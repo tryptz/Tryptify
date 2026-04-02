@@ -13,6 +13,8 @@ A high-fidelity music player for Android with TIDAL HiFi streaming, local file p
   <img src="https://github.com/user-attachments/assets/359bf19e-1a79-4372-a7a0-1d841cc03387" width="220" alt="DSP Mixer — bus strips with gain, pan, mute, solo, and plugin chains" />
   <img src="https://github.com/user-attachments/assets/2670b38b-18cf-4aba-a71f-b3c1390761ec" width="220" alt="Plugin picker — categorized browser for all 33 audio processors" />
   <img src="https://github.com/user-attachments/assets/2a36210f-bd54-4bf7-98d1-aee0e556569b" width="220" alt="Plugin editor — per-effect parameter controls" />
+  <img src="https://github.com/user-attachments/assets/e2d9b57d-ab5f-40c7-9eff-f8c9a741c942" width="220" alt="AutoEQ — headphone correction filters generator" />
+  <img src="https://github.com/user-attachments/assets/58930158-4f00-45f2-a0bd-ae1d32961525" width="220" alt="AutoEQ — headphone model database browser" />
 </p>
 
 ---
