@@ -70,6 +70,7 @@ import tf.monochrome.android.ui.player.NowPlayingScreen
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.library.FolderBrowserScreen
 import tf.monochrome.android.ui.profile.ProfileScreen
+import tf.monochrome.android.ui.stats.ListeningStatsScreen
 import tf.monochrome.android.ui.stats.StatsScreen
 import tf.monochrome.android.ui.search.SearchScreen
 import tf.monochrome.android.ui.settings.SettingsScreen
@@ -99,6 +100,7 @@ sealed class Screen(val route: String) {
     data object Equalizer : Screen("equalizer")
     data object Profile : Screen("profile")
     data object Stats : Screen("stats")
+    data object ListeningStats : Screen("listening_stats")
     data object FolderBrowser : Screen("folder/{folderPath}") {
         fun createRoute(folderPath: String) = "folder/${java.net.URLEncoder.encode(folderPath, "UTF-8")}"
     }
@@ -263,6 +265,9 @@ fun MonochromeNavHost() {
                 }
                 composable(Screen.Stats.route) {
                     StatsScreen(navController = navController)
+                }
+                composable(Screen.ListeningStats.route) {
+                    ListeningStatsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = Screen.FolderBrowser.route,

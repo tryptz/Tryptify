@@ -33,7 +33,6 @@ interface HistoryDao {
     @Query("DELETE FROM history_tracks")
     suspend fun clearHistory()
 
-    // Get most played tracks for radio mode seeding
     @Query("""
         SELECT id, title, duration, artistId, artistName, albumId, albumTitle, albumCover,
                audioQuality, COUNT(*) as playCount, MAX(playedAt) as playedAt
@@ -43,4 +42,27 @@ interface HistoryDao {
         LIMIT :limit
     """)
     suspend fun getMostPlayed(limit: Int = 50): List<HistoryTrackEntity>
+
+    @Query("""
+        SELECT artistName as name, artistId as id, COUNT(*) as count
+        FROM history_tracks
+        WHERE artistName IS NOT NULL AND artistName != ''
+        GROUP BY artistName
+        ORDER BY count DESC
+        LIMIT :limit
+    """)
+    fun getTopArtists(limit: Int = 10): Flow<List<TopArtist>>
+
+    @Query("""
+        SELECT albumTitle as title, albumCover as cover, artistName, COUNT(*) as count
+        FROM history_tracks
+        WHERE albumTitle IS NOT NULL AND albumTitle != ''
+        GROUP BY albumTitle, artistName
+        ORDER BY count DESC
+        LIMIT :limit
+    """)
+    fun getTopAlbums(limit: Int = 10): Flow<List<TopAlbum>>
+
+    data class TopArtist(val name: String, val id: Long?, val count: Int)
+    data class TopAlbum(val title: String, val cover: String?, val artistName: String?, val count: Int)
 }
