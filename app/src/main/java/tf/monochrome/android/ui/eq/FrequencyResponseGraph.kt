@@ -69,10 +69,10 @@ fun FrequencyResponseGraph(
     originalCurve: List<FrequencyPoint>,
     targetCurve: List<FrequencyPoint>,
     eqBands: List<EqBand>,
+    modifier: Modifier = Modifier,
     preamp: Float = 0f,
     sampleRate: Float = 48000f,
     onBandDragged: ((bandId: Int, newFreq: Float, newGain: Float) -> Unit)? = null,
-    modifier: Modifier = Modifier
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
@@ -324,9 +324,9 @@ private fun LegendDot(label: String, color: Color) {
 @Composable
 fun EqProfileMiniGraph(
     bands: List<EqBand>,
+    modifier: Modifier = Modifier,
     preamp: Float = 0f,
     sampleRate: Float = 48000f,
-    modifier: Modifier = Modifier
 ) {
     if (bands.isEmpty()) return
 

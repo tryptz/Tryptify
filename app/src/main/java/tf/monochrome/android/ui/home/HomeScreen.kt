@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
@@ -50,12 +52,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import tf.monochrome.android.domain.model.AiFilter
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.AlbumItem
@@ -66,8 +70,8 @@ import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.components.liquidGlass
-import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 

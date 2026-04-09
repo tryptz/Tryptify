@@ -230,9 +230,9 @@ fun AlphabeticalIndexSidebar(
 @Composable
 fun HeadphoneItemRow(
     headphone: Headphone,
+    modifier: Modifier = Modifier,
     profileCount: Int = 4,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
@@ -295,10 +295,10 @@ fun SectionLabel(
 @Composable
 fun SelectorRow(
     value: String,
+    modifier: Modifier = Modifier,
     placeholder: String = "Select...",
     onClick: () -> Unit,
     trailingIcon: @Composable (() -> Unit)? = null,
-    modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),

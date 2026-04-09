@@ -156,6 +156,13 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetPluginDryWet(
     if (engine) engine->setPluginDryWet(busIndex, slotIndex, dryWet);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetMixBypassed(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr, jboolean bypassed) {
+    auto* engine = getEngine(enginePtr);
+    if (engine) engine->setMixBypassed(bypassed);
+}
+
 // ── Metering ────────────────────────────────────────────────────────────
 
 extern "C" JNIEXPORT void JNICALL

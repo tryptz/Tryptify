@@ -91,7 +91,8 @@ class DspEngineManager @Inject constructor(
 
     fun setEnabled(enabled: Boolean) {
         _enabled.value = enabled
-        processor.setEnabled(enabled)
+        // Bypass mix bus plugins when mixer DSP is off; master bus (AutoEQ) keeps running
+        processor.setMixBypassed(!enabled)
         scope.launch { preferences.setDspEnabled(enabled) }
     }
 
@@ -103,10 +104,8 @@ class DspEngineManager @Inject constructor(
             loadStateJson(stateJson)
         }
 
-        if (enabled) {
-            _enabled.value = true
-            processor.setEnabled(true)
-        }
+        _enabled.value = enabled
+        processor.setMixBypassed(!enabled)
     }
 
     // ── Bus controls ────────────────────────────────────────────────────

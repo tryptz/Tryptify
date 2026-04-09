@@ -466,6 +466,7 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
     val targetFps by viewModel.visualizerTargetFps.collectAsState()
     val showFps by viewModel.visualizerShowFps.collectAsState()
     val fullscreen by viewModel.visualizerFullscreen.collectAsState()
+    val touchWaveform by viewModel.visualizerTouchWaveform.collectAsState()
     val engineStatus by viewModel.visualizerEngineStatus.collectAsState()
     val presets by viewModel.visualizerPresets.collectAsState()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
@@ -611,6 +612,12 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
             subtitle = "Fill screen in Now Playing visualizer view",
             checked = fullscreen,
             onCheckedChange = { viewModel.setVisualizerFullscreen(it) }
+        )
+        SettingSwitchItem(
+            title = "Touch Waveform",
+            subtitle = "Draw audio waveforms between touch points on the visualizer",
+            checked = touchWaveform,
+            onCheckedChange = { viewModel.setVisualizerTouchWaveform(it) }
         )
         SettingItem(
             title = "Engine Status",
@@ -763,6 +770,7 @@ private fun AudioTab(viewModel: SettingsViewModel) {
     val wifiQuality by viewModel.wifiQuality.collectAsState()
     val cellularQuality by viewModel.cellularQuality.collectAsState()
     val normalization by viewModel.normalizationEnabled.collectAsState()
+    val dspMixer by viewModel.dspMixerEnabled.collectAsState()
     val crossfade by viewModel.crossfadeDuration.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val preservePitch by viewModel.preservePitch.collectAsState()
@@ -793,6 +801,12 @@ private fun AudioTab(viewModel: SettingsViewModel) {
             subtitle = "Use ReplayGain to normalize loudness",
             checked = normalization,
             onCheckedChange = { viewModel.setNormalizationEnabled(it) }
+        )
+        SettingSwitchItem(
+            title = "DSP Mixer",
+            subtitle = "Enable mixer bus processing engine",
+            checked = dspMixer,
+            onCheckedChange = { viewModel.setDspMixerEnabled(it) }
         )
 
         Spacer(modifier = Modifier.height(8.dp))

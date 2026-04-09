@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.data.downloads.TrackDownloadState
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.theme.ExplicitBadge
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -43,7 +44,8 @@ fun TrackItem(
     showDuration: Boolean = true,
     trackNumber: Int? = null,
     onMoreClick: (() -> Unit)? = null,
-    onAlbumClick: (() -> Unit)? = null
+    onAlbumClick: (() -> Unit)? = null,
+    downloadState: TrackDownloadState? = null
 ) {
     Surface(
         modifier = modifier
@@ -154,6 +156,14 @@ fun TrackItem(
                     tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+
+        if (downloadState != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            DownloadIndicator(
+                state = downloadState,
+                size = 18f
+            )
         }
 
         if (showDuration) {

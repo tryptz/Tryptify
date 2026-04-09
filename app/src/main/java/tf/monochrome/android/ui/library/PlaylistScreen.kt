@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
@@ -69,6 +70,7 @@ fun PlaylistScreen(
     val tracks by viewModel.tracks.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val playlists by playerViewModel.playlists.collectAsState()
+    val activeDownloads by playerViewModel.activeDownloads.collectAsState()
 
     var showMenu by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -245,6 +247,18 @@ fun PlaylistScreen(
                         ) {
                             Icon(Icons.Default.Shuffle, contentDescription = "Shuffle")
                         }
+
+                        FilledIconButton(
+                            onClick = { playerViewModel.downloadAllTracks(tracks) },
+                            enabled = tracks.isNotEmpty(),
+                            modifier = Modifier.size(48.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = "Download All")
+                        }
                     }
                 }
             }
@@ -276,6 +290,7 @@ fun PlaylistScreen(
                             onAlbumClick = track.album?.id?.let { albumId ->
                                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                             },
+                            downloadState = activeDownloads[track.id],
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(

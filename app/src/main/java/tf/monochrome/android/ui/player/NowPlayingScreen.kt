@@ -309,6 +309,7 @@ fun NowPlayingScreen(
                 verticalArrangement = if (isFullscreenActive) Arrangement.Top else Arrangement.spacedBy(8.dp)
             ) {
                 val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                @Suppress("ConfigurationScreenWidthHeight") // containerSize unavailable in current Compose BOM
                 val screenAspectRatio = configuration.screenHeightDp.toFloat() / configuration.screenWidthDp.toFloat()
                 val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
 

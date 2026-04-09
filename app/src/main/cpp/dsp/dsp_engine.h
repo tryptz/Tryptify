@@ -63,6 +63,7 @@ public:
     void setPluginBypassed(int busIndex, int slotIndex, bool bypassed);
     void setPluginDryWet(int busIndex, int slotIndex, float dryWet);
     void setBusInputEnabled(int busIndex, bool enabled);
+    void setMixBypassed(bool bypassed);
 
     // Metering — returns levels in dB
     // Output: [bus0_peakL, bus0_peakR, bus0_holdL, bus0_holdR, ..., master_holdR]
@@ -99,6 +100,10 @@ private:
     // Meter ballistics
     float meterDecayPerSample_ = 0.0f;  // Computed from sample rate
     int meterHoldSamples_ = 0;          // 1.5 seconds in samples
+
+    // When true, mix bus plugins (0-3) are bypassed but master bus still processes.
+    // Allows AutoEQ on master to stay active when user toggles mixer DSP off.
+    std::atomic<bool> mixBypassed_{false};
 
     // Clipping flag
     std::atomic<bool> clipped_{false};

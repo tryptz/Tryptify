@@ -8,27 +8,31 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.rememberTextMeasurer
-import tf.monochrome.android.ui.mixer.canvas.CanvasGestureHandler.screenToCanvas
 import tf.monochrome.android.ui.mixer.canvas.CanvasRenderer.drawGrid
 import tf.monochrome.android.ui.mixer.canvas.connection.ConnectionAnimator.drawConnectionPulse
 import tf.monochrome.android.ui.mixer.canvas.connection.SplineRenderer.drawConnectionSpline
-import tf.monochrome.android.ui.mixer.canvas.connection.SplineRenderer.drawDragConnectionSpline
 import tf.monochrome.android.ui.mixer.canvas.model.CanvasOffset
 import tf.monochrome.android.ui.mixer.canvas.model.CanvasState
-import tf.monochrome.android.ui.mixer.canvas.model.DragState
 import tf.monochrome.android.ui.mixer.canvas.model.DspNode
 import tf.monochrome.android.ui.mixer.canvas.model.NodeColorScheme
 import tf.monochrome.android.ui.mixer.canvas.model.NodeId
@@ -38,14 +42,20 @@ import tf.monochrome.android.ui.mixer.canvas.node.drawOutputNode
 import tf.monochrome.android.ui.mixer.canvas.node.drawPluginNode
 import tf.monochrome.android.ui.mixer.canvas.node.inputPortPosition
 import tf.monochrome.android.ui.mixer.canvas.node.outputPortPosition
+import kotlin.math.abs
 
 /**
- * The main node-based DSP canvas composable.
+ * Node-based DSP workflow studio canvas.
  *
- * Renders a zoomable, pannable workspace showing all bus input nodes,
- * plugin chains, master bus, and output, connected by glowing bezier splines.
- * All rendering is done via DrawScope operations within a single Canvas
- * for optimal 60fps performance.
+ * Gesture model:
+ *   - Single finger on node → drag node (wires follow automatically)
+ *   - Single finger on empty space → pan canvas
+ *   - Two fingers → pinch-zoom + pan
+ *   - Tap node → select
+ *   - Double-tap plugin → open editor
+ *   - Long-press plugin → delete mode
+ *
+ * Wires are always fixed connections between nodes — never free-flying.
  */
 @Composable
 fun DspCanvas(
@@ -68,7 +78,20 @@ fun DspCanvas(
     val textMeasurer = rememberTextMeasurer()
     val haptic = LocalHapticFeedback.current
 
-    // Pulse animation for active connections
+    // Keep fresh references to state and callbacks without restarting pointerInput
+    val currentState by rememberUpdatedState(state)
+    val currentOnViewportPan by rememberUpdatedState(onViewportPan)
+    val currentOnViewportZoom by rememberUpdatedState(onViewportZoom)
+    val currentOnNodeSelected by rememberUpdatedState(onNodeSelected)
+    val currentOnNodeDragStart by rememberUpdatedState(onNodeDragStart)
+    val currentOnNodeDrag by rememberUpdatedState(onNodeDrag)
+    val currentOnNodeDragEnd by rememberUpdatedState(onNodeDragEnd)
+    val currentOnNodeDoubleTap by rememberUpdatedState(onNodeDoubleTap)
+    val currentOnNodeLongPress by rememberUpdatedState(onNodeLongPress)
+    val currentOnDeleteConfirmed by rememberUpdatedState(onDeleteConfirmed)
+    val currentOnDeleteCancelled by rememberUpdatedState(onDeleteCancelled)
+    val currentOnCanvasTap by rememberUpdatedState(onCanvasTap)
+
     val infiniteTransition = rememberInfiniteTransition(label = "connectionPulse")
     val pulseProgress by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -80,105 +103,143 @@ fun DspCanvas(
         label = "pulseProgress"
     )
 
-    // Track drag start position for distinguishing taps from drags
-    val dragStartNodeId = remember { mutableListOf<NodeId?>() }
-
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .background(NodeColorScheme.CanvasBackground)
-            // Pinch-zoom + two-finger pan
+            // Single unified gesture handler for all touch interactions
             .pointerInput(Unit) {
-                detectTransformGestures(panZoomLock = false) { centroid, pan, zoom, _ ->
-                    if (zoom != 1f) {
-                        onViewportZoom(zoom, centroid)
+                awaitEachGesture {
+                    val firstDown = awaitFirstDown(requireUnconsumed = false)
+                    val startPos = firstDown.position
+                    val startTime = firstDown.uptimeMillis
+
+                    // Hit test at touch down
+                    val hitNode = CanvasGestureHandler.hitTestNode(startPos, currentState)
+
+                    var draggingNode: NodeId? = null
+                    var totalDrag = Offset.Zero
+                    var isMultiTouch = false
+                    var longPressTriggered = false
+
+                    // Start node drag if we hit a node
+                    if (hitNode != null) {
+                        draggingNode = hitNode
+                        currentOnNodeDragStart(hitNode)
                     }
-                    if (pan != Offset.Zero) {
-                        onViewportPan(pan)
+
+                    // Process subsequent events
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val activePointers = event.changes.filter { it.pressed }
+
+                        if (activePointers.isEmpty()) {
+                            // All pointers up — determine what happened
+                            if (draggingNode != null) {
+                                currentOnNodeDragEnd(draggingNode!!)
+                            }
+
+                            val dragDist = totalDrag.getDistance()
+                            val elapsed = event.changes.firstOrNull()?.uptimeMillis?.minus(startTime) ?: 0L
+
+                            // Classify as tap if minimal movement and short duration
+                            if (dragDist < 15f && elapsed < 300L && !longPressTriggered) {
+                                // Check delete button first
+                                val deleteHit = CanvasGestureHandler.hitTestDeleteButton(startPos, currentState)
+                                if (deleteHit != null) {
+                                    currentOnDeleteConfirmed(deleteHit)
+                                } else if (currentState.deleteTargetId != null) {
+                                    currentOnDeleteCancelled()
+                                } else if (hitNode != null) {
+                                    currentOnNodeSelected(hitNode)
+                                } else {
+                                    currentOnNodeSelected(null)
+                                    currentOnCanvasTap()
+                                }
+                            }
+                            break
+                        }
+
+                        if (activePointers.size >= 2) {
+                            // ── Multi-touch: zoom + pan ────────────────────
+                            isMultiTouch = true
+                            if (draggingNode != null) {
+                                currentOnNodeDragEnd(draggingNode!!)
+                                draggingNode = null
+                            }
+
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            val centroid = event.calculateCentroid(useCurrent = true)
+
+                            if (zoom != 1f) currentOnViewportZoom(zoom, centroid)
+                            if (pan != Offset.Zero) currentOnViewportPan(pan)
+
+                            event.changes.forEach { it.consume() }
+                        } else {
+                            // ── Single finger ──────────────────────────────
+                            val change = activePointers.first()
+                            val delta = change.positionChange()
+                            val elapsed = change.uptimeMillis - startTime
+
+                            // Long press detection (500ms hold with minimal movement)
+                            if (!longPressTriggered && elapsed > 500L && totalDrag.getDistance() < 15f) {
+                                longPressTriggered = true
+                                if (hitNode != null) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    currentOnNodeLongPress(hitNode)
+                                }
+                            }
+
+                            if (delta != Offset.Zero && !longPressTriggered) {
+                                totalDrag += delta
+
+                                if (draggingNode != null && !isMultiTouch) {
+                                    // Drag node — wires follow automatically
+                                    val canvasDelta = CanvasOffset(
+                                        delta.x / currentState.viewportScale,
+                                        delta.y / currentState.viewportScale
+                                    )
+                                    currentOnNodeDrag(draggingNode!!, canvasDelta)
+                                } else if (draggingNode == null) {
+                                    // Pan canvas
+                                    currentOnViewportPan(delta)
+                                }
+                                change.consume()
+                            }
+                        }
                     }
                 }
             }
-            // Tap gestures (select, double-tap edit, long-press delete)
-            .pointerInput(state.deleteTargetId, state.selectedNodeId) {
-                detectTapGestures(
-                    onTap = { offset ->
-                        // Check delete button first
-                        val deleteHit = CanvasGestureHandler.hitTestDeleteButton(offset, state)
-                        if (deleteHit != null) {
-                            onDeleteConfirmed(deleteHit)
-                            return@detectTapGestures
-                        }
+            // Double-tap detection (separate because awaitEachGesture can't detect it)
+            .pointerInput(Unit) {
+                var lastTapTime = 0L
+                var lastTapPos = Offset.Zero
 
-                        // If in delete mode, cancel it
-                        if (state.deleteTargetId != null) {
-                            onDeleteCancelled()
-                            return@detectTapGestures
-                        }
-
-                        // Hit test nodes
-                        val hitNode = CanvasGestureHandler.hitTestNode(offset, state)
-                        if (hitNode != null) {
-                            onNodeSelected(hitNode)
-                        } else {
-                            onNodeSelected(null)
-                            onCanvasTap()
-                        }
-                    },
-                    onDoubleTap = { offset ->
-                        val hitNode = CanvasGestureHandler.hitTestNode(offset, state)
-                        if (hitNode != null) {
-                            onNodeDoubleTap(hitNode)
-                        }
-                    },
-                    onLongPress = { offset ->
-                        val hitNode = CanvasGestureHandler.hitTestNode(offset, state)
-                        if (hitNode != null) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onNodeLongPress(hitNode)
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val upEvent = awaitPointerEvent()
+                    val change = upEvent.changes.firstOrNull() ?: return@awaitEachGesture
+                    if (!change.pressed) {
+                        val dragDist = (change.position - down.position).getDistance()
+                        val elapsed = change.uptimeMillis - down.uptimeMillis
+                        if (dragDist < 15f && elapsed < 300L) {
+                            val now = change.uptimeMillis
+                            val distFromLast = (down.position - lastTapPos).getDistance()
+                            if (now - lastTapTime < 400L && distFromLast < 40f) {
+                                // Double tap detected
+                                val hitNode = CanvasGestureHandler.hitTestNode(down.position, currentState)
+                                if (hitNode != null) {
+                                    currentOnNodeDoubleTap(hitNode)
+                                }
+                                lastTapTime = 0L
+                            } else {
+                                lastTapTime = now
+                                lastTapPos = down.position
+                            }
                         }
                     }
-                )
-            }
-            // Node drag gestures
-            .pointerInput(state.nodes.keys.hashCode()) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        val hitNode = CanvasGestureHandler.hitTestNode(offset, state)
-                        dragStartNodeId.clear()
-                        dragStartNodeId.add(hitNode)
-                        if (hitNode != null) {
-                            onNodeDragStart(hitNode)
-                        }
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        val nodeId = dragStartNodeId.firstOrNull()
-                        if (nodeId != null) {
-                            val canvasDelta = CanvasOffset(
-                                dragAmount.x / state.viewportScale,
-                                dragAmount.y / state.viewportScale
-                            )
-                            onNodeDrag(nodeId, canvasDelta)
-                        } else {
-                            // Drag on empty canvas = pan
-                            onViewportPan(dragAmount)
-                        }
-                    },
-                    onDragEnd = {
-                        val nodeId = dragStartNodeId.firstOrNull()
-                        if (nodeId != null) {
-                            onNodeDragEnd(nodeId)
-                        }
-                        dragStartNodeId.clear()
-                    },
-                    onDragCancel = {
-                        val nodeId = dragStartNodeId.firstOrNull()
-                        if (nodeId != null) {
-                            onNodeDragEnd(nodeId)
-                        }
-                        dragStartNodeId.clear()
-                    }
-                )
+                }
             }
     ) {
         val canvasWidth = size.width
@@ -187,33 +248,30 @@ fun DspCanvas(
         val offsetX = state.viewportOffset.x
         val offsetY = state.viewportOffset.y
 
-        // ── Layer 0: Grid background ────────────────────────────────────
+        // ── Layer 0: Grid (drawn in screen space) ───────────────────────
         drawGrid(state, canvasWidth, canvasHeight)
 
-        // ── Apply viewport transform for all subsequent drawing ─────────
-        val drawState = state // capture for lambda
+        // ── Apply viewport offset so nodes and wires share the same transform.
+        // Node renderers already multiply by scale, so we only translate by offset.
+        drawContext.transform.translate(offsetX, offsetY)
 
-        // Helper to transform canvas coords to screen coords for drawing
-        fun Offset.toScreen() = Offset(
-            this.x * scale + offsetX,
-            this.y * scale + offsetY
-        )
+        // Port positions in scaled canvas space (matching how nodes render)
+        fun portToScaled(port: Offset) = Offset(port.x * scale, port.y * scale)
 
-        // ── Layer 1: Connection splines ─────────────────────────────────
-        for (connection in drawState.connections) {
-            val fromNode = drawState.nodes[connection.fromId] ?: continue
-            val toNode = drawState.nodes[connection.toId] ?: continue
+        // ── Layer 1: Connection wires (always fixed to nodes) ───────────
+        for (connection in state.connections) {
+            val fromNode = state.nodes[connection.fromId] ?: continue
+            val toNode = state.nodes[connection.toId] ?: continue
 
-            val fromPort = outputPortPosition(fromNode).toScreen()
+            val fromPort = portToScaled(outputPortPosition(fromNode))
             val toPort = when (toNode) {
-                is DspNode.BusMaster -> inputPortPosition(toNode, connection.busIndex).toScreen()
-                else -> inputPortPosition(toNode).toScreen()
+                is DspNode.BusMaster -> portToScaled(inputPortPosition(toNode, connection.busIndex))
+                else -> portToScaled(inputPortPosition(toNode))
             }
 
             val color = NodeColorScheme.connectionColor(connection.busIndex, fromNode)
             drawConnectionSpline(fromPort, toPort, color, scale)
 
-            // Pulse animation on active connections
             if (dspEnabled) {
                 drawConnectionPulse(
                     from = fromPort,
@@ -227,74 +285,32 @@ fun DspCanvas(
             }
         }
 
-        // ── Layer 2: Drag connection line ───────────────────────────────
-        val dragConn = drawState.dragState as? DragState.ConnectionDrag
-        if (dragConn != null) {
-            val fromNode = drawState.nodes[dragConn.fromNodeId]
-            if (fromNode != null) {
-                val fromPort = outputPortPosition(fromNode).toScreen()
-                val endScreen = dragConn.currentEndpoint.toComposeOffset()
-                drawDragConnectionSpline(
-                    from = fromPort,
-                    to = Offset(
-                        endScreen.x * scale + offsetX,
-                        endScreen.y * scale + offsetY
-                    ),
-                    color = NodeColorScheme.nodeAccentColor(fromNode),
-                    scale = scale
-                )
-            }
-        }
-
-        // ── Layer 3: Nodes ──────────────────────────────────────────────
-        for ((id, node) in drawState.nodes) {
-            // Viewport culling
-            if (!CanvasGestureHandler.isNodeVisible(node, drawState, canvasWidth, canvasHeight)) {
+        // ── Layer 2: Nodes ──────────────────────────────────────────────
+        for ((id, node) in state.nodes) {
+            if (!CanvasGestureHandler.isNodeVisible(node, state, canvasWidth, canvasHeight)) {
                 continue
             }
 
-            // Apply drag offset if this node is being dragged
-            val displayNode = when (val drag = drawState.dragState) {
-                is DragState.NodeDrag if drag.nodeId == id -> {
-                    node.withPosition(
-                        CanvasOffset(
-                            node.position.x + drag.currentOffset.x,
-                            node.position.y + drag.currentOffset.y
-                        )
-                    )
-                }
-                else -> node
-            }
+            val isSelected = id == state.selectedNodeId
+            val isDeleteTarget = id == state.deleteTargetId
 
-            val isSelected = id == drawState.selectedNodeId
-            val isDeleteTarget = id == drawState.deleteTargetId
-
-            when (displayNode) {
+            when (node) {
                 is DspNode.BusInput -> drawBusInputNode(
-                    node = displayNode,
-                    isSelected = isSelected,
-                    textMeasurer = textMeasurer,
-                    scale = scale
+                    node = node, isSelected = isSelected,
+                    textMeasurer = textMeasurer, scale = scale
                 )
                 is DspNode.Plugin -> drawPluginNode(
-                    node = displayNode,
-                    isSelected = isSelected,
+                    node = node, isSelected = isSelected,
                     isDeleteTarget = isDeleteTarget,
-                    textMeasurer = textMeasurer,
-                    scale = scale,
-                    vizData = null  // TODO: wire per-node viz data
+                    textMeasurer = textMeasurer, scale = scale, vizData = null
                 )
                 is DspNode.BusMaster -> drawMasterBusNode(
-                    node = displayNode,
-                    isSelected = isSelected,
-                    textMeasurer = textMeasurer,
-                    scale = scale
+                    node = node, isSelected = isSelected,
+                    textMeasurer = textMeasurer, scale = scale
                 )
                 is DspNode.Output -> drawOutputNode(
-                    node = displayNode,
-                    isSelected = isSelected,
-                    textMeasurer = textMeasurer,
-                    scale = scale
+                    node = node, isSelected = isSelected,
+                    textMeasurer = textMeasurer, scale = scale
                 )
             }
         }

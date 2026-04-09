@@ -10,13 +10,14 @@ data class BusConfig(
     val pan: Float = 0f,
     val muted: Boolean = false,
     val soloed: Boolean = false,
+    val inputEnabled: Boolean = false,
     val plugins: List<PluginInstance> = emptyList()
 ) {
     val isMaster: Boolean get() = index == 4
 
     companion object {
         fun defaultBuses(): List<BusConfig> = listOf(
-            BusConfig(index = 0, name = "Bus 1"),
+            BusConfig(index = 0, name = "Bus 1", inputEnabled = true),
             BusConfig(index = 1, name = "Bus 2"),
             BusConfig(index = 2, name = "Bus 3"),
             BusConfig(index = 3, name = "Bus 4"),

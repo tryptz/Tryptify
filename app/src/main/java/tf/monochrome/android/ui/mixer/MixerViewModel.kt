@@ -54,11 +54,11 @@ class MixerViewModel @Inject constructor(
     private val outputId: NodeId = "output_node"
 
     init {
-        // Poll meter levels at ~50ms (20 fps) while the ViewModel is alive
+        // Poll meter levels at ~250ms (4 fps) — imperceptible to user, 5x less CPU
         viewModelScope.launch {
             while (isActive) {
                 dspManager.pollLevels()
-                delay(50L)
+                delay(250L)
                 val levels = busLevels.value
                 if (levels.isNotEmpty()) {
                     val peakDb = levels.maxOfOrNull { maxOf(it.peakDbL, it.peakDbR) } ?: -60f
@@ -152,6 +152,8 @@ class MixerViewModel @Inject constructor(
 
     fun setBusGain(busIndex: Int, gainDb: Float) = dspManager.setBusGain(busIndex, gainDb)
     fun setBusPan(busIndex: Int, pan: Float) = dspManager.setBusPan(busIndex, pan)
+    fun setBusInputEnabled(busIndex: Int, enabled: Boolean) = dspManager.setBusInputEnabled(busIndex, enabled)
+
     fun toggleMute(busIndex: Int) {
         val bus = buses.value.getOrNull(busIndex) ?: return
         dspManager.setBusMute(busIndex, !bus.muted)
@@ -194,6 +196,10 @@ class MixerViewModel @Inject constructor(
 
     fun setParameter(busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) {
         dspManager.setParameter(busIndex, slotIndex, paramIndex, value)
+    }
+
+    fun setPluginDryWet(busIndex: Int, slotIndex: Int, dryWet: Float) {
+        dspManager.setPluginDryWet(busIndex, slotIndex, dryWet)
     }
 
     // ── Presets ──────────────────────────────────────────────────────────

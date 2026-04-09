@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.main
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import android.view.ViewGroup
@@ -19,7 +20,10 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.ui.navigation.MonochromeNavHost
 import tf.monochrome.android.ui.theme.MonochromeTheme
@@ -33,12 +37,18 @@ val LocalBlurTarget = compositionLocalOf<BlurTarget?> { null }
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var preferences: PreferencesManager
+    @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        
+
+        // Restore existing Supabase session on startup
+        lifecycleScope.launch {
+            supabaseAuthManager.initialize()
+        }
+
         FrequencyTargets.init(applicationContext)
 
         // Force maximum available refresh rate (e.g. 120Hz)
@@ -99,6 +109,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Called when the activity is relaunched by the Appwrite OAuth callback.
+     * Since launchMode=singleTop, the activity is not recreated — we must
+     * manually trigger refreshUser() here to pick up the new session.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Handle Supabase OAuth callback deep-link
+        val uri = intent.data ?: return
+        lifecycleScope.launch {
+            supabaseAuthManager.handleDeepLink(uri)
         }
     }
 }

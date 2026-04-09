@@ -41,7 +41,7 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "tf.monochrome.android"
+        applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -163,8 +163,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines)
     implementation(libs.kotlinx.serialization)
 
-    // Appwrite
-    implementation(libs.appwrite)
+    // Supabase
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.supabase.compose.auth)
+    implementation(libs.supabase.compose.auth.ui)
+    implementation(libs.supabase.postgrest)
 
     // Glance Widgets
     implementation(libs.glance.appwidget)
@@ -179,6 +183,7 @@ dependencies {
     // AndroidX Core
     implementation(libs.core.ktx)
     implementation(libs.core.splashscreen)
+    implementation(libs.browser)
 
     // Media (Android Auto)
     implementation(libs.media)
@@ -199,5 +204,5 @@ dependencies {
     implementation(libs.haze.materials)
 
     // BlurView v3 (real backdrop blur, Compose-safe on API 31+)
-    implementation("com.github.Dimezis:BlurView:version-3.2.0")
+    implementation(libs.blurview)
 }

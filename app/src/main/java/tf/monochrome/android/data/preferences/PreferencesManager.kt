@@ -104,6 +104,7 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_TARGET_FPS = intPreferencesKey("visualizer_target_fps")
         private val VISUALIZER_SHOW_FPS = booleanPreferencesKey("visualizer_show_fps")
         private val VISUALIZER_FULLSCREEN = booleanPreferencesKey("visualizer_fullscreen")
+        private val VISUALIZER_TOUCH_WAVEFORM = booleanPreferencesKey("visualizer_touch_waveform")
         private val VISUALIZER_FAVORITE_PRESETS = stringSetPreferencesKey("visualizer_favorite_presets")
 
         // AI
@@ -140,6 +141,9 @@ class PreferencesManager @Inject constructor(
 
         // Library tab order
         private val LIBRARY_TAB_ORDER = stringPreferencesKey("library_tab_order")
+
+        // Car mode
+        private val CAR_MODE_BAND_COUNT = intPreferencesKey("car_mode_band_count")
     }
 
     // Audio Quality
@@ -427,6 +431,7 @@ class PreferencesManager @Inject constructor(
     val visualizerTargetFps: Flow<Int> = dataStore.data.map { it[VISUALIZER_TARGET_FPS] ?: 60 }
     val visualizerShowFps: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_SHOW_FPS] ?: false }
     val visualizerFullscreen: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_FULLSCREEN] ?: false }
+    val visualizerTouchWaveform: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_TOUCH_WAVEFORM] ?: true }
 
     suspend fun setVisualizerSensitivity(value: Int) {
         dataStore.edit { it[VISUALIZER_SENSITIVITY] = value }
@@ -472,6 +477,9 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setVisualizerFullscreen(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_FULLSCREEN] = enabled }
+    }
+    suspend fun setVisualizerTouchWaveform(enabled: Boolean) {
+        dataStore.edit { it[VISUALIZER_TOUCH_WAVEFORM] = enabled }
     }
 
     val visualizerFavoritePresets: Flow<Set<String>> = dataStore.data.map {
@@ -606,7 +614,7 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- DSP Mixer ---
-    val dspEnabled: Flow<Boolean> = dataStore.data.map { it[DSP_ENABLED] ?: true }
+    val dspEnabled: Flow<Boolean> = dataStore.data.map { it[DSP_ENABLED] ?: false }
     suspend fun setDspEnabled(enabled: Boolean) {
         dataStore.edit { it[DSP_ENABLED] = enabled }
     }
@@ -649,6 +657,12 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setLibraryTabOrder(order: List<String>) {
         dataStore.edit { it[LIBRARY_TAB_ORDER] = order.joinToString(",") }
+    }
+
+    // --- Car mode ---
+    val carModeBandCount: Flow<Int> = dataStore.data.map { it[CAR_MODE_BAND_COUNT] ?: 10 }
+    suspend fun setCarModeBandCount(count: Int) {
+        dataStore.edit { it[CAR_MODE_BAND_COUNT] = count.coerceIn(3, 32) }
     }
 
     // --- Clear all prefs (System) ---

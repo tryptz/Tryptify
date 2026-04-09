@@ -1,6 +1,7 @@
 #include "projectm_bridge.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace {
@@ -95,6 +96,11 @@ bool ProjectMBridge::SetPreset(const std::string& preset_path) {
     if (resolved.empty()) {
         return false;
     }
+    // Skip reload if already displaying this preset (avoids the
+    // double-load caused by the preferences observer).
+    if (resolved == current_preset_) {
+        return true;
+    }
 
     const auto playlist_size = projectm_playlist_size(playlist_);
     for (uint32_t index = 0; index < playlist_size; ++index) {
@@ -111,7 +117,8 @@ bool ProjectMBridge::SetPreset(const std::string& preset_path) {
         }
     }
 
-    projectm_load_preset_file(projectm_, resolved.c_str(), true);
+    // Instant load — no smooth crossfade transition
+    projectm_load_preset_file(projectm_, resolved.c_str(), false);
     current_preset_ = resolved;
     return true;
 }
@@ -133,7 +140,10 @@ void ProjectMBridge::SetShuffle(bool enabled) {
 
 void ProjectMBridge::SetBeatSensitivity(int value) {
     if (projectm_ != nullptr) {
-        const auto scaled = 0.25f + (static_cast<float>(std::clamp(value, 0, 100)) / 100.0f) * 1.75f;
+        // Exponential curve: 50 % → 1.0 (default), range 0.2 – 5.0
+        // Gives finer control in the mid-range where most users operate
+        const float normalized = static_cast<float>(std::clamp(value, 0, 100)) / 100.0f;
+        const float scaled = 0.2f * std::pow(25.0f, normalized);
         projectm_set_beat_sensitivity(projectm_, scaled);
     }
 }
@@ -206,6 +216,30 @@ std::string ProjectMBridge::ReadCurrentPreset() const {
     return result;
 }
 
+void ProjectMBridge::Touch(float x, float y, int pressure, int touch_type) {
+    if (projectm_ != nullptr) {
+        projectm_touch(projectm_, x, y, pressure, static_cast<projectm_touch_type>(touch_type));
+    }
+}
+
+void ProjectMBridge::TouchDrag(float x, float y, int pressure) {
+    if (projectm_ != nullptr) {
+        projectm_touch_drag(projectm_, x, y, pressure);
+    }
+}
+
+void ProjectMBridge::TouchDestroy(float x, float y) {
+    if (projectm_ != nullptr) {
+        projectm_touch_destroy(projectm_, x, y);
+    }
+}
+
+void ProjectMBridge::TouchDestroyAll() {
+    if (projectm_ != nullptr) {
+        projectm_touch_destroy_all(projectm_);
+    }
+}
+
 void ProjectMBridge::PushBufferedAudioToProjectM() {
     if (projectm_ == nullptr) {
         return;
@@ -216,6 +250,37 @@ void ProjectMBridge::PushBufferedAudioToProjectM() {
     int sample_rate = 44100;
     if (!audio_buffer_.Pop(samples, channel_count, sample_rate) || samples.empty()) {
         return;
+    }
+
+    // ── RMS-based auto-gain normalization ──────────────────────────
+    // Keeps visualizer reaction consistent across quiet and loud tracks.
+    float sum_sq = 0.0f;
+    for (const auto& s : samples) {
+        sum_sq += s * s;
+    }
+    const float rms = std::sqrt(sum_sq / static_cast<float>(samples.size()));
+
+    // Adaptive envelope: fast attack (~55 ms) to catch transients,
+    // slow release (~550 ms) to preserve musical dynamics.
+    if (rms > smoothed_rms_) {
+        smoothed_rms_ = smoothed_rms_ * 0.7f + rms * 0.3f;
+    } else {
+        smoothed_rms_ = smoothed_rms_ * 0.97f + rms * 0.03f;
+    }
+
+    // Derive gain that brings the smoothed level to a consistent target.
+    constexpr float kTargetRms = 0.18f;
+    constexpr float kMinGain = 0.5f;
+    constexpr float kMaxGain = 6.0f;
+    float gain = 1.0f;
+    if (smoothed_rms_ > 0.001f) {
+        gain = std::clamp(kTargetRms / smoothed_rms_, kMinGain, kMaxGain);
+    }
+
+    // Apply gain with tanh soft-clip so transient peaks drive the
+    // visualizer without harsh distortion.
+    for (auto& s : samples) {
+        s = std::tanh(s * gain);
     }
 
     (void) sample_rate;

@@ -32,7 +32,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.MixBusProcessor
-import tf.monochrome.android.audio.eq.EqProcessor
+import tf.monochrome.android.audio.dsp.SpatialAudioProcessor
+import tf.monochrome.android.audio.eq.AutoEqProcessor
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.scrobbling.ScrobblingService
@@ -55,12 +56,13 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     @Inject lateinit var dspManager: DspEngineManager
+    @Inject lateinit var autoEqProcessor: AutoEqProcessor
+    @Inject lateinit var spatialProcessor: SpatialAudioProcessor
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var currentReplayGain: ReplayGainValues? = null
-    private var eqProcessor: EqProcessor? = null
 
     private fun createSessionActivity(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -135,10 +137,6 @@ class PlaybackService : MediaSessionService() {
             .setSessionActivity(createSessionActivity())
             .build()
 
-        // Initialize EQ Processor with the player's audio session
-        eqProcessor = EqProcessor(player.audioSessionId)
-        eqProcessor?.initialize()
-
         // Seamlessly apply playback speed when settings change
         serviceScope.launch {
             kotlinx.coroutines.flow.combine(
@@ -175,7 +173,7 @@ class PlaybackService : MediaSessionService() {
                     // Re-apply saved state on engine recreation (format change)
                     val stateJson = preferences.dspStateJson.first()
                     if (!stateJson.isNullOrEmpty()) dspManager.loadStateJson(stateJson)
-                    if (dspManager.enabled.value) mixBusProcessor.setEnabled(true)
+                    dspManager.setEnabled(dspManager.enabled.value)
                 }
             }
         }
@@ -196,7 +194,9 @@ class PlaybackService : MediaSessionService() {
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         .setAudioProcessors(
                             arrayOf(
-                                mixBusProcessor,  // DSP engine (mixer/effects)
+                                spatialProcessor,   // Dolby Atmos: multichannel → binaural (first in chain)
+                                mixBusProcessor,    // DSP engine (mixer/effects)
+                                autoEqProcessor,    // AutoEQ (independent, always-on when enabled)
                                 TeeAudioProcessor(
                                     ProjectMAudioTapProcessor(audioBus)
                                 )
@@ -215,6 +215,29 @@ class PlaybackService : MediaSessionService() {
                         )
                     )
                 }
+            }
+
+            override fun buildAudioRenderers(
+                context: android.content.Context,
+                extensionRendererMode: Int,
+                mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector,
+                enableDecoderFallback: Boolean,
+                audioSink: AudioSink,
+                eventHandler: android.os.Handler,
+                eventListener: androidx.media3.exoplayer.audio.AudioRendererEventListener,
+                out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>
+            ) {
+                out.add(tf.monochrome.android.player.atmos.AtmosAudioRenderer(eventHandler, eventListener, audioSink, mixBusProcessor))
+                super.buildAudioRenderers(
+                    context, 
+                    extensionRendererMode, 
+                    mediaCodecSelector, 
+                    enableDecoderFallback, 
+                    audioSink, 
+                    eventHandler, 
+                    eventListener, 
+                    out
+                )
             }
         }
     }
@@ -236,7 +259,6 @@ class PlaybackService : MediaSessionService() {
             release()
             mediaSession = null
         }
-        eqProcessor?.release()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -393,18 +415,17 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * Apply EQ settings to the audio processor
+     * Apply EQ settings to the standalone AutoEQ processor (independent of mixer DSP)
      */
     private fun applyEqSettings(enabled: Boolean, bandsJson: String?, preamp: Double) {
         try {
-            if (enabled && !bandsJson.isNullOrEmpty()) {
+            val bands = if (!bandsJson.isNullOrEmpty()) {
                 val json = Json { ignoreUnknownKeys = true }
-                val bands = json.decodeFromString<List<EqBand>>(bandsJson)
-                eqProcessor?.applyBands(bands, preamp.toFloat())
-                eqProcessor?.enable()
+                json.decodeFromString<List<EqBand>>(bandsJson)
             } else {
-                eqProcessor?.disable()
+                emptyList()
             }
+            autoEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }

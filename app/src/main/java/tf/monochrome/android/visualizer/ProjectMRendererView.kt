@@ -7,6 +7,7 @@ import android.util.AttributeSet
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
+@Suppress("ViewConstructor") // Programmatic-only view; requires ProjectMEngineRepository
 class ProjectMRendererView @JvmOverloads constructor(
     context: Context,
     private val repository: ProjectMEngineRepository,
@@ -36,7 +37,11 @@ class ProjectMRendererView @JvmOverloads constructor(
     }
 
     override fun onDetachedFromWindow() {
-        repository.onSurfaceDetached()
+        // Queue the detach on the GL thread so it runs in the correct OpenGL context
+        // and doesn't race with renderFrame.
+        queueEvent {
+            visualizerRenderer.onDetach()
+        }
         onPause()
         super.onDetachedFromWindow()
     }
@@ -44,24 +49,38 @@ class ProjectMRendererView @JvmOverloads constructor(
     private class VisualizerRenderer(
         private val repository: ProjectMEngineRepository
     ) : Renderer {
-        private var surfaceAttached = false
+        @Volatile
+        private var attached = false
 
         override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
             GLES20.glClearColor(0f, 0f, 0f, 1f)
-            repository.prepareEngine()
+            // Don't do heavy I/O here; the engine prepares assets asynchronously
+            // in its init block. We just signal readiness on the GL thread.
+            attached = false
         }
 
         override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
-            if (!surfaceAttached) {
+            if (!attached) {
                 repository.onSurfaceAttached(width, height)
-                surfaceAttached = true
+                attached = true
             } else {
                 repository.onSurfaceResized(width, height)
             }
         }
 
         override fun onDrawFrame(gl: GL10?) {
-            repository.renderFrame(System.nanoTime())
+            if (attached) {
+                repository.renderFrame(System.nanoTime())
+            } else {
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            }
+        }
+
+        fun onDetach() {
+            if (attached) {
+                attached = false
+                repository.onSurfaceDetached()
+            }
         }
     }
 }

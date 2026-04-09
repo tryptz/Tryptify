@@ -32,6 +32,7 @@
 #include "snapins/ring_mod.h"
 #include "snapins/tape_stop.h"
 #include "snapins/trance_gate.h"
+#include "snapins/eq_10band.h"
 #include <algorithm>
 #include <cstring>
 #include <sstream>
@@ -102,6 +103,7 @@ SnapinProcessor* createSnapin(SnapinType type) {
         case SnapinType::RING_MOD:   return new RingModProcessor();
         case SnapinType::TAPE_STOP:  return new TapeStopProcessor();
         case SnapinType::TRANCE_GATE: return new TranceGateProcessor();
+        case SnapinType::EQ_10BAND:  return new Eq10BandProcessor();
         default:
             LOGE("Unsupported snapin type: %d", static_cast<int>(type));
             return nullptr;
@@ -148,6 +150,7 @@ void DspEngine::process(float* left, float* right, int numFrames) {
     std::fill(sumR_.begin(), sumR_.begin() + numFrames, 0.0f);
 
     bool hasSolo = anySoloed();
+    bool mixBypass = mixBypassed_.load(std::memory_order_relaxed);
 
     // Lock for reading plugin chains (brief lock — plugins don't allocate during process)
     std::lock_guard<std::mutex> lock(chainMutex_);
@@ -160,8 +163,8 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         bool busInputEnabled = bus.inputEnabled.load(std::memory_order_relaxed);
         bool busMuted = bus.muted.load(std::memory_order_relaxed);
         bool busSoloed = bus.soloed.load(std::memory_order_relaxed);
-        float busGainDb = bus.gainDb.load(std::memory_order_relaxed);
-        float busPan = bus.pan.load(std::memory_order_relaxed);
+        float busGainDb = mixBypass ? 0.0f : bus.gainDb.load(std::memory_order_relaxed);
+        float busPan = mixBypass ? 0.0f : bus.pan.load(std::memory_order_relaxed);
 
         // Skip if no input, muted, or (solo mode active and this bus not soloed)
         if (!busInputEnabled || busMuted || (hasSolo && !busSoloed)) {
@@ -174,8 +177,9 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         std::copy(left, left + numFrames, busL_.data());
         std::copy(right, right + numFrames, busR_.data());
 
-        // Run plugin chain with dry/wet blending
+        // Run plugin chain with dry/wet blending (skip when mixer DSP is bypassed)
         for (auto& plugin : bus.plugins) {
+            if (mixBypass) break;
             if (plugin && !plugin->isBypassed()) {
                 float dw = plugin->getDryWet();
                 if (dw >= 0.999f) {
@@ -400,6 +404,10 @@ void DspEngine::setPluginBypassed(int busIndex, int slotIndex, bool bypassed) {
 void DspEngine::setBusInputEnabled(int busIndex, bool enabled) {
     if (busIndex < 0 || busIndex >= NUM_MIX_BUSES) return;  // Only mix buses, not master
     buses_[busIndex].inputEnabled.store(enabled, std::memory_order_relaxed);
+}
+
+void DspEngine::setMixBypassed(bool bypassed) {
+    mixBypassed_.store(bypassed, std::memory_order_relaxed);
 }
 
 void DspEngine::setPluginDryWet(int busIndex, int slotIndex, float dryWet) {
