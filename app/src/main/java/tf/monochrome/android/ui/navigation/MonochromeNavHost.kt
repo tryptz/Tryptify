@@ -70,8 +70,11 @@ import tf.monochrome.android.ui.player.NowPlayingScreen
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.library.FolderBrowserScreen
 import tf.monochrome.android.ui.profile.ProfileScreen
+import tf.monochrome.android.ui.stats.ListeningStatsScreen
+import tf.monochrome.android.ui.stats.StatsScreen
 import tf.monochrome.android.ui.search.SearchScreen
 import tf.monochrome.android.ui.settings.SettingsScreen
+import tf.monochrome.android.ui.carmode.CarModeScreen
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
@@ -96,6 +99,8 @@ sealed class Screen(val route: String) {
     }
     data object Equalizer : Screen("equalizer")
     data object Profile : Screen("profile")
+    data object Stats : Screen("stats")
+    data object ListeningStats : Screen("listening_stats")
     data object FolderBrowser : Screen("folder/{folderPath}") {
         fun createRoute(folderPath: String) = "folder/${java.net.URLEncoder.encode(folderPath, "UTF-8")}"
     }
@@ -106,6 +111,7 @@ sealed class Screen(val route: String) {
         fun createRoute(artistId: Long) = "local_artist/$artistId"
     }
     data object Mixer : Screen("mixer")
+    data object CarMode : Screen("car_mode")
 }
 
 data class BottomNavItem(
@@ -134,7 +140,9 @@ fun MonochromeNavHost() {
     // True when the user is on one of the three main tab screens
     val isOnMainTab = currentDestination?.route in tabRoutes
 
-    val showMiniPlayer = currentTrack != null && currentDestination?.route != Screen.NowPlaying.route
+    val showMiniPlayer = currentTrack != null
+        && currentDestination?.route != Screen.NowPlaying.route
+        && currentDestination?.route != Screen.Mixer.route
 
     // Pager state for the two main tabs
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
@@ -240,6 +248,9 @@ fun MonochromeNavHost() {
                         viewModel = hiltViewModel()
                     )
                 }
+                composable(Screen.CarMode.route) {
+                    CarModeScreen(navController = navController)
+                }
                 composable(Screen.Downloads.route) {
                     DownloadsScreen(navController = navController)
                 }
@@ -251,6 +262,12 @@ fun MonochromeNavHost() {
                 }
                 composable(Screen.Profile.route) {
                     ProfileScreen(navController = navController)
+                }
+                composable(Screen.Stats.route) {
+                    StatsScreen(navController = navController)
+                }
+                composable(Screen.ListeningStats.route) {
+                    ListeningStatsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = Screen.FolderBrowser.route,

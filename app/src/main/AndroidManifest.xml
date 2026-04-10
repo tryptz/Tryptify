@@ -45,20 +45,15 @@
                     android:scheme="https"
                     android:host="monochrome.tf" />
             </intent-filter>
-        </activity>
 
-        <!-- Appwrite OAuth2 callback -->
-        <activity
-            android:name="io.appwrite.views.CallbackActivity"
-            android:exported="true"
-            android:launchMode="singleTop">
-            <intent-filter android:label="Appwrite OAuth Callback">
+            <!-- Supabase OAuth2 callback deep-link -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="appwrite-callback-auth-for-monochrome"
-                    android:host="monochrome.tf" />
+                    android:scheme="tf.monotrypt.android"
+                    android:host="login-callback" />
             </intent-filter>
         </activity>
 

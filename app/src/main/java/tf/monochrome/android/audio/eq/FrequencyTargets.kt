@@ -10,6 +10,7 @@ import tf.monochrome.android.domain.model.FrequencyPoint
  * High-resolution target data (384 points per curve, 20Hz-20kHz) loaded dynamically
  * from the autoeq/targets assets directory.
  */
+@Suppress("StaticFieldLeak") // Stores applicationContext only — no leak
 object FrequencyTargets {
 
     private var context: Context? = null

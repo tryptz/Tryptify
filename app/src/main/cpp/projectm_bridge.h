@@ -7,6 +7,7 @@
 
 #include "projectM-4/projectM.h"
 #include "projectM-4/playlist.h"
+#include "projectM-4/touch.h"
 
 class ProjectMBridge {
 public:
@@ -35,6 +36,11 @@ public:
     void SetPresetDuration(int seconds);
     std::string CurrentPreset() const;
 
+    void Touch(float x, float y, int pressure, int touch_type);
+    void TouchDrag(float x, float y, int pressure);
+    void TouchDestroy(float x, float y);
+    void TouchDestroyAll();
+
 private:
     std::string FindPresetPath(const std::string& preset_path) const;
     std::string ReadCurrentPreset() const;
@@ -49,4 +55,5 @@ private:
     AudioRingBuffer audio_buffer_;
     bool paused_ = false;
     int brightness_ = 80;
+    float smoothed_rms_ = 0.0f;
 };

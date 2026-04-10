@@ -34,7 +34,8 @@ enum class SnapinType(val displayName: String, val category: SnapinCategory) {
     REVERSER("Reverser", SnapinCategory.SPACE),
     RING_MOD("Ring Mod", SnapinCategory.MODULATION),
     TAPE_STOP("Tape Stop", SnapinCategory.MODULATION),
-    TRANCE_GATE("Trance Gate", SnapinCategory.DYNAMICS);
+    TRANCE_GATE("Trance Gate", SnapinCategory.DYNAMICS),
+    EQ_10BAND("10-Band EQ", SnapinCategory.EQ_FILTER);
 
     val isAvailable: Boolean
         get() = true  // All 33 snapins implemented

@@ -1,59 +1,78 @@
 package tf.monochrome.android.ui.profile
 
-import android.util.Log
-import androidx.activity.ComponentActivity
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.AuthRepository
-import tf.monochrome.android.data.auth.GoogleAuthManager
+import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.auth.UserProfile
+import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import javax.inject.Inject
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val authManager: GoogleAuthManager,
-    private val authRepository: AuthRepository
+    private val authManager: SupabaseAuthManager,
+    private val authRepository: AuthRepository,
+    private val supabaseSyncRepository: SupabaseSyncRepository
 ) : ViewModel() {
 
     val userProfile: StateFlow<UserProfile?> = authManager.userProfile
     val isSigningIn: StateFlow<Boolean> = authManager.isSigningIn
     val errorMessage: StateFlow<String?> = authManager.errorMessage
 
-    fun refreshUser() {
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+    private val _syncStatus = MutableStateFlow<String?>(null)
+    val syncStatus: StateFlow<String?> = _syncStatus.asStateFlow()
+
+    fun syncNow() {
+        if (_isSyncing.value) return
         viewModelScope.launch {
-            authManager.refreshUser()
-            // If we have an Appwrite session, ensure PocketBase record exists
-            if (authManager.userProfile.value != null) {
-                authRepository.ensurePocketBaseRecord()
+            _isSyncing.value = true
+            _syncStatus.value = null
+            try {
+                supabaseSyncRepository.pushAll()
+                supabaseSyncRepository.pullAll()
+                _syncStatus.value = "Sync complete"
+            } catch (e: Exception) {
+                _syncStatus.value = "Sync failed: ${e.message ?: "unknown error"}"
+            } finally {
+                _isSyncing.value = false
             }
         }
     }
 
-    fun signInWithGoogle(activity: ComponentActivity) {
+    fun clearSyncStatus() {
+        _syncStatus.value = null
+    }
+
+    fun refreshUser() {
         viewModelScope.launch {
-            authManager.signInWithGoogle(activity)
-            // The actual sync happens in refreshUser() when the activity resumes
+            authManager.refreshUser()
+        }
+    }
+
+    fun signInWithGoogle(context: Context) {
+        viewModelScope.launch {
+            authManager.signInWithGoogle(context)
         }
     }
 
     fun signInWithEmail(email: String, password: String) {
         viewModelScope.launch {
-            val result = authManager.signInWithEmail(email, password)
-            result.onSuccess {
-                authRepository.ensurePocketBaseRecord()
-            }
+            authManager.signInWithEmail(email, password)
         }
     }
 
     fun signUpWithEmail(email: String, password: String) {
         viewModelScope.launch {
-            val result = authManager.signUpWithEmail(email, password)
-            result.onSuccess {
-                authRepository.ensurePocketBaseRecord()
-            }
+            authManager.signUpWithEmail(email, password)
         }
     }
 

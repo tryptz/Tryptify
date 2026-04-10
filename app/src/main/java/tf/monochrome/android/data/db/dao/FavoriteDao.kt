@@ -24,6 +24,9 @@ interface FavoriteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavoriteTrack(track: FavoriteTrackEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTrackIfNotExists(track: FavoriteTrackEntity)
+
     @Query("DELETE FROM favorite_tracks WHERE id = :trackId")
     suspend fun deleteFavoriteTrack(trackId: Long)
 
@@ -43,6 +46,9 @@ interface FavoriteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavoriteAlbum(album: FavoriteAlbumEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAlbumIfNotExists(album: FavoriteAlbumEntity)
+
     @Query("DELETE FROM favorite_albums WHERE id = :albumId")
     suspend fun deleteFavoriteAlbum(albumId: Long)
 
@@ -61,6 +67,9 @@ interface FavoriteDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavoriteArtist(artist: FavoriteArtistEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertArtistIfNotExists(artist: FavoriteArtistEntity)
 
     @Query("DELETE FROM favorite_artists WHERE id = :artistId")
     suspend fun deleteFavoriteArtist(artistId: Long)

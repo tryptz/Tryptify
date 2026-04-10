@@ -2,6 +2,7 @@ package tf.monochrome.android.data.local.tags
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.annotation.SuppressLint
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -101,6 +102,7 @@ class TagReader @Inject constructor(
         )
     }
 
+    @SuppressLint("InlinedApi") // METADATA_KEY_SAMPLERATE/BITS_PER_SAMPLE: returns null on <31
     private fun extractTagsFromRetriever(
         retriever: MediaMetadataRetriever,
         filePath: String,

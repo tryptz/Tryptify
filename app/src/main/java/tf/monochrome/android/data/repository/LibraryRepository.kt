@@ -5,12 +5,14 @@ import kotlinx.coroutines.flow.map
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
+import tf.monochrome.android.data.db.dao.PlayEventDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.data.db.entity.FavoriteAlbumEntity
 import tf.monochrome.android.data.db.entity.FavoriteArtistEntity
 import tf.monochrome.android.data.db.entity.FavoriteTrackEntity
 import tf.monochrome.android.data.db.entity.HistoryTrackEntity
+import tf.monochrome.android.data.db.entity.PlayEventEntity
 import tf.monochrome.android.data.db.entity.PlaylistTrackEntity
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
 import tf.monochrome.android.domain.model.Album
@@ -24,6 +26,7 @@ import javax.inject.Singleton
 class LibraryRepository @Inject constructor(
     private val favoriteDao: FavoriteDao,
     private val historyDao: HistoryDao,
+    private val playEventDao: PlayEventDao,
     private val playlistDao: PlaylistDao,
     private val downloadDao: DownloadDao
 ) {
@@ -77,11 +80,17 @@ class LibraryRepository @Inject constructor(
 
     suspend fun addToHistory(track: Track) {
         historyDao.addToHistory(track.toHistoryEntity())
+        playEventDao.insert(track.toPlayEventEntity())
     }
 
     suspend fun clearHistory() {
         historyDao.clearHistory()
+        playEventDao.clearAll()
     }
+
+    // --- Play events / stats ---
+
+    val playEventDaoRef: PlayEventDao get() = playEventDao
 
     suspend fun getMostPlayed(limit: Int = 50): List<Track> {
         return historyDao.getMostPlayed(limit).map { it.toDomain() }
@@ -235,6 +244,20 @@ private fun Track.toHistoryEntity() = HistoryTrackEntity(
     albumTitle = album?.title,
     albumCover = album?.cover,
     audioQuality = audioQuality
+)
+
+private fun Track.toPlayEventEntity() = PlayEventEntity(
+    trackId = id,
+    title = title,
+    duration = duration,
+    artistId = artist?.id,
+    artistName = displayArtist,
+    albumId = album?.id,
+    albumTitle = album?.title,
+    albumCover = album?.cover,
+    audioQuality = audioQuality,
+    source = null,
+    playedAt = System.currentTimeMillis()
 )
 
 private fun Track.toPlaylistTrackEntity(playlistId: String) = PlaylistTrackEntity(

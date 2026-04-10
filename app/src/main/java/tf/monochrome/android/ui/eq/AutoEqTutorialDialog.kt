@@ -133,6 +133,7 @@ fun AutoEqTutorialDialog(
                     ) {
                         // Icon with gradient background
                         val context = LocalContext.current
+                        @Suppress("DiscouragedApi", "LocalContextResourcesRead")
                         val drawableId = context.resources.getIdentifier(
                             tutorialStep.drawableRes, "drawable", context.packageName
                         )

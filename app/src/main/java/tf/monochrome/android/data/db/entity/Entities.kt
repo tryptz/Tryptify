@@ -64,6 +64,29 @@ data class HistoryTrackEntity(
     val playedAt: Long = System.currentTimeMillis()
 )
 
+/**
+ * Per-play scrobble log. Unlike [HistoryTrackEntity] (which holds one row per track),
+ * this table records one row per playback so we can compute listening statistics over time.
+ */
+@Entity(
+    tableName = "play_events",
+    indices = [Index("trackId"), Index("playedAt")]
+)
+data class PlayEventEntity(
+    @PrimaryKey(autoGenerate = true) val rowId: Long = 0,
+    val trackId: Long,
+    val title: String,
+    val duration: Int = 0,
+    val artistId: Long? = null,
+    val artistName: String = "",
+    val albumId: Long? = null,
+    val albumTitle: String? = null,
+    val albumCover: String? = null,
+    val audioQuality: String? = null,
+    val source: String? = null,
+    val playedAt: Long = System.currentTimeMillis()
+)
+
 @Serializable
 @Entity(tableName = "user_playlists")
 data class UserPlaylistEntity(

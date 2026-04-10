@@ -1,8 +1,10 @@
 package tf.monochrome.android.di
 
+import android.content.Context
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.MixBusProcessor
@@ -16,6 +18,11 @@ object DspModule {
     @Provides
     @Singleton
     fun provideMixBusProcessor(): MixBusProcessor = MixBusProcessor()
+
+    @Provides
+    @Singleton
+    fun provideSpatialAudioProcessor(@ApplicationContext context: Context): tf.monochrome.android.audio.dsp.SpatialAudioProcessor = 
+        tf.monochrome.android.audio.dsp.SpatialAudioProcessor(context)
 
     @Provides
     @Singleton

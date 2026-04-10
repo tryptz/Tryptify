@@ -8,7 +8,7 @@ hilt = "2.57.1"
 room = "2.7.1"
 ktor = "3.0.3"
 coil = "3.0.4"
-appwrite = "7.0.0"
+supabase = "3.4.1"
 lifecycle = "2.8.7"
 navigation = "2.8.5"
 workmanager = "2.10.0"
@@ -82,8 +82,12 @@ work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref
 kotlinx-coroutines = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-serialization = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
-# Appwrite
-appwrite = { group = "io.appwrite", name = "sdk-for-android", version.ref = "appwrite" }
+# Supabase
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
+supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+supabase-compose-auth = { group = "io.github.jan-tennert.supabase", name = "compose-auth" }
+supabase-compose-auth-ui = { group = "io.github.jan-tennert.supabase", name = "compose-auth-ui" }
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 
 # Glance (Widgets)
 glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
@@ -98,6 +102,7 @@ cast-framework = { group = "com.google.android.gms", name = "play-services-cast-
 # AndroidX Core
 core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.15.0" }
 core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version = "1.0.1" }
+browser = { group = "androidx.browser", name = "browser", version = "1.8.0" }
 
 # Media (for Android Auto)
 media = { group = "androidx.media", name = "media", version = "1.7.0" }
@@ -116,6 +121,9 @@ accompanist-permissions = { group = "com.google.accompanist", name = "accompanis
 # Haze (Glassmorphism blur)
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 haze-materials = { group = "dev.chrisbanes.haze", name = "haze-materials", version.ref = "haze" }
+
+# BlurView
+blurview = { group = "com.github.Dimezis", name = "BlurView", version = "version-3.2.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

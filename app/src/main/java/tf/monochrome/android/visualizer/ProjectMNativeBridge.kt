@@ -86,6 +86,22 @@ class ProjectMNativeBridge {
         }
     }
 
+    fun touch(x: Float, y: Float, pressure: Int, touchType: Int) {
+        if (nativeHandle != 0L) nativeTouch(nativeHandle, x, y, pressure, touchType)
+    }
+
+    fun touchDrag(x: Float, y: Float, pressure: Int) {
+        if (nativeHandle != 0L) nativeTouchDrag(nativeHandle, x, y, pressure)
+    }
+
+    fun touchDestroy(x: Float, y: Float) {
+        if (nativeHandle != 0L) nativeTouchDestroy(nativeHandle, x, y)
+    }
+
+    fun touchDestroyAll() {
+        if (nativeHandle != 0L) nativeTouchDestroyAll(nativeHandle)
+    }
+
     fun release() {
         if (nativeHandle != 0L) {
             nativeRelease(nativeHandle)
@@ -157,5 +173,9 @@ class ProjectMNativeBridge {
     private external fun nativeSetQuality(handle: Long, meshWidth: Int, meshHeight: Int)
     private external fun nativeSetFps(handle: Long, fps: Int)
     private external fun nativeSetPresetDuration(handle: Long, seconds: Int)
+    private external fun nativeTouch(handle: Long, x: Float, y: Float, pressure: Int, touchType: Int)
+    private external fun nativeTouchDrag(handle: Long, x: Float, y: Float, pressure: Int)
+    private external fun nativeTouchDestroy(handle: Long, x: Float, y: Float)
+    private external fun nativeTouchDestroyAll(handle: Long)
     private external fun nativeRelease(handle: Long)
 }

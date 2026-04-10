@@ -19,7 +19,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ButtonDefaults
@@ -65,15 +67,7 @@ import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.UserProfile
 import tf.monochrome.android.ui.components.liquidGlass
 import android.content.Context
-import android.content.ContextWrapper
-import androidx.activity.ComponentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
-
-fun Context.findActivity(): ComponentActivity? = when (this) {
-    is ComponentActivity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,6 +78,8 @@ fun ProfileScreen(
     val userProfile by viewModel.userProfile.collectAsState()
     val isSigningIn by viewModel.isSigningIn.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -114,43 +110,74 @@ fun ProfileScreen(
             )
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (userProfile != null) {
-                SignedInView(
-                    profile = userProfile!!,
-                    onSignOut = {
-                        viewModel.signOut()
-                    }
+        if (isSigningIn) {
+            // Full-screen loading while OAuth completes
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(48.dp),
+                    strokeWidth = 3.dp,
+                    color = MaterialTheme.colorScheme.primary
                 )
-            } else {
-                SignedOutView(
-                    isLoading = isSigningIn,
-                    errorMessage = errorMessage,
-                    onSignInWithGoogle = {
-                        val activity = context.findActivity() ?: return@SignedOutView
-                        viewModel.signInWithGoogle(activity)
-                    },
-                    onSignInWithEmail = { email, password ->
-                        viewModel.signInWithEmail(email, password)
-                    },
-                    onSignUpWithEmail = { email, password ->
-                        viewModel.signUpWithEmail(email, password)
-                    },
-                    onClearError = { viewModel.clearError() }
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    "Signing in...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (userProfile != null) {
+                    SignedInView(
+                        profile = userProfile!!,
+                        isSyncing = isSyncing,
+                        syncStatus = syncStatus,
+                        onSync = { viewModel.syncNow() },
+                        onOpenStats = { navController.navigate("stats") },
+                        onSignOut = {
+                            viewModel.signOut()
+                        }
+                    )
+                } else {
+                    SignedOutView(
+                        isLoading = false,
+                        errorMessage = errorMessage,
+                        onSignInWithGoogle = {
+                            viewModel.signInWithGoogle(context)
+                        },
+                        onSignInWithEmail = { email, password ->
+                            viewModel.signInWithEmail(email, password)
+                        },
+                        onSignUpWithEmail = { email, password ->
+                            viewModel.signUpWithEmail(email, password)
+                        },
+                        onClearError = { viewModel.clearError() }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SignedInView(profile: UserProfile, onSignOut: () -> Unit) {
+private fun SignedInView(
+    profile: UserProfile,
+    isSyncing: Boolean,
+    syncStatus: String?,
+    onSync: () -> Unit,
+    onOpenStats: () -> Unit,
+    onSignOut: () -> Unit
+) {
     Spacer(modifier = Modifier.height(32.dp))
 
     Icon(
@@ -199,6 +226,54 @@ private fun SignedInView(profile: UserProfile, onSignOut: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    ElevatedButton(
+        onClick = onSync,
+        enabled = !isSyncing,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.elevatedButtonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        )
+    ) {
+        if (isSyncing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text("Syncing...", style = MaterialTheme.typography.labelLarge)
+        } else {
+            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+            Text("Sync Now", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+
+    if (syncStatus != null) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = syncStatus,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    OutlinedButton(
+        onClick = onOpenStats,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Icon(Icons.Default.BarChart, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(10.dp))
+        Text("Listening Stats", style = MaterialTheme.typography.labelLarge)
     }
 
     Spacer(modifier = Modifier.height(24.dp))

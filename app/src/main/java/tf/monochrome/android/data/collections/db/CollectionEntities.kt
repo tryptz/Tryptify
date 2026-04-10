@@ -65,7 +65,8 @@ data class CollectionAlbumEntity(
         Index("collectionId"),
         Index("albumUuid"),
         Index("isrc"),
-        Index("tidalId")
+        Index("tidalId"),
+        Index("title")
     ]
 )
 data class CollectionTrackEntity(

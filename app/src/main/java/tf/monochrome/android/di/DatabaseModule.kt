@@ -13,6 +13,7 @@ import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
+import tf.monochrome.android.data.db.dao.PlayEventDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
 import javax.inject.Singleton
 
@@ -35,6 +36,9 @@ object DatabaseModule {
 
     @Provides
     fun provideHistoryDao(db: MusicDatabase): HistoryDao = db.historyDao()
+
+    @Provides
+    fun providePlayEventDao(db: MusicDatabase): PlayEventDao = db.playEventDao()
 
     @Provides
     fun providePlaylistDao(db: MusicDatabase): PlaylistDao = db.playlistDao()

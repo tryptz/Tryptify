@@ -228,6 +228,63 @@ Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeSetPresetDurati
 
 extern "C"
 JNIEXPORT void JNICALL
+Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeTouch(
+        JNIEnv* /*env*/,
+        jobject /*thiz*/,
+        jlong handle,
+        jfloat x,
+        jfloat y,
+        jint pressure,
+        jint touch_type) {
+    auto* bridge = FromHandle(handle);
+    if (bridge != nullptr) {
+        bridge->Touch(x, y, pressure, touch_type);
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeTouchDrag(
+        JNIEnv* /*env*/,
+        jobject /*thiz*/,
+        jlong handle,
+        jfloat x,
+        jfloat y,
+        jint pressure) {
+    auto* bridge = FromHandle(handle);
+    if (bridge != nullptr) {
+        bridge->TouchDrag(x, y, pressure);
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeTouchDestroy(
+        JNIEnv* /*env*/,
+        jobject /*thiz*/,
+        jlong handle,
+        jfloat x,
+        jfloat y) {
+    auto* bridge = FromHandle(handle);
+    if (bridge != nullptr) {
+        bridge->TouchDestroy(x, y);
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeTouchDestroyAll(
+        JNIEnv* /*env*/,
+        jobject /*thiz*/,
+        jlong handle) {
+    auto* bridge = FromHandle(handle);
+    if (bridge != nullptr) {
+        bridge->TouchDestroyAll();
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
 Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeRelease(
         JNIEnv* /*env*/,
         jobject /*thiz*/,

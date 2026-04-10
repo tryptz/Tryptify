@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,6 +68,7 @@ fun LibraryScreen(
     val favoriteArtists by viewModel.favoriteArtists.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val activeDownloads by playerViewModel.activeDownloads.collectAsState()
 
     val libraryTabOrder by settingsViewModel.libraryTabOrder.collectAsState()
 
@@ -190,7 +192,8 @@ fun LibraryScreen(
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                                }
+                                },
+                                downloadState = activeDownloads[track.id]
                             )
                         }
                     }
@@ -207,7 +210,8 @@ fun LibraryScreen(
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                                }
+                                },
+                                downloadState = activeDownloads[track.id]
                             )
                         }
                     }
@@ -310,7 +314,24 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     if (favoriteTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "Liked Songs") }
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SectionHeader(title = "Liked Songs")
+                                IconButton(onClick = { playerViewModel.downloadAllTracks(favoriteTracks) }) {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = "Download All",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
                         items(favoriteTracks) { track ->
                             TrackItem(
                                 track = track,
@@ -321,7 +342,8 @@ fun LibraryScreen(
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                                }
+                                },
+                                downloadState = activeDownloads[track.id]
                             )
                         }
                     }

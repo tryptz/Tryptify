@@ -11,7 +11,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -23,29 +22,32 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 import tf.monochrome.android.domain.model.VisualizerEnginePhase
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
+import tf.monochrome.android.visualizer.ProjectMAudioBus
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.visualizer.ProjectMRendererView
@@ -66,6 +68,7 @@ fun VisualizerComponent(
     engineEnabled: Boolean,
     showFps: Boolean = false,
     isFullscreen: Boolean = false,
+    touchWaveformEnabled: Boolean = true,
     repository: ProjectMEngineRepository? = null
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "projectm-shell")
@@ -97,7 +100,7 @@ fun VisualizerComponent(
     val intensity = (sensitivity / 100f).coerceIn(0.18f, 1f)
     val alpha = (brightness / 100f).coerceIn(0.25f, 1f)
     
-    val currentFps by repository?.currentFps?.collectAsState(initial = 0) ?: androidx.compose.runtime.mutableStateOf(0)
+    val currentFps by repository?.currentFps?.collectAsState(initial = 0) ?: remember { mutableIntStateOf(0) }
 
     Box(
         modifier = modifier
@@ -113,57 +116,10 @@ fun VisualizerComponent(
             )
     ) {
         if (engineEnabled && engineStatus.isNativeReady && repository != null) {
-            val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-            val scale = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(1f) }
-            val offsetX = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
-            val offsetY = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
-            val rot = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
-            
-            Box(
+            AndroidView(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, rotationChange ->
-                            coroutineScope.launch {
-                                scale.snapTo((scale.value * zoom).coerceIn(0.5f, 5f))
-                                offsetX.snapTo(offsetX.value + pan.x)
-                                offsetY.snapTo(offsetY.value + pan.y)
-                                rot.snapTo(rot.value + rotationChange)
-                            }
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
-                                if (!event.changes.any { it.pressed }) {
-                                    coroutineScope.launch {
-                                        scale.animateTo(1f, animationSpec = androidx.compose.animation.core.spring(stiffness = 300f))
-                                    }
-                                    coroutineScope.launch {
-                                        offsetX.animateTo(0f, animationSpec = androidx.compose.animation.core.spring(stiffness = 300f))
-                                    }
-                                    coroutineScope.launch {
-                                        offsetY.animateTo(0f, animationSpec = androidx.compose.animation.core.spring(stiffness = 300f))
-                                    }
-                                    coroutineScope.launch {
-                                        rot.animateTo(0f, animationSpec = androidx.compose.animation.core.spring(stiffness = 300f))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .graphicsLayer {
-                        scaleX = scale.value
-                        scaleY = scale.value
-                        translationX = offsetX.value
-                        translationY = offsetY.value
-                        rotationZ = rot.value
-                        this.alpha = alpha
-                    }
-            ) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+                    .graphicsLayer { this.alpha = alpha },
                 factory = { context ->
                     ProjectMRendererView(context, repository).apply {
                         updatePlayback(isPlaying)
@@ -173,7 +129,13 @@ fun VisualizerComponent(
                     view.updatePlayback(isPlaying)
                 }
             )
-        }
+            if (touchWaveformEnabled) {
+                TouchWaveformOverlay(
+                    audioBus = repository.audioBus,
+                    alpha = alpha,
+                    travel = travel
+                )
+            }
         } else {
             AmbientGlowLayer(
                 travel = travel,
@@ -368,9 +330,9 @@ private fun SpectrumWaveLayer(
 @Composable
 private fun ProjectMStatusOverlay(
     engineStatus: VisualizerEngineStatus,
+    modifier: Modifier = Modifier,
     showFps: Boolean = false,
     currentFps: Int = 0,
-    modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier
@@ -418,4 +380,140 @@ private fun ProjectMStatusOverlay(
             }
         }
     }
+}
+
+// ─── Touch waveform overlay ────────────────────────────────────────
+
+@Composable
+private fun TouchWaveformOverlay(
+    audioBus: ProjectMAudioBus,
+    alpha: Float,
+    travel: Float,
+    modifier: Modifier = Modifier
+) {
+    val touchPoints = remember { mutableStateMapOf<Long, Offset>() }
+
+    Canvas(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val active = mutableMapOf<Long, Offset>()
+                        for (change in event.changes) {
+                            if (change.pressed) {
+                                active[change.id.value] = change.position
+                            }
+                            change.consume()
+                        }
+                        touchPoints.clear()
+                        touchPoints.putAll(active)
+                    }
+                }
+            }
+    ) {
+        // Read travel to force continuous redraws while fingers are down
+        @Suppress("UNUSED_EXPRESSION")
+        travel
+
+        if (touchPoints.isEmpty()) return@Canvas
+        val samples = audioBus.peekSamples() ?: return@Canvas
+        val points = touchPoints.values.toList()
+
+        if (points.size >= 2) {
+            for (i in 0 until points.size - 1) {
+                drawLinearWaveform(points[i], points[i + 1], samples, alpha)
+            }
+            if (points.size > 2) {
+                drawLinearWaveform(points.last(), points.first(), samples, alpha)
+            }
+        } else {
+            drawRadialWaveform(points[0], samples, alpha)
+        }
+    }
+}
+
+/** Draws an audio waveform stretched between two finger positions. */
+private fun DrawScope.drawLinearWaveform(
+    from: Offset,
+    to: Offset,
+    samples: FloatArray,
+    alpha: Float
+) {
+    val dx = to.x - from.x
+    val dy = to.y - from.y
+    val dist = sqrt(dx * dx + dy * dy)
+    if (dist < 2f) return
+
+    // Perpendicular direction for the wave displacement
+    val nx = -dy / dist
+    val ny = dx / dist
+
+    val path = Path()
+    val numPoints = 160
+    val waveHeight = dist * 0.14f
+
+    for (i in 0..numPoints) {
+        val t = i / numPoints.toFloat()
+        val sIdx = ((t * (samples.size - 1)).toInt()).coerceIn(0, samples.size - 1)
+        val s = samples[sIdx]
+        // Taper to zero at the endpoints so the wave meets the fingers
+        val envelope = sin(t * PI.toFloat())
+        val amp = s * waveHeight * envelope
+
+        val x = from.x + dx * t + nx * amp
+        val y = from.y + dy * t + ny * amp
+
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+
+    // Glow layer
+    drawPath(
+        path = path,
+        color = VisualizerMint.copy(alpha = 0.22f * alpha),
+        style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
+    )
+    // Main line
+    drawPath(
+        path = path,
+        color = VisualizerMint.copy(alpha = 0.88f * alpha),
+        style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+    )
+}
+
+/** Draws a circular oscilloscope waveform around a single finger. */
+private fun DrawScope.drawRadialWaveform(
+    center: Offset,
+    samples: FloatArray,
+    alpha: Float
+) {
+    val path = Path()
+    val numPoints = 160
+    val baseRadius = 38.dp.toPx()
+    val waveAmp = 28.dp.toPx()
+
+    for (i in 0..numPoints) {
+        val t = i / numPoints.toFloat()
+        val angle = t * 2f * PI.toFloat()
+        val sIdx = ((t * (samples.size - 1)).toInt()).coerceIn(0, samples.size - 1)
+        val radius = baseRadius + samples[sIdx] * waveAmp
+
+        val x = center.x + cos(angle) * radius
+        val y = center.y + sin(angle) * radius
+
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    path.close()
+
+    drawPath(
+        path = path,
+        color = VisualizerBlue.copy(alpha = 0.22f * alpha),
+        style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
+    )
+    drawPath(
+        path = path,
+        color = VisualizerBlue.copy(alpha = 0.88f * alpha),
+        style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+    )
 }

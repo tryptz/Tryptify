@@ -57,6 +57,9 @@ interface CollectionDao {
     @Query("SELECT * FROM collection_tracks WHERE collectionId = :collectionId ORDER BY albumUuid, volumeNumber, trackNumber")
     fun getTracksByCollection(collectionId: String): Flow<List<CollectionTrackEntity>>
 
+    @Query("SELECT * FROM collection_tracks WHERE collectionId = :collectionId ORDER BY albumUuid, volumeNumber, trackNumber LIMIT :limit OFFSET :offset")
+    suspend fun getTracksByCollectionPaginated(collectionId: String, limit: Int, offset: Int): List<CollectionTrackEntity>
+
     @Query("SELECT * FROM collection_tracks WHERE albumUuid = :albumUuid ORDER BY volumeNumber, trackNumber")
     fun getTracksByAlbum(albumUuid: String): Flow<List<CollectionTrackEntity>>
 
@@ -66,7 +69,7 @@ interface CollectionDao {
     @Query("SELECT * FROM collection_tracks WHERE isrc = :isrc LIMIT 1")
     suspend fun findTrackByIsrc(isrc: String): CollectionTrackEntity?
 
-    @Query("SELECT * FROM collection_tracks WHERE title LIKE :query OR isrc LIKE :query")
+    @Query("SELECT * FROM collection_tracks WHERE title LIKE :query OR isrc LIKE :query LIMIT 500")
     fun searchTracks(query: String): Flow<List<CollectionTrackEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

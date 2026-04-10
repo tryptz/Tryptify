@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tf.monochrome.android.audio.dsp.model.BusConfig
+import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -50,12 +51,13 @@ import tf.monochrome.android.ui.theme.MonoDimens
 fun ConsoleBusStrip(
     bus: BusConfig,
     isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    levels: BusLevels = BusLevels(),
     onSelect: () -> Unit,
     onGainChange: (Float) -> Unit,
     onPanChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
     onToggleSolo: () -> Unit,
-    modifier: Modifier = Modifier
 ) {
     val isMaster   = bus.isMaster
     val stripWidth = if (isMaster) 72.dp else 56.dp
@@ -131,20 +133,20 @@ fun ConsoleBusStrip(
                 .padding(horizontal = 2.dp),
             contentAlignment = Alignment.Center
         ) {
-            // VU meters behind ──────────────────────────────────────────
+            // VU meters behind — using actual audio levels ─────────────
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.Center
             ) {
                 VuMeter(
-                    levelDb  = bus.gainDb,
+                    levelDb  = levels.peakDbL,
                     muted    = bus.muted,
                     modifier = Modifier.fillMaxHeight()
                 )
                 if (isMaster) {
                     Spacer(modifier = Modifier.width(1.dp))
                     VuMeter(
-                        levelDb  = bus.gainDb,
+                        levelDb  = levels.peakDbR,
                         muted    = bus.muted,
                         modifier = Modifier.fillMaxHeight()
                     )

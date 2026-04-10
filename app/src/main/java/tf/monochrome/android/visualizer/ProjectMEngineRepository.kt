@@ -1,6 +1,7 @@
 package tf.monochrome.android.visualizer
 
 import android.content.Context
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -72,9 +73,13 @@ class ProjectMEngineRepository @Inject constructor(
     private var brightness: Int = 80
     private var rotationSeconds: Int = 20
     private var playbackPaused: Boolean = false
-    private var attachedSurfaceCount: Int = 0
-    private var lastPcmTimestampMs: Long = 0L
 
+    // Track whether there is an active GL surface. Only the most recent
+    // onSurfaceAttached call owns the native bridge. All others become no-ops.
+    private var attachedSurfaceCount: Int = 0
+    private var nativeInitialized: Boolean = false
+
+    private var lastPcmTimestampMs: Long = 0L
     private var fpsFrameCount = 0
     private var fpsStartTimeMs = 0L
 
@@ -91,14 +96,14 @@ class ProjectMEngineRepository @Inject constructor(
                 _engineEnabled.value = enabled
                 synchronized(engineLock) {
                     if (!enabled) {
-                        nativeBridge.release()
+                        releaseNativeLocked()
                         updateStatus(
                             phase = VisualizerEnginePhase.FALLBACK,
                             message = "projectM disabled in settings. Showing fallback visualizer."
                         )
                     } else if (ProjectMNativeBridge.isLibraryLoaded) {
                         updateStatus(
-                            phase = if (attachedSurfaceCount > 0) VisualizerEnginePhase.READY else _engineStatus.value.phase,
+                            phase = if (nativeInitialized) VisualizerEnginePhase.READY else _engineStatus.value.phase,
                             message = "projectM enabled and ready."
                         )
                     }
@@ -109,7 +114,9 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerAutoShuffle.collectLatest { enabled ->
                 _autoShuffle.value = enabled
                 synchronized(engineLock) {
-                    nativeBridge.setPresetShuffleEnabled(enabled)
+                    if (nativeInitialized) {
+                        nativeBridge.setPresetShuffleEnabled(enabled)
+                    }
                 }
             }
         }
@@ -120,7 +127,7 @@ class ProjectMEngineRepository @Inject constructor(
                 if (selected != null) {
                     _currentPreset.value = selected
                     synchronized(engineLock) {
-                        if (engineStatus.value.isNativeReady) {
+                        if (nativeInitialized) {
                             nativeBridge.setPreset(resolveAbsolutePresetPath(selected))
                         }
                     }
@@ -136,7 +143,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerMeshX.collectLatest { x ->
                 meshX = x
                 synchronized(engineLock) {
-                    nativeBridge.configureQuality(meshX, meshY)
+                    if (nativeInitialized) nativeBridge.configureQuality(meshX, meshY)
                 }
             }
         }
@@ -144,7 +151,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerMeshY.collectLatest { y ->
                 meshY = y
                 synchronized(engineLock) {
-                    nativeBridge.configureQuality(meshX, meshY)
+                    if (nativeInitialized) nativeBridge.configureQuality(meshX, meshY)
                 }
             }
         }
@@ -152,7 +159,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerTargetFps.collectLatest { fps ->
                 targetFps = fps
                 synchronized(engineLock) {
-                    nativeBridge.configureTargetFps(targetFps)
+                    if (nativeInitialized) nativeBridge.configureTargetFps(targetFps)
                 }
             }
         }
@@ -160,7 +167,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerSensitivity.collectLatest { value ->
                 beatSensitivity = value
                 synchronized(engineLock) {
-                    nativeBridge.setBeatSensitivity(value)
+                    if (nativeInitialized) nativeBridge.setBeatSensitivity(value)
                 }
             }
         }
@@ -168,7 +175,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerBrightness.collectLatest { value ->
                 brightness = value
                 synchronized(engineLock) {
-                    nativeBridge.setBrightness(value)
+                    if (nativeInitialized) nativeBridge.setBrightness(value)
                 }
             }
         }
@@ -176,7 +183,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerRotationSeconds.collectLatest { seconds ->
                 rotationSeconds = seconds
                 synchronized(engineLock) {
-                    applyRotationLocked()
+                    if (nativeInitialized) applyRotationLocked()
                 }
             }
         }
@@ -194,9 +201,15 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
+    /**
+     * Called from the GL thread when a new surface is ready.
+     * Releases any existing native instance first (since it's tied to the
+     * previous EGL context), then re-initializes on the current GL thread.
+     */
     fun onSurfaceAttached(width: Int, height: Int) {
         synchronized(engineLock) {
             attachedSurfaceCount += 1
+
             if (!_engineEnabled.value || !ProjectMNativeBridge.isLibraryLoaded) {
                 updateStatus(
                     phase = VisualizerEnginePhase.FALLBACK,
@@ -207,8 +220,11 @@ class ProjectMEngineRepository @Inject constructor(
 
             ensureAssetsLocked()
             val assets = installedAssets ?: return
-            nativeBridge.configureQuality(meshX, meshY)
-            nativeBridge.configureTargetFps(targetFps)
+
+            // Always release + re-create when a new GL surface attaches.
+            // The old EGL context is gone; the native handle is invalid.
+            releaseNativeLocked()
+
             val initialized = nativeBridge.initialize(assets.rootDir.absolutePath, width, height, meshX, meshY)
             if (!initialized) {
                 updateStatus(
@@ -218,6 +234,9 @@ class ProjectMEngineRepository @Inject constructor(
                 return
             }
 
+            nativeInitialized = true
+            nativeBridge.configureQuality(meshX, meshY)
+            nativeBridge.configureTargetFps(targetFps)
             nativeBridge.setPresetShuffleEnabled(_autoShuffle.value)
             nativeBridge.setBeatSensitivity(beatSensitivity)
             nativeBridge.setBrightness(brightness)
@@ -232,15 +251,20 @@ class ProjectMEngineRepository @Inject constructor(
 
     fun onSurfaceResized(width: Int, height: Int) {
         synchronized(engineLock) {
-            nativeBridge.resize(width, height)
+            if (nativeInitialized) {
+                nativeBridge.resize(width, height)
+            }
         }
     }
 
+    /**
+     * Called from the GL thread when the surface is about to be destroyed.
+     */
     fun onSurfaceDetached() {
         synchronized(engineLock) {
             attachedSurfaceCount = (attachedSurfaceCount - 1).coerceAtLeast(0)
             if (attachedSurfaceCount == 0) {
-                nativeBridge.release()
+                releaseNativeLocked()
                 updateStatus(
                     phase = if (ProjectMNativeBridge.isLibraryLoaded && _engineEnabled.value) {
                         VisualizerEnginePhase.READY
@@ -259,10 +283,13 @@ class ProjectMEngineRepository @Inject constructor(
 
     fun renderFrame(frameTimeNanos: Long) {
         synchronized(engineLock) {
-            if (!_engineEnabled.value || !engineStatus.value.isNativeReady) return
-            audioBus.consumeLatest()?.let { frame ->
-                lastPcmTimestampMs = frame.timestampMs
-                nativeBridge.pushPcm(frame.samples, frame.channelCount, frame.sampleRate)
+            if (!_engineEnabled.value || !nativeInitialized) return
+            val frames = audioBus.drainAll()
+            if (frames.isNotEmpty()) {
+                lastPcmTimestampMs = frames.last().timestampMs
+                for (frame in frames) {
+                    nativeBridge.pushPcm(frame.samples, frame.channelCount, frame.sampleRate)
+                }
             }
             val freezeFrame = playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
             if (!freezeFrame) {
@@ -271,7 +298,7 @@ class ProjectMEngineRepository @Inject constructor(
                     phase = VisualizerEnginePhase.ACTIVE,
                     message = "projectM rendering bundled presets."
                 )
-                
+
                 fpsFrameCount++
                 val now = System.currentTimeMillis()
                 if (now - fpsStartTimeMs >= 1000) {
@@ -286,12 +313,13 @@ class ProjectMEngineRepository @Inject constructor(
     fun setPlaybackPaused(paused: Boolean) {
         playbackPaused = paused
         synchronized(engineLock) {
-            nativeBridge.setPaused(paused)
+            if (nativeInitialized) nativeBridge.setPaused(paused)
         }
     }
 
     fun nextPreset() {
         synchronized(engineLock) {
+            if (!nativeInitialized) return
             val currentPath = nativeBridge.nextPreset() ?: return
             updateCurrentPresetFromPathLocked(currentPath)
             scope.launch {
@@ -307,7 +335,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.setVisualizerPresetId(preset.id)
         }
         synchronized(engineLock) {
-            if (engineStatus.value.isNativeReady) {
+            if (nativeInitialized) {
                 nativeBridge.setPreset(resolveAbsolutePresetPath(preset))
             }
         }
@@ -331,7 +359,31 @@ class ProjectMEngineRepository @Inject constructor(
         }
         synchronized(engineLock) {
             rotationSeconds = seconds
-            applyRotationLocked()
+            if (nativeInitialized) applyRotationLocked()
+        }
+    }
+
+    fun touch(x: Float, y: Float, pressure: Int, touchType: Int) {
+        synchronized(engineLock) {
+            if (nativeInitialized) nativeBridge.touch(x, y, pressure, touchType)
+        }
+    }
+
+    fun touchDrag(x: Float, y: Float, pressure: Int) {
+        synchronized(engineLock) {
+            if (nativeInitialized) nativeBridge.touchDrag(x, y, pressure)
+        }
+    }
+
+    fun touchDestroy(x: Float, y: Float) {
+        synchronized(engineLock) {
+            if (nativeInitialized) nativeBridge.touchDestroy(x, y)
+        }
+    }
+
+    fun touchDestroyAll() {
+        synchronized(engineLock) {
+            if (nativeInitialized) nativeBridge.touchDestroyAll()
         }
     }
 
@@ -340,6 +392,15 @@ class ProjectMEngineRepository @Inject constructor(
             phase = VisualizerEnginePhase.FALLBACK,
             message = message
         )
+    }
+
+    // ─── Private helpers ────────────────────────────────────────────────
+
+    private fun releaseNativeLocked() {
+        if (nativeInitialized) {
+            nativeBridge.release()
+            nativeInitialized = false
+        }
     }
 
     private fun ensureAssetsLocked() {
@@ -356,6 +417,7 @@ class ProjectMEngineRepository @Inject constructor(
             _currentPreset.value = preferredPresetId?.let { id ->
                 presets.firstOrNull { it.id == id }
             } ?: presets.firstOrNull()
+            Log.d(TAG, "Loaded ${presets.size} presets from catalog")
             updateStatus(
                 phase = VisualizerEnginePhase.READY,
                 message = "Bundled projectM presets ready.",
@@ -363,6 +425,7 @@ class ProjectMEngineRepository @Inject constructor(
                 assetVersion = assets.version
             )
         }.onFailure { error ->
+            Log.e(TAG, "Failed to install projectM assets", error)
             updateStatus(
                 phase = VisualizerEnginePhase.ERROR,
                 message = "projectM assets failed to install: ${error.message ?: "unknown error"}"
@@ -415,5 +478,9 @@ class ProjectMEngineRepository @Inject constructor(
             message = message,
             assetRoot = assetRoot
         )
+    }
+
+    companion object {
+        private const val TAG = "ProjectMEngineRepository"
     }
 }

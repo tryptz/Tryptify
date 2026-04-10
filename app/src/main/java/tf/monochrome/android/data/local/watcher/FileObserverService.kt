@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.local.watcher
 
+import android.os.Build
 import android.os.FileObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,8 +25,10 @@ class FileObserverService @Inject constructor(
     private var debounceJob: Job? = null
     private var isRunning = false
 
+    @Suppress("NewApi") // FileObserver(File, Int) requires API 29; gracefully skipped on older
     fun startWatching(directories: List<String>) {
         if (isRunning) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
         isRunning = true
 
         for (dirPath in directories) {

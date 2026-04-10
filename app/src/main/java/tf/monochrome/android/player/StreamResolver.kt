@@ -32,7 +32,7 @@ class StreamResolver @Inject constructor(
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
-        val parsed = Uri.parse(raw)
+        val parsed = raw.toUri()
         return if (parsed.scheme.isNullOrBlank()) Uri.fromFile(File(raw)) else parsed
     }
 

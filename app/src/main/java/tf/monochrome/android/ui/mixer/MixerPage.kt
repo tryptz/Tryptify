@@ -68,6 +68,7 @@ fun MixerPage(
 ) {
     val enabled          by viewModel.enabled.collectAsState()
     val buses            by viewModel.buses.collectAsState()
+    val busLevels        by viewModel.busLevels.collectAsState()
     val selectedBusIndex by viewModel.selectedBusIndex.collectAsState()
     val presets           by viewModel.presets.collectAsState()
     val currentPresetName by viewModel.currentPresetName.collectAsState()
@@ -125,6 +126,7 @@ fun MixerPage(
                             ConsoleBusStrip(
                                 bus          = bus,
                                 isSelected   = index == selectedBusIndex,
+                                levels       = busLevels.getOrNull(index) ?: tf.monochrome.android.audio.dsp.model.BusLevels(),
                                 onSelect     = {
                                     viewModel.selectBus(index)
                                     showInsertRack = true
@@ -147,6 +149,7 @@ fun MixerPage(
                             bus              = selectedBus,
                             busIndex         = selectedBusIndex,
                             editingPlugin    = editingPlugin,
+                            allBuses         = buses,
                             onSlotTap        = { slotIdx ->
                                 viewModel.editPlugin(selectedBusIndex, slotIdx)
                             },
@@ -159,6 +162,12 @@ fun MixerPage(
                             },
                             onParameterChange = { busIdx, slotIdx, paramIdx, value ->
                                 viewModel.setParameter(busIdx, slotIdx, paramIdx, value)
+                            },
+                            onPluginDryWet   = { busIdx, slotIdx, dw ->
+                                viewModel.setPluginDryWet(busIdx, slotIdx, dw)
+                            },
+                            onBusInputToggle = { busIdx, enabled ->
+                                viewModel.setBusInputEnabled(busIdx, enabled)
                             },
                             onDismissEditor  = { viewModel.dismissPluginEditor() },
                             onClose          = { showInsertRack = false }

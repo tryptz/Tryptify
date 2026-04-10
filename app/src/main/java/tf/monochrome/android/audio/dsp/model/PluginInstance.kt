@@ -8,6 +8,7 @@ data class PluginInstance(
     val slotIndex: Int,
     val typeOrdinal: Int,
     val bypassed: Boolean = false,
+    val dryWet: Float = 1f,
     val parameters: Map<Int, Float> = emptyMap()
 ) {
     val type: SnapinType?

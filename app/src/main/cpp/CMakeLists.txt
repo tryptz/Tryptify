@@ -31,13 +31,30 @@ target_link_libraries(monochrome_visualizer
 add_library(monochrome_dsp SHARED
     dsp/dsp_engine.cpp
     dsp/dsp_jni.cpp
+    dsp/spatial_renderer.cpp
+    dsp/spatial_renderer_jni.cpp
+    # dsp/atmos/AtmosDecoderJni.cpp
+    # dsp/atmos/Eac3Decoder.cpp
+    dsp/atmos/JocReconstructor.cpp
+    dsp/atmos/BinauralRenderer.cpp
+    dsp/atmos/RoomSimulator.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dsp
     ${CMAKE_CURRENT_SOURCE_DIR}/dsp/util
     ${CMAKE_CURRENT_SOURCE_DIR}/dsp/snapins
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp/atmos
+    ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include
+    ${CMAKE_CURRENT_BINARY_DIR}/libmysofa/include
 )
+
+# ── FFmpeg (Disabled temporarily due to Windows build constraints) ──────
+# include(ExternalProject)
+# set(FFMPEG_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg)
+# ExternalProject_Add(ffmpeg_source ...)
+# ExternalProject_Add(libmysofa_source ...)
+# add_dependencies(monochrome_dsp ffmpeg_source libmysofa_source)
 
 target_compile_options(monochrome_dsp PRIVATE
     -O3 -ffast-math -fno-exceptions -fno-rtti

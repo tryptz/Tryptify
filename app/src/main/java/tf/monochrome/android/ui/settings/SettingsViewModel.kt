@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.settings
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,7 +21,9 @@ import tf.monochrome.android.data.api.InstanceType
 import tf.monochrome.android.data.auth.AuthRepository
 import tf.monochrome.android.data.import_.PlaylistImporter
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.sync.BackupManager
+import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
@@ -38,6 +41,8 @@ class SettingsViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val playlistImporter: PlaylistImporter,
     private val projectMEngineRepository: ProjectMEngineRepository,
+    private val supabaseSyncRepository: SupabaseSyncRepository,
+    private val supabaseAuthManager: SupabaseAuthManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -75,6 +80,8 @@ class SettingsViewModel @Inject constructor(
     val cellularQuality: StateFlow<AudioQuality> = preferences.cellularQuality
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HIGH)
     val normalizationEnabled: StateFlow<Boolean> = preferences.normalizationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val dspMixerEnabled: StateFlow<Boolean> = preferences.dspEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -122,6 +129,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val visualizerFullscreen: StateFlow<Boolean> = preferences.visualizerFullscreen
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val visualizerTouchWaveform: StateFlow<Boolean> = preferences.visualizerTouchWaveform
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
 
@@ -245,6 +254,7 @@ class SettingsViewModel @Inject constructor(
     fun setWifiQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setWifiQuality(quality) } }
     fun setCellularQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setCellularQuality(quality) } }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
+    fun setDspMixerEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setDspEnabled(enabled) } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
 
     // --- Audio speed actions ---
@@ -271,6 +281,7 @@ class SettingsViewModel @Inject constructor(
     fun setVisualizerTargetFps(value: Int) { viewModelScope.launch { preferences.setVisualizerTargetFps(value) } }
     fun setVisualizerShowFps(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerShowFps(enabled) } }
     fun setVisualizerFullscreen(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerFullscreen(enabled) } }
+    fun setVisualizerTouchWaveform(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerTouchWaveform(enabled) } }
     fun setVisualizerPresetId(presetId: String?) { viewModelScope.launch { preferences.setVisualizerPresetId(presetId) } }
 
     // --- Library settings ---
@@ -321,7 +332,19 @@ class SettingsViewModel @Inject constructor(
 
     fun importLibrary(jsonStr: String) {
         viewModelScope.launch {
-            backupManager.importLibrary(jsonStr)
+            Log.d("ImportSync", "Starting library import...")
+            val result = backupManager.importLibrary(jsonStr)
+            Log.d("ImportSync", "Import result: $result")
+            // Auto-sync to Supabase if signed in
+            val profile = supabaseAuthManager.userProfile.value
+            Log.d("ImportSync", "Current Supabase user: ${profile?.id} (${profile?.email})")
+            if (profile != null) {
+                Log.d("ImportSync", "Pushing all data to Supabase...")
+                supabaseSyncRepository.pushAll()
+                Log.d("ImportSync", "Push complete")
+            } else {
+                Log.w("ImportSync", "Not signed in - skipping Supabase sync")
+            }
         }
     }
 

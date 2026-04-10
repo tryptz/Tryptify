@@ -101,6 +101,8 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val visualizerFullscreen: StateFlow<Boolean> = preferences.visualizerFullscreen
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val visualizerTouchWaveform: StateFlow<Boolean> = preferences.visualizerTouchWaveform
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     private val _visualizerCompact = MutableStateFlow(false)
     val visualizerCompact: StateFlow<Boolean> = _visualizerCompact.asStateFlow()
 
@@ -148,6 +150,11 @@ class PlayerViewModel @Inject constructor(
         connectToService()
         startPositionPolling()
         observeCurrentTrackMeta()
+        viewModelScope.launch {
+            downloadManager.observeAllActiveDownloads().collectLatest { active ->
+                _activeDownloads.value = active
+            }
+        }
     }
 
     private fun observeCurrentTrackMeta() {
@@ -475,13 +482,32 @@ class PlayerViewModel @Inject constructor(
     }
 
     // --- Downloads ---
+
+    private val _activeDownloads = MutableStateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>>(emptyMap())
+    val activeDownloads: StateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>> = _activeDownloads.asStateFlow()
+
     fun downloadTrack(track: Track) {
         downloadManager.downloadTrack(track)
-        android.widget.Toast.makeText(
-            context,
-            "Downloading: ${track.title}",
-            android.widget.Toast.LENGTH_SHORT
-        ).show()
+        observeTrackDownload(track.id)
+    }
+
+    fun downloadAllTracks(tracks: List<Track>) {
+        downloadManager.downloadTracks(tracks)
+        tracks.forEach { observeTrackDownload(it.id) }
+    }
+
+    private fun observeTrackDownload(trackId: Long) {
+        viewModelScope.launch {
+            downloadManager.observeDownloadState(trackId).collectLatest { state ->
+                _activeDownloads.value = _activeDownloads.value.toMutableMap().apply {
+                    if (state.status == tf.monochrome.android.data.downloads.DownloadStatus.IDLE) {
+                        remove(trackId)
+                    } else {
+                        put(trackId, state)
+                    }
+                }
+            }
+        }
     }
 
     fun addTrackToPlaylist(playlistId: String, track: Track) {

@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,7 +70,7 @@ fun MeasurementUploadScreen(
     val currentBands by viewModel.currentBands.collectAsState()
 
     var measurementData by remember { mutableStateOf("") }
-    var bandCount by remember { mutableStateOf(10f) }
+    var bandCount by remember { mutableFloatStateOf(10f) }
     var showTargetMenu by remember { mutableStateOf(false) }
     var headphoneName by remember { mutableStateOf("") }
     var calculationAttempted by remember { mutableStateOf(false) }

@@ -22,7 +22,6 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
     private var inputFormat = AudioFormat.NOT_SET
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
-    private var enabled = false
     private val _engineReady = MutableStateFlow(false)
     val engineReady: StateFlow<Boolean> = _engineReady.asStateFlow()
 
@@ -59,6 +58,7 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
     external fun nativeGetBusLevels(enginePtr: Long, outLevels: FloatArray)
     external fun nativeGetAndResetClipped(enginePtr: Long): Boolean
     external fun nativeResetPluginState(enginePtr: Long)
+    external fun nativeSetMixBypassed(enginePtr: Long, bypassed: Boolean)
     external fun nativeGetStateJson(enginePtr: Long): String
     external fun nativeLoadStateJson(enginePtr: Long, stateJson: String)
 
@@ -70,8 +70,12 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
     }
 
     fun getEnginePtr(): Long = enginePtr
-    fun isEnabled(): Boolean = enabled
-    fun setEnabled(e: Boolean) { enabled = e }
+
+    /** Bypass mix bus plugins (0-3) in the C++ engine. Master bus (AutoEQ) still runs. */
+    fun setMixBypassed(bypassed: Boolean) {
+        val ptr = enginePtr
+        if (ptr != 0L) nativeSetMixBypassed(ptr, bypassed)
+    }
 
     // ── AudioProcessor implementation ────────────────────────────────────
 
@@ -166,12 +170,13 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
         }
         inputBuffer.position(inputBuffer.position() + numFrames * frameSize)
 
-        // Always process through native engine (for metering)
+        // Always process through native engine — AutoEQ lives on the master bus
+        // and must run regardless of the mixer DSP toggle. The toggle controls
+        // mix bus bypass in the C++ engine, not a blanket wet/dry switch here.
         nativeProcess(enginePtr, scratchInL, scratchInR, scratchOutL, scratchOutR, numFrames)
 
-        // When disabled, output original input (dry) instead of processed
-        val useL = if (enabled) scratchOutL else scratchInL
-        val useR = if (enabled) scratchOutR else scratchInR
+        val useL = scratchOutL
+        val useR = scratchOutR
 
         // Interleave output back to ByteBuffer (always stereo output)
         val outFrameSize = bytesPerSample * 2  // stereo
@@ -232,7 +237,6 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
         if (formatChanged) {
             // Save current state so it survives engine recreation
             val savedState = if (enginePtr != 0L) nativeGetStateJson(enginePtr) else null
-            val wasEnabled = enabled
 
             if (enginePtr != 0L) {
                 nativeDestroy(enginePtr)
@@ -244,7 +248,6 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
             if (!savedState.isNullOrEmpty() && savedState != "{}") {
                 nativeLoadStateJson(enginePtr, savedState)
             }
-            enabled = wasEnabled
 
             // Signal ready (false→true transition ensures StateFlow emits)
             _engineReady.value = false
@@ -263,7 +266,6 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
         }
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
-        enabled = false
     }
 
     // LCG PRNG for TPDF dither — returns uniform value in [-0.5, 0.5) LSB range

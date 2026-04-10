@@ -9,12 +9,15 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.readBytes
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.readAvailable
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
@@ -40,6 +43,7 @@ class DownloadWorker @AssistedInject constructor(
         const val KEY_ALBUM_TITLE = "album_title"
         const val KEY_ALBUM_COVER = "album_cover"
         const val KEY_DURATION = "duration"
+        const val KEY_PROGRESS = "progress"
     }
 
     override suspend fun doWork(): Result {
@@ -61,11 +65,28 @@ class DownloadWorker @AssistedInject constructor(
             val streamUrl = streamResponse.streamUrl
                 ?: return Result.failure()
 
-            // Download audio bytes
+            // Download audio bytes with progress
+            setProgress(workDataOf(KEY_PROGRESS to 0.05f))
             val response = httpClient.get(streamUrl)
             if (!response.status.isSuccess()) return Result.failure()
 
-            val audioData = response.readBytes()
+            val contentLength = response.headers["Content-Length"]?.toLongOrNull() ?: -1L
+            val channel = response.bodyAsChannel()
+            val buffer = ByteArray(8192)
+            val output = java.io.ByteArrayOutputStream()
+            var totalRead = 0L
+
+            while (!channel.isClosedForRead) {
+                val read = channel.readAvailable(buffer)
+                if (read <= 0) break
+                output.write(buffer, 0, read)
+                totalRead += read
+                if (contentLength > 0) {
+                    val progress = (totalRead.toFloat() / contentLength).coerceIn(0.05f, 0.95f)
+                    setProgress(workDataOf(KEY_PROGRESS to progress))
+                }
+            }
+            val audioData = output.toByteArray()
 
             // Determine save location
             val customFolderUri = preferences.downloadFolderUri.first()
