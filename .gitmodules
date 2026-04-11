@@ -1,3 +1,7 @@
+[submodule "app/src/main/assets/presets"]
+	path = app/src/main/assets/presets
+	url = https://github.com/projectM-visualizer/presets-cream-of-the-crop.git
+
 [submodule "third_party/projectm"]
 	path = third_party/projectm
 	url = https://github.com/projectM-visualizer/projectm.git
