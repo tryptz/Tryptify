@@ -148,10 +148,13 @@ class SupabaseAuthManager @Inject constructor(
                     _errorMessage.value = "No access token in callback"
                 }
             } else {
-                // PKCE fallback: exchange code for session
                 val code = uri.getQueryParameter("code")
-                Log.d("SupabaseAuth", "PKCE flow: code=$code")
-                auth.exchangeCodeForSession(uri.toString())
+                Log.d("SupabaseAuth", "PKCE flow: code=${code?.take(20)}...")
+                if (code.isNullOrBlank()) {
+                    _errorMessage.value = "No code in callback"
+                    return
+                }
+                auth.exchangeCodeForSession(code)
                 val user = auth.currentUserOrNull()
                 _userProfile.value = user?.toProfile()
                 Log.d("SupabaseAuth", "PKCE flow login successful, user: ${user?.id}")
