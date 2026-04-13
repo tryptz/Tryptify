@@ -62,8 +62,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
-import tf.monochrome.android.ui.components.AlbumItem
-import tf.monochrome.android.ui.components.ArtistItem
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.LoadingScreen
 import tf.monochrome.android.ui.components.SectionHeader
@@ -72,6 +70,8 @@ import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.search.SearchQueryField
+import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -88,14 +88,18 @@ fun HomeScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRadioLoading by viewModel.isRadioLoading.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
-    val playlists by playerViewModel.playlists.collectAsState()
+    val libraryPlaylists by playerViewModel.playlists.collectAsState()
 
     // Search state
     val searchQuery by searchViewModel.query.collectAsState()
     val searchTracks by searchViewModel.tracks.collectAsState()
     val searchAlbums by searchViewModel.albums.collectAsState()
     val searchArtists by searchViewModel.artists.collectAsState()
+    val searchPlaylists by searchViewModel.playlists.collectAsState()
     val isSearching by searchViewModel.isSearching.collectAsState()
+    val selectedType by searchViewModel.selectedType.collectAsState()
+    val selectedSource by searchViewModel.selectedSource.collectAsState()
+    val showSourceFilter by searchViewModel.showSourceFilter.collectAsState()
     val hasSearchResults = searchQuery.isNotBlank()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember {
@@ -140,7 +144,7 @@ fun HomeScreen(
     showAddToPlaylistForTrack?.let { track ->
         AddToPlaylistSheet(
             track = track,
-            playlists = playlists,
+            playlists = libraryPlaylists,
             onDismiss = { showAddToPlaylistForTrack = null },
             onPlaylistSelected = { playlist ->
                 playerViewModel.addTrackToPlaylist(playlist.id, track)
@@ -185,119 +189,30 @@ fun HomeScreen(
         )
 
         // Search bar
-        androidx.compose.material3.TextField(
-            value = searchQuery,
-            onValueChange = searchViewModel::onQueryChange,
-            placeholder = {
-                Text(
-                    "Search tracks, albums, artists…",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = "Search")
-            },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { searchViewModel.onQueryChange("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear")
-                    }
-                }
-            },
-            singleLine = true,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .liquidGlass(shape = MonoDimens.shapePill)
+        SearchQueryField(
+            query = searchQuery,
+            onQueryChange = searchViewModel::onQueryChange,
+            onSubmit = searchViewModel::submitSearch
         )
 
         if (hasSearchResults) {
-            // ── Search results ───────────────────────────────────
-            when {
-                isSearching -> LoadingScreen()
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 160.dp)
-                    ) {
-                        if (searchArtists.isNotEmpty()) {
-                            item { SectionHeader(title = "Artists") }
-                            item {
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(searchArtists.take(10)) { artist ->
-                                        ArtistItem(
-                                            artist = artist,
-                                            onClick = {
-                                                navController.navigate(
-                                                    Screen.ArtistDetail.createRoute(artist.id)
-                                                )
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        if (searchAlbums.isNotEmpty()) {
-                            item { SectionHeader(title = "Albums") }
-                            item {
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(searchAlbums.take(10)) { album ->
-                                        AlbumItem(
-                                            album = album,
-                                            onClick = {
-                                                navController.navigate(
-                                                    Screen.AlbumDetail.createRoute(album.id)
-                                                )
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        if (searchTracks.isNotEmpty()) {
-                            item { SectionHeader(title = "Tracks") }
-                            items(searchTracks.take(20)) { track ->
-                                TrackItem(
-                                    track = track,
-                                    isLiked = favoriteTrackIds.contains(track.id),
-                                    onLikeClick = { playerViewModel.toggleFavorite(track) },
-                                    onClick = { playerViewModel.playTrack(track, searchTracks) },
-                                    onLongClick = { showContextMenuForTrack = track },
-                                    onMoreClick = { showContextMenuForTrack = track },
-                                    onAlbumClick = track.album?.id?.let { albumId ->
-                                        { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                                    }
-                                )
-                            }
-                        }
-
-                        if (searchTracks.isEmpty() && searchAlbums.isEmpty() && searchArtists.isEmpty()) {
-                            item {
-                                Text(
-                                    text = "No results found",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(24.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            SearchResultsContent(
+                navController = navController,
+                playerViewModel = playerViewModel,
+                query = searchQuery,
+                tracks = searchTracks,
+                albums = searchAlbums,
+                artists = searchArtists,
+                playlistResults = searchPlaylists,
+                isSearching = isSearching,
+                selectedType = selectedType,
+                onTypeSelected = searchViewModel::setSelectedType,
+                selectedSource = selectedSource,
+                onSourceSelected = searchViewModel::setSelectedSource,
+                showSourceFilter = showSourceFilter,
+                favoriteTrackIds = favoriteTrackIds,
+                libraryPlaylists = libraryPlaylists
+            )
         } else if (isLoading) {
             LoadingScreen()
         } else {

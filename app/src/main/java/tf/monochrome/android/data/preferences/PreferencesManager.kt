@@ -15,6 +15,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ReplayGainMode
@@ -30,6 +33,8 @@ class PreferencesManager @Inject constructor(
     private val dataStore = context.dataStore
 
     companion object {
+        private const val MAX_SEARCH_HISTORY_SIZE = 10
+
         // Audio quality
         private val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         private val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
@@ -144,7 +149,12 @@ class PreferencesManager @Inject constructor(
 
         // Car mode
         private val CAR_MODE_BAND_COUNT = intPreferencesKey("car_mode_band_count")
+
+        // Search
+        private val SEARCH_HISTORY_JSON = stringPreferencesKey("search_history_json")
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     // Audio Quality
     val wifiQuality: Flow<AudioQuality> = dataStore.data.map { prefs ->
@@ -390,6 +400,32 @@ class PreferencesManager @Inject constructor(
             if (uri != null) it[CUSTOM_FONT_URI] = uri
             else it.remove(CUSTOM_FONT_URI)
         }
+    }
+
+    // --- Search ---
+    val searchHistory: Flow<List<String>> = dataStore.data.map { prefs ->
+        prefs[SEARCH_HISTORY_JSON]?.let { raw ->
+            runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+        } ?: emptyList()
+    }
+
+    suspend fun addSearchHistoryQuery(query: String) {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isBlank()) return
+        dataStore.edit { prefs ->
+            val existing = prefs[SEARCH_HISTORY_JSON]?.let { raw ->
+                runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+            }.orEmpty()
+            val updated = buildList {
+                add(normalizedQuery)
+                addAll(existing.filterNot { it.equals(normalizedQuery, ignoreCase = true) })
+            }.take(MAX_SEARCH_HISTORY_SIZE)
+            prefs[SEARCH_HISTORY_JSON] = json.encodeToString(updated)
+        }
+    }
+
+    suspend fun clearSearchHistory() {
+        dataStore.edit { it.remove(SEARCH_HISTORY_JSON) }
     }
 
     // --- Google Auth ---
