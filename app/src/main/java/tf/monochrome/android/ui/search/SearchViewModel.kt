@@ -33,7 +33,13 @@ class SearchViewModel @Inject constructor(
     private val preferences: PreferencesManager
 ) : ViewModel() {
 
+    /**
+     * Search relevance favors title matches first, then artist and album context,
+     * and finally applies a small source boost so locally playable results edge out
+     * remote ones when textual relevance is otherwise identical.
+     */
     companion object {
+        private const val SEARCH_DEBOUNCE_MS = 250L
         private const val SCORE_WEIGHT_PRIMARY = 4_000
         private const val SCORE_WEIGHT_SECONDARY = 1_800
         private const val SCORE_WEIGHT_TERTIARY = 1_200
@@ -43,6 +49,7 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_LOCAL = 90
         private const val SOURCE_BOOST_COLLECTION = 70
         private const val SOURCE_BOOST_API = 50
+        private const val DEFAULT_ARTIST_NAME = "Unknown Artist"
     }
 
     enum class SearchTypeFilter(val label: String) {
@@ -122,7 +129,7 @@ class SearchViewModel @Inject constructor(
             return
         }
         searchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(250)
+            kotlinx.coroutines.delay(SEARCH_DEBOUNCE_MS)
             performSearch(newQuery.trim())
         }
     }
@@ -164,18 +171,29 @@ class SearchViewModel @Inject constructor(
     private suspend fun performSearch(query: String) {
         _isSearching.value = true
         val trimmedQuery = query.trim()
-        val (searchResult, unifiedResults) = coroutineScope {
-            val apiDeferred = async { repository.search(trimmedQuery) }
-            val libraryDeferred = async { unifiedLibrarySearch.search(trimmedQuery).first() }
+        val (searchResult, unifiedResultsResult) = coroutineScope {
+            val apiDeferred = async { runCatching { repository.search(trimmedQuery) } }
+            val libraryDeferred = async { runCatching { unifiedLibrarySearch.search(trimmedQuery).first() } }
             apiDeferred.await() to libraryDeferred.await()
         }
+        val unifiedResults = unifiedResultsResult.getOrNull()
 
-        if (searchResult.isSuccess) {
-            val result = searchResult.getOrThrow()
+        if (searchResult.isFailure && unifiedResults == null) {
+            clearResults()
+            _isSearching.value = false
+            return
+        }
+
+        val localAndCollectionTracks = listOfNotNull(
+            unifiedResults?.localTracks,
+            unifiedResults?.collectionTracks
+        ).flatten()
+
+        if (searchResult.getOrNull()?.isSuccess == true) {
+            val result = searchResult.getOrThrow().getOrThrow()
             _allTracks.value = scoreTracks(
                 query = trimmedQuery,
-                tracks = unifiedResults.localTracks +
-                    unifiedResults.collectionTracks +
+                tracks = localAndCollectionTracks +
                     result.tracks.map { it.toUnifiedTrack() }
             )
             _allAlbums.value = scoreItems(trimmedQuery, result.albums) { listOf(it.title, it.displayArtist) }
@@ -187,7 +205,7 @@ class SearchViewModel @Inject constructor(
         } else {
             _allTracks.value = scoreTracks(
                 query = trimmedQuery,
-                tracks = unifiedResults.localTracks + unifiedResults.collectionTracks
+                tracks = localAndCollectionTracks
             )
             _allAlbums.value = emptyList()
             _allArtists.value = emptyList()
@@ -211,7 +229,7 @@ class SearchViewModel @Inject constructor(
         trackNumber = trackNumber,
         discNumber = volumeNumber,
         explicit = explicit,
-        artistName = displayArtist.ifBlank { "Unknown Artist" },
+        artistName = displayArtist.ifBlank { DEFAULT_ARTIST_NAME },
         artistNames = artists.map { it.name }.ifEmpty { listOfNotNull(artist?.name) },
         albumArtistName = artist?.name,
         albumTitle = album?.title,
@@ -269,5 +287,5 @@ class SearchViewModel @Inject constructor(
     private fun String.normalized(): String = lowercase().trim()
 
     private fun String.tokenStartsWith(query: String): Boolean =
-        split(' ', '-', '_', '/', '.', '(', ')').any { token -> token.startsWith(query) }
+        splitToSequence(' ', '-', '_', '/', '.', '(', ')').any { token -> token.startsWith(query) }
 }
