@@ -33,6 +33,18 @@ class SearchViewModel @Inject constructor(
     private val preferences: PreferencesManager
 ) : ViewModel() {
 
+    companion object {
+        private const val SCORE_WEIGHT_PRIMARY = 4_000
+        private const val SCORE_WEIGHT_SECONDARY = 1_800
+        private const val SCORE_WEIGHT_TERTIARY = 1_200
+        private const val SCORE_PENALTY_PREFIX_MATCH = 500
+        private const val SCORE_PENALTY_TOKEN_PREFIX_MATCH = 1_000
+        private const val SCORE_PENALTY_SUBSTRING_MATCH = 1_500
+        private const val SOURCE_BOOST_LOCAL = 90
+        private const val SOURCE_BOOST_COLLECTION = 70
+        private const val SOURCE_BOOST_API = 50
+    }
+
     enum class SearchTypeFilter(val label: String) {
         ALL("All"),
         TRACKS("Tracks"),
@@ -215,9 +227,9 @@ class SearchViewModel @Inject constructor(
     ): List<UnifiedTrack> = tracks
         .distinctBy { it.id }
         .sortedByDescending { track ->
-            scoreField(query, track.title, 4_000) +
-                scoreField(query, track.artistName, 1_800) +
-                scoreField(query, track.albumTitle, 1_200) +
+            scoreField(query, track.title, SCORE_WEIGHT_PRIMARY) +
+                scoreField(query, track.artistName, SCORE_WEIGHT_SECONDARY) +
+                scoreField(query, track.albumTitle, SCORE_WEIGHT_TERTIARY) +
                 sourceBoost(track.sourceType)
         }
 
@@ -228,17 +240,17 @@ class SearchViewModel @Inject constructor(
     ): List<T> = items.sortedByDescending { item ->
         fields(item).mapIndexed { index, value ->
             scoreField(query, value, when (index) {
-                0 -> 4_000
-                1 -> 1_800
-                else -> 1_200
+                0 -> SCORE_WEIGHT_PRIMARY
+                1 -> SCORE_WEIGHT_SECONDARY
+                else -> SCORE_WEIGHT_TERTIARY
             })
         }.sum()
     }
 
     private fun sourceBoost(sourceType: SourceType): Int = when (sourceType) {
-        SourceType.LOCAL -> 90
-        SourceType.COLLECTION -> 70
-        SourceType.API -> 50
+        SourceType.LOCAL -> SOURCE_BOOST_LOCAL
+        SourceType.COLLECTION -> SOURCE_BOOST_COLLECTION
+        SourceType.API -> SOURCE_BOOST_API
     }
 
     private fun scoreField(query: String, rawValue: String?, baseScore: Int): Int {
@@ -247,9 +259,9 @@ class SearchViewModel @Inject constructor(
         if (normalizedQuery.isBlank() || normalizedValue.isBlank()) return 0
         return when {
             normalizedValue == normalizedQuery -> baseScore
-            normalizedValue.startsWith(normalizedQuery) -> baseScore - 500
-            normalizedValue.tokenStartsWith(normalizedQuery) -> baseScore - 1_000
-            normalizedValue.contains(normalizedQuery) -> baseScore - 1_500
+            normalizedValue.startsWith(normalizedQuery) -> baseScore - SCORE_PENALTY_PREFIX_MATCH
+            normalizedValue.tokenStartsWith(normalizedQuery) -> baseScore - SCORE_PENALTY_TOKEN_PREFIX_MATCH
+            normalizedValue.contains(normalizedQuery) -> baseScore - SCORE_PENALTY_SUBSTRING_MATCH
             else -> 0
         }
     }

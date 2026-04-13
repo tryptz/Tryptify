@@ -33,6 +33,8 @@ class PreferencesManager @Inject constructor(
     private val dataStore = context.dataStore
 
     companion object {
+        private const val MAX_SEARCH_HISTORY_SIZE = 10
+
         // Audio quality
         private val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         private val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
@@ -417,7 +419,7 @@ class PreferencesManager @Inject constructor(
             val updated = buildList {
                 add(normalizedQuery)
                 addAll(existing.filterNot { it.equals(normalizedQuery, ignoreCase = true) })
-            }.take(10)
+            }.take(MAX_SEARCH_HISTORY_SIZE)
             prefs[SEARCH_HISTORY_JSON] = json.encodeToString(updated)
         }
     }
