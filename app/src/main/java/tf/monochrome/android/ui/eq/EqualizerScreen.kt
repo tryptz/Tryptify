@@ -395,6 +395,25 @@ fun EqualizerScreen(
                         onClick = { viewModel.runAutoEq() },
                         modifier = Modifier.weight(1f)
                     )
+                    IconButton(
+                        onClick = {
+                            val hp = selectedHeadphone?.name
+                            saveName = if (hp.isNullOrBlank()) selectedTarget.label
+                                       else "$hp — ${selectedTarget.label}"
+                            saveDescription = ""
+                            showSaveDialog = true
+                        },
+                        enabled = currentBands.isNotEmpty(),
+                        modifier = Modifier
+                            .size(52.dp)
+                            .liquidGlass(shape = RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = "Save as preset",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 
@@ -451,7 +470,7 @@ fun EqualizerScreen(
                 if (allPresets.isEmpty()) {
                     item {
                         Text(
-                            "No saved profiles yet. Use the Save button in the EQ filters section.",
+                            "No saved profiles yet. Run AutoEq, then tap the save icon next to it.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

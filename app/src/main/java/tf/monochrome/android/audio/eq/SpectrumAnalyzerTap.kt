@@ -41,15 +41,21 @@ import kotlin.math.sqrt
 class SpectrumAnalyzerTap @Inject constructor() : AudioProcessor {
 
     companion object {
-        const val FFT_SIZE_LOW = 8192
-        const val FFT_SIZE_HIGH = 16384
-        const val OUTPUT_BINS = 128
+        const val FFT_SIZE_4K = 4096
+        const val FFT_SIZE_8K = 8192
+        const val FFT_SIZE_16K = 16384
+        // Legacy aliases (kept so existing call sites still resolve).
+        const val FFT_SIZE_LOW = FFT_SIZE_8K
+        const val FFT_SIZE_HIGH = FFT_SIZE_16K
+        const val OUTPUT_BINS = 256
         private const val MIN_FREQ = 20f
         private const val MAX_FREQ = 20000f
-        private const val PINK_SLOPE_DB_PER_OCT = 3.5f
-        private const val TARGET_FPS = 120
-        private const val FRAME_DELAY_MS = 1000L / TARGET_FPS   // ~8 ms
-        private const val SMOOTHING = 0.35f
+        private const val PINK_SLOPE_DB_PER_OCT = 4.0f
+        private const val TARGET_FPS = 60
+        private const val FRAME_DELAY_MS = 1000L / TARGET_FPS   // ~16 ms
+        // Slow exponential smoothing → ~176 ms time constant @ 60 fps (SPAN-like Avg Time).
+        private const val SMOOTH_ATTACK = 0.55f
+        private const val SMOOTH_RELEASE = 0.09f
     }
 
     private var pendingFormat = AudioFormat.NOT_SET
@@ -62,11 +68,12 @@ class SpectrumAnalyzerTap @Inject constructor() : AudioProcessor {
     @Volatile private var ring: FloatArray = FloatArray(FFT_SIZE_HIGH)
     @Volatile private var ringWrite = 0
 
-    @Volatile var fftSize: Int = FFT_SIZE_LOW
+    @Volatile var fftSize: Int = FFT_SIZE_8K
         set(value) {
             val clamped = when {
-                value <= FFT_SIZE_LOW -> FFT_SIZE_LOW
-                else -> FFT_SIZE_HIGH
+                value <= FFT_SIZE_4K -> FFT_SIZE_4K
+                value <= FFT_SIZE_8K -> FFT_SIZE_8K
+                else -> FFT_SIZE_16K
             }
             if (clamped != field) {
                 field = clamped
@@ -180,13 +187,32 @@ class SpectrumAnalyzerTap @Inject constructor() : AudioProcessor {
                     newBins[b] -= centerOffset
                 }
 
-                // Temporal smoothing
-                val a = SMOOTHING
+                // Temporal smoothing — fast attack, slow release for SPAN-like
+                // held-peak feel (~176 ms release time constant at 60 fps).
                 for (b in 0 until OUTPUT_BINS) {
-                    smoothed[b] = smoothed[b] * (1f - a) + newBins[b] * a
+                    val target = newBins[b]
+                    val prev = smoothed[b]
+                    val coef = if (target > prev) SMOOTH_ATTACK else SMOOTH_RELEASE
+                    smoothed[b] = prev + coef * (target - prev)
                 }
 
-                _spectrumBins.value = smoothed.copyOf()
+                // Spatial smoothing — 7-tap gaussian across log-frequency bins.
+                // With 256 bins / ~10 octaves this is ~1/12-octave smoothing,
+                // matching the flowing envelope of SPAN / FabFilter Pro-Q.
+                val out = FloatArray(OUTPUT_BINS)
+                val g0 = 0.30f; val g1 = 0.22f; val g2 = 0.10f; val g3 = 0.03f
+                for (b in 0 until OUTPUT_BINS) {
+                    val l3 = smoothed[(b - 3).coerceAtLeast(0)]
+                    val l2 = smoothed[(b - 2).coerceAtLeast(0)]
+                    val l1 = smoothed[(b - 1).coerceAtLeast(0)]
+                    val c = smoothed[b]
+                    val r1 = smoothed[(b + 1).coerceAtMost(OUTPUT_BINS - 1)]
+                    val r2 = smoothed[(b + 2).coerceAtMost(OUTPUT_BINS - 1)]
+                    val r3 = smoothed[(b + 3).coerceAtMost(OUTPUT_BINS - 1)]
+                    out[b] = g3 * (l3 + r3) + g2 * (l2 + r2) + g1 * (l1 + r1) + g0 * c
+                }
+
+                _spectrumBins.value = out
 
                 delay(FRAME_DELAY_MS)
             }

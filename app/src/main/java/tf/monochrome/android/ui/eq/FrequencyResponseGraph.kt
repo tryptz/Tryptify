@@ -40,7 +40,6 @@ import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.domain.model.FrequencyPoint
 import tf.monochrome.android.audio.eq.AutoEqEngine
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -217,10 +216,7 @@ fun FrequencyResponseGraph(
                     height = h,
                     minGain = minGain,
                     maxGain = maxGain,
-                    zeroOffset = zeroOffset,
-                    eqBands = eqBands,
-                    preamp = preamp,
-                    sampleRate = sampleRate
+                    zeroOffset = zeroOffset
                 )
             }
 
@@ -661,9 +657,9 @@ private fun DrawScope.drawDashedCurve(
 }
 
 /**
- * Render FFT spectrum bins as per-bin vertical columns, coloured by EQ response
- * at each bin's frequency — bright on boost, shadow on cut. Bins span
- * MIN_FREQ..MAX_FREQ on a log axis; magnitudes are dB relative to 0 dB center.
+ * Render FFT spectrum bins as a smooth Catmull-Rom envelope with vertical
+ * gradient fill (FabFilter Pro-Q style). Bins span MIN_FREQ..MAX_FREQ on a
+ * log axis; magnitudes are dB relative to 0 dB center.
  */
 private fun DrawScope.drawSpectrum(
     bins: FloatArray,
@@ -672,113 +668,65 @@ private fun DrawScope.drawSpectrum(
     height: Float,
     minGain: Float,
     maxGain: Float,
-    zeroOffset: Float,
-    eqBands: List<EqBand>,
-    preamp: Float,
-    sampleRate: Float
+    zeroOffset: Float
 ) {
     if (bins.isEmpty()) return
     val n = bins.size
     val logMin = log10(MIN_FREQ)
     val logMax = log10(MAX_FREQ)
-    val zeroY = gainToY(zeroOffset, height, minGain, maxGain)
-        .coerceIn(GRAPH_PADDING_TOP, height - GRAPH_PADDING_BOTTOM)
+    val topY = GRAPH_PADDING_TOP
+    val bottomY = height - GRAPH_PADDING_BOTTOM
 
-    // Precompute bin positions and EQ response at each bin's frequency
+    // Precompute bin x/y in screen space
     val xs = FloatArray(n)
     val ys = FloatArray(n)
-    val eqDb = FloatArray(n)
     for (i in 0 until n) {
         val t = i.toFloat() / (n - 1).toFloat()
         val freq = 10f.pow(logMin + t * (logMax - logMin))
         xs[i] = freqToX(freq, width)
         val binGain = (zeroOffset + bins[i]).coerceIn(minGain, maxGain)
-        ys[i] = gainToY(binGain, height, minGain, maxGain)
-        var g = preamp
-        eqBands.forEach { band ->
-            if (band.enabled) g += AutoEqEngine.calculateBiquadResponse(freq, band, sampleRate)
-        }
-        eqDb[i] = g
+        ys[i] = gainToY(binGain, height, minGain, maxGain).coerceIn(topY, bottomY)
     }
 
-    // Draw per-bin vertical columns, coloured by EQ response
-    // Boost: brighter + higher alpha. Cut: desaturated + dark shadow overlay.
-    val boostRef = 12f   // dB that maps to "max bright"
-    val cutRef = -12f    // dB that maps to "max shadow"
-    val shadow = Color(0xFF000000)
-    for (i in 0 until n) {
-        val x = xs[i]
-        val y = ys[i]
-        val next = if (i < n - 1) xs[i + 1] else width
-        val colWidth = (next - x).coerceAtLeast(1f)
-        val eq = eqDb[i]
-        // Base column fill — vertical gradient from bin-top (bright) → zero line (fade)
-        val baseAlphaTop: Float
-        val baseAlphaBottom: Float
-        val tintTop: Color
-        when {
-            eq >= 0f -> {
-                // Boost: ramp alpha up with boost amount
-                val k = (eq / boostRef).coerceIn(0f, 1f)
-                baseAlphaTop = 0.55f + 0.35f * k          // up to 0.9
-                baseAlphaBottom = 0.12f + 0.18f * k       // up to 0.30
-                tintTop = lerpColor(color, Color.White, 0.15f + 0.45f * k)
-            }
-            else -> {
-                // Cut: darken with cut amount
-                val k = (eq / cutRef).coerceIn(0f, 1f)    // 0..1 (more cut → more shadow)
-                baseAlphaTop = 0.30f * (1f - k) + 0.08f
-                baseAlphaBottom = 0.05f
-                tintTop = lerpColor(color, shadow, 0.25f + 0.55f * k)
-            }
+    // Build a smooth envelope path using Catmull-Rom -> cubic Bézier interpolation.
+    // This gives the flowing, continuously-curved look of FabFilter Pro-Q.
+    val envelope = Path().apply {
+        moveTo(xs[0], ys[0])
+        for (i in 0 until n - 1) {
+            val p0x = xs[(i - 1).coerceAtLeast(0)]; val p0y = ys[(i - 1).coerceAtLeast(0)]
+            val p1x = xs[i]; val p1y = ys[i]
+            val p2x = xs[i + 1]; val p2y = ys[i + 1]
+            val p3x = xs[(i + 2).coerceAtMost(n - 1)]; val p3y = ys[(i + 2).coerceAtMost(n - 1)]
+            val c1x = p1x + (p2x - p0x) / 6f
+            val c1y = p1y + (p2y - p0y) / 6f
+            val c2x = p2x - (p3x - p1x) / 6f
+            val c2y = p2y - (p3y - p1y) / 6f
+            cubicTo(c1x, c1y, c2x, c2y, p2x, p2y)
         }
-        if (y >= zeroY) continue // bin magnitude below zero (rare) — nothing to fill
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    tintTop.copy(alpha = baseAlphaTop),
-                    tintTop.copy(alpha = baseAlphaBottom)
-                ),
-                startY = y,
-                endY = zeroY
+    }
+
+    // Filled body — vertical gradient from envelope top down to graph bottom.
+    val fill = Path().apply {
+        addPath(envelope)
+        lineTo(xs[n - 1], bottomY)
+        lineTo(xs[0], bottomY)
+        close()
+    }
+    drawPath(
+        path = fill,
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                color.copy(alpha = 0.55f),
+                color.copy(alpha = 0.18f),
+                color.copy(alpha = 0.04f)
             ),
-            topLeft = Offset(x, y),
-            size = androidx.compose.ui.geometry.Size(colWidth, zeroY - y)
+            startY = topY,
+            endY = bottomY
         )
-        // Cut shadow: overlay a soft dark column from zero line down to represent "duck"
-        if (eq < 0f) {
-            val k = (eq / cutRef).coerceIn(0f, 1f)
-            val duckHeight = (zeroY - y) * (0.25f + 0.5f * k)
-            drawRect(
-                color = shadow.copy(alpha = 0.15f + 0.25f * k),
-                topLeft = Offset(x, zeroY),
-                size = androidx.compose.ui.geometry.Size(colWidth, duckHeight.coerceAtMost(height - zeroY))
-            )
-        }
-    }
-
-    // Thin line across the spectrum envelope for definition
-    val line = Path()
-    var started = false
-    for (i in 0 until n) {
-        if (!started) {
-            line.moveTo(xs[i], ys[i])
-            started = true
-        } else {
-            line.lineTo(xs[i], ys[i])
-        }
-    }
-    drawPath(line, color.copy(alpha = 0.75f), style = Stroke(width = 1.5f))
-}
-
-private fun lerpColor(a: Color, b: Color, t: Float): Color {
-    val tc = t.coerceIn(0f, 1f)
-    return Color(
-        red = a.red + (b.red - a.red) * tc,
-        green = a.green + (b.green - a.green) * tc,
-        blue = a.blue + (b.blue - a.blue) * tc,
-        alpha = a.alpha + (b.alpha - a.alpha) * tc
     )
+
+    // Soft envelope outline for definition.
+    drawPath(envelope, color.copy(alpha = 0.85f), style = Stroke(width = 1.5f))
 }
 
 private fun DrawScope.drawFilledCurve(

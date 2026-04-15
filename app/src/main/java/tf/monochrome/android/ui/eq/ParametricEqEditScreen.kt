@@ -126,7 +126,7 @@ fun ParametricEqEditScreen(
             }
         }
 
-        // FFT size toggle (8K / 16K)
+        // FFT size toggle (4K / 8K / 16K)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -141,14 +141,19 @@ fun ParametricEqEditScreen(
                 letterSpacing = 1.sp
             )
             TabChip(
+                label = "4K",
+                isSelected = fftSize == SpectrumAnalyzerTap.FFT_SIZE_4K,
+                onClick = { viewModel.setFftSize(SpectrumAnalyzerTap.FFT_SIZE_4K) }
+            )
+            TabChip(
                 label = "8K",
-                isSelected = fftSize == SpectrumAnalyzerTap.FFT_SIZE_LOW,
-                onClick = { viewModel.setFftSize(SpectrumAnalyzerTap.FFT_SIZE_LOW) }
+                isSelected = fftSize == SpectrumAnalyzerTap.FFT_SIZE_8K,
+                onClick = { viewModel.setFftSize(SpectrumAnalyzerTap.FFT_SIZE_8K) }
             )
             TabChip(
                 label = "16K",
-                isSelected = fftSize == SpectrumAnalyzerTap.FFT_SIZE_HIGH,
-                onClick = { viewModel.setFftSize(SpectrumAnalyzerTap.FFT_SIZE_HIGH) }
+                isSelected = fftSize == SpectrumAnalyzerTap.FFT_SIZE_16K,
+                onClick = { viewModel.setFftSize(SpectrumAnalyzerTap.FFT_SIZE_16K) }
             )
         }
 

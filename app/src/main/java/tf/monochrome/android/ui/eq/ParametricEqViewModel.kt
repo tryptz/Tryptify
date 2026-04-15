@@ -224,8 +224,9 @@ class ParametricEqViewModel @Inject constructor(
 
     fun setFftSize(size: Int) {
         val clamped = when {
-            size <= SpectrumAnalyzerTap.FFT_SIZE_LOW -> SpectrumAnalyzerTap.FFT_SIZE_LOW
-            else -> SpectrumAnalyzerTap.FFT_SIZE_HIGH
+            size <= SpectrumAnalyzerTap.FFT_SIZE_4K -> SpectrumAnalyzerTap.FFT_SIZE_4K
+            size <= SpectrumAnalyzerTap.FFT_SIZE_8K -> SpectrumAnalyzerTap.FFT_SIZE_8K
+            else -> SpectrumAnalyzerTap.FFT_SIZE_16K
         }
         _fftSize.value = clamped
         spectrumAnalyzer.fftSize = clamped
