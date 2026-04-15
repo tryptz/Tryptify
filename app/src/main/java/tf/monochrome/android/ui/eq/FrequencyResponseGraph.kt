@@ -207,9 +207,21 @@ fun FrequencyResponseGraph(
             // Frequency labels at bottom
             drawFreqLabels(w, h)
 
-            // FFT spectrum behind curves — uses the active theme's primary color
+            // FFT spectrum behind curves — uses the active theme's primary color,
+            // modulated per-bin by the EQ response (bright on boost, shadow on cut).
             if (spectrumBins.isNotEmpty() && spectrumColor != null) {
-                drawSpectrum(spectrumBins, spectrumColor, w, h, minGain, maxGain, zeroOffset)
+                drawSpectrum(
+                    bins = spectrumBins,
+                    color = spectrumColor,
+                    width = w,
+                    height = h,
+                    minGain = minGain,
+                    maxGain = maxGain,
+                    zeroOffset = zeroOffset,
+                    eqBands = eqBands,
+                    preamp = preamp,
+                    sampleRate = sampleRate
+                )
             }
 
             // Original measurement curve (bright blue for visibility)
@@ -649,8 +661,9 @@ private fun DrawScope.drawDashedCurve(
 }
 
 /**
- * Render FFT spectrum bins as a filled area below a translucent line.
- * Bins span MIN_FREQ..MAX_FREQ on a log axis; magnitudes are dB relative to 0 dB center.
+ * Render FFT spectrum bins as per-bin vertical columns, coloured by EQ response
+ * at each bin's frequency — bright on boost, shadow on cut. Bins span
+ * MIN_FREQ..MAX_FREQ on a log axis; magnitudes are dB relative to 0 dB center.
  */
 private fun DrawScope.drawSpectrum(
     bins: FloatArray,
@@ -659,7 +672,10 @@ private fun DrawScope.drawSpectrum(
     height: Float,
     minGain: Float,
     maxGain: Float,
-    zeroOffset: Float
+    zeroOffset: Float,
+    eqBands: List<EqBand>,
+    preamp: Float,
+    sampleRate: Float
 ) {
     if (bins.isEmpty()) return
     val n = bins.size
@@ -668,41 +684,101 @@ private fun DrawScope.drawSpectrum(
     val zeroY = gainToY(zeroOffset, height, minGain, maxGain)
         .coerceIn(GRAPH_PADDING_TOP, height - GRAPH_PADDING_BOTTOM)
 
-    val line = Path()
-    val fill = Path()
-    var started = false
+    // Precompute bin positions and EQ response at each bin's frequency
+    val xs = FloatArray(n)
+    val ys = FloatArray(n)
+    val eqDb = FloatArray(n)
     for (i in 0 until n) {
         val t = i.toFloat() / (n - 1).toFloat()
         val freq = 10f.pow(logMin + t * (logMax - logMin))
-        val x = freqToX(freq, width)
-        val gain = (zeroOffset + bins[i]).coerceIn(minGain, maxGain)
-        val y = gainToY(gain, height, minGain, maxGain)
-        if (!started) {
-            line.moveTo(x, y)
-            fill.moveTo(x, zeroY)
-            fill.lineTo(x, y)
-            started = true
-        } else {
-            line.lineTo(x, y)
-            fill.lineTo(x, y)
+        xs[i] = freqToX(freq, width)
+        val binGain = (zeroOffset + bins[i]).coerceIn(minGain, maxGain)
+        ys[i] = gainToY(binGain, height, minGain, maxGain)
+        var g = preamp
+        eqBands.forEach { band ->
+            if (band.enabled) g += AutoEqEngine.calculateBiquadResponse(freq, band, sampleRate)
+        }
+        eqDb[i] = g
+    }
+
+    // Draw per-bin vertical columns, coloured by EQ response
+    // Boost: brighter + higher alpha. Cut: desaturated + dark shadow overlay.
+    val boostRef = 12f   // dB that maps to "max bright"
+    val cutRef = -12f    // dB that maps to "max shadow"
+    val shadow = Color(0xFF000000)
+    for (i in 0 until n) {
+        val x = xs[i]
+        val y = ys[i]
+        val next = if (i < n - 1) xs[i + 1] else width
+        val colWidth = (next - x).coerceAtLeast(1f)
+        val eq = eqDb[i]
+        // Base column fill — vertical gradient from bin-top (bright) → zero line (fade)
+        val baseAlphaTop: Float
+        val baseAlphaBottom: Float
+        val tintTop: Color
+        when {
+            eq >= 0f -> {
+                // Boost: ramp alpha up with boost amount
+                val k = (eq / boostRef).coerceIn(0f, 1f)
+                baseAlphaTop = 0.55f + 0.35f * k          // up to 0.9
+                baseAlphaBottom = 0.12f + 0.18f * k       // up to 0.30
+                tintTop = lerpColor(color, Color.White, 0.15f + 0.45f * k)
+            }
+            else -> {
+                // Cut: darken with cut amount
+                val k = (eq / cutRef).coerceIn(0f, 1f)    // 0..1 (more cut → more shadow)
+                baseAlphaTop = 0.30f * (1f - k) + 0.08f
+                baseAlphaBottom = 0.05f
+                tintTop = lerpColor(color, shadow, 0.25f + 0.55f * k)
+            }
+        }
+        if (y >= zeroY) continue // bin magnitude below zero (rare) — nothing to fill
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    tintTop.copy(alpha = baseAlphaTop),
+                    tintTop.copy(alpha = baseAlphaBottom)
+                ),
+                startY = y,
+                endY = zeroY
+            ),
+            topLeft = Offset(x, y),
+            size = androidx.compose.ui.geometry.Size(colWidth, zeroY - y)
+        )
+        // Cut shadow: overlay a soft dark column from zero line down to represent "duck"
+        if (eq < 0f) {
+            val k = (eq / cutRef).coerceIn(0f, 1f)
+            val duckHeight = (zeroY - y) * (0.25f + 0.5f * k)
+            drawRect(
+                color = shadow.copy(alpha = 0.15f + 0.25f * k),
+                topLeft = Offset(x, zeroY),
+                size = androidx.compose.ui.geometry.Size(colWidth, duckHeight.coerceAtMost(height - zeroY))
+            )
         }
     }
-    // Close fill back to zero line
-    val lastX = freqToX(MAX_FREQ, width)
-    val firstX = freqToX(MIN_FREQ, width)
-    fill.lineTo(lastX, zeroY)
-    fill.lineTo(firstX, zeroY)
-    fill.close()
 
-    drawPath(
-        path = fill,
-        brush = Brush.verticalGradient(
-            colors = listOf(color.copy(alpha = 0.45f), color.copy(alpha = 0.05f)),
-            startY = GRAPH_PADDING_TOP,
-            endY = zeroY
-        )
-    )
+    // Thin line across the spectrum envelope for definition
+    val line = Path()
+    var started = false
+    for (i in 0 until n) {
+        if (!started) {
+            line.moveTo(xs[i], ys[i])
+            started = true
+        } else {
+            line.lineTo(xs[i], ys[i])
+        }
+    }
     drawPath(line, color.copy(alpha = 0.75f), style = Stroke(width = 1.5f))
+}
+
+private fun lerpColor(a: Color, b: Color, t: Float): Color {
+    val tc = t.coerceIn(0f, 1f)
+    return Color(
+        red = a.red + (b.red - a.red) * tc,
+        green = a.green + (b.green - a.green) * tc,
+        blue = a.blue + (b.blue - a.blue) * tc,
+        alpha = a.alpha + (b.alpha - a.alpha) * tc
+    )
 }
 
 private fun DrawScope.drawFilledCurve(
