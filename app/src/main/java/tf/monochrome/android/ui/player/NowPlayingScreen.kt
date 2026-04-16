@@ -967,6 +967,8 @@ private fun HeroCoverArt(
     spectrumBins: FloatArray = FloatArray(0),
     spectrumColor: Color = Color(0xFF7EB6FF)
 ) {
+    var spectrumEnabled by remember { mutableStateOf(true) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         CoverImage(
             url = track?.coverUrl,
@@ -989,18 +991,12 @@ private fun HeroCoverArt(
         )
 
         // Live spectrum overlay anchored to the bottom edge of the artwork.
-        // Pulled from the singleton SpectrumAnalyzerTap that already sits in
-        // the ExoPlayer audio pipeline, so it reflects exactly what the user
-        // is hearing (post-EQ, post-mixer). Always drawn — when the audio
-        // falls silent the envelope just decays to the baseline.
-        if (spectrumBins.isNotEmpty()) {
+        if (spectrumEnabled && spectrumBins.isNotEmpty()) {
             BoxWithConstraints(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
             ) {
-                // Take ~35% of the artwork height — enough to be clearly
-                // visible but capped so the peaks stay in the lower third.
                 SpectrumOverlay(
                     bins = spectrumBins,
                     color = spectrumColor,
@@ -1010,10 +1006,13 @@ private fun HeroCoverArt(
             }
         }
 
+        // Tap to toggle the spectrum overlay on/off.
         Surface(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(16.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .clickable { spectrumEnabled = !spectrumEnabled }
                 .liquidGlass(
                     shape = RoundedCornerShape(999.dp),
                     tintAlpha = 0.15f,
@@ -1029,12 +1028,12 @@ private fun HeroCoverArt(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Album,
+                    imageVector = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = if (isPlaying) "Artwork in focus" else "Paused artwork",
+                    text = if (spectrumEnabled) "Spectrum ON" else "Spectrum OFF",
                     style = MaterialTheme.typography.labelMedium
                 )
             }
