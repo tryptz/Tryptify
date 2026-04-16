@@ -1,0 +1,17 @@
+# Backend configuration — copy this file to `local.properties` (ignored by
+# git) and fill in values. Every key is optional; features that depend on
+# a given value gracefully degrade when it is blank.
+
+# Supabase project that backs Google Sign-In and cross-device sync.
+# Get these from your project's Settings -> API page.
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+
+# PocketBase instance that stores the `DB_users` collection for the
+# optional cloud-sync feature. Example: https://data.example.com
+POCKETBASE_URL=
+
+# Comma-separated uptime endpoints that publish the current list of TIDAL
+# proxy instances. When blank, the app falls back to the static instance
+# pool bundled in InstanceManager.kt.
+TIDAL_UPTIME_URLS=

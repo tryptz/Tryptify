@@ -483,9 +483,17 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
     val touchWaveform by viewModel.visualizerTouchWaveform.collectAsState()
     val engineStatus by viewModel.visualizerEngineStatus.collectAsState()
     val presets by viewModel.visualizerPresets.collectAsState()
+    val spectrumEnabled by viewModel.spectrumAnalyzerEnabled.collectAsState()
+    val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsState()
+    val spectrumFftSize by viewModel.spectrumFftSize.collectAsState()
+    val spectrumColorMode by viewModel.spectrumColorMode.collectAsState()
+    val spectrumBins by viewModel.spectrumBins.collectAsState()
+    val spectrumCoverUrl by viewModel.currentCoverUrl.collectAsState()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
     var showTextureDropdown by remember { mutableStateOf(false) }
     var showPresetDropdown by remember { mutableStateOf(false) }
+    var showFftDropdown by remember { mutableStateOf(false) }
+    var showColorDropdown by remember { mutableStateOf(false) }
 
     SettingsTabContent {
         SettingsGroupHeader("Playback")
@@ -528,6 +536,87 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
                     onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Spectrum Analyzer")
+        SettingSwitchItem(
+            title = "Show Spectrum Analyzer",
+            subtitle = "Display live audio spectrum on the player and EQ screens",
+            checked = spectrumEnabled,
+            onCheckedChange = { viewModel.setSpectrumAnalyzerEnabled(it) }
+        )
+        SettingSwitchItem(
+            title = "Show on Now Playing",
+            subtitle = "Overlay the spectrum on the album-art hero",
+            checked = spectrumShowOnNowPlaying,
+            onCheckedChange = { viewModel.setSpectrumShowOnNowPlaying(it) }
+        )
+        val fftLabel = when (spectrumFftSize) {
+            4096 -> "Low (4096)"
+            16384 -> "High (16384)"
+            else -> "Medium (8192)"
+        }
+        SettingItem(
+            title = "FFT Size",
+            subtitle = fftLabel,
+            onClick = { showFftDropdown = true }
+        )
+        DropdownMenu(expanded = showFftDropdown, onDismissRequest = { showFftDropdown = false }) {
+            listOf(
+                4096 to "Low (4096)",
+                8192 to "Medium (8192)",
+                16384 to "High (16384)"
+            ).forEach { (size, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        viewModel.setSpectrumFftSize(size)
+                        showFftDropdown = false
+                    }
+                )
+            }
+        }
+        val colorLabel = when (spectrumColorMode.uppercase()) {
+            "PRIMARY" -> "Theme Primary"
+            "WHITE" -> "White"
+            else -> "Dynamic (album art)"
+        }
+        SettingItem(
+            title = "Color",
+            subtitle = colorLabel,
+            onClick = { showColorDropdown = true }
+        )
+        DropdownMenu(expanded = showColorDropdown, onDismissRequest = { showColorDropdown = false }) {
+            listOf(
+                "DYNAMIC" to "Dynamic (album art)",
+                "PRIMARY" to "Theme Primary",
+                "WHITE" to "White"
+            ).forEach { (mode, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        viewModel.setSpectrumColorMode(mode)
+                        showColorDropdown = false
+                    }
+                )
+            }
+        }
+        if (spectrumEnabled) {
+            androidx.compose.runtime.DisposableEffect(Unit) {
+                viewModel.setSpectrumActive(true)
+                onDispose { viewModel.setSpectrumActive(false) }
+            }
+            val previewColor = tf.monochrome.android.ui.player.rememberSpectrumColor(
+                mode = spectrumColorMode,
+                imageUrl = spectrumCoverUrl
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            tf.monochrome.android.ui.player.SpectrumOverlay(
+                bins = spectrumBins,
+                color = previewColor,
+                height = 96.dp
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))

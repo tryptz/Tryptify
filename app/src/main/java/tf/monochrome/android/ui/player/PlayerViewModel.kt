@@ -111,6 +111,18 @@ class PlayerViewModel @Inject constructor(
     private val _visualizerCompact = MutableStateFlow(false)
     val visualizerCompact: StateFlow<Boolean> = _visualizerCompact.asStateFlow()
 
+    // --- Spectrum analyzer (global prefs) ---
+    val spectrumAnalyzerEnabled: StateFlow<Boolean> = preferences.spectrumAnalyzerEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val spectrumShowOnNowPlaying: StateFlow<Boolean> = preferences.spectrumShowOnNowPlaying
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val spectrumColorMode: StateFlow<String> = preferences.spectrumColorMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DYNAMIC")
+
+    fun setSpectrumShowOnNowPlaying(enabled: Boolean) {
+        viewModelScope.launch { preferences.setSpectrumShowOnNowPlaying(enabled) }
+    }
+
     val visualizerAutoShuffle: StateFlow<Boolean> = projectMEngineRepository.autoShuffle
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
@@ -158,6 +170,11 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             downloadManager.observeAllActiveDownloads().collectLatest { active ->
                 _activeDownloads.value = active
+            }
+        }
+        viewModelScope.launch {
+            preferences.spectrumFftSize.collect { size ->
+                spectrumAnalyzer.fftSize = size
             }
         }
     }

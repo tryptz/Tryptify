@@ -158,6 +158,12 @@ class PreferencesManager @Inject constructor(
 
         // Search
         private val SEARCH_HISTORY_JSON = stringPreferencesKey("search_history_json")
+
+        // Spectrum analyzer
+        private val SPECTRUM_ANALYZER_ENABLED = booleanPreferencesKey("spectrum_analyzer_enabled")
+        private val SPECTRUM_SHOW_ON_NOW_PLAYING = booleanPreferencesKey("spectrum_show_on_now_playing")
+        private val SPECTRUM_FFT_SIZE = intPreferencesKey("spectrum_fft_size")
+        private val SPECTRUM_COLOR_MODE = stringPreferencesKey("spectrum_color_mode")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -739,6 +745,44 @@ class PreferencesManager @Inject constructor(
     val carModeBandCount: Flow<Int> = dataStore.data.map { it[CAR_MODE_BAND_COUNT] ?: 10 }
     suspend fun setCarModeBandCount(count: Int) {
         dataStore.edit { it[CAR_MODE_BAND_COUNT] = count.coerceIn(3, 32) }
+    }
+
+    // --- Spectrum analyzer ---
+    val spectrumAnalyzerEnabled: Flow<Boolean> = dataStore.data.map {
+        it[SPECTRUM_ANALYZER_ENABLED] ?: true
+    }
+    suspend fun setSpectrumAnalyzerEnabled(enabled: Boolean) {
+        dataStore.edit { it[SPECTRUM_ANALYZER_ENABLED] = enabled }
+    }
+
+    val spectrumShowOnNowPlaying: Flow<Boolean> = dataStore.data.map {
+        it[SPECTRUM_SHOW_ON_NOW_PLAYING] ?: true
+    }
+    suspend fun setSpectrumShowOnNowPlaying(enabled: Boolean) {
+        dataStore.edit { it[SPECTRUM_SHOW_ON_NOW_PLAYING] = enabled }
+    }
+
+    val spectrumFftSize: Flow<Int> = dataStore.data.map {
+        it[SPECTRUM_FFT_SIZE] ?: 8192
+    }
+    suspend fun setSpectrumFftSize(size: Int) {
+        val clamped = when {
+            size <= 4096 -> 4096
+            size <= 8192 -> 8192
+            else -> 16384
+        }
+        dataStore.edit { it[SPECTRUM_FFT_SIZE] = clamped }
+    }
+
+    val spectrumColorMode: Flow<String> = dataStore.data.map {
+        it[SPECTRUM_COLOR_MODE] ?: "DYNAMIC"
+    }
+    suspend fun setSpectrumColorMode(mode: String) {
+        val normalized = when (mode.uppercase()) {
+            "DYNAMIC", "PRIMARY", "WHITE" -> mode.uppercase()
+            else -> "DYNAMIC"
+        }
+        dataStore.edit { it[SPECTRUM_COLOR_MODE] = normalized }
     }
 
     // --- Clear all prefs (System) ---
