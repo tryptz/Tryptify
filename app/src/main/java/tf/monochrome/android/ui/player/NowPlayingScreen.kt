@@ -181,13 +181,19 @@ fun NowPlayingScreen(
     val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsState()
     val visualizerCompact by playerViewModel.visualizerCompact.collectAsState()
     val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsState()
+    val spectrumAnalyzerEnabled by playerViewModel.spectrumAnalyzerEnabled.collectAsState()
+    val spectrumShowOnNowPlaying by playerViewModel.spectrumShowOnNowPlaying.collectAsState()
+    val spectrumColorMode by playerViewModel.spectrumColorMode.collectAsState()
+    val showNpSpectrum = spectrumAnalyzerEnabled && spectrumShowOnNowPlaying
 
-    // Power the FFT tap only while this screen is on-screen. The tap itself
-    // is always wired into the audio pipeline (passive), but its analysis
-    // coroutine sleeps when nobody is listening.
-    DisposableEffect(Unit) {
-        playerViewModel.setSpectrumActive(true)
-        onDispose { playerViewModel.setSpectrumActive(false) }
+    // Power the FFT tap only while this screen is on-screen AND the user wants
+    // it shown here. The tap itself is always wired into the audio pipeline
+    // (passive); its analysis coroutine sleeps when nobody is listening.
+    if (showNpSpectrum) {
+        DisposableEffect(Unit) {
+            playerViewModel.setSpectrumActive(true)
+            onDispose { playerViewModel.setSpectrumActive(false) }
+        }
     }
 
     var speedText by remember(playbackSpeed) {
@@ -254,6 +260,15 @@ fun NowPlayingScreen(
         targetValue = albumColors.vibrant,
         animationSpec = androidx.compose.animation.core.tween(durationMillis = 800)
     )
+    val themePrimary = MaterialTheme.colorScheme.primary
+    val spectrumColor = when (spectrumColorMode.uppercase()) {
+        "PRIMARY" -> themePrimary
+        "WHITE" -> Color.White
+        else -> animatedVibrant
+    }
+    val onToggleShowSpectrum: () -> Unit = {
+        playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
+    }
 
     Box(
         modifier = Modifier
@@ -386,7 +401,9 @@ fun NowPlayingScreen(
                         onToggleCompact = playerViewModel::toggleVisualizerCompact,
                         onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
                         spectrumBins = spectrumBins,
-                        spectrumColor = animatedVibrant
+                        spectrumColor = spectrumColor,
+                        showSpectrum = showNpSpectrum,
+                        onToggleShowSpectrum = onToggleShowSpectrum
                     )
                 }
 
@@ -704,7 +721,9 @@ private fun NowPlayingHero(
     onToggleCompact: () -> Unit = {},
     onToggleFullscreen: () -> Unit = {},
     spectrumBins: FloatArray = FloatArray(0),
-    spectrumColor: Color = Color(0xFF7EB6FF)
+    spectrumColor: Color = Color(0xFF7EB6FF),
+    showSpectrum: Boolean = true,
+    onToggleShowSpectrum: () -> Unit = {}
 ) {
     var showOverlay by androidx.compose.runtime.remember(viewMode) {
         androidx.compose.runtime.mutableStateOf(viewMode == NowPlayingViewMode.VISUALIZER) 
@@ -738,7 +757,14 @@ private fun NowPlayingHero(
             if (viewMode == NowPlayingViewMode.VISUALIZER && visualizerCompact) {
                 // Compact mode: cover art with small visualizer window
                 Box(modifier = Modifier.fillMaxSize()) {
-                    HeroCoverArt(track = track, isPlaying = isPlaying, spectrumBins = spectrumBins, spectrumColor = spectrumColor)
+                    HeroCoverArt(
+                        track = track,
+                        isPlaying = isPlaying,
+                        spectrumBins = spectrumBins,
+                        spectrumColor = spectrumColor,
+                        showSpectrum = showSpectrum,
+                        onToggleShowSpectrum = onToggleShowSpectrum
+                    )
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -773,7 +799,9 @@ private fun NowPlayingHero(
                             track = track,
                             isPlaying = isPlaying,
                             spectrumBins = spectrumBins,
-                            spectrumColor = spectrumColor
+                            spectrumColor = spectrumColor,
+                            showSpectrum = showSpectrum,
+                            onToggleShowSpectrum = onToggleShowSpectrum
                         )
                         NowPlayingViewMode.VISUALIZER -> VisualizerComponent(
                             isPlaying = isPlaying,
@@ -989,9 +1017,11 @@ private fun HeroCoverArt(
     track: Track?,
     isPlaying: Boolean,
     spectrumBins: FloatArray = FloatArray(0),
-    spectrumColor: Color = Color(0xFF7EB6FF)
+    spectrumColor: Color = Color(0xFF7EB6FF),
+    showSpectrum: Boolean = true,
+    onToggleShowSpectrum: () -> Unit = {}
 ) {
-    var spectrumEnabled by remember { mutableStateOf(true) }
+    val spectrumEnabled = showSpectrum
     var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
 
     // Controls auto-hide after 3 seconds, reappear on tap.
@@ -1067,7 +1097,7 @@ private fun HeroCoverArt(
                     .padding(16.dp)
                     .clip(RoundedCornerShape(999.dp))
                     .clickable(enabled = controlsAlpha > 0.5f) {
-                        spectrumEnabled = !spectrumEnabled
+                        onToggleShowSpectrum()
                         controlsVisible = true
                     }
                     .liquidGlass(

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.data.api.Instance
 import tf.monochrome.android.data.api.InstanceManager
 import tf.monochrome.android.data.api.InstanceType
@@ -24,6 +25,8 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.sync.BackupManager
 import tf.monochrome.android.data.sync.SupabaseSyncRepository
+import tf.monochrome.android.player.QueueManager
+import kotlinx.coroutines.flow.map
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
@@ -43,8 +46,21 @@ class SettingsViewModel @Inject constructor(
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
+    private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
+    queueManager: QueueManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    /** Shared live FFT bins from the audio pipeline — same source the NowPlaying overlay uses. */
+    val spectrumBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrumBins
+
+    /** Power the FFT analysis coroutine only while a screen observing the preview is on-screen. */
+    fun setSpectrumActive(active: Boolean) = spectrumAnalyzerTap.setAnalysisActive(active)
+
+    /** Current track's album art URL — drives the Dynamic spectrum color in previews. */
+    val currentCoverUrl: StateFlow<String?> = queueManager.currentTrack
+        .map { it?.coverUrl }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // --- Appearance ---
     val theme: StateFlow<String> = preferences.theme
@@ -131,6 +147,17 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val visualizerTouchWaveform: StateFlow<Boolean> = preferences.visualizerTouchWaveform
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    // --- Spectrum analyzer ---
+    val spectrumAnalyzerEnabled: StateFlow<Boolean> = preferences.spectrumAnalyzerEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val spectrumShowOnNowPlaying: StateFlow<Boolean> = preferences.spectrumShowOnNowPlaying
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val spectrumFftSize: StateFlow<Int> = preferences.spectrumFftSize
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 8192)
+    val spectrumColorMode: StateFlow<String> = preferences.spectrumColorMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DYNAMIC")
+
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
 
@@ -283,6 +310,20 @@ class SettingsViewModel @Inject constructor(
     fun setVisualizerFullscreen(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerFullscreen(enabled) } }
     fun setVisualizerTouchWaveform(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerTouchWaveform(enabled) } }
     fun setVisualizerPresetId(presetId: String?) { viewModelScope.launch { preferences.setVisualizerPresetId(presetId) } }
+
+    // --- Spectrum analyzer actions ---
+    fun setSpectrumAnalyzerEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setSpectrumAnalyzerEnabled(enabled) }
+    }
+    fun setSpectrumShowOnNowPlaying(enabled: Boolean) {
+        viewModelScope.launch { preferences.setSpectrumShowOnNowPlaying(enabled) }
+    }
+    fun setSpectrumFftSize(size: Int) {
+        viewModelScope.launch { preferences.setSpectrumFftSize(size) }
+    }
+    fun setSpectrumColorMode(mode: String) {
+        viewModelScope.launch { preferences.setSpectrumColorMode(mode) }
+    }
 
     // --- Library settings ---
     val scanOnAppOpen: StateFlow<Boolean> = preferences.scanOnAppOpen
