@@ -99,6 +99,14 @@ class SpectrumAnalyzerTap @Inject constructor() : AudioProcessor {
         if (enabled == analysisActive) return
         analysisActive = enabled
         if (enabled) {
+            // Restart from a coherent state: a prior disable can leave `ring`
+            // frozen mid-write (queueInput skips writes while inactive) and
+            // `_analysisDirty` false, so the restarted coroutine would trust
+            // stale work arrays against a stale ring. Force reallocation and
+            // refill so the first FFT reads only post-re-enable audio.
+            _analysisDirty = true
+            ringWrite = 0
+            java.util.Arrays.fill(ring, 0f)
             startAnalysis()
         } else {
             analysisJob?.cancel()
