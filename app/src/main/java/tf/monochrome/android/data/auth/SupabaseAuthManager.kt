@@ -16,7 +16,6 @@ import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
-import tf.monochrome.android.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,14 +53,9 @@ data class UserProfile(
 class SupabaseAuthManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    // Blank defaults let public forks build without Supabase credentials.
-    // Sign-in fails fast at runtime with a warning in that case.
-    private val isConfigured =
-        BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_ANON_KEY.isNotBlank()
-
     val supabase: SupabaseClient = createSupabaseClient(
-        supabaseUrl = BuildConfig.SUPABASE_URL.ifBlank { "https://unconfigured.local" },
-        supabaseKey = BuildConfig.SUPABASE_ANON_KEY.ifBlank { "unconfigured" }
+        supabaseUrl = "https://lvzorvfhhopillzlwgau.supabase.co",
+        supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2em9ydmZoaG9waWxsemx3Z2F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNTc0NDQsImV4cCI6MjA4OTkzMzQ0NH0.Y_TN9r19WS96HyVZSQeNa0TyOqyBGuqFARaj8-7Ylow"
     ) {
         install(Auth) {
             flowType = FlowType.PKCE
