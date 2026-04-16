@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -18,56 +18,79 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.isActive
+import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
+import kotlin.math.exp
 import kotlin.math.max
 
 /**
- * A FabFilter-style smoothed spectrum waveform overlay for the Now Playing screen.
+ * FabFilter-style smoothed spectrum waveform overlay for the Now Playing
+ * screen. Renders the live FFT bins from [SpectrumAnalyzerTap] as a flowing
+ * envelope filled to the baseline.
  *
- * Renders the live FFT bins from [SpectrumAnalyzerTap] (256 log-spaced bins, dB
- * relative to a 0 dB pink-noise reference) as a flowing envelope at the bottom
- * of its parent. Designed to overlay album art without obscuring it — the fill
- * fades from accent-tint at the peak to fully transparent at the bottom edge.
- *
- * The composable smoothly interpolates each bin per-frame (~60 fps) so the
- * envelope glides between FFT updates instead of jittering. Empty / silent
- * input collapses to the baseline.
+ * Implementation notes:
+ *  - The smoothing buffer is allocated once and mutated in place inside the
+ *    per-frame coroutine, so we don't churn the GC at 60 fps. A monotonic
+ *    counter inside a `mutableIntStateOf` is the only Compose state we
+ *    write to — that's enough to invalidate the Canvas without recomposing
+ *    anything else on the screen.
+ *  - Separate attack/release time constants give the envelope a snappy
+ *    response on transients and a longer tail on decays, matching the
+ *    "Pro-Q" look the reference EQ editor uses.
+ *  - The overlay always paints; if the audio falls silent the bins decay
+ *    naturally toward the floor and the envelope flattens.
  */
 @Composable
 fun SpectrumOverlay(
     bins: FloatArray,
     color: Color,
     modifier: Modifier = Modifier,
-    height: Dp = 96.dp,
-    /** Display range in dB above the 0-line that maps to full height. */
-    headroomDb: Float = 24f,
-    /** Display range in dB below the 0-line that maps to the baseline. */
-    floorDb: Float = -36f,
-    /** Per-frame approach factor for the smoothed envelope (0..1). */
-    smoothing: Float = 0.18f,
+    height: Dp = 240.dp,
+    /** dB above 0 (pink-noise reference) that maps to the top of the canvas. */
+    headroomDb: Float = 12f,
+    /** dB below 0 that maps to the baseline. */
+    floorDb: Float = -42f,
+    /** Approach factor per 60 fps frame for rising bins (0..1, higher = snappier). */
+    attack: Float = 0.55f,
+    /** Approach factor per 60 fps frame for falling bins. */
+    release: Float = 0.12f,
 ) {
-    // Locally smoothed bins for buttery motion between FFT frames.
-    var smoothed by remember { mutableStateOf(FloatArray(0)) }
+    // Persistent in-place smoothing buffer — never replaced.
+    val smoothed = remember {
+        FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS) { floorDb }
+    }
+    // Bumped once per frame to invalidate the Canvas without allocating.
+    val tick = remember { mutableIntStateOf(0) }
+    // The parent re-emits a fresh FloatArray on every FFT frame; without
+    // rememberUpdatedState the LaunchedEffect would forever read the array
+    // captured at first composition and the envelope would never animate.
+    val currentBins by rememberUpdatedState(bins)
 
     LaunchedEffect(Unit) {
         var lastFrameNanos = 0L
-        while (true) {
+        while (isActive) {
             val now = withFrameNanos { it }
             val dt = if (lastFrameNanos == 0L) (1f / 60f)
                 else ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(0.001f, 0.1f)
             lastFrameNanos = now
 
-            val src = bins
-            if (src.isEmpty()) {
-                if (smoothed.isNotEmpty()) smoothed = FloatArray(0)
+            val src = currentBins
+            val n = minOf(src.size, smoothed.size)
+            if (n == 0) {
+                tick.intValue++
                 continue
             }
-            val dst = if (smoothed.size == src.size) smoothed else FloatArray(src.size) { floorDb }
-            // Frame-rate–independent exponential smoothing.
-            val alpha = (1f - kotlin.math.exp(-smoothing * 60f * dt)).coerceIn(0f, 1f)
-            for (i in dst.indices) {
-                dst[i] = dst[i] + (src[i] - dst[i]) * alpha
+            // Frame-rate–independent exponential smoothing with split
+            // attack/release for the snappy-on-rise, gentle-on-fall feel.
+            val attackAlpha = (1f - exp(-attack * 60f * dt)).coerceIn(0f, 1f)
+            val releaseAlpha = (1f - exp(-release * 60f * dt)).coerceIn(0f, 1f)
+            for (i in 0 until n) {
+                val target = src[i]
+                val cur = smoothed[i]
+                val a = if (target > cur) attackAlpha else releaseAlpha
+                smoothed[i] = cur + (target - cur) * a
             }
-            smoothed = dst.copyOf()
+            tick.intValue++
         }
     }
 
@@ -76,26 +99,28 @@ fun SpectrumOverlay(
             .fillMaxWidth()
             .height(height)
     ) {
-        val data = smoothed
-        if (data.isEmpty()) return@Canvas
-        val n = data.size
+        // Subscribe to the per-frame tick so the Canvas redraws.
+        @Suppress("UNUSED_VARIABLE")
+        val t = tick.intValue
+
+        val n = smoothed.size
+        if (n < 2) return@Canvas
         val w = size.width
         val h = size.height
         val span = max(0.001f, headroomDb - floorDb)
 
-        // Build envelope path: x is linear across the canvas (bins are
-        // already log-spaced in frequency); y is the bin magnitude clamped
-        // to the display range and inverted so high dB sits near the top.
+        // Map bin index -> x (linear; bins are already log-spaced in
+        // frequency by SpectrumAnalyzerTap), magnitude -> y (inverted).
         val xs = FloatArray(n)
         val ys = FloatArray(n)
         for (i in 0 until n) {
             xs[i] = i.toFloat() / (n - 1).toFloat() * w
-            val db = data[i].coerceIn(floorDb, headroomDb)
-            val t = (db - floorDb) / span // 0 at floor, 1 at headroom
-            ys[i] = h - t * h
+            val db = smoothed[i].coerceIn(floorDb, headroomDb)
+            val tNorm = (db - floorDb) / span
+            ys[i] = h - tNorm * h
         }
 
-        // Catmull-Rom -> cubic Bézier for a flowing FabFilter look.
+        // Catmull-Rom -> cubic Bézier for the flowing FabFilter envelope.
         val envelope = Path().apply {
             moveTo(xs[0], ys[0])
             for (i in 0 until n - 1) {
@@ -111,8 +136,8 @@ fun SpectrumOverlay(
             }
         }
 
-        // Fill body: vertical gradient from accent at the envelope peak to
-        // full transparency at the baseline so the album art shows through.
+        // Filled body: bright at the envelope peak, fading to transparent
+        // at the baseline so the album art still shows through.
         val fill = Path().apply {
             addPath(envelope)
             lineTo(xs[n - 1], h)
@@ -123,8 +148,9 @@ fun SpectrumOverlay(
             path = fill,
             brush = Brush.verticalGradient(
                 colors = listOf(
-                    color.copy(alpha = 0.55f),
-                    color.copy(alpha = 0.18f),
+                    color.copy(alpha = 0.75f),
+                    color.copy(alpha = 0.35f),
+                    color.copy(alpha = 0.10f),
                     Color.Transparent
                 ),
                 startY = 0f,
@@ -135,14 +161,13 @@ fun SpectrumOverlay(
         // Crisp envelope outline for definition over busy artwork.
         drawPath(
             path = envelope,
-            brush = Brush.horizontalGradient(
-                colors = listOf(
-                    color.copy(alpha = 0.85f),
-                    color.copy(alpha = 0.95f),
-                    color.copy(alpha = 0.85f)
-                )
-            ),
-            style = Stroke(width = 2f)
+            color = Color.White.copy(alpha = 0.92f),
+            style = Stroke(width = 2.5f)
+        )
+        drawPath(
+            path = envelope,
+            color = color.copy(alpha = 0.55f),
+            style = Stroke(width = 5f)
         )
 
         // Soft glow dot at the loudest bin — moves with the music.
@@ -152,12 +177,12 @@ fun SpectrumOverlay(
         if (peakY < h - 4f) {
             drawCircle(
                 color = color.copy(alpha = 0.55f),
-                radius = 6f,
+                radius = 9f,
                 center = Offset(xs[peakIdx], peakY)
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.85f),
-                radius = 2.2f,
+                color = Color.White,
+                radius = 3f,
                 center = Offset(xs[peakIdx], peakY)
             )
         }

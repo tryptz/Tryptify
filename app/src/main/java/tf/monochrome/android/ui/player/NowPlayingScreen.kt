@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -990,16 +991,24 @@ private fun HeroCoverArt(
         // Live spectrum overlay anchored to the bottom edge of the artwork.
         // Pulled from the singleton SpectrumAnalyzerTap that already sits in
         // the ExoPlayer audio pipeline, so it reflects exactly what the user
-        // is hearing (post-EQ, post-mixer).
-        if (isPlaying && spectrumBins.isNotEmpty()) {
-            SpectrumOverlay(
-                bins = spectrumBins,
-                color = spectrumColor,
+        // is hearing (post-EQ, post-mixer). Always drawn — when the audio
+        // falls silent the envelope just decays to the baseline.
+        if (spectrumBins.isNotEmpty()) {
+            BoxWithConstraints(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .fillMaxWidth(),
-                height = 120.dp
-            )
+                    .fillMaxWidth()
+            ) {
+                // Take ~60% of the artwork height so the envelope is dramatic
+                // and clearly visible like the EQ editor reference, not a
+                // thin strip at the bottom.
+                SpectrumOverlay(
+                    bins = spectrumBins,
+                    color = spectrumColor,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = maxHeight * 0.6f
+                )
+            }
         }
 
         Surface(
