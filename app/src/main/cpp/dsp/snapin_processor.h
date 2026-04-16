@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <cstdint>
 
 // Plugin type enum — matches SnapinType.kt ordinal
@@ -31,7 +32,10 @@ public:
     void setBypassed(bool b) { bypassed_ = b; }
 
     float getDryWet() const { return dryWet_; }
-    void setDryWet(float v) { dryWet_ = (v < 0.0f) ? 0.0f : (v > 1.0f) ? 1.0f : v; }
+    void setDryWet(float v) {
+        const float safe = std::isfinite(v) ? v : 1.0f;
+        dryWet_ = (safe < 0.0f) ? 0.0f : (safe > 1.0f) ? 1.0f : safe;
+    }
 
 protected:
     double sampleRate_ = 44100.0;

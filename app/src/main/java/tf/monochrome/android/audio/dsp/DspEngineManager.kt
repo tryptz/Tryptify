@@ -87,6 +87,21 @@ class DspEngineManager @Inject constructor(
 
     companion object {
         private const val TOTAL_BUSES = 5
+
+        // Parameter bounds — mirror the native clamps in dsp_engine.cpp / snapin_processor.h.
+        // Clamping in Kotlin keeps the StateFlow value in sync with what native actually stores.
+        const val MIN_BUS_GAIN_DB = -60f
+        const val MAX_BUS_GAIN_DB = 12f
+        const val MIN_PAN = -1f
+        const val MAX_PAN = 1f
+        const val MIN_DRY_WET = 0f
+        const val MAX_DRY_WET = 1f
+    }
+
+    private fun sanitizeParam(value: Float): Float {
+        // Plugin parameter ranges vary per processor; the native side clamps to its own range.
+        // Here we only reject NaN/Inf so they never reach the native atomics or StateFlow.
+        return if (value.isFinite()) value else 0f
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -111,16 +126,19 @@ class DspEngineManager @Inject constructor(
     // ── Bus controls ────────────────────────────────────────────────────
 
     fun setBusGain(busIndex: Int, gainDb: Float) {
+        val clamped = (if (gainDb.isFinite()) gainDb else 0f)
+            .coerceIn(MIN_BUS_GAIN_DB, MAX_BUS_GAIN_DB)
         val ptr = processor.getEnginePtr()
-        if (ptr != 0L) processor.nativeSetBusGain(ptr, busIndex, gainDb)
-        updateBus(busIndex) { it.copy(gainDb = gainDb) }
+        if (ptr != 0L) processor.nativeSetBusGain(ptr, busIndex, clamped)
+        updateBus(busIndex) { it.copy(gainDb = clamped) }
         requestSave()
     }
 
     fun setBusPan(busIndex: Int, pan: Float) {
+        val clamped = (if (pan.isFinite()) pan else 0f).coerceIn(MIN_PAN, MAX_PAN)
         val ptr = processor.getEnginePtr()
-        if (ptr != 0L) processor.nativeSetBusPan(ptr, busIndex, pan)
-        updateBus(busIndex) { it.copy(pan = pan) }
+        if (ptr != 0L) processor.nativeSetBusPan(ptr, busIndex, clamped)
+        updateBus(busIndex) { it.copy(pan = clamped) }
         requestSave()
     }
 
@@ -194,14 +212,15 @@ class DspEngineManager @Inject constructor(
     }
 
     fun setParameter(busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) {
+        val sanitized = sanitizeParam(value)
         val ptr = processor.getEnginePtr()
-        if (ptr != 0L) processor.nativeSetParameter(ptr, busIndex, slotIndex, paramIndex, value)
+        if (ptr != 0L) processor.nativeSetParameter(ptr, busIndex, slotIndex, paramIndex, sanitized)
         updateBus(busIndex) { bus ->
             val plugins = bus.plugins.toMutableList()
             if (slotIndex in plugins.indices) {
                 val plugin = plugins[slotIndex]
                 plugins[slotIndex] = plugin.copy(
-                    parameters = plugin.parameters + (paramIndex to value)
+                    parameters = plugin.parameters + (paramIndex to sanitized)
                 )
             }
             bus.copy(plugins = plugins)
@@ -223,12 +242,14 @@ class DspEngineManager @Inject constructor(
     }
 
     fun setPluginDryWet(busIndex: Int, slotIndex: Int, dryWet: Float) {
+        val clamped = (if (dryWet.isFinite()) dryWet else MAX_DRY_WET)
+            .coerceIn(MIN_DRY_WET, MAX_DRY_WET)
         val ptr = processor.getEnginePtr()
-        if (ptr != 0L) processor.nativeSetPluginDryWet(ptr, busIndex, slotIndex, dryWet)
+        if (ptr != 0L) processor.nativeSetPluginDryWet(ptr, busIndex, slotIndex, clamped)
         updateBus(busIndex) { bus ->
             val plugins = bus.plugins.toMutableList()
             if (slotIndex in plugins.indices) {
-                plugins[slotIndex] = plugins[slotIndex].copy(dryWet = dryWet)
+                plugins[slotIndex] = plugins[slotIndex].copy(dryWet = clamped)
             }
             bus.copy(plugins = plugins)
         }
@@ -279,18 +300,23 @@ class DspEngineManager @Inject constructor(
                     val plugObj = plugEl.jsonObject
                     val typeOrd = plugObj["type"]?.jsonPrimitive?.int ?: 0
                     val bypassed = plugObj["bypassed"]?.jsonPrimitive?.boolean ?: false
-                    val dryWet = plugObj["dryWet"]?.jsonPrimitive?.float ?: 1f
+                    val dryWet = (plugObj["dryWet"]?.jsonPrimitive?.float ?: 1f)
+                        .let { if (it.isFinite()) it else 1f }
+                        .coerceIn(MIN_DRY_WET, MAX_DRY_WET)
                     val params = plugObj["params"]?.jsonArray
-                        ?.mapIndexed { pi, pv -> pi to pv.jsonPrimitive.float }
+                        ?.mapIndexed { pi, pv -> pi to sanitizeParam(pv.jsonPrimitive.float) }
                         ?.toMap() ?: emptyMap()
                     PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params)
                 } ?: emptyList()
 
+                val rawGain = obj["gain"]?.jsonPrimitive?.float ?: 0f
+                val rawPan = obj["pan"]?.jsonPrimitive?.float ?: 0f
                 BusConfig(
                     index = index,
                     name = defaultBusNames.getOrElse(index) { "Bus ${index + 1}" },
-                    gainDb = obj["gain"]?.jsonPrimitive?.float ?: 0f,
-                    pan = obj["pan"]?.jsonPrimitive?.float ?: 0f,
+                    gainDb = (if (rawGain.isFinite()) rawGain else 0f)
+                        .coerceIn(MIN_BUS_GAIN_DB, MAX_BUS_GAIN_DB),
+                    pan = (if (rawPan.isFinite()) rawPan else 0f).coerceIn(MIN_PAN, MAX_PAN),
                     muted = obj["muted"]?.jsonPrimitive?.boolean ?: false,
                     soloed = obj["soloed"]?.jsonPrimitive?.boolean ?: false,
                     inputEnabled = obj["inputEnabled"]?.jsonPrimitive?.boolean ?: (index == 0),

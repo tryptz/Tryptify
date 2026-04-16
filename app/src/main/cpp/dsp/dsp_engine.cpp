@@ -34,6 +34,7 @@
 #include "snapins/trance_gate.h"
 #include "snapins/eq_10band.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <sstream>
 #include <android/log.h>
@@ -317,14 +318,22 @@ void DspEngine::process(float* left, float* right, int numFrames) {
 
 // ── Bus control ─────────────────────────────────────────────────────────
 
+// Sanitize: reject NaN/Inf (would poison the real-time atomics and trigger NaN audio).
+static inline float finiteOr(float v, float fallback) {
+    return std::isfinite(v) ? v : fallback;
+}
+
 void DspEngine::setBusGain(int busIndex, float gainDb) {
     if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
-    buses_[busIndex].gainDb.store(gainDb, std::memory_order_relaxed);
+    const float clamped = std::max(-60.0f, std::min(12.0f, finiteOr(gainDb, 0.0f)));
+    buses_[busIndex].gainDb.store(clamped, std::memory_order_relaxed);
 }
 
 void DspEngine::setBusPan(int busIndex, float pan) {
     if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
-    buses_[busIndex].pan.store(std::max(-1.0f, std::min(1.0f, pan)), std::memory_order_relaxed);
+    buses_[busIndex].pan.store(
+        std::max(-1.0f, std::min(1.0f, finiteOr(pan, 0.0f))),
+        std::memory_order_relaxed);
 }
 
 void DspEngine::setBusMute(int busIndex, bool muted) {
@@ -555,11 +564,12 @@ void DspEngine::loadStateJson(const std::string& json) {
         if (busStart == std::string::npos) break;
 
         pos = busStart + 8;
-        buses_[busIdx].gainDb.store(readFloat(pos), std::memory_order_relaxed);
+        // Route through setBusGain/setBusPan so clamping + NaN filtering match live edits.
+        setBusGain(busIdx, readFloat(pos));
 
         size_t panPos = json.find("\"pan\":", pos);
         if (panPos != std::string::npos) {
-            buses_[busIdx].pan.store(readFloat(panPos + 6), std::memory_order_relaxed);
+            setBusPan(busIdx, readFloat(panPos + 6));
             pos = panPos + 6;
         }
 
@@ -605,6 +615,7 @@ void DspEngine::loadStateJson(const std::string& json) {
 
                     size_t dwPos = json.find("\"dryWet\":", pos);
                     if (dwPos != std::string::npos && dwPos < json.find("\"params\":", pos)) {
+                        // setDryWet already filters NaN + clamps to [0,1]
                         proc->setDryWet(readFloat(dwPos + 9));
                         pos = dwPos + 9;
                     }
@@ -616,7 +627,12 @@ void DspEngine::loadStateJson(const std::string& json) {
                         while (pos < json.size() && json[pos] != ']') {
                             if (json[pos] == ',' || json[pos] == ' ') { pos++; continue; }
                             float val = readFloat(pos);
-                            proc->setParameter(paramIdx++, val);
+                            // Reject NaN/Inf before reaching per-plugin setParameter (not all
+                            // plugins defensively filter non-finite inputs).
+                            if (std::isfinite(val)) {
+                                proc->setParameter(paramIdx, val);
+                            }
+                            paramIdx++;
                             size_t next = json.find_first_of(",]", pos);
                             if (next == std::string::npos) break;
                             pos = next;

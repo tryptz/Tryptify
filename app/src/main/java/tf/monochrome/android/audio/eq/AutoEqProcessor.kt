@@ -11,6 +11,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.pow
@@ -273,8 +274,23 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                     na2 = (a + 1) - (a - 1) * cosw0 - sq
                 }
             }
-            b0 = (nb0 / na0).toFloat(); b1 = (nb1 / na0).toFloat(); b2 = (nb2 / na0).toFloat()
-            a1 = (na1 / na0).toFloat(); a2 = (na2 / na0).toFloat()
+            if (abs(na0) < 1e-20 || !na0.isFinite()) {
+                // Degenerate coefficient — fall back to passthrough instead of emitting NaN/Inf audio.
+                b0 = 1f; b1 = 0f; b2 = 0f; a1 = 0f; a2 = 0f
+                z1 = 0f; z2 = 0f
+                return
+            }
+            val nb0f = (nb0 / na0).toFloat()
+            val nb1f = (nb1 / na0).toFloat()
+            val nb2f = (nb2 / na0).toFloat()
+            val na1f = (na1 / na0).toFloat()
+            val na2f = (na2 / na0).toFloat()
+            if (!nb0f.isFinite() || !nb1f.isFinite() || !nb2f.isFinite() ||
+                !na1f.isFinite() || !na2f.isFinite()) {
+                b0 = 1f; b1 = 0f; b2 = 0f; a1 = 0f; a2 = 0f
+            } else {
+                b0 = nb0f; b1 = nb1f; b2 = nb2f; a1 = na1f; a2 = na2f
+            }
             z1 = 0f; z2 = 0f
         }
 
