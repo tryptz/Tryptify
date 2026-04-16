@@ -146,12 +146,15 @@ fun FrequencyResponseGraph(
     var selectedBandId by remember { mutableIntStateOf(-1) }
     var isDragging by remember { mutableStateOf(false) }
 
+    val graphBackground = MaterialTheme.colorScheme.surface
+    val legendBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+    val legendLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(260.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF0A0A0A))
+            .background(graphBackground)
     ) {
         Canvas(
             modifier = Modifier
@@ -325,20 +328,20 @@ fun FrequencyResponseGraph(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Color(0x600A0A0A))
+                    .background(legendBackground)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
             ) {
-                LegendDot("Original", Color(0xFF4A9EFF))
-                LegendDot("Target (Primary)", Color.White)
-                LegendDot("Corrected", Color(0xFFFF4444))
+                LegendDot("Original", Color(0xFF4A9EFF), legendLabelColor)
+                LegendDot("Target (Primary)", Color.White, legendLabelColor)
+                LegendDot("Corrected", Color(0xFFFF4444), legendLabelColor)
             }
         }
     }
 }
 
 @Composable
-private fun LegendDot(label: String, color: Color) {
+private fun LegendDot(label: String, color: Color, labelColor: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -351,7 +354,7 @@ private fun LegendDot(label: String, color: Color) {
         Text(
             label,
             fontSize = 9.sp,
-            color = Color(0xFFB0B0B0)
+            color = labelColor
         )
     }
 }
@@ -372,13 +375,14 @@ fun EqProfileMiniGraph(
 ) {
     if (bands.isEmpty()) return
 
-
+    val miniBackground = MaterialTheme.colorScheme.surface
+    val zeroLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF0D0D0D))
+            .background(miniBackground)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
@@ -388,7 +392,7 @@ fun EqProfileMiniGraph(
 
             // Zero center line
             drawLine(
-                color = Color(0x20FFFFFF),
+                color = zeroLineColor,
                 start = Offset(0f, midY),
                 end = Offset(w, midY),
                 strokeWidth = 1f

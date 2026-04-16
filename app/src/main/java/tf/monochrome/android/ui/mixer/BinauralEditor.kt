@@ -34,17 +34,32 @@ import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.theme.MonoDimens
 
 // ── Binaural-specific colors ───────────────────────────────────────────────
-private object BinauralColors {
-    val bg = Color(0xFF0F1419)
-    val headerBg = Color(0xFF1A1F2B)
-    val surfaceAlt = Color(0xFF16212E)
-    val divider = Color(0xFF2A3548)
-    val textPrimary = Color(0xFFE8EAED)
-    val textSecondary = Color(0xFF8A92A6)
-    val accentCyan = Color(0xFF00D4D4)
-    val accentPurple = Color(0xFFB084CC)
-    val switchEnabled = Color(0xFF00D4D4)
-    val switchDisabled = Color(0xFF4A5568)
+// Neutrals resolve from MaterialTheme so the sheet works on light themes too;
+// the cyan/purple accents are deliberate plugin branding and stay fixed.
+private data class BinauralPalette(
+    val bg: Color,
+    val headerBg: Color,
+    val surfaceAlt: Color,
+    val divider: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val accentCyan: Color = Color(0xFF00D4D4),
+    val accentPurple: Color = Color(0xFFB084CC),
+    val switchEnabled: Color = Color(0xFF00D4D4),
+    val switchDisabled: Color = Color(0xFF4A5568)
+)
+
+@Composable
+private fun rememberBinauralPalette(): BinauralPalette {
+    val cs = androidx.compose.material3.MaterialTheme.colorScheme
+    return BinauralPalette(
+        bg = cs.surface,
+        headerBg = cs.surfaceVariant,
+        surfaceAlt = cs.surfaceContainerHigh,
+        divider = cs.outlineVariant,
+        textPrimary = cs.onSurface,
+        textSecondary = cs.onSurfaceVariant
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +71,7 @@ fun BinauralEditorSheet(
     onParameterChange: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val palette = rememberBinauralPalette()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Extract parameter values
@@ -71,7 +87,7 @@ fun BinauralEditorSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = BinauralColors.bg
+        containerColor = palette.bg
     ) {
         Column(
             modifier = Modifier
@@ -82,7 +98,7 @@ fun BinauralEditorSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(BinauralColors.headerBg)
+                    .background(palette.headerBg)
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
                 Column {
@@ -90,13 +106,13 @@ fun BinauralEditorSheet(
                         text = "Binaural / Spatial DSP",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = BinauralColors.accentCyan,
+                        color = palette.accentCyan,
                         letterSpacing = 1.sp
                     )
                     Text(
                         text = "Multichannel HRTF rendering for Atmos & 3D Audio, crossfeed for stereo",
                         fontSize = 11.sp,
-                        color = BinauralColors.textSecondary,
+                        color = palette.textSecondary,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
@@ -109,14 +125,14 @@ fun BinauralEditorSheet(
                 Text(
                     text = "Mode: Stereo",
                     fontSize = 12.sp,
-                    color = BinauralColors.textSecondary,
+                    color = palette.textSecondary,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Select output format for spatial processing",
                     fontSize = 10.sp,
-                    color = BinauralColors.textSecondary.copy(alpha = 0.7f)
+                    color = palette.textSecondary.copy(alpha = 0.7f)
                 )
             }
 
@@ -134,13 +150,13 @@ fun BinauralEditorSheet(
                     Text(
                         text = "Auto-enable for Spatial Audio",
                         fontSize = 13.sp,
-                        color = BinauralColors.textPrimary,
+                        color = palette.textPrimary,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = "Automatically activate when Atmos or 3D content is detected",
                         fontSize = 10.sp,
-                        color = BinauralColors.textSecondary,
+                        color = palette.textSecondary,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
@@ -153,10 +169,10 @@ fun BinauralEditorSheet(
                         onParameterChange(busIndex, slotIndex, 0, if (newValue) 1f else 0f)
                     },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = BinauralColors.switchEnabled,
-                        checkedTrackColor = BinauralColors.switchEnabled.copy(alpha = 0.3f),
-                        uncheckedThumbColor = BinauralColors.switchDisabled,
-                        uncheckedTrackColor = BinauralColors.switchDisabled.copy(alpha = 0.3f)
+                        checkedThumbColor = palette.switchEnabled,
+                        checkedTrackColor = palette.switchEnabled.copy(alpha = 0.3f),
+                        uncheckedThumbColor = palette.switchDisabled,
+                        uncheckedTrackColor = palette.switchDisabled.copy(alpha = 0.3f)
                     )
                 )
             }
@@ -168,7 +184,7 @@ fun BinauralEditorSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(BinauralColors.divider)
+                    .background(palette.divider)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -185,13 +201,13 @@ fun BinauralEditorSheet(
                     Text(
                         text = "Crossfeed",
                         fontSize = 13.sp,
-                        color = BinauralColors.textPrimary,
+                        color = palette.textPrimary,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = "Simulate speaker presentation on headphones",
                         fontSize = 10.sp,
-                        color = BinauralColors.textSecondary,
+                        color = palette.textSecondary,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
@@ -203,10 +219,10 @@ fun BinauralEditorSheet(
                         onParameterChange(busIndex, slotIndex, 1, if (newValue) 1f else 0f)
                     },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = BinauralColors.switchEnabled,
-                        checkedTrackColor = BinauralColors.switchEnabled.copy(alpha = 0.3f),
-                        uncheckedThumbColor = BinauralColors.switchDisabled,
-                        uncheckedTrackColor = BinauralColors.switchDisabled.copy(alpha = 0.3f)
+                        checkedThumbColor = palette.switchEnabled,
+                        checkedTrackColor = palette.switchEnabled.copy(alpha = 0.3f),
+                        uncheckedThumbColor = palette.switchDisabled,
+                        uncheckedTrackColor = palette.switchDisabled.copy(alpha = 0.3f)
                     )
                 )
             }
@@ -224,12 +240,12 @@ fun BinauralEditorSheet(
                         Text(
                             text = "Crossfeed Level",
                             fontSize = 12.sp,
-                            color = BinauralColors.textSecondary
+                            color = palette.textSecondary
                         )
                         Text(
                             text = "${crossfeedLevel.toInt()}%",
                             fontSize = 12.sp,
-                            color = BinauralColors.accentCyan,
+                            color = palette.accentCyan,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -239,7 +255,7 @@ fun BinauralEditorSheet(
                         onValueChange = { onParameterChange(busIndex, slotIndex, 2, it) },
                         min = 0f,
                         max = 100f,
-                        color = BinauralColors.accentCyan
+                        color = palette.accentCyan
                     )
                 }
             }
@@ -251,7 +267,7 @@ fun BinauralEditorSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(BinauralColors.divider)
+                    .background(palette.divider)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -261,14 +277,14 @@ fun BinauralEditorSheet(
                 Text(
                     text = "HRTF Preset",
                     fontSize = 12.sp,
-                    color = BinauralColors.textSecondary,
+                    color = palette.textSecondary,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Virtual speaker angle for multichannel rendering",
                     fontSize = 10.sp,
-                    color = BinauralColors.textSecondary.copy(alpha = 0.7f)
+                    color = palette.textSecondary.copy(alpha = 0.7f)
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -298,7 +314,7 @@ fun BinauralEditorSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(BinauralColors.divider)
+                    .background(palette.divider)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -315,13 +331,13 @@ fun BinauralEditorSheet(
                     Text(
                         text = "Stereo Width",
                         fontSize = 13.sp,
-                        color = BinauralColors.textPrimary,
+                        color = palette.textPrimary,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = "Adjust spatial width (0 = mono, 1 = neutral, 2 = wide)",
                         fontSize = 10.sp,
-                        color = BinauralColors.textSecondary,
+                        color = palette.textSecondary,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
@@ -333,10 +349,10 @@ fun BinauralEditorSheet(
                         onParameterChange(busIndex, slotIndex, 4, if (newValue) 1f else 0f)
                     },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = BinauralColors.accentPurple,
-                        checkedTrackColor = BinauralColors.accentPurple.copy(alpha = 0.3f),
-                        uncheckedThumbColor = BinauralColors.switchDisabled,
-                        uncheckedTrackColor = BinauralColors.switchDisabled.copy(alpha = 0.3f)
+                        checkedThumbColor = palette.accentPurple,
+                        checkedTrackColor = palette.accentPurple.copy(alpha = 0.3f),
+                        uncheckedThumbColor = palette.switchDisabled,
+                        uncheckedTrackColor = palette.switchDisabled.copy(alpha = 0.3f)
                     )
                 )
             }
@@ -352,12 +368,12 @@ fun BinauralEditorSheet(
                         Text(
                             text = "Width Amount",
                             fontSize = 12.sp,
-                            color = BinauralColors.textSecondary
+                            color = palette.textSecondary
                         )
                         Text(
                             text = "%.2f".format(widthAmount),
                             fontSize = 12.sp,
-                            color = BinauralColors.accentPurple,
+                            color = palette.accentPurple,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -367,7 +383,7 @@ fun BinauralEditorSheet(
                         onValueChange = { onParameterChange(busIndex, slotIndex, 5, it) },
                         min = 0f,
                         max = 2f,
-                        color = BinauralColors.accentPurple
+                        color = palette.accentPurple
                     )
                 }
             }
@@ -384,12 +400,13 @@ private fun PresetButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = rememberBinauralPalette()
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .background(
-                if (isSelected) BinauralColors.accentCyan.copy(alpha = 0.25f)
-                else BinauralColors.surfaceAlt
+                if (isSelected) palette.accentCyan.copy(alpha = 0.25f)
+                else palette.surfaceAlt
             )
             .padding(vertical = 8.dp, horizontal = 6.dp),
         contentAlignment = Alignment.Center
@@ -398,7 +415,7 @@ private fun PresetButton(
             text = label,
             fontSize = 10.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) BinauralColors.accentCyan else BinauralColors.textSecondary
+            color = if (isSelected) palette.accentCyan else palette.textSecondary
         )
     }
 }
@@ -412,6 +429,7 @@ private fun HorizontalSlider(
     color: Color,
     modifier: Modifier = Modifier
 ) {
+    val palette = rememberBinauralPalette()
     val fraction = (value - min) / (max - min)
 
     Box(
@@ -419,7 +437,7 @@ private fun HorizontalSlider(
             .fillMaxWidth()
             .height(4.dp)
             .clip(RoundedCornerShape(2.dp))
-            .background(BinauralColors.divider)
+            .background(palette.divider)
     ) {
         Box(
             modifier = Modifier

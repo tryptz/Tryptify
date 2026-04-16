@@ -185,7 +185,7 @@ private fun LevelMeter(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(3.dp))
-            .background(Color(0xFF1A1A1A)),
+            .background(MaterialTheme.colorScheme.surfaceContainer),
         horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally)
     ) {
         MeterBar(fraction = fracL, clipping = clipL, modifier = Modifier.weight(1f).fillMaxHeight())
@@ -206,7 +206,7 @@ private fun MeterBar(
                 .fillMaxWidth()
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(2.dp))
-                .background(Color(0xFF2A2A2A))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         )
         // Filled level (grows from bottom)
         Box(
