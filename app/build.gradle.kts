@@ -49,6 +49,17 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Backend configuration pulled from local.properties. Defaults are
+        // empty so forks don't ship against the upstream project; features
+        // that depend on a given value gracefully no-op when it's blank.
+        fun localOrEnv(key: String): String =
+            localProperties.getProperty(key) ?: System.getenv(key) ?: ""
+
+        buildConfigField("String", "SUPABASE_URL", "\"${localOrEnv("SUPABASE_URL")}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localOrEnv("SUPABASE_ANON_KEY")}\"")
+        buildConfigField("String", "POCKETBASE_URL", "\"${localOrEnv("POCKETBASE_URL")}\"")
+        buildConfigField("String", "TIDAL_UPTIME_URLS", "\"${localOrEnv("TIDAL_UPTIME_URLS")}\"")
+
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"

@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.data.preferences.PreferencesManager
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,10 +29,13 @@ class InstanceManager @Inject constructor(
     private val json: Json
 ) {
     companion object {
-        private val UPTIME_URLS = listOf(
-            "https://tidal-uptime.jiffy-puffs-1j.workers.dev/",
-            "https://tidal-uptime.props-76styles.workers.dev/"
-        )
+        // Comma-separated uptime endpoints from BuildConfig (local.properties).
+        // Empty when not configured — callers fall back to the static instance
+        // pool below.
+        private val UPTIME_URLS: List<String> = BuildConfig.TIDAL_UPTIME_URLS
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
         private const val CACHE_DURATION_MS = 15 * 60 * 1000L
 
         private val FALLBACK_API_INSTANCES = listOf(
