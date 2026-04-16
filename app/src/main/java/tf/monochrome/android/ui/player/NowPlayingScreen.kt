@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -78,6 +79,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -960,6 +962,15 @@ private fun VisualizerHeroOverlay(
     }
 }
 
+private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
+    SLOW("SLOW", 0.12f, 0.03f),
+    NORMAL("NORMAL", 0.55f, 0.12f),
+    FAST("FAST", 0.85f, 0.35f),
+    HYPER("HYPER", 1.0f, 0.70f);
+
+    fun next(): SpectrumSpeed = entries[(ordinal + 1) % entries.size]
+}
+
 @Composable
 private fun HeroCoverArt(
     track: Track?,
@@ -968,8 +979,30 @@ private fun HeroCoverArt(
     spectrumColor: Color = Color(0xFF7EB6FF)
 ) {
     var spectrumEnabled by remember { mutableStateOf(true) }
+    var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Controls auto-hide after 3 seconds, reappear on tap.
+    var controlsVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            kotlinx.coroutines.delay(3000)
+            controlsVisible = false
+        }
+    }
+    val controlsAlpha by animateFloatAsState(
+        targetValue = if (controlsVisible) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
+        label = "controlsFade"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { controlsVisible = true }
+    ) {
         CoverImage(
             url = track?.coverUrl,
             contentDescription = track?.title ?: "Album Art",
@@ -1001,41 +1034,93 @@ private fun HeroCoverArt(
                     bins = spectrumBins,
                     color = spectrumColor,
                     modifier = Modifier.fillMaxWidth(),
-                    height = maxHeight * 0.35f
+                    height = maxHeight * 0.35f,
+                    attack = spectrumSpeed.attack,
+                    release = spectrumSpeed.release
                 )
             }
         }
 
-        // Tap to toggle the spectrum overlay on/off.
-        Surface(
+        // Overlay controls — fade out after 3 s, tap artwork to bring back.
+        Box(
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .clickable { spectrumEnabled = !spectrumEnabled }
-                .liquidGlass(
-                    shape = RoundedCornerShape(999.dp),
-                    tintAlpha = 0.15f,
-                    borderAlpha = 0.12f
-                ),
-            shape = RoundedCornerShape(999.dp),
-            color = Color.Transparent,
-            contentColor = Color.White
+                .fillMaxSize()
+                .graphicsLayer { alpha = controlsAlpha }
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Top-left: tap to toggle the spectrum overlay on/off.
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .clickable(enabled = controlsAlpha > 0.5f) {
+                        spectrumEnabled = !spectrumEnabled
+                        controlsVisible = true
+                    }
+                    .liquidGlass(
+                        shape = RoundedCornerShape(999.dp),
+                        tintAlpha = 0.15f,
+                        borderAlpha = 0.12f
+                    ),
+                shape = RoundedCornerShape(999.dp),
+                color = Color.Transparent,
+                contentColor = Color.White
             ) {
-                Icon(
-                    imageVector = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = if (spectrumEnabled) "Spectrum ON" else "Spectrum OFF",
-                    style = MaterialTheme.typography.labelMedium
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = if (spectrumEnabled) "Spectrum ON" else "Spectrum OFF",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+
+            // Top-right: tap to cycle spectrum speed (only shown when spectrum is on).
+            if (spectrumEnabled) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .clickable(enabled = controlsAlpha > 0.5f) {
+                            spectrumSpeed = spectrumSpeed.next()
+                            controlsVisible = true
+                        }
+                        .liquidGlass(
+                            shape = RoundedCornerShape(999.dp),
+                            tintAlpha = 0.15f,
+                            borderAlpha = 0.12f
+                        ),
+                    shape = RoundedCornerShape(999.dp),
+                    color = Color.Transparent,
+                    contentColor = Color.White
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = spectrumSpeed.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
             }
         }
     }
