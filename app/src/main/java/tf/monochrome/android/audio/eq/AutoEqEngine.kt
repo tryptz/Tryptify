@@ -38,12 +38,39 @@ object AutoEqEngine {
         val A = 10.0.pow(band.gain.toDouble() / 40.0)
         val cosW0 = cos(w0)
 
-        val b0 = 1.0 + alpha * A
-        val b1 = -2.0 * cosW0
-        val b2 = 1.0 - alpha * A
-        val a0 = 1.0 + alpha / A
-        val a1 = -2.0 * cosW0
-        val a2 = 1.0 - alpha / A
+        // RBJ Audio EQ Cookbook biquad coefficients per filter type. These
+        // must mirror ParametricEqProcessor.BiquadFilter.configure() so the
+        // displayed response curve matches the actual audio processing.
+        val b0: Double; val b1: Double; val b2: Double
+        val a0: Double; val a1: Double; val a2: Double
+        when (band.type) {
+            FilterType.LOWSHELF -> {
+                val sq = 2.0 * sqrt(A) * alpha
+                b0 = A * ((A + 1.0) - (A - 1.0) * cosW0 + sq)
+                b1 = 2.0 * A * ((A - 1.0) - (A + 1.0) * cosW0)
+                b2 = A * ((A + 1.0) - (A - 1.0) * cosW0 - sq)
+                a0 = (A + 1.0) + (A - 1.0) * cosW0 + sq
+                a1 = -2.0 * ((A - 1.0) + (A + 1.0) * cosW0)
+                a2 = (A + 1.0) + (A - 1.0) * cosW0 - sq
+            }
+            FilterType.HIGHSHELF -> {
+                val sq = 2.0 * sqrt(A) * alpha
+                b0 = A * ((A + 1.0) + (A - 1.0) * cosW0 + sq)
+                b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cosW0)
+                b2 = A * ((A + 1.0) + (A - 1.0) * cosW0 - sq)
+                a0 = (A + 1.0) - (A - 1.0) * cosW0 + sq
+                a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cosW0)
+                a2 = (A + 1.0) - (A - 1.0) * cosW0 - sq
+            }
+            else -> {
+                b0 = 1.0 + alpha * A
+                b1 = -2.0 * cosW0
+                b2 = 1.0 - alpha * A
+                a0 = 1.0 + alpha / A
+                a1 = -2.0 * cosW0
+                a2 = 1.0 - alpha / A
+            }
+        }
 
         val inv = 1.0 / a0
         val b0n = b0 * inv; val b1n = b1 * inv; val b2n = b2 * inv

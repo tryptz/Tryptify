@@ -35,6 +35,7 @@ import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.player.PlaybackService
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.player.StreamResolver
+import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import javax.inject.Inject
 
@@ -47,8 +48,12 @@ class PlayerViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val downloadManager: DownloadManager,
     private val preferences: PreferencesManager,
-    private val projectMEngineRepository: ProjectMEngineRepository
+    private val projectMEngineRepository: ProjectMEngineRepository,
+    val spectrumAnalyzer: SpectrumAnalyzerTap
 ) : ViewModel() {
+
+    /** Toggle the live FFT spectrum tap. Cheap when off — no analysis runs. */
+    fun setSpectrumActive(active: Boolean) = spectrumAnalyzer.setAnalysisActive(active)
 
     // --- State from QueueManager (runs in-process, no IPC needed) ---
     val currentTrack: StateFlow<Track?> = queueManager.currentTrack

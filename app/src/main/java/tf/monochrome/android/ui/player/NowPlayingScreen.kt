@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -77,6 +79,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -99,10 +102,13 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import java.util.Locale
 
+data class AlbumColors(val dominant: Color, val vibrant: Color)
+
 @Composable
-fun rememberDominantColor(imageUrl: String?): Color {
+fun rememberAlbumColors(imageUrl: String?): AlbumColors {
     val context = LocalContext.current
-    var dominantColor by remember { mutableStateOf(Color(0xFF1B1B1B)) }
+    var dominant by remember(imageUrl) { mutableStateOf(Color(0xFF1B1B1B)) }
+    var vibrant by remember(imageUrl) { mutableStateOf(Color(0xFF7EB6FF)) }
 
     Box(modifier = Modifier.size(1.dp).graphicsLayer { alpha = 0f }) {
         SubcomposeAsyncImage(
@@ -117,11 +123,14 @@ fun rememberDominantColor(imageUrl: String?): Color {
                 LaunchedEffect(state) {
                     val bitmap = state.result.image.toBitmap()
                     androidx.palette.graphics.Palette.from(bitmap).generate { palette ->
-                        palette?.dominantSwatch?.let { swatch ->
-                            dominantColor = Color(swatch.rgb)
-                        } ?: palette?.vibrantSwatch?.let { swatch ->
-                            dominantColor = Color(swatch.rgb)
-                        }
+                        dominant = palette?.dominantSwatch?.let { Color(it.rgb) }
+                            ?: palette?.vibrantSwatch?.let { Color(it.rgb) }
+                            ?: dominant
+                        // Pick the brightest swatch for the spectrum overlay.
+                        vibrant = palette?.lightVibrantSwatch?.let { Color(it.rgb) }
+                            ?: palette?.vibrantSwatch?.let { Color(it.rgb) }
+                            ?: palette?.lightMutedSwatch?.let { Color(it.rgb) }
+                            ?: dominant
                     }
                 }
             }
@@ -129,8 +138,11 @@ fun rememberDominantColor(imageUrl: String?): Color {
         }
     }
 
-    return dominantColor
+    return AlbumColors(dominant, vibrant)
 }
+
+@Composable
+fun rememberDominantColor(imageUrl: String?): Color = rememberAlbumColors(imageUrl).dominant
 
 private val PlayerGlowBlue = Color(0xFF7EB6FF)
 private val PlayerGlowPink = Color(0xFFFF7EB3)
@@ -168,6 +180,15 @@ fun NowPlayingScreen(
     val visualizerPresets by playerViewModel.visualizerPresets.collectAsState()
     val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsState()
     val visualizerCompact by playerViewModel.visualizerCompact.collectAsState()
+    val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsState()
+
+    // Power the FFT tap only while this screen is on-screen. The tap itself
+    // is always wired into the audio pipeline (passive), but its analysis
+    // coroutine sleeps when nobody is listening.
+    DisposableEffect(Unit) {
+        playerViewModel.setSpectrumActive(true)
+        onDispose { playerViewModel.setSpectrumActive(false) }
+    }
 
     var speedText by remember(playbackSpeed) {
         mutableStateOf(String.format(Locale.US, "%.2f", playbackSpeed))
@@ -224,9 +245,13 @@ fun NowPlayingScreen(
         }
     }
 
-    val dominantColor = rememberDominantColor(currentTrack?.coverUrl)
+    val albumColors = rememberAlbumColors(currentTrack?.coverUrl)
     val animatedBackground by androidx.compose.animation.animateColorAsState(
-        targetValue = dominantColor,
+        targetValue = albumColors.dominant,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 800)
+    )
+    val animatedVibrant by androidx.compose.animation.animateColorAsState(
+        targetValue = albumColors.vibrant,
         animationSpec = androidx.compose.animation.core.tween(durationMillis = 800)
     )
 
@@ -359,7 +384,9 @@ fun NowPlayingScreen(
                         onTogglePresetFavorite = { currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) } },
                         visualizerCompact = visualizerCompact,
                         onToggleCompact = playerViewModel::toggleVisualizerCompact,
-                        onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen
+                        onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
+                        spectrumBins = spectrumBins,
+                        spectrumColor = animatedVibrant
                     )
                 }
 
@@ -675,9 +702,11 @@ private fun NowPlayingHero(
     onTogglePresetFavorite: () -> Unit,
     visualizerCompact: Boolean = false,
     onToggleCompact: () -> Unit = {},
-    onToggleFullscreen: () -> Unit = {}
+    onToggleFullscreen: () -> Unit = {},
+    spectrumBins: FloatArray = FloatArray(0),
+    spectrumColor: Color = Color(0xFF7EB6FF)
 ) {
-    var showOverlay by androidx.compose.runtime.remember(viewMode) { 
+    var showOverlay by androidx.compose.runtime.remember(viewMode) {
         androidx.compose.runtime.mutableStateOf(viewMode == NowPlayingViewMode.VISUALIZER) 
     }
 
@@ -709,7 +738,7 @@ private fun NowPlayingHero(
             if (viewMode == NowPlayingViewMode.VISUALIZER && visualizerCompact) {
                 // Compact mode: cover art with small visualizer window
                 Box(modifier = Modifier.fillMaxSize()) {
-                    HeroCoverArt(track = track, isPlaying = isPlaying)
+                    HeroCoverArt(track = track, isPlaying = isPlaying, spectrumBins = spectrumBins, spectrumColor = spectrumColor)
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -740,7 +769,12 @@ private fun NowPlayingHero(
                     label = "HeroCrossfade"
                 ) { targetMode ->
                     when (targetMode) {
-                        NowPlayingViewMode.COVER_ART -> HeroCoverArt(track = track, isPlaying = isPlaying)
+                        NowPlayingViewMode.COVER_ART -> HeroCoverArt(
+                            track = track,
+                            isPlaying = isPlaying,
+                            spectrumBins = spectrumBins,
+                            spectrumColor = spectrumColor
+                        )
                         NowPlayingViewMode.VISUALIZER -> VisualizerComponent(
                             isPlaying = isPlaying,
                             sensitivity = visualizerSensitivity,
@@ -941,12 +975,47 @@ private fun VisualizerHeroOverlay(
     }
 }
 
+private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
+    SLOW("SLOW", 0.12f, 0.03f),
+    NORMAL("NORMAL", 0.55f, 0.12f),
+    FAST("FAST", 0.85f, 0.35f),
+    HYPER("HYPER", 1.0f, 0.70f);
+
+    fun next(): SpectrumSpeed = entries[(ordinal + 1) % entries.size]
+}
+
 @Composable
 private fun HeroCoverArt(
     track: Track?,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    spectrumBins: FloatArray = FloatArray(0),
+    spectrumColor: Color = Color(0xFF7EB6FF)
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    var spectrumEnabled by remember { mutableStateOf(true) }
+    var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
+
+    // Controls auto-hide after 3 seconds, reappear on tap.
+    var controlsVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            kotlinx.coroutines.delay(3000)
+            controlsVisible = false
+        }
+    }
+    val controlsAlpha by animateFloatAsState(
+        targetValue = if (controlsVisible) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
+        label = "controlsFade"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { controlsVisible = true }
+    ) {
         CoverImage(
             url = track?.coverUrl,
             contentDescription = track?.title ?: "Album Art",
@@ -967,33 +1036,104 @@ private fun HeroCoverArt(
                 )
         )
 
-        Surface(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .liquidGlass(
-                    shape = RoundedCornerShape(999.dp),
-                    tintAlpha = 0.15f,
-                    borderAlpha = 0.12f
-                ),
-            shape = RoundedCornerShape(999.dp),
-            color = Color.Transparent,
-            contentColor = Color.White
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // Live spectrum overlay anchored to the bottom edge of the artwork.
+        if (spectrumEnabled && spectrumBins.isNotEmpty()) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Album,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                SpectrumOverlay(
+                    bins = spectrumBins,
+                    color = spectrumColor,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = maxHeight * 0.35f,
+                    attack = spectrumSpeed.attack,
+                    release = spectrumSpeed.release
                 )
-                Text(
-                    text = if (isPlaying) "Artwork in focus" else "Paused artwork",
-                    style = MaterialTheme.typography.labelMedium
-                )
+            }
+        }
+
+        // Overlay controls — fade out after 3 s, tap artwork to bring back.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = controlsAlpha }
+        ) {
+            // Top-left: tap to toggle the spectrum overlay on/off.
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .clickable(enabled = controlsAlpha > 0.5f) {
+                        spectrumEnabled = !spectrumEnabled
+                        controlsVisible = true
+                    }
+                    .liquidGlass(
+                        shape = RoundedCornerShape(999.dp),
+                        tintAlpha = 0.15f,
+                        borderAlpha = 0.12f
+                    ),
+                shape = RoundedCornerShape(999.dp),
+                color = Color.Transparent,
+                contentColor = Color.White
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = if (spectrumEnabled) "Spectrum ON" else "Spectrum OFF",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+
+            // Top-right: tap to cycle spectrum speed (only shown when spectrum is on).
+            if (spectrumEnabled) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .clickable(enabled = controlsAlpha > 0.5f) {
+                            spectrumSpeed = spectrumSpeed.next()
+                            controlsVisible = true
+                        }
+                        .liquidGlass(
+                            shape = RoundedCornerShape(999.dp),
+                            tintAlpha = 0.15f,
+                            borderAlpha = 0.12f
+                        ),
+                    shape = RoundedCornerShape(999.dp),
+                    color = Color.Transparent,
+                    contentColor = Color.White
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = spectrumSpeed.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
             }
         }
     }
