@@ -212,13 +212,14 @@ cd monotrypt.android
 
 The `--recurse-submodules` flag pulls the ProjectM v4.1.6 submodule used by the native visualizer.
 
-**Optional — backend configuration:** copy `local.properties.example` → `local.properties` (gitignored) and fill in any keys you want to use. All are optional — features that depend on a given value gracefully degrade when blank:
+**Optional — TIDAL streaming:** add credentials to `local.properties`:
 
-- `SUPABASE_URL` / `SUPABASE_ANON_KEY` — Google Sign-In and cross-device sync
-- `POCKETBASE_URL` — cloud sync of the `DB_users` collection
-- `TIDAL_UPTIME_URLS` — comma-separated endpoints for live TIDAL proxy discovery; falls back to the static pool in `InstanceManager.kt` when blank
+```
+TIDAL_CLIENT_ID=...
+TIDAL_CLIENT_SECRET=...
+```
 
-Without these the app still builds and runs; the respective features just won't initialize.
+Without these the app still builds and runs; TIDAL content just won't resolve.
 
 **Optional — signed release:** copy `keystore.properties.example` → `keystore.properties`, fill in the signing config, then:
 

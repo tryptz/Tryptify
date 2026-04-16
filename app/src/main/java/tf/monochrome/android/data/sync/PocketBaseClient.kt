@@ -37,7 +37,7 @@ class PocketBaseClient @Inject constructor(
     private val json: Json
 ) {
     companion object {
-        private val BASE_URL: String = tf.monochrome.android.BuildConfig.POCKETBASE_URL
+        private const val BASE_URL = "https://data.samidy.xyz"
         private const val COLLECTION = "DB_users"
     }
 
