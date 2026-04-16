@@ -168,6 +168,15 @@ fun NowPlayingScreen(
     val visualizerPresets by playerViewModel.visualizerPresets.collectAsState()
     val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsState()
     val visualizerCompact by playerViewModel.visualizerCompact.collectAsState()
+    val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsState()
+
+    // Power the FFT tap only while this screen is on-screen. The tap itself
+    // is always wired into the audio pipeline (passive), but its analysis
+    // coroutine sleeps when nobody is listening.
+    DisposableEffect(Unit) {
+        playerViewModel.setSpectrumActive(true)
+        onDispose { playerViewModel.setSpectrumActive(false) }
+    }
 
     var speedText by remember(playbackSpeed) {
         mutableStateOf(String.format(Locale.US, "%.2f", playbackSpeed))
@@ -359,7 +368,9 @@ fun NowPlayingScreen(
                         onTogglePresetFavorite = { currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) } },
                         visualizerCompact = visualizerCompact,
                         onToggleCompact = playerViewModel::toggleVisualizerCompact,
-                        onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen
+                        onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
+                        spectrumBins = spectrumBins,
+                        spectrumColor = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -675,9 +686,11 @@ private fun NowPlayingHero(
     onTogglePresetFavorite: () -> Unit,
     visualizerCompact: Boolean = false,
     onToggleCompact: () -> Unit = {},
-    onToggleFullscreen: () -> Unit = {}
+    onToggleFullscreen: () -> Unit = {},
+    spectrumBins: FloatArray = FloatArray(0),
+    spectrumColor: Color = Color(0xFF7EB6FF)
 ) {
-    var showOverlay by androidx.compose.runtime.remember(viewMode) { 
+    var showOverlay by androidx.compose.runtime.remember(viewMode) {
         androidx.compose.runtime.mutableStateOf(viewMode == NowPlayingViewMode.VISUALIZER) 
     }
 
@@ -709,7 +722,7 @@ private fun NowPlayingHero(
             if (viewMode == NowPlayingViewMode.VISUALIZER && visualizerCompact) {
                 // Compact mode: cover art with small visualizer window
                 Box(modifier = Modifier.fillMaxSize()) {
-                    HeroCoverArt(track = track, isPlaying = isPlaying)
+                    HeroCoverArt(track = track, isPlaying = isPlaying, spectrumBins = spectrumBins, spectrumColor = spectrumColor)
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -740,7 +753,12 @@ private fun NowPlayingHero(
                     label = "HeroCrossfade"
                 ) { targetMode ->
                     when (targetMode) {
-                        NowPlayingViewMode.COVER_ART -> HeroCoverArt(track = track, isPlaying = isPlaying)
+                        NowPlayingViewMode.COVER_ART -> HeroCoverArt(
+                            track = track,
+                            isPlaying = isPlaying,
+                            spectrumBins = spectrumBins,
+                            spectrumColor = spectrumColor
+                        )
                         NowPlayingViewMode.VISUALIZER -> VisualizerComponent(
                             isPlaying = isPlaying,
                             sensitivity = visualizerSensitivity,
@@ -944,7 +962,9 @@ private fun VisualizerHeroOverlay(
 @Composable
 private fun HeroCoverArt(
     track: Track?,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    spectrumBins: FloatArray = FloatArray(0),
+    spectrumColor: Color = Color(0xFF7EB6FF)
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         CoverImage(
@@ -966,6 +986,21 @@ private fun HeroCoverArt(
                     )
                 )
         )
+
+        // Live spectrum overlay anchored to the bottom edge of the artwork.
+        // Pulled from the singleton SpectrumAnalyzerTap that already sits in
+        // the ExoPlayer audio pipeline, so it reflects exactly what the user
+        // is hearing (post-EQ, post-mixer).
+        if (isPlaying && spectrumBins.isNotEmpty()) {
+            SpectrumOverlay(
+                bins = spectrumBins,
+                color = spectrumColor,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+                height = 120.dp
+            )
+        }
 
         Surface(
             modifier = Modifier
