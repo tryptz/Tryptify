@@ -69,6 +69,7 @@ fun SpectrumOverlay(
     val currentBins by rememberUpdatedState(bins)
     val currentAttack by rememberUpdatedState(attack)
     val currentRelease by rememberUpdatedState(release)
+    val currentColor by rememberUpdatedState(color)
 
     LaunchedEffect(Unit) {
         var lastFrameNanos = 0L
@@ -152,9 +153,9 @@ fun SpectrumOverlay(
             path = fill,
             brush = Brush.verticalGradient(
                 colors = listOf(
-                    color.copy(alpha = 0.75f),
-                    color.copy(alpha = 0.35f),
-                    color.copy(alpha = 0.10f),
+                    currentColor.copy(alpha = 0.75f),
+                    currentColor.copy(alpha = 0.35f),
+                    currentColor.copy(alpha = 0.10f),
                     Color.Transparent
                 ),
                 startY = 0f,
@@ -170,7 +171,7 @@ fun SpectrumOverlay(
         )
         drawPath(
             path = envelope,
-            color = color.copy(alpha = 0.55f),
+            color = currentColor.copy(alpha = 0.55f),
             style = Stroke(width = 5f)
         )
 
@@ -180,7 +181,7 @@ fun SpectrumOverlay(
         for (i in 0 until n) if (ys[i] < peakY) { peakY = ys[i]; peakIdx = i }
         if (peakY < h - 4f) {
             drawCircle(
-                color = color.copy(alpha = 0.55f),
+                color = currentColor.copy(alpha = 0.55f),
                 radius = 9f,
                 center = Offset(xs[peakIdx], peakY)
             )
