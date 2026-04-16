@@ -381,17 +381,22 @@ val MintDarkScheme = darkColorScheme(
     onError = MonoBlack
 )
 
+// True light theme. Secondary/tertiary use charcoal/near-black so their
+// onSecondary/onTertiary = white stays at ≥7:1 contrast (previously these
+// paired white text on light-gray MonoTextSecondary/Tertiary, which failed
+// WCAG and rendered as ghost text). onSurfaceVariant is a darker gray so
+// secondary labels on WhiteSurfaceVariant (#EBEBEB) stay readable.
 val WhiteScheme = androidx.compose.material3.lightColorScheme(
     primary = WhitePrimary,
     onPrimary = MonoWhite,
     primaryContainer = WhiteSurfaceVariant,
     onPrimaryContainer = MonoBlack,
-    secondary = MonoTextSecondary,
-    onSecondary = MonoWhite,
+    secondary = WhiteSecondary,
+    onSecondary = WhiteOnSecondary,
     secondaryContainer = WhiteCard,
     onSecondaryContainer = MonoBlack,
-    tertiary = MonoTextTertiary,
-    onTertiary = MonoWhite,
+    tertiary = WhiteTertiary,
+    onTertiary = WhiteOnSecondary,
     tertiaryContainer = WhiteCard,
     onTertiaryContainer = MonoBlack,
     background = WhiteBackground,
@@ -399,7 +404,7 @@ val WhiteScheme = androidx.compose.material3.lightColorScheme(
     surface = WhiteSurface,
     onSurface = MonoBlack,
     surfaceVariant = WhiteSurfaceVariant,
-    onSurfaceVariant = MonoTextSecondary,
+    onSurfaceVariant = WhiteOnSurfaceVariant,
     outline = WhiteOutline,
     outlineVariant = WhiteSurfaceVariant,
     error = ErrorRed,
@@ -432,6 +437,7 @@ val ClearDarkScheme = darkColorScheme(
 )
 /** Display names for theme selection UI */
 val themeDisplayNames = mapOf(
+    "system" to "System",
     "monochrome_dark" to "Monochrome",
     "ocean" to "Ocean",
     "midnight" to "Midnight",
@@ -476,9 +482,27 @@ fun MonochromeTheme(
     themeName: String = "monochrome_dark",
     fontScale: Float = 1.0f,
     customFontFamily: FontFamily? = null,
+    dynamicPalette: DynamicPalette? = null,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = getColorScheme(themeName)
+    // "system" follows the OS dark-mode toggle — light mode gets the
+    // rebuilt WhiteScheme, dark mode gets the default Monochrome scheme.
+    val resolvedTheme = if (themeName == "system") {
+        if (androidx.compose.foundation.isSystemInDarkTheme()) "monochrome_dark" else "white"
+    } else themeName
+    val baseScheme = getColorScheme(resolvedTheme)
+    // Overlay album-art-derived colors on the selected theme. We only swap
+    // primary/secondary slots so backgrounds, text-on-surface, and outlines
+    // remain coherent with the user's chosen theme.
+    val colorScheme = if (dynamicPalette != null) {
+        baseScheme.copy(
+            primary = dynamicPalette.primary,
+            onPrimary = dynamicPalette.onPrimary,
+            primaryContainer = dynamicPalette.primaryContainer,
+            secondary = dynamicPalette.secondary,
+            onSecondary = dynamicPalette.onSecondary
+        )
+    } else baseScheme
     val family = customFontFamily ?: InterFontFamily
     val typography = remember(fontScale, family) {
         buildTypography(family, fontScale)

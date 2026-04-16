@@ -126,17 +126,32 @@ val MintCard = Color(0xFF1E3328)
 val MintOutline = Color(0xFF284736)
 
 // White Theme
+// True light theme — dark text on light surfaces. All secondary/tertiary
+// tokens must pair with dark `on*` colors; reusing the dark-theme
+// MonoTextSecondary/MonoTextTertiary with white `on*` is a WCAG violation.
 val WhitePrimary = Color(0xFF000000)
 val WhiteBackground = Color(0xFFFFFFFF)
 val WhiteSurface = Color(0xFFF5F5F5)
 val WhiteSurfaceVariant = Color(0xFFEBEBEB)
 val WhiteCard = Color(0xFFFAFAFA)
 val WhiteOutline = Color(0xFFE0E0E0)
+// Light-theme accents: desaturated slate primary, charcoal secondary,
+// near-black tertiary — all contrast ≥4.5:1 against WhiteOnSecondary.
+val WhiteSecondary = Color(0xFF424242)       // charcoal
+val WhiteTertiary = Color(0xFF1F1F1F)        // near-black
+val WhiteOnSecondary = Color(0xFFFFFFFF)     // white text on charcoal
+val WhiteOnSurfaceVariant = Color(0xFF4A4A4A) // readable secondary text on #EBEBEB
 
 // Clear Theme
+// Clear is intentionally translucent so surfaces let the background (album
+// art, visualizer, etc.) bleed through. ClearSurface used to be fully
+// transparent (0x00000000) which made Material cards invisible — any
+// composable painting onto colorScheme.surface would render nothing.
+// 0x40000000 keeps the smoky look while guaranteeing ≥25% opacity so
+// surface bounds stay legible against bright backdrops.
 val ClearPrimary = Color(0xFFFFFFFF)
 val ClearBackground = Color(0xFF000000)
-val ClearSurface = Color(0x00000000)
+val ClearSurface = Color(0x40000000)
 val ClearSurfaceVariant = Color(0x15FFFFFF)
 val ClearCard = Color(0x0AFFFFFF)
 val ClearOutline = Color(0x22FFFFFF)

@@ -1,11 +1,14 @@
 package tf.monochrome.android.ui.main
 
 import android.content.Intent
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import android.view.ViewGroup
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import eightbitlab.com.blurview.BlurTarget
 import androidx.activity.enableEdgeToEdge
@@ -16,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -25,8 +29,10 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.ui.navigation.MonochromeNavHost
 import tf.monochrome.android.ui.theme.MonochromeTheme
+import tf.monochrome.android.ui.theme.rememberDynamicPalette
 import java.io.File
 import javax.inject.Inject
 import tf.monochrome.android.audio.eq.FrequencyTargets
@@ -38,6 +44,7 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
+    @Inject lateinit var queueManager: QueueManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -77,6 +84,12 @@ class MainActivity : ComponentActivity() {
             val themeName by preferences.theme.collectAsState(initial = "monochrome_dark")
             val fontScale by preferences.fontScale.collectAsState(initial = 1.0f)
             val customFontPath by preferences.customFontUri.collectAsState(initial = null)
+            val dynamicColorsEnabled by preferences.dynamicColors.collectAsState(initial = false)
+            val currentTrack by queueManager.currentTrack.collectAsState()
+            val dynamicPalette by rememberDynamicPalette(
+                coverUrl = currentTrack?.coverUrl,
+                enabled = dynamicColorsEnabled
+            )
 
             val customFontFamily = remember(customFontPath) {
                 customFontPath?.let { path ->
@@ -99,8 +112,27 @@ class MainActivity : ComponentActivity() {
                 MonochromeTheme(
                     themeName = themeName,
                     fontScale = fontScale,
-                    customFontFamily = customFontFamily
+                    customFontFamily = customFontFamily,
+                    dynamicPalette = dynamicPalette
                 ) {
+                    // Re-apply edge-to-edge with a SystemBarStyle tuned to
+                    // the current theme. Light themes need dark icons so
+                    // they stay legible on white system bars; dark themes
+                    // want light icons on transparent scrims. enableEdgeToEdge
+                    // is idempotent — safe to call on every background change.
+                    val background = MaterialTheme.colorScheme.background
+                    SideEffect {
+                        val isLight = background.luminance() > 0.5f
+                        val style = if (isLight) {
+                            SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+                        } else {
+                            SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+                        }
+                        this@MainActivity.enableEdgeToEdge(
+                            statusBarStyle = style,
+                            navigationBarStyle = style
+                        )
+                    }
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
