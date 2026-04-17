@@ -8,6 +8,8 @@ import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import tf.monochrome.android.audio.dsp.oxford.CompressorEffect
+import tf.monochrome.android.audio.dsp.oxford.InflatorEffect
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
@@ -15,7 +17,10 @@ import javax.inject.Singleton
 
 @Singleton
 @OptIn(UnstableApi::class)
-class MixBusProcessor @Inject constructor() : AudioProcessor {
+class MixBusProcessor @Inject constructor(
+    private val inflator: InflatorEffect,
+    private val compressor: CompressorEffect,
+) : AudioProcessor {
 
     private var enginePtr: Long = 0L
     private var pendingFormat = AudioFormat.NOT_SET
@@ -175,6 +180,11 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
         // mix bus bypass in the C++ engine, not a blanket wet/dry switch here.
         nativeProcess(enginePtr, scratchInL, scratchInR, scratchOutL, scratchOutR, numFrames)
 
+        // Oxford post-chain: runs after the bus+master chain, before interleave.
+        // Each effect handles its own bypass flag internally.
+        inflator.processArrays(scratchOutL, scratchOutR, numFrames)
+        compressor.processArrays(scratchOutL, scratchOutR, numFrames)
+
         val useL = scratchOutL
         val useR = scratchOutR
 
@@ -243,6 +253,10 @@ class MixBusProcessor @Inject constructor() : AudioProcessor {
             }
             inputFormat = pendingFormat
             enginePtr = nativeCreate(inputFormat.sampleRate, MAX_BLOCK_SIZE)
+
+            // Prepare Oxford post-chain at the new sample rate (always stereo — output is stereo)
+            inflator.prepare(inputFormat.sampleRate.toDouble(), 2)
+            compressor.prepare(inputFormat.sampleRate.toDouble(), 2)
 
             // Restore state into the new engine immediately (same thread, no race)
             if (!savedState.isNullOrEmpty() && savedState != "{}") {

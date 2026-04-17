@@ -8,6 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.MixBusProcessor
+import tf.monochrome.android.audio.dsp.oxford.CompressorEffect
+import tf.monochrome.android.audio.dsp.oxford.InflatorEffect
 import tf.monochrome.android.data.preferences.PreferencesManager
 import javax.inject.Singleton
 
@@ -17,7 +19,10 @@ object DspModule {
 
     @Provides
     @Singleton
-    fun provideMixBusProcessor(): MixBusProcessor = MixBusProcessor()
+    fun provideMixBusProcessor(
+        inflator: InflatorEffect,
+        compressor: CompressorEffect,
+    ): MixBusProcessor = MixBusProcessor(inflator, compressor)
 
     @Provides
     @Singleton
