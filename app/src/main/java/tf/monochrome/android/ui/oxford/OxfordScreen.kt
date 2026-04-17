@@ -5,25 +5,23 @@ package tf.monochrome.android.ui.oxford
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
@@ -48,138 +46,22 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 // ----------------------------------------------------------------------------
-// Palette
+// Shared M3 tokens — thin wrapper over MaterialTheme.colorScheme so the two
+// effect panels pick up the user's theme (monochrome, ocean, crimson, …)
+// without any skeuomorphic treatment.
 // ----------------------------------------------------------------------------
 
-/**
- * Theme-derived Seap palette. Everything is keyed off MaterialTheme.colorScheme
- * so the Inflator / Compressor sit inside whichever of the 16 themes the user
- * has picked (monochrome, ocean, midnight, crimson, …). LEDs stay semantic
- * — green/yellow/red convey signal health independent of brand colour.
- */
-private data class SeapPalette(
-    val panelSheen: Color,
-    val panelTop: Color,
-    val panelMid: Color,
-    val panelBottom: Color,
-    val panelShadow: Color,
-    val panelDarkEdge: Color,
-
-    val chromeHi: Color,
-    val chromeLight: Color,
-    val chromeMid: Color,
-    val chromeDark: Color,
-    val chromeShadow: Color,
-
-    val readoutRim: Color,
-    val readout: Color,
-    val readoutTop: Color,
-    val readoutText: Color,
-    val readoutGlow: Color,
-
-    val ledGreen: Color,
-    val ledYellow: Color,
-    val ledRed: Color,
-    val ledOff: Color,
-    val ledOffEdge: Color,
-
-    val trackBg: Color,
-    val trackDeep: Color,
-    val trackSheen: Color,
-
-    val btnClip: Color,
-    val btnClipHi: Color,
-    val btnBandSplit: Color,
-    val btnEffectOn: Color,
-    val btnEffectHi: Color,
-
-    val textOnChrome: Color,
-    val textTitle: Color,
-)
-
-private val LocalSeapPalette = staticCompositionLocalOf<SeapPalette> {
-    error("LocalSeapPalette not provided — wrap content in ProvideSeapPalette()")
-}
-
-@Composable
-private fun rememberSeapPalette(): SeapPalette {
-    val cs = MaterialTheme.colorScheme
-    return remember(cs) {
-        val base     = cs.surfaceVariant   // panel body
-        val elevated = cs.surface          // slightly darker mid
-        val deep     = cs.background       // deepest — pure black on monochrome
-        SeapPalette(
-            panelSheen   = base.lighten(0.25f),
-            panelTop     = base.lighten(0.08f),
-            panelMid     = base,
-            panelBottom  = elevated,
-            panelShadow  = deep,
-            panelDarkEdge = deep,
-
-            // Dark brushed metal, not silver — subtle sheen from above.
-            chromeHi     = base.lighten(0.32f),
-            chromeLight  = base.lighten(0.18f),
-            chromeMid    = base.lighten(0.05f),
-            chromeDark   = base.darken(0.15f),
-            chromeShadow = deep,
-
-            readoutRim   = deep,
-            readout      = elevated.darken(0.40f),
-            readoutTop   = elevated.darken(0.20f),
-            readoutText  = cs.primary,
-            readoutGlow  = cs.primary.copy(alpha = 0.45f),
-
-            ledGreen   = Color(0xFF3EE26A),
-            ledYellow  = Color(0xFFF5D84A),
-            ledRed     = Color(0xFFE84A3A),
-            ledOff     = elevated.darken(0.35f),
-            ledOffEdge = deep,
-
-            trackBg    = elevated.darken(0.20f),
-            trackDeep  = deep,
-            trackSheen = base.lighten(0.15f),
-
-            btnClip      = cs.error,
-            btnClipHi    = cs.error.lighten(0.35f),
-            btnBandSplit = base.lighten(0.12f),
-            btnEffectOn  = cs.primary,
-            btnEffectHi  = cs.primary.lighten(0.40f),
-
-            textOnChrome = cs.onSurface,
-            textTitle    = cs.onSurface,
-        )
-    }
-}
-
-/** 4-stop dark brushed-metal vertical gradient. */
-private fun brushedMetalGradient(p: SeapPalette): Brush = Brush.verticalGradient(
-    0.00f to p.chromeHi,
-    0.18f to p.chromeLight,
-    0.55f to p.chromeMid,
-    1.00f to p.chromeDark,
-)
-
-/** Panel gradient — subtle sheen over theme surfaces. */
-private fun panelGradient(p: SeapPalette): Brush = Brush.verticalGradient(
-    0.00f to p.panelSheen,
-    0.06f to p.panelTop,
-    0.55f to p.panelMid,
-    1.00f to p.panelBottom,
-)
-
-@Composable
-private fun digitStyle(p: SeapPalette): TextStyle = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontWeight = FontWeight.Bold,
-    fontSize = 14.sp,
-    color = p.readoutText,
-)
+/** Semantic LED colours — intentionally constant across themes so the meter
+ *  always reads "green / yellow / red" for signal health. */
+private val LedGreen  = Color(0xFF4CAF77)
+private val LedAmber  = Color(0xFFE8B84A)
+private val LedRed    = Color(0xFFE5534B)
 
 /** LED peak-hold decay rate in dB/sec (rate-independent). */
 private const val DECAY_DB_PER_SEC = 36f
 
 // ----------------------------------------------------------------------------
-// Vertical fader — silver cap on a dark track, drag to set value.
+// Vertical fader — slim tonal track with a primary-coloured fill + pill thumb.
 // ----------------------------------------------------------------------------
 
 @Composable
@@ -188,9 +70,13 @@ private fun OxfordFader(
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    trackWidth: Dp = 10.dp,
+    trackWidth: Dp = 6.dp,
 ) {
-    val seap = LocalSeapPalette.current
+    val trackBg = MaterialTheme.colorScheme.surfaceContainerHighest
+    val trackActive = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+    val thumbColor = MaterialTheme.colorScheme.primary
+    val thumbShadow = MaterialTheme.colorScheme.scrim.copy(alpha = 0.25f)
+
     var dragOriginValue by remember { mutableStateOf(value) }
     var dragAccumPx by remember { mutableStateOf(0f) }
 
@@ -222,118 +108,53 @@ private fun OxfordFader(
             val w = size.width
             val h = size.height
             val trackX = w * 0.5f
-            val trackTop = 6f
-            val trackBottom = h - 6f
-            val trackHeight = trackBottom - trackTop
             val tw = trackWidth.toPx()
+            val trackTop = 8f
+            val trackBottom = h - 8f
+            val trackHeight = trackBottom - trackTop
 
-            // Track — recessed well. Outer dark rim, deeper centre, sheen along right edge.
+            // Inactive track
             drawRoundRect(
-                color = seap.panelDarkEdge,
-                topLeft = Offset(trackX - tw / 2f - 1f, trackTop - 1f),
-                size = Size(tw + 2f, trackHeight + 2f),
-                cornerRadius = CornerRadius(4f, 4f),
-            )
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    0f to seap.trackDeep,
-                    1f to seap.trackBg,
-                ),
+                color = trackBg,
                 topLeft = Offset(trackX - tw / 2f, trackTop),
                 size = Size(tw, trackHeight),
-                cornerRadius = CornerRadius(3f, 3f),
-            )
-            // Right-edge specular line — sells the "inset well lit from above-left"
-            drawLine(
-                color = seap.trackSheen.copy(alpha = 0.65f),
-                start = Offset(trackX + tw / 2f - 1f, trackTop + 4f),
-                end   = Offset(trackX + tw / 2f - 1f, trackBottom - 4f),
-                strokeWidth = 1f,
+                cornerRadius = CornerRadius(tw / 2f, tw / 2f),
             )
 
             val t = ((value - valueRange.start) /
                     (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
-            val handleY = trackBottom - t * trackHeight
-            val handleW = w * 0.88f
-            val handleH = 32f
+            val thumbY = trackBottom - t * trackHeight
 
-            // Drop shadow (offset down-right, soft-ish via double draw)
+            // Active fill — from thumb down.
             drawRoundRect(
-                color = Color.Black.copy(alpha = 0.35f),
-                topLeft = Offset(trackX - handleW / 2f + 1f, handleY - handleH / 2f + 3f),
-                size = Size(handleW, handleH),
-                cornerRadius = CornerRadius(5f, 5f),
-            )
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.20f),
-                topLeft = Offset(trackX - handleW / 2f + 2f, handleY - handleH / 2f + 5f),
-                size = Size(handleW - 2f, handleH),
-                cornerRadius = CornerRadius(5f, 5f),
+                color = trackActive,
+                topLeft = Offset(trackX - tw / 2f, thumbY),
+                size = Size(tw, trackBottom - thumbY),
+                cornerRadius = CornerRadius(tw / 2f, tw / 2f),
             )
 
-            // Handle body — 4-stop metallic with darker waist in the middle (brushed cap look)
+            // Thumb — horizontal pill, fits visually on a vertical fader.
+            val thumbW = w * 0.72f
+            val thumbH = 6.dp.toPx()
+            // Soft shadow below the thumb (single offset rect, low alpha)
             drawRoundRect(
-                brush = Brush.verticalGradient(
-                    0.00f to seap.chromeHi,
-                    0.15f to seap.chromeLight,
-                    0.50f to seap.chromeMid,
-                    0.80f to seap.chromeDark,
-                    1.00f to seap.chromeShadow,
-                ),
-                topLeft = Offset(trackX - handleW / 2f, handleY - handleH / 2f),
-                size = Size(handleW, handleH),
-                cornerRadius = CornerRadius(5f, 5f),
+                color = thumbShadow,
+                topLeft = Offset(trackX - thumbW / 2f, thumbY - thumbH / 2f + 2f),
+                size = Size(thumbW, thumbH),
+                cornerRadius = CornerRadius(thumbH / 2f, thumbH / 2f),
             )
-            // Top specular line (very thin, near-white)
-            drawLine(
-                color = Color.White.copy(alpha = 0.85f),
-                start = Offset(trackX - handleW / 2f + 3f, handleY - handleH / 2f + 1.5f),
-                end   = Offset(trackX + handleW / 2f - 3f, handleY - handleH / 2f + 1.5f),
-                strokeWidth = 1f,
-            )
-            // Centre waist line — makes the cap feel machined
-            drawLine(
-                color = seap.chromeShadow.copy(alpha = 0.65f),
-                start = Offset(trackX - handleW / 2f + 2f, handleY),
-                end   = Offset(trackX + handleW / 2f - 2f, handleY),
-                strokeWidth = 1.4f,
-            )
-            drawLine(
-                color = Color.White.copy(alpha = 0.35f),
-                start = Offset(trackX - handleW / 2f + 2f, handleY + 1.5f),
-                end   = Offset(trackX + handleW / 2f - 2f, handleY + 1.5f),
-                strokeWidth = 1f,
-            )
-            // Grippers — 5 etched lines above the waist, 3 below
-            val gripCount = 5
-            for (i in 0 until gripCount) {
-                val gy = handleY - (handleH * 0.34f) + i * (handleH * 0.22f / (gripCount - 1))
-                drawLine(
-                    color = seap.chromeShadow,
-                    start = Offset(trackX - handleW * 0.32f, gy),
-                    end   = Offset(trackX + handleW * 0.32f, gy),
-                    strokeWidth = 1f,
-                )
-                drawLine(
-                    color = Color.White.copy(alpha = 0.35f),
-                    start = Offset(trackX - handleW * 0.32f, gy + 1f),
-                    end   = Offset(trackX + handleW * 0.32f, gy + 1f),
-                    strokeWidth = 0.7f,
-                )
-            }
-            // Bottom-edge shadow to anchor the cap
-            drawLine(
-                color = Color.Black.copy(alpha = 0.55f),
-                start = Offset(trackX - handleW / 2f + 3f, handleY + handleH / 2f - 1.5f),
-                end   = Offset(trackX + handleW / 2f - 3f, handleY + handleH / 2f - 1.5f),
-                strokeWidth = 1f,
+            drawRoundRect(
+                color = thumbColor,
+                topLeft = Offset(trackX - thumbW / 2f, thumbY - thumbH / 2f),
+                size = Size(thumbW, thumbH),
+                cornerRadius = CornerRadius(thumbH / 2f, thumbH / 2f),
             )
         }
     }
 }
 
 // ----------------------------------------------------------------------------
-// LED meter — vertical, segmented, green/yellow/red. dB-scaled.
+// LED meter — vertical, segmented. Semantic green/yellow/red for signal health.
 // ----------------------------------------------------------------------------
 
 @Composable
@@ -343,10 +164,11 @@ private fun LedMeter(
     modifier: Modifier = Modifier,
     minDb: Float = -42f,
     maxDb: Float = 0f,
-    segmentCount: Int = 24,
+    segmentCount: Int = 20,
     stereo: Boolean = true,
 ) {
-    val seap = LocalSeapPalette.current
+    val offColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f)
+
     var heldL by remember { mutableStateOf(minDb) }
     var heldR by remember { mutableStateOf(minDb) }
     var lastTick by remember { mutableStateOf(0L) }
@@ -354,8 +176,6 @@ private fun LedMeter(
     val dbL = if (peakL > 1e-6f) 20f * log10(peakL) else minDb
     val dbR = if (peakR > 1e-6f) 20f * log10(peakR) else minDb
 
-    // Decay peak hold at a fixed rate (dB/sec) independent of poll rate so
-    // bumping the meter FPS doesn't also speed up how fast the hold falls.
     LaunchedEffect(dbL, dbR) {
         val now = System.nanoTime()
         val dtSec = if (lastTick == 0L) 0f else (now - lastTick) / 1_000_000_000f
@@ -371,16 +191,8 @@ private fun LedMeter(
         val laneCount = if (stereo) 2 else 1
         val gap = 2f
         val laneW = (w - gap * (laneCount - 1)) / laneCount
-        val segGap = 1.2f
+        val segGap = 1.5f
         val segH = (h - segGap * (segmentCount - 1)) / segmentCount
-
-        // Outer dark bezel behind all lanes for inset-panel feel
-        drawRoundRect(
-            color = seap.panelDarkEdge,
-            topLeft = Offset(-1.5f, -1.5f),
-            size = Size(w + 3f, h + 3f),
-            cornerRadius = CornerRadius(3f, 3f),
-        )
 
         for (lane in 0 until laneCount) {
             val lx = lane * (laneW + gap)
@@ -393,104 +205,40 @@ private fun LedMeter(
                 val segY = h - (s + 1) * segH - s * segGap
                 val isLit = s < lit
                 val isPeak = s == heldSeg && heldSeg >= 0
-                val ledColor = ledColorFor(seap, s, segmentCount)
-
-                if (isLit || isPeak) {
-                    val c = if (isLit) ledColor else ledColor.copy(alpha = 0.7f)
-                    // Soft glow halo underneath (slightly larger, low alpha)
-                    drawRoundRect(
-                        color = c.copy(alpha = if (isLit) 0.35f else 0.18f),
-                        topLeft = Offset(lx - 1.5f, segY - 1f),
-                        size = Size(laneW + 3f, segH + 2f),
-                        cornerRadius = CornerRadius(2f, 2f),
-                    )
-                    // LED body — lit with top→bottom brightness gradient for glass-bead look
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            0f to Color.White.copy(alpha = 0.55f).compositeOver(c),
-                            0.4f to c,
-                            1f to c.copy(alpha = 0.85f).compositeOver(Color.Black.copy(alpha = 0.2f)),
-                        ),
-                        topLeft = Offset(lx, segY),
-                        size = Size(laneW, segH),
-                        cornerRadius = CornerRadius(1.5f, 1.5f),
-                    )
-                    // Very thin top specular
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.7f),
-                        start = Offset(lx + 1f, segY + 0.8f),
-                        end   = Offset(lx + laneW - 1f, segY + 0.8f),
-                        strokeWidth = 0.8f,
-                    )
-                } else {
-                    // Unlit well — inset look
-                    drawRoundRect(
-                        color = seap.ledOffEdge,
-                        topLeft = Offset(lx - 0.5f, segY - 0.5f),
-                        size = Size(laneW + 1f, segH + 1f),
-                        cornerRadius = CornerRadius(1.5f, 1.5f),
-                    )
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            0f to seap.ledOffEdge,
-                            1f to seap.ledOff,
-                        ),
-                        topLeft = Offset(lx, segY),
-                        size = Size(laneW, segH),
-                        cornerRadius = CornerRadius(1.5f, 1.5f),
-                    )
+                val semanticColor = ledColorFor(s, segmentCount)
+                val col = when {
+                    isLit -> semanticColor
+                    isPeak -> semanticColor.copy(alpha = 0.5f)
+                    else -> offColor
                 }
+                drawRoundRect(
+                    color = col,
+                    topLeft = Offset(lx, segY),
+                    size = Size(laneW, segH),
+                    cornerRadius = CornerRadius(1.5f, 1.5f),
+                )
             }
         }
     }
 }
-
-private fun Color.compositeOver(background: Color): Color {
-    val a = this.alpha + background.alpha * (1f - this.alpha)
-    if (a < 1e-4f) return Color.Transparent
-    val r = (this.red * this.alpha + background.red * background.alpha * (1f - this.alpha)) / a
-    val g = (this.green * this.alpha + background.green * background.alpha * (1f - this.alpha)) / a
-    val b = (this.blue * this.alpha + background.blue * background.alpha * (1f - this.alpha)) / a
-    return Color(r, g, b, a)
-}
-
-/** Pick a contrasting text colour for the given background. */
-private fun onColorFor(bg: Color): Color =
-    if (bg.luminance() > 0.55f) Color(0xFF0A0A0A) else Color.White
-
-private fun Color.luminance(): Float =
-    0.2126f * red + 0.7152f * green + 0.0722f * blue
-
-private fun Color.lighten(amount: Float): Color = Color(
-    red   = (red   + (1f - red)   * amount).coerceIn(0f, 1f),
-    green = (green + (1f - green) * amount).coerceIn(0f, 1f),
-    blue  = (blue  + (1f - blue)  * amount).coerceIn(0f, 1f),
-    alpha = alpha,
-)
-
-private fun Color.darken(amount: Float): Color = Color(
-    red   = (red   * (1f - amount)).coerceIn(0f, 1f),
-    green = (green * (1f - amount)).coerceIn(0f, 1f),
-    blue  = (blue  * (1f - amount)).coerceIn(0f, 1f),
-    alpha = alpha,
-)
 
 private fun dbToSegments(db: Float, minDb: Float, maxDb: Float, segmentCount: Int): Int {
     val t = ((db - minDb) / (maxDb - minDb)).coerceIn(0f, 1f)
     return (t * segmentCount).roundToInt()
 }
 
-private fun ledColorFor(p: SeapPalette, segmentIndex: Int, total: Int): Color {
+private fun ledColorFor(segmentIndex: Int, total: Int): Color {
     val t = segmentIndex.toFloat() / (total - 1).toFloat()
     return when {
-        t >= 0.90f -> p.ledRed
-        t >= 0.75f -> p.ledYellow
-        else       -> p.ledGreen
+        t >= 0.90f -> LedRed
+        t >= 0.75f -> LedAmber
+        else       -> LedGreen
     }
 }
 
 // ----------------------------------------------------------------------------
-// Chunky pill buttons
+// Toggle button — tonal/filled state pair. Filled primary when active,
+// tonal surface when inactive. Pure M3, no embossing.
 // ----------------------------------------------------------------------------
 
 @Composable
@@ -501,67 +249,45 @@ private fun OxfordButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val seap = LocalSeapPalette.current
-    val shape = RoundedCornerShape(7.dp)
-    // Convex metallic dome when active, brushed chrome when inactive.
-    val bodyBrush = if (active) {
-        val hi = activeColor.lighten(0.45f)
-        val lo = activeColor.darken(0.30f)
-        Brush.verticalGradient(
-            0.00f to hi,
-            0.30f to activeColor,
-            1.00f to lo,
-        )
-    } else brushedMetalGradient(seap)
+    val shape = RoundedCornerShape(10.dp)
+    val container = if (active) activeColor
+                    else MaterialTheme.colorScheme.surfaceContainerHighest
+    val content = if (active) onColorFor(activeColor)
+                  else MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         onClick = onClick,
         shape = shape,
-        color = Color.Transparent,
-        shadowElevation = if (active) 4.dp else 2.dp,
+        color = container,
+        contentColor = content,
+        tonalElevation = if (active) 0.dp else 1.dp,
         modifier = modifier
-            .height(46.dp)
-            .defaultMinSize(minWidth = 68.dp)
-            .shadow(
-                elevation = if (active) 5.dp else 3.dp,
-                shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.7f),
-                spotColor = Color.Black.copy(alpha = 0.7f),
-            ),
+            .height(40.dp)
+            .defaultMinSize(minWidth = 68.dp),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(bodyBrush, shape)
-                .border(
-                    width = 0.8.dp,
-                    brush = Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = if (active) 0.85f else 0.7f),
-                        0.4f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.45f),
-                    ),
-                    shape = shape,
-                )
                 .padding(horizontal = 10.dp),
             contentAlignment = Alignment.Center,
         ) {
-            val textColor = if (active) onColorFor(activeColor) else seap.textOnChrome
             Text(
                 text = label,
                 style = TextStyle(
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 11.sp,
-                    color = textColor,
+                    textAlign = TextAlign.Center,
+                    color = content,
                     fontFamily = FontFamily.SansSerif,
+                    letterSpacing = 0.3.sp,
                 ),
-                textAlign = TextAlign.Center,
             )
         }
     }
 }
 
 // ----------------------------------------------------------------------------
-// Fader column
+// Fader column — label + LCD-style readout + fader + meter.
 // ----------------------------------------------------------------------------
 
 @Composable
@@ -578,24 +304,19 @@ private fun FaderColumn(
     meterMinDb: Float = -42f,
     meterMaxDb: Float = 0f,
 ) {
-    val seap = LocalSeapPalette.current
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = label,
-            style = TextStyle(
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = seap.textTitle,
-                fontFamily = FontFamily.SansSerif,
-                letterSpacing = 0.8.sp,
-            ),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(4.dp))
         LcdReadout(text = readout)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Row(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -612,63 +333,39 @@ private fun FaderColumn(
                 stereo = meterStereo,
                 minDb = meterMinDb,
                 maxDb = meterMaxDb,
-                modifier = Modifier.width(if (meterStereo) 22.dp else 12.dp).fillMaxHeight(),
+                modifier = Modifier.width(if (meterStereo) 18.dp else 10.dp).fillMaxHeight(),
             )
         }
     }
 }
 
 // ----------------------------------------------------------------------------
-// LCD readout — recessed black panel with top-lit glass + inset rim
+// LCD readout — tonal Surface with primary-coloured monospace digits.
 // ----------------------------------------------------------------------------
 
 @Composable
 private fun LcdReadout(text: String) {
-    val seap = LocalSeapPalette.current
-    val rimShape = RoundedCornerShape(4.dp)
-    val glassShape = RoundedCornerShape(3.dp)
-    Box(
-        modifier = Modifier
-            .clip(rimShape)
-            .background(seap.readoutRim)
-            .padding(1.5.dp),
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        tonalElevation = 0.dp,
     ) {
-        Box(
-            modifier = Modifier
-                .clip(glassShape)
-                .background(
-                    Brush.verticalGradient(
-                        0f to seap.readoutTop,
-                        0.5f to seap.readout,
-                        1f to seap.readoutRim,
-                    ),
-                    glassShape,
-                )
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-        ) {
-            // Thin specular hairline across the top — sells the glass dome
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(0.8.dp)
-                    .background(Color.White.copy(alpha = 0.12f))
-            )
-            Text(
-                text = text,
-                style = digitStyle(seap).copy(
-                    shadow = androidx.compose.ui.graphics.Shadow(
-                        color = seap.readoutGlow,
-                        offset = Offset(0f, 0f),
-                        blurRadius = 4f,
-                    ),
-                ),
-            )
-        }
+        Text(
+            text = text,
+            style = TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.5.sp,
+            ),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+        )
     }
 }
 
 // ----------------------------------------------------------------------------
-// Panel chrome
+// Panel — ElevatedCard with a simple header row (title, help icon).
 // ----------------------------------------------------------------------------
 
 @Composable
@@ -679,149 +376,55 @@ private fun OxfordPanel(
     presetRail: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val seap = LocalSeapPalette.current
-    val panelShape = RoundedCornerShape(12.dp)
-    Box(
-        modifier = modifier
-            .shadow(
-                elevation = 10.dp,
-                shape = panelShape,
-                ambientColor = Color.Black.copy(alpha = 0.9f),
-                spotColor = Color.Black.copy(alpha = 0.9f),
-            )
-            .clip(panelShape)
-            .background(panelGradient(seap))
-            // Double bevel: bright inner hairline + dark outer rim for depth
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    0f to seap.chromeHi.copy(alpha = 0.55f),
-                    0.4f to Color.Transparent,
-                    1f to seap.panelShadow,
-                ),
-                shape = panelShape,
-            )
-            .padding(10.dp),
+    ElevatedCard(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
     ) {
-        Column(Modifier.fillMaxSize()) {
-            val headerShape = RoundedCornerShape(5.dp)
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            // Header: title + help
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = 3.dp,
-                        shape = headerShape,
-                        ambientColor = Color.Black.copy(alpha = 0.7f),
-                        spotColor = Color.Black.copy(alpha = 0.7f),
-                    )
-                    .clip(headerShape)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to seap.panelMid.darken(0.15f),
-                            0.5f to seap.panelBottom.darken(0.25f),
-                            1f to seap.panelDarkEdge,
-                        ),
-                        headerShape,
-                    )
-                    .border(
-                        width = 0.8.dp,
-                        brush = Brush.verticalGradient(
-                            0f to seap.chromeHi.copy(alpha = 0.3f),
-                            0.5f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.55f),
-                        ),
-                        shape = headerShape,
-                    )
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "SEAP",
-                    style = TextStyle(
-                        color = seap.textTitle,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 12.sp,
-                        letterSpacing = 1.2.sp,
-                    ),
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
                     text = title,
-                    style = TextStyle(
-                        color = seap.textTitle,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        letterSpacing = 1.5.sp,
-                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    letterSpacing = 0.3.sp,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = "Seap Effects",
-                    style = TextStyle(color = seap.textTitle.copy(alpha = 0.8f), fontSize = 10.sp),
-                )
                 if (onHelpClick != null) {
-                    Spacer(Modifier.width(4.dp))
-                    HelpChip(onClick = onHelpClick)
+                    IconButton(
+                        onClick = onHelpClick,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                            contentDescription = "Help",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
             if (presetRail != null) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 presetRail()
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             content()
         }
     }
 }
 
 // ----------------------------------------------------------------------------
-// ? help chip + preset rail
+// Preset rail — FilterChip for each factory preset (M3 native).
 // ----------------------------------------------------------------------------
-
-@Composable
-private fun HelpChip(onClick: () -> Unit) {
-    val seap = LocalSeapPalette.current
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = Color.Transparent,
-        modifier = Modifier
-            .size(24.dp)
-            .shadow(
-                elevation = 3.dp,
-                shape = CircleShape,
-                ambientColor = Color.Black.copy(alpha = 0.8f),
-                spotColor = Color.Black.copy(alpha = 0.8f),
-            ),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(brushedMetalGradient(seap), CircleShape)
-                .border(
-                    width = 0.8.dp,
-                    brush = Brush.verticalGradient(
-                        0f to seap.chromeHi.copy(alpha = 0.9f),
-                        0.5f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.55f),
-                    ),
-                    shape = CircleShape,
-                ),
-        ) {
-            Text(
-                text = "?",
-                style = TextStyle(
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp,
-                    color = seap.textOnChrome,
-                    fontFamily = FontFamily.SansSerif,
-                ),
-            )
-        }
-    }
-}
 
 @Composable
 private fun PresetRail(
@@ -835,61 +438,16 @@ private fun PresetRail(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         items.forEachIndexed { index, (label, active) ->
-            PresetChip(label = label, active = active, onClick = { onSelect(index) })
-        }
-    }
-}
-
-@Composable
-private fun PresetChip(label: String, active: Boolean, onClick: () -> Unit) {
-    val seap = LocalSeapPalette.current
-    val shape = RoundedCornerShape(14.dp)
-    val bodyBrush = if (active) {
-        Brush.verticalGradient(
-            0f to seap.btnEffectHi,
-            0.45f to seap.btnEffectOn,
-            1f to seap.btnEffectOn.darken(0.35f),
-        )
-    } else brushedMetalGradient(seap)
-    val fg = if (active) onColorFor(seap.btnEffectOn) else seap.textOnChrome
-
-    Surface(
-        onClick = onClick,
-        shape = shape,
-        color = Color.Transparent,
-        modifier = Modifier
-            .height(30.dp)
-            .shadow(
-                elevation = if (active) 4.dp else 2.dp,
-                shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.7f),
-                spotColor = Color.Black.copy(alpha = 0.7f),
-            ),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(bodyBrush, shape)
-                .border(
-                    width = 0.8.dp,
-                    brush = Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = if (active) 0.9f else 0.75f),
-                        0.45f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.5f),
-                    ),
-                    shape = shape,
-                )
-                .padding(horizontal = 12.dp),
-        ) {
-            Text(
-                text = label,
-                style = TextStyle(
-                    fontWeight = FontWeight.Black,
-                    fontSize = 10.sp,
-                    color = fg,
-                    letterSpacing = 0.7.sp,
-                ),
+            FilterChip(
+                selected = active,
+                onClick = { onSelect(index) },
+                label = {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        letterSpacing = 0.4.sp,
+                    )
+                },
             )
         }
     }
@@ -962,7 +520,6 @@ fun InflatorScreen(
 ) {
     val state by effect.state.collectAsState()
     val peak  by effect.peak.collectAsState()
-    val seap = LocalSeapPalette.current
     var showHelp by rememberSaveable { mutableStateOf(false) }
 
     if (showHelp) {
@@ -975,7 +532,7 @@ fun InflatorScreen(
     }
 
     OxfordPanel(
-        title = "SEAP INFLATOR",
+        title = "Seap Inflator",
         modifier = modifier.fillMaxSize(),
         onHelpClick = { showHelp = true },
         presetRail = {
@@ -1040,23 +597,23 @@ fun InflatorScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     OxfordButton(
-                        label = "CLIP\n0 dB",
+                        label = "CLIP 0 dB",
                         active = state.clipZeroDb,
-                        activeColor = seap.btnClip,
+                        activeColor = MaterialTheme.colorScheme.errorContainer,
                         onClick = { effect.setClipZeroDb(!state.clipZeroDb) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OxfordButton(
-                        label = "BAND\nSPLIT",
+                        label = "BAND SPLIT",
                         active = state.bandSplit,
-                        activeColor = seap.btnBandSplit,
+                        activeColor = MaterialTheme.colorScheme.secondaryContainer,
                         onClick = { effect.setBandSplit(!state.bandSplit) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OxfordButton(
-                        label = "EFFECT\nIN",
+                        label = "EFFECT IN",
                         active = state.effectIn,
-                        activeColor = seap.btnEffectOn,
+                        activeColor = MaterialTheme.colorScheme.primary,
                         onClick = { effect.setEffectIn(!state.effectIn) },
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -1090,7 +647,6 @@ fun CompressorScreen(
     val state by effect.state.collectAsState()
     val peak  by effect.peak.collectAsState()
     val grDb  by effect.gainReductionDb.collectAsState()
-    val seap = LocalSeapPalette.current
     var showHelp by rememberSaveable { mutableStateOf(false) }
 
     if (showHelp) {
@@ -1103,7 +659,7 @@ fun CompressorScreen(
     }
 
     OxfordPanel(
-        title = "SEAP COMPRESSOR",
+        title = "Seap Compressor",
         modifier = modifier.fillMaxSize(),
         onHelpClick = { showHelp = true },
         presetRail = {
@@ -1165,25 +721,22 @@ fun CompressorScreen(
             ) {
                 Text(
                     text = "GR",
-                    style = TextStyle(
-                        color = seap.textTitle,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
                 LcdReadout(text = "-${"%.1f".format(grDb)} dB")
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 LedMeter(
                     peakL = grDbToFakePeak(grDb),
                     peakR = grDbToFakePeak(grDb),
                     stereo = false,
                     minDb = -20f,
                     maxDb = 0f,
-                    modifier = Modifier.weight(1f).width(14.dp),
+                    modifier = Modifier.weight(1f).width(12.dp),
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 FaderColumn(
                     label = "MAKEUP",
                     readout = formatDbSigned(state.makeupDb),
@@ -1194,11 +747,11 @@ fun CompressorScreen(
                     meterStereo = false,
                     modifier = Modifier.height(100.dp).fillMaxWidth(),
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 OxfordButton(
-                    label = "EFFECT\nIN",
+                    label = "EFFECT IN",
                     active = !state.bypass,
-                    activeColor = seap.btnEffectOn,
+                    activeColor = MaterialTheme.colorScheme.primary,
                     onClick = { effect.setBypass(!state.bypass) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1235,28 +788,26 @@ fun OxfordEffectsTabs(
         }
     }
 
-    CompositionLocalProvider(LocalSeapPalette provides rememberSeapPalette()) {
-        Column(modifier = modifier.fillMaxSize()) {
-            TabRow(selectedTabIndex = selected) {
-                tabs.forEachIndexed { i, title ->
-                    Tab(
-                        selected = selected == i,
-                        onClick = { selected = i },
-                        text = { Text(title) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            when (selected) {
-                0 -> CompressorScreen(
-                    effect = compressor,
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
-                )
-                else -> InflatorScreen(
-                    effect = inflator,
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
+    Column(modifier = modifier.fillMaxSize()) {
+        PrimaryTabRow(selectedTabIndex = selected) {
+            tabs.forEachIndexed { i, title ->
+                Tab(
+                    selected = selected == i,
+                    onClick = { selected = i },
+                    text = { Text(title) },
                 )
             }
+        }
+        Spacer(Modifier.height(12.dp))
+        when (selected) {
+            0 -> CompressorScreen(
+                effect = compressor,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+            else -> InflatorScreen(
+                effect = inflator,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
+            )
         }
     }
 }
@@ -1278,6 +829,17 @@ private fun formatMs(ms: Float): String = when {
     ms < 100f -> "${"%.1f".format(ms)} ms"
     else      -> "${ms.roundToInt()} ms"
 }
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
+/** Pick a contrasting text colour for the given background. */
+private fun onColorFor(bg: Color): Color =
+    if (bg.luminance() > 0.55f) Color(0xFF0A0A0A) else Color(0xFFF5F5F5)
+
+private fun Color.luminance(): Float =
+    0.2126f * red + 0.7152f * green + 0.0722f * blue
 
 // ----------------------------------------------------------------------------
 // Preset matching (fuzzy, so tiny float noise from the UI doesn't dehighlight)
