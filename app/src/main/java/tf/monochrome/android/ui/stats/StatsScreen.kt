@@ -52,6 +52,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -91,6 +93,8 @@ fun StatsScreen(
     viewModel: StatsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val lastSyncedAt by viewModel.lastSyncedAt.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -103,15 +107,25 @@ fun StatsScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
         )
 
-        AnimatedContent(
-            targetState = state.range,
-            transitionSpec = {
-                (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 8 })
-                    .togetherWith(fadeOut(tween(140)))
-            },
-            label = "range-crossfade"
-        ) { _ ->
-            StatsContent(state = state, onPickRange = viewModel::setRange)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            AnimatedContent(
+                targetState = state.range,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 8 })
+                        .togetherWith(fadeOut(tween(140)))
+                },
+                label = "range-crossfade"
+            ) { _ ->
+                StatsContent(
+                    state = state,
+                    lastSyncedAt = lastSyncedAt,
+                    onPickRange = viewModel::setRange,
+                )
+            }
         }
     }
 }
@@ -119,6 +133,7 @@ fun StatsScreen(
 @Composable
 private fun StatsContent(
     state: StatsUiState,
+    lastSyncedAt: Long?,
     onPickRange: (StatsRange) -> Unit,
 ) {
     LazyColumn(
@@ -127,6 +142,9 @@ private fun StatsContent(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item { RangePicker(state.range, onPick = onPickRange) }
+        if (lastSyncedAt != null) {
+            item { LastSyncedLabel(lastSyncedAt) }
+        }
         item { StaggerEntry(0) { HeroMinutesCard(state) } }
         item { StaggerEntry(1) { HighlightRow(state) } }
         item {
@@ -820,4 +838,27 @@ private fun prettySource(s: String): String = when (s.lowercase()) {
     "local" -> "Local"
     "unknown", "" -> "Unknown"
     else -> s.replaceFirstChar { it.uppercase() }
+}
+
+@Composable
+private fun LastSyncedLabel(syncedAtMs: Long) {
+    val now = System.currentTimeMillis()
+    val text = formatRelative(now - syncedAtMs)
+    Text(
+        "Synced $text",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp)
+    )
+}
+
+private fun formatRelative(deltaMs: Long): String {
+    val seconds = (deltaMs / 1000L).coerceAtLeast(0)
+    return when {
+        seconds < 5 -> "just now"
+        seconds < 60 -> "${seconds}s ago"
+        seconds < 3600 -> "${seconds / 60}m ago"
+        seconds < 86_400 -> "${seconds / 3600}h ago"
+        else -> "${seconds / 86_400}d ago"
+    }
 }

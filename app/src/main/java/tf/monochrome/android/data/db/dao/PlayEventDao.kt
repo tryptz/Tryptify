@@ -2,6 +2,7 @@ package tf.monochrome.android.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import tf.monochrome.android.data.db.entity.PlayEventEntity
@@ -11,6 +12,19 @@ interface PlayEventDao {
 
     @Insert
     suspend fun insert(event: PlayEventEntity): Long
+
+    /**
+     * Insert a cloud-origin row; silently ignores duplicates detected via
+     * the unique cloudRowId index, so repeated pulls are idempotent.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFromCloud(event: PlayEventEntity): Long
+
+    @Query("UPDATE play_events SET cloudRowId = :cloudId WHERE rowId = :localId AND cloudRowId IS NULL")
+    suspend fun setCloudId(localId: Long, cloudId: Long)
+
+    @Query("SELECT MAX(cloudRowId) FROM play_events")
+    suspend fun latestCloudRowId(): Long?
 
     @Query("DELETE FROM play_events")
     suspend fun clearAll()

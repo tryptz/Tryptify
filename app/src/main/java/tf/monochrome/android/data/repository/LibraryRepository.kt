@@ -94,7 +94,7 @@ class LibraryRepository @Inject constructor(
         val historyRow = track.toHistoryEntity()
         val event = track.toPlayEventEntity()
         historyDao.addToHistory(historyRow)
-        playEventDao.insert(event)
+        val localRowId = playEventDao.insert(event)
         // Fire-and-forget cloud sync — no-op if the user isn't signed in.
         syncScope.launch {
             supabaseSync.pushHistoryTrack(historyRow)
@@ -102,13 +102,16 @@ class LibraryRepository @Inject constructor(
             val deviceId = deviceRegistry.snapshotRemoteId()
             val sourceType = track.cloudSourceType()
             val sourceRef = track.cloudSourceRef()
-            supabaseSync.pushPlayEvent(
+            val cloudId = supabaseSync.pushPlayEvent(
                 event = event,
                 sessionId = sessionId,
                 deviceId = deviceId,
                 sourceType = sourceType,
                 sourceRef = sourceRef,
             )
+            if (cloudId != null) {
+                playEventDao.setCloudId(localRowId, cloudId)
+            }
         }
     }
 

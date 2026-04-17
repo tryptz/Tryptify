@@ -373,14 +373,14 @@ class SupabaseSyncRepository @Inject constructor(
         sourceRef: String? = null,
         durationPlayedMs: Int? = null,
         completed: Boolean = false,
-    ) {
-        val uid = userId() ?: return
+    ): Long? {
+        val uid = userId() ?: return null
         val trackUuid = if (sourceType != null && sourceRef != null) {
             ensureCatalogTrack(event, sourceType, sourceRef)
         } else null
         val startedAtIso = java.time.Instant.ofEpochMilli(event.playedAt).toString()
 
-        runCatching {
+        return runCatching {
             supabase.postgrest["play_events"].insert(
                 SbPlayEvent(
                     user_id = uid,
@@ -402,8 +402,70 @@ class SupabaseSyncRepository @Inject constructor(
                     duration_played_ms = durationPlayedMs,
                     completed = completed,
                 )
-            )
-        }.onFailure { Log.e(TAG, "pushPlayEvent failed: ${it.message}") }
+            ) { select() }
+                .decodeSingleOrNull<SbPlayEvent>()
+                ?.id
+        }.getOrElse {
+            Log.e(TAG, "pushPlayEvent failed: ${it.message}")
+            null
+        }
+    }
+
+    // ─── Pull play_events from cloud into local Room (phase 2.1) ─────────────
+
+    /**
+     * Fetch play_events for the signed-in user with `played_at_ms >= since`
+     * and upsert them into Room keyed on cloud_row_id. Idempotent — rerunning
+     * the pull after more plays arrive is safe.
+     *
+     * @return the number of rows actually inserted (ignored duplicates
+     *         don't count), or null if the user isn't signed in or the
+     *         request failed.
+     */
+    suspend fun pullPlayEventsSince(since: Long, pageSize: Int = 500): Int? {
+        val uid = userId() ?: return null
+        return runCatching {
+            var inserted = 0
+            var offset = 0
+            while (true) {
+                val page = supabase.postgrest["play_events"]
+                    .select {
+                        filter {
+                            eq("user_id", uid)
+                            gte("played_at_ms", since)
+                        }
+                        order("played_at_ms", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                        range(offset.toLong(), (offset + pageSize - 1).toLong())
+                    }
+                    .decodeList<SbPlayEvent>()
+                if (page.isEmpty()) break
+                page.forEach { e ->
+                    val rowId = playEventDao.insertFromCloud(
+                        PlayEventEntity(
+                            trackId = e.track_id,
+                            title = e.title,
+                            duration = e.duration,
+                            artistId = e.artist_id,
+                            artistName = e.artist_name,
+                            albumId = e.album_id,
+                            albumTitle = e.album_title,
+                            albumCover = e.album_cover,
+                            audioQuality = e.audio_quality,
+                            source = e.source,
+                            playedAt = e.played_at_ms,
+                            cloudRowId = e.id
+                        )
+                    )
+                    if (rowId > 0) inserted += 1
+                }
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+            inserted
+        }.getOrElse {
+            Log.e(TAG, "pullPlayEventsSince failed: ${it.message}")
+            null
+        }
     }
 
     /**

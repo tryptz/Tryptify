@@ -70,7 +70,11 @@ data class HistoryTrackEntity(
  */
 @Entity(
     tableName = "play_events",
-    indices = [Index("trackId"), Index("playedAt")]
+    indices = [
+        Index("trackId"),
+        Index("playedAt"),
+        Index(value = ["cloudRowId"], unique = true)
+    ]
 )
 data class PlayEventEntity(
     @PrimaryKey(autoGenerate = true) val rowId: Long = 0,
@@ -84,7 +88,9 @@ data class PlayEventEntity(
     val albumCover: String? = null,
     val audioQuality: String? = null,
     val source: String? = null,
-    val playedAt: Long = System.currentTimeMillis()
+    val playedAt: Long = System.currentTimeMillis(),
+    /** Supabase play_events.id for rows pulled from / pushed to cloud. */
+    val cloudRowId: Long? = null
 )
 
 @Serializable
