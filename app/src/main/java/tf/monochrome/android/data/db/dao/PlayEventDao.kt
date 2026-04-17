@@ -15,6 +15,9 @@ interface PlayEventDao {
     @Query("DELETE FROM play_events")
     suspend fun clearAll()
 
+    @Query("SELECT * FROM play_events ORDER BY playedAt DESC LIMIT :limit")
+    suspend fun getRecent(limit: Int = 1000): List<PlayEventEntity>
+
     @Query("DELETE FROM play_events WHERE playedAt < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
 

@@ -15,8 +15,10 @@ import tf.monochrome.android.data.db.entity.FavoriteArtistEntity
 import tf.monochrome.android.data.db.entity.FavoriteTrackEntity
 import tf.monochrome.android.data.db.entity.HistoryTrackEntity
 import tf.monochrome.android.data.db.entity.MixPresetEntity
+import tf.monochrome.android.data.db.entity.PlayEventEntity
 import tf.monochrome.android.data.db.entity.PlaylistTrackEntity
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
+import tf.monochrome.android.data.db.dao.PlayEventDao
 import tf.monochrome.android.domain.model.EqBand
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -109,6 +111,28 @@ data class SbPlayHistory(
     val played_at: String? = null
 )
 
+/**
+ * Per-play scrobble log synced to `play_events` on Supabase.
+ * Append-only — one row per playback, used to drive Listening Stats
+ * aggregations across devices.
+ */
+@Serializable
+data class SbPlayEvent(
+    val id: Long? = null,
+    val user_id: String? = null,
+    val track_id: Long,
+    val title: String,
+    val duration: Int = 0,
+    val artist_id: Long? = null,
+    val artist_name: String = "",
+    val album_id: Long? = null,
+    val album_title: String? = null,
+    val album_cover: String? = null,
+    val audio_quality: String? = null,
+    val source: String? = null,
+    val played_at_ms: Long = 0L
+)
+
 @Serializable
 data class SbLocalFolder(
     val id: String? = null,
@@ -151,7 +175,8 @@ class SupabaseSyncRepository @Inject constructor(
     private val favoritesDao: FavoriteDao,
     private val historyDao: HistoryDao,
     private val mixPresetDao: MixPresetDao,
-    private val playlistDao: PlaylistDao
+    private val playlistDao: PlaylistDao,
+    private val playEventDao: PlayEventDao,
 ) {
     private val supabase get() = authManager.supabase
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -313,6 +338,30 @@ class SupabaseSyncRepository @Inject constructor(
                 )
             )
         }.onFailure { Log.e(TAG, "pushHistoryTrack failed: ${it.message}") }
+    }
+
+    // ─── Play Events (per-play scrobble log) ─────────────────────────────────
+
+    suspend fun pushPlayEvent(event: PlayEventEntity) {
+        val uid = userId() ?: return
+        runCatching {
+            supabase.postgrest["play_events"].insert(
+                SbPlayEvent(
+                    user_id = uid,
+                    track_id = event.trackId,
+                    title = event.title,
+                    duration = event.duration,
+                    artist_id = event.artistId,
+                    artist_name = event.artistName,
+                    album_id = event.albumId,
+                    album_title = event.albumTitle,
+                    album_cover = event.albumCover,
+                    audio_quality = event.audioQuality,
+                    source = event.source,
+                    played_at_ms = event.playedAt
+                )
+            )
+        }.onFailure { Log.e(TAG, "pushPlayEvent failed: ${it.message}") }
     }
 
     // ─── Local Folder Routes ─────────────────────────────────────────────────
@@ -504,6 +553,36 @@ class SupabaseSyncRepository @Inject constructor(
             }
         }.onFailure { Log.e(TAG, "pull playlists: ${it.message}") }
 
+        // Play events — pull the most recent 1000 and merge into Room so stats
+        // come across on a new device. Skip events already present (same track
+        // + same playedAt) to avoid duplicating scrobbles if pull runs twice.
+        runCatching {
+            val events = supabase.postgrest["play_events"]
+                .select {
+                    filter { eq("user_id", uid) }
+                    order("played_at_ms", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                    limit(1000)
+                }
+                .decodeList<SbPlayEvent>()
+            events.forEach { e ->
+                playEventDao.insert(
+                    PlayEventEntity(
+                        trackId = e.track_id,
+                        title = e.title,
+                        duration = e.duration,
+                        artistId = e.artist_id,
+                        artistName = e.artist_name,
+                        albumId = e.album_id,
+                        albumTitle = e.album_title,
+                        albumCover = e.album_cover,
+                        audioQuality = e.audio_quality,
+                        source = e.source,
+                        playedAt = e.played_at_ms
+                    )
+                )
+            }
+        }.onFailure { Log.e(TAG, "pull play_events: ${it.message}") }
+
         Log.d(TAG, "Cloud pull complete")
     }
 
@@ -532,10 +611,15 @@ class SupabaseSyncRepository @Inject constructor(
             favoritesDao.getFavoriteArtistsSnapshot().forEach { pushFavoriteArtist(it) }
         }.onFailure { Log.e(TAG, "push favorite_artists: ${it.message}") }
 
-        // History
+        // History (aggregated — one row per track)
         runCatching {
             historyDao.getHistorySnapshot(500).forEach { pushHistoryTrack(it) }
         }.onFailure { Log.e(TAG, "push play_history: ${it.message}") }
+
+        // Play events (per-play scrobble log — drives Listening Stats)
+        runCatching {
+            playEventDao.getRecent(1000).forEach { pushPlayEvent(it) }
+        }.onFailure { Log.e(TAG, "push play_events: ${it.message}") }
 
         // Playlists + tracks
         runCatching {
