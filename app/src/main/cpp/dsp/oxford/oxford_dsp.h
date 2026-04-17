@@ -211,11 +211,11 @@ public:
             const float B = -curve * 0.02f;
             const float C = -0.5f + curve * 0.01f;
             const float D =  0.0625f - curve * 0.0025f + curve * curve * 2.5e-5f;
-            const float limit = clip ? 1.0f : 2.0f;
 
             for (int c = 0; c < nCh_; ++c) {
-                float x = buffers[c][n] * pre;
-                x = std::clamp(x, -limit, limit);
+                // Input guard: keep x within the waveshape's valid range [-2, 2].
+                // CLIP 0 dB is applied to the OUTPUT below, per Sonnox spec.
+                float x = std::clamp(buffers[c][n] * pre, -2.0f, 2.0f);
 
                 float shaped;
                 if (split) {
@@ -229,7 +229,8 @@ public:
                     shaped = waveshape(x, A, B, C, D);
                 }
 
-                const float y = (dry * x + wet * shaped) * post;
+                float y = (dry * x + wet * shaped) * post;
+                if (clip) y = std::clamp(y, -1.0f, 1.0f);
                 buffers[c][n] = y;
 
                 const float ay = std::fabs(y);
@@ -257,8 +258,7 @@ private:
 
     // Odd-symmetric Inflator transfer function (tviler canonical form).
     // |x| in [0,1]: polynomial in |x|, re-signed.
-    // |x| in (1,2]: 2|x| - x^2 (smooth fall to 0 at |x|=2). When clip==true,
-    //               input is clamped to [-1,1] so this branch never fires.
+    // |x| in (1,2]: 2|x| - x^2 (smooth fall to 0 at |x|=2).
     static inline float waveshape(float x, float A, float B, float C, float D) noexcept {
         const float ax = std::fabs(x);
         const float s  = std::copysign(1.0f, x);
