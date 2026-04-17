@@ -1221,8 +1221,9 @@ fun OxfordEffectsTabs(
     inflator: InflatorEffect,
     compressor: CompressorEffect,
     modifier: Modifier = Modifier,
+    initialTab: Int = 0,
 ) {
-    var selected by rememberSaveable { mutableStateOf(0) }
+    var selected by rememberSaveable { mutableStateOf(initialTab.coerceIn(0, 1)) }
     val tabs = listOf("Compressor", "Inflator")
 
     // 60 Hz meter polling — keeps the LED bars fluid under fast transients.

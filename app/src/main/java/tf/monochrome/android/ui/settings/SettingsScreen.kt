@@ -865,11 +865,22 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Audio Processing")
-        OutlinedButton(
-            onClick = { navController.navigate("oxford") },
+        Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Open Seap Effects")
+            OutlinedButton(
+                onClick = { navController.navigate("oxford?tab=0") },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Seap Compressor")
+            }
+            OutlinedButton(
+                onClick = { navController.navigate("oxford?tab=1") },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Seap Inflator")
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

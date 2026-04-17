@@ -118,7 +118,10 @@ sealed class Screen(val route: String) {
     }
     data object Mixer : Screen("mixer")
     data object CarMode : Screen("car_mode")
-    data object Oxford : Screen("oxford")
+    data object Oxford : Screen("oxford?tab={tab}") {
+        /** tab: 0 = Compressor, 1 = Inflator. */
+        fun createRoute(tab: Int = 0) = "oxford?tab=$tab"
+    }
 }
 
 data class BottomNavItem(
@@ -271,11 +274,19 @@ fun MonochromeNavHost() {
                 composable(Screen.CarMode.route) {
                     CarModeScreen(navController = navController)
                 }
-                composable(Screen.Oxford.route) {
+                composable(
+                    route = Screen.Oxford.route,
+                    arguments = listOf(navArgument("tab") {
+                        type = NavType.IntType
+                        defaultValue = 0
+                    })
+                ) { backStackEntry ->
+                    val tab = backStackEntry.arguments?.getInt("tab") ?: 0
                     val vm: OxfordViewModel = hiltViewModel()
                     OxfordEffectsTabs(
                         inflator = vm.inflator,
                         compressor = vm.compressor,
+                        initialTab = tab,
                         modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
                     )
                 }
