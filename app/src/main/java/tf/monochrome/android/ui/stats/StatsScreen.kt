@@ -113,15 +113,16 @@ fun StatsScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             AnimatedContent(
-                targetState = state.range,
+                targetState = state,
+                contentKey = { it.range },
                 transitionSpec = {
                     (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 8 })
                         .togetherWith(fadeOut(tween(140)))
                 },
                 label = "range-crossfade"
-            ) { _ ->
+            ) { snapshot ->
                 StatsContent(
-                    state = state,
+                    state = snapshot,
                     lastSyncedAt = lastSyncedAt,
                     onPickRange = viewModel::setRange,
                 )
