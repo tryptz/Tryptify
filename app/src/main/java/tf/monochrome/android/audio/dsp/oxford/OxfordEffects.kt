@@ -82,7 +82,7 @@ enum class InflatorPreset(
         "WARMTH",
         "Gentle low-order harmonics for analogue-ish body.",
         InflatorState(
-            inputDb = 0f, outputDb = -1f, effectPct = 35f, curve = -18f,
+            inputDb = 0f, outputDb = -1f, effectPct = 100f, curve = -18f,
             clipZeroDb = true, bandSplit = false, effectIn = true,
         )
     ),
@@ -90,7 +90,7 @@ enum class InflatorPreset(
         "PRESENCE",
         "Lifts the upper mids without dulling the low end.",
         InflatorState(
-            inputDb = 1f, outputDb = -1f, effectPct = 55f, curve = 22f,
+            inputDb = 1f, outputDb = -1f, effectPct = 100f, curve = 22f,
             clipZeroDb = true, bandSplit = true, effectIn = true,
         )
     ),
@@ -98,7 +98,7 @@ enum class InflatorPreset(
         "PUNCH",
         "Aggressive enhancement on drums / bass — band-split on.",
         InflatorState(
-            inputDb = 2f, outputDb = -2f, effectPct = 75f, curve = 12f,
+            inputDb = 2f, outputDb = -2f, effectPct = 100f, curve = 12f,
             clipZeroDb = true, bandSplit = true, effectIn = true,
         )
     ),
@@ -106,7 +106,7 @@ enum class InflatorPreset(
         "TAPE",
         "Soft saturation evocative of tape — ceiling slightly off.",
         InflatorState(
-            inputDb = 2f, outputDb = -2f, effectPct = 50f, curve = -30f,
+            inputDb = 2f, outputDb = -2f, effectPct = 100f, curve = -30f,
             clipZeroDb = false, bandSplit = false, effectIn = true,
         )
     ),
@@ -114,7 +114,7 @@ enum class InflatorPreset(
         "LOUD",
         "Master-chain loudness boost, hard 0 dB ceiling.",
         InflatorState(
-            inputDb = 3f, outputDb = -3f, effectPct = 90f, curve = 0f,
+            inputDb = 3f, outputDb = -3f, effectPct = 100f, curve = 0f,
             clipZeroDb = true, bandSplit = false, effectIn = true,
         )
     );
