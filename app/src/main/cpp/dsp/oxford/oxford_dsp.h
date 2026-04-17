@@ -78,46 +78,99 @@ private:
 };
 
 // ============================================================================
-// Linkwitz-Riley 4th order = two cascaded 2nd-order Butterworth of same cutoff
-// (Q = 1/sqrt(2) ~ 0.7071). Gives 24 dB/oct slope.
+// Linear-phase FIR crossover filter.
+//
+// Windowed-sinc kernel, odd length for a clean integer sample group delay of
+// CENTER = (LEN-1)/2. At 48 kHz with LEN=511 this is ~5.3 ms latency — fine
+// for music playback, not for live monitoring.
+//
+// Both LP and HP are designed from the same windowed-sinc LP kernel; the HP
+// is produced by spectral inversion (negate then add impulse at the center),
+// which guarantees `hp(f) + lp(f) == 1` at every frequency. That means the
+// `mid = x_delayed - lo - hi` reconstruction is *sample-accurate* at zero
+// phase — the defining feature of the Sonnox split-band mode.
 // ============================================================================
 
-class LinkwitzRiley4 {
+class LinearPhaseFir {
 public:
+    static constexpr int LEN    = 511;
+    static constexpr int CENTER = (LEN - 1) / 2;
+
     enum class Type { LowPass, HighPass };
 
-    void configure(Type t, double fc, double sr) noexcept {
-        const double w0 = 2.0 * M_PI * fc / sr;
-        const double cs = std::cos(w0);
-        const double sn = std::sin(w0);
-        const double Q  = 0.70710678118654752;   // Butterworth
-        const double alpha = sn / (2.0 * Q);
-        const double a0 = 1.0 + alpha;
-        const double a1 = -2.0 * cs;
-        const double a2 = 1.0 - alpha;
-        double b0, b1, b2;
-        if (t == Type::LowPass) {
-            b0 = (1.0 - cs) * 0.5;
-            b1 =  1.0 - cs;
-            b2 =  b0;
-        } else {
-            b0 = (1.0 + cs) * 0.5;
-            b1 = -(1.0 + cs);
-            b2 =  b0;
+    void design(Type type, double fc, double sr) noexcept {
+        const double fcNorm = std::clamp(fc / sr, 0.0, 0.5);
+        double sum = 0.0;
+        for (int i = 0; i < LEN; ++i) {
+            const int n = i - CENTER;
+            double h;
+            if (n == 0) {
+                h = 2.0 * fcNorm;
+            } else {
+                h = std::sin(2.0 * M_PI * fcNorm * n) / (M_PI * n);
+            }
+            // Hamming window — good stop-band rejection for audio crossovers
+            const double w = 0.54 - 0.46 * std::cos(2.0 * M_PI * i / (LEN - 1));
+            h *= w;
+            h_[i] = static_cast<float>(h);
+            sum += h;
         }
-        const double inv = 1.0 / a0;
-        stage1_.setCoeffs(b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv);
-        stage2_.setCoeffs(b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv);
+        // Normalise LP to unity DC gain
+        if (sum > 1e-9) {
+            const float scale = static_cast<float>(1.0 / sum);
+            for (int i = 0; i < LEN; ++i) h_[i] *= scale;
+        }
+        // Spectral inversion → HP: negate, then add unit impulse at center.
+        if (type == Type::HighPass) {
+            for (int i = 0; i < LEN; ++i) h_[i] = -h_[i];
+            h_[CENTER] += 1.0f;
+        }
+    }
+
+    void reset() noexcept {
+        buffer_.fill(0.0f);
+        writePos_ = 0;
     }
 
     inline float process(float x) noexcept {
-        return stage2_.process(stage1_.process(x));
+        buffer_[writePos_] = x;
+        float y = 0.0f;
+        int r = writePos_;
+        for (int i = 0; i < LEN; ++i) {
+            y += h_[i] * buffer_[r];
+            r = (r == 0) ? LEN - 1 : r - 1;
+        }
+        writePos_ = (writePos_ + 1) % LEN;
+        return y;
     }
 
-    void reset() noexcept { stage1_.reset(); stage2_.reset(); }
+private:
+    std::array<float, LEN> h_{};
+    std::array<float, LEN> buffer_{};
+    int writePos_ = 0;
+};
+
+// Fixed-latency delay line matched to LinearPhaseFir::CENTER so the
+// `mid = x_delayed - lo - hi` reconstruction stays sample-aligned.
+class FirAlignDelay {
+public:
+    static constexpr int D    = LinearPhaseFir::CENTER;
+    static constexpr int SIZE = D + 1;
+
+    void reset() noexcept {
+        buffer_.fill(0.0f);
+        writePos_ = 0;
+    }
+
+    inline float process(float x) noexcept {
+        buffer_[writePos_] = x;
+        writePos_ = (writePos_ + 1) % SIZE;
+        return buffer_[writePos_];  // now the oldest slot = D samples ago
+    }
 
 private:
-    Biquad stage1_, stage2_;
+    std::array<float, SIZE> buffer_{};
+    int writePos_ = 0;
 };
 
 // ============================================================================
@@ -166,11 +219,16 @@ public:
         sr_   = sampleRate;
         nCh_  = std::clamp(numChannels, 1, 2);
 
+        // Sonnox's split-band crossovers are estimated at ~260 Hz and ~2.2 kHz
+        // from 3rd-harmonic measurements. The linear-phase FIR means lo+hi sums
+        // back to `x` exactly (at the FIR latency), so `mid = x_d - lo - hi` is
+        // a true zero-phase bandpass.
         for (int c = 0; c < nCh_; ++c) {
-            lrLow_ [c].configure(LinkwitzRiley4::Type::LowPass,  240.0,  sr_);
-            lrHigh_[c].configure(LinkwitzRiley4::Type::HighPass, 2400.0, sr_);
-            lrLow_ [c].reset();
-            lrHigh_[c].reset();
+            firLow_ [c].design(LinearPhaseFir::Type::LowPass,  260.0,  sr_);
+            firHigh_[c].design(LinearPhaseFir::Type::HighPass, 2200.0, sr_);
+            firLow_ [c].reset();
+            firHigh_[c].reset();
+            dryDelay_[c].reset();
         }
         preGain_ .configure(sr_, 20.0);
         postGain_.configure(sr_, 20.0);
@@ -215,21 +273,25 @@ public:
             for (int c = 0; c < nCh_; ++c) {
                 // Input guard: keep x within the waveshape's valid range [-2, 2].
                 // CLIP 0 dB is applied to the OUTPUT below, per Sonnox spec.
-                float x = std::clamp(buffers[c][n] * pre, -2.0f, 2.0f);
+                const float x = std::clamp(buffers[c][n] * pre, -2.0f, 2.0f);
+
+                // Always advance the delay line + FIR buffers so toggling
+                // BAND SPLIT is seamless (no jump when state becomes active).
+                const float xd = dryDelay_[c].process(x);
+                const float lo = firLow_ [c].process(x);
+                const float hi = firHigh_[c].process(x);
 
                 float shaped;
                 if (split) {
-                    const float lo  = lrLow_ [c].process(x);
-                    const float hi  = lrHigh_[c].process(x);
-                    const float mid = x - lo - hi;
-                    shaped = waveshape(lo, A, B, C, D)
+                    const float mid = xd - lo - hi;
+                    shaped = waveshape(lo,  A, B, C, D)
                            + waveshape(mid, A, B, C, D)
-                           + waveshape(hi, A, B, C, D);
+                           + waveshape(hi,  A, B, C, D);
                 } else {
-                    shaped = waveshape(x, A, B, C, D);
+                    shaped = waveshape(xd, A, B, C, D);
                 }
 
-                float y = (dry * x + wet * shaped) * post;
+                float y = (dry * xd + wet * shaped) * post;
                 if (clip) y = std::clamp(y, -1.0f, 1.0f);
                 buffers[c][n] = y;
 
@@ -276,7 +338,8 @@ private:
 
     double sr_{48000.0};
     int    nCh_{2};
-    std::array<LinkwitzRiley4, 2> lrLow_, lrHigh_;
+    std::array<LinearPhaseFir, 2> firLow_, firHigh_;
+    std::array<FirAlignDelay, 2>  dryDelay_;
     Smoothed preGain_, postGain_, effect_, curve_;
 };
 
