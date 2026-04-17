@@ -38,6 +38,22 @@ interface PlayEventDao {
     @Query("SELECT COUNT(DISTINCT albumId) FROM play_events WHERE albumId IS NOT NULL AND playedAt >= :since")
     fun uniqueAlbums(since: Long = 0L): Flow<Int>
 
+    /**
+     * Number of listening sessions in range. A new session starts whenever
+     * the gap between consecutive plays exceeds 30 min (1,800,000 ms). The
+     * very first play in the window is also a session start (LAG defaults
+     * to 0 so the gap is effectively infinite).
+     */
+    @Query("""
+        SELECT COUNT(*) FROM (
+            SELECT (playedAt - LAG(playedAt, 1, 0)
+                    OVER (ORDER BY playedAt)) AS gap
+            FROM play_events
+            WHERE playedAt >= :since
+        ) WHERE gap > 1800000
+    """)
+    fun sessionCount(since: Long = 0L): Flow<Int>
+
     // --- Top lists ---
 
     @Query("""

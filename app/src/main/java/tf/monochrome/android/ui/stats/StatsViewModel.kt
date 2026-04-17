@@ -37,6 +37,9 @@ data class StatsUiState(
     val uniqueTracks: Int = 0,
     val uniqueArtists: Int = 0,
     val uniqueAlbums: Int = 0,
+    val sessionCount: Int = 0,
+    val currentStreakDays: Int = 0,
+    val longestStreakDays: Int = 0,
     val topTracks: List<TopTrackAggregate> = emptyList(),
     val topArtists: List<TopArtistAggregate> = emptyList(),
     val topAlbums: List<TopAlbumAggregate> = emptyList(),
@@ -45,7 +48,11 @@ data class StatsUiState(
     val playsByWeekday: List<WeekdayAggregate> = emptyList(),
     val playsByQuality: List<QualityAggregate> = emptyList(),
     val playsBySource: List<SourceAggregate> = emptyList()
-)
+) {
+    val isEmpty: Boolean get() = totalPlays == 0
+    val peakHour: Int? get() = playsByHour.maxByOrNull { it.playCount }?.hour
+    val peakWeekday: Int? get() = playsByWeekday.maxByOrNull { it.playCount }?.weekday
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -68,6 +75,7 @@ class StatsViewModel @Inject constructor(
                 playEventDao.uniqueTracks(since),
                 playEventDao.uniqueArtists(since),
                 playEventDao.uniqueAlbums(since),
+                playEventDao.sessionCount(since),
                 playEventDao.topTracks(since, 20),
                 playEventDao.topArtists(since, 20),
                 playEventDao.topAlbums(since, 20),
@@ -79,6 +87,8 @@ class StatsViewModel @Inject constructor(
             )
         ) { values ->
             @Suppress("UNCHECKED_CAST")
+            val days = values[9] as List<DayAggregate>
+            val (curStreak, maxStreak) = streaks(days)
             StatsUiState(
                 range = r,
                 totalPlays = values[0] as Int,
@@ -86,17 +96,53 @@ class StatsViewModel @Inject constructor(
                 uniqueTracks = values[2] as Int,
                 uniqueArtists = values[3] as Int,
                 uniqueAlbums = values[4] as Int,
-                topTracks = values[5] as List<TopTrackAggregate>,
-                topArtists = values[6] as List<TopArtistAggregate>,
-                topAlbums = values[7] as List<TopAlbumAggregate>,
-                playsByDay = values[8] as List<DayAggregate>,
-                playsByHour = values[9] as List<HourAggregate>,
-                playsByWeekday = values[10] as List<WeekdayAggregate>,
-                playsByQuality = values[11] as List<QualityAggregate>,
-                playsBySource = values[12] as List<SourceAggregate>
+                sessionCount = values[5] as Int,
+                currentStreakDays = curStreak,
+                longestStreakDays = maxStreak,
+                topTracks = values[6] as List<TopTrackAggregate>,
+                topArtists = values[7] as List<TopArtistAggregate>,
+                topAlbums = values[8] as List<TopAlbumAggregate>,
+                playsByDay = days,
+                playsByHour = values[10] as List<HourAggregate>,
+                playsByWeekday = values[11] as List<WeekdayAggregate>,
+                playsByQuality = values[12] as List<QualityAggregate>,
+                playsBySource = values[13] as List<SourceAggregate>
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
     fun setRange(r: StatsRange) { _range.value = r }
+
+    /**
+     * Returns (currentStreak, longestStreak) in days from a list of
+     * (dayEpoch -> playCount). Assumes the list is sorted ascending by day.
+     * "Current streak" = chain ending today (or yesterday); 0 otherwise.
+     */
+    private fun streaks(days: List<DayAggregate>): Pair<Int, Int> {
+        if (days.isEmpty()) return 0 to 0
+        val epochs = days.map { it.dayEpoch }.toSortedSet()
+        var longest = 0
+        var running = 0
+        var prev: Long = Long.MIN_VALUE
+        for (d in epochs) {
+            running = if (d == prev + 1) running + 1 else 1
+            if (running > longest) longest = running
+            prev = d
+        }
+        val today = System.currentTimeMillis() / 86_400_000L
+        var cur = 0
+        var cursor = today
+        while (cursor in epochs) {
+            cur += 1
+            cursor -= 1
+        }
+        if (cur == 0 && (today - 1) in epochs) {
+            cursor = today - 1
+            while (cursor in epochs) {
+                cur += 1
+                cursor -= 1
+            }
+        }
+        return cur to longest
+    }
 }
