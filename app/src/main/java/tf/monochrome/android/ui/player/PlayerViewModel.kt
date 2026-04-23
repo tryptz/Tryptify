@@ -307,9 +307,13 @@ class PlayerViewModel @Inject constructor(
     /** Shuffle-play all tracks. */
     fun shufflePlay(tracks: List<Track>) {
         if (tracks.isEmpty()) return
-        queueManager.setQueue(tracks, 0)
-        queueManager.toggleShuffle()
-        resolveAndPlay()
+        try {
+            queueManager.setQueue(tracks, 0)
+            queueManager.toggleShuffle()
+            resolveAndPlay()
+        } catch (t: Throwable) {
+            android.util.Log.e("PlayerViewModel", "shufflePlay(${tracks.size}) failed", t)
+        }
     }
 
     // --- Unified Track playback (local files, collections) ---
@@ -341,13 +345,17 @@ class PlayerViewModel @Inject constructor(
     /** Shuffle-play all unified tracks. */
     fun shufflePlayUnified(tracks: List<UnifiedTrack>) {
         if (tracks.isEmpty()) return
-        tracks.forEach { ut ->
-            unifiedSourceMap[ut.toLegacyTrack().id] = ut
+        try {
+            tracks.forEach { ut ->
+                unifiedSourceMap[ut.toLegacyTrack().id] = ut
+            }
+            val legacyTracks = tracks.map { it.toLegacyTrack() }
+            queueManager.setQueue(legacyTracks, 0)
+            queueManager.toggleShuffle()
+            resolveAndPlay()
+        } catch (t: Throwable) {
+            android.util.Log.e("PlayerViewModel", "shufflePlayUnified(${tracks.size}) failed", t)
         }
-        val legacyTracks = tracks.map { it.toLegacyTrack() }
-        queueManager.setQueue(legacyTracks, 0)
-        queueManager.toggleShuffle()
-        resolveAndPlay()
     }
 
     /** Add tracks to end of current queue. */
@@ -398,7 +406,11 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun toggleShuffle() {
-        queueManager.toggleShuffle()
+        try {
+            queueManager.toggleShuffle()
+        } catch (t: Throwable) {
+            android.util.Log.e("PlayerViewModel", "toggleShuffle failed", t)
+        }
     }
 
     fun cycleRepeatMode() {

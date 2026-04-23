@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -33,6 +34,7 @@ class InstanceManager @Inject constructor(
             "https://tidal-uptime.props-76styles.workers.dev/"
         )
         private const val CACHE_DURATION_MS = 15 * 60 * 1000L
+        private const val UPTIME_FETCH_TIMEOUT_MS = 5_000L
 
         private val FALLBACK_API_INSTANCES = listOf(
             Instance("https://eu-central.monochrome.tf"),
@@ -128,13 +130,13 @@ class InstanceManager @Inject constructor(
     private suspend fun fetchFromUptimeApis(): String? {
         val shuffledUrls = UPTIME_URLS.shuffled()
         for (url in shuffledUrls) {
-            try {
-                val response = httpClient.get(url)
-                val body = response.bodyAsText()
-                if (body.isNotBlank()) return body
-            } catch (_: Exception) {
-                continue
+            // Hard 5-second ceiling per uptime URL so one unreachable CF worker
+            // can't leave Home's "Your Mix" spinner spinning forever while the
+            // HTTP client waits on its default (much longer) socket timeout.
+            val body = withTimeoutOrNull(UPTIME_FETCH_TIMEOUT_MS) {
+                runCatching { httpClient.get(url).bodyAsText() }.getOrNull()
             }
+            if (!body.isNullOrBlank()) return body
         }
         return null
     }
