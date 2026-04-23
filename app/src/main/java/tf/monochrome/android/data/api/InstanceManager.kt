@@ -63,10 +63,14 @@ class InstanceManager @Inject constructor(
     private var cacheTimestamp: Long = 0L
 
     suspend fun getInstances(type: InstanceType): List<Instance> {
-        // Check custom endpoint first
-        val customEndpoint = preferences.customApiEndpoint.first()
-        if (customEndpoint != null) {
-            return listOf(Instance(customEndpoint.trimEnd('/')))
+        // Dev Mode: route all requests through the user-specified custom endpoint.
+        // When disabled, ignore any saved URL and fall through to the normal
+        // instance resolution so stale overrides don't silently redirect traffic.
+        if (preferences.devModeEnabled.first()) {
+            val customEndpoint = preferences.customApiEndpoint.first()
+            if (customEndpoint != null) {
+                return listOf(Instance(customEndpoint.trimEnd('/')))
+            }
         }
 
         // Check memory cache

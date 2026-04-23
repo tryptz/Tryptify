@@ -65,6 +65,7 @@ class PreferencesManager @Inject constructor(
 
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
+        private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
 
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
@@ -328,6 +329,14 @@ class PreferencesManager @Inject constructor(
                 it.remove(CUSTOM_API_ENDPOINT)
             }
         }
+    }
+
+    val devModeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[DEV_MODE_ENABLED] ?: false
+    }
+
+    suspend fun setDevModeEnabled(enabled: Boolean) {
+        dataStore.edit { it[DEV_MODE_ENABLED] = enabled }
     }
 
     // --- Interface ---

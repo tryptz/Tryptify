@@ -1043,10 +1043,20 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
     val apiInstances by viewModel.apiInstances.collectAsState()
     val streamingInstances by viewModel.streamingInstances.collectAsState()
     val customEndpoint by viewModel.customEndpoint.collectAsState()
+    val devModeEnabled by viewModel.devModeEnabled.collectAsState()
     val refreshing by viewModel.instancesRefreshing.collectAsState()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
 
     SettingsTabContent {
+        SettingSwitchItem(
+            title = "Dev Mode",
+            subtitle = "Route all API requests through a local Tidal HiFi API server. Requires a compatible server running at the specified URL.",
+            checked = devModeEnabled,
+            onCheckedChange = { viewModel.setDevModeEnabled(it) }
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         SettingsGroupHeader("Custom Endpoint")
         OutlinedTextField(
             value = customInput,
