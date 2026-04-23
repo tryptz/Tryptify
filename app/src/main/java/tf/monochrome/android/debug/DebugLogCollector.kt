@@ -1,6 +1,5 @@
 package tf.monochrome.android.debug
 
-import android.os.Process
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,7 +45,7 @@ class DebugLogCollector @Inject constructor(
     }
 
     private suspend fun run() {
-        val pid = Process.myPid()
+        val pid = android.os.Process.myPid()
         // `*:V` = every tag at Verbose and above. `-T 1` starts from the tail so
         // we don't replay megabytes of framework output from before this boot.
         // `--pid` scopes to our own process on API 24+.
