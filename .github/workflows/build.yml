@@ -46,42 +46,8 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode signing keystore (optional)
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
-          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
-          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
-        # When the release-key secrets are configured on the repo, decode them
-        # so the debug APK is signed with the owner's real key instead of the
-        # committed project-local debug key. Every APK (CI debug, CI release,
-        # local installDebug) then shares one signature and installs over any
-        # other on the device. Missing secrets silently fall back to the
-        # committed debug key.
-        run: |
-          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_STORE_PASSWORD" ] \
-              && [ -n "$KEYSTORE_KEY_ALIAS" ] && [ -n "$KEYSTORE_KEY_PASSWORD" ]; then
-            mkdir -p "$RUNNER_TEMP/keystore"
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore/release.keystore"
-            cat > keystore.properties <<EOF
-          storeFile=$RUNNER_TEMP/keystore/release.keystore
-          storePassword=$KEYSTORE_STORE_PASSWORD
-          keyAlias=$KEYSTORE_KEY_ALIAS
-          keyPassword=$KEYSTORE_KEY_PASSWORD
-          EOF
-            echo "Debug APK will be signed with the release key."
-          else
-            echo "Release secrets not set; falling back to the committed debug key."
-          fi
-
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
-
-      - name: Cleanup signing material
-        if: always()
-        run: |
-          rm -f keystore.properties
-          rm -rf "$RUNNER_TEMP/keystore"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

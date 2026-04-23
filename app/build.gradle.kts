@@ -81,17 +81,10 @@ android {
 
     buildTypes {
         debug {
-            // Prefer the user's release keystore when it's available (e.g. CI
-            // has decoded the secret, or the user has a local keystore.properties).
-            // That way every APK produced anywhere — CI debug, CI release, local
-            // installDebug — shares a signature and upgrades in place on the
-            // device. Falls back to the committed project-local debug keystore
-            // when no release key is configured.
-            signingConfig = if (hasCompleteReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // Always the committed project-local debug keystore. Same signature
+            // on every machine and every CI run — so `./gradlew installDebug`
+            // over a CI-produced APK (or vice versa) upgrades in place.
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             if (hasCompleteReleaseSigning) {

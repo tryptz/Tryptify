@@ -167,30 +167,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode signing keystore (optional)
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
-          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
-          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
-        # See build.yml — if the owner's release-key secrets exist, sign with
-        # them so the CI debug APK matches local + release signatures.
-        run: |
-          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_STORE_PASSWORD" ] \
-              && [ -n "$KEYSTORE_KEY_ALIAS" ] && [ -n "$KEYSTORE_KEY_PASSWORD" ]; then
-            mkdir -p "$RUNNER_TEMP/keystore"
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore/release.keystore"
-            cat > keystore.properties <<EOF
-          storeFile=$RUNNER_TEMP/keystore/release.keystore
-          storePassword=$KEYSTORE_STORE_PASSWORD
-          keyAlias=$KEYSTORE_KEY_ALIAS
-          keyPassword=$KEYSTORE_KEY_PASSWORD
-          EOF
-            echo "APK will be signed with the release key."
-          else
-            echo "Release secrets not set; falling back to the committed debug key."
-          fi
-
       - name: Run Gradle task
         run: ./gradlew ${{ github.event.inputs.task || 'assembleDebug' }} --stacktrace
 
@@ -202,9 +178,3 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
           if-no-files-found: ignore
-
-      - name: Cleanup signing material
-        if: always()
-        run: |
-          rm -f keystore.properties
-          rm -rf "$RUNNER_TEMP/keystore"
