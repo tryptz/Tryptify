@@ -199,6 +199,15 @@ class PlaybackService : MediaSessionService() {
     private fun buildRenderersFactory(): DefaultRenderersFactory {
         val audioBus = projectMEngineRepository.audioBus
         return object : DefaultRenderersFactory(this) {
+            init {
+                // FfmpegAudioRenderer picks up any audio format MediaCodec
+                // can't decode (DSD, APE, TAK, WavPack, MPC, TrueHD, DTS, …).
+                // EXTENSION_RENDERER_MODE_ON = added AFTER the platform
+                // MediaCodecAudioRenderer, so hardware stays preferred for
+                // formats it supports and FFmpeg is used as a fallback.
+                setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
+            }
+
             override fun buildAudioSink(
                 context: android.content.Context,
                 enableFloatOutput: Boolean,
@@ -234,6 +243,47 @@ class PlaybackService : MediaSessionService() {
                 }
             }
 
+            override fun buildAudioRenderers(
+                context: android.content.Context,
+                extensionRendererMode: Int,
+                mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector,
+                enableDecoderFallback: Boolean,
+                audioSink: AudioSink,
+                eventHandler: android.os.Handler,
+                eventListener: androidx.media3.exoplayer.audio.AudioRendererEventListener,
+                out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>,
+            ) {
+                // Let the default MediaCodecAudioRenderer run first so hardware
+                // decoders get priority for the codecs they support.
+                super.buildAudioRenderers(
+                    context,
+                    extensionRendererMode,
+                    mediaCodecSelector,
+                    enableDecoderFallback,
+                    audioSink,
+                    eventHandler,
+                    eventListener,
+                    out,
+                )
+                // Append the FFmpeg extension renderer as a universal
+                // fallback. Media3 walks the list in order and picks the
+                // first renderer that can handle the track's format.
+                runCatching {
+                    out.add(
+                        androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer(
+                            eventHandler,
+                            eventListener,
+                            audioSink,
+                        )
+                    )
+                }.onFailure { error ->
+                    android.util.Log.w(
+                        "PlaybackService",
+                        "FfmpegAudioRenderer unavailable; falling back to MediaCodec only",
+                        error,
+                    )
+                }
+            }
         }
     }
 

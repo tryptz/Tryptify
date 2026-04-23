@@ -22,6 +22,7 @@ credentials = "1.5.0-beta01"
 googleid = "1.1.1"
 accompanist = "0.36.0"
 haze = "1.7.1"
+nextlibMedia3ext = "0.8.4"
 
 [libraries]
 # Compose
@@ -48,6 +49,13 @@ media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls
 media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 media3-cast = { group = "androidx.media3", name = "media3-cast", version.ref = "media3" }
+
+# NextLib — prebuilt Media3 FFmpeg audio decoder extension. Ships libavcodec +
+# libavformat as JNI .so files alongside the androidx.media3.decoder.ffmpeg
+# glue from the official Media3 source tree, so FfmpegAudioRenderer works
+# without having to cross-compile FFmpeg ourselves. Covers codecs MediaCodec
+# can't: DSD, APE, TAK, WavPack, Musepack, TrueHD, DTS, MLP, etc. LGPL build.
+nextlib-media3ext = { group = "io.github.anilbeesetti.nextlib", name = "nextlib-media3ext", version.ref = "nextlibMedia3ext" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }

@@ -152,6 +152,10 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.ui)
     implementation(libs.media3.cast)
+    // Prebuilt FFmpeg audio decoder wired as FfmpegAudioRenderer. Drops in
+    // support for DSD/DSF, APE, TAK, WavPack, Musepack, TrueHD/MLP, DTS, AC-3,
+    // and a long tail of codecs the platform MediaCodec can't handle.
+    implementation(libs.nextlib.media3ext)
 
     // Hilt
     implementation(libs.hilt.android)
