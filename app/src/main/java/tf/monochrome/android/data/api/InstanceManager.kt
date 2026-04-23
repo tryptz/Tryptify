@@ -37,26 +37,15 @@ class InstanceManager @Inject constructor(
         private const val UPTIME_FETCH_TIMEOUT_MS = 5_000L
 
         private val FALLBACK_API_INSTANCES = listOf(
-            Instance("https://eu-central.monochrome.tf"),
-            Instance("https://us-west.monochrome.tf"),
-            Instance("https://arran.monochrome.tf"),
-            Instance("https://api.monochrome.tf"),
-            Instance("https://triton.squid.wtf"),
-            Instance("https://wolf.qqdl.site"),
-            Instance("https://maus.qqdl.site"),
-            Instance("https://vogel.qqdl.site"),
-            Instance("https://hund.qqdl.site"),
-            Instance("https://tidal.kinoplus.online")
+            Instance("https://tidal-api.binimum.org"),
+            Instance("https://hifi.geeked.wtf"),
+            Instance("https://monochrome-api.samidy.com"),
         )
 
         private val FALLBACK_STREAMING_INSTANCES = listOf(
-            Instance("https://arran.monochrome.tf"),
-            Instance("https://triton.squid.wtf"),
-            Instance("https://wolf.qqdl.site"),
-            Instance("https://maus.qqdl.site"),
-            Instance("https://vogel.qqdl.site"),
-            Instance("https://katze.qqdl.site"),
-            Instance("https://hund.qqdl.site")
+            Instance("https://tidal-api.binimum.org"),
+            Instance("https://hifi.geeked.wtf"),
+            Instance("https://monochrome-api.samidy.com"),
         )
     }
 
