@@ -43,8 +43,21 @@ class MediaStoreSource @Inject constructor(
     // particular device's media scanner produced. Codec identification still
     // happens downstream in TagReader from the MIME + extension; unknown codecs
     // fall through to AudioCodec.UNKNOWN rather than being dropped at scan time.
-    private fun isAudioMime(mime: String?): Boolean =
-        mime != null && mime.startsWith("audio/", ignoreCase = true)
+    private fun isAudioMime(mime: String?): Boolean {
+        if (mime == null) return false
+        val lower = mime.lowercase()
+        if (!lower.startsWith("audio/")) return false
+        // MIDI files (audio/midi, audio/x-midi, audio/mid) aren't real recordings
+        // — they're synth instructions and the app can't play them. MediaStore
+        // still indexes them as IS_MUSIC=1 so we need an explicit exclusion.
+        if (lower == "audio/midi" || lower == "audio/x-midi" || lower == "audio/mid") return false
+        return true
+    }
+
+    private fun isExcludedExtension(path: String): Boolean {
+        val ext = path.substringAfterLast('.', "").lowercase()
+        return ext == "mid" || ext == "midi" || ext == "kar" || ext == "rmi"
+    }
 
     fun queryAllAudio(
         minDurationMs: Long = 30_000,
@@ -83,6 +96,11 @@ class MediaStoreSource @Inject constructor(
 
                 // Filter by mime type
                 if (!isAudioMime(mime)) continue
+
+                // Skip MIDI-class files by extension too (some devices report
+                // them with a non-midi MIME but the extension is always .mid
+                // / .midi / .kar / .rmi).
+                if (isExcludedExtension(path)) continue
 
                 // Filter excluded paths
                 if (excludedPaths.any { path.startsWith(it) }) continue
