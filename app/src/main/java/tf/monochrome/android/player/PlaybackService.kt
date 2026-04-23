@@ -204,7 +204,7 @@ class PlaybackService : MediaSessionService() {
         // the custom AudioProcessor chain — DSP, EQ, spectrum tap, ProjectM
         // tee) still applies while the FFmpeg renderer handles any format
         // MediaCodec can't (DSD, APE, TAK, WavPack, MPC, TrueHD, DTS, …).
-        return object : io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(this) {
+        return object : io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(this@PlaybackService) {
             init {
                 setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
             }
