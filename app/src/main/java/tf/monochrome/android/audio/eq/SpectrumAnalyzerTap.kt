@@ -39,7 +39,9 @@ import kotlin.math.sqrt
  */
 @Singleton
 @OptIn(UnstableApi::class)
-class SpectrumAnalyzerTap @Inject constructor() : AudioProcessor {
+class SpectrumAnalyzerTap @Inject constructor(
+    performanceProfile: tf.monochrome.android.performance.PerformanceProfile,
+) : AudioProcessor {
 
     companion object {
         const val FFT_SIZE_4K = 4096
@@ -52,12 +54,16 @@ class SpectrumAnalyzerTap @Inject constructor() : AudioProcessor {
         private const val MIN_FREQ = 20f
         private const val MAX_FREQ = 20000f
         private const val PINK_SLOPE_DB_PER_OCT = 4.0f
-        private const val TARGET_FPS = 60
-        private const val FRAME_DELAY_MS = 1000L / TARGET_FPS   // ~16 ms
         // Slow exponential smoothing → ~176 ms time constant @ 60 fps (SPAN-like Avg Time).
         private const val SMOOTH_ATTACK = 0.55f
         private const val SMOOTH_RELEASE = 0.09f
     }
+
+    // Frame cadence picked from the device tier: LOW=15 fps, MID=30 fps, HIGH=60 fps.
+    // The visible smoothing constants above are tuned for 60 fps; slower tiers look
+    // a touch more damped, which is fine — they also run on thermally-constrained
+    // hardware where running an analyzer at 60 Hz would be the dominant cost.
+    private val frameDelayMs: Long = (1000L / performanceProfile.spectrumFps.coerceAtLeast(1))
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
@@ -240,7 +246,7 @@ class SpectrumAnalyzerTap @Inject constructor() : AudioProcessor {
 
                 _spectrumBins.value = out
 
-                delay(FRAME_DELAY_MS)
+                delay(frameDelayMs)
             }
         }
     }

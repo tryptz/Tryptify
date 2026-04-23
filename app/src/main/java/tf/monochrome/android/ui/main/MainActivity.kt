@@ -36,6 +36,8 @@ import tf.monochrome.android.ui.theme.rememberDynamicPalette
 import java.io.File
 import javax.inject.Inject
 import tf.monochrome.android.audio.eq.FrequencyTargets
+import tf.monochrome.android.performance.LocalPerformanceProfile
+import tf.monochrome.android.performance.PerformanceProfile
 
 val LocalBlurTarget = compositionLocalOf<BlurTarget?> { null }
 
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
     @Inject lateinit var queueManager: QueueManager
+    @Inject lateinit var performanceProfile: PerformanceProfile
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -108,7 +111,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            CompositionLocalProvider(LocalBlurTarget provides blurTarget) {
+            CompositionLocalProvider(
+                LocalBlurTarget provides blurTarget,
+                LocalPerformanceProfile provides performanceProfile,
+            ) {
                 MonochromeTheme(
                     themeName = themeName,
                     fontScale = fontScale,

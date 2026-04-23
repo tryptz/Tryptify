@@ -1,6 +1,7 @@
 package tf.monochrome.android
 
 import android.app.Application
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil3.ImageLoader
@@ -19,26 +20,42 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.device.DeviceRegistry
+import tf.monochrome.android.performance.DeviceCapabilities
+import tf.monochrome.android.performance.PerformanceProfile
 import javax.inject.Inject
 
 @HiltAndroidApp
 class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoader.Factory {
 
     companion object {
+        /**
+         * Resolved performance envelope for this process. Set exactly once by the
+         * companion-object `init` block below; read by `newImageLoader` here and by
+         * `PerformanceModule` for Hilt consumers. `@Volatile` for visibility across
+         * the audio / main / worker threads that all run off `Dispatchers.Default`.
+         */
+        @Volatile
+        lateinit var profile: PerformanceProfile
+            private set
+
         init {
-            // Cap the coroutine Default scheduler to 2 workers so background work
-            // (FFT tap, scanner, sync, Palette decode) can't pile up on every
-            // available core. Target profile: a 2022 mid-range phone (2 perf
-            // cores, 6 efficiency cores). On an 8-core SoC the default pool
-            // would be 8 workers and could saturate the whole CPU, leaving the
-            // UI thread starved. The IO pool is still allowed to grow for
-            // concurrent blocking disk/network, but bounded.
-            //
-            // These must be set before any Dispatchers.Default access, which is
-            // why this lives in a companion-object `init` — it runs when the
-            // Application class is loaded, before onCreate().
-            System.setProperty("kotlinx.coroutines.scheduler.core.pool.size", "2")
-            System.setProperty("kotlinx.coroutines.scheduler.max.pool.size", "6")
+            // Detection must run before Dispatchers.Default wakes up — the Kotlin
+            // scheduler reads `kotlinx.coroutines.scheduler.*.pool.size` exactly
+            // once on first access. `companion object { init {} }` fires when the
+            // Application class is loaded, which precedes onCreate() and any
+            // coroutine dispatch.
+            val (tier, snapshot) = DeviceCapabilities.detect()
+            val picked = PerformanceProfile.forTier(tier)
+            profile = picked
+            System.setProperty("kotlinx.coroutines.scheduler.core.pool.size", picked.corePoolSize.toString())
+            System.setProperty("kotlinx.coroutines.scheduler.max.pool.size", picked.maxPoolSize.toString())
+            Log.i(
+                "MonoPerf",
+                "tier=$tier cores=${snapshot.cores} big=${snapshot.bigCores} " +
+                    "maxFreq=${snapshot.maxFreqMhz}MHz ram=${snapshot.ramMb}MB " +
+                    "pool=${picked.corePoolSize}/${picked.maxPoolSize} " +
+                    "spectrumFps=${picked.spectrumFps} haze=${picked.allowHazeBlur}"
+            )
         }
     }
 
@@ -63,21 +80,23 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
      * spins up a default loader and the in-memory + on-disk caches don't survive
      * navigation, so identical artwork gets re-decoded on every screen change.
      */
-    override fun newImageLoader(context: PlatformContext): ImageLoader =
-        ImageLoader.Builder(context)
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        val p = profile
+        return ImageLoader.Builder(context)
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25)
+                    .maxSizePercent(context, p.coilMemoryPercent)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(250L * 1024 * 1024)
+                    .maxSizeBytes(p.coilDiskBytes)
                     .build()
             }
             .crossfade(true)
             .build()
+    }
 
     override fun onCreate() {
         super.onCreate()

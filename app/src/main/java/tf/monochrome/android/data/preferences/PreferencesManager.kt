@@ -21,6 +21,7 @@ import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ReplayGainMode
+import tf.monochrome.android.performance.PerformanceProfile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,7 +29,8 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 @Singleton
 class PreferencesManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val performanceProfile: PerformanceProfile,
 ) {
     private val dataStore = context.dataStore
 
@@ -489,7 +491,12 @@ class PreferencesManager @Inject constructor(
     val visualizerTextureSize: Flow<Int> = dataStore.data.map { it[VISUALIZER_TEXTURE_SIZE] ?: 1024 }
     val visualizerMeshX: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_X] ?: 32 }
     val visualizerMeshY: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_Y] ?: 24 }
-    val visualizerTargetFps: Flow<Int> = dataStore.data.map { it[VISUALIZER_TARGET_FPS] ?: 60 }
+    val visualizerTargetFps: Flow<Int> = dataStore.data.map {
+        // First-run / never-set → fall back to the resolved performance tier's
+        // ceiling (LOW=30, MID=60, HIGH=120). Once the user touches the setting,
+        // DataStore keeps their override across device-tier changes.
+        it[VISUALIZER_TARGET_FPS] ?: performanceProfile.visualizerFps
+    }
     val visualizerShowFps: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_SHOW_FPS] ?: false }
     val visualizerFullscreen: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_FULLSCREEN] ?: false }
     val visualizerTouchWaveform: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_TOUCH_WAVEFORM] ?: true }

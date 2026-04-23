@@ -19,6 +19,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
@@ -38,10 +39,18 @@ fun Modifier.liquidGlass(
     blurRadius: Dp = MonoDimens.glassBlurRadius,
     showRefraction: Boolean = true
 ) = composed {
+    val profile = LocalPerformanceProfile.current
     val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
     val tintColor = if (isDark) Color.Black else Color.White
     val adaptedTintAlpha = if (isDark) (tintAlpha * 1.4f).coerceAtMost(0.50f) else tintAlpha
     val borderColor = MaterialTheme.colorScheme.outline
+
+    // LOW-tier devices skip the full glass chrome — no backdrop blur, no specular
+    // rim, no refraction overlay. Those three layers together are the dominant
+    // per-row GPU cost on lazy lists, and blur in particular is expensive on
+    // budget SoCs. Return the incoming modifier unchanged so the caller's layout
+    // still respects shape via their own background/clip if any.
+    if (!profile.allowHazeBlur) return@composed this
 
     // Specular rim — thin gradient border simulating reflected light on glass edges.
     // Cache per-(theme, alpha) so we don't allocate a fresh Brush per recomposition,
