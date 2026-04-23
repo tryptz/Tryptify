@@ -29,14 +29,17 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
 
     companion object {
         /**
-         * Resolved performance envelope for this process. Set exactly once by the
-         * companion-object `init` block below; read by `newImageLoader` here and by
-         * `PerformanceModule` for Hilt consumers. `@Volatile` for visibility across
-         * the audio / main / worker threads that all run off `Dispatchers.Default`.
+         * Resolved performance envelope for this process. Initialized at class-load
+         * time (i.e. before `Application.onCreate` and before `Dispatchers.Default`
+         * wakes) so the scheduler pool properties below can be set from it.
+         *
+         * `val` is safe here — Kotlin guarantees eager initialization of top-level
+         * and companion-object `val`s with a static initializer (safe publication
+         * across threads), and we never reassign after first-boot detection.
          */
-        @Volatile
-        lateinit var profile: PerformanceProfile
-            private set
+        @JvmStatic
+        val profile: PerformanceProfile =
+            PerformanceProfile.forTier(DeviceCapabilities.detect().first)
 
         init {
             // Detection must run before Dispatchers.Default wakes up — the Kotlin
@@ -44,17 +47,15 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
             // once on first access. `companion object { init {} }` fires when the
             // Application class is loaded, which precedes onCreate() and any
             // coroutine dispatch.
-            val (tier, snapshot) = DeviceCapabilities.detect()
-            val picked = PerformanceProfile.forTier(tier)
-            profile = picked
-            System.setProperty("kotlinx.coroutines.scheduler.core.pool.size", picked.corePoolSize.toString())
-            System.setProperty("kotlinx.coroutines.scheduler.max.pool.size", picked.maxPoolSize.toString())
+            System.setProperty("kotlinx.coroutines.scheduler.core.pool.size", profile.corePoolSize.toString())
+            System.setProperty("kotlinx.coroutines.scheduler.max.pool.size", profile.maxPoolSize.toString())
+            val snapshot = DeviceCapabilities.detect().second
             Log.i(
                 "MonoPerf",
-                "tier=$tier cores=${snapshot.cores} big=${snapshot.bigCores} " +
+                "tier=${profile.tier} cores=${snapshot.cores} big=${snapshot.bigCores} " +
                     "maxFreq=${snapshot.maxFreqMhz}MHz ram=${snapshot.ramMb}MB " +
-                    "pool=${picked.corePoolSize}/${picked.maxPoolSize} " +
-                    "spectrumFps=${picked.spectrumFps} haze=${picked.allowHazeBlur}"
+                    "pool=${profile.corePoolSize}/${profile.maxPoolSize} " +
+                    "spectrumFps=${profile.spectrumFps} haze=${profile.allowHazeBlur}"
             )
         }
     }
@@ -106,8 +107,8 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
             authManager.initialize()
             authManager.userProfile
                 .distinctUntilChanged { a, b -> a?.id == b?.id }
-                .collect { profile ->
-                    if (profile != null) deviceRegistry.registerCurrentDevice()
+                .collect { user ->
+                    if (user != null) deviceRegistry.registerCurrentDevice()
                     else deviceRegistry.clearOnSignOut()
                 }
         }
