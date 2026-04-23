@@ -1,12 +1,17 @@
 package tf.monochrome.android.ui.main
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import android.view.ViewGroup
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
@@ -49,10 +54,19 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var performanceProfile: PerformanceProfile
 
+    // Registered-for-result launcher for POST_NOTIFICATIONS. Fires a one-shot
+    // system prompt on Android 13+; the result doesn't block the UI either way
+    // — if the user denies we just lose the playback notification, playback
+    // itself still works.
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        maybeRequestNotificationPermission()
 
         // Restore existing Supabase session on startup
         lifecycleScope.launch {
@@ -147,6 +161,24 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * On Android 13+ the manifest POST_NOTIFICATIONS entry isn't sufficient —
+     * the user must be prompted once. Without the grant, Media3's foreground
+     * playback notification is silently dropped, so the user sees no lock
+     * screen / shade controls and the system can reclaim the service mid-track.
+     * Called once per cold start; the ActivityResult contract throttles
+     * reprompts automatically when the user has already decided.
+     */
+    private fun maybeRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

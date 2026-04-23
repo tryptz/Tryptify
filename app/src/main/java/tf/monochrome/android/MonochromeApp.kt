@@ -1,6 +1,9 @@
 package tf.monochrome.android
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -105,6 +108,11 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
 
     override fun onCreate() {
         super.onCreate()
+        // Pre-create the Now Playing channel so the first foreground-service
+        // notification from Media3 has a named channel instead of showing up
+        // under "default" in Android Settings → App → Notifications. Media3
+        // auto-creates the channel lazily otherwise, but with a generic name.
+        registerPlaybackNotificationChannel()
         // Start the in-app logcat collector as early as possible so the "View
         // debug log" screen has a buffered history from (almost) app start.
         debugLogCollector.start()
@@ -120,4 +128,24 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
                 }
         }
     }
+
+    private fun registerPlaybackNotificationChannel() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        // Match Media3's default channel id so our pre-registered channel is
+        // the one used by MediaNotification.Provider — no custom provider
+        // needed for the one-time name/description customization.
+        val channel = NotificationChannel(
+            PLAYBACK_CHANNEL_ID,
+            "Now Playing",
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "Playback controls shown in the notification shade and on the lock screen."
+            setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
+        }
+        manager.createNotificationChannel(channel)
+    }
 }
+
+private const val PLAYBACK_CHANNEL_ID = "default_channel_id"
