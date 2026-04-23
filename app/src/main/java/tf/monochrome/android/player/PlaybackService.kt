@@ -198,13 +198,13 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     private fun buildRenderersFactory(): DefaultRenderersFactory {
         val audioBus = projectMEngineRepository.audioBus
-        // NextRenderersFactory is a drop-in replacement for
-        // DefaultRenderersFactory that appends FFmpeg-based decoders after the
-        // platform ones. We subclass it so our AudioSink override (with the
-        // custom AudioProcessor chain — DSP, EQ, spectrum tap, ProjectM tee)
-        // still applies while the FFmpeg renderer handles any format
+        // NextRenderersFactory extends DefaultRenderersFactory and appends
+        // FFmpeg-based renderers (prebuilt libavcodec + libavformat) after
+        // the platform ones. We subclass it so our AudioSink override (with
+        // the custom AudioProcessor chain — DSP, EQ, spectrum tap, ProjectM
+        // tee) still applies while the FFmpeg renderer handles any format
         // MediaCodec can't (DSD, APE, TAK, WavPack, MPC, TrueHD, DTS, …).
-        return object : io.github.anilbeesetti.nextlib.media3ext.NextRenderersFactory(this) {
+        return object : io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(this) {
             init {
                 setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
             }
