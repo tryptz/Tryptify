@@ -59,14 +59,28 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run lint
-        run: ./gradlew lintDebug --stacktrace
+        id: run_lint
+        run: ./gradlew lintDebug --stacktrace 2>&1 | tee gradle-lint.log
+
+      - name: Summarize lint failure
+        if: failure()
+        run: |
+          echo "::group::Gradle lint failure tail"
+          tail -n 200 gradle-lint.log | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::endgroup::"
+          first=$(grep -E -m 1 "^e: |FAILURE:|error:|Unresolved reference|Execution failed" gradle-lint.log || true)
+          if [ -n "$first" ]; then
+            echo "::error::$first"
+          fi
 
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
-          path: app/build/reports/lint-results-*.html
+          path: |
+            app/build/reports/lint-results-*.html
+            gradle-lint.log
           retention-days: 14
           if-no-files-found: ignore
 
@@ -113,14 +127,33 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+        id: run_tests
+        run: ./gradlew testDebugUnitTest --stacktrace 2>&1 | tee gradle-test.log
+        # `set -o pipefail` inherits from the runner's bash config, so the tee
+        # above still propagates gradle's exit status.
+
+      - name: Summarize failure
+        if: failure()
+        run: |
+          echo "::group::Gradle test failure tail"
+          tail -n 200 gradle-test.log | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::endgroup::"
+          # Extract and re-echo the first real error line as a workflow error
+          # annotation — that surfaces into the PR check UI where we can read
+          # it without drilling into the full log.
+          first=$(grep -E -m 1 "^e: |FAILURE:|error:|Unresolved reference|Execution failed" gradle-test.log || true)
+          if [ -n "$first" ]; then
+            echo "::error::$first"
+          fi
 
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: app/build/reports/tests/testDebugUnitTest
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            gradle-test.log
           retention-days: 14
           if-no-files-found: ignore
 
