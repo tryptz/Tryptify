@@ -92,8 +92,19 @@ class ProjectMEngineRepository @Inject constructor(
 
     private fun observePreferences() {
         scope.launch {
+            var heldSubscription = false
             preferences.visualizerEngineEnabled.collectLatest { enabled ->
                 _engineEnabled.value = enabled
+                // Acquire/release the audio bus subscription so the audio render
+                // thread skips the per-frame PCM→float conversion when the engine
+                // is disabled in settings.
+                if (enabled && !heldSubscription) {
+                    audioBus.acquire()
+                    heldSubscription = true
+                } else if (!enabled && heldSubscription) {
+                    audioBus.release()
+                    heldSubscription = false
+                }
                 synchronized(engineLock) {
                     if (!enabled) {
                         releaseNativeLocked()
