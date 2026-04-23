@@ -20,7 +20,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Init submodules with retry
+        shell: bash
+        run: |
+          attempts=0
+          max_attempts=5
+          until git submodule update --init --recursive --jobs 4; do
+            attempts=$((attempts + 1))
+            if [ "$attempts" -ge "$max_attempts" ]; then
+              echo "::error::Submodule init failed after $max_attempts attempts"
+              exit 1
+            fi
+            delay=$((5 * attempts))
+            echo "::warning::Submodule init failed (attempt $attempts/$max_attempts); retrying in ${delay}s..."
+            sleep "$delay"
+          done
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

@@ -40,6 +40,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,7 +54,6 @@ import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.ErrorScreen
 import tf.monochrome.android.ui.components.LoadingScreen
-import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.navigation.Screen
@@ -74,6 +74,12 @@ fun LocalArtistDetailScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
 
+    val sortedTracks = remember(tracks) {
+        tracks.sortedWith(
+            compareBy({ it.albumTitle ?: "" }, { it.discNumber ?: 1 }, { it.trackNumber ?: 0 })
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {},
@@ -87,14 +93,14 @@ fun LocalArtistDetailScreen(
             )
         )
 
+        val artistData = artist
         when {
             isLoading -> LoadingScreen()
             error != null -> ErrorScreen(
                 message = error ?: "Unknown error",
                 onRetry = { viewModel.retry() }
             )
-            artist != null -> {
-                val artistData = artist ?: return
+            artistData != null -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp)
@@ -196,13 +202,9 @@ fun LocalArtistDetailScreen(
                     }
 
                     // All tracks
-                    if (tracks.isNotEmpty()) {
+                    if (sortedTracks.isNotEmpty()) {
                         item { SectionHeader(title = "All Tracks") }
-                        val sortedTracks = tracks.sortedWith(
-                            compareBy({ it.albumTitle ?: "" }, { it.discNumber ?: 1 }, { it.trackNumber ?: 0 })
-                        )
-                        items(sortedTracks.size) { index ->
-                            val track = sortedTracks[index]
+                        items(sortedTracks, key = { it.id }) { track ->
                             ArtistTrackRow(
                                 track = track,
                                 onClick = { onPlayTrack(track, sortedTracks) }
@@ -286,10 +288,9 @@ private fun ArtistTrackRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
-            .liquidGlass(shape = MonoDimens.shapeMd),
+            .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs),
         shape = MonoDimens.shapeMd,
-        color = androidx.compose.ui.graphics.Color.Transparent,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha),
         onClick = onClick
     ) {
         Row(
@@ -336,13 +337,14 @@ private fun ArtistTrackRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (track.qualityBadge != null) {
+            val badge = track.qualityBadge
+            if (badge != null) {
                 Surface(
                     shape = RoundedCornerShape(999.dp),
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                 ) {
                     Text(
-                        text = track.qualityBadge!!,
+                        text = badge,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary

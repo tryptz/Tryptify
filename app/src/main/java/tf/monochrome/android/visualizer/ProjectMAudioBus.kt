@@ -1,6 +1,7 @@
 package tf.monochrome.android.visualizer
 
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,6 +18,17 @@ class ProjectMAudioBus @Inject constructor() {
     private val pendingFrames = ConcurrentLinkedQueue<ProjectMAudioFrame>()
     private val latestTimestampMs = AtomicLong(0L)
     private val sampleSnapshot = java.util.concurrent.atomic.AtomicReference<FloatArray?>(null)
+    private val subscriberCount = AtomicInteger(0)
+
+    /**
+     * Reference-count subscribers (visualizer engine + waveform overlay). Callers
+     * must pair acquire/release. When zero, the audio tap skips the per-frame
+     * PCM→float conversion entirely so the audio render thread doesn't do work
+     * no one is consuming.
+     */
+    fun acquire() { subscriberCount.incrementAndGet() }
+    fun release() { subscriberCount.updateAndGet { (it - 1).coerceAtLeast(0) } }
+    fun hasSubscribers(): Boolean = subscriberCount.get() > 0
 
     fun publish(samples: FloatArray, channelCount: Int, sampleRate: Int) {
         val now = System.currentTimeMillis()

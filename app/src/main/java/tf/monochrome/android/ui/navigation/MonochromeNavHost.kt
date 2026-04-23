@@ -59,6 +59,7 @@ import tf.monochrome.android.ui.detail.AlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
 import tf.monochrome.android.ui.detail.LocalAlbumDetailScreen
 import tf.monochrome.android.ui.detail.LocalArtistDetailScreen
+import tf.monochrome.android.ui.detail.LocalGenreDetailScreen
 import tf.monochrome.android.ui.detail.MixScreen
 import tf.monochrome.android.ui.eq.EqualizerScreen
 import tf.monochrome.android.ui.eq.ParametricEqEditScreen
@@ -115,6 +116,9 @@ sealed class Screen(val route: String) {
     }
     data object LocalArtistDetail : Screen("local_artist/{artistId}") {
         fun createRoute(artistId: Long) = "local_artist/$artistId"
+    }
+    data object LocalGenreDetail : Screen("local_genre/{genre}") {
+        fun createRoute(genre: String) = "local_genre/${java.net.URLEncoder.encode(genre, "UTF-8")}"
     }
     data object Mixer : Screen("mixer")
     data object CarMode : Screen("car_mode")
@@ -348,6 +352,23 @@ fun MonochromeNavHost() {
                     arguments = listOf(navArgument("artistId") { type = NavType.LongType })
                 ) {
                     LocalArtistDetailScreen(
+                        navController = navController,
+                        onPlayTrack = { track, queue ->
+                            playerViewModel.playUnifiedTrack(track, queue)
+                        },
+                        onPlayAll = { tracks ->
+                            playerViewModel.playAllUnified(tracks)
+                        },
+                        onShuffleAll = { tracks ->
+                            playerViewModel.shufflePlayUnified(tracks)
+                        }
+                    )
+                }
+                composable(
+                    route = Screen.LocalGenreDetail.route,
+                    arguments = listOf(navArgument("genre") { type = NavType.StringType })
+                ) {
+                    LocalGenreDetailScreen(
                         navController = navController,
                         onPlayTrack = { track, queue ->
                             playerViewModel.playUnifiedTrack(track, queue)

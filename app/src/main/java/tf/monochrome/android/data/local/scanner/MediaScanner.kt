@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.local.scanner
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -28,7 +29,8 @@ sealed class ScanProgress {
 class MediaScanner @Inject constructor(
     private val mediaStoreSource: MediaStoreSource,
     private val tagReader: TagReader,
-    private val localMediaDao: LocalMediaDao
+    private val localMediaDao: LocalMediaDao,
+    private val musicDatabase: tf.monochrome.android.data.db.MusicDatabase
 ) {
 
     fun fullScan(
@@ -40,12 +42,15 @@ class MediaScanner @Inject constructor(
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
 
             var addedCount = 0
+            // Memoize sidecar cover art lookups by parent directory so we don't
+            // listFiles() once per track. A 500-track album → 1 directory scan.
+            val folderArtCache = HashMap<String, String?>()
 
             mediaStoreFiles.forEachIndexed { index, audioFile ->
                 try {
                     val existing = localMediaDao.findByPath(audioFile.absolutePath)
                     if (existing == null || existing.lastModified < audioFile.dateModified) {
-                        val tags = tagReader.readTags(audioFile.absolutePath)
+                        val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
                         val trackEntity = buildTrackEntity(audioFile, tags)
                         localMediaDao.insertTrack(trackEntity)
                         addedCount++
@@ -105,10 +110,11 @@ class MediaScanner @Inject constructor(
 
             emit(ScanProgress.Started(totalFiles = modifiedFiles.size))
             var addedCount = 0
+            val folderArtCache = HashMap<String, String?>()
 
             modifiedFiles.forEachIndexed { index, audioFile ->
                 try {
-                    val tags = tagReader.readTags(audioFile.absolutePath)
+                    val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
                     val trackEntity = buildTrackEntity(audioFile, tags)
                     localMediaDao.insertTrack(trackEntity)
                     addedCount++
@@ -166,26 +172,15 @@ class MediaScanner @Inject constructor(
     }
 
     private suspend fun rebuildGroupings() {
-        // Build albums
-        localMediaDao.clearAllAlbums()
-        localMediaDao.clearAllArtists()
-        localMediaDao.clearAllGenres()
+        // Pull every track in one query (was: getAllTrackPaths() then per-path
+        // findByPath, i.e. N+1 round-trips for an N-track library).
+        val tracks = localMediaDao.getAllTracksSnapshot()
 
-        // Get all tracks to build groupings
-        // Use a snapshot query instead of Flow for scanning
-        val allPaths = localMediaDao.getAllTrackPaths()
-        val tracksByAlbumKey = mutableMapOf<String, MutableList<LocalTrackEntity>>()
-        val artistSet = mutableMapOf<String, MutableList<LocalTrackEntity>>()
-        val genreSet = mutableMapOf<String, Int>()
-
-        // Process tracks from the database
-        val tracks = mutableListOf<LocalTrackEntity>()
-        for (path in allPaths) {
-            localMediaDao.findByPath(path)?.let { tracks.add(it) }
-        }
-
+        // In-memory grouping — pure CPU work, no DB calls.
+        val tracksByAlbumKey = HashMap<String, MutableList<LocalTrackEntity>>()
+        val artistSet = HashMap<String, MutableList<LocalTrackEntity>>()
+        val genreSet = HashMap<String, Int>()
         for (track in tracks) {
-            // Album grouping
             val albumKey = buildAlbumGroupingKey(
                 track.album,
                 track.albumArtist ?: track.artist,
@@ -193,62 +188,72 @@ class MediaScanner @Inject constructor(
             )
             tracksByAlbumKey.getOrPut(albumKey) { mutableListOf() }.add(track)
 
-            // Artist grouping
             val artistName = track.albumArtist ?: track.artist ?: "Unknown Artist"
             val normalizedArtist = normalizeText(artistName)
             artistSet.getOrPut(normalizedArtist) { mutableListOf() }.add(track)
 
-            // Genre grouping
             track.genre?.let { genre ->
                 genreSet[genre] = (genreSet[genre] ?: 0) + 1
             }
         }
 
-        // Insert albums and update track references
-        for ((key, albumTracks) in tracksByAlbumKey) {
-            val representative = albumTracks.first()
-            val albumEntity = LocalAlbumEntity(
-                title = representative.album ?: "Unknown Album",
-                artist = representative.albumArtist ?: representative.artist ?: "Unknown Artist",
-                year = representative.year,
-                genre = representative.genre,
-                trackCount = albumTracks.size,
-                totalDuration = albumTracks.sumOf { it.durationSeconds },
-                artworkCacheKey = albumTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey,
-                bestQuality = albumTracks.maxByOrNull { qualityScore(it) }?.let {
-                    "${it.codec} ${it.bitDepth ?: ""}/${(it.sampleRate / 1000)}"
-                },
-                groupingKey = key
-            )
-            val albumId = localMediaDao.upsertAlbum(albumEntity)
+        // Wrap every DB write in a single transaction so Room flushes once and
+        // observers (LocalLibraryViewModel's StateFlows) only get one
+        // invalidation pass.
+        musicDatabase.withTransaction {
+            localMediaDao.clearAllAlbums()
+            localMediaDao.clearAllArtists()
+            localMediaDao.clearAllGenres()
 
-            // Update track albumId references
-            for (track in albumTracks) {
-                localMediaDao.updateTrack(track.copy(albumId = albumId))
+            val albumIdByTrackPath = HashMap<String, Long>(tracks.size)
+            for ((key, albumTracks) in tracksByAlbumKey) {
+                val representative = albumTracks.first()
+                val albumEntity = LocalAlbumEntity(
+                    title = representative.album ?: "Unknown Album",
+                    artist = representative.albumArtist ?: representative.artist ?: "Unknown Artist",
+                    year = representative.year,
+                    genre = representative.genre,
+                    trackCount = albumTracks.size,
+                    totalDuration = albumTracks.sumOf { it.durationSeconds },
+                    artworkCacheKey = albumTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey,
+                    bestQuality = albumTracks.maxByOrNull { qualityScore(it) }?.let {
+                        "${it.codec} ${it.bitDepth ?: ""}/${(it.sampleRate / 1000)}"
+                    },
+                    groupingKey = key
+                )
+                val albumId = localMediaDao.upsertAlbum(albumEntity)
+                for (track in albumTracks) albumIdByTrackPath[track.filePath] = albumId
             }
-        }
 
-        // Insert artists and update track references
-        for ((normalizedName, artistTracks) in artistSet) {
-            val displayName = artistTracks.first().let { it.albumArtist ?: it.artist ?: "Unknown Artist" }
-            val uniqueAlbums = artistTracks.mapNotNull { it.album }.toSet().size
-            val artistEntity = LocalArtistEntity(
-                name = displayName,
-                normalizedName = normalizedName,
-                albumCount = uniqueAlbums,
-                trackCount = artistTracks.size,
-                artworkCacheKey = artistTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey
-            )
-            val artistId = localMediaDao.upsertArtist(artistEntity)
-
-            for (track in artistTracks) {
-                localMediaDao.updateTrack(track.copy(artistId = artistId))
+            val artistIdByTrackPath = HashMap<String, Long>(tracks.size)
+            for ((normalizedName, artistTracks) in artistSet) {
+                val displayName = artistTracks.first().let { it.albumArtist ?: it.artist ?: "Unknown Artist" }
+                val uniqueAlbums = artistTracks.mapNotNull { it.album }.toSet().size
+                val artistEntity = LocalArtistEntity(
+                    name = displayName,
+                    normalizedName = normalizedName,
+                    albumCount = uniqueAlbums,
+                    trackCount = artistTracks.size,
+                    artworkCacheKey = artistTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey
+                )
+                val artistId = localMediaDao.upsertArtist(artistEntity)
+                for (track in artistTracks) artistIdByTrackPath[track.filePath] = artistId
             }
-        }
 
-        // Insert genres
-        for ((genre, count) in genreSet) {
-            localMediaDao.upsertGenre(LocalGenreEntity(name = genre, trackCount = count))
+            // Bulk-update every track in one statement (was: N updateTrack calls).
+            val updatedTracks = tracks.map { t ->
+                t.copy(
+                    albumId = albumIdByTrackPath[t.filePath],
+                    artistId = artistIdByTrackPath[t.filePath]
+                )
+            }
+            if (updatedTracks.isNotEmpty()) {
+                localMediaDao.updateTracks(updatedTracks)
+            }
+
+            for ((genre, count) in genreSet) {
+                localMediaDao.upsertGenre(LocalGenreEntity(name = genre, trackCount = count))
+            }
         }
     }
 

@@ -164,6 +164,8 @@ class SettingsViewModel @Inject constructor(
     val streamingInstances: StateFlow<List<Instance>> = _streamingInstances.asStateFlow()
     val customEndpoint: StateFlow<String?> = preferences.customApiEndpoint
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val devModeEnabled: StateFlow<Boolean> = preferences.devModeEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     private val _instancesRefreshing = MutableStateFlow(false)
     val instancesRefreshing: StateFlow<Boolean> = _instancesRefreshing.asStateFlow()
 
@@ -420,6 +422,13 @@ class SettingsViewModel @Inject constructor(
     fun setCustomEndpoint(endpoint: String?) {
         viewModelScope.launch {
             preferences.setCustomApiEndpoint(endpoint)
+            loadInstances()
+        }
+    }
+
+    fun setDevModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setDevModeEnabled(enabled)
             loadInstances()
         }
     }

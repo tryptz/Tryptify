@@ -3,7 +3,9 @@ package tf.monochrome.android.ui.settings
 import android.content.Intent
 import androidx.core.net.toUri
 import java.util.Locale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -17,11 +19,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -69,6 +74,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1043,31 +1049,66 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
     val apiInstances by viewModel.apiInstances.collectAsState()
     val streamingInstances by viewModel.streamingInstances.collectAsState()
     val customEndpoint by viewModel.customEndpoint.collectAsState()
+    val devModeEnabled by viewModel.devModeEnabled.collectAsState()
     val refreshing by viewModel.instancesRefreshing.collectAsState()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
 
     SettingsTabContent {
-        SettingsGroupHeader("Custom Endpoint")
-        OutlinedTextField(
-            value = customInput,
-            onValueChange = { customInput = it },
-            label = { Text("Custom API URL (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+        SettingSwitchItem(
+            title = "Dev Mode",
+            subtitle = "Route all API requests through a local Tidal HiFi API server. Requires a compatible server running at the specified URL.",
+            checked = devModeEnabled,
+            onCheckedChange = { viewModel.setDevModeEnabled(it) }
         )
+
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedButton(onClick = {
-                viewModel.setCustomEndpoint(customInput.ifBlank { null })
-            }) { Text("Apply") }
-            if (customEndpoint != null) {
-                OutlinedButton(onClick = {
-                    customInput = ""
-                    viewModel.setCustomEndpoint(null)
-                }) { Text("Clear") }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Dev Mode API URL",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "The URL of your local Tidal HiFi API instance",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+            Spacer(modifier = Modifier.width(12.dp))
+            // Snapshot the latest input/saved value into stable holders so the
+            // onFocusChanged closure captured by the OutlinedTextField doesn't
+            // need to re-allocate on every keystroke recomposition.
+            val latestInput = rememberUpdatedState(customInput)
+            val latestSaved = rememberUpdatedState(customEndpoint)
+            OutlinedTextField(
+                value = customInput,
+                onValueChange = { customInput = it },
+                placeholder = {
+                    Text(
+                        "http://127.0.0.1:8000",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                singleLine = true,
+                enabled = devModeEnabled,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setCustomEndpoint(latestInput.value.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = latestInput.value.trim().ifBlank { null }
+                            if (trimmed != latestSaved.value) {
+                                viewModel.setCustomEndpoint(trimmed)
+                            }
+                        }
+                    }
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))

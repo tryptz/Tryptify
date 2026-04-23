@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
@@ -42,29 +43,35 @@ fun Modifier.liquidGlass(
     val adaptedTintAlpha = if (isDark) (tintAlpha * 1.4f).coerceAtMost(0.50f) else tintAlpha
     val borderColor = MaterialTheme.colorScheme.outline
 
-    // Specular rim — thin gradient border simulating reflected light on glass edges
-    val luminousBorderBrush = Brush.linearGradient(
-        colors = listOf(
-            borderColor.copy(alpha = borderAlpha * 2f),
-            borderColor.copy(alpha = borderAlpha * 0.5f),
-            borderColor.copy(alpha = borderAlpha * 1.5f)
-        ),
-        start = Offset.Zero,
-        end = Offset.Infinite
-    )
-
-    // Refraction overlay — subtle gradient to enhance glass depth
-    val refractionBrush = if (showRefraction) {
-        val refractionColor = if (isDark) Color.White else Color.Black
+    // Specular rim — thin gradient border simulating reflected light on glass edges.
+    // Cache per-(theme, alpha) so we don't allocate a fresh Brush per recomposition,
+    // which is the dominant cost when this modifier is applied to LazyColumn rows.
+    val luminousBorderBrush = remember(borderColor, borderAlpha) {
         Brush.linearGradient(
             colors = listOf(
-                refractionColor.copy(alpha = 0.04f),
-                Color.Transparent,
-                refractionColor.copy(alpha = 0.02f)
+                borderColor.copy(alpha = borderAlpha * 2f),
+                borderColor.copy(alpha = borderAlpha * 0.5f),
+                borderColor.copy(alpha = borderAlpha * 1.5f)
             ),
             start = Offset.Zero,
             end = Offset.Infinite
         )
+    }
+
+    // Refraction overlay — subtle gradient to enhance glass depth
+    val refractionBrush = if (showRefraction) {
+        remember(isDark) {
+            val refractionColor = if (isDark) Color.White else Color.Black
+            Brush.linearGradient(
+                colors = listOf(
+                    refractionColor.copy(alpha = 0.04f),
+                    Color.Transparent,
+                    refractionColor.copy(alpha = 0.02f)
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite
+            )
+        }
     } else null
 
     var modifier = this

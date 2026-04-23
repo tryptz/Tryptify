@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -56,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,19 +86,21 @@ fun LocalLibraryTab(
     onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onAlbumClick: (UnifiedAlbum) -> Unit,
     onArtistClick: (UnifiedArtist) -> Unit,
-    onFolderClick: (String) -> Unit
+    onGenreClick: (String) -> Unit,
+    onFolderClick: (String) -> Unit,
+    onShuffleAll: (List<UnifiedTrack>) -> Unit
 ) {
     val localTracks by viewModel.localTracks.collectAsState()
     val localAlbums by viewModel.localAlbums.collectAsState()
     val localArtists by viewModel.localArtists.collectAsState()
     val localGenres by viewModel.localGenres.collectAsState()
-    val rootFolders by viewModel.rootFolders.collectAsState()
+    val rootFolders by viewModel.displayRootFolders.collectAsState()
     val scanProgress by viewModel.scanProgress.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
 
-    var selectedSubTab by remember { mutableIntStateOf(0) }
+    var selectedSubTab by rememberSaveable { mutableIntStateOf(0) }
     val subTabs = listOf("Albums", "Artists", "Songs", "Genres", "Folders")
     var showSearch by remember { mutableStateOf(false) }
 
@@ -117,6 +122,9 @@ fun LocalLibraryTab(
             // Take persistent read permission so we can access this folder across restarts
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
             context.contentResolver.takePersistableUriPermission(uri, flags)
+            // Persist the selected folder so it shows up in the Folders tab even
+            // before MediaStore re-indexes and the scanner derives it from tracks.
+            safTreeUriToPath(uri)?.let { viewModel.addUserFolderRoot(it) }
             // Trigger a full scan after adding a folder (MediaStore will include it)
             viewModel.startFullScan()
         }
@@ -191,6 +199,12 @@ fun LocalLibraryTab(
             IconButton(onClick = { showSearch = !showSearch; if (!showSearch) viewModel.setSearchQuery("") }) {
                 Icon(Icons.Default.Search, contentDescription = "Search")
             }
+            IconButton(
+                onClick = { if (localTracks.isNotEmpty()) onShuffleAll(localTracks) },
+                enabled = localTracks.isNotEmpty()
+            ) {
+                Icon(Icons.Default.Shuffle, contentDescription = "Shuffle all")
+            }
             IconButton(onClick = { folderPickerLauncher.launch(null) }) {
                 Icon(Icons.Default.CreateNewFolder, contentDescription = "Add folder")
             }
@@ -206,16 +220,19 @@ fun LocalLibraryTab(
             }
         }
 
+        val genrePairs = remember(localGenres) {
+            localGenres.map { it.name to it.trackCount }
+        }
         when (selectedSubTab) {
             0 -> AlbumGrid(albums = localAlbums, onAlbumClick = onAlbumClick)
             1 -> ArtistList(artists = localArtists, onArtistClick = onArtistClick)
             2 -> SongList(tracks = localTracks, onTrackClick = onTrackClick)
             3 -> GenreList(
-                genres = localGenres.map { it.name to it.trackCount },
-                onGenreClick = { /* navigate to genre detail */ }
+                genres = genrePairs,
+                onGenreClick = onGenreClick
             )
             4 -> FolderList(
-                folders = rootFolders.map { it.displayName to it.path },
+                folders = rootFolders,
                 onFolderClick = onFolderClick
             )
         }
@@ -538,7 +555,7 @@ fun GenreList(
     LazyColumn(
         contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
     ) {
-        items(genres) { (genre, count) ->
+        items(genres, key = { it.first }) { (genre, count) ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -568,6 +585,24 @@ fun GenreList(
     }
 }
 
+/**
+ * Resolve a SAF tree URI (from `OpenDocumentTree`) to a best-guess filesystem path.
+ * Handles "primary" (emulated) storage plus SD-card volume IDs. Returns null if the
+ * URI isn't a recognized tree document — callers should fall back gracefully.
+ */
+private fun safTreeUriToPath(uri: Uri): String? = runCatching {
+    val docId = DocumentsContract.getTreeDocumentId(uri)
+    val parts = docId.split(":", limit = 2)
+    if (parts.size != 2) return@runCatching null
+    val (type, path) = parts
+    val base = if (type.equals("primary", ignoreCase = true)) {
+        "/storage/emulated/0"
+    } else {
+        "/storage/$type"
+    }
+    if (path.isBlank()) base else "$base/$path".trimEnd('/')
+}.getOrNull()
+
 @Composable
 fun FolderList(
     folders: List<Pair<String, String>>,
@@ -576,7 +611,7 @@ fun FolderList(
     LazyColumn(
         contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
     ) {
-        items(folders) { (name, path) ->
+        items(folders, key = { it.second }) { (name, path) ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

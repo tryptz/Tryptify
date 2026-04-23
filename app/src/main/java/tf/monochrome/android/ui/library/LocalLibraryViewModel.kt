@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -20,6 +21,7 @@ import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
 import tf.monochrome.android.data.local.scanner.ScanProgress
+import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
@@ -34,7 +36,8 @@ class LocalLibraryViewModel @Inject constructor(
     private val collectionRepository: CollectionRepository,
     private val scanLocalMediaUseCase: ScanLocalMediaUseCase,
     private val importCollectionUseCase: ImportCollectionUseCase,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
     // ── Local media ─────────────────────────────────────────────────
@@ -53,6 +56,28 @@ class LocalLibraryViewModel @Inject constructor(
 
     val rootFolders: StateFlow<List<LocalFolderEntity>> = localMediaRepository.getRootFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** User-added folder roots merged with scanner-derived folders. User roots come first. */
+    val displayRootFolders: StateFlow<List<Pair<String, String>>> = combine(
+        localMediaRepository.getRootFolders(),
+        preferencesManager.userFolderRoots
+    ) { dbFolders, userPaths ->
+        val user = userPaths.map { path ->
+            val name = path.substringAfterLast('/').ifBlank { path }
+            name to path
+        }
+        val db = dbFolders
+            .filter { it.path !in userPaths }
+            .map { it.displayName to it.path }
+        user + db
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun addUserFolderRoot(path: String) {
+        if (path.isBlank()) return
+        viewModelScope.launch {
+            preferencesManager.addUserFolderRoot(path)
+        }
+    }
 
     // ── Search ────────────────────────────────────────────────────────
 

@@ -24,6 +24,10 @@ class ProjectMAudioTapProcessor(
 
     override fun handleBuffer(buffer: ByteBuffer) {
         if (!buffer.hasRemaining()) return
+        // No visualizer engine or waveform overlay listening → skip the PCM→float
+        // conversion entirely. handleBuffer is called on the audio render thread
+        // for every frame of every track, so even modest per-frame work matters.
+        if (!audioBus.hasSubscribers()) return
 
         val copy = buffer.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN)
         val floatSamples = when (encoding) {

@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
@@ -392,6 +393,11 @@ private fun TouchWaveformOverlay(
     modifier: Modifier = Modifier
 ) {
     val touchPoints = remember { mutableStateMapOf<Long, Offset>() }
+
+    DisposableEffect(audioBus) {
+        audioBus.acquire()
+        onDispose { audioBus.release() }
+    }
 
     Canvas(
         modifier = modifier

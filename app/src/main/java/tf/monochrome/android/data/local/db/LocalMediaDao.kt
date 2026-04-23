@@ -53,6 +53,12 @@ interface LocalMediaDao {
     @Update
     suspend fun updateTrack(track: LocalTrackEntity)
 
+    @Update
+    suspend fun updateTracks(tracks: List<LocalTrackEntity>)
+
+    @Query("SELECT * FROM local_tracks")
+    suspend fun getAllTracksSnapshot(): List<LocalTrackEntity>
+
     @Query("DELETE FROM local_tracks WHERE filePath = :path")
     suspend fun deleteTrackByPath(path: String)
 

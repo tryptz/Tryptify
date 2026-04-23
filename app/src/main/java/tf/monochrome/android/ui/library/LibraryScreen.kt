@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +82,7 @@ fun LibraryScreen(
     )
     val tabs = libraryTabOrder.mapNotNull { id -> tabDisplayNames[id]?.let { id to it } }
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
@@ -239,8 +240,14 @@ fun LibraryScreen(
                             navController.navigate("local_artist/$artistId")
                         }
                     },
+                    onGenreClick = { genre ->
+                        navController.navigate(Screen.LocalGenreDetail.createRoute(genre))
+                    },
                     onFolderClick = { path ->
                         navController.navigate("folder/${java.net.URLEncoder.encode(path, "UTF-8")}")
+                    },
+                    onShuffleAll = { tracks ->
+                        playerViewModel.shufflePlayUnified(tracks)
                     }
                 )
 

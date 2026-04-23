@@ -61,14 +61,17 @@ class TagReader @Inject constructor(
         File(context.cacheDir, "artwork").also { it.mkdirs() }
     }
 
-    suspend fun readTags(filePath: String): AudioTags {
+    suspend fun readTags(
+        filePath: String,
+        folderArtCache: MutableMap<String, String?>? = null
+    ): AudioTags {
         val file = File(filePath)
         if (!file.exists()) return AudioTags(filePath = filePath)
 
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(filePath)
-            extractTags(retriever, file)
+            extractTags(retriever, file, folderArtCache)
         } catch (e: Exception) {
             AudioTags(
                 filePath = filePath,
@@ -93,12 +96,17 @@ class TagReader @Inject constructor(
         }
     }
 
-    private fun extractTags(retriever: MediaMetadataRetriever, file: File): AudioTags {
+    private fun extractTags(
+        retriever: MediaMetadataRetriever,
+        file: File,
+        folderArtCache: MutableMap<String, String?>? = null
+    ): AudioTags {
         return extractTagsFromRetriever(
             retriever,
             file.absolutePath,
             file.length(),
-            file.lastModified()
+            file.lastModified(),
+            folderArtCache
         )
     }
 
@@ -107,7 +115,8 @@ class TagReader @Inject constructor(
         retriever: MediaMetadataRetriever,
         filePath: String,
         fileSize: Long,
-        lastModified: Long
+        lastModified: Long,
+        folderArtCache: MutableMap<String, String?>? = null
     ): AudioTags {
         val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
         val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
@@ -132,12 +141,17 @@ class TagReader @Inject constructor(
         // Determine codec
         val codec = detectCodec(mimeType, filePath)
 
-        // Extract and cache artwork
+        // Extract and cache artwork. For MP4/M4A this reads the `covr` atom;
+        // for FLAC/Vorbis/Opus this reads the METADATA_BLOCK_PICTURE/coverart;
+        // for ID3v2 this reads APIC. If nothing is embedded, fall back to a
+        // sidecar image in the track's folder (cover.jpg, folder.jpg, etc.).
         val artworkBytes = retriever.embeddedPicture
         val hasArt = artworkBytes != null
-        val artworkCacheKey = if (hasArt && artworkBytes != null) {
-            cacheArtwork(artworkBytes, filePath)
-        } else null
+        val artworkCacheKey = when {
+            hasArt && artworkBytes != null -> cacheArtwork(artworkBytes, filePath)
+            else -> findFolderCoverArt(filePath, folderArtCache)
+        }
+        val hasArtOrSidecar = artworkCacheKey != null
 
         return AudioTags(
             title = title,
@@ -157,7 +171,7 @@ class TagReader @Inject constructor(
             bitRate = (bitRateStr?.toLongOrNull() ?: 0L).let { (it / 1000).toInt() },
             channels = numChannels?.toIntOrNull() ?: 2,
             durationSeconds = (durationMs / 1000).toInt(),
-            hasEmbeddedArt = hasArt,
+            hasEmbeddedArt = hasArtOrSidecar,
             artworkCacheKey = artworkCacheKey,
             filePath = filePath,
             fileSizeBytes = fileSize,
@@ -182,13 +196,25 @@ class TagReader @Inject constructor(
     }
 
     private fun detectCodec(mimeType: String?, filePath: String): AudioCodec {
+        // Opus and Vorbis share the Ogg container, so MediaMetadataRetriever often
+        // reports both as "audio/ogg". ALAC and AAC share the MP4 container, so
+        // both report as "audio/mp4" on some Android versions. Check explicit
+        // codec MIMEs first, then fall back to the file extension.
         return when {
             mimeType?.contains("flac") == true -> AudioCodec.FLAC
             mimeType?.contains("mpeg") == true -> AudioCodec.MP3
+            mimeType?.contains("alac") == true -> AudioCodec.ALAC
             mimeType?.contains("mp4a") == true || mimeType?.contains("aac") == true ||
-                mimeType?.contains("mp4") == true -> AudioCodec.AAC
-            mimeType?.contains("ogg") == true || mimeType?.contains("vorbis") == true -> AudioCodec.OGG_VORBIS
+                mimeType?.contains("mp4") == true -> {
+                val fromExt = detectCodecFromExtension(filePath)
+                if (fromExt == AudioCodec.ALAC) AudioCodec.ALAC else AudioCodec.AAC
+            }
             mimeType?.contains("opus") == true -> AudioCodec.OPUS
+            mimeType?.contains("vorbis") == true -> AudioCodec.OGG_VORBIS
+            mimeType?.contains("ogg") == true -> {
+                val fromExt = detectCodecFromExtension(filePath)
+                if (fromExt == AudioCodec.OPUS) AudioCodec.OPUS else AudioCodec.OGG_VORBIS
+            }
             mimeType?.contains("wav") == true || mimeType?.contains("wave") == true -> AudioCodec.WAV
             mimeType?.contains("aiff") == true -> AudioCodec.AIFF
             mimeType?.contains("x-ms-wma") == true -> AudioCodec.WMA
@@ -200,7 +226,8 @@ class TagReader @Inject constructor(
         return when (filePath.substringAfterLast('.').lowercase()) {
             "flac" -> AudioCodec.FLAC
             "mp3" -> AudioCodec.MP3
-            "m4a", "aac" -> AudioCodec.AAC
+            "alac" -> AudioCodec.ALAC
+            "m4a", "aac", "mp4" -> AudioCodec.AAC
             "ogg", "oga" -> AudioCodec.OGG_VORBIS
             "opus" -> AudioCodec.OPUS
             "wav" -> AudioCodec.WAV
@@ -209,6 +236,64 @@ class TagReader @Inject constructor(
             "wma" -> AudioCodec.WMA
             else -> AudioCodec.UNKNOWN
         }
+    }
+
+    /**
+     * Look for a sidecar cover art file in the track's folder. Matches the common
+     * naming conventions (cover.*, folder.*, album.*, front.*, AlbumArt*.jpg) case-
+     * insensitively, prefers larger images when multiple candidates exist, and
+     * returns the file's absolute path (Coil will load it directly). Returns null
+     * when `filePath` isn't a real filesystem path (e.g. a content:// URI) or the
+     * folder has no recognisable image.
+     *
+     * Pass a [cache] keyed by parent directory to avoid re-listing the same folder
+     * for every track in an album.
+     */
+    private fun findFolderCoverArt(
+        filePath: String,
+        cache: MutableMap<String, String?>? = null
+    ): String? {
+        val parent = File(filePath).parentFile ?: return null
+        if (!parent.isDirectory) return null
+        val parentKey = parent.absolutePath
+        cache?.let { if (it.containsKey(parentKey)) return it[parentKey] }
+        val resolved = scanFolderCoverArt(parent)
+        cache?.put(parentKey, resolved)
+        return resolved
+    }
+
+    private fun scanFolderCoverArt(parent: File): String? {
+        val files = parent.listFiles() ?: return null
+        val candidates = files.filter { f ->
+            if (!f.isFile) return@filter false
+            val name = f.name.lowercase()
+            val ext = name.substringAfterLast('.', "")
+            if (ext !in IMAGE_EXTENSIONS) return@filter false
+            val stem = name.substringBeforeLast('.')
+            stem in COVER_STEMS || COVER_STEM_PREFIXES.any { stem.startsWith(it) }
+        }
+        if (candidates.isEmpty()) return null
+        // Prefer exact stem match over prefix match, then the largest file
+        // (Windows Media Player writes both AlbumArt.jpg and AlbumArtSmall.jpg).
+        return candidates
+            .sortedWith(
+                compareByDescending<File> { f ->
+                    val stem = f.name.lowercase().substringBeforeLast('.')
+                    if (stem in COVER_STEMS) 1 else 0
+                }.thenByDescending { it.length() }
+            )
+            .first()
+            .absolutePath
+    }
+
+    companion object {
+        private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
+        private val COVER_STEMS = setOf(
+            "cover", "folder", "album", "albumart", "front", "artwork"
+        )
+        private val COVER_STEM_PREFIXES = setOf(
+            "albumart" // AlbumArt_{GUID}_Large.jpg (WMP)
+        )
     }
 
     private fun cacheArtwork(artworkBytes: ByteArray, filePath: String): String {

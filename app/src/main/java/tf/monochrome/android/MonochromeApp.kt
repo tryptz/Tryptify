@@ -3,6 +3,13 @@ package tf.monochrome.android
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.disk.DiskCache
+import coil3.disk.directory
+import coil3.memory.MemoryCache
+import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +22,7 @@ import tf.monochrome.android.data.device.DeviceRegistry
 import javax.inject.Inject
 
 @HiltAndroidApp
-class MonochromeApp : Application(), Configuration.Provider {
+class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoader.Factory {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -31,6 +38,27 @@ class MonochromeApp : Application(), Configuration.Provider {
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
+            .build()
+
+    /**
+     * Single ImageLoader for the whole app. Without this, every Coil call site
+     * spins up a default loader and the in-memory + on-disk caches don't survive
+     * navigation, so identical artwork gets re-decoded on every screen change.
+     */
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader.Builder(context)
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.25)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(250L * 1024 * 1024)
+                    .build()
+            }
+            .crossfade(true)
             .build()
 
     override fun onCreate() {
