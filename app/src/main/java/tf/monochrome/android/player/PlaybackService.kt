@@ -60,6 +60,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var autoEqProcessor: AutoEqProcessor
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
+    @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
@@ -301,6 +302,22 @@ class PlaybackService : MediaSessionService() {
         val currentTrack = queueManager.currentTrack.value ?: return
         serviceScope.launch {
             try {
+                // Unified tracks (local files, encrypted collections) go through a
+                // different resolver — they aren't HiFi API streams and the legacy
+                // resolver can't handle them. Consult the shared registry first so
+                // notification / lock-screen next / previous taps route correctly
+                // for mixed queues.
+                val unifiedTrack = unifiedTrackRegistry[currentTrack.id]
+                if (unifiedTrack != null) {
+                    val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
+                    currentReplayGain = resolved.trackStream?.replayGain
+                    player.setMediaItem(resolved.mediaItem)
+                    player.prepare()
+                    player.play()
+                    libraryRepository.addToHistory(currentTrack)
+                    return@launch
+                }
+
                 val (mediaItem, trackStream) = streamResolver.resolveMediaItem(currentTrack)
                 currentReplayGain = trackStream?.replayGain
 

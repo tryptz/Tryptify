@@ -49,6 +49,7 @@ class PlayerViewModel @Inject constructor(
     private val downloadManager: DownloadManager,
     private val preferences: PreferencesManager,
     private val projectMEngineRepository: ProjectMEngineRepository,
+    private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
     val spectrumAnalyzer: SpectrumAnalyzerTap
 ) : ViewModel() {
 
@@ -162,8 +163,9 @@ class PlayerViewModel @Inject constructor(
     private var mediaController: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
 
-    // Maps legacy Track IDs to their UnifiedTrack source for local/collection playback
-    private val unifiedSourceMap = mutableMapOf<Long, UnifiedTrack>()
+    // Legacy Track IDs → their UnifiedTrack source live in UnifiedTrackRegistry
+    // (a @Singleton) so PlaybackService's notification / media-button skip path
+    // can resolve unified tracks too. Don't redeclare here.
 
 
     init {
@@ -324,7 +326,7 @@ class PlayerViewModel @Inject constructor(
         // Store source mappings so resolveAndPlay can find the right playback source
         trackList.forEach { ut ->
             val legacyId = ut.toLegacyTrack().id
-            unifiedSourceMap[legacyId] = ut
+            unifiedTrackRegistry.put(legacyId, ut)
         }
         val legacyTrack = track.toLegacyTrack()
         queueManager.playTrackInQueue(legacyTrack, legacyTracks)
@@ -335,7 +337,7 @@ class PlayerViewModel @Inject constructor(
     fun playAllUnified(tracks: List<UnifiedTrack>) {
         if (tracks.isEmpty()) return
         tracks.forEach { ut ->
-            unifiedSourceMap[ut.toLegacyTrack().id] = ut
+            unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
         }
         val legacyTracks = tracks.map { it.toLegacyTrack() }
         queueManager.setQueue(legacyTracks, 0)
@@ -347,7 +349,7 @@ class PlayerViewModel @Inject constructor(
         if (tracks.isEmpty()) return
         try {
             tracks.forEach { ut ->
-                unifiedSourceMap[ut.toLegacyTrack().id] = ut
+                unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
             }
             val legacyTracks = tracks.map { it.toLegacyTrack() }
             queueManager.setQueue(legacyTracks, 0)
@@ -494,7 +496,7 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Check if this track has a unified source (local file, collection, etc.)
-                val unifiedTrack = unifiedSourceMap[track.id]
+                val unifiedTrack = unifiedTrackRegistry[track.id]
                 if (unifiedTrack != null) {
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
                     mediaController?.let { mc ->
