@@ -5,6 +5,14 @@ project("monochrome_native")
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/projectm
     ${CMAKE_CURRENT_BINARY_DIR}/projectm)
 
+# The ProjectM subproject defaults to appending 'd' to the library name in
+# debug builds (libprojectM-4d.so / libprojectM-4-playlistd.so), which means
+# System.loadLibrary("projectM-4") fails and triggers a scary `dlopen failed`
+# in logcat on every debug launch. Force the non-suffixed name on all config
+# types so one Kotlin loader path works for both debug and release.
+set_target_properties(projectM PROPERTIES DEBUG_POSTFIX "")
+set_target_properties(projectM_playlist PROPERTIES DEBUG_POSTFIX "")
+
 add_library(monochrome_visualizer SHARED
     projectm_bridge.cpp
     projectm_jni.cpp

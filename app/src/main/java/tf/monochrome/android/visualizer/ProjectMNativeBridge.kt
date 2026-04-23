@@ -132,18 +132,14 @@ class ProjectMNativeBridge {
 
         val isLibraryLoaded: Boolean by lazy {
             runCatching {
-                listOf("projectM-4", "projectM-4d").forEach { name ->
-                    runCatching { System.loadLibrary(name) }
-                }
-                listOf("projectM-4-playlist", "projectM-4-playlistd").forEach { name ->
-                    runCatching { System.loadLibrary(name) }
-                }
-                listOf("monochrome_visualizer").firstNotNullOfOrNull { name ->
-                    runCatching {
-                        System.loadLibrary(name)
-                        name
-                    }.getOrNull()
-                } != null
+                // Load deps in link order: core → playlist → our JNI bridge.
+                // CMakeLists.txt pins DEBUG_POSTFIX="" on these, so one name
+                // works for both debug and release and there's no scary
+                // `dlopen failed` probe in logcat on launch.
+                System.loadLibrary("projectM-4")
+                System.loadLibrary("projectM-4-playlist")
+                System.loadLibrary("monochrome_visualizer")
+                true
             }.getOrElse { error ->
                 Log.w(TAG, "Native projectM bridge unavailable", error)
                 false

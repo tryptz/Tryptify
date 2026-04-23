@@ -68,6 +68,20 @@
             </intent-filter>
         </service>
 
+        <!-- Hardware / Bluetooth media button forwarding. Media3 builds a
+             legacy MediaSessionCompat under the hood for framework compat and
+             logs "Couldn't find a unique registered media button receiver" on
+             every MediaSession init without this declaration. The receiver is
+             an empty re-export; the intent is routed to the MediaSessionService
+             automatically. -->
+        <receiver
+            android:name="androidx.media.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Android Auto Media Browser Service -->
         <service
             android:name=".auto.MonochromeMediaBrowserService"
