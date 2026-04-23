@@ -3,7 +3,9 @@ package tf.monochrome.android.ui.settings
 import android.content.Intent
 import androidx.core.net.toUri
 import java.util.Locale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -17,11 +19,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -1055,29 +1060,49 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
             onCheckedChange = { viewModel.setDevModeEnabled(it) }
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        SettingsGroupHeader("Custom Endpoint")
-        OutlinedTextField(
-            value = customInput,
-            onValueChange = { customInput = it },
-            label = { Text("Custom API URL (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedButton(onClick = {
-                viewModel.setCustomEndpoint(customInput.ifBlank { null })
-            }) { Text("Apply") }
-            if (customEndpoint != null) {
-                OutlinedButton(onClick = {
-                    customInput = ""
-                    viewModel.setCustomEndpoint(null)
-                }) { Text("Clear") }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Dev Mode API URL",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "The URL of your local Tidal HiFi API instance",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+            Spacer(modifier = Modifier.width(12.dp))
+            OutlinedTextField(
+                value = customInput,
+                onValueChange = { customInput = it },
+                placeholder = {
+                    Text(
+                        "http://127.0.0.1:8000",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                singleLine = true,
+                enabled = devModeEnabled,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setCustomEndpoint(customInput.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = customInput.trim().ifBlank { null }
+                            if (trimmed != customEndpoint) {
+                                viewModel.setCustomEndpoint(trimmed)
+                            }
+                        }
+                    }
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
