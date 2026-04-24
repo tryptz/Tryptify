@@ -46,6 +46,13 @@ public:
     DspEngine(int sampleRate, int maxBlockSize);
     ~DspEngine();
 
+    // Swap sample rate / max block without tearing down the bus graph, plugin
+    // chains, or atomic parameter state. Keeps track transitions from producing
+    // the 5–10 ms silence window we'd get from a full destroy-recreate on every
+    // 44.1k → 48k shift. Safe to call from any thread — internally holds the
+    // same chainMutex_ the audio thread does during process().
+    void reconfigure(int sampleRate, int maxBlockSize);
+
     // Audio processing — called from audio thread
     void process(float* left, float* right, int numFrames);
 

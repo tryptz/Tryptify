@@ -31,6 +31,13 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeDestroy(
     }
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeReconfigure(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr, jint sampleRate, jint maxBlockSize) {
+    auto* engine = getEngine(enginePtr);
+    if (engine) engine->reconfigure(sampleRate, maxBlockSize);
+}
+
 // ── Audio processing ────────────────────────────────────────────────────
 
 extern "C" JNIEXPORT void JNICALL

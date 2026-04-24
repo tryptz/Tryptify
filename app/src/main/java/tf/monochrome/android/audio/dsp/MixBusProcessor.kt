@@ -42,6 +42,12 @@ class MixBusProcessor @Inject constructor(
     // JNI native methods
     private external fun nativeCreate(sampleRate: Int, maxBlockSize: Int): Long
     private external fun nativeDestroy(enginePtr: Long)
+    // Live format swap that keeps the bus graph + plugin instances alive.
+    // ExoPlayer flushes AudioProcessors on every track transition; recreating
+    // the engine at that point drops audio for 5–10 ms while plugin
+    // constructors re-allocate FFT tables etc. — audible as a gap between
+    // tracks of different sample rates (44.1k → 48k is the common case).
+    private external fun nativeReconfigure(enginePtr: Long, sampleRate: Int, maxBlockSize: Int)
     private external fun nativeProcess(
         enginePtr: Long,
         inputL: FloatArray, inputR: FloatArray,
@@ -245,23 +251,21 @@ class MixBusProcessor @Inject constructor(
             || inputFormat.channelCount != pendingFormat.channelCount
 
         if (formatChanged) {
-            // Save current state so it survives engine recreation
-            val savedState = if (enginePtr != 0L) nativeGetStateJson(enginePtr) else null
-
-            if (enginePtr != 0L) {
-                nativeDestroy(enginePtr)
-            }
             inputFormat = pendingFormat
-            enginePtr = nativeCreate(inputFormat.sampleRate, MAX_BLOCK_SIZE)
+            if (enginePtr == 0L) {
+                // Cold start — no existing engine, full construct + state restore.
+                enginePtr = nativeCreate(inputFormat.sampleRate, MAX_BLOCK_SIZE)
+            } else {
+                // Hot path — live reconfigure keeps the bus graph, plugin
+                // instances, and every atomic parameter untouched. No state
+                // JSON round-trip, no FFT table reallocation, no audible gap.
+                nativeReconfigure(enginePtr, inputFormat.sampleRate, MAX_BLOCK_SIZE)
+            }
 
-            // Prepare Oxford post-chain at the new sample rate (always stereo — output is stereo)
+            // Oxford post-chain isn't part of the native engine; still needs
+            // its own sample-rate prep call on every format change.
             inflator.prepare(inputFormat.sampleRate.toDouble(), 2)
             compressor.prepare(inputFormat.sampleRate.toDouble(), 2)
-
-            // Restore state into the new engine immediately (same thread, no race)
-            if (!savedState.isNullOrEmpty() && savedState != "{}") {
-                nativeLoadStateJson(enginePtr, savedState)
-            }
 
             // Signal ready (false→true transition ensures StateFlow emits)
             _engineReady.value = false

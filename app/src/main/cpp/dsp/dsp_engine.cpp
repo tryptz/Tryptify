@@ -136,6 +136,59 @@ DspEngine::DspEngine(int sampleRate, int maxBlockSize)
     LOGD("DspEngine created: sr=%d, maxBlock=%d", sampleRate, maxBlockSize);
 }
 
+// ── Live reconfigure — no destroy, no state reload ─────────────────────
+//
+// ExoPlayer calls our AudioProcessor.configure()/flush() on every track
+// change; for transitions across sample-rate boundaries (44.1k → 48k or
+// vice-versa) a destroy + recreate takes 5–10 ms while plugin constructors
+// allocate FFT tables, delay lines, and filter state. Audible as a gap
+// between tracks.
+//
+// Instead, keep the bus graph and every plugin instance alive, and only
+// update:
+//   - the cached sample rate
+//   - SR-dependent engine-level coefficients (gain smoothing + meter ballistics)
+//   - each plugin's internal coefficients via prepare(newSr)
+//
+// Scratch buffers grow if `maxBlockSize` exceeded the previous allocation;
+// plugin prepare() calls are mandatory on SR changes because biquad
+// coefficients, FFT lengths, LFO phase increments, etc. are all SR-derived.
+void DspEngine::reconfigure(int sampleRate, int maxBlockSize) {
+    std::lock_guard<std::mutex> lock(chainMutex_);
+
+    bool srChanged = (sampleRate != sampleRate_);
+    bool blockGrew = (maxBlockSize > maxBlockSize_);
+
+    if (!srChanged && !blockGrew) return;
+
+    sampleRate_ = sampleRate;
+    if (blockGrew) {
+        maxBlockSize_ = maxBlockSize;
+        sumL_.resize(maxBlockSize_, 0.0f);
+        sumR_.resize(maxBlockSize_, 0.0f);
+        busL_.resize(maxBlockSize_, 0.0f);
+        busR_.resize(maxBlockSize_, 0.0f);
+        dryBufL_.resize(maxBlockSize_, 0.0f);
+        dryBufR_.resize(maxBlockSize_, 0.0f);
+    }
+
+    if (srChanged) {
+        // Match DspEngine() ctor derivations — keep the formulas in lock-step.
+        gainSmoothCoeff_ = 1.0f - std::exp(-1.0f / (0.005f * sampleRate_));
+        meterDecayPerSample_ = 20.0f / static_cast<float>(sampleRate_);
+        meterHoldSamples_ = static_cast<int>(1.5f * sampleRate_);
+
+        for (auto& bus : buses_) {
+            for (auto& plugin : bus.plugins) {
+                if (plugin) plugin->prepare(static_cast<double>(sampleRate_), maxBlockSize_);
+            }
+        }
+    }
+
+    LOGD("DspEngine reconfigured: sr=%d maxBlock=%d (graph preserved, srChanged=%d, blockGrew=%d)",
+         sampleRate_, maxBlockSize_, srChanged ? 1 : 0, blockGrew ? 1 : 0);
+}
+
 DspEngine::~DspEngine() {
     LOGD("DspEngine destroyed");
 }

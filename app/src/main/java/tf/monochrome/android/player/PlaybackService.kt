@@ -85,6 +85,25 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
+        // Tuned for hi-fi streaming: buffer 30 s minimum and 120 s cap so a
+        // brief cell-signal dip mid-track doesn't rebuffer, and the 48 kHz
+        // Opus / FLAC / ALAC tail has room without starving the audio
+        // thread. Playback starts after 2.5 s of buffered audio (down from
+        // the 5 s default) so tapping play feels immediate on a warm cache;
+        // rebuffer after an underrun waits for 5 s so we don't churn. See
+        // androidx.media3.exoplayer.DefaultLoadControl defaults — this
+        // widens the ceiling by 2-3× to absorb hi-bitrate streams.
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs */ 30_000,
+                /* maxBufferMs */ 120_000,
+                /* bufferForPlaybackMs */ 2_500,
+                /* bufferForPlaybackAfterRebufferMs */ 5_000,
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .setTargetBufferBytes(C.LENGTH_UNSET)
+            .build()
+
         player = ExoPlayer.Builder(this, buildRenderersFactory())
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -95,7 +114,19 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setLoadControl(loadControl)
             .build()
+            .apply {
+                // Spins up the next media item's decoder + fills 10 s of its
+                // buffer before the current track ends. Paired with the DSP
+                // engine's live reconfigure path (no destroy/create), this
+                // is what makes cross-sample-rate transitions silent.
+                setPreloadConfiguration(
+                    ExoPlayer.PreloadConfiguration(
+                        /* targetPreloadDurationUs */ 10_000_000L,
+                    )
+                )
+            }
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
