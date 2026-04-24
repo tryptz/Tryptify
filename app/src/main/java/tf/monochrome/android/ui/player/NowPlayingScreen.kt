@@ -1312,8 +1312,10 @@ private fun ModeSelector(
     onDspMixClick: () -> Unit
 ) {
     Row(
+        // 5 pills × weight(1) + 4 × 6dp gap × labelMedium text — tightened
+        // from 10dp gap so "DSP Mix" fits on one line on a 360-dp-wide phone.
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         ModePill(
             modifier = Modifier.weight(1f),
@@ -1385,7 +1387,10 @@ private fun ModePill(
                 tintAlpha = if (selected) 0.22f else 0.06f,
                 borderAlpha = if (selected) 0.18f else 0.0f
             )
-            .padding(vertical = 12.dp, horizontal = 8.dp),
+            // Horizontal padding reduced from 8 → 4 dp so a 5-pill row on a
+            // 360-dp-wide phone has enough internal width for the widest
+            // label ("DSP Mix") to render on one line.
+            .padding(vertical = 12.dp, horizontal = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -1400,7 +1405,10 @@ private fun ModePill(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (selected) Color.White else Color.White.copy(alpha = 0.6f)
+                color = if (selected) Color.White else Color.White.copy(alpha = 0.6f),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

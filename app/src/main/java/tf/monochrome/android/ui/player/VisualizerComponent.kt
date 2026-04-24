@@ -370,13 +370,18 @@ private fun ProjectMStatusOverlay(
             Text(
                 text = engineStatus.badge,
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.92f)
+                color = Color.White.copy(alpha = 0.92f),
+                maxLines = 1,
+                softWrap = false,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
             if (showFps && engineStatus.isNativeReady) {
                 Text(
                     text = "• $currentFps FPS",
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.92f)
+                    color = Color.White.copy(alpha = 0.92f),
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
