@@ -5,6 +5,7 @@ import android.os.FileObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.local.scanner.MediaScanner
@@ -21,7 +22,9 @@ class FileObserverService @Inject constructor(
     private val mediaScanner: MediaScanner
 ) {
     private val observers = mutableListOf<FileObserver>()
-    private val scope = CoroutineScope(Dispatchers.IO)
+    // SupervisorJob so one failed incremental scan doesn't cancel the whole
+    // scope and silently kill file watching for the rest of the session.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var debounceJob: Job? = null
     private var isRunning = false
 
@@ -42,11 +45,21 @@ class FileObserverService @Inject constructor(
                     val ext = path.substringAfterLast('.').lowercase()
                     if (ext !in audioExtensions) return
 
-                    // Debounce: wait 500ms after last event before scanning
+                    // Debounce: wait 500ms after last event before scanning.
+                    // Catch exceptions explicitly — an unhandled throw from
+                    // incrementalScan() would propagate to the IO thread's
+                    // uncaught handler (process crash) even with the
+                    // SupervisorJob above.
                     debounceJob?.cancel()
                     debounceJob = scope.launch {
-                        delay(500)
-                        mediaScanner.incrementalScan().collect { /* consume flow */ }
+                        try {
+                            delay(500)
+                            mediaScanner.incrementalScan().collect { /* consume flow */ }
+                        } catch (cancel: kotlinx.coroutines.CancellationException) {
+                            throw cancel
+                        } catch (t: Throwable) {
+                            android.util.Log.w("FileObserverService", "incremental scan failed, will retry on next event", t)
+                        }
                     }
                 }
             }
