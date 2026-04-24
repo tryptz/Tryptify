@@ -561,7 +561,9 @@ class PlaybackService : MediaSessionService() {
      * onMediaItemTransition listener and the existing `playQueue()` path
      * take over to resolve the actual stream URL.
      */
+    @OptIn(UnstableApi::class)
     private inner class PlaybackResumptionCallback : MediaSession.Callback {
+        @OptIn(UnstableApi::class)
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
