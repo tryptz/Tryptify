@@ -1068,15 +1068,17 @@ private fun exclusiveSubtitle(
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.AwaitingPermission ->
             "DAC detected — accept the system USB-permission prompt."
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.DeviceOpen ->
-            "DAC handle acquired ✓ — iso pump ships in next update; " +
-            "audio still flowing through the standard sink for now."
+            "DAC handle acquired ✓ — bypass engages on the next " +
+            "track (or skip the current track to engage now)."
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.InterfaceClaimed ->
             "Streaming interface claimed ✓"
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Streaming ->
             "Bit-perfect: bypassing Android audio ✓ (EQ / DSP still active)"
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Error ->
-            "Couldn't claim the DAC. Turn ON Developer Options → " +
-            "Disable USB audio routing, then re-plug the DAC."
+            "Couldn't claim the DAC's streaming interface — Android's " +
+            "audio HAL still owns it. Turn ON Developer Options → " +
+            "Disable USB audio routing, then re-toggle Exclusive USB DAC. " +
+            "Audio is currently flowing through the standard sink."
     }
 }
 

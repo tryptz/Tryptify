@@ -50,6 +50,17 @@ class LibusbUacDriver @Inject constructor(
     private val _isStreaming = MutableStateFlow(false)
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
 
+    /**
+     * Reason the most recent [start] failed, or null if it
+     * succeeded / hasn't been attempted. Lets the controller flip
+     * to a meaningful Status.Error state with a human-readable
+     * reason instead of the prior generic "DAC handle acquired"
+     * (which was misleading when claim_interface had actually
+     * failed under us).
+     */
+    private val _lastStartError = MutableStateFlow<String?>(null)
+    val lastStartError: StateFlow<String?> = _lastStartError.asStateFlow()
+
     /** Device the driver currently owns, or null. */
     private val _device = MutableStateFlow<UsbDevice?>(null)
     val device: StateFlow<UsbDevice?> = _device.asStateFlow()
@@ -165,12 +176,23 @@ class LibusbUacDriver @Inject constructor(
     fun start(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean {
         val ok = nativeStart(sampleRate, bitsPerSample, channels)
         _isStreaming.value = ok
+        // Best-effort error categorisation — the native side already
+        // logged the actual libusb error code with details. We just
+        // need the controller to know whether claim_interface was
+        // the failure (the common kernel-still-owns-it case) vs.
+        // descriptor / rate negotiation (rare, device-specific).
+        _lastStartError.value = if (ok) null else
+            "Couldn't claim the DAC's streaming interface. Most likely " +
+            "Android's audio HAL still owns it — turn ON Developer " +
+            "Options → Disable USB audio routing, then re-toggle " +
+            "Exclusive USB DAC."
         return ok
     }
 
     fun stop() {
         nativeStop()
         _isStreaming.value = false
+        _lastStartError.value = null
     }
 
     /**

@@ -122,6 +122,20 @@ class UsbExclusiveController @Inject constructor(
                 }
             }
         }
+        // When LibusbAudioSink tries to start the iso pump and fails
+        // (most common reason: the kernel UAC driver still owns the
+        // streaming interface because Developer Options → Disable USB
+        // audio routing is OFF), the driver records a reason — bump
+        // status to Error so the user gets actionable text instead of
+        // a stale "DAC handle acquired" line that doesn't say why
+        // bypass isn't engaging.
+        scope.launch {
+            driver.lastStartError.collect { err ->
+                if (err != null && enabled && !driver.isStreaming.value) {
+                    _status.value = Status.Error
+                }
+            }
+        }
     }
 
     private suspend fun reconcile() {
