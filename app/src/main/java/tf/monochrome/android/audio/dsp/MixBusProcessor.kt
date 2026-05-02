@@ -174,6 +174,22 @@ class MixBusProcessor @Inject constructor(
         // no-engine pass-through below.
         if (bypassed || enginePtr == 0L) {
             val size = inputBuffer.remaining()
+            // Nothing to forward — leave outputBuffer as-is so getOutput
+            // returns whatever it returned last time (or EMPTY_BUFFER on
+            // cold start). Without this guard, when both inputBuffer and
+            // outputBuffer happen to be the AudioProcessor.EMPTY_BUFFER
+            // singleton (the pipeline-wide shared zero-capacity buffer
+            // used during init, end-of-stream, or when an upstream
+            // processor produced nothing), the put(self) call below
+            // throws IllegalArgumentException("source buffer is this
+            // buffer"). Media3 doesn't catch it — ExoPlayer kills the
+            // playback session and the user hears it as audio skipping.
+            // The crash signature (MixBusProcessor.kt:182 in the
+            // ExoPlayerImplInternal stack) was the real cause behind a
+            // user-reported "audio skipping" bug; the libusb resubmit
+            // errors that show up in the same logs were a red herring
+            // (those are just the iso pump tearing down on USB unplug).
+            if (size == 0 || inputBuffer === outputBuffer) return
             if (outputBuffer.capacity() < size) {
                 outputBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
             } else {
