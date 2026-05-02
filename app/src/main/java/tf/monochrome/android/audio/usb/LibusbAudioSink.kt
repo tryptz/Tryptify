@@ -70,6 +70,13 @@ class LibusbAudioSink(
     private var lastPlayedFrames: Long = 0L
     private var lastPlayedAdvanceNs: Long = 0L
     private var watchdogTripped: Boolean = false
+    // True between the first successful write of a stream and the
+    // next flush/configure/reset. Used solely to log a one-shot
+    // diagnostic ("first bypass write succeeded") so a build that
+    // includes this code path is visibly distinct in logcat from
+    // an older build that doesn't — saves a "did you rebuild?"
+    // round-trip when triaging field reports.
+    private var firstWriteLogged: Boolean = false
 
     // Reusable scratch for the software-gain path. Only allocated /
     // grown when the user actually attenuates (volume < 1.0f); at
@@ -258,8 +265,53 @@ class LibusbAudioSink(
             processed.position(processed.position() + written * pcmBytesPerFrame)
         }
         framesWritten += written
+        if (!firstWriteLogged) {
+            firstWriteLogged = true
+            Log.i(TAG, "bypass first write succeeded — wrote $written frames " +
+                "at ${outBitsPerSample}b, gain=$gain")
+        }
         checkIsoPumpWatchdog()
         return !buffer.hasRemaining()
+    }
+
+    // Pause/play: ExoPlayer's DefaultAudioSink.pause() calls
+    // AudioTrack.pause(), which immediately mutes the hardware
+    // regardless of what's queued. Our libusb path has no such
+    // primitive — the iso pump keeps draining the ring on its own
+    // thread until it goes empty, so without intervention the user
+    // hears up to a full ring's worth of audio (multiple seconds
+    // depending on encoding) AFTER they hit pause. Mute by
+    // dropping queued PCM so the iso pump immediately starts
+    // padding silence on its next packet.
+    //
+    // We do NOT call driver.stop() here — stopIsoPump spins for up
+    // to a second waiting for cancelled URBs to drain (see
+    // libusb_uac_driver.cpp:stopIsoPump), which would block the
+    // pause-button latency on the audio thread. Keeping the iso
+    // pump alive over pause also means resume() doesn't need to
+    // re-claim the streaming interface, which is the slow path
+    // that occasionally wedges with EBUSY when snd-usb-audio
+    // re-attaches in the gap.
+    override fun pause() {
+        super.pause()
+        if (bypassActive) {
+            driver.flushRing()
+        }
+    }
+
+    override fun play() {
+        super.play()
+        if (bypassActive) {
+            // Resume from pause: the ring is empty (we flushed on
+            // pause) and the iso pump has been padding silence
+            // while playedFrames kept advancing. Resetting the
+            // watchdog and the position-reporting baseline avoids
+            // a false "playedFrames stuck" trip on the very next
+            // write, since by definition lastPlayedAdvanceNs is
+            // far in the past after a long pause.
+            resetWatchdog()
+            startTimeUs = C.TIME_UNSET
+        }
     }
 
     // Trips bypass off if the iso pump accepted writes but never
@@ -367,6 +419,7 @@ class LibusbAudioSink(
         lastPlayedFrames = 0L
         lastPlayedAdvanceNs = 0L
         watchdogTripped = false
+        firstWriteLogged = false
     }
 
     override fun release() {
@@ -438,13 +491,15 @@ class LibusbAudioSink(
         // before we even consider it stuck. The first ~150 ms after
         // configure can legitimately produce zero playedFrames while
         // the URBs prime, the kernel schedules iso slots, and the
-        // ring fills up to the silence head-start.
-        private const val kIsoWarmupNs: Long = 250_000_000L
+        // ring fills up to the silence head-start. 400 ms is well
+        // above the longest legit warmup we've measured but well
+        // under the ~3.5 s of back-pressure the wedged-pump bug
+        // produces in field logs, so we still recover fast enough
+        // that the user gets fallback audio before they notice the
+        // dropout.
+        private const val kIsoWarmupNs: Long = 400_000_000L
         // After warmup, this much time without playedFrames advancing
-        // means the pump isn't draining and won't recover. Tuned to
-        // be well under the ~3.5 s of back-pressure the wedged-pump
-        // bug produces in field logs, so the user gets fallback
-        // audio before they notice the dropout.
-        private const val kIsoStallNs: Long = 250_000_000L
+        // means the pump isn't draining and won't recover.
+        private const val kIsoStallNs: Long = 400_000_000L
     }
 }
