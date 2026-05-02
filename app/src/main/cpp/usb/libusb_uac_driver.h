@@ -18,12 +18,44 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
 #include <libusb.h>
 
 namespace monotrypt::usb {
+
+// Categorised reason the most recent start() returned false. Surfaced
+// to Kotlin so the Settings screen can show actionable text instead of
+// the prior "kernel still owns it" boilerplate which was wrong about
+// half the time (rate negotiation failures, clock STALLs, alloc
+// failures all looked the same to the user). Order matches Kotlin's
+// LibusbUacDriver.StartError enum.
+enum class StartError : int {
+    Ok = 0,
+    NoDevice,                  // start() before open()
+    NoMatchingAlt,             // selectAltSetting found nothing
+    ClaimInterfaceFailed,      // libusb_claim_interface (most common
+                               // — kernel UAC driver owns the iface)
+    SetAltFailed,              // libusb_set_interface_alt_setting
+    SetSampleRateFailed,       // SET_CUR/GET_CUR all fell through
+    IsoPumpAllocFailed,        // libusb_alloc_transfer returned null
+    IsoPumpSubmitFailed,       // initial libusb_submit_transfer
+};
+
+// One subrange entry returned by GET_RANGE on a clock entity. UAC2
+// §5.2.1 RANGE attribute — wNumSubRanges followed by N triples of
+// (dMIN, dMAX, dRES) each 4-byte LE. Most DACs report each supported
+// discrete rate as its own subrange with min==max; some (like USB
+// audio interfaces with a continuous PLL) report a single subrange
+// covering a range. We surface both honestly.
+struct ClockRateRange {
+    uint8_t clockId = 0;
+    uint32_t minHz = 0;
+    uint32_t maxHz = 0;
+    uint32_t resHz = 0;
+};
 
 // Negotiated PCM stream parameters (output of UAC2 enumeration).
 struct StreamFormat {
@@ -146,6 +178,26 @@ public:
 
     const StreamFormat& currentFormat() const { return format_; }
 
+    // Reason the most recent start() returned false, or Ok if it
+    // succeeded / hasn't been attempted. Reset to Ok on the next
+    // successful start.
+    StartError lastError() const {
+        return lastError_.load(std::memory_order_acquire);
+    }
+
+    // Best-effort detail string accompanying [lastError]. May be empty.
+    // Holds the libusb_strerror text or a contextual line written at
+    // the failure site.
+    std::string lastErrorDetail() const;
+
+    // Snapshot of the GET_RANGE table reported by the device's clock
+    // entities. Populated during start(); empty before any start
+    // attempt or if the device returned nothing readable. Used by the
+    // Settings UI to show what rates the DAC actually supports —
+    // people want to know whether their hi-res 24/192 file is going
+    // bit-perfect or quietly being downsampled to 48k.
+    std::vector<ClockRateRange> supportedRates() const;
+
 private:
     // Walks the active config, finds an Audio Streaming alt-setting
     // whose AS_GENERAL/AS_FORMAT_TYPE descriptors match the request,
@@ -157,6 +209,13 @@ private:
     // control transfer to the clock source entity. UAC2 puts the rate
     // on a clock-source unit, not on the endpoint like UAC1 did.
     bool setSampleRate(uint32_t hz);
+
+    // Issues GET_RANGE on the given clock entity and appends decoded
+    // (min, max, res) subranges into supportedRates_. No-op if the
+    // device returns less than the 2-byte wNumSubRanges header. Used
+    // on the success path of setSampleRate so the UI can list "44.1 /
+    // 48 / 88.2 / 96 / 176.4 / 192 kHz" beneath the active rate.
+    void captureRangeForClock(uint8_t clockId);
 
     bool startIsoPump();
     void stopIsoPump();
@@ -235,6 +294,22 @@ private:
 
     static void LIBUSB_CALL onFeedbackTrampoline(libusb_transfer* xfr);
     void onFeedback(libusb_transfer* xfr);
+
+    // Persist the most recent failure category + a human-readable
+    // detail line. Mutated only from start()'s call stack (under
+    // mutex_) and from setSampleRate; read from any thread via
+    // lastError() / lastErrorDetail() so we don't have to plumb a
+    // result code back through several layers. Reset to Ok at the
+    // top of every start() call.
+    std::atomic<StartError> lastError_{StartError::Ok};
+    mutable std::mutex errorMutex_;
+    std::string lastErrorDetail_;
+
+    // Filled at start() time by setSampleRate's GET_RANGE pass. Read
+    // by the JNI getter to surface to the UI. Guarded by the same
+    // errorMutex_ — readers and the start() writer don't race on the
+    // hot path.
+    std::vector<ClockRateRange> supportedRates_;
 };
 
 } // namespace monotrypt::usb

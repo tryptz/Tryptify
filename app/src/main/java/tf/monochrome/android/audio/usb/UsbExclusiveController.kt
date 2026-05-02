@@ -68,6 +68,19 @@ class UsbExclusiveController @Inject constructor(
     private val _status = MutableStateFlow(Status.Disabled)
     val status: StateFlow<Status> = _status.asStateFlow()
 
+    /** What the iso pump is currently doing — null when not streaming.
+     *  Forwarded straight from the driver so the UI binds to one place
+     *  (the controller) for everything bypass-related instead of
+     *  reaching into the driver from ViewModels. */
+    val diagnostics: StateFlow<BypassDiagnostics?> = driver.diagnostics
+
+    /** Categorised + detailed reason the most recent start() failed.
+     *  Null when bypass is succeeding or hasn't been attempted. */
+    val lastStartError: StateFlow<StartFailure?> = driver.lastStartError
+
+    /** GET_RANGE inventory — what rates the DAC actually supports. */
+    val supportedRates: StateFlow<List<ClockRateRange>> = driver.supportedRates
+
     private val usbManager = appContext.getSystemService(Context.USB_SERVICE) as UsbManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

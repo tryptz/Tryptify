@@ -92,6 +92,42 @@ LibusbUacDriver::~LibusbUacDriver() {
     }
 }
 
+std::string LibusbUacDriver::lastErrorDetail() const {
+    std::lock_guard<std::mutex> lock(errorMutex_);
+    return lastErrorDetail_;
+}
+
+std::vector<ClockRateRange> LibusbUacDriver::supportedRates() const {
+    std::lock_guard<std::mutex> lock(errorMutex_);
+    return supportedRates_;
+}
+
+namespace {
+
+// Members `lastError_` / `lastErrorDetail_` are private, so we route
+// through a small lambda created at the failure site. Keeping the
+// mechanism inline (rather than a setter method) avoids polluting the
+// public surface with something only the implementation needs.
+
+} // namespace
+
+// Sets [code] + [detail], logs at WARN. Internal-only — every call site
+// in this file calls it through a lambda capture so the lock + log
+// stay co-located with the failure context.
+namespace {
+struct ErrorSink {
+    std::atomic<StartError>* code;
+    std::mutex* m;
+    std::string* detail;
+    void operator()(StartError c, std::string text) const {
+        code->store(c, std::memory_order_release);
+        std::lock_guard<std::mutex> lock(*m);
+        *detail = std::move(text);
+        LOGW("start error %d: %s", static_cast<int>(c), detail->c_str());
+    }
+};
+} // namespace
+
 bool LibusbUacDriver::ensureContext() {
     if (contextReady_.load(std::memory_order_acquire)) return true;
     std::lock_guard<std::mutex> lock(mutex_);
@@ -300,7 +336,64 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
                             // verify the requested rate is supported.
                             // Type=0 means continuous [lo, hi]; other
                             // values are the discrete rate count.
-                            if (len >= 8) {
+                            //
+                            // Also push every advertised rate into
+                            // supportedRates_ so the UI can list what
+                            // this UAC1 device supports — UAC1 has no
+                            // clock entities, so we use clockId=0 as
+                            // the synthetic "endpoint clock" marker.
+                            // Only do this for alts that match our
+                            // requested channels/bits, otherwise an
+                            // unrelated 5.1 alt would pollute the list.
+                            if (len >= 8 && altChannels == channels
+                                && altBits == bitsPerSample) {
+                                int kind = p[7];
+                                int reqRate = sampleRateHz;
+                                if (kind == 0 && len >= 14) {
+                                    auto rd24 = [](const uint8_t* q) {
+                                        return static_cast<uint32_t>(q[0]) |
+                                               (static_cast<uint32_t>(q[1]) << 8) |
+                                               (static_cast<uint32_t>(q[2]) << 16);
+                                    };
+                                    uint32_t lo = rd24(p + 8);
+                                    uint32_t hi = rd24(p + 11);
+                                    rateSupportedByDescriptor =
+                                        (static_cast<uint32_t>(reqRate) >= lo &&
+                                         static_cast<uint32_t>(reqRate) <= hi);
+                                    std::lock_guard<std::mutex> elock(errorMutex_);
+                                    bool dup = false;
+                                    for (const auto& e : supportedRates_) {
+                                        if (e.minHz == lo && e.maxHz == hi) {
+                                            dup = true; break;
+                                        }
+                                    }
+                                    if (!dup) supportedRates_.push_back({0, lo, hi, 0});
+                                } else if (kind > 0) {
+                                    rateSupportedByDescriptor = false;
+                                    std::lock_guard<std::mutex> elock(errorMutex_);
+                                    for (int k = 0; k < kind; ++k) {
+                                        int off = 8 + k * 3;
+                                        if (off + 3 > len) break;
+                                        uint32_t hz =
+                                            static_cast<uint32_t>(p[off]) |
+                                            (static_cast<uint32_t>(p[off + 1]) << 8) |
+                                            (static_cast<uint32_t>(p[off + 2]) << 16);
+                                        if (static_cast<int>(hz) == reqRate) {
+                                            rateSupportedByDescriptor = true;
+                                        }
+                                        bool dup = false;
+                                        for (const auto& e : supportedRates_) {
+                                            if (e.minHz == hz && e.maxHz == hz) {
+                                                dup = true; break;
+                                            }
+                                        }
+                                        if (!dup) supportedRates_.push_back({0, hz, hz, 0});
+                                    }
+                                }
+                            } else if (len >= 8) {
+                                // Channels/bits don't match — keep the
+                                // rate-supported check working without
+                                // polluting the inventory.
                                 int kind = p[7];
                                 int reqRate = sampleRateHz;
                                 if (kind == 0 && len >= 14) {
@@ -488,6 +581,42 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
     return found;
 }
 
+void LibusbUacDriver::captureRangeForClock(uint8_t clockId) {
+    if (clockId == 0 || !device_) return;
+    uint8_t rng[256] = {0};
+    int gr = libusb_control_transfer(
+        device_, /*bmRequestType=*/0xA1, /*RANGE=*/0x02,
+        static_cast<uint16_t>(CS_SAM_FREQ_CONTROL_SEL << 8),
+        static_cast<uint16_t>(
+            (clockId << 8) | format_.controlInterfaceNum),
+        rng, sizeof(rng), 1000);
+    if (gr < 2) {
+        LOGW("captureRangeForClock(%u): GET_RANGE returned %d (no rate "
+             "inventory available — UI won't show supported rates)",
+             clockId, gr);
+        return;
+    }
+    int n = rng[0] | (rng[1] << 8);
+    std::lock_guard<std::mutex> elock(errorMutex_);
+    for (int i = 0; i < n && (2 + (i + 1) * 12) <= gr; ++i) {
+        const uint8_t* t = rng + 2 + i * 12;
+        uint32_t mn = uint32_t(t[0]) | (uint32_t(t[1]) << 8) |
+                      (uint32_t(t[2]) << 16) | (uint32_t(t[3]) << 24);
+        uint32_t mx = uint32_t(t[4]) | (uint32_t(t[5]) << 8) |
+                      (uint32_t(t[6]) << 16) | (uint32_t(t[7]) << 24);
+        uint32_t res = uint32_t(t[8]) | (uint32_t(t[9]) << 8) |
+                       (uint32_t(t[10]) << 16) | (uint32_t(t[11]) << 24);
+        bool dup = false;
+        for (const auto& e : supportedRates_) {
+            if (e.minHz == mn && e.maxHz == mx && e.resHz == res) {
+                dup = true; break;
+            }
+        }
+        if (!dup) supportedRates_.push_back({clockId, mn, mx, res});
+    }
+    LOGI("captureRangeForClock(%u): %d subrange(s) cached", clockId, n);
+}
+
 bool LibusbUacDriver::setSampleRate(uint32_t hz) {
     if (format_.uacVersion >= 0x0200) {
         // UAC2 §5.2.5.1.1 — SET_CUR(SAM_FREQ_CONTROL) on a clock
@@ -536,6 +665,12 @@ bool LibusbUacDriver::setSampleRate(uint32_t hz) {
                      winningId, format_.clockSourceId);
                 format_.clockSourceId = winningId;
             }
+            // Capture the rate inventory on the success path too so
+            // the Settings UI can show "supports 44.1 / 48 / 88.2 /
+            // 96 / 176.4 / 192 kHz" beneath the active rate. Failures
+            // already get this via the diagnostic loop below; on
+            // success we only need to ask the winning clock entity.
+            captureRangeForClock(winningId);
             return true;
         }
         // STALL or I/O error: many UAC2 DACs (Focal Bathys included)
@@ -581,13 +716,27 @@ bool LibusbUacDriver::setSampleRate(uint32_t hz) {
                      id, hzGot, gr);
                 if (gr >= 2) {
                     int n = rng[0] | (rng[1] << 8);
+                    std::lock_guard<std::mutex> elock(errorMutex_);
                     for (int i = 0; i < n && (2 + (i + 1) * 12) <= gr; ++i) {
                         const uint8_t* t = rng + 2 + i * 12;
                         uint32_t mn = uint32_t(t[0]) | (uint32_t(t[1]) << 8) |
                                       (uint32_t(t[2]) << 16) | (uint32_t(t[3]) << 24);
                         uint32_t mx = uint32_t(t[4]) | (uint32_t(t[5]) << 8) |
                                       (uint32_t(t[6]) << 16) | (uint32_t(t[7]) << 24);
-                        LOGI("    range[%d]: %u..%u Hz", i, mn, mx);
+                        uint32_t res = uint32_t(t[8]) | (uint32_t(t[9]) << 8) |
+                                       (uint32_t(t[10]) << 16) | (uint32_t(t[11]) << 24);
+                        LOGI("    range[%d]: %u..%u Hz res=%u", i, mn, mx, res);
+                        // Avoid duplicating entries if a previous
+                        // candidate clock already reported the same
+                        // subrange — happens on devices where the
+                        // SELECTOR mirrors the SOURCE's range.
+                        bool dup = false;
+                        for (const auto& e : supportedRates_) {
+                            if (e.minHz == mn && e.maxHz == mx && e.resHz == res) {
+                                dup = true; break;
+                            }
+                        }
+                        if (!dup) supportedRates_.push_back({id, mn, mx, res});
                     }
                 }
             }
@@ -650,8 +799,20 @@ bool LibusbUacDriver::setSampleRate(uint32_t hz) {
 
 bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
     std::lock_guard<std::mutex> lock(mutex_);
+    ErrorSink err{&lastError_, &errorMutex_, &lastErrorDetail_};
+    // Optimistic clear; failure sites overwrite. Successful return
+    // also clears at the bottom.
+    lastError_.store(StartError::Ok, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> elock(errorMutex_);
+        lastErrorDetail_.clear();
+        // Drop the previous start's rate inventory — we'll repopulate
+        // on this start (or leave empty if the device returns nothing).
+        supportedRates_.clear();
+    }
     if (!device_) {
-        LOGE("start() called before open()");
+        err(StartError::NoDevice, "start() called before open() — "
+            "no UsbDeviceConnection wrapped yet");
         return false;
     }
     if (streaming_.load(std::memory_order_acquire)) {
@@ -665,6 +826,12 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
 
     StreamFormat fmt{};
     if (!selectAltSetting(sampleRateHz, bitsPerSample, channels, &fmt)) {
+        err(StartError::NoMatchingAlt,
+            "no AS alt setting matches " +
+            std::to_string(sampleRateHz) + " Hz / " +
+            std::to_string(bitsPerSample) + "-bit / " +
+            std::to_string(channels) + "ch — DAC may not support "
+            "this rate at this bit depth");
         return false;
     }
 
@@ -680,12 +847,20 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
         }
         int rc = libusb_claim_interface(device_, fmt.interfaceNumber);
         if (rc != LIBUSB_SUCCESS) {
+            const char* libErr = libusb_strerror(rc);
             LOGE("claim_interface(%u) -> %d (%s) — Developer Options "
                  "'Disable USB audio routing' must be ON, AND the "
                  "older 'USB DAC bit-perfect routing' toggle must be "
                  "OFF (it grabs the device via the framework and "
                  "fights us for the claim)",
-                 fmt.interfaceNumber, rc, libusb_strerror(rc));
+                 fmt.interfaceNumber, rc, libErr);
+            err(StartError::ClaimInterfaceFailed,
+                std::string("libusb_claim_interface(") +
+                std::to_string(fmt.interfaceNumber) + ") -> " +
+                libErr + ". Most likely Android's audio HAL still " +
+                "owns the streaming interface — turn ON Developer " +
+                "Options → Disable USB audio routing, and ensure " +
+                "the framework-routing toggle (above) is OFF.");
             return false;
         }
         interfaceClaimed_ = true;
@@ -725,9 +900,20 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
     if (rc != LIBUSB_SUCCESS) {
         LOGE("set_interface_alt_setting(%u, %u) -> %d",
              format_.interfaceNumber, format_.altSetting, rc);
+        err(StartError::SetAltFailed,
+            std::string("libusb_set_interface_alt_setting(iface=") +
+            std::to_string(format_.interfaceNumber) + ", alt=" +
+            std::to_string(format_.altSetting) + ") -> " +
+            libusb_strerror(rc));
         return false;
     }
     if (!setSampleRate(static_cast<uint32_t>(sampleRateHz))) {
+        err(StartError::SetSampleRateFailed,
+            "no clock entity accepted SET_CUR(" +
+            std::to_string(sampleRateHz) +
+            " Hz) and GET_CUR didn't already report this rate. "
+            "Check the GET_RANGE log lines for what rates each "
+            "clock supports.");
         return false;
     }
 
@@ -739,6 +925,12 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
     stopRequested_.store(false, std::memory_order_relaxed);
 
     if (!startIsoPump()) {
+        // startIsoPump() sets the specific subcategory itself based
+        // on whether alloc or submit failed. Don't overwrite here.
+        if (lastError_.load(std::memory_order_relaxed) == StartError::Ok) {
+            err(StartError::IsoPumpAllocFailed,
+                "iso pump failed to start (see logcat for details)");
+        }
         return false;
     }
     streaming_.store(true, std::memory_order_release);
@@ -845,10 +1037,19 @@ bool LibusbUacDriver::startIsoPump() {
     transfers_.reserve(kNumTransfers);
     transferBuffers_.reserve(kNumTransfers);
 
+    auto setErr = [this](StartError c, const std::string& d) {
+        lastError_.store(c, std::memory_order_release);
+        std::lock_guard<std::mutex> lock(errorMutex_);
+        lastErrorDetail_ = d;
+    };
+
     for (int t = 0; t < kNumTransfers; ++t) {
         libusb_transfer* xfr = libusb_alloc_transfer(kPacketsPerTransfer);
         if (!xfr) {
             LOGE("libusb_alloc_transfer failed at #%d", t);
+            setErr(StartError::IsoPumpAllocFailed,
+                   "libusb_alloc_transfer returned null at transfer #" +
+                   std::to_string(t) + " — likely OOM");
             stopIsoPump();
             return false;
         }
@@ -882,6 +1083,9 @@ bool LibusbUacDriver::startIsoPump() {
             libusb_transfer* fxfr = libusb_alloc_transfer(/*iso pkts=*/1);
             if (!fxfr) {
                 LOGE("alloc feedback transfer %d failed", t);
+                setErr(StartError::IsoPumpAllocFailed,
+                       "libusb_alloc_transfer (feedback) returned null at #" +
+                       std::to_string(t));
                 stopIsoPump();
                 return false;
             }
@@ -918,6 +1122,9 @@ bool LibusbUacDriver::startIsoPump() {
         int rc = libusb_submit_transfer(fxfr);
         if (rc != LIBUSB_SUCCESS) {
             LOGE("initial submit feedback -> %d", rc);
+            setErr(StartError::IsoPumpSubmitFailed,
+                   std::string("libusb_submit_transfer (feedback) -> ") +
+                   libusb_strerror(rc));
             stopRequested_.store(true, std::memory_order_release);
             stopIsoPump();
             return false;
@@ -928,6 +1135,9 @@ bool LibusbUacDriver::startIsoPump() {
         int rc = libusb_submit_transfer(xfr);
         if (rc != LIBUSB_SUCCESS) {
             LOGE("initial submit_transfer -> %d", rc);
+            setErr(StartError::IsoPumpSubmitFailed,
+                   std::string("libusb_submit_transfer -> ") +
+                   libusb_strerror(rc));
             stopRequested_.store(true, std::memory_order_release);
             stopIsoPump();
             return false;

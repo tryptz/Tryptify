@@ -52,14 +52,34 @@ class LibusbUacDriver @Inject constructor(
 
     /**
      * Reason the most recent [start] failed, or null if it
-     * succeeded / hasn't been attempted. Lets the controller flip
-     * to a meaningful Status.Error state with a human-readable
-     * reason instead of the prior generic "DAC handle acquired"
-     * (which was misleading when claim_interface had actually
-     * failed under us).
+     * succeeded / hasn't been attempted. Carries both the categorised
+     * code and the native-side detail line so the UI can render
+     * actionable text without having to fish through logcat.
      */
-    private val _lastStartError = MutableStateFlow<String?>(null)
-    val lastStartError: StateFlow<String?> = _lastStartError.asStateFlow()
+    private val _lastStartError = MutableStateFlow<StartFailure?>(null)
+    val lastStartError: StateFlow<StartFailure?> = _lastStartError.asStateFlow()
+
+    /**
+     * Snapshot of the iso pump's current state: negotiated rate, bit
+     * depth, alt setting, clock entity, feedback endpoint presence,
+     * UAC version. Null when not streaming. Refreshed on every
+     * [start]/[stop] transition.
+     *
+     * The Settings UI binds to this to show "192 kHz · 24-bit · async
+     * feedback ✓ · clock #9 · UAC2 HS" beneath the toggle so the user
+     * has visible proof of what they're getting.
+     */
+    private val _diagnostics = MutableStateFlow<BypassDiagnostics?>(null)
+    val diagnostics: StateFlow<BypassDiagnostics?> = _diagnostics.asStateFlow()
+
+    /**
+     * Per-clock-entity GET_RANGE table snapshot. Empty list before
+     * any [start] succeeds, or if every clock entity refused both
+     * SET_CUR and GET_RANGE. UAC1 devices return synthetic entries
+     * (clockId=0) sourced from the AS_FORMAT_TYPE rate table.
+     */
+    private val _supportedRates = MutableStateFlow<List<ClockRateRange>>(emptyList())
+    val supportedRates: StateFlow<List<ClockRateRange>> = _supportedRates.asStateFlow()
 
     /** Device the driver currently owns, or null. */
     private val _device = MutableStateFlow<UsbDevice?>(null)
@@ -176,22 +196,31 @@ class LibusbUacDriver @Inject constructor(
     fun start(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean {
         val ok = nativeStart(sampleRate, bitsPerSample, channels)
         _isStreaming.value = ok
-        // Best-effort error categorisation — the native side already
-        // logged the actual libusb error code with details. We just
-        // need the controller to know whether claim_interface was
-        // the failure (the common kernel-still-owns-it case) vs.
-        // descriptor / rate negotiation (rare, device-specific).
-        _lastStartError.value = if (ok) null else
-            "Couldn't claim the DAC's streaming interface. Most likely " +
-            "Android's audio HAL still owns it — turn ON Developer " +
-            "Options → Disable USB audio routing, then re-toggle " +
-            "Exclusive USB DAC."
+        // Always pull the rate inventory: native populates it during
+        // start whether we succeeded or not (failure path's GET_RANGE
+        // diagnostic loop also caches into supportedRates_), and the
+        // UI wants to show "your DAC supports X / Y / Z kHz" even
+        // when the requested rate isn't one of them.
+        _supportedRates.value = ClockRateRange.decodeAll(nativeSupportedRates())
+        if (ok) {
+            _diagnostics.value = BypassDiagnostics.fromLongArray(nativeActiveStream())
+            _lastStartError.value = null
+        } else {
+            // No active stream — but we still want the UI to render
+            // the failure category. Diagnostics stays null so the
+            // "currently active" block hides.
+            _diagnostics.value = null
+            val code = StartError.fromCode(nativeLastErrorCode())
+            val detail = nativeLastErrorDetail().orEmpty()
+            _lastStartError.value = StartFailure(code, detail)
+        }
         return ok
     }
 
     fun stop() {
         nativeStop()
         _isStreaming.value = false
+        _diagnostics.value = null
         _lastStartError.value = null
     }
 
@@ -245,6 +274,16 @@ class LibusbUacDriver @Inject constructor(
     private external fun nativeWritableFrames(): Int
     private external fun nativePlayedFrames(): Long
     private external fun nativePendingFrames(): Long
+    /** Numeric category — see [StartError]; 0 = Ok / no failure recorded. */
+    private external fun nativeLastErrorCode(): Int
+    /** Free-form detail string from the native failure site. May be empty. */
+    private external fun nativeLastErrorDetail(): String?
+    /** Flat (clockId, minHz, maxHz, resHz) quads from the device's GET_RANGE,
+     *  or null/empty when no clock-entity rate inventory is available. */
+    private external fun nativeSupportedRates(): IntArray?
+    /** Packed long[] of negotiated stream parameters; null when not streaming.
+     *  See [BypassDiagnostics.fromLongArray] for the field layout. */
+    private external fun nativeActiveStream(): LongArray?
 
     companion object {
         private const val TAG = "LibusbUacDriver"

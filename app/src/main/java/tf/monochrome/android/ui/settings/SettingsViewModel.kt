@@ -55,6 +55,21 @@ class SettingsViewModel @Inject constructor(
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
         usbExclusiveController.status
 
+    /** Negotiated stream parameters when bypass is live. Settings UI
+     *  renders "192 kHz · 24-bit · UAC2 HS · async feedback ✓" from this. */
+    val usbBypassDiagnostics: StateFlow<tf.monochrome.android.audio.usb.BypassDiagnostics?> =
+        usbExclusiveController.diagnostics
+
+    /** Categorised reason the bypass failed, when it did. The UI shows
+     *  [tf.monochrome.android.audio.usb.StartFailure.actionableMessage]
+     *  in the Error subtitle. */
+    val usbBypassFailure: StateFlow<tf.monochrome.android.audio.usb.StartFailure?> =
+        usbExclusiveController.lastStartError
+
+    /** What rates the DAC actually supports, per its GET_RANGE table. */
+    val usbBypassSupportedRates: StateFlow<List<tf.monochrome.android.audio.usb.ClockRateRange>> =
+        usbExclusiveController.supportedRates
+
     /** Shared live FFT bins from the audio pipeline — same source the NowPlaying overlay uses. */
     val spectrumBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrumBins
 

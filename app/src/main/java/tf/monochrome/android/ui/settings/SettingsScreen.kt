@@ -1033,12 +1033,166 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
 
     val exclusiveEnabled by viewModel.usbExclusiveBitPerfectEnabled.collectAsState()
     val exclusiveStatus by viewModel.usbExclusiveStatus.collectAsState()
+    val diagnostics by viewModel.usbBypassDiagnostics.collectAsState()
+    val failure by viewModel.usbBypassFailure.collectAsState()
+    val supportedRates by viewModel.usbBypassSupportedRates.collectAsState()
     SettingSwitchItem(
         title = "Exclusive USB DAC (bypass Android audio)",
-        subtitle = exclusiveSubtitle(exclusiveEnabled, exclusiveStatus),
+        subtitle = exclusiveSubtitle(
+            exclusiveEnabled, exclusiveStatus, failure
+        ),
         checked = exclusiveEnabled,
         onCheckedChange = { viewModel.setUsbExclusiveBitPerfectEnabled(it) },
     )
+    // Only render the diagnostic card when the toggle is on AND we
+    // have something honest to say — either an active stream, a
+    // categorised failure, or a known rate inventory. Hidden the rest
+    // of the time so the toggle row stays clean.
+    if (exclusiveEnabled &&
+        (diagnostics != null || failure != null || supportedRates.isNotEmpty())) {
+        BypassDiagnosticsCard(
+            diagnostics = diagnostics,
+            failure = failure,
+            supportedRates = supportedRates,
+        )
+    }
+}
+
+/**
+ * Renders a compact info card beneath the exclusive-USB toggle:
+ *   - Active stream specs (when streaming): rate / bits / channels /
+ *     UAC version / device speed / async-feedback presence / clock id
+ *   - Failure detail (when not streaming and a start attempt failed)
+ *   - Supported-rates list from the device's GET_RANGE table
+ *
+ * Card styling matches the existing Settings cards. Stays terse: a
+ * Bathys at 192/24 should fit the active-stream block in two lines so
+ * the toggle below it isn't pushed off-screen.
+ */
+@Composable
+private fun BypassDiagnosticsCard(
+    diagnostics: tf.monochrome.android.audio.usb.BypassDiagnostics?,
+    failure: tf.monochrome.android.audio.usb.StartFailure?,
+    supportedRates: List<tf.monochrome.android.audio.usb.ClockRateRange>,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            if (diagnostics != null) {
+                Text(
+                    text = "Active stream",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = buildString {
+                        append(diagnostics.rateLabel())
+                        append(" · ")
+                        append(diagnostics.bitsPerSample)
+                        append("-bit · ")
+                        append(diagnostics.channels)
+                        append("ch · ")
+                        append(diagnostics.uacLabel())
+                        append(" ")
+                        append(diagnostics.speedLabel())
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    // Second line: less critical metadata. Async
+                    // feedback presence is the big one — it's the
+                    // difference between rate-locked playback and the
+                    // host drifting against the DAC's clock.
+                    text = buildString {
+                        append("alt ")
+                        append(diagnostics.altSetting)
+                        if (diagnostics.clockSourceId != 0) {
+                            append(" · clock #")
+                            append(diagnostics.clockSourceId)
+                        }
+                        append(" · ")
+                        append(
+                            if (diagnostics.hasFeedbackEndpoint)
+                                "async feedback ✓"
+                            else "no feedback EP (open-loop)"
+                        )
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (failure != null && failure.code !=
+                tf.monochrome.android.audio.usb.StartError.Ok) {
+                Text(
+                    text = "Bypass failed",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = failure.actionableMessage(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (failure.detail.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        // The native detail is technical (libusb error
+                        // codes, control-transfer info). Useful for
+                        // anyone debugging via logcat — render in mono
+                        // to make it visually distinct from the
+                        // user-facing actionable message above.
+                        text = failure.detail,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (supportedRates.isNotEmpty()) {
+                if (diagnostics != null || failure != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                Text(
+                    text = "Supported rates",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    // Most DACs expose discrete rates with min==max,
+                    // so deduplicating on the label produces the clean
+                    // "44.1 / 48 / 88.2 / 96 / 176.4 / 192 kHz" line
+                    // that Hi-Fi people care about. Continuous-range
+                    // PLLs render as "44.1–768 kHz" untouched.
+                    text = supportedRates
+                        .map { it.label() }
+                        .distinct()
+                        .joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -1054,6 +1208,7 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
 private fun exclusiveSubtitle(
     enabled: Boolean,
     status: tf.monochrome.android.audio.usb.UsbExclusiveController.Status,
+    failure: tf.monochrome.android.audio.usb.StartFailure?,
 ): String {
     if (!enabled) {
         return "Off — UAPP-style libusb output. Needs Developer Options " +
@@ -1074,11 +1229,16 @@ private fun exclusiveSubtitle(
             "Streaming interface claimed ✓"
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Streaming ->
             "Bit-perfect: bypassing Android audio ✓ (EQ / DSP still active)"
+        // The Error subtitle used to hardcode the kernel-claim story.
+        // Now we defer to whichever StartFailure category the native
+        // side reported — claim failures, rate-negotiation failures,
+        // alloc failures all surface as their own actionable line. If
+        // somehow we're in Error with no failure recorded (shouldn't
+        // happen but: defensive), fall back to the old text.
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Error ->
-            "Couldn't claim the DAC's streaming interface — Android's " +
-            "audio HAL still owns it. Turn ON Developer Options → " +
-            "Disable USB audio routing, then re-toggle Exclusive USB DAC. " +
-            "Audio is currently flowing through the standard sink."
+            failure?.actionableMessage()?.takeIf { it.isNotBlank() }
+                ?: ("Bypass couldn't engage — see logcat tagged " +
+                    "'LibusbUacDriver' for details.")
     }
 }
 

@@ -107,4 +107,100 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativePendingFrames(
     return static_cast<jlong>(w > p ? w - p : 0);
 }
 
+// --- Diagnostics surface ---------------------------------------------
+//
+// These getters back the BypassDiagnostics StateFlow surfaced to the
+// Settings UI. They're snapshot-cheap on the read side: lastError() is
+// an atomic load; lastErrorDetail() and supportedRates() each take the
+// driver's errorMutex_ briefly, which only contends with start() (a
+// rare, off-the-hot-path event).
+
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeLastErrorCode(
+    JNIEnv*, jobject) {
+    return static_cast<jint>(driver().lastError());
+}
+
+JNIEXPORT jstring JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeLastErrorDetail(
+    JNIEnv* env, jobject) {
+    std::string s = driver().lastErrorDetail();
+    return env->NewStringUTF(s.c_str());
+}
+
+// Returns a flat int[] of (clockId, minHz, maxHz, resHz) quads — one
+// quad per ClockRateRange. Length is always a multiple of 4. Empty
+// array if the driver hasn't started yet, the device returned no
+// GET_RANGE data (UAC1 with no descriptor table), or every clock
+// entity refused both SET_CUR and GET_CUR.
+//
+// Why a flat int[] instead of a typed object[]: keeps the JNI binding
+// dependency-free (no FindClass / NewObject for a packed struct) and
+// makes the marshalling unambiguous — the Kotlin side rebuilds typed
+// objects in one pass over groups of 4.
+JNIEXPORT jintArray JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeSupportedRates(
+    JNIEnv* env, jobject) {
+    auto ranges = driver().supportedRates();
+    jintArray arr = env->NewIntArray(static_cast<jsize>(ranges.size() * 4));
+    if (!arr || ranges.empty()) return arr;
+    std::vector<jint> packed;
+    packed.reserve(ranges.size() * 4);
+    for (const auto& r : ranges) {
+        packed.push_back(static_cast<jint>(r.clockId));
+        // GET_RANGE values are 32-bit unsigned (per UAC2 §5.2.1).
+        // Hz values fit in 31 bits comfortably (max valid is ~768k),
+        // so the unsigned-to-signed cast is safe in practice.
+        packed.push_back(static_cast<jint>(r.minHz));
+        packed.push_back(static_cast<jint>(r.maxHz));
+        packed.push_back(static_cast<jint>(r.resHz));
+    }
+    env->SetIntArrayRegion(arr, 0, static_cast<jsize>(packed.size()), packed.data());
+    return arr;
+}
+
+// Returns a long[] packing the negotiated stream parameters in a
+// fixed order so the Kotlin side can deserialize without tagged
+// fields. Order:
+//   [0] sampleRateHz
+//   [1] bitsPerSample
+//   [2] channels
+//   [3] interfaceNumber
+//   [4] altSetting
+//   [5] endpointAddress
+//   [6] maxPacketSize
+//   [7] bInterval
+//   [8] uacVersion (0x0100 = UAC1, 0x0200 = UAC2)
+//   [9] clockSourceId (0 if UAC1 / no resolved clock)
+//   [10] feedbackEndpointAddress (0 if absent)
+//   [11] isHighSpeed (1/0)
+//   [12] bytesPerSample (subslot size)
+// Returns null when the driver isn't streaming — caller should hide
+// the diagnostics block.
+JNIEXPORT jlongArray JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeActiveStream(
+    JNIEnv* env, jobject) {
+    if (!driver().isStreaming()) return nullptr;
+    const auto& f = driver().currentFormat();
+    jlong packed[13] = {
+        static_cast<jlong>(f.sampleRateHz),
+        static_cast<jlong>(f.bitsPerSample),
+        static_cast<jlong>(f.channels),
+        static_cast<jlong>(f.interfaceNumber),
+        static_cast<jlong>(f.altSetting),
+        static_cast<jlong>(f.endpointAddress),
+        static_cast<jlong>(f.maxPacketSize),
+        static_cast<jlong>(f.bInterval),
+        static_cast<jlong>(f.uacVersion),
+        static_cast<jlong>(f.clockSourceId),
+        static_cast<jlong>(f.feedbackEndpointAddress),
+        f.isHighSpeed ? jlong{1} : jlong{0},
+        static_cast<jlong>(f.bytesPerSample),
+    };
+    jlongArray arr = env->NewLongArray(13);
+    if (!arr) return nullptr;
+    env->SetLongArrayRegion(arr, 0, 13, packed);
+    return arr;
+}
+
 } // extern "C"
