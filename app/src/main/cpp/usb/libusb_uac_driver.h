@@ -38,6 +38,12 @@ struct StreamFormat {
     uint8_t clockSourceId = 0;
     uint8_t controlInterfaceNum = 0;
     bool isHighSpeed = true;   // affects packet timing (125us vs 1ms)
+    // UAC version, decoded from bcdADC in the AudioControl Header
+    // class-specific descriptor (UAC1 = 0x0100, UAC2 = 0x0200).
+    // Different rate-set wire format and different AS_FORMAT_TYPE
+    // layout — Focal Bathys is UAC1; most newer hi-res DACs are
+    // UAC2.
+    uint16_t uacVersion = 0x0200;
     // Async iso feedback IN endpoint (UAC2 §3.16.2.2). Zero if the
     // device is adaptive/sync — most quality DACs (incl. Focal Bathys)
     // are async and expose one. The host reads a 16.16 fixed-point

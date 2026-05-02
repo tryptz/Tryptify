@@ -1056,8 +1056,9 @@ private fun exclusiveSubtitle(
     status: tf.monochrome.android.audio.usb.UsbExclusiveController.Status,
 ): String {
     if (!enabled) {
-        return "Off — UAPP-style libusb output. Requires Developer " +
-            "Options → Disable USB audio routing → ON before turning on."
+        return "Off — UAPP-style libusb output. Needs Developer Options " +
+            "→ Disable USB audio routing → ON, otherwise Android's audio " +
+            "HAL will keep grabbing the DAC and fight us for it."
     }
     return when (status) {
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Disabled ->

@@ -42,6 +42,12 @@ class LibusbAudioSink(
     private var framesWritten: Long = 0L
     private var startTimeUs: Long = C.TIME_UNSET
     private var pcmBytesPerFrame: Int = 0
+    // Throttle for the lazy-engage path so that if driver.start
+    // returns false for the current format, we don't hammer it on
+    // every handleBuffer (~50× per second) — that flooded logcat
+    // with SET_CUR errors during the UAC1 bug. Reset on
+    // configure/flush so the next track gets a fresh attempt.
+    private var lastEngageFailHash: Int = 0
 
     override fun configure(
         inputFormat: Format,
@@ -53,6 +59,7 @@ class LibusbAudioSink(
         // succeeds; if it doesn't, audio still plays via the delegate.
         super.configure(inputFormat, specifiedBufferSize, outputChannels)
         configuredFormat = inputFormat
+        lastEngageFailHash = 0   // fresh attempt for the new format
 
         val rate = inputFormat.sampleRate
         val channels = inputFormat.channelCount
@@ -130,15 +137,26 @@ class LibusbAudioSink(
                 val rate = fmt.sampleRate
                 val ch = fmt.channelCount
                 val bits = pcmBitsFromEncoding(fmt.pcmEncoding)
-                if (rate > 0 && ch > 0 && bits > 0) {
+                val fmtHash = (rate * 31 + ch) * 31 + bits
+                if (rate > 0 && ch > 0 && bits > 0 &&
+                    fmtHash != lastEngageFailHash) {
                     bypassActive = if (driver.isStreamingFormat(rate, bits, ch)) {
                         true
                     } else {
                         driver.start(rate, bits, ch)
                     }
                     if (bypassActive) {
+                        lastEngageFailHash = 0
                         Log.i(TAG, "lazy-engaged bypass mid-stream " +
                             "($rate/${bits}b/${ch}ch)")
+                    } else {
+                        // Cache the failed format so we don't retry
+                        // until configure or flush clears it. Without
+                        // this, every handleBuffer (~50/s) re-tries
+                        // and floods logcat with the same error.
+                        lastEngageFailHash = fmtHash
+                        Log.w(TAG, "bypass engage failed for "
+                            + "$rate/${bits}b/${ch}ch — staying on delegate")
                     }
                 }
             }
@@ -224,6 +242,7 @@ class LibusbAudioSink(
             framesWritten = 0L
             startTimeUs = C.TIME_UNSET
         }
+        lastEngageFailHash = 0
     }
 
     override fun reset() {

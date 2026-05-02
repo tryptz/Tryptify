@@ -30,7 +30,9 @@ constexpr uint8_t AS_GENERAL            = 0x01;
 constexpr uint8_t AS_FORMAT_TYPE        = 0x02;
 constexpr uint8_t FORMAT_TYPE_I         = 0x01;
 
-// UAC2 class-specific request: SET_CUR on Sample Rate (CS_SAM_FREQ_CONTROL).
+// UAC2: SET_CUR on Sample Rate (CS_SAM_FREQ_CONTROL) of a clock
+// source entity. UAC1: SET_CUR on SAMPLING_FREQ_CONTROL of the iso
+// data endpoint, 3-byte LE rate. Both share bRequest = 0x01.
 constexpr uint8_t REQ_SET_CUR              = 0x01;
 constexpr uint16_t CS_SAM_FREQ_CONTROL_SEL = 0x01;
 
@@ -161,12 +163,14 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
         return false;
     }
 
-    // First pass: locate AudioControl interface so we can discover
-    // the clock-source ID. UAC2 puts sample-rate control on a clock
-    // entity, not on the streaming endpoint — without an ID, we
-    // can't issue SET_CUR.
+    // First pass: locate AudioControl interface, decode bcdADC
+    // (UAC version) from its Header class-specific descriptor, and
+    // for UAC2 harvest the clock-source entity ID. UAC1 has no
+    // clock entities — sample-rate control lives on the data
+    // endpoint instead.
     uint8_t controlIface = 0xFF;
     uint8_t clockId = 0;
+    uint16_t uacVersion = 0x0200;   // assume UAC2 unless header says otherwise
     bool foundControl = false;
     for (uint8_t i = 0; i < config->bNumInterfaces; ++i) {
         const libusb_interface& iface = config->interface[i];
@@ -177,9 +181,12 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
             controlIface = alt.bInterfaceNumber;
             walkExtra(alt.extra, alt.extra_length,
                 [&](const uint8_t* p, int len) {
-                    if (isClassDescriptor(p, len, CS_INTERFACE, AC_CLOCK_SOURCE) && len >= 4) {
+                    if (isClassDescriptor(p, len, CS_INTERFACE, AC_HEADER) && len >= 5) {
+                        // bcdADC is little-endian at offset 3..4.
+                        uacVersion = static_cast<uint16_t>(p[3]) |
+                                     (static_cast<uint16_t>(p[4]) << 8);
+                    } else if (isClassDescriptor(p, len, CS_INTERFACE, AC_CLOCK_SOURCE) && len >= 4) {
                         clockId = p[3];   // bClockID
-                        return true;
                     }
                     return false;
                 });
@@ -193,6 +200,9 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
         libusb_free_config_descriptor(config);
         return false;
     }
+    LOGI("AudioControl iface %u, UAC version 0x%04x%s",
+         controlIface, uacVersion,
+         (uacVersion < 0x0200) ? " (UAC1)" : " (UAC2)");
 
     // Second pass: walk AudioStreaming alt settings and find one
     // matching the requested rate/depth/channels. UAC2 doesn't list
@@ -209,21 +219,78 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
             if (alt.bAlternateSetting == 0) continue;   // alt 0 = idle
 
             int altChannels = 0, altBits = 0, altSubslot = 0;
+            bool rateSupportedByDescriptor = (uacVersion >= 0x0200);
             walkExtra(alt.extra, alt.extra_length,
                 [&](const uint8_t* p, int len) {
-                    if (isClassDescriptor(p, len, CS_INTERFACE, AS_GENERAL) && len >= 16) {
-                        // bNrChannels at offset 10 (after bTerminalLink+bmControls+bFormatType+bmFormats[4])
-                        altChannels = p[10];
-                    } else if (isClassDescriptor(p, len, CS_INTERFACE, AS_FORMAT_TYPE) && len >= 6) {
-                        if (p[3] == FORMAT_TYPE_I) {
-                            altSubslot = p[4]; // bSubslotSize
-                            altBits = p[5];    // bBitResolution
+                    if (isClassDescriptor(p, len, CS_INTERFACE, AS_GENERAL)) {
+                        // UAC2 AS_GENERAL is 16 bytes and carries
+                        // bNrChannels at p[10]. UAC1 AS_GENERAL is
+                        // 7 bytes and has no channel field — channels
+                        // come from AS_FORMAT_TYPE there.
+                        if (uacVersion >= 0x0200 && len >= 16) {
+                            altChannels = p[10];
+                        }
+                    } else if (isClassDescriptor(p, len, CS_INTERFACE, AS_FORMAT_TYPE)
+                               && len >= 7 && p[3] == FORMAT_TYPE_I) {
+                        if (uacVersion >= 0x0200) {
+                            // UAC2 FORMAT_TYPE_I: bSubslotSize @ p[4],
+                            // bBitResolution @ p[5].
+                            altSubslot = p[4];
+                            altBits = p[5];
+                        } else {
+                            // UAC1 FORMAT_TYPE_I: bNrChannels @ p[4],
+                            // bSubframeSize @ p[5], bBitResolution
+                            // @ p[6], bSamFreqType @ p[7], then the
+                            // sample frequency table or [lower,upper]
+                            // continuous range.
+                            altChannels = p[4];
+                            altSubslot = p[5];
+                            altBits = p[6];
+                            // Walk the sample-frequency table to
+                            // verify the requested rate is supported.
+                            // Type=0 means continuous [lo, hi]; other
+                            // values are the discrete rate count.
+                            if (len >= 8) {
+                                int kind = p[7];
+                                int reqRate = sampleRateHz;
+                                if (kind == 0 && len >= 14) {
+                                    auto rd24 = [](const uint8_t* q) {
+                                        return static_cast<uint32_t>(q[0]) |
+                                               (static_cast<uint32_t>(q[1]) << 8) |
+                                               (static_cast<uint32_t>(q[2]) << 16);
+                                    };
+                                    uint32_t lo = rd24(p + 8);
+                                    uint32_t hi = rd24(p + 11);
+                                    rateSupportedByDescriptor =
+                                        (static_cast<uint32_t>(reqRate) >= lo &&
+                                         static_cast<uint32_t>(reqRate) <= hi);
+                                } else if (kind > 0) {
+                                    rateSupportedByDescriptor = false;
+                                    for (int k = 0; k < kind; ++k) {
+                                        int off = 8 + k * 3;
+                                        if (off + 3 > len) break;
+                                        uint32_t hz =
+                                            static_cast<uint32_t>(p[off]) |
+                                            (static_cast<uint32_t>(p[off + 1]) << 8) |
+                                            (static_cast<uint32_t>(p[off + 2]) << 16);
+                                        if (static_cast<int>(hz) == reqRate) {
+                                            rateSupportedByDescriptor = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     return false;
                 });
 
             if (altChannels != channels || altBits != bitsPerSample) continue;
+            if (!rateSupportedByDescriptor) {
+                LOGW("alt %u advertises %dch/%db but not %d Hz",
+                     alt.bAlternateSetting, channels, bitsPerSample, sampleRateHz);
+                continue;
+            }
 
             // Find the OUT iso data EP and (optionally) the IN iso
             // feedback EP. Async UAC2 endpoints have:
@@ -256,6 +323,7 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
             out_fmt->controlInterfaceNum = controlIface;
             out_fmt->isHighSpeed =
                 libusb_get_device_speed(dev) >= LIBUSB_SPEED_HIGH;
+            out_fmt->uacVersion = uacVersion;
             if (feedback) {
                 out_fmt->feedbackEndpointAddress = feedback->bEndpointAddress;
                 out_fmt->feedbackMaxPacketSize = feedback->wMaxPacketSize;
@@ -280,30 +348,66 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
 }
 
 bool LibusbUacDriver::setSampleRate(uint32_t hz) {
-    // UAC2 5.2.5.1.1 layout:
-    //   bmRequestType = 0x21 (Class | Interface | Host-to-Device)
+    if (format_.uacVersion >= 0x0200) {
+        // UAC2 §5.2.5.1.1 — set on a clock-source entity, 32-bit LE.
+        //   bmRequestType = 0x21 (Class | Interface | Host-to-Device)
+        //   bRequest      = SET_CUR (0x01)
+        //   wValue        = (CS_SAM_FREQ_CONTROL << 8) | 0
+        //   wIndex        = (clockSourceId << 8) | controlInterfaceNum
+        //   wLength       = 4
+        uint8_t data[4] = {
+            static_cast<uint8_t>(hz & 0xFF),
+            static_cast<uint8_t>((hz >> 8) & 0xFF),
+            static_cast<uint8_t>((hz >> 16) & 0xFF),
+            static_cast<uint8_t>((hz >> 24) & 0xFF),
+        };
+        int rc = libusb_control_transfer(
+            device_,
+            /*bmRequestType=*/0x21,
+            /*bRequest=*/REQ_SET_CUR,
+            /*wValue=*/static_cast<uint16_t>(CS_SAM_FREQ_CONTROL_SEL << 8),
+            /*wIndex=*/static_cast<uint16_t>(
+                (format_.clockSourceId << 8) | format_.controlInterfaceNum),
+            data, 4,
+            /*timeout=*/1000);
+        if (rc != 4) {
+            LOGE("UAC2 SET_CUR sample rate %u Hz -> %d", hz, rc);
+            return false;
+        }
+        return true;
+    }
+    // UAC1 §5.2.3.2.3.1 — set on the iso DATA endpoint, 24-bit LE.
+    //   bmRequestType = 0x22 (Class | Endpoint | Host-to-Device)
     //   bRequest      = SET_CUR (0x01)
-    //   wValue        = (CS_SAM_FREQ_CONTROL << 8) | 0
-    //   wIndex        = (clockSourceId << 8) | controlInterfaceNum
-    //   wLength       = 4 (uint32 LE rate)
-    uint8_t data[4] = {
+    //   wValue        = (SAMPLING_FREQ_CONTROL << 8) | 0  (0x0100)
+    //   wIndex        = endpointAddress
+    //   wLength       = 3
+    uint8_t data[3] = {
         static_cast<uint8_t>(hz & 0xFF),
         static_cast<uint8_t>((hz >> 8) & 0xFF),
         static_cast<uint8_t>((hz >> 16) & 0xFF),
-        static_cast<uint8_t>((hz >> 24) & 0xFF),
     };
     int rc = libusb_control_transfer(
         device_,
-        /*bmRequestType=*/0x21,
+        /*bmRequestType=*/0x22,
         /*bRequest=*/REQ_SET_CUR,
         /*wValue=*/static_cast<uint16_t>(CS_SAM_FREQ_CONTROL_SEL << 8),
-        /*wIndex=*/static_cast<uint16_t>(
-            (format_.clockSourceId << 8) | format_.controlInterfaceNum),
-        data, 4,
+        /*wIndex=*/static_cast<uint16_t>(format_.endpointAddress),
+        data, 3,
         /*timeout=*/1000);
-    if (rc != 4) {
-        LOGE("SET_CUR sample rate %u Hz -> %d", hz, rc);
-        return false;
+    if (rc != 3) {
+        // Many UAC1 devices accept the 32-bit form on the endpoint
+        // too — try as a fallback before giving up.
+        uint8_t data4[4] = { data[0], data[1], data[2], 0 };
+        rc = libusb_control_transfer(
+            device_, 0x22, REQ_SET_CUR,
+            static_cast<uint16_t>(CS_SAM_FREQ_CONTROL_SEL << 8),
+            static_cast<uint16_t>(format_.endpointAddress),
+            data4, 4, 1000);
+        if (rc != 4) {
+            LOGE("UAC1 SET_CUR sample rate %u Hz -> %d (3-byte and 4-byte both failed)", hz, rc);
+            return false;
+        }
     }
     return true;
 }
