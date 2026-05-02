@@ -135,6 +135,12 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         appScope.launch {
             tf.monochrome.android.audio.dsp.DspNativeLoader.ensureLoaded()
         }
+        // libusb gets the same off-thread warm-up so the dlopen + libusb_init
+        // don't land on the audio thread the first time the user toggles
+        // exclusive USB output.
+        appScope.launch {
+            runCatching { tf.monochrome.android.audio.usb.UsbNativeLoader.ensureLoaded() }
+        }
         // Restore auth on app start, then register this device against whichever
         // user is signed in. The collector re-fires on sign-in / sign-out.
         appScope.launch {

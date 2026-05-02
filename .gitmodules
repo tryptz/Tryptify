@@ -6,3 +6,7 @@
 	path = third_party/projectm
 	url = https://github.com/projectM-visualizer/projectm.git
 	branch = v4.1.6
+[submodule "third_party/libusb"]
+	path = third_party/libusb
+	url = https://github.com/libusb/libusb
+	branch = master

@@ -161,6 +161,8 @@ class PreferencesManager @Inject constructor(
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
         private val USB_BIT_PERFECT_ENABLED = booleanPreferencesKey("usb_bit_perfect_enabled")
+        private val USB_EXCLUSIVE_BIT_PERFECT_ENABLED =
+            booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
         // Powers of two mirroring the user-facing chip row in Settings.
         // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
         // both together if you add another step.
@@ -816,6 +818,20 @@ class PreferencesManager @Inject constructor(
     val usbBitPerfectEnabled: Flow<Boolean> = dataStore.data.map { it[USB_BIT_PERFECT_ENABLED] ?: false }
     suspend fun setUsbBitPerfectEnabled(enabled: Boolean) {
         dataStore.edit { it[USB_BIT_PERFECT_ENABLED] = enabled }
+    }
+
+    /**
+     * Exclusive UAC2 path — libusb-backed, bypasses Android's audio
+     * framework entirely (UAPP-style). Distinct from
+     * [usbBitPerfectEnabled] which only pins routing inside the
+     * framework. Default false; requires the user to also have
+     * "Disable USB audio routing" on in Developer Options for the
+     * libusb claim to succeed on most non-rooted devices.
+     */
+    val usbExclusiveBitPerfectEnabled: Flow<Boolean> =
+        dataStore.data.map { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] ?: false }
+    suspend fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) {
+        dataStore.edit { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] = enabled }
     }
 
     // --- Library / Local Media ---

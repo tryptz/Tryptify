@@ -1030,6 +1030,16 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
         checked = enabled,
         onCheckedChange = { viewModel.setUsbBitPerfectEnabled(it) },
     )
+
+    val exclusiveEnabled by viewModel.usbExclusiveBitPerfectEnabled.collectAsState()
+    SettingSwitchItem(
+        title = "Exclusive USB DAC (bypass Android audio)",
+        subtitle = "UAPP-style libusb output. Requires Developer Options → " +
+            "Disable USB audio routing → ON. Stage 1 (scaffolding) — full " +
+            "iso-transfer pump ships in a follow-up.",
+        checked = exclusiveEnabled,
+        onCheckedChange = { viewModel.setUsbExclusiveBitPerfectEnabled(it) },
+    )
 }
 
 // ─── Tab 6: Downloads ──────────────────────────────────────────────────

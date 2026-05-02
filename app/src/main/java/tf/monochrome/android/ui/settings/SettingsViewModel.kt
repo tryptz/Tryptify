@@ -105,6 +105,8 @@ class SettingsViewModel @Inject constructor(
 
     val usbBitPerfectEnabled: StateFlow<Boolean> = preferences.usbBitPerfectEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val usbExclusiveBitPerfectEnabled: StateFlow<Boolean> = preferences.usbExclusiveBitPerfectEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     /** Human-readable name of the attached USB DAC, or null when nothing is plugged in. */
     val usbOutputDeviceName: StateFlow<String?> =
         usbAudioRouter.usbOutputDevice
@@ -307,6 +309,7 @@ class SettingsViewModel @Inject constructor(
     fun setDspMixerEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setDspEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
     fun setUsbBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setUsbBitPerfectEnabled(enabled) } }
+    fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setUsbExclusiveBitPerfectEnabled(enabled) } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
 
     // --- Audio speed actions ---
