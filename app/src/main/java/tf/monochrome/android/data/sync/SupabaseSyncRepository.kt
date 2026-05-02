@@ -111,7 +111,11 @@ data class SbPlayHistory(
     val album_title: String? = null,
     val album_cover: String? = null,
     val audio_quality: String? = null,
-    val played_at: String? = null
+    val played_at: String? = null,
+    // Mirrors history_tracks.unifiedJson on the local DB. Carries the
+    // serialized UnifiedTrack so cross-device re-routing of Recently Played
+    // doesn't fall back to TIDAL with a Qobuz id / file-path hash.
+    val unified_json: String? = null,
 )
 
 /**
@@ -345,7 +349,8 @@ class SupabaseSyncRepository @Inject constructor(
                     album_id = track.albumId,
                     album_title = track.albumTitle,
                     album_cover = track.albumCover,
-                    audio_quality = track.audioQuality
+                    audio_quality = track.audioQuality,
+                    unified_json = track.unifiedJson,
                 )
             )
         }.onFailure { Log.e(TAG, "pushHistoryTrack failed: ${it.message}") }
