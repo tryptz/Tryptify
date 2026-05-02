@@ -1032,14 +1032,51 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     )
 
     val exclusiveEnabled by viewModel.usbExclusiveBitPerfectEnabled.collectAsState()
+    val exclusiveStatus by viewModel.usbExclusiveStatus.collectAsState()
     SettingSwitchItem(
         title = "Exclusive USB DAC (bypass Android audio)",
-        subtitle = "UAPP-style libusb output. Requires Developer Options → " +
-            "Disable USB audio routing → ON. Stage 1 (scaffolding) — full " +
-            "iso-transfer pump ships in a follow-up.",
+        subtitle = exclusiveSubtitle(exclusiveEnabled, exclusiveStatus),
         checked = exclusiveEnabled,
         onCheckedChange = { viewModel.setUsbExclusiveBitPerfectEnabled(it) },
     )
+}
+
+/**
+ * Renders the controller's real state instead of just echoing the
+ * toggle. Status flows through:
+ *  Disabled → NoDevice → AwaitingPermission → DeviceOpen
+ *  (→ InterfaceClaimed → Streaming once Stage 2/3 land).
+ *
+ * Honest about the Stage-1 ceiling: even when everything works, the
+ * iso pump isn't running yet so audio is still going through the
+ * standard sink. The DeviceOpen string says so.
+ */
+private fun exclusiveSubtitle(
+    enabled: Boolean,
+    status: tf.monochrome.android.audio.usb.UsbExclusiveController.Status,
+): String {
+    if (!enabled) {
+        return "Off — UAPP-style libusb output. Requires Developer " +
+            "Options → Disable USB audio routing → ON before turning on."
+    }
+    return when (status) {
+        tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Disabled ->
+            "Starting up…"
+        tf.monochrome.android.audio.usb.UsbExclusiveController.Status.NoDevice ->
+            "On, waiting for a USB DAC to be plugged in."
+        tf.monochrome.android.audio.usb.UsbExclusiveController.Status.AwaitingPermission ->
+            "DAC detected — accept the system USB-permission prompt."
+        tf.monochrome.android.audio.usb.UsbExclusiveController.Status.DeviceOpen ->
+            "DAC handle acquired ✓ — iso pump ships in next update; " +
+            "audio still flowing through the standard sink for now."
+        tf.monochrome.android.audio.usb.UsbExclusiveController.Status.InterfaceClaimed ->
+            "Streaming interface claimed ✓"
+        tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Streaming ->
+            "Bit-perfect: bypassing Android audio ✓"
+        tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Error ->
+            "Couldn't claim the DAC. Turn ON Developer Options → " +
+            "Disable USB audio routing, then re-plug the DAC."
+    }
 }
 
 // ─── Tab 6: Downloads ──────────────────────────────────────────────────

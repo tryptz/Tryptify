@@ -47,8 +47,13 @@ class SettingsViewModel @Inject constructor(
     private val supabaseAuthManager: SupabaseAuthManager,
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
+    private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    /** Honest live status of the libusb exclusive-output path. */
+    val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
+        usbExclusiveController.status
 
     /** Shared live FFT bins from the audio pipeline — same source the NowPlaying overlay uses. */
     val spectrumBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrumBins

@@ -80,6 +80,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var crashLogger: CrashLogger
 
+    @Inject
+    lateinit var usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -141,6 +144,10 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         appScope.launch {
             runCatching { tf.monochrome.android.audio.usb.UsbNativeLoader.ensureLoaded() }
         }
+        // Wire the Exclusive USB DAC toggle to actual driver lifecycle
+        // and start publishing real status to Settings UI. Without this,
+        // the toggle is a persisted boolean with no observable effect.
+        usbExclusiveController.start()
         // Restore auth on app start, then register this device against whichever
         // user is signed in. The collector re-fires on sign-in / sign-out.
         appScope.launch {
