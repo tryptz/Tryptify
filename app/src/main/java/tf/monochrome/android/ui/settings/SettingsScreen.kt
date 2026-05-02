@@ -973,6 +973,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 // + more JNI / native overhead per second; larger = lower CPU at the
 // cost of slightly later parameter response. Mirrors the buffer-size
 // dropdown most pro-audio apps expose.
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
     val current by viewModel.dspBlockSize.collectAsState()
@@ -986,19 +987,25 @@ private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Row(
+    androidx.compose.foundation.layout.FlowRow(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         viewModel.dspBlockSizes.forEach { size ->
             FilterChip(
                 selected = size == current,
                 onClick = { viewModel.setDspBlockSize(size) },
-                label = { Text(size.toString()) },
-                modifier = Modifier.weight(1f),
+                label = { Text(formatBlockSize(size)) },
             )
         }
     }
+}
+
+/** "8192" → "8K", "16384" → "16K" so the chip row stays readable. */
+private fun formatBlockSize(size: Int): String = when {
+    size >= 1024 && size % 1024 == 0 -> "${size / 1024}K"
+    else -> size.toString()
 }
 
 // ─── Tab 6: Downloads ──────────────────────────────────────────────────

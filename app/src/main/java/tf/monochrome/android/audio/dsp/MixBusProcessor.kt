@@ -83,7 +83,13 @@ class MixBusProcessor @Inject constructor(
 
     companion object {
         init { DspNativeLoader.ensureLoaded() }
-        const val MAX_BLOCK_SIZE = 4096
+        // Upper bound on the native engine's scratch allocation (sumL/R,
+        // busL/R, dryBufL/R) and the chunk-scratch float arrays on the
+        // Kotlin side. Sized to the largest entry in
+        // PreferencesManager.DSP_BLOCK_SIZES so the user can pick 16k
+        // without ever crossing a reconfigure path. ~6 × 16384 × 4B ≈
+        // 384 KB resident; trivial.
+        const val MAX_BLOCK_SIZE = 16384
     }
 
     fun getEnginePtr(): Long = enginePtr

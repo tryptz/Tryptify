@@ -160,8 +160,10 @@ class PreferencesManager @Inject constructor(
         private val DSP_ENABLED = booleanPreferencesKey("dsp_enabled")
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
-        // Powers of two mirroring the user-facing dropdown in Settings.
-        val DSP_BLOCK_SIZES = listOf(128, 256, 512, 1024, 2048)
+        // Powers of two mirroring the user-facing chip row in Settings.
+        // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
+        // both together if you add another step.
+        val DSP_BLOCK_SIZES = listOf(128, 256, 512, 1024, 2048, 4096, 8192, 16384)
 
         // Library tab order
         private val LIBRARY_TAB_ORDER = stringPreferencesKey("library_tab_order")
