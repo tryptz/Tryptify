@@ -1072,7 +1072,7 @@ private fun exclusiveSubtitle(
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.InterfaceClaimed ->
             "Streaming interface claimed ✓"
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Streaming ->
-            "Bit-perfect: bypassing Android audio ✓"
+            "Bit-perfect: bypassing Android audio ✓ (EQ / DSP still active)"
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Error ->
             "Couldn't claim the DAC. Turn ON Developer Options → " +
             "Disable USB audio routing, then re-plug the DAC."

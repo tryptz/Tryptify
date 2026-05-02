@@ -322,9 +322,28 @@ class PlaybackService : MediaSessionService() {
                     // open, configure() spins up the iso pump and
                     // handleBuffer() routes PCM to the DAC directly,
                     // bypassing AudioTrack + the HAL.
+                    //
+                    // Processors are passed in so the libusb path runs
+                    // the SAME DSP / EQ / spectrum / ProjectM-tap chain
+                    // DefaultAudioSink would. The processors are
+                    // singletons but only one of the two paths
+                    // configures + drains them at a time (bypassActive
+                    // gates inside LibusbAudioSink), so there's no
+                    // contention.
                     tf.monochrome.android.audio.usb.LibusbAudioSink(
                         delegate = defaultSink,
                         driver = libusbDriver,
+                        processors = listOf(
+                            mixBusProcessor,
+                            autoEqProcessor,
+                            parametricEqProcessor,
+                            spectrumAnalyzerTap,
+                            // ProjectM tap intentionally omitted from
+                            // the bypass chain — the inline pump runs
+                            // on the renderer thread and the visualizer
+                            // bus sometimes blocks on its consumer.
+                            // Spectrum tap is light-weight and fine.
+                        ),
                     )
                 } catch (error: Exception) {
                     projectMEngineRepository.reportAudioTapFailure(

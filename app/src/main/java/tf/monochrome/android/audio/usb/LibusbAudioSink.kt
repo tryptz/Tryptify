@@ -3,6 +3,7 @@ package tf.monochrome.android.audio.usb
 import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
@@ -17,14 +18,12 @@ import java.nio.ByteOrder
  * one of the ~35 AudioSink methods doing the right thing without
  * us having to re-implement them.
  *
- * Honest scope of this commit:
- *  - When the libusb path is hot, audio bypasses the
- *    DefaultAudioSink-internal AudioProcessor chain — i.e. mixBus
- *    DSP, AutoEQ, parametric EQ, the spectrum tap, and the ProjectM
- *    audio tap don't run. Exclusive mode is therefore raw
- *    bit-perfect playback for now. Bringing the processor chain
- *    inline is a follow-up: will run them on the buffer here before
- *    [LibusbUacDriver.write], with a separate config() pass.
+ * Honest scope:
+ *  - When bypass is hot, the sink runs the same AudioProcessor chain
+ *    that DefaultAudioSink would (mixBus DSP, AutoEQ, parametric EQ,
+ *    spectrum FFT, ProjectM tap) inline via [AudioProcessorChain],
+ *    then writes the post-DSP PCM to libusb. So EQ + visualizer keep
+ *    working in exclusive mode.
  *  - getCurrentPositionUs uses frames-written accounting, ignoring
  *    iso buffer-depth latency (~32 ms at 48 kHz w/ defaults).
  *    A/V sync is "good enough" for music; would need correction for
@@ -34,8 +33,10 @@ import java.nio.ByteOrder
 class LibusbAudioSink(
     delegate: AudioSink,
     private val driver: LibusbUacDriver,
+    processors: List<AudioProcessor> = emptyList(),
 ) : ForwardingAudioSink(delegate) {
 
+    private val chain = AudioProcessorChain(processors)
     private var bypassActive = false
     private var configuredFormat: Format? = null
     private var framesWritten: Long = 0L
@@ -60,22 +61,37 @@ class LibusbAudioSink(
             bypassActive = false
             return
         }
-        pcmBytesPerFrame = (bits / 8) * channels
 
-        // Driver only attempts start() when the user toggle is on AND
-        // a DAC handle was acquired by UsbExclusiveController — both
-        // gating happens in driver.isOpen.value upstream. start()
-        // returns false on any descriptor-mismatch / EBUSY / fractional
-        // rate; bypassActive stays false and we fall through.
+        // Configure the inline DSP chain with the same input format
+        // the renderer is feeding us. Output format may change (e.g.
+        // an upsampler would lift the rate); we negotiate the libusb
+        // alt setting against the *post-chain* format so the DAC
+        // sees what the chain actually produced.
+        val chainOut = chain.configure(
+            AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
+        )
+        val outRate = if (chainOut != AudioProcessor.AudioFormat.NOT_SET)
+            chainOut.sampleRate else rate
+        val outChans = if (chainOut != AudioProcessor.AudioFormat.NOT_SET)
+            chainOut.channelCount else channels
+        val outBits = if (chainOut != AudioProcessor.AudioFormat.NOT_SET)
+            pcmBitsFromEncoding(chainOut.encoding) else bits
+        if (outRate <= 0 || outChans <= 0 || outBits <= 0) {
+            bypassActive = false
+            return
+        }
+        pcmBytesPerFrame = (outBits / 8) * outChans
+
         bypassActive = if (driver.isOpen.value) {
-            driver.start(rate, bits, channels)
+            driver.start(outRate, outBits, outChans)
         } else {
             false
         }
         if (bypassActive) {
             framesWritten = 0L
             startTimeUs = C.TIME_UNSET
-            Log.i(TAG, "configured: bypass active ($rate Hz / $bits-bit / ${channels}ch)")
+            Log.i(TAG, "configured: bypass active " +
+                "(in $rate/${bits}b/${channels}ch → out $outRate/${outBits}b/${outChans}ch)")
         }
     }
 
@@ -90,24 +106,42 @@ class LibusbAudioSink(
         if (!buffer.hasRemaining()) return true
         if (startTimeUs == C.TIME_UNSET) startTimeUs = presentationTimeUs
 
+        // Run input through the DSP chain (no-op when no processors
+        // are active). Chain returns a buffer owned by the last
+        // processor, or EMPTY_BUFFER if it buffered the input
+        // waiting for more — in which case our input was consumed
+        // (chain advances `buffer`'s position) but no output yet,
+        // and we report the buffer fully handled.
+        val processed = if (chain.anyActive()) chain.process(buffer)
+                        else buffer
+
+        if (!processed.hasRemaining()) {
+            return !buffer.hasRemaining()
+        }
+
         // Driver expects a direct, native-byte-order ByteBuffer because
-        // the JNI side reads via GetDirectBufferAddress. ExoPlayer's
-        // decoder usually hands us a direct ByteBuffer already; if it
-        // doesn't, copy into a scratch direct buffer.
-        val direct = if (buffer.isDirect) buffer else copyIntoScratch(buffer)
+        // the JNI side reads via GetDirectBufferAddress.
+        val direct = if (processed.isDirect) processed else copyIntoScratch(processed)
         val framesAvailable = direct.remaining() / pcmBytesPerFrame
-        if (framesAvailable <= 0) return true
+        if (framesAvailable <= 0) return !buffer.hasRemaining()
 
         val written = driver.write(direct, framesAvailable)
         if (written <= 0) {
-            // Ring full — back-pressure: tell the renderer we couldn't
-            // consume this buffer right now, it'll retry on next tick.
-            return false
+            // Ring full. If we owned the input buffer (no DSP),
+            // back-pressure to the renderer; otherwise the chain
+            // already consumed the input and we'd be lying to claim
+            // we couldn't take it. Drop this tick's output —
+            // underrun handling in the iso pump will pad with
+            // silence.
+            return processed === buffer && !buffer.hasRemaining()
         }
-        // Advance position of the *original* caller buffer so Media3
-        // sees the correct consumption count.
-        val bytesWritten = written * pcmBytesPerFrame
-        buffer.position(buffer.position() + bytesWritten)
+        if (processed === buffer) {
+            buffer.position(buffer.position() + written * pcmBytesPerFrame)
+        } else {
+            // Advance the processed buffer so the chain sees its
+            // output as consumed on the next tick.
+            processed.position(processed.position() + written * pcmBytesPerFrame)
+        }
         framesWritten += written
         return !buffer.hasRemaining()
     }
@@ -136,6 +170,7 @@ class LibusbAudioSink(
 
     override fun flush() {
         super.flush()
+        chain.flush()
         if (bypassActive) {
             driver.stop()
             framesWritten = 0L
@@ -147,6 +182,7 @@ class LibusbAudioSink(
 
     override fun reset() {
         super.reset()
+        chain.reset()
         if (driver.isStreaming.value) driver.stop()
         bypassActive = false
         framesWritten = 0L
