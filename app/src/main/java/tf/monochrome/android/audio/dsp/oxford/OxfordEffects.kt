@@ -226,6 +226,13 @@ class InflatorEffect @Inject constructor() {
     }
 
     fun processArrays(l: FloatArray, r: FloatArray, frames: Int) {
+        // Fast path: when the user has the effect bypassed (the default
+        // shipping state), skip the JNI round-trip entirely. The C++ side
+        // also early-returns on bypass, but the per-buffer JNI border
+        // overhead alone is enough to chip into headroom on top of the
+        // already-running mix-bus engine, contributing to PipelineWatcher
+        // back-pressure on the audio renderer.
+        if (!_state.value.effectIn) return
         val h = handle.get()
         if (h != 0L) InflatorNative.nativeProcessArrays(h, l, r, frames)
     }
@@ -298,6 +305,8 @@ class CompressorEffect @Inject constructor() {
     }
 
     fun processArrays(l: FloatArray, r: FloatArray, frames: Int) {
+        // Fast path: skip JNI when the user has the compressor bypassed.
+        if (_state.value.bypass) return
         val h = handle.get()
         if (h != 0L) CompressorNative.nativeProcessArrays(h, l, r, frames)
     }
