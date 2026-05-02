@@ -150,6 +150,13 @@ private:
     StreamFormat format_;
     std::atomic<bool> streaming_{false};
     std::atomic<bool> stopRequested_{false};
+    // True iff we currently hold libusb_claim_interface on
+    // format_.interfaceNumber. Tracked separately from streaming_
+    // because we keep the claim alive across format changes (e.g.
+    // 16-bit → 24-bit between tracks of the same album) so the
+    // Android kernel can't briefly re-attach snd-usb-audio in the
+    // gap and bounce us with LIBUSB_ERROR_BUSY on the next claim.
+    bool interfaceClaimed_ = false;
 
     // Iso pump state — touched only from the event thread once
     // streaming_ is true.

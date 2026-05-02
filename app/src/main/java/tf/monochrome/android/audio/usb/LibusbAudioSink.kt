@@ -95,7 +95,11 @@ class LibusbAudioSink(
                 true
             }
             else -> {
-                if (driver.isStreaming.value) driver.stop()
+                // Format changed (or first start). driver.start now
+                // handles the "already streaming, different format"
+                // case internally — stops iso pump and keeps the
+                // interface claim, so the kernel can't grab the
+                // device in the gap and bounce us with EBUSY.
                 driver.start(outRate, outBits, outChans).also { ok ->
                     if (ok) Log.i(TAG, "configured: bypass active " +
                         "(in $rate/${bits}b/${channels}ch → out $outRate/${outBits}b/${outChans}ch)")
@@ -113,6 +117,33 @@ class LibusbAudioSink(
         presentationTimeUs: Long,
         encodedAccessUnitCount: Int,
     ): Boolean {
+        // Lazy-engage bypass: if the user flipped the toggle AFTER
+        // configure() ran for this track (typical case — they enable
+        // exclusive mode mid-listen), we still have the format from
+        // configure but bypassActive=false. Try to start the iso pump
+        // here so the next buffer flows through the DAC. The check is
+        // cheap (two atomics + a small int compare) so it's fine on
+        // the hot handleBuffer path.
+        if (!bypassActive && pcmBytesPerFrame > 0 && driver.isOpen.value) {
+            val fmt = configuredFormat
+            if (fmt != null) {
+                val rate = fmt.sampleRate
+                val ch = fmt.channelCount
+                val bits = pcmBitsFromEncoding(fmt.pcmEncoding)
+                if (rate > 0 && ch > 0 && bits > 0) {
+                    bypassActive = if (driver.isStreamingFormat(rate, bits, ch)) {
+                        true
+                    } else {
+                        driver.start(rate, bits, ch)
+                    }
+                    if (bypassActive) {
+                        Log.i(TAG, "lazy-engaged bypass mid-stream " +
+                            "($rate/${bits}b/${ch}ch)")
+                    }
+                }
+            }
+        }
+
         if (!bypassActive) {
             return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
         }

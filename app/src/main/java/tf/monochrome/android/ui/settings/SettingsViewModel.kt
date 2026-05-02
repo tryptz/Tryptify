@@ -313,8 +313,19 @@ class SettingsViewModel @Inject constructor(
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
     fun setDspMixerEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setDspEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
-    fun setUsbBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setUsbBitPerfectEnabled(enabled) } }
-    fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setUsbExclusiveBitPerfectEnabled(enabled) } }
+    // The two USB toggles are mutually exclusive — they fight for
+    // the device. The framework router (usbBitPerfectEnabled) pins
+    // Android's audio HAL to the USB device; libusb (exclusive) needs
+    // libusb_claim_interface to win. Turning either on auto-flips
+    // the other off so the user never accidentally has both.
+    fun setUsbBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch {
+        preferences.setUsbBitPerfectEnabled(enabled)
+        if (enabled) preferences.setUsbExclusiveBitPerfectEnabled(false)
+    } }
+    fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch {
+        preferences.setUsbExclusiveBitPerfectEnabled(enabled)
+        if (enabled) preferences.setUsbBitPerfectEnabled(false)
+    } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
 
     // --- Audio speed actions ---

@@ -315,36 +315,51 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
         return false;
     }
     if (streaming_.load(std::memory_order_acquire)) {
-        LOGW("start() called while already streaming — stop first");
-        return false;
+        // Already streaming — caller wants a different format. Stop
+        // the iso pump but KEEP the interface claim so the kernel
+        // can't grab it in the gap. Common path on a mixed-format
+        // album (16-bit FLAC followed by 24-bit FLAC).
+        stopIsoPump();
+        streaming_.store(false, std::memory_order_release);
     }
 
     StreamFormat fmt{};
     if (!selectAltSetting(sampleRateHz, bitsPerSample, channels, &fmt)) {
         return false;
     }
+
+    // (Re-)claim only when needed: not held yet, or a different
+    // interface number on the new alt setting (vanishingly rare —
+    // most DACs put all alt settings under one streaming interface).
+    bool needClaim = !interfaceClaimed_ ||
+                     format_.interfaceNumber != fmt.interfaceNumber;
+    if (needClaim) {
+        if (interfaceClaimed_) {
+            libusb_release_interface(device_, format_.interfaceNumber);
+            interfaceClaimed_ = false;
+        }
+        int rc = libusb_claim_interface(device_, fmt.interfaceNumber);
+        if (rc != LIBUSB_SUCCESS) {
+            LOGE("claim_interface(%u) -> %d (%s) — Developer Options "
+                 "'Disable USB audio routing' must be ON, AND the "
+                 "older 'USB DAC bit-perfect routing' toggle must be "
+                 "OFF (it grabs the device via the framework and "
+                 "fights us for the claim)",
+                 fmt.interfaceNumber, rc, libusb_strerror(rc));
+            return false;
+        }
+        interfaceClaimed_ = true;
+    }
     format_ = fmt;
 
-    int rc = libusb_claim_interface(device_, format_.interfaceNumber);
-    if (rc != LIBUSB_SUCCESS) {
-        LOGE("claim_interface(%u) -> %d (%s) — likely Developer "
-             "Options 'Disable USB audio routing' is OFF",
-             format_.interfaceNumber, rc, libusb_strerror(rc));
-        format_ = {};
-        return false;
-    }
-    rc = libusb_set_interface_alt_setting(
+    int rc = libusb_set_interface_alt_setting(
         device_, format_.interfaceNumber, format_.altSetting);
     if (rc != LIBUSB_SUCCESS) {
         LOGE("set_interface_alt_setting(%u, %u) -> %d",
              format_.interfaceNumber, format_.altSetting, rc);
-        libusb_release_interface(device_, format_.interfaceNumber);
-        format_ = {};
         return false;
     }
     if (!setSampleRate(static_cast<uint32_t>(sampleRateHz))) {
-        libusb_release_interface(device_, format_.interfaceNumber);
-        format_ = {};
         return false;
     }
 
@@ -354,8 +369,6 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
     stopRequested_.store(false, std::memory_order_relaxed);
 
     if (!startIsoPump()) {
-        libusb_release_interface(device_, format_.interfaceNumber);
-        format_ = {};
         return false;
     }
     streaming_.store(true, std::memory_order_release);
@@ -387,15 +400,22 @@ bool LibusbUacDriver::isStreamingFormat(int sampleRate, int bitsPerSample, int c
 
 void LibusbUacDriver::stop() {
     bool was = streaming_.exchange(false, std::memory_order_acq_rel);
-    if (!was && transfers_.empty()) return;
+    if (!was && transfers_.empty() && !interfaceClaimed_) return;
 
     std::lock_guard<std::mutex> lock(mutex_);
     stopIsoPump();
-    if (device_ && format_.interfaceNumber != 0xFF && format_.altSetting != 0) {
-        libusb_set_interface_alt_setting(device_, format_.interfaceNumber, 0);
+    // Full teardown: alt 0 then release. Caller is the toggle going
+    // off, the queue clearing, or app pause — NOT a track-to-track
+    // reconfigure, which goes through start() with the claim kept.
+    if (device_ && interfaceClaimed_) {
+        if (format_.altSetting != 0) {
+            libusb_set_interface_alt_setting(
+                device_, format_.interfaceNumber, 0);
+        }
         libusb_release_interface(device_, format_.interfaceNumber);
+        interfaceClaimed_ = false;
     }
-    LOGI("stopped streaming");
+    LOGI("stopped streaming (full teardown)");
 }
 
 // --- Iso pump ---------------------------------------------------------
