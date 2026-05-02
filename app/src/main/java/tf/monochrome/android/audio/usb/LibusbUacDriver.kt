@@ -47,6 +47,9 @@ class LibusbUacDriver @Inject constructor(
     private val _isOpen = MutableStateFlow(false)
     val isOpen: StateFlow<Boolean> = _isOpen.asStateFlow()
 
+    private val _isStreaming = MutableStateFlow(false)
+    val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
+
     /** Device the driver currently owns, or null. */
     private val _device = MutableStateFlow<UsbDevice?>(null)
     val device: StateFlow<UsbDevice?> = _device.asStateFlow()
@@ -143,15 +146,34 @@ class LibusbUacDriver @Inject constructor(
     }
 
     /**
-     * Stage-2 stub. Negotiates UAC2 alt setting + claims streaming
-     * interface, then starts the iso pump. Returns false until Stage 2
-     * ships — LibusbAudioSink falls back to the standard output path
-     * when this returns false.
+     * Negotiates a UAC2 alt setting matching [sampleRate]/[bitsPerSample]/[channels],
+     * claims the streaming interface, sets the clock-source rate via
+     * a class-specific control transfer, and spins up the iso pump.
+     * Returns false on any failure (logged with TAG "LibusbUacDriver");
+     * LibusbAudioSink then falls back to its DefaultAudioSink delegate.
+     *
+     * Caveats today:
+     *  - Only rates that divide evenly into 8000 (HS) or 1000 (FS) Hz
+     *    work — i.e. 48 / 96 / 192 kHz family. 44.1 / 88.2 / 176.4 are
+     *    rejected with a clear logcat line; fixing that needs the
+     *    fractional-packet accumulator + feedback-EP reader (next).
+     *  - No DSP / EQ / ProjectM tap on this path yet (they live inside
+     *    DefaultAudioSink's processor chain). Exclusive mode is raw
+     *    bit-perfect output for now; chain re-integration is a
+     *    follow-up commit.
      */
-    fun start(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean =
-        nativeStart(sampleRate, bitsPerSample, channels)
+    fun start(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean {
+        val ok = nativeStart(sampleRate, bitsPerSample, channels)
+        _isStreaming.value = ok
+        return ok
+    }
 
-    fun stop() = nativeStop()
+    fun stop() {
+        nativeStop()
+        _isStreaming.value = false
+    }
+
+    fun nativeStreaming(): Boolean = nativeIsStreaming()
 
     /** Number of PCM frames the driver can accept right now. */
     fun writableFrames(): Int = nativeWritableFrames()
@@ -165,6 +187,7 @@ class LibusbUacDriver @Inject constructor(
     private external fun nativeIsOpen(): Boolean
     private external fun nativeStart(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeStop()
+    private external fun nativeIsStreaming(): Boolean
     private external fun nativeWrite(buffer: ByteBuffer, frames: Int): Int
     private external fun nativeWritableFrames(): Int
 

@@ -107,6 +107,21 @@ class UsbExclusiveController @Inject constructor(
         scope.launch {
             for (ignored in tick) reconcile()
         }
+        // Mirror the driver's streaming flag onto our public Status so
+        // Settings UI flips DeviceOpen → Streaming the moment
+        // LibusbAudioSink.configure() succeeds in starting the iso
+        // pump for a track. If the pump tears down (track end, flush)
+        // we fall back to DeviceOpen, which is honest: the DAC handle
+        // is still ours, just no audio is flowing.
+        scope.launch {
+            driver.isStreaming.collect { streaming ->
+                if (streaming) {
+                    _status.value = Status.Streaming
+                } else if (_status.value == Status.Streaming) {
+                    _status.value = if (driver.isOpen.value) Status.DeviceOpen else Status.NoDevice
+                }
+            }
+        }
     }
 
     private suspend fun reconcile() {

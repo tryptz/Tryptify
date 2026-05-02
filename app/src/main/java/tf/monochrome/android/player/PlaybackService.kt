@@ -63,6 +63,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
+    @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
@@ -299,7 +300,7 @@ class PlaybackService : MediaSessionService() {
                 enableAudioTrackPlaybackParams: Boolean
             ): AudioSink {
                 return try {
-                    DefaultAudioSink.Builder(context)
+                    val defaultSink = DefaultAudioSink.Builder(context)
                         .setEnableFloatOutput(enableFloatOutput)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         .setAudioProcessors(
@@ -314,17 +315,29 @@ class PlaybackService : MediaSessionService() {
                             )
                         )
                         .build()
+                    // Wrap with LibusbAudioSink: a no-op when the user
+                    // hasn't enabled exclusive mode (forwards everything
+                    // to defaultSink). When the toggle is on AND
+                    // UsbExclusiveController has a libusb device handle
+                    // open, configure() spins up the iso pump and
+                    // handleBuffer() routes PCM to the DAC directly,
+                    // bypassing AudioTrack + the HAL.
+                    tf.monochrome.android.audio.usb.LibusbAudioSink(
+                        delegate = defaultSink,
+                        driver = libusbDriver,
+                    )
                 } catch (error: Exception) {
                     projectMEngineRepository.reportAudioTapFailure(
                         "projectM audio tap unavailable: ${error.message ?: "unknown error"}"
                     )
-                    checkNotNull(
+                    val fallback = checkNotNull(
                         super.buildAudioSink(
                             context,
                             enableFloatOutput,
                             enableAudioTrackPlaybackParams
                         )
                     )
+                    tf.monochrome.android.audio.usb.LibusbAudioSink(fallback, libusbDriver)
                 }
             }
         }
