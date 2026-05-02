@@ -184,8 +184,12 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
     // Per-terminal: (terminalID -> bCSourceID).
     struct TermClock { uint8_t termId; uint8_t clockId; };
     std::vector<TermClock> terminals;
-    // Set of all clock-entity IDs (any of source/selector/multiplier).
-    std::vector<uint8_t> clockEntities;
+    // All clock-bearing entities, with their subtype so we can
+    // distinguish CLOCK_SOURCE (settable rate) from CLOCK_SELECTOR
+    // (selects between sources — SET_CUR on it picks pin index, not
+    // rate) and CLOCK_MULTIPLIER (derived from another clock).
+    struct ClockEntity { uint8_t id; uint8_t subtype; uint8_t baseId; };
+    std::vector<ClockEntity> clockEntities;
 
     for (uint8_t i = 0; i < config->bNumInterfaces; ++i) {
         const libusb_interface& iface = config->interface[i];
@@ -200,11 +204,17 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
                         uacVersion = static_cast<uint16_t>(p[3]) |
                                      (static_cast<uint16_t>(p[4]) << 8);
                     } else if (isClassDescriptor(p, len, CS_INTERFACE, AC_CLOCK_SOURCE) && len >= 4) {
-                        clockEntities.push_back(p[3]);
-                    } else if (isClassDescriptor(p, len, CS_INTERFACE, AC_CLOCK_SELECTOR) && len >= 4) {
-                        clockEntities.push_back(p[3]);
-                    } else if (isClassDescriptor(p, len, CS_INTERFACE, AC_CLOCK_MULTIPLIER) && len >= 4) {
-                        clockEntities.push_back(p[3]);
+                        clockEntities.push_back({p[3], AC_CLOCK_SOURCE, 0});
+                    } else if (isClassDescriptor(p, len, CS_INTERFACE, AC_CLOCK_SELECTOR) && len >= 6) {
+                        // CLOCK_SELECTOR layout: bClockID @p[3],
+                        // bNrInPins @p[4], baCSourceID(1..N) @p[5..].
+                        // We grab the first input-pin source as the
+                        // "underlying" clock to set the rate on —
+                        // SET_CUR on the selector itself selects the
+                        // pin index, not the rate.
+                        clockEntities.push_back({p[3], AC_CLOCK_SELECTOR, p[5]});
+                    } else if (isClassDescriptor(p, len, CS_INTERFACE, AC_CLOCK_MULTIPLIER) && len >= 5) {
+                        clockEntities.push_back({p[3], AC_CLOCK_MULTIPLIER, p[4]});
                     } else if (isClassDescriptor(p, len, CS_INTERFACE, AC_INPUT_TERMINAL) && len >= 8) {
                         // UAC2 IT: bTerminalID @p[3], bCSourceID @p[7].
                         terminals.push_back({p[3], p[7]});
@@ -383,15 +393,18 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
             out_fmt->altSetting = alt.bAlternateSetting;
             out_fmt->endpointAddress = iso->bEndpointAddress;
             out_fmt->maxPacketSize = iso->wMaxPacketSize;
-            // Resolve which clock entity this AS interface uses:
-            //  1. AS_GENERAL.bTerminalLink → look up terminal,
-            //     take its bCSourceID. This is the spec-correct
-            //     path and what Bathys uses (it has no standalone
-            //     CLOCK_SOURCE descriptor).
-            //  2. Fallback: first clock entity we found (any of
-            //     CLOCK_SOURCE / SELECTOR / MULTIPLIER).
-            //  3. Last resort: 0 (caller will skip SET_CUR — many
-            //     fixed-clock devices accept that gracefully).
+            // Resolve the rate-bearing CLOCK_SOURCE entity for this
+            // streaming alt by walking the topology graph:
+            //   AS_GENERAL.bTerminalLink → terminal → bCSourceID
+            //   → if SELECTOR: follow its first input-pin source
+            //   → if MULTIPLIER: follow its base-clock-source
+            //   → continue until we land on a CLOCK_SOURCE
+            // Fall back to first CLOCK_SOURCE in the device, then to
+            // any clock entity, then to 0 (skip SET_CUR). The "follow
+            // selector" step is what fixes Bathys-style topologies
+            // where AS_GENERAL.bTerminalLink → terminal.bCSourceID
+            // points at a CLOCK_SELECTOR (subtype 0x0B), and SET_CUR
+            // on a Selector picks a pin index — not a sample rate.
             uint8_t resolvedClock = 0;
             for (const auto& tc : terminals) {
                 if (tc.termId == altTerminalLink) {
@@ -399,8 +412,30 @@ bool LibusbUacDriver::selectAltSetting(int sampleRateHz, int bitsPerSample,
                     break;
                 }
             }
+            // Walk through Selector/Multiplier indirection up to a
+            // bounded depth (4 — UAC2 doesn't actually constrain
+            // this, but real topologies don't exceed 2). Stops on
+            // the first CLOCK_SOURCE.
+            for (int hop = 0; hop < 4 && resolvedClock != 0; ++hop) {
+                const ClockEntity* ent = nullptr;
+                for (const auto& ce : clockEntities) {
+                    if (ce.id == resolvedClock) { ent = &ce; break; }
+                }
+                if (!ent) break;
+                if (ent->subtype == AC_CLOCK_SOURCE) break;
+                if (ent->baseId == 0) break;
+                resolvedClock = ent->baseId;
+            }
+            if (resolvedClock == 0) {
+                for (const auto& ce : clockEntities) {
+                    if (ce.subtype == AC_CLOCK_SOURCE) {
+                        resolvedClock = ce.id;
+                        break;
+                    }
+                }
+            }
             if (resolvedClock == 0 && !clockEntities.empty()) {
-                resolvedClock = clockEntities.front();
+                resolvedClock = clockEntities.front().id;
             }
             out_fmt->clockSourceId = resolvedClock;
             out_fmt->controlInterfaceNum = controlIface;
@@ -465,9 +500,15 @@ bool LibusbUacDriver::setSampleRate(uint32_t hz) {
         // want; if so, proceed without SET_CUR. If GET_CUR is also
         // a different rate, log a warning but still proceed (audio
         // may pitch-shift, but at least it'll play).
+        // UAC2 §5.2.1: bRequest is 0x01 (CUR) for both SET and GET —
+        // direction is in bmRequestType (0x21 = SET, 0xA1 = GET).
+        // Earlier code passed 0x81 here which the device correctly
+        // ignored, returning all-zero data and reporting "0 Hz" — at
+        // which point we'd "proceed anyway" and stream 44.1k frames
+        // at whatever rate the device's clock was actually locked to.
         uint8_t cur[4] = {0, 0, 0, 0};
         int gc = libusb_control_transfer(
-            device_, /*bmRequestType=*/0xA1, /*bRequest=*/0x81 /*GET_CUR*/,
+            device_, /*bmRequestType=*/0xA1, /*bRequest=*/REQ_SET_CUR,
             static_cast<uint16_t>(CS_SAM_FREQ_CONTROL_SEL << 8),
             static_cast<uint16_t>(
                 (format_.clockSourceId << 8) | format_.controlInterfaceNum),
@@ -480,10 +521,18 @@ bool LibusbUacDriver::setSampleRate(uint32_t hz) {
             LOGI("UAC2 SET_CUR stalled but GET_CUR confirms %u Hz already — fixed-rate clock", hz);
             return true;
         }
-        LOGW("UAC2 SET_CUR %u Hz -> %d, GET_CUR -> %u Hz; "
-             "proceeding anyway (device may pitch-shift)",
-             hz, rc, devHz);
-        return true;
+        // Device's clock is at a different rate than requested AND
+        // it didn't accept the change. Pushing audio at a different
+        // rate to a fixed-rate clock is the chipmunk-distortion bug
+        // we used to ship. Fail bypass cleanly so LibusbAudioSink
+        // falls back to the delegate (Android's HAL) which will
+        // resample to the device's rate properly.
+        LOGE("UAC2 SET_CUR %u Hz -> %d, device reports %u Hz — refusing "
+             "bypass to avoid pitch-shifted distortion. Falling back to "
+             "the delegate sink. Try selecting a track at the device's "
+             "native rate (%u Hz) for true bit-perfect output.",
+             hz, rc, devHz, devHz);
+        return false;
     }
     // UAC1 §5.2.3.2.3.1 — set on the iso DATA endpoint, 24-bit LE.
     //   bmRequestType = 0x22 (Class | Endpoint | Host-to-Device)
