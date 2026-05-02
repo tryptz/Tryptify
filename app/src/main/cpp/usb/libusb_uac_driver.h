@@ -21,9 +21,7 @@
 #include <thread>
 #include <vector>
 
-struct libusb_context;
-struct libusb_device_handle;
-struct libusb_transfer;
+#include <libusb.h>
 
 namespace monotrypt::usb {
 
