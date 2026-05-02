@@ -734,6 +734,8 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
     // Reset the ring before priming the pump.
     ringHead_.store(0, std::memory_order_relaxed);
     ringTail_.store(0, std::memory_order_relaxed);
+    writtenFrames_.store(0, std::memory_order_relaxed);
+    playedFrames_.store(0, std::memory_order_relaxed);
     stopRequested_.store(false, std::memory_order_relaxed);
 
     if (!startIsoPump()) {
@@ -757,6 +759,11 @@ void LibusbUacDriver::flushRing() {
     // actually stale.
     ringTail_.store(0, std::memory_order_release);
     ringHead_.store(0, std::memory_order_release);
+    // Position counters reset too — flushRing is called between
+    // tracks (Media3 flush()), and stale frame counts would let
+    // getCurrentPositionUs report frames from the previous track.
+    writtenFrames_.store(0, std::memory_order_release);
+    playedFrames_.store(0, std::memory_order_release);
 }
 
 bool LibusbUacDriver::isStreamingFormat(int sampleRate, int bitsPerSample, int channels) const {
@@ -1092,6 +1099,13 @@ int LibusbUacDriver::drainRing(uint8_t* dst, int bytes) {
         // The DAC hears a click rather than dropping the entire URB.
         std::memset(dst + n, 0, bytes - n);
     }
+    // Frames "played" = frames the pump has dispatched, including the
+    // silence padding (since the device hears those samples too). Used
+    // for accurate position reporting back to ExoPlayer.
+    int frameStride = format_.channels * format_.bytesPerSample;
+    if (frameStride > 0) {
+        playedFrames_.fetch_add(bytes / frameStride, std::memory_order_acq_rel);
+    }
     return n;
 }
 
@@ -1115,7 +1129,9 @@ int LibusbUacDriver::writePcm(const uint8_t* data, int frames) {
         std::memcpy(ring_.data(), data + first, writable - first);
     }
     ringHead_.store(head + writable, std::memory_order_release);
-    return writable / frameStride;
+    int framesPushed = writable / frameStride;
+    writtenFrames_.fetch_add(framesPushed, std::memory_order_acq_rel);
+    return framesPushed;
 }
 
 int LibusbUacDriver::writableFrames() const {

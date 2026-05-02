@@ -93,4 +93,18 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeWritableFrames(
     return driver().writableFrames();
 }
 
+JNIEXPORT jlong JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativePlayedFrames(
+    JNIEnv*, jobject) {
+    return static_cast<jlong>(driver().playedFrames());
+}
+
+JNIEXPORT jlong JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativePendingFrames(
+    JNIEnv*, jobject) {
+    long w = driver().writtenFrames();
+    long p = driver().playedFrames();
+    return static_cast<jlong>(w > p ? w - p : 0);
+}
+
 } // extern "C"

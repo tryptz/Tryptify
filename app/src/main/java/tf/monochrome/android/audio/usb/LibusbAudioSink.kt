@@ -212,22 +212,34 @@ class LibusbAudioSink(
         if (!bypassActive) return super.getCurrentPositionUs(sourceEnded)
         val rate = configuredFormat?.sampleRate ?: return C.TIME_UNSET
         if (rate <= 0) return C.TIME_UNSET
-        val playedUs = framesWritten * 1_000_000L / rate
+        // Use frames the iso pump has actually dispatched, not frames
+        // we've pushed into the ring — the renderer fills the ring
+        // 10× faster than realtime, and reporting written-frames
+        // makes ExoPlayer think a 30-second track ended after 3
+        // seconds. (Symptom the user saw: 'plays for 5 sec then
+        // skips to next track with weird distortion'.)
+        val playedUs = driver.playedFrames() * 1_000_000L / rate
         return (if (startTimeUs == C.TIME_UNSET) 0L else startTimeUs) + playedUs
     }
 
     override fun hasPendingData(): Boolean {
         if (!bypassActive) return super.hasPendingData()
-        // While the libusb ring still has anything in it, we have
-        // pending data. writableFrames > 0 doesn't mean empty — we
-        // approximate "near-empty" with a generous threshold so we
-        // don't spuriously stall the renderer.
-        return false
+        // Honest answer: we have pending data iff frames are still
+        // queued in the ring waiting for the iso pump to dispatch
+        // them. Returning `false` unconditionally (the previous
+        // impl) made Media3's renderer stop waiting for the sink to
+        // drain at end-of-track, which combined with the inflated
+        // position made ExoPlayer skip to the next track way before
+        // the previous one finished playing.
+        return driver.pendingFrames() > 0
     }
 
     override fun isEnded(): Boolean {
         if (!bypassActive) return super.isEnded()
-        return !driver.isStreaming.value && !hasPendingData()
+        // We're ended only when the iso pump has flushed everything
+        // we pushed AND the renderer has indicated it's not feeding
+        // any more (driver.isStreaming becomes false on stop()).
+        return !hasPendingData() && !driver.isStreaming.value
     }
 
     override fun flush() {

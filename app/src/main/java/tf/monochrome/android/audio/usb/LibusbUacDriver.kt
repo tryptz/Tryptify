@@ -217,6 +217,18 @@ class LibusbUacDriver @Inject constructor(
     /** Number of PCM frames the driver can accept right now. */
     fun writableFrames(): Int = nativeWritableFrames()
 
+    /** Cumulative frames the iso pump has dispatched to the DAC since [start].
+     *  Used by [LibusbAudioSink.getCurrentPositionUs] for accurate playhead
+     *  reporting — `framesWritten` (which the renderer sees as "consumed")
+     *  runs ahead of realtime because the renderer fills the ring much faster
+     *  than the DAC drains it. */
+    fun playedFrames(): Long = nativePlayedFrames()
+
+    /** Frames currently sitting in the ring waiting for the DAC to consume.
+     *  Used by [LibusbAudioSink.hasPendingData] / [isEnded] so Media3 knows
+     *  when the sink has actually finished playback vs. just queued it. */
+    fun pendingFrames(): Long = nativePendingFrames()
+
     /** Pushes [frames] frames from [buffer] (direct, native-byte-order). */
     fun write(buffer: ByteBuffer, frames: Int): Int = nativeWrite(buffer, frames)
 
@@ -231,6 +243,8 @@ class LibusbUacDriver @Inject constructor(
     private external fun nativeIsStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeWrite(buffer: ByteBuffer, frames: Int): Int
     private external fun nativeWritableFrames(): Int
+    private external fun nativePlayedFrames(): Long
+    private external fun nativePendingFrames(): Long
 
     companion object {
         private const val TAG = "LibusbUacDriver"

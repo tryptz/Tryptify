@@ -128,6 +128,22 @@ public:
     // How many frames can be written right now without blocking.
     int writableFrames() const;
 
+    // Total PCM frames the iso pump has drained from the ring since
+    // [start] — i.e. the frames the device has actually been told to
+    // play. Used by LibusbAudioSink for getCurrentPositionUs / hasPendingData
+    // / isEnded; reporting framesWritten there instead caused ExoPlayer
+    // to think a track had finished within seconds (the renderer fills
+    // the ring much faster than realtime), which manifested as 5-second
+    // playbacks followed by an early skip to the next track.
+    long playedFrames() const {
+        return playedFrames_.load(std::memory_order_acquire);
+    }
+
+    // Total PCM frames the host has pushed into the ring since [start].
+    long writtenFrames() const {
+        return writtenFrames_.load(std::memory_order_acquire);
+    }
+
     const StreamFormat& currentFormat() const { return format_; }
 
 private:
@@ -194,6 +210,10 @@ private:
     std::vector<libusb_transfer*> feedbackTransfers_;
     std::vector<std::vector<uint8_t>> feedbackBuffers_;
     std::atomic<int> inflight_{0};     // active transfers (data + fb)
+    // Cumulative frame counters used for honest position reporting
+    // (see playedFrames() / writtenFrames()). Reset on start().
+    std::atomic<long> writtenFrames_{0};
+    std::atomic<long> playedFrames_{0};
     std::thread eventThread_;
 
     // Per-packet frame count is computed from a 16.16 fixed-point
