@@ -397,7 +397,7 @@ class SearchViewModel @Inject constructor(
                         }
                         SearchPageType.PLAYLISTS -> {
                             @Suppress("UNCHECKED_CAST")
-                            _allPlaylists.value = scoreItems(q, (_allPlaylists.value + (newItems as List<Playlist>)).distinctBy { it.id }) {
+                            _allPlaylists.value = scoreItems(q, (_allPlaylists.value + (newItems as List<Playlist>)).distinctBy { it.uuid }) {
                                 listOfNotNull(it.title, it.creator?.name, it.description)
                             }
                         }
