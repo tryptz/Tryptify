@@ -55,7 +55,8 @@ class PlayerViewModel @Inject constructor(
     private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
     private val trackShareHelper: tf.monochrome.android.share.TrackShareHelper,
-    val spectrumAnalyzer: SpectrumAnalyzerTap
+    val spectrumAnalyzer: SpectrumAnalyzerTap,
+    private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
 ) : ViewModel() {
 
     /**
@@ -431,6 +432,14 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             preferences.setVolume(newVolume.toDouble())
             mediaController?.volume = newVolume
+            // Mirror to the libusb bypass path. mediaController.volume
+            // routes to Player.volume → DefaultAudioSink, which we
+            // skip when bypass is hot, so a slider drag would
+            // otherwise have zero audible effect on the DAC. Matches
+            // the existing delegate-path semantics: no ReplayGain
+            // re-application on a mid-playback drag (PlaybackService
+            // re-applies on the next STATE_READY).
+            bypassVolumeController.setVolume(newVolume)
         }
     }
 

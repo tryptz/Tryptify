@@ -33,6 +33,7 @@ import java.nio.ByteOrder
 class LibusbAudioSink(
     delegate: AudioSink,
     private val driver: LibusbUacDriver,
+    private val volumeController: BypassVolumeController,
     processors: List<AudioProcessor> = emptyList(),
 ) : ForwardingAudioSink(delegate) {
 
@@ -48,6 +49,44 @@ class LibusbAudioSink(
     // with SET_CUR errors during the UAC1 bug. Reset on
     // configure/flush so the next track gets a fresh attempt.
     private var lastEngageFailHash: Int = 0
+
+    // Wedged-iso-pump watchdog. driver.start() can succeed (returns
+    // true, _isStreaming flips on) but the iso completion callbacks
+    // never actually fire on some Android xHCI controllers — e.g.
+    // OnePlus OP611FL1 / CPH2749 in field reports. The user-visible
+    // symptom is "USB audio crash after a couple of seconds": the
+    // ring fills (~6 sec at 44.1k/16/2ch), driver.write() starts
+    // returning 0, ExoPlayer back-pressures, PipelineWatcher floods
+    // "pipelineFull (4)" for ~3.5 sec, then everything falls silent
+    // because the renderer thread stops feeding a sink that won't
+    // drain. There is no Java exception and no native tombstone —
+    // just dead audio. To recover, watch driver.playedFrames(): if it
+    // hasn't budged for kIsoStallNs after our first successful write
+    // we declare the iso pump wedged, latch bypass off, and let
+    // ForwardingAudioSink delegate to DefaultAudioSink so audio
+    // actually plays. Latch is cleared on flush()/configure() so the
+    // next track / next play attempt gets a fresh shot at bypass.
+    private var firstWriteNs: Long = 0L
+    private var lastPlayedFrames: Long = 0L
+    private var lastPlayedAdvanceNs: Long = 0L
+    private var watchdogTripped: Boolean = false
+    // True between the first successful write of a stream and the
+    // next flush/configure/reset. Used solely to log a one-shot
+    // diagnostic ("first bypass write succeeded") so a build that
+    // includes this code path is visibly distinct in logcat from
+    // an older build that doesn't — saves a "did you rebuild?"
+    // round-trip when triaging field reports.
+    private var firstWriteLogged: Boolean = false
+
+    // Reusable scratch for the software-gain path. Only allocated /
+    // grown when the user actually attenuates (volume < 1.0f); at
+    // unity the bypass stays bit-perfect — direct buffer goes
+    // straight to libusb with no copy, no allocation, no rounding.
+    private var gainScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    // Bit depth is per-stream; cache so the gain path doesn't have
+    // to recompute pcmBitsFromEncoding on every handleBuffer.
+    private var outBitsPerSample: Int = 0
 
     override fun configure(
         inputFormat: Format,
@@ -88,6 +127,7 @@ class LibusbAudioSink(
             return
         }
         pcmBytesPerFrame = (outBits / 8) * outChans
+        outBitsPerSample = outBits
 
         // Track-to-track configure with the same format: skip the
         // stop/start cycle so we don't release the streaming
@@ -116,6 +156,7 @@ class LibusbAudioSink(
         if (bypassActive) {
             framesWritten = 0L
             startTimeUs = C.TIME_UNSET
+            resetWatchdog()
         }
     }
 
@@ -187,7 +228,26 @@ class LibusbAudioSink(
         val framesAvailable = direct.remaining() / pcmBytesPerFrame
         if (framesAvailable <= 0) return !buffer.hasRemaining()
 
-        val written = driver.write(direct, framesAvailable)
+        // Software volume on the bypass path. AudioFlinger's
+        // master-volume / hardware-volume-key apparatus doesn't reach
+        // the DAC here, so without this attenuation the user has no
+        // way to lower the level short of yanking the cable.
+        // BypassVolumeController is fed by the UI slider
+        // (PlayerViewModel.setVolume), ReplayGain
+        // (PlaybackService.applyReplayGain), and the hardware key
+        // dispatcher (MainActivity.dispatchKeyEvent). At unity gain
+        // OR on a bit depth we don't have a fast path for (24/32),
+        // we skip the scaling entirely and feed `direct` straight to
+        // libusb — preserves bit-perfect output for users who keep
+        // the slider maxed, and matches the prior behavior at
+        // depths the integer-multiply path doesn't yet cover.
+        val gain = volumeController.getVolume()
+        val toWrite = if (gain >= 0.9999f || outBitsPerSample != 16) {
+            direct
+        } else {
+            applyGainPcm16(direct, gain)
+        }
+        val written = driver.write(toWrite, framesAvailable)
         if (written <= 0) {
             // Ring full. If we owned the input buffer (no DSP),
             // back-pressure to the renderer; otherwise the chain
@@ -205,7 +265,93 @@ class LibusbAudioSink(
             processed.position(processed.position() + written * pcmBytesPerFrame)
         }
         framesWritten += written
+        if (!firstWriteLogged) {
+            firstWriteLogged = true
+            Log.i(TAG, "bypass first write succeeded — wrote $written frames " +
+                "at ${outBitsPerSample}b, gain=$gain")
+        }
+        checkIsoPumpWatchdog()
         return !buffer.hasRemaining()
+    }
+
+    // Pause/play: ExoPlayer's DefaultAudioSink.pause() calls
+    // AudioTrack.pause(), which immediately mutes the hardware
+    // regardless of what's queued. Our libusb path has no such
+    // primitive — the iso pump keeps draining the ring on its own
+    // thread until it goes empty, so without intervention the user
+    // hears up to a full ring's worth of audio (multiple seconds
+    // depending on encoding) AFTER they hit pause. Mute by
+    // dropping queued PCM so the iso pump immediately starts
+    // padding silence on its next packet.
+    //
+    // We do NOT call driver.stop() here — stopIsoPump spins for up
+    // to a second waiting for cancelled URBs to drain (see
+    // libusb_uac_driver.cpp:stopIsoPump), which would block the
+    // pause-button latency on the audio thread. Keeping the iso
+    // pump alive over pause also means resume() doesn't need to
+    // re-claim the streaming interface, which is the slow path
+    // that occasionally wedges with EBUSY when snd-usb-audio
+    // re-attaches in the gap.
+    override fun pause() {
+        super.pause()
+        if (bypassActive) {
+            driver.flushRing()
+        }
+    }
+
+    override fun play() {
+        super.play()
+        if (bypassActive) {
+            // Resume from pause: the ring is empty (we flushed on
+            // pause) and the iso pump has been padding silence
+            // while playedFrames kept advancing. Resetting the
+            // watchdog and the position-reporting baseline avoids
+            // a false "playedFrames stuck" trip on the very next
+            // write, since by definition lastPlayedAdvanceNs is
+            // far in the past after a long pause.
+            resetWatchdog()
+            startTimeUs = C.TIME_UNSET
+        }
+    }
+
+    // Trips bypass off if the iso pump accepted writes but never
+    // actually dispatched any frames. See the field-block comment on
+    // firstWriteNs for the failure mode this exists to catch.
+    private fun checkIsoPumpWatchdog() {
+        if (watchdogTripped) return
+        val now = System.nanoTime()
+        if (firstWriteNs == 0L) {
+            firstWriteNs = now
+            lastPlayedFrames = driver.playedFrames()
+            lastPlayedAdvanceNs = now
+            return
+        }
+        val played = driver.playedFrames()
+        if (played > lastPlayedFrames) {
+            lastPlayedFrames = played
+            lastPlayedAdvanceNs = now
+            return
+        }
+        // Both gates so we don't false-trip on the very first tick
+        // (pump hasn't had time to start) or on a brief stall mid-
+        // stream that recovers on its own.
+        val sinceFirstWriteNs = now - firstWriteNs
+        val sinceAdvanceNs = now - lastPlayedAdvanceNs
+        if (sinceFirstWriteNs > kIsoWarmupNs && sinceAdvanceNs > kIsoStallNs) {
+            Log.w(TAG, "iso pump wedged — playedFrames=$played stuck for " +
+                "${sinceAdvanceNs / 1_000_000} ms after $framesWritten frames " +
+                "written; falling back to delegate sink. Re-engages on next " +
+                "configure/flush.")
+            watchdogTripped = true
+            bypassActive = false
+            // Don't call driver.stop() here — nativeStop() spins up
+            // to a second waiting for cancelled transfers to drain,
+            // which would glitch the audio thread mid-buffer.
+            // ForwardingAudioSink's delegate is already configured
+            // with the same format (we always call super.configure
+            // in configure()), so the next handleBuffer flows
+            // straight to it.
+        }
     }
 
     override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
@@ -255,6 +401,7 @@ class LibusbAudioSink(
             startTimeUs = C.TIME_UNSET
         }
         lastEngageFailHash = 0
+        resetWatchdog()
     }
 
     override fun reset() {
@@ -264,11 +411,61 @@ class LibusbAudioSink(
         bypassActive = false
         framesWritten = 0L
         startTimeUs = C.TIME_UNSET
+        resetWatchdog()
+    }
+
+    private fun resetWatchdog() {
+        firstWriteNs = 0L
+        lastPlayedFrames = 0L
+        lastPlayedAdvanceNs = 0L
+        watchdogTripped = false
+        firstWriteLogged = false
     }
 
     override fun release() {
         super.release()
         if (driver.isStreaming.value) driver.stop()
+    }
+
+    // PCM16 software gain. Reads signed 16-bit samples from `src`
+    // (native byte order — set on every direct buffer we touch), does
+    // one float multiply per sample, clamps at ±0x7FFF to match the
+    // PCM16 range exactly, and writes the result to a reusable direct
+    // scratch buffer that's safe to hand to libusb. Returned buffer
+    // is positioned at 0 / limited to the byte count actually written
+    // so driver.write sees the whole payload. Source position is
+    // intentionally NOT advanced — handleBuffer's existing accounting
+    // advances `processed` (or `buffer`) by `written * pcmBytesPerFrame`
+    // after the write returns.
+    //
+    // No dither: attenuation is monotonic, so the LSB error is
+    // deterministic and quieter than a pre-existing dither floor on
+    // the upstream MixBusProcessor. Adding TPDF here would just
+    // double-dither.
+    private fun applyGainPcm16(src: ByteBuffer, gain: Float): ByteBuffer {
+        val srcPos = src.position()
+        val srcLimit = src.limit()
+        val totalBytes = srcLimit - srcPos
+        val scratch = ensureGainScratch(totalBytes)
+        val numSamples = totalBytes / 2
+        for (i in 0 until numSamples) {
+            val s = src.getShort(srcPos + i * 2).toInt()
+            val scaled = (s * gain).toInt().coerceIn(-32768, 32767)
+            scratch.putShort(i * 2, scaled.toShort())
+        }
+        scratch.position(0)
+        scratch.limit(numSamples * 2)
+        return scratch
+    }
+
+    private fun ensureGainScratch(needBytes: Int): ByteBuffer {
+        if (gainScratch.capacity() < needBytes) {
+            gainScratch = ByteBuffer.allocateDirect(needBytes)
+                .order(ByteOrder.nativeOrder())
+        } else {
+            gainScratch.clear()
+        }
+        return gainScratch
     }
 
     private fun copyIntoScratch(buffer: ByteBuffer): ByteBuffer {
@@ -290,5 +487,19 @@ class LibusbAudioSink(
 
     companion object {
         private const val TAG = "LibusbAudioSink"
+        // Give the iso pump this long to start dispatching frames
+        // before we even consider it stuck. The first ~150 ms after
+        // configure can legitimately produce zero playedFrames while
+        // the URBs prime, the kernel schedules iso slots, and the
+        // ring fills up to the silence head-start. 400 ms is well
+        // above the longest legit warmup we've measured but well
+        // under the ~3.5 s of back-pressure the wedged-pump bug
+        // produces in field logs, so we still recover fast enough
+        // that the user gets fallback audio before they notice the
+        // dropout.
+        private const val kIsoWarmupNs: Long = 400_000_000L
+        // After warmup, this much time without playedFrames advancing
+        // means the pump isn't draining and won't recover.
+        private const val kIsoStallNs: Long = 400_000_000L
     }
 }

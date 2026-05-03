@@ -64,6 +64,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
+    @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
@@ -333,6 +334,7 @@ class PlaybackService : MediaSessionService() {
                     tf.monochrome.android.audio.usb.LibusbAudioSink(
                         delegate = defaultSink,
                         driver = libusbDriver,
+                        volumeController = bypassVolumeController,
                         processors = listOf(
                             mixBusProcessor,
                             autoEqProcessor,
@@ -356,7 +358,11 @@ class PlaybackService : MediaSessionService() {
                             enableAudioTrackPlaybackParams
                         )
                     )
-                    tf.monochrome.android.audio.usb.LibusbAudioSink(fallback, libusbDriver)
+                    tf.monochrome.android.audio.usb.LibusbAudioSink(
+                        delegate = fallback,
+                        driver = libusbDriver,
+                        volumeController = bypassVolumeController,
+                    )
                 }
             }
         }
@@ -533,6 +539,11 @@ class PlaybackService : MediaSessionService() {
             val volume = preferences.volume.first().toFloat()
             val adjustedVolume = replayGainProcessor.calculateVolume(volume, currentReplayGain)
             player.volume = adjustedVolume
+            // Mirror to the libusb bypass path. Player.volume runs
+            // inside DefaultAudioSink which we skip when bypass is
+            // hot, so without this line the slider + ReplayGain
+            // attenuation only applies on the AudioFlinger fallback.
+            bypassVolumeController.setVolume(adjustedVolume)
         }
     }
 

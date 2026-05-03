@@ -7,6 +7,8 @@ import android.graphics.Color as AndroidColor
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import android.media.AudioManager
+import android.view.KeyEvent
 import android.view.ViewGroup
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -53,6 +55,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var performanceProfile: PerformanceProfile
+    @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
+    @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
 
     // Registered-for-result launcher for POST_NOTIFICATIONS. Fires a one-shot
     // system prompt on Android 13+; the result doesn't block the UI either way
@@ -65,6 +69,14 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        // Make the system route hardware volume keys to STREAM_MUSIC
+        // by default. We re-route them to BypassVolumeController only
+        // when the libusb iso pump is actively streaming (see
+        // dispatchKeyEvent below); otherwise the system handles them
+        // normally and AudioFlinger volume changes apply to the
+        // delegate sink path as expected.
+        volumeControlStream = AudioManager.STREAM_MUSIC
 
         maybeRequestNotificationPermission()
 
@@ -180,6 +192,58 @@ class MainActivity : ComponentActivity() {
         if (!granted) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    /**
+     * Hardware-volume-key interception. The phone's volume rocker
+     * normally only steers AudioFlinger's STREAM_MUSIC, which has no
+     * audible effect when the libusb bypass path is hot — the iso
+     * pump writes PCM directly to the DAC and AudioFlinger isn't in
+     * the chain. So when the iso pump is streaming, we consume the
+     * key event, nudge the BypassVolumeController, persist the new
+     * value to preferences (so the slider in NowPlaying mirrors it
+     * and the value survives restart), and return true.
+     *
+     * When bypass is NOT active (delegate sink path, or USB DAC
+     * unplugged), we fall through to super and let the system do its
+     * thing — STREAM_MUSIC volume actually reaches the speakers /
+     * Bluetooth / non-exclusive USB output as expected.
+     *
+     * Step size is 1/25 ≈ 4% per press, picked to roughly match the
+     * granularity of Android's STREAM_MUSIC slider on most phones
+     * so the press cadence feels familiar. ACTION_DOWN only —
+     * ACTION_UP fires on every key release and would double the
+     * step otherwise.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+                              event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+            if (isVolumeKey && libusbDriver.isStreaming.value) {
+                val current = bypassVolumeController.getVolume()
+                val step = 1f / 25f
+                val next = if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                    current + step
+                } else {
+                    current - step
+                }
+                val clamped = next.coerceIn(0f, 1f)
+                bypassVolumeController.setVolume(clamped)
+                lifecycleScope.launch {
+                    preferences.setVolume(clamped.toDouble())
+                }
+                return true
+            }
+        } else if (event.action == KeyEvent.ACTION_UP) {
+            // Swallow the matching UP event so the system doesn't
+            // briefly show its own STREAM_MUSIC volume panel after we
+            // already handled the DOWN. Same gating as the DOWN path
+            // — when bypass is off, the system handles both.
+            val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+                              event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+            if (isVolumeKey && libusbDriver.isStreaming.value) return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     /**

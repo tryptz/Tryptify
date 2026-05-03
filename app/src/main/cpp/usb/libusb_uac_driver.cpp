@@ -47,6 +47,14 @@ constexpr int kNumTransfers = 4;
 constexpr int kPacketsPerTransfer = 8;
 constexpr size_t kRingBytes = 1u << 20;  // 1 MiB, must be power of two
 
+// Heartbeat: one LOGI per N iso completion callbacks. At HS /
+// bInterval=1 the event thread fires 8000 callbacks/sec / kPacketsPerTransfer
+// per transfer, so kNumTransfers transfers in flight × 8000pps gives
+// ~1000 onIso calls/sec → log once per second. Calibrated to be
+// noticeable in logcat without flooding it; flip to a smaller value
+// when actively diagnosing a wedge.
+constexpr uint32_t kIsoLogEvery = 1000;
+
 // Produced/consumed bytes count, not frame count. We pack interleaved
 // PCM contiguously so byte-level accounting is the natural unit.
 inline size_t ringSize(size_t head, size_t tail) {
@@ -1018,6 +1026,7 @@ bool LibusbUacDriver::startIsoPump() {
             static_cast<uint32_t>(microframesPerSec_));
     framesPerUframe_q16_.store(seed_q16, std::memory_order_relaxed);
     fracAccumulator_q16_ = 0;
+    isoCallbacks_ = 0;
     maxFramesPerPacket_ = baseFrames + (rateRemainder > 0 ? 1 : 0)
                           // +1 headroom for feedback over-asks.
                           + 1;
@@ -1279,6 +1288,22 @@ void LibusbUacDriver::onIso(libusb_transfer* xfr) {
         xfr->iso_packet_desc[p].length = bytes;
         if (bytes > 0) drainRing(cursor, bytes);
         cursor += bytes;
+    }
+
+    // Periodic heartbeat so a wedged or slow pump is visible in
+    // logcat. Without this, the only iso-side log lines are LOGW on
+    // failure, so a pump that "completes" but never advances
+    // playedFrames (because every drainRing pads with silence) looks
+    // identical to a pump that's perfectly healthy.
+    if ((++isoCallbacks_ % kIsoLogEvery) == 0) {
+        size_t head = ringHead_.load(std::memory_order_acquire);
+        size_t tail = ringTail_.load(std::memory_order_acquire);
+        LOGI("iso heartbeat: cb=%u played=%ld written=%ld ring=%zu inflight=%d",
+             isoCallbacks_,
+             playedFrames_.load(std::memory_order_relaxed),
+             writtenFrames_.load(std::memory_order_relaxed),
+             head - tail,
+             inflight_.load(std::memory_order_relaxed));
     }
 
     int rc = libusb_submit_transfer(xfr);

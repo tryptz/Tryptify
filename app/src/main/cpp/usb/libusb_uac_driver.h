@@ -292,6 +292,12 @@ private:
     int maxFramesPerPacket_ = 0;
     uint32_t fracAccumulator_q16_ = 0;  // event-thread-only state
 
+    // Heartbeat counter for the iso completion log. Without this, a
+    // wedged or slow iso pump is invisible (onIso only logs failures).
+    // Touched only from the event thread; one LOGI per ~kIsoLogEvery
+    // callbacks (≈ once per second at HS / 8000 packets per sec).
+    uint32_t isoCallbacks_ = 0;
+
     static void LIBUSB_CALL onFeedbackTrampoline(libusb_transfer* xfr);
     void onFeedback(libusb_transfer* xfr);
 
