@@ -327,7 +327,16 @@ class LibusbAudioSink(
             return
         }
         val played = driver.playedFrames()
-        if (played > lastPlayedFrames) {
+        // != not > : driver.flushRing() (called on our own pause()
+        // override and on Media3-driven flushes) zeros the C++ side
+        // playedFrames_ counter, so a healthy pump can legitimately
+        // produce played < lastPlayedFrames right after a flush.
+        // Treating that as "stuck" causes a false trip + fallback to
+        // the delegate sink mid-stream — which the user perceives
+        // as audio "fighting" itself between two paths every time
+        // they pause / skip / seek. Any change at all means the
+        // pump is alive; only zero-progress is a genuine wedge.
+        if (played != lastPlayedFrames) {
             lastPlayedFrames = played
             lastPlayedAdvanceNs = now
             return
