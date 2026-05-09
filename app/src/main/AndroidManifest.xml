@@ -14,6 +14,11 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Sidecar JPG / PNG covers next to local audio files. Without this, the
+         app can read the indexed audio FLAC via READ_MEDIA_AUDIO but cannot
+         even stat() the cover image sitting next to it. With it granted
+         File.exists()/read works on MediaStore-indexed images. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <!-- Bit-perfect / hi-res output. MODIFY_AUDIO_SETTINGS lets us route around
          the system mixer (request specific sample rates, disable effects on the

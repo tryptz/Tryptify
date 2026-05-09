@@ -2,7 +2,6 @@ package tf.monochrome.android.domain.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.io.File
 
 @Serializable
 data class Track(
@@ -216,7 +215,10 @@ enum class NowPlayingViewMode(val displayName: String) {
 
 fun buildCoverUrl(coverId: String, size: Int): String {
     if (coverId.contains("://")) return coverId
-    if (coverId.startsWith("/")) return File(coverId).toURI().toString()
+    // Local artwork path. File.toURI() emits `file:/path` (single slash) which
+    // Coil 3 interprets as a malformed URI; library lists pass the raw path
+    // and Coil's PathMapper resolves it correctly. Match that here.
+    if (coverId.startsWith("/")) return coverId
     val formatted = coverId.replace("-", "/")
     return "https://resources.tidal.com/images/$formatted/${size}x${size}.jpg"
 }
@@ -381,18 +383,29 @@ data class UnifiedTrack(
             is PlaybackSource.QobuzCached -> s.qobuzId
             else -> id.hashCode().toLong()
         }
+        // Fall back to the audio file path for local sources when the scan
+        // didn't manage to cache an artwork JPG. AudioFileCoverFetcher
+        // (Coil) extracts the embedded picture on demand from the file
+        // itself, so the player shows the cover even on cache misses.
+        val coverFallback = artworkUri ?: when (val s = source) {
+            is PlaybackSource.LocalFile -> s.filePath
+            else -> null
+        }
         return Track(
             id = tidalId,
             title = title,
             duration = durationSeconds,
             artist = Artist(id = artistName.hashCode().toLong(), name = artistName),
-            album = albumTitle?.let {
+            // Build an Album whenever we have a title OR a cover/fallback.
+            // Sideloaded downloads have null albumTitle but a content:// cover
+            // URI; without this guard the player drops the artwork entirely.
+            album = if (albumTitle != null || coverFallback != null) {
                 Album(
                     id = albumId?.hashCode()?.toLong() ?: tidalId,
-                    title = it,
-                    cover = artworkUri
+                    title = albumTitle.orEmpty(),
+                    cover = coverFallback
                 )
-            },
+            } else null,
             audioQuality = codec?.displayName,
             explicit = explicit,
             trackNumber = trackNumber,

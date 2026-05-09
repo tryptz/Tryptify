@@ -53,6 +53,7 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,6 +61,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.google.accompanist.permissions.isGranted
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,8 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.shouldShowRationale
 import tf.monochrome.android.data.local.scanner.ScanProgress
 import tf.monochrome.android.domain.model.UnifiedAlbum
@@ -106,13 +107,19 @@ fun LocalLibraryTab(
 
     val context = LocalContext.current
 
-    // Permission for reading audio files
-    val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        Manifest.permission.READ_MEDIA_AUDIO
+    // Permissions for reading audio files AND sidecar cover images. On API
+    // 33+ these are independent runtime grants — without READ_MEDIA_IMAGES
+    // we can't stat() the JPG sitting next to a FLAC, so per-track sidecar
+    // covers never load even though the audio plays fine.
+    val mediaPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        listOf(
+            Manifest.permission.READ_MEDIA_AUDIO,
+            Manifest.permission.READ_MEDIA_IMAGES,
+        )
     } else {
-        Manifest.permission.READ_EXTERNAL_STORAGE
+        listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
-    val permissionState = rememberPermissionState(audioPermission)
+    val permissionState = rememberMultiplePermissionsState(mediaPermissions)
 
     // SAF folder picker - takes persistent URI permission for the selected folder
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -131,13 +138,27 @@ fun LocalLibraryTab(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Permission gate
-        if (!permissionState.status.isGranted) {
+        // Permission gate — block UI only until READ_MEDIA_AUDIO is granted
+        // (image grant is best-effort; tracks still play, sidecar covers
+        // just won't render). Audio is permission index 0.
+        val audioGranted = permissionState.permissions.firstOrNull {
+            it.permission == Manifest.permission.READ_MEDIA_AUDIO ||
+                it.permission == Manifest.permission.READ_EXTERNAL_STORAGE
+        }?.status?.isGranted == true
+        if (!audioGranted) {
             PermissionRequest(
-                shouldShowRationale = permissionState.status.shouldShowRationale,
-                onRequestPermission = { permissionState.launchPermissionRequest() }
+                shouldShowRationale = permissionState.shouldShowRationale,
+                onRequestPermission = { permissionState.launchMultiplePermissionRequest() }
             )
             return@Column
+        }
+        // If we have audio but not images yet, prompt once silently — but
+        // don't gate the UI; the user has already opted into local library
+        // and the absence of cover images shouldn't block playback.
+        LaunchedEffect(permissionState.allPermissionsGranted) {
+            if (!permissionState.allPermissionsGranted) {
+                permissionState.launchMultiplePermissionRequest()
+            }
         }
 
         // Scan progress bar
@@ -211,8 +232,15 @@ fun LocalLibraryTab(
             IconButton(
                 onClick = {
                     if (!isScanning) {
-                        if (localTracks.isEmpty()) viewModel.startFullScan()
-                        else viewModel.startIncrementalScan()
+                        // Always fullScan: incremental only iterates files
+                        // whose mtime moved since the last run, which means
+                        // when scanner *logic* changes (e.g. a new sidecar
+                        // matcher), already-indexed rows never get re-read
+                        // and stay stuck with the older logic's verdict.
+                        // Full scan walks everything and lets fullScan's
+                        // per-file rescan triggers (artworkMissing,
+                        // maybeMissedArt) decide what to re-tag.
+                        viewModel.startFullScan()
                     }
                 }
             ) {
@@ -448,12 +476,23 @@ fun ArtistList(
                     .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingMd),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (artist.artworkUri != null) {
+                    AsyncImage(
+                        model = artist.artworkUri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

@@ -149,7 +149,12 @@ class TagReader @Inject constructor(
         val hasArt = artworkBytes != null
         val artworkCacheKey = when {
             hasArt && artworkBytes != null -> cacheArtwork(artworkBytes, filePath)
-            else -> findFolderCoverArt(filePath, folderArtCache)
+            // Per-track sidecar: an image next to the audio file with the
+            // same stem (e.g. "song.flac" + "song.jpg"). yt-dlp, Bandcamp,
+            // and rip workflows all produce this convention. Checked before
+            // folder-level cover.* / albumart.* fallback.
+            else -> findPerTrackSidecar(filePath)
+                ?: findFolderCoverArt(filePath, folderArtCache)
         }
         val hasArtOrSidecar = artworkCacheKey != null
 
@@ -260,6 +265,31 @@ class TagReader @Inject constructor(
         val resolved = scanFolderCoverArt(parent)
         cache?.put(parentKey, resolved)
         return resolved
+    }
+
+    /**
+     * Match an image file in the same directory whose stem equals the audio
+     * file's stem. Common naming convention from yt-dlp, Bandcamp, and
+     * various TIDAL/Qobuz rip workflows.
+     *
+     * Uses direct File.exists() rather than listFiles() — under Android's
+     * scoped storage (API 33+) listFiles() on /storage/emulated/0/...
+     * returns null even with READ_MEDIA_AUDIO/READ_MEDIA_IMAGES granted,
+     * but exists()/length() on a known indexed media path works. We pay
+     * up to 8 stat() calls per art-less track (4 extensions × 2 cases) to
+     * cover this.
+     */
+    private fun findPerTrackSidecar(filePath: String): String? {
+        val file = File(filePath)
+        val parent = file.parentFile ?: return null
+        val stem = file.nameWithoutExtension
+        for (ext in IMAGE_EXTENSIONS) {
+            val lower = File(parent, "$stem.$ext")
+            if (lower.exists()) return lower.absolutePath
+            val upper = File(parent, "$stem.${ext.uppercase()}")
+            if (upper.exists()) return upper.absolutePath
+        }
+        return null
     }
 
     private fun scanFolderCoverArt(parent: File): String? {

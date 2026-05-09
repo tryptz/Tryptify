@@ -13,6 +13,7 @@ import tf.monochrome.android.data.local.db.LocalMediaDao
 import tf.monochrome.android.data.local.db.LocalTrackEntity
 import tf.monochrome.android.data.local.db.ScanStateEntity
 import tf.monochrome.android.data.local.tags.TagReader
+import java.io.File
 import java.text.Normalizer
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,7 +50,28 @@ class MediaScanner @Inject constructor(
             mediaStoreFiles.forEachIndexed { index, audioFile ->
                 try {
                     val existing = localMediaDao.findByPath(audioFile.absolutePath)
-                    if (existing == null || existing.lastModified < audioFile.dateModified) {
+                    // Android reaps the app cache/ directory under storage
+                    // pressure, leaving Room rows pointing at vanished
+                    // artwork files. mtime hasn't changed, so without this
+                    // extra check the refresh button would never repopulate
+                    // them and the user is stuck with empty cards.
+                    val artworkMissing = existing != null &&
+                        existing.artworkCacheKey != null &&
+                        !File(existing.artworkCacheKey).exists()
+                    // Re-tag tracks whose previous scan came up artwork-less.
+                    // The TagReader sidecar matcher has been extended over
+                    // time (per-track stem match was added later), so a
+                    // null cache key on an existing row may just mean "the
+                    // older scan logic missed it" — re-read so freshly-
+                    // installed cover detection logic gets a chance.
+                    val maybeMissedArt = existing != null &&
+                        !existing.hasEmbeddedArt &&
+                        existing.artworkCacheKey == null
+                    if (existing == null ||
+                        existing.lastModified < audioFile.dateModified ||
+                        artworkMissing ||
+                        maybeMissedArt
+                    ) {
                         val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
                         val trackEntity = buildTrackEntity(audioFile, tags)
                         localMediaDao.insertTrack(trackEntity)
@@ -104,6 +126,13 @@ class MediaScanner @Inject constructor(
 
             val modifiedFiles = mediaStoreSource.queryModifiedSince(lastScan, minDurationMs)
             if (modifiedFiles.isEmpty()) {
+                // No new tag content to read, but still rebuild groupings so
+                // album-cover-into-track propagation runs and the UI picks up
+                // any album-level artwork changes since the last scan.
+                emit(ScanProgress.Grouping("Refreshing library..."))
+                rebuildGroupings()
+                rebuildFolders()
+                updateScanState()
                 emit(ScanProgress.Complete(scanned = 0, added = 0, removed = 0))
                 return@flow
             }
@@ -206,8 +235,24 @@ class MediaScanner @Inject constructor(
             localMediaDao.clearAllGenres()
 
             val albumIdByTrackPath = HashMap<String, Long>(tracks.size)
+            // Album cover propagated down to each track in the album, so
+            // tracks without their own embedded art still render the album
+            // cover in the song list instead of a music-note placeholder.
+            val albumArtByTrackPath = HashMap<String, String?>(tracks.size)
             for ((key, albumTracks) in tracksByAlbumKey) {
                 val representative = albumTracks.first()
+                // A "synthetic" album is the bucket every track with a null/
+                // blank `album` tag falls into — those tracks aren't actually
+                // an album together, just unidentified files that share the
+                // grouping key "unknown|unknown|0". If one of them happens to
+                // have embedded art, propagating that single cover onto all
+                // 1000+ unrelated tracks looks completely wrong (every song
+                // ends up branded with one stray file's cover). So: never
+                // store album art for the synthetic bucket, and never
+                // propagate it down to its tracks.
+                val isSyntheticAlbum = representative.album.isNullOrBlank()
+                val albumArt = if (isSyntheticAlbum) null
+                    else albumTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey
                 val albumEntity = LocalAlbumEntity(
                     title = representative.album ?: "Unknown Album",
                     artist = representative.albumArtist ?: representative.artist ?: "Unknown Artist",
@@ -215,36 +260,57 @@ class MediaScanner @Inject constructor(
                     genre = representative.genre,
                     trackCount = albumTracks.size,
                     totalDuration = albumTracks.sumOf { it.durationSeconds },
-                    artworkCacheKey = albumTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey,
+                    artworkCacheKey = albumArt,
                     bestQuality = albumTracks.maxByOrNull { qualityScore(it) }?.let {
                         "${it.codec} ${it.bitDepth ?: ""}/${(it.sampleRate / 1000)}"
                     },
                     groupingKey = key
                 )
                 val albumId = localMediaDao.upsertAlbum(albumEntity)
-                for (track in albumTracks) albumIdByTrackPath[track.filePath] = albumId
+                for (track in albumTracks) {
+                    albumIdByTrackPath[track.filePath] = albumId
+                    albumArtByTrackPath[track.filePath] = albumArt
+                }
             }
 
             val artistIdByTrackPath = HashMap<String, Long>(tracks.size)
             for ((normalizedName, artistTracks) in artistSet) {
-                val displayName = artistTracks.first().let { it.albumArtist ?: it.artist ?: "Unknown Artist" }
+                val representative = artistTracks.first()
+                val displayName = representative.albumArtist ?: representative.artist ?: "Unknown Artist"
                 val uniqueAlbums = artistTracks.mapNotNull { it.album }.toSet().size
+                // Same logic as albums: the "Unknown Artist" bucket is a
+                // synthetic grouping of unrelated files with no artist tag.
+                // One stray file's embedded cover shouldn't appear next to
+                // every other anonymous track in the artist list.
+                val isSyntheticArtist = representative.albumArtist.isNullOrBlank() &&
+                    representative.artist.isNullOrBlank()
+                val artistArt = if (isSyntheticArtist) null
+                    else artistTracks.firstNotNullOfOrNull { it.artworkCacheKey }
+                        ?: artistTracks.firstNotNullOfOrNull { albumArtByTrackPath[it.filePath] }
                 val artistEntity = LocalArtistEntity(
                     name = displayName,
                     normalizedName = normalizedName,
                     albumCount = uniqueAlbums,
                     trackCount = artistTracks.size,
-                    artworkCacheKey = artistTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey
+                    artworkCacheKey = artistArt
                 )
                 val artistId = localMediaDao.upsertArtist(artistEntity)
                 for (track in artistTracks) artistIdByTrackPath[track.filePath] = artistId
             }
 
             // Bulk-update every track in one statement (was: N updateTrack calls).
+            // Trust hasEmbeddedArt (set by TagReader; covers both an embedded
+            // picture atom and a folder sidecar) to decide ownership. Tracks
+            // with their own art keep its path. Tracks without get the
+            // album-propagated path — or null if the album is synthetic
+            // (Unknown Album bucket). Always-overwriting on rebuild ensures
+            // stale propagation from a previous scan gets cleaned up.
             val updatedTracks = tracks.map { t ->
                 t.copy(
                     albumId = albumIdByTrackPath[t.filePath],
-                    artistId = artistIdByTrackPath[t.filePath]
+                    artistId = artistIdByTrackPath[t.filePath],
+                    artworkCacheKey = if (t.hasEmbeddedArt) t.artworkCacheKey
+                        else albumArtByTrackPath[t.filePath],
                 )
             }
             if (updatedTracks.isNotEmpty()) {

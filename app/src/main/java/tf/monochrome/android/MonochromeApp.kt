@@ -14,6 +14,7 @@ import coil3.disk.DiskCache
 import coil3.disk.directory
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
+import tf.monochrome.android.data.local.coil.AudioFileCoverFetcher
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +111,14 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
                     .build()
             }
             .crossfade(true)
+            .components {
+                // Pulls embedded album art straight from audio files when
+                // the cached extraction missed (or got evicted), so local
+                // and downloaded tracks always show their cover in the
+                // player even before MediaScanner / our scanner have
+                // populated the artwork cache.
+                add(AudioFileCoverFetcher.Factory(this@MonochromeApp))
+            }
             .build()
     }
 
