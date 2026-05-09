@@ -1,6 +1,18 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("monochrome_native")
 
+# projectM v4's FilesystemSupport.cmake probes for std::filesystem via
+# check_source_compiles. Under the Android NDK that probe links a tiny
+# try_compile executable without -lc++_shared, so the link step fails
+# with "undefined symbol: std::__ndk1::basic_string::~basic_string" even
+# though NDK 28 fully supports <filesystem> for API >= 26. Pre-cache the
+# probe result so the projectM helper skips it and uses std::filesystem.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(STD_FILESYSTEM_EXISTS TRUE CACHE INTERNAL "Forced: NDK 28 supports std::filesystem")
+set(ENABLE_BOOST_FILESYSTEM OFF CACHE BOOL "Use std::filesystem instead of Boost")
+
 # ── ProjectM Visualizer ──────────────────────────────────────────────────
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/projectm
     ${CMAKE_CURRENT_BINARY_DIR}/projectm)
