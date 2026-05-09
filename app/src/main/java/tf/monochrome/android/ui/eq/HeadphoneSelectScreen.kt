@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,9 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,29 +44,41 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import tf.monochrome.android.domain.model.AutoEqMeasurement
 import tf.monochrome.android.domain.model.Headphone
+import tf.monochrome.android.domain.model.MeasurementRig
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
- * Full-screen headphone browser with A-Z alphabetical index sidebar.
+ * Full-screen headphone browser.
+ *
+ * Layout: a horizontally-scrolling rig filter chip row pinned at the top
+ * ("All rigs" + every rig present in the loaded data, ordered B&K → GRAS →
+ * 711 clone → MiniDSP → Unknown), then a search bar, then a denormalized
+ * one-row-per-measurement list with the source label visible on each row
+ * and an A–Z sidebar for jumping by headphone name.
+ *
+ * Each row binds to a single (headphone, measurement) pair so picking
+ * commits the user to that specific measurement on that specific rig —
+ * the EQ engine then runs against that measurement's FR data.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HeadphoneSelectScreen(
     viewModel: EqViewModel,
     onHeadphoneSelected: (Headphone) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val availableHeadphones by viewModel.availableHeadphones.collectAsState()
     val headphonesLoading by viewModel.headphonesLoading.collectAsState()
     val error by viewModel.error.collectAsState()
-    val headphoneTypeFilter by viewModel.headphoneTypeFilter.collectAsState()
+    val selectedRig by viewModel.selectedRig.collectAsState()
+    val availableRigs by viewModel.availableRigs.collectAsState()
 
     var localSearchQuery by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -74,42 +88,43 @@ fun HeadphoneSelectScreen(
         viewModel.loadAvailableHeadphones()
     }
 
-    // Filter headphones
-    val filteredHeadphones = remember(availableHeadphones, localSearchQuery, headphoneTypeFilter) {
-        availableHeadphones.filter { hp ->
-            val matchesSearch = localSearchQuery.isEmpty() ||
-                    hp.name.contains(localSearchQuery, ignoreCase = true)
-            val matchesType = headphoneTypeFilter == null || hp.type == headphoneTypeFilter
-            matchesSearch && matchesType
-        }
-    }
+    // Denormalize: one row per (headphone, measurement) pair, then apply
+    // search + rig filter. A headphone measured by N sources contributes
+    // N rows when "All rigs" is selected, so the user can pick the source
+    // they trust without first picking the headphone.
+    data class Row(val headphone: Headphone, val measurement: AutoEqMeasurement)
 
-    // Group by first letter
-    val groupedHeadphones = remember(filteredHeadphones) {
-        filteredHeadphones
-            .groupBy {
-                val first = it.name.firstOrNull()?.uppercaseChar() ?: '#'
-                if (first.isLetter()) first else '#'
+    val rows = remember(availableHeadphones, localSearchQuery, selectedRig) {
+        availableHeadphones
+            .asSequence()
+            .filter { hp ->
+                localSearchQuery.isEmpty() || hp.name.contains(localSearchQuery, ignoreCase = true)
             }
-            .toSortedMap()
+            .flatMap { hp -> hp.measurements.map { Row(hp, it) } }
+            .filter { selectedRig == null || it.measurement.rig == selectedRig }
+            .toList()
     }
 
-    val availableLetters = remember(groupedHeadphones) { groupedHeadphones.keys }
+    val groupedByLetter = remember(rows) {
+        rows.groupBy {
+            val first = it.headphone.name.firstOrNull()?.uppercaseChar() ?: '#'
+            if (first.isLetter()) first else '#'
+        }.toSortedMap()
+    }
 
-    // Build flat list for LazyColumn indexing (letter headers + items)
+    val availableLetters = remember(groupedByLetter) { groupedByLetter.keys }
+
     data class ListEntry(
         val isHeader: Boolean,
         val letter: Char? = null,
-        val headphone: Headphone? = null
+        val row: Row? = null,
     )
 
-    val flatList = remember(groupedHeadphones) {
+    val flatList = remember(groupedByLetter) {
         buildList {
-            groupedHeadphones.forEach { (letter, headphones) ->
+            groupedByLetter.forEach { (letter, group) ->
                 add(ListEntry(isHeader = true, letter = letter))
-                headphones.forEach { hp ->
-                    add(ListEntry(isHeader = false, headphone = hp))
-                }
+                group.forEach { add(ListEntry(isHeader = false, row = it)) }
             }
         }
     }
@@ -125,31 +140,65 @@ fun HeadphoneSelectScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Database",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    "AutoEq Repo",
+                    text = selectedRig?.label ?: "All rigs",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(
-                "${filteredHeadphones.size} models",
+                "${rows.size} measurements",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 8.dp)
+                modifier = Modifier.padding(end = 8.dp),
             )
             IconButton(onClick = { viewModel.refreshHeadphones() }) {
                 Icon(Icons.Default.Refresh, "Refresh", modifier = Modifier.size(20.dp))
             }
             IconButton(onClick = onDismiss) {
                 Icon(Icons.Default.Close, "Close", modifier = Modifier.size(20.dp))
+            }
+        }
+
+        // ─── Rig filter (horizontally scrollable chips) ───
+        if (availableRigs.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item(key = "rig_all") {
+                    FilterChip(
+                        selected = selectedRig == null,
+                        onClick = { viewModel.setRigFilter(null) },
+                        label = { Text("All rigs") },
+                        colors = FilterChipDefaults.filterChipColors(),
+                    )
+                }
+                items(
+                    count = availableRigs.size,
+                    key = { i -> "rig_${availableRigs[i].name}" },
+                ) { i ->
+                    val rig = availableRigs[i]
+                    FilterChip(
+                        selected = selectedRig == rig,
+                        onClick = {
+                            viewModel.setRigFilter(if (selectedRig == rig) null else rig)
+                        },
+                        label = { Text(rig.label) },
+                        colors = FilterChipDefaults.filterChipColors(),
+                    )
+                }
             }
         }
 
@@ -162,7 +211,7 @@ fun HeadphoneSelectScreen(
                 Icon(
                     Icons.Default.Search, null,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             },
             trailingIcon = {
@@ -179,8 +228,8 @@ fun HeadphoneSelectScreen(
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.glassAlpha),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.glassAlpha)
-            )
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.glassAlpha),
+            ),
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -193,54 +242,53 @@ fun HeadphoneSelectScreen(
                     .padding(horizontal = 16.dp, vertical = 4.dp)
                     .background(
                         MaterialTheme.colorScheme.errorContainer,
-                        RoundedCornerShape(8.dp)
+                        RoundedCornerShape(8.dp),
                     )
-                    .padding(12.dp)
+                    .padding(12.dp),
             ) {
                 Text(
                     error!!,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
                 )
             }
         }
 
-        // ─── Content: List + A-Z Sidebar ───
+        // ─── Content: list + A-Z sidebar ───
         if (headphonesLoading && availableHeadphones.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "Loading headphones from GitHub...",
+                        "Loading measurements from AutoEq + squig.link...",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-        } else if (filteredHeadphones.isEmpty()) {
+        } else if (rows.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No headphones found",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "No measurements match",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
             Row(modifier = Modifier.fillMaxSize()) {
-                // Headphone list
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxHeight(),
                 ) {
-                    flatList.forEach { entry ->
+                    flatList.forEachIndexed { index, entry ->
                         if (entry.isHeader && entry.letter != null) {
                             stickyHeader(key = "header_${entry.letter}") {
                                 Text(
@@ -250,29 +298,37 @@ fun HeadphoneSelectScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = MonoDimens.cardAlpha))
-                                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.surface
+                                                .copy(alpha = MonoDimens.cardAlpha)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
                                 )
                             }
-                        } else if (entry.headphone != null) {
-                            item(key = "hp_${entry.headphone.id}") {
-                                HeadphoneListItem(
-                                    headphone = entry.headphone,
+                        } else if (entry.row != null) {
+                            item(
+                                key = "m_${entry.row.headphone.id}_${entry.row.measurement.source}_$index"
+                            ) {
+                                MeasurementRowItem(
+                                    headphone = entry.row.headphone,
+                                    measurement = entry.row.measurement,
                                     onClick = {
-                                        viewModel.selectHeadphone(entry.headphone)
-                                        onHeadphoneSelected(entry.headphone)
-                                    }
+                                        viewModel.selectMeasurement(
+                                            entry.row.headphone,
+                                            entry.row.measurement,
+                                        )
+                                        onHeadphoneSelected(entry.row.headphone)
+                                    },
                                 )
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
                                 )
                             }
                         }
                     }
                 }
 
-                // A-Z Index Sidebar
                 AlphabeticalIndexSidebar(
                     availableLetters = availableLetters,
                     onLetterClicked = { letter ->
@@ -284,7 +340,7 @@ fun HeadphoneSelectScreen(
                                 listState.animateScrollToItem(index)
                             }
                         }
-                    }
+                    },
                 )
             }
         }
@@ -292,9 +348,10 @@ fun HeadphoneSelectScreen(
 }
 
 @Composable
-private fun HeadphoneListItem(
+private fun MeasurementRowItem(
     headphone: Headphone,
-    onClick: () -> Unit
+    measurement: AutoEqMeasurement,
+    onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -302,13 +359,13 @@ private fun HeadphoneListItem(
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
             imageVector = Icons.Default.Headphones,
             contentDescription = null,
             modifier = Modifier.size(28.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -316,18 +373,20 @@ private fun HeadphoneListItem(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "${headphone.measurements.size} profiles",
+                text = "${measurement.source} • ${measurement.rig.label}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Text(
             ">",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

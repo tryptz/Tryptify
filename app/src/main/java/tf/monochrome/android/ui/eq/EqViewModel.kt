@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.eq.AutoEqEngine
@@ -112,6 +113,24 @@ class EqViewModel @Inject constructor(
 
     private val _headphoneTypeFilter = MutableStateFlow<String?>(null)
     val headphoneTypeFilter: StateFlow<String?> = _headphoneTypeFilter.asStateFlow()
+
+    // ===== Rig filter (new index) =====
+
+    private val _selectedRig = MutableStateFlow<tf.monochrome.android.domain.model.MeasurementRig?>(null)
+    val selectedRig: StateFlow<tf.monochrome.android.domain.model.MeasurementRig?> = _selectedRig.asStateFlow()
+
+    val availableRigs: StateFlow<List<tf.monochrome.android.domain.model.MeasurementRig>> = _availableHeadphones
+        .map { hps ->
+            hps.flatMap { hp -> hp.measurements }
+                .map { it.rig }
+                .toSortedSet(compareBy { it.ordinal })
+                .toList()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setRigFilter(rig: tf.monochrome.android.domain.model.MeasurementRig?) {
+        _selectedRig.value = rig
+    }
 
     private val _originalMeasurement = MutableStateFlow<List<FrequencyPoint>>(emptyList())
     val originalMeasurement: StateFlow<List<FrequencyPoint>> = _originalMeasurement.asStateFlow()
@@ -512,7 +531,8 @@ class EqViewModel @Inject constructor(
     }
 
     /**
-     * Select a headphone and load its measurement
+     * Select a headphone and load its measurement (legacy path: picks the
+     * headphone's first available AutoEq measurement).
      */
     fun selectHeadphone(headphone: Headphone) {
         _selectedHeadphone.value = headphone
@@ -520,6 +540,68 @@ class EqViewModel @Inject constructor(
             preferences.setEqSelectedHeadphone(headphone.id, headphone.name)
         }
         loadHeadphonePreset(headphone.name)
+    }
+
+    /**
+     * Select a specific measurement (squig.link or AutoEq) for a headphone.
+     * Used by the rig-filtered headphone browser, where each row binds to one
+     * concrete measurement rather than the whole headphone.
+     */
+    fun selectMeasurement(
+        headphone: Headphone,
+        measurement: tf.monochrome.android.domain.model.AutoEqMeasurement,
+    ) {
+        _selectedHeadphone.value = headphone
+        viewModelScope.launch {
+            preferences.setEqSelectedHeadphone(headphone.id, headphone.name)
+            loadHeadphonePresetForMeasurement(measurement)
+        }
+    }
+
+    private suspend fun loadHeadphonePresetForMeasurement(
+        measurement: tf.monochrome.android.domain.model.AutoEqMeasurement,
+    ) {
+        try {
+            _isCalculating.value = true
+            _error.value = null
+
+            val csvData = headphoneRepository.fetchMeasurementText(measurement)
+            if (csvData == null) {
+                _error.value = "Failed to fetch measurement"
+                _isCalculating.value = false
+                return
+            }
+            val parsed = EqDataParser.parseRawData(csvData)
+            if (parsed.isEmpty()) {
+                _error.value = "Failed to parse headphone measurement"
+                _isCalculating.value = false
+                return
+            }
+
+            _originalMeasurement.value = parsed
+
+            val target = _selectedTarget.value.data
+            if (target.isEmpty()) {
+                _error.value = "Target curve not available"
+                _isCalculating.value = false
+                return
+            }
+
+            val bands = AutoEqEngine.runAutoEqAlgorithm(
+                measurement = parsed,
+                target = target,
+                bandCount = _bandCount.value,
+                maxFrequency = _maxFrequency.value,
+                sampleRate = _sampleRate.value,
+            )
+            _currentBands.value = bands
+            saveBandsToPreferences(bands)
+            _error.value = null
+            _isCalculating.value = false
+        } catch (e: Exception) {
+            _error.value = "Failed to load measurement: ${e.message}"
+            _isCalculating.value = false
+        }
     }
 
     /**
