@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -174,11 +175,13 @@ class EqViewModel @Inject constructor(
             }
         }
 
-        // Restore bands + preset + headphone from persistent storage
+        // Restore bands + preset + headphone from persistent storage.
+        // NOTE: use Flow.first() to await the first DataStore emission;
+        // the previous stateIn(...).value pattern raced and almost always
+        // returned the null initial value before the prefs read landed,
+        // which made every restore here silently no-op.
         viewModelScope.launch {
-            val presetId = preferences.eqActivePresetId.stateIn(
-                viewModelScope, SharingStarted.Eagerly, null
-            ).value
+            val presetId = preferences.eqActivePresetId.first()
 
             if (presetId != null) {
                 val preset = eqRepository.getPresetById(presetId)
@@ -191,9 +194,7 @@ class EqViewModel @Inject constructor(
                 }
             } else {
                 // No active preset — restore raw bands from DataStore
-                val bandsJson = preferences.eqBandsJson.stateIn(
-                    viewModelScope, SharingStarted.Eagerly, null
-                ).value
+                val bandsJson = preferences.eqBandsJson.first()
                 if (!bandsJson.isNullOrBlank()) {
                     try {
                         val jsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
@@ -207,21 +208,15 @@ class EqViewModel @Inject constructor(
             }
 
             // Restore saved headphone
-            val headphoneId = preferences.eqSelectedHeadphoneId.stateIn(
-                viewModelScope, SharingStarted.Eagerly, null
-            ).value
-            val headphoneName = preferences.eqSelectedHeadphoneName.stateIn(
-                viewModelScope, SharingStarted.Eagerly, null
-            ).value
+            val headphoneId = preferences.eqSelectedHeadphoneId.first()
+            val headphoneName = preferences.eqSelectedHeadphoneName.first()
             if (headphoneId != null && headphoneName != null) {
                 _selectedHeadphone.value = Headphone(id = headphoneId, name = headphoneName)
             }
 
             // Restore the cached measurement curve so the FR graph repopulates
             // immediately when the EQ screen reopens, no network round-trip.
-            val measurementJson = preferences.eqMeasurementJson.stateIn(
-                viewModelScope, SharingStarted.Eagerly, null
-            ).value
+            val measurementJson = preferences.eqMeasurementJson.first()
             if (!measurementJson.isNullOrBlank()) {
                 try {
                     val jsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
