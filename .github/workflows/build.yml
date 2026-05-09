@@ -47,6 +47,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android NDK r29
+        run: sdkmanager "ndk;29.0.14206865"
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 

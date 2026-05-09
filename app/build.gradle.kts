@@ -44,7 +44,7 @@ if (!hasCompleteReleaseSigning) {
 android {
     namespace = "tf.monochrome.android"
     compileSdk = 36
-    ndkVersion = "28.2.13676358"
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = "tf.monotrypt.android"
@@ -58,6 +58,7 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
+                arguments += "-DANDROID_STL=c++_shared"
                 abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
             }
         }

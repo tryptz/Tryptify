@@ -50,6 +50,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android NDK r29
+        run: sdkmanager "ndk;29.0.14206865"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -120,6 +123,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK r29
+        run: sdkmanager "ndk;29.0.14206865"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -195,6 +201,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK r29
+        run: sdkmanager "ndk;29.0.14206865"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
