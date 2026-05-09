@@ -506,5 +506,25 @@ data class AutoEqMeasurement(
     val source: String,
     val target: String,
     val path: String,
-    val fileName: String
+    val fileName: String,
+    val rig: MeasurementRig = MeasurementRig.UNKNOWN,
+    // Origin host for squig.link sources (e.g. "https://precog.squig.link");
+    // empty for AutoEq sources where path is the GitHub repo subpath.
+    val host: String = ""
 )
+
+/**
+ * Acoustic measurement rig used to capture a headphone's frequency response.
+ * Bucket label is what the UI shows in its filter chip; ordinal controls sort
+ * order so industry-grade rigs (B&K 5128, GRAS) rise above community clones.
+ */
+@Serializable
+enum class MeasurementRig(val label: String) {
+    BK_5128("B&K 5128"),
+    GRAS_43AG_7("GRAS 43AG-7"),
+    GRAS_43AC_10("GRAS 43AC-10"),
+    GRAS_45CA_10("GRAS 45CA-10"),
+    IEC_711_CLONE("IEC 711 clone"),
+    MINIDSP_EARS("MiniDSP EARS"),
+    UNKNOWN("Unknown")
+}

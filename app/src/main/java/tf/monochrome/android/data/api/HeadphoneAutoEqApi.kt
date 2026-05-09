@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.domain.model.AutoEqMeasurement
 import tf.monochrome.android.domain.model.Headphone
+import tf.monochrome.android.domain.model.MeasurementRig
 import java.net.URL
 import java.util.concurrent.TimeUnit
 
@@ -111,7 +112,8 @@ class HeadphoneAutoEqApi {
                         source = entry.source,
                         target = "AutoEq",
                         path = entry.path,
-                        fileName = entry.name
+                        fileName = entry.name,
+                        rig = rigFor(entry.source, entry.type),
                     )
                 }
                 Headphone(
@@ -215,6 +217,21 @@ class HeadphoneAutoEqApi {
 
     private fun isCacheValid(): Boolean =
         cachedHeadphones != null && (System.currentTimeMillis() - lastFetchTime) < CACHE_TTL_MS
+
+    /**
+     * Map an AutoEq source name (the first path component under `results/`)
+     * to the rig that source publicly uses. Crinacle splits by form factor:
+     * over-ear runs on a GRAS 43AG-7, in-ear on a 711 clone. Anything not in
+     * this map falls through to UNKNOWN so the rig filter can group them
+     * separately.
+     */
+    private fun rigFor(source: String, type: String): MeasurementRig = when (source.lowercase()) {
+        "oratory1990" -> MeasurementRig.GRAS_43AC_10
+        "crinacle" -> if (type == "over-ear") MeasurementRig.GRAS_43AG_7 else MeasurementRig.IEC_711_CLONE
+        "innerfidelity" -> MeasurementRig.MINIDSP_EARS
+        "headphonecom", "headphones.com" -> MeasurementRig.GRAS_43AG_7
+        else -> MeasurementRig.UNKNOWN
+    }
 
     private fun fetchUrl(urlString: String): String? {
         val connection = (URL(urlString).openConnection() as java.net.HttpURLConnection).apply {

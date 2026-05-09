@@ -3,40 +3,58 @@ package tf.monochrome.android.data.repository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import tf.monochrome.android.data.api.HeadphoneAutoEqApi
+import tf.monochrome.android.data.api.SquiglinkApi
+import tf.monochrome.android.domain.model.AutoEqMeasurement
 import tf.monochrome.android.domain.model.Headphone
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * HeadphoneRepository - Manages headphone data from GitHub AutoEq repository
- *
- * Provides:
- * - Fetching list of available headphones
- * - Searching and filtering headphones
- * - Caching with TTL management
- * - Loading measurements for selected headphone
+ * HeadphoneRepository - Aggregates headphone measurements from the AutoEq
+ * GitHub repo and twelve squig.link CrinGraph instances. Each measurement
+ * carries its origin source and acoustic rig so the UI can group/filter.
  */
 @Singleton
 class HeadphoneRepository @Inject constructor(
-    private val autoEqApi: HeadphoneAutoEqApi
+    private val autoEqApi: HeadphoneAutoEqApi,
+    private val squiglinkApi: SquiglinkApi,
 ) {
     /**
-     * Get all available headphones as a Flow
-     *
-     * Fetches from API and caches. Returns Flow that emits once data is available.
+     * Get all available headphones as a Flow. Both sources are queried; their
+     * measurement lists are merged so the same physical headphone appears
+     * once with measurements from every source that covers it.
      */
     fun getAllHeadphones(): Flow<List<Headphone>> = flow {
         try {
-            val result = autoEqApi.fetchHeadphones()
-            result.onSuccess { headphones ->
-                emit(headphones)
-            }.onFailure {
-                emit(emptyList())
-            }
+            val auto = autoEqApi.fetchHeadphones().getOrDefault(emptyList())
+            val squig = squiglinkApi.fetchHeadphones().getOrDefault(emptyList())
+            emit(mergeByName(auto + squig))
         } catch (_: Exception) {
             emit(emptyList())
         }
     }
+
+    /**
+     * Fetch the raw frequency-response text for a specific measurement.
+     * Dispatches by `target` to the appropriate API; returns null on miss.
+     */
+    suspend fun fetchMeasurementText(measurement: AutoEqMeasurement): String? = when (measurement.target) {
+        "squiglink" -> squiglinkApi.fetchMeasurementText(measurement.host, measurement.fileName)
+        else -> autoEqApi.fetchHeadphoneMeasurement(
+            measurement.path.substringAfterLast('/').replace(' ', '_').lowercase(),
+            measurement.fileName,
+        ).getOrNull()
+    }
+
+    private fun mergeByName(all: List<Headphone>): List<Headphone> =
+        all.groupBy { it.name }.map { (name, group) ->
+            Headphone(
+                id = group.first().id,
+                name = name,
+                type = group.first().type,
+                measurements = group.flatMap { it.measurements },
+            )
+        }.sortedBy { it.name.lowercase() }
 
     /**
      * Search headphones by name
@@ -99,11 +117,11 @@ class HeadphoneRepository @Inject constructor(
     }
 
     /**
-     * Refresh headphone cache
-     *
-     * Forces a fresh fetch from GitHub on next request.
+     * Refresh headphone cache across both source APIs. Forces a fresh fetch
+     * on the next request.
      */
     fun refreshCache() {
         autoEqApi.clearCache()
+        squiglinkApi.clearCache()
     }
 }
