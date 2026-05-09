@@ -3,6 +3,11 @@ package tf.monochrome.android.ui.settings
 import android.content.Intent
 import androidx.core.net.toUri
 import java.util.Locale
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import tf.monochrome.android.R
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
@@ -99,7 +104,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System")
+private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,6 +159,7 @@ fun SettingsScreen(
             6 -> DownloadsTab(viewModel)
             7 -> InstancesTab(viewModel)
             8 -> SystemTab(viewModel, navController)
+            9 -> AboutTab()
         }
     }
 }
@@ -1766,6 +1772,55 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+// ─── Tab 9: About ──────────────────────────────────────────────────────
+@Composable
+private fun AboutTab() {
+    val context = LocalContext.current
+    SettingsTabContent {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Image(
+                painter = painterResource(id = R.drawable.trypt_pfp),
+                contentDescription = "trypt avatar",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(140.dp)
+                    .clip(CircleShape)
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = "Support the app",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Tryptify is built and maintained by trypt. If it's "
+                    + "earned a place in your day, a tip on Ko-fi keeps the "
+                    + "lights on and the next features shipping.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, "https://ko-fi.com/trypt".toUri())
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Support on Ko-fi")
+            }
+        }
     }
 }
 
