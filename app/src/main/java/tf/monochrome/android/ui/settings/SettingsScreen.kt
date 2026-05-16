@@ -1760,7 +1760,7 @@ private fun AboutTab() {
             }
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "Tryptify version 1.5.0 · 2026",
+                text = "Tryptify version 1.5.1 · 2026",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
