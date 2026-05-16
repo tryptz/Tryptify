@@ -71,8 +71,10 @@ obj/
 # VS Code
 .vscode/
 
-# Custom AI Assistant files
-.claude/
+# Custom AI Assistant files — agent team is version-controlled.
+# Keep machine-local settings and runtime agent memory out of git.
+.claude/settings.local.json
+.claude/agent-memory/
 
 # Custom project files
 compile_errors.txt
