@@ -89,6 +89,7 @@ fun LocalAlbumDetailScreen(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     item {
+                        tf.monochrome.android.devedit.DevEditable("album_hero", Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -181,6 +182,7 @@ fun LocalAlbumDetailScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(16.dp))
+                        }
                         }
                     }
 

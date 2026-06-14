@@ -84,6 +84,7 @@ fun LocalGenreDetailScreen(
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             item {
+                tf.monochrome.android.devedit.DevEditable("genre_hero", Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -145,6 +146,7 @@ fun LocalGenreDetailScreen(
                             )
                         }
                     }
+                }
                 }
             }
 

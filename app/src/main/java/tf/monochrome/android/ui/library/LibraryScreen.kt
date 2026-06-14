@@ -139,38 +139,42 @@ fun LibraryScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = "Library",
-                    style = MaterialTheme.typography.headlineMedium
+        tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Library",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                },
+                actions = {
+                    IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
                 )
-            },
-            actions = {
-                IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        tf.monochrome.android.devedit.DevEditable("library_tab_row", Modifier.fillMaxWidth()) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedTabIndex,
+                containerColor = Color.Transparent,
+                edgePadding = 8.dp
+            ) {
+                tabs.forEachIndexed { index, (_, title) ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = { Text(title) }
                     )
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.Transparent
-            )
-        )
-
-        ScrollableTabRow(
-            selectedTabIndex = selectedTabIndex,
-            containerColor = Color.Transparent,
-            edgePadding = 8.dp
-        ) {
-            tabs.forEachIndexed { index, (_, title) ->
-                Tab(
-                    selected = selectedTabIndex == index,
-                    onClick = { selectedTabIndex = index },
-                    text = { Text(title) }
-                )
             }
         }
 

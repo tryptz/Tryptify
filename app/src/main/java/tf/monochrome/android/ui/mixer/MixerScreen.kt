@@ -230,21 +230,23 @@ fun MixerScreen(
                     }
 
                     // Preset bar
-                    PresetBar(
-                        currentPresetName = currentPresetName,
-                        presets = presets,
-                        onSave = { viewModel.savePreset(it) },
-                        onLoad = { viewModel.loadPreset(it) },
-                        onDelete = { viewModel.deletePreset(it) },
-                        onExport = { preset ->
-                            pendingExport = preset
-                            val safeName = preset.name
-                                .replace(Regex("[^A-Za-z0-9 _-]"), "_")
-                                .ifBlank { "preset" }
-                            exportLauncher.launch("$safeName.json")
-                        },
-                        onImport = { importLauncher.launch("application/json") }
-                    )
+                    tf.monochrome.android.devedit.DevEditable("preset_bar", Modifier.fillMaxWidth()) {
+                        PresetBar(
+                            currentPresetName = currentPresetName,
+                            presets = presets,
+                            onSave = { viewModel.savePreset(it) },
+                            onLoad = { viewModel.loadPreset(it) },
+                            onDelete = { viewModel.deletePreset(it) },
+                            onExport = { preset ->
+                                pendingExport = preset
+                                val safeName = preset.name
+                                    .replace(Regex("[^A-Za-z0-9 _-]"), "_")
+                                    .ifBlank { "preset" }
+                                exportLauncher.launch("$safeName.json")
+                            },
+                            onImport = { importLauncher.launch("application/json") }
+                        )
+                    }
 
                     HorizontalDivider(color = FLColors.stripBorder, modifier = Modifier.padding(horizontal = MonoDimens.spacingSm))
                 }
@@ -261,19 +263,21 @@ fun MixerScreen(
                         horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingXs)
                     ) {
                         itemsIndexed(buses) { index, bus ->
-                            FLChannelStrip(
-                                bus = bus,
-                                isSelected = index == selectedBusIndex,
-                                levels = busLevels.getOrNull(index) ?: tf.monochrome.android.audio.dsp.model.BusLevels(),
-                                onSelect = {
-                                    viewModel.selectBus(index)
-                                    showInsertRack = true
-                                },
-                                onGainChange = { viewModel.setBusGain(index, it) },
-                                onPanChange = { viewModel.setBusPan(index, it) },
-                                onToggleMute = { viewModel.toggleMute(index) },
-                                onToggleSolo = { viewModel.toggleSolo(index) }
-                            )
+                            tf.monochrome.android.devedit.DevEditable("channel_strip_$index", Modifier) {
+                                FLChannelStrip(
+                                    bus = bus,
+                                    isSelected = index == selectedBusIndex,
+                                    levels = busLevels.getOrNull(index) ?: tf.monochrome.android.audio.dsp.model.BusLevels(),
+                                    onSelect = {
+                                        viewModel.selectBus(index)
+                                        showInsertRack = true
+                                    },
+                                    onGainChange = { viewModel.setBusGain(index, it) },
+                                    onPanChange = { viewModel.setBusPan(index, it) },
+                                    onToggleMute = { viewModel.toggleMute(index) },
+                                    onToggleSolo = { viewModel.toggleSolo(index) }
+                                )
+                            }
                         }
                     }
 
@@ -283,27 +287,29 @@ fun MixerScreen(
                         enter = slideInHorizontally(initialOffsetX = { it }),
                         exit = slideOutHorizontally(targetOffsetX = { it })
                     ) {
-                        InsertRack(
-                            bus = selectedBus,
-                            busIndex = selectedBusIndex,
-                            editingPlugin = editingPlugin,
-                            allBuses = buses,
-                            onSlotTap = { slotIdx -> viewModel.editPlugin(selectedBusIndex, slotIdx) },
-                            onAddPlugin = { viewModel.showAddPlugin() },
-                            onPluginBypass = { busIdx, slotIdx -> viewModel.togglePluginBypass(busIdx, slotIdx) },
-                            onPluginRemove = { busIdx, slotIdx -> viewModel.removePlugin(busIdx, slotIdx) },
-                            onParameterChange = { busIdx, slotIdx, paramIdx, value ->
-                                viewModel.setParameter(busIdx, slotIdx, paramIdx, value)
-                            },
-                            onPluginDryWet = { busIdx, slotIdx, dw ->
-                                viewModel.setPluginDryWet(busIdx, slotIdx, dw)
-                            },
-                            onBusInputToggle = { busIdx, enabled ->
-                                viewModel.setBusInputEnabled(busIdx, enabled)
-                            },
-                            onDismissEditor = { viewModel.dismissPluginEditor() },
-                            onClose = { showInsertRack = false }
-                        )
+                        tf.monochrome.android.devedit.DevEditable("insert_rack", Modifier) {
+                            InsertRack(
+                                bus = selectedBus,
+                                busIndex = selectedBusIndex,
+                                editingPlugin = editingPlugin,
+                                allBuses = buses,
+                                onSlotTap = { slotIdx -> viewModel.editPlugin(selectedBusIndex, slotIdx) },
+                                onAddPlugin = { viewModel.showAddPlugin() },
+                                onPluginBypass = { busIdx, slotIdx -> viewModel.togglePluginBypass(busIdx, slotIdx) },
+                                onPluginRemove = { busIdx, slotIdx -> viewModel.removePlugin(busIdx, slotIdx) },
+                                onParameterChange = { busIdx, slotIdx, paramIdx, value ->
+                                    viewModel.setParameter(busIdx, slotIdx, paramIdx, value)
+                                },
+                                onPluginDryWet = { busIdx, slotIdx, dw ->
+                                    viewModel.setPluginDryWet(busIdx, slotIdx, dw)
+                                },
+                                onBusInputToggle = { busIdx, enabled ->
+                                    viewModel.setBusInputEnabled(busIdx, enabled)
+                                },
+                                onDismissEditor = { viewModel.dismissPluginEditor() },
+                                onClose = { showInsertRack = false }
+                            )
+                        }
                     }
                 }
             }

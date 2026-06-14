@@ -138,6 +138,7 @@ fun ArtistDetailScreen(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     item {
+                        tf.monochrome.android.devedit.DevEditable("artist_hero", Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -164,10 +165,11 @@ fun ArtistDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
+                        }
                     }
 
                     if (detail.topTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "Top Tracks") }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = "Top Tracks") } }
                         items(detail.topTracks.take(5)) { track ->
                             TrackItem(
                                 track = track,
@@ -184,7 +186,7 @@ fun ArtistDetailScreen(
                     }
 
                     if (detail.albums.isNotEmpty()) {
-                        item { SectionHeader(title = "Albums") }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_albums", Modifier.fillMaxWidth()) { SectionHeader(title = "Albums") } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -204,7 +206,7 @@ fun ArtistDetailScreen(
 
                     val epSingles = detail.eps + detail.singles
                     if (epSingles.isNotEmpty()) {
-                        item { SectionHeader(title = "Singles & EPs") }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_singles_eps", Modifier.fillMaxWidth()) { SectionHeader(title = "Singles & EPs") } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -223,7 +225,7 @@ fun ArtistDetailScreen(
                     }
 
                     if (detail.unreleasedTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "Unreleased (ArtistGrid)") }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_unreleased", Modifier.fillMaxWidth()) { SectionHeader(title = "Unreleased (ArtistGrid)") } }
                         item {
                             androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
                                 rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
@@ -245,7 +247,7 @@ fun ArtistDetailScreen(
                     }
 
                     if (detail.similarArtists.isNotEmpty()) {
-                        item { SectionHeader(title = "Similar Artists") }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_similar_artists", Modifier.fillMaxWidth()) { SectionHeader(title = "Similar Artists") } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
