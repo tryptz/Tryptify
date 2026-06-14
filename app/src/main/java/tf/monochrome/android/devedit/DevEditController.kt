@@ -17,8 +17,15 @@ import javax.inject.Singleton
 class DevEditController @Inject constructor(
     private val repository: DevEditRepository,
 ) {
-    private val _enabled = MutableStateFlow(false)
-    val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
+    // Master unlock, driven by the Settings toggle. When false there are no
+    // edit buttons, overlays, or highlights anywhere in the app.
+    private val _masterEnabled = MutableStateFlow(false)
+    val masterEnabled: StateFlow<Boolean> = _masterEnabled.asStateFlow()
+
+    // Screens whose per-screen edit button is currently toggled on. Transient
+    // (not persisted) — only the layout itself is saved to internal storage.
+    private val _editingScreens = MutableStateFlow<Set<String>>(emptySet())
+    val editingScreens: StateFlow<Set<String>> = _editingScreens.asStateFlow()
 
     private val _layout = MutableStateFlow(repository.load())
     val layout: StateFlow<DevEditLayout> = _layout.asStateFlow()
@@ -26,7 +33,19 @@ class DevEditController @Inject constructor(
     private val _currentScreen = MutableStateFlow("")
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
-    fun setEnabled(value: Boolean) { _enabled.value = value }
+    fun setMasterEnabled(value: Boolean) {
+        _masterEnabled.value = value
+        if (!value) _editingScreens.value = emptySet()
+    }
+
+    /** Toggle active edit mode for a single screen (the per-screen button). */
+    fun toggleScreenEditing(screen: String) {
+        _editingScreens.value = if (screen in _editingScreens.value) {
+            _editingScreens.value - screen
+        } else {
+            _editingScreens.value + screen
+        }
+    }
 
     fun setCurrentScreen(id: String) { _currentScreen.value = id }
 

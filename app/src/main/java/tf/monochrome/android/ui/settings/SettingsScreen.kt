@@ -149,17 +149,19 @@ fun SettingsScreen(
             }
         }
 
-        when (selectedTab) {
-            0 -> AppearanceTab(viewModel)
-            1 -> InterfaceTab(viewModel)
-            2 -> ScrobblingTab(viewModel)
-            3 -> AudioTab(viewModel, navController)
-            4 -> EqualizerTab(navController)
-            5 -> LibrarySettingsTab(viewModel)
-            6 -> DownloadsTab(viewModel)
-            7 -> InstancesTab(viewModel)
-            8 -> SystemTab(viewModel, navController)
-            9 -> AboutTab()
+        tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[selectedTab])}") {
+            when (selectedTab) {
+                0 -> AppearanceTab(viewModel)
+                1 -> InterfaceTab(viewModel)
+                2 -> ScrobblingTab(viewModel)
+                3 -> AudioTab(viewModel, navController)
+                4 -> EqualizerTab(navController)
+                5 -> LibrarySettingsTab(viewModel)
+                6 -> DownloadsTab(viewModel)
+                7 -> InstancesTab(viewModel)
+                8 -> SystemTab(viewModel, navController)
+                9 -> AboutTab()
+            }
         }
     }
 }
@@ -1713,12 +1715,12 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 
         val devEdit = tf.monochrome.android.devedit.LocalDevEditController.current
         if (devEdit != null) {
-            val devEnabled = devEdit.enabled.collectAsState().value
+            val devEnabled = devEdit.masterEnabled.collectAsState().value
             SettingSwitchItem(
                 title = "DevEdit layout mode",
-                subtitle = "Drag, hide & add UI elements; the toolbar's Save writes the layout to internal storage",
+                subtitle = "Unlocks a per-screen Edit button. Drag, hide & add UI elements; the toolbar's Save writes the layout to internal storage",
                 checked = devEnabled,
-                onCheckedChange = { devEdit.setEnabled(it) },
+                onCheckedChange = { devEdit.setMasterEnabled(it) },
             )
         }
     }
@@ -1808,41 +1810,53 @@ private fun SettingsTabContent(content: @Composable () -> Unit) {
     }
 }
 
+// Slugify a label into a stable DevEdit element id (e.g. "Gapless Playback" →
+// "gapless_playback"). Used so wrapping the shared setting rows yields stable,
+// human-readable ids that persist across launches.
+internal fun devSlug(text: String): String =
+    text.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifEmpty { "item" }
+
 @Composable
 private fun SettingsGroupHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
-    )
+    tf.monochrome.android.devedit.DevEditable("hdr_${devSlug(title)}", Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
+        )
+    }
 }
 
 @Composable
 fun SettingItem(title: String, subtitle: String, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp)
-    ) {
-        Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    tf.monochrome.android.devedit.DevEditable("item_${devSlug(title)}", Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 12.dp)
+        ) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
 @Composable
 fun SettingSwitchItem(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    tf.monochrome.android.devedit.DevEditable("sw_${devSlug(title)}", Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

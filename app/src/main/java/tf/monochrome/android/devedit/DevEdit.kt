@@ -1,8 +1,14 @@
 package tf.monochrome.android.devedit
 
 import android.widget.Toast
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditOff
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
@@ -61,8 +69,10 @@ fun DevEditRoot(controller: DevEditController, content: @Composable () -> Unit) 
     CompositionLocalProvider(LocalDevEditController provides controller) {
         Box(modifier = Modifier.fillMaxSize()) {
             content()
-            val enabled by controller.enabled.collectAsState()
-            if (enabled) {
+            val master by controller.masterEnabled.collectAsState()
+            val editing by controller.editingScreens.collectAsState()
+            val current by controller.currentScreen.collectAsState()
+            if (master && current in editing) {
                 DevEditToolbar(
                     controller = controller,
                     modifier = Modifier.align(Alignment.TopCenter),
@@ -106,8 +116,8 @@ private fun DevEditToolbar(controller: DevEditController, modifier: Modifier = M
             IconButton(onClick = { if (screen.isNotEmpty()) controller.resetScreen(screen) }) {
                 Icon(Icons.Default.RestartAlt, contentDescription = "Reset screen", tint = Color.White)
             }
-            IconButton(onClick = { controller.setEnabled(false) }) {
-                Icon(Icons.Default.Close, contentDescription = "Exit DevEdit", tint = Color.White)
+            IconButton(onClick = { if (screen.isNotEmpty()) controller.toggleScreenEditing(screen) }) {
+                Icon(Icons.Default.Close, contentDescription = "Stop editing screen", tint = Color.White)
             }
         }
     }
@@ -131,9 +141,55 @@ fun DevEditScreen(screenId: String, content: @Composable () -> Unit) {
         Box(modifier = Modifier.fillMaxSize()) {
             content()
             if (controller != null) {
-                val enabled by controller.enabled.collectAsState()
-                if (enabled) FreeformBoxLayer(controller, screenId)
+                val master by controller.masterEnabled.collectAsState()
+                val editing by controller.editingScreens.collectAsState()
+                val isEditing = master && screenId in editing
+                if (isEditing) FreeformBoxLayer(controller, screenId)
+                if (master) {
+                    DevEditScreenButton(
+                        editing = isEditing,
+                        onClick = { controller.toggleScreenEditing(screenId) },
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
+                }
             }
+        }
+    }
+}
+
+/**
+ * The per-screen "edit this screen" button. Rendered by [DevEditScreen] on every
+ * DevEdit-aware screen whenever the master unlock is on. Toggling it puts just
+ * this screen into edit mode, highlighting every editable parameter.
+ */
+@Composable
+private fun DevEditScreenButton(
+    editing: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.padding(8.dp),
+        shape = RoundedCornerShape(999.dp),
+        color = if (editing) DevAccent else Color.Black.copy(alpha = 0.72f),
+        contentColor = if (editing) Color.Black else DevAccent,
+        shadowElevation = 6.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, DevAccent.copy(alpha = 0.6f)),
+    ) {
+        Row(
+            modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = if (editing) Icons.Default.EditOff else Icons.Default.Edit,
+                contentDescription = if (editing) "Stop editing" else "Edit layout",
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = if (editing) "Editing" else "Edit",
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
     }
 }
@@ -157,25 +213,35 @@ fun DevEditable(
     }
 
     val layout by controller.layout.collectAsState()
-    val enabled by controller.enabled.collectAsState()
+    val master by controller.masterEnabled.collectAsState()
+    val editing by controller.editingScreens.collectAsState()
+    val active = master && screen in editing
     val override = layout.elements["$screen/$elementId"] ?: ElementOverride()
 
-    if (override.hidden && !enabled) return
+    if (override.hidden && !active) return
 
     val offsetMod = Modifier.offset {
         IntOffset(override.offsetX.dp.roundToPx(), override.offsetY.dp.roundToPx())
     }
 
-    if (!enabled) {
+    if (!active) {
         Box(modifier = modifier.then(offsetMod)) { content() }
         return
     }
 
+    val glowTransition = rememberInfiniteTransition(label = "devGlow")
+    val glow by glowTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "devGlowAlpha",
+    )
     val density = LocalDensity.current
     Box(
         modifier = modifier
             .then(offsetMod)
-            .border(1.dp, DevAccent.copy(alpha = 0.9f), RoundedCornerShape(6.dp))
+            .background(DevAccent.copy(alpha = glow * 0.10f), RoundedCornerShape(6.dp))
+            .border(2.dp, DevAccent.copy(alpha = glow), RoundedCornerShape(6.dp))
             .pointerInput(elementId) {
                 detectDragGestures { change, drag ->
                     change.consume()
