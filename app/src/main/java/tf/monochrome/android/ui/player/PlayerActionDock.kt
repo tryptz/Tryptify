@@ -1,0 +1,111 @@
+package tf.monochrome.android.ui.player
+
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import tf.monochrome.android.ui.components.liquidGlass
+
+/**
+ * Compact tool row beneath the transport controls: Timer · Chapters ·
+ * Playlist · Bookmark. Replaces the old five-pill mode selector.
+ */
+@Composable
+fun PlayerActionDock(
+    isBookmarked: Boolean,
+    onTimer: () -> Unit,
+    onChapters: () -> Unit,
+    onPlaylist: () -> Unit,
+    onBookmark: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerLarge),
+                tintAlpha = PlayerDesignTokens.GlassTintMedium,
+                borderAlpha = PlayerDesignTokens.GlassTintSoft,
+            )
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        DockAction(Icons.Default.Timer, "Timer", false, onTimer)
+        DockAction(Icons.Default.MenuBook, "Chapters", false, onChapters)
+        DockAction(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", false, onPlaylist)
+        DockAction(
+            icon = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+            label = "Bookmark",
+            selected = isBookmarked,
+            onClick = onBookmark,
+        )
+    }
+}
+
+@Composable
+private fun DockAction(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "dockActionScale",
+    )
+    val tint = if (selected) PlayerGlowMint else Color.White.copy(alpha = 0.85f)
+
+    Column(
+        modifier = Modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            modifier = Modifier.size(PlayerDesignTokens.ActionIconSize),
+            tint = tint,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}

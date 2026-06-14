@@ -416,6 +416,16 @@ class PlayerViewModel @Inject constructor(
         seekTo(pos)
     }
 
+    /** Seek relative to the current position, clamped to the track bounds. */
+    fun seekBy(deltaMs: Long) {
+        val target = (_positionMs.value + deltaMs).coerceIn(0L, _durationMs.value.coerceAtLeast(0L))
+        seekTo(target)
+    }
+
+    fun rewind10() = seekBy(-10_000L)
+
+    fun forward10() = seekBy(10_000L)
+
     fun toggleShuffle() {
         try {
             queueManager.toggleShuffle()
