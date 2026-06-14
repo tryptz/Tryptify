@@ -182,33 +182,38 @@ private fun SignedInView(
 ) {
     Spacer(modifier = Modifier.height(32.dp))
 
-    Icon(
-        Icons.Default.AccountCircle,
-        contentDescription = "Profile",
-        modifier = Modifier.size(80.dp),
-        tint = MaterialTheme.colorScheme.primary
-    )
+    tf.monochrome.android.devedit.DevEditable("profile_header", Modifier.fillMaxWidth()) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Default.AccountCircle,
+                contentDescription = "Profile",
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
 
-    Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-    Text(
-        text = profile.displayName ?: "User",
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onBackground
-    )
+            Text(
+                text = profile.displayName ?: "User",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
 
-    if (profile.email != null) {
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = profile.email,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            if (profile.email != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = profile.email,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 
     Spacer(modifier = Modifier.height(32.dp))
 
+    tf.monochrome.android.devedit.DevEditable("profile_sync_card", Modifier.fillMaxWidth()) {
     Card(
         modifier = Modifier.fillMaxWidth().liquidGlass(shape = RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -228,6 +233,7 @@ private fun SignedInView(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
     }
 
     Spacer(modifier = Modifier.height(16.dp))
@@ -305,30 +311,34 @@ private fun SignedOutView(
 
     Spacer(modifier = Modifier.height(40.dp))
 
-    Icon(
-        Icons.Default.AccountCircle,
-        contentDescription = null,
-        modifier = Modifier.size(72.dp),
-        tint = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    tf.monochrome.android.devedit.DevEditable("signin_header", Modifier.fillMaxWidth()) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Default.AccountCircle,
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-    Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-    Text(
-        text = "Sign in to Monochrome",
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onBackground
-    )
+            Text(
+                text = "Sign in to Monochrome",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
 
-    Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-    Text(
-        text = "Sync your favorites and playlists across devices",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center
-    )
+            Text(
+                text = "Sync your favorites and playlists across devices",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 
     Spacer(modifier = Modifier.height(28.dp))
 

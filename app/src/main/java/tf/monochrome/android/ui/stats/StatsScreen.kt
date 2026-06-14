@@ -142,72 +142,88 @@ private fun StatsContent(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item { RangePicker(state.range, onPick = onPickRange) }
+        item { tf.monochrome.android.devedit.DevEditable("range_picker", Modifier.fillMaxWidth()) { RangePicker(state.range, onPick = onPickRange) } }
         if (lastSyncedAt != null) {
-            item { LastSyncedLabel(lastSyncedAt) }
+            item { tf.monochrome.android.devedit.DevEditable("last_synced_label") { LastSyncedLabel(lastSyncedAt) } }
         }
-        item { StaggerEntry(0) { HeroMinutesCard(state) } }
-        item { StaggerEntry(1) { HighlightRow(state) } }
+        item { tf.monochrome.android.devedit.DevEditable("hero_minutes_card", Modifier.fillMaxWidth()) { StaggerEntry(0) { HeroMinutesCard(state) } } }
+        item { tf.monochrome.android.devedit.DevEditable("highlight_row", Modifier.fillMaxWidth()) { StaggerEntry(1) { HighlightRow(state) } } }
         item {
-            StaggerEntry(2) {
-                SectionCard("Plays over time") {
-                    if (state.playsByDay.isNotEmpty()) DayLineChart(state.playsByDay)
-                    else EmptyHint()
+            tf.monochrome.android.devedit.DevEditable("section_plays_over_time", Modifier.fillMaxWidth()) {
+                StaggerEntry(2) {
+                    SectionCard("Plays over time") {
+                        if (state.playsByDay.isNotEmpty()) DayLineChart(state.playsByDay)
+                        else EmptyHint()
+                    }
                 }
             }
         }
         item {
-            StaggerEntry(3) {
-                SectionCard("Time of day") {
-                    if (state.playsByHour.isNotEmpty()) HourBarChart(state.playsByHour, state.peakHour)
-                    else EmptyHint()
+            tf.monochrome.android.devedit.DevEditable("section_time_of_day", Modifier.fillMaxWidth()) {
+                StaggerEntry(3) {
+                    SectionCard("Time of day") {
+                        if (state.playsByHour.isNotEmpty()) HourBarChart(state.playsByHour, state.peakHour)
+                        else EmptyHint()
+                    }
                 }
             }
         }
         item {
-            StaggerEntry(4) {
-                SectionCard("Day of week") {
-                    if (state.playsByWeekday.isNotEmpty()) WeekdayBarChart(state.playsByWeekday)
-                    else EmptyHint()
+            tf.monochrome.android.devedit.DevEditable("section_day_of_week", Modifier.fillMaxWidth()) {
+                StaggerEntry(4) {
+                    SectionCard("Day of week") {
+                        if (state.playsByWeekday.isNotEmpty()) WeekdayBarChart(state.playsByWeekday)
+                        else EmptyHint()
+                    }
                 }
             }
         }
         item {
-            StaggerEntry(5) {
-                SectionCard("Top tracks") {
-                    if (state.topTracks.isEmpty()) EmptyHint()
-                    else TopTracksList(state.topTracks.take(10))
+            tf.monochrome.android.devedit.DevEditable("section_top_tracks", Modifier.fillMaxWidth()) {
+                StaggerEntry(5) {
+                    SectionCard("Top tracks") {
+                        if (state.topTracks.isEmpty()) EmptyHint()
+                        else TopTracksList(state.topTracks.take(10))
+                    }
                 }
             }
         }
         item {
-            StaggerEntry(6) {
-                SectionCard("Top artists") {
-                    if (state.topArtists.isEmpty()) EmptyHint()
-                    else TopArtistsList(state.topArtists.take(10))
+            tf.monochrome.android.devedit.DevEditable("section_top_artists", Modifier.fillMaxWidth()) {
+                StaggerEntry(6) {
+                    SectionCard("Top artists") {
+                        if (state.topArtists.isEmpty()) EmptyHint()
+                        else TopArtistsList(state.topArtists.take(10))
+                    }
                 }
             }
         }
         item {
-            StaggerEntry(7) {
-                SectionCard("Top albums") {
-                    if (state.topAlbums.isEmpty()) EmptyHint()
-                    else TopAlbumsList(state.topAlbums.take(10))
+            tf.monochrome.android.devedit.DevEditable("section_top_albums", Modifier.fillMaxWidth()) {
+                StaggerEntry(7) {
+                    SectionCard("Top albums") {
+                        if (state.topAlbums.isEmpty()) EmptyHint()
+                        else TopAlbumsList(state.topAlbums.take(10))
+                    }
                 }
             }
         }
         item {
-            StaggerEntry(8) {
-                SectionCard("Audio quality") {
-                    if (state.playsByQuality.isEmpty()) EmptyHint()
-                    else QualityBars(state.playsByQuality)
+            tf.monochrome.android.devedit.DevEditable("section_audio_quality", Modifier.fillMaxWidth()) {
+                StaggerEntry(8) {
+                    SectionCard("Audio quality") {
+                        if (state.playsByQuality.isEmpty()) EmptyHint()
+                        else QualityBars(state.playsByQuality)
+                    }
                 }
             }
         }
         if (state.playsBySource.isNotEmpty()) {
             item {
-                StaggerEntry(9) {
-                    SectionCard("Source") { SourceBars(state.playsBySource) }
+                tf.monochrome.android.devedit.DevEditable("section_source", Modifier.fillMaxWidth()) {
+                    StaggerEntry(9) {
+                        SectionCard("Source") { SourceBars(state.playsBySource) }
+                    }
                 }
             }
         }

@@ -134,6 +134,7 @@ fun AlbumDetailScreen(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     item {
+                        tf.monochrome.android.devedit.DevEditable("album_hero", Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -171,6 +172,7 @@ fun AlbumDetailScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.height(16.dp))
+                            tf.monochrome.android.devedit.DevEditable("album_action_row") {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 FilledIconButton(
                                     onClick = { playerViewModel.playAll(detail.tracks) },
@@ -199,7 +201,9 @@ fun AlbumDetailScreen(
                                     )
                                 }
                             }
+                            }
                             Spacer(modifier = Modifier.height(16.dp))
+                        }
                         }
                     }
 

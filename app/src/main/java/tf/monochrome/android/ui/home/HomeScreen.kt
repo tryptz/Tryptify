@@ -159,42 +159,46 @@ fun HomeScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = "Tryptify",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground
+        tf.monochrome.android.devedit.DevEditable("home_header", Modifier.fillMaxWidth()) {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Tryptify",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                },
+                actions = {
+                    IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = { navController.navigate(Screen.Profile.route) }) {
+                        Icon(
+                            Icons.Default.AccountCircle,
+                            contentDescription = "Profile",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                 )
-            },
-            actions = {
-                IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = { navController.navigate(Screen.Profile.route) }) {
-                    Icon(
-                        Icons.Default.AccountCircle,
-                        contentDescription = "Profile",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.Transparent,
-                scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
             )
-        )
+        }
 
         // Search bar
-        SearchQueryField(
-            query = searchQuery,
-            onQueryChange = searchViewModel::onQueryChange,
-            onSubmit = searchViewModel::submitSearch
-        )
+        tf.monochrome.android.devedit.DevEditable("home_search_bar", Modifier.fillMaxWidth()) {
+            SearchQueryField(
+                query = searchQuery,
+                onQueryChange = searchViewModel::onQueryChange,
+                onSubmit = searchViewModel::submitSearch
+            )
+        }
 
         if (hasSearchResults) {
             SearchResultsContent(

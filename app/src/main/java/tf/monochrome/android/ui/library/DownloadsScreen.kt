@@ -76,11 +76,13 @@ fun DownloadsScreen(
     ) {
         if (albumGroups.isNotEmpty()) {
             item {
+                tf.monochrome.android.devedit.DevEditable("downloads_albums_header", Modifier.fillMaxWidth()) {
                 Text(
                     text = "Albums",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                 )
+                }
             }
             item {
                 LazyRow(
@@ -102,11 +104,13 @@ fun DownloadsScreen(
             }
             item { Spacer(modifier = Modifier.height(16.dp)) }
             item {
+                tf.monochrome.android.devedit.DevEditable("downloads_tracks_header", Modifier.fillMaxWidth()) {
                 Text(
                     text = "Tracks",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
+                }
             }
         }
 

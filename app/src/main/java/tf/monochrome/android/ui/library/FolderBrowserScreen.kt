@@ -57,6 +57,7 @@ fun FolderBrowserScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
+                tf.monochrome.android.devedit.DevEditable("folder_path_bar") {
                 Column {
                     Text(
                         displayName,
@@ -71,6 +72,7 @@ fun FolderBrowserScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
                 }
             },
             navigationIcon = {
