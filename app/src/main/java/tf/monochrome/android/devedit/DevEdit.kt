@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +26,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditOff
+import androidx.compose.material.icons.filled.GridOff
+import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
@@ -43,6 +46,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -107,6 +111,14 @@ private fun DevEditToolbar(controller: DevEditController, modifier: Modifier = M
             IconButton(onClick = { if (screen.isNotEmpty()) controller.addBox(screen) }) {
                 Icon(Icons.Default.Add, contentDescription = "Add box", tint = Color.White)
             }
+            val snapOn by controller.snapToGrid.collectAsState()
+            IconButton(onClick = { controller.toggleSnapToGrid() }) {
+                Icon(
+                    imageVector = if (snapOn) Icons.Default.GridOn else Icons.Default.GridOff,
+                    contentDescription = if (snapOn) "Grid snap on" else "Grid snap off",
+                    tint = if (snapOn) DevAccent else Color.White,
+                )
+            }
             IconButton(onClick = {
                 controller.save()
                 Toast.makeText(context, "Layout saved", Toast.LENGTH_SHORT).show()
@@ -144,6 +156,8 @@ fun DevEditScreen(screenId: String, content: @Composable () -> Unit) {
                 val master by controller.masterEnabled.collectAsState()
                 val editing by controller.editingScreens.collectAsState()
                 val isEditing = master && screenId in editing
+                val snapOn by controller.snapToGrid.collectAsState()
+                if (isEditing && snapOn) GridOverlay(controller.gridStep)
                 if (isEditing) FreeformBoxLayer(controller, screenId)
                 if (master) {
                     DevEditScreenButton(
@@ -215,13 +229,17 @@ fun DevEditable(
     val layout by controller.layout.collectAsState()
     val master by controller.masterEnabled.collectAsState()
     val editing by controller.editingScreens.collectAsState()
+    val snapOn by controller.snapToGrid.collectAsState()
     val active = master && screen in editing
     val override = layout.elements["$screen/$elementId"] ?: ElementOverride()
 
     if (override.hidden && !active) return
 
+    val gridStep = controller.gridStep
     val offsetMod = Modifier.offset {
-        IntOffset(override.offsetX.dp.roundToPx(), override.offsetY.dp.roundToPx())
+        val ox = if (snapOn) snapToStep(override.offsetX, gridStep) else override.offsetX
+        val oy = if (snapOn) snapToStep(override.offsetY, gridStep) else override.offsetY
+        IntOffset(ox.dp.roundToPx(), oy.dp.roundToPx())
     }
 
     if (!active) {
@@ -243,7 +261,9 @@ fun DevEditable(
             .background(DevAccent.copy(alpha = glow * 0.10f), RoundedCornerShape(6.dp))
             .border(2.dp, DevAccent.copy(alpha = glow), RoundedCornerShape(6.dp))
             .pointerInput(elementId) {
-                detectDragGestures { change, drag ->
+                detectDragGestures(
+                    onDragEnd = { controller.snapElementToGrid(screen, elementId) },
+                ) { change, drag ->
                     change.consume()
                     val dx = with(density) { drag.x.toDp().value }
                     val dy = with(density) { drag.y.toDp().value }
@@ -295,14 +315,19 @@ private fun FreeformBoxLayer(controller: DevEditController, screen: String) {
 @Composable
 private fun FreeformBoxView(controller: DevEditController, screen: String, box: FreeformBox) {
     val density = LocalDensity.current
+    val snapOn by controller.snapToGrid.collectAsState()
+    val step = controller.gridStep
+    fun s(v: Float) = if (snapOn) snapToStep(v, step) else v
     Box(
         modifier = Modifier
-            .offset(box.x.dp, box.y.dp)
-            .size(box.width.dp, box.height.dp)
+            .offset(s(box.x).dp, s(box.y).dp)
+            .size(s(box.width).dp, s(box.height).dp)
             .background(Color(box.colorArgb), RoundedCornerShape(8.dp))
             .border(1.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
             .pointerInput(box.id) {
-                detectDragGestures { change, drag ->
+                detectDragGestures(
+                    onDragEnd = { controller.snapBoxToGrid(screen, box.id) },
+                ) { change, drag ->
                     change.consume()
                     val dx = with(density) { drag.x.toDp().value }
                     val dy = with(density) { drag.y.toDp().value }
@@ -327,7 +352,9 @@ private fun FreeformBoxView(controller: DevEditController, screen: String, box: 
                 .align(Alignment.BottomEnd)
                 .size(24.dp)
                 .pointerInput(box.id) {
-                    detectDragGestures { change, drag ->
+                    detectDragGestures(
+                        onDragEnd = { controller.snapBoxToGrid(screen, box.id) },
+                    ) { change, drag ->
                         change.consume()
                         val dw = with(density) { drag.x.toDp().value }
                         val dh = with(density) { drag.y.toDp().value }
@@ -337,6 +364,30 @@ private fun FreeformBoxView(controller: DevEditController, screen: String, box: 
             contentAlignment = Alignment.Center,
         ) {
             Icon(Icons.Default.OpenInFull, contentDescription = "Resize box", tint = Color.White, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+/** Round a dp value to the nearest grid step. */
+internal fun snapToStep(value: Float, step: Float): Float =
+    if (step > 0f) Math.round(value / step) * step else value
+
+/** Faint grid drawn over a screen while editing with grid-snap enabled. */
+@Composable
+private fun GridOverlay(stepDp: Float) {
+    val lineColor = DevAccent.copy(alpha = 0.14f)
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val step = stepDp.dp.toPx()
+        if (step <= 0f) return@Canvas
+        var x = 0f
+        while (x <= size.width) {
+            drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+            x += step
+        }
+        var y = 0f
+        while (y <= size.height) {
+            drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+            y += step
         }
     }
 }

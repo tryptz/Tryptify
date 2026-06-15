@@ -13,6 +13,8 @@ import kotlinx.serialization.Serializable
 data class DevEditLayout(
     val elements: Map<String, ElementOverride> = emptyMap(),
     val boxes: Map<String, List<FreeformBox>> = emptyMap(),
+    val snapToGrid: Boolean = false,
+    val gridStep: Float = 16f,
 )
 
 @Serializable

@@ -33,6 +33,47 @@ class DevEditController @Inject constructor(
     private val _currentScreen = MutableStateFlow("")
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
+    // When on, dragging locks element offsets and freeform boxes to a grid.
+    private val _snapToGrid = MutableStateFlow(_layout.value.snapToGrid)
+    val snapToGrid: StateFlow<Boolean> = _snapToGrid.asStateFlow()
+
+    val gridStep: Float get() = _layout.value.gridStep.takeIf { it > 0f } ?: 16f
+
+    fun toggleSnapToGrid() {
+        val value = !_snapToGrid.value
+        _snapToGrid.value = value
+        update { it.copy(snapToGrid = value) }
+    }
+
+    /** Round a dp value to the nearest grid step when snapping is on. */
+    fun snap(value: Float): Float =
+        if (_snapToGrid.value) Math.round(value / gridStep) * gridStep else value
+
+    /** Snap a moved element's stored offset to the grid (no-op when snap off). */
+    fun snapElementToGrid(screen: String, element: String) {
+        val k = key(screen, element)
+        val cur = _layout.value.elements[k] ?: return
+        update {
+            it.copy(elements = it.elements + (k to cur.copy(
+                offsetX = snap(cur.offsetX),
+                offsetY = snap(cur.offsetY),
+            )))
+        }
+    }
+
+    /** Snap a box's stored position and size to the grid (no-op when snap off). */
+    fun snapBoxToGrid(screen: String, id: String) {
+        val list = (_layout.value.boxes[screen] ?: return).map {
+            if (it.id == id) it.copy(
+                x = snap(it.x),
+                y = snap(it.y),
+                width = snap(it.width).coerceAtLeast(gridStep),
+                height = snap(it.height).coerceAtLeast(gridStep),
+            ) else it
+        }
+        update { it.copy(boxes = it.boxes + (screen to list)) }
+    }
+
     fun setMasterEnabled(value: Boolean) {
         _masterEnabled.value = value
         if (!value) _editingScreens.value = emptySet()
