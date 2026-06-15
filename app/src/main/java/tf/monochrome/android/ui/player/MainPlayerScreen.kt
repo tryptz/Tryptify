@@ -207,12 +207,23 @@ fun MainPlayerScreen(
                 )
             }
 
-            // Lower swipe zone — a flick upward here reveals the audio-tools
-            // overlay. The handle doubles as a tap affordance for discovery.
+            // Free, fully-interactive space below the dock. The audio-tools
+            // pull gesture lives in a thin strip at the very bottom edge (added
+            // as an overlay below), so anything placed in this area still works
+            // when the panel isn't pulled up.
+            Spacer(Modifier.weight(1f))
+        }
+
+        // Thin bottom-edge pull strip — the only element that captures the
+        // audio-tools pull gesture. Everything above it stays interactive when
+        // the panel isn't pulled up. Hidden once the panel is open.
+        if (!statusExpanded) {
             Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .weight(0.45f)
+                    .navigationBarsPadding()
+                    .height(44.dp)
                     .pointerInput(Unit) {
                         var total = 0f
                         detectVerticalDragGestures(
@@ -225,7 +236,6 @@ fun MainPlayerScreen(
             ) {
                 SwipeUpHandle(onClick = { statusExpanded = true })
             }
-            Spacer(Modifier.height(8.dp))
         }
 
         // Scrim behind the overlay.
