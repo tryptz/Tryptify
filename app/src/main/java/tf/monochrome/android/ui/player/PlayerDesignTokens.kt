@@ -1,9 +1,7 @@
 package tf.monochrome.android.ui.player
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,12 +15,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImagePainter
-import coil3.compose.SubcomposeAsyncImage
-import coil3.compose.SubcomposeAsyncImageContent
+import coil3.ImageLoader
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Visual design tokens for the redesigned main player. Keeping sizes, corner
@@ -66,37 +65,42 @@ data class AlbumColors(val dominant: Color, val vibrant: Color)
 @Composable
 fun rememberAlbumColors(imageUrl: String?): AlbumColors {
     val context = LocalContext.current
-    var dominant by remember(imageUrl) { mutableStateOf(Color(0xFF1B1B1B)) }
-    var vibrant by remember(imageUrl) { mutableStateOf(Color(0xFF7EB6FF)) }
-
-    Box(modifier = Modifier.size(1.dp).graphicsLayer { alpha = 0f }) {
-        SubcomposeAsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .allowHardware(false)
-                .build(),
-            contentDescription = null
-        ) {
-            val state = painter.state
-            if (state is AsyncImagePainter.State.Success) {
-                LaunchedEffect(state) {
-                    val bitmap = state.result.image.toBitmap()
-                    androidx.palette.graphics.Palette.from(bitmap).generate { palette ->
-                        dominant = palette?.dominantSwatch?.let { Color(it.rgb) }
-                            ?: palette?.vibrantSwatch?.let { Color(it.rgb) }
-                            ?: dominant
-                        vibrant = palette?.lightVibrantSwatch?.let { Color(it.rgb) }
-                            ?: palette?.vibrantSwatch?.let { Color(it.rgb) }
-                            ?: palette?.lightMutedSwatch?.let { Color(it.rgb) }
-                            ?: dominant
-                    }
-                }
-            }
-            SubcomposeAsyncImageContent()
-        }
+    var colors by remember(imageUrl) {
+        mutableStateOf(AlbumColors(Color(0xFF1B1B1B), Color(0xFF7EB6FF)))
     }
 
-    return AlbumColors(dominant, vibrant)
+    LaunchedEffect(imageUrl) {
+        if (imageUrl.isNullOrBlank()) return@LaunchedEffect
+        // Decode the cover at a usable size (a 1dp image yields an empty bitmap
+        // and Palette returns null swatches → everything falls back to defaults).
+        // Palette needs a pixel-readable (software) bitmap, hence allowHardware(false).
+        val bitmap = try {
+            val request = ImageRequest.Builder(context)
+                .data(imageUrl)
+                .allowHardware(false)
+                .size(256, 256)
+                .build()
+            val result = ImageLoader(context).execute(request)
+            (result as? SuccessResult)?.image?.toBitmap()
+        } catch (_: Exception) {
+            null
+        } ?: return@LaunchedEffect
+        val extracted = withContext(Dispatchers.Default) {
+            val palette = androidx.palette.graphics.Palette.from(bitmap).generate()
+            val dominant = palette.dominantSwatch?.let { Color(it.rgb) }
+                ?: palette.vibrantSwatch?.let { Color(it.rgb) }
+                ?: palette.mutedSwatch?.let { Color(it.rgb) }
+            val vibrant = palette.vibrantSwatch?.let { Color(it.rgb) }
+                ?: palette.lightVibrantSwatch?.let { Color(it.rgb) }
+                ?: palette.lightMutedSwatch?.let { Color(it.rgb) }
+                ?: palette.dominantSwatch?.let { Color(it.rgb) }
+            if (dominant == null && vibrant == null) null
+            else AlbumColors(dominant ?: Color(0xFF1B1B1B), vibrant ?: dominant ?: Color(0xFF7EB6FF))
+        }
+        if (extracted != null) colors = extracted
+    }
+
+    return colors
 }
 
 @Composable
