@@ -168,7 +168,6 @@ fun PlayerHero(
                 showSpectrum = showSpectrum,
                 onToggleShowSpectrum = onToggleShowSpectrum,
                 onEnterVisualizer = onEnterVisualizer,
-                glowColor = albumColors.dominant,
             )
         }
     }
@@ -183,20 +182,19 @@ private fun SquareArtHero(
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     onEnterVisualizer: () -> Unit,
-    glowColor: Color,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .shadow(
-                elevation = 28.dp,
+                elevation = 14.dp,
                 shape = RectangleShape,
-                ambientColor = glowColor,
-                spotColor = glowColor,
+                spotColor = Color.Black,
+                ambientColor = Color.Black,
             ),
         shape = RectangleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+        color = Color.Transparent,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             HeroCoverArt(
