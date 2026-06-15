@@ -199,6 +199,7 @@ fun MainPlayerScreen(
             Spacer(Modifier.height(20.dp))
             DevEditable("actionDock", Modifier.fillMaxWidth()) {
                 PlayerActionDock(
+                    accent = accent,
                     isBookmarked = state.isLiked,
                     onTimer = onTimer,
                     onChapters = onChapters,
@@ -353,6 +354,7 @@ private fun StatusOverlayPanel(
                     .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
             )
             PlayerStatusGrid(
+                accent = state.albumColors.vibrant,
                 outputLabel = state.outputLabel,
                 soundLabel = state.soundLabel,
                 speedLabel = state.speedLabel,

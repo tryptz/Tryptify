@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ import tf.monochrome.android.ui.components.liquidGlass
  */
 @Composable
 fun PlayerStatusGrid(
+    accent: Color,
     outputLabel: String,
     soundLabel: String,
     speedLabel: String,
@@ -50,6 +52,8 @@ fun PlayerStatusGrid(
     onSleep: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Four related hues derived from the album accent so the cards stay varied
+    // but track the current artwork.
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -60,7 +64,7 @@ fun PlayerStatusGrid(
                 icon = Icons.Default.Headphones,
                 title = "Output",
                 value = outputLabel,
-                accent = PlayerGlowBlue,
+                accent = accent,
                 onClick = onOutput,
             )
             StatusCard(
@@ -68,7 +72,7 @@ fun PlayerStatusGrid(
                 icon = Icons.Default.Tune,
                 title = "Sound",
                 value = soundLabel,
-                accent = PlayerGlowMint,
+                accent = accent.shiftHue(36f),
                 onClick = onSound,
             )
         }
@@ -78,7 +82,7 @@ fun PlayerStatusGrid(
                 icon = Icons.Default.Speed,
                 title = "Speed",
                 value = speedLabel,
-                accent = PlayerGlowGold,
+                accent = accent.shiftHue(72f),
                 onClick = onSpeed,
             )
             StatusCard(
@@ -86,11 +90,19 @@ fun PlayerStatusGrid(
                 icon = Icons.Default.Bedtime,
                 title = "Sleep timer",
                 value = sleepLabel,
-                accent = PlayerGlowPink,
+                accent = accent.shiftHue(-36f),
                 onClick = onSleep,
             )
         }
     }
+}
+
+/** Rotate a color's hue by [degrees], preserving saturation/value. */
+private fun Color.shiftHue(degrees: Float): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(this.toArgb(), hsv)
+    hsv[0] = ((hsv[0] + degrees) % 360f + 360f) % 360f
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 @Composable

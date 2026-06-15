@@ -40,6 +40,7 @@ import tf.monochrome.android.ui.components.liquidGlass
  */
 @Composable
 fun PlayerActionDock(
+    accent: Color,
     isBookmarked: Boolean,
     onTimer: () -> Unit,
     onChapters: () -> Unit,
@@ -58,12 +59,13 @@ fun PlayerActionDock(
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        DockAction(Icons.Default.Timer, "Timer", false, onTimer)
-        DockAction(Icons.Default.MenuBook, "Chapters", false, onChapters)
-        DockAction(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", false, onPlaylist)
+        DockAction(Icons.Default.Timer, "Timer", accent, false, onTimer)
+        DockAction(Icons.Default.MenuBook, "Chapters", accent, false, onChapters)
+        DockAction(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", accent, false, onPlaylist)
         DockAction(
             icon = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
             label = "Bookmark",
+            accent = accent,
             selected = isBookmarked,
             onClick = onBookmark,
         )
@@ -74,6 +76,7 @@ fun PlayerActionDock(
 private fun DockAction(
     icon: ImageVector,
     label: String,
+    accent: Color,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
@@ -84,7 +87,8 @@ private fun DockAction(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "dockActionScale",
     )
-    val tint = if (selected) PlayerGlowMint else Color.White.copy(alpha = 0.85f)
+    val iconTint = accent
+    val labelTint = if (selected) accent else Color.White.copy(alpha = 0.7f)
 
     Column(
         modifier = Modifier
@@ -98,12 +102,12 @@ private fun DockAction(
             imageVector = icon,
             contentDescription = label,
             modifier = Modifier.size(PlayerDesignTokens.ActionIconSize),
-            tint = tint,
+            tint = iconTint,
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = tint,
+            color = labelTint,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
