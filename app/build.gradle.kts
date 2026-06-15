@@ -231,9 +231,6 @@ dependencies {
     implementation(libs.haze)
     implementation(libs.haze.materials)
 
-    // BlurView v3 (real backdrop blur, Compose-safe on API 31+)
-    implementation(libs.blurview)
-
     // Bundles app/src/main/baseline-prof.txt into the APK so ProfileInstaller
     // AOT-compiles hot Compose code paths on first launch.
     implementation(libs.profileinstaller)

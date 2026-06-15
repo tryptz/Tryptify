@@ -56,6 +56,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -167,6 +168,7 @@ fun PlayerHero(
                 showSpectrum = showSpectrum,
                 onToggleShowSpectrum = onToggleShowSpectrum,
                 onEnterVisualizer = onEnterVisualizer,
+                glowColor = albumColors.dominant,
             )
         }
     }
@@ -181,9 +183,18 @@ private fun SquareArtHero(
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     onEnterVisualizer: () -> Unit,
+    glowColor: Color,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .shadow(
+                elevation = 28.dp,
+                shape = RectangleShape,
+                ambientColor = glowColor,
+                spotColor = glowColor,
+            ),
         shape = RectangleShape,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
     ) {
