@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
@@ -37,7 +37,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 
 /**
  * Bottom 2×2 grid surfacing the player's premium audio tools: output device,
- * sound/AutoEQ, playback speed and sleep timer.
+ * sound/AutoEQ, playback speed and the DSP mixer.
  */
 @Composable
 fun PlayerStatusGrid(
@@ -45,11 +45,11 @@ fun PlayerStatusGrid(
     outputLabel: String,
     soundLabel: String,
     speedLabel: String,
-    sleepLabel: String,
+    mixerLabel: String,
     onOutput: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
-    onSleep: () -> Unit,
+    onMixer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Four related hues derived from the album accent so the cards stay varied
@@ -69,7 +69,7 @@ fun PlayerStatusGrid(
             )
             StatusCard(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Default.Tune,
+                icon = Icons.Default.Equalizer,
                 title = "Sound",
                 value = soundLabel,
                 accent = accent.shiftHue(36f),
@@ -87,11 +87,11 @@ fun PlayerStatusGrid(
             )
             StatusCard(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Default.Bedtime,
-                title = "Sleep timer",
-                value = sleepLabel,
+                icon = Icons.Default.Tune,
+                title = "Mixer",
+                value = mixerLabel,
                 accent = accent.shiftHue(-36f),
-                onClick = onSleep,
+                onClick = onMixer,
             )
         }
     }
