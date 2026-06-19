@@ -78,6 +78,9 @@ import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
@@ -521,66 +524,75 @@ fun SongList(
         contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
     ) {
         items(tracks, key = { it.id }) { track ->
-            Row(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
                     .bounceClick(onClick = { onTrackClick(track, tracks) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.listItemPaddingV),
-                verticalAlignment = Alignment.CenterVertically
+                    .liquidGlass(shape = MonoDimens.shapeMd),
+                shape = MonoDimens.shapeMd,
+                color = Color.Transparent,
             ) {
-                if (track.artworkUri != null) {
-                    AsyncImage(
-                        model = track.artworkUri,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(MonoDimens.shapeSm)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.size(48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.MusicNote,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (track.artworkUri != null) {
+                        AsyncImage(
+                            model = track.artworkUri,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(MonoDimens.shapeSm)
                         )
-                    }
-                }
-                Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        track.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Row {
-                        Text(
-                            track.artistName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        track.qualityBadge?.let { badge ->
-                            Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
-                            Text(
-                                badge,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    } else {
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            track.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row {
+                            Text(
+                                track.artistName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            track.qualityBadge?.let { badge ->
+                                Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                                Text(
+                                    badge,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        track.formattedDuration,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Text(
-                    track.formattedDuration,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
