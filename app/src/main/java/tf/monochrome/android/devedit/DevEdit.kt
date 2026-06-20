@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditOff
@@ -125,6 +126,15 @@ private fun DevEditToolbar(controller: DevEditController, modifier: Modifier = M
                 Toast.makeText(context, "Layout saved", Toast.LENGTH_SHORT).show()
             }) {
                 Icon(Icons.Default.Save, contentDescription = "Save layout", tint = Color.White)
+            }
+            IconButton(onClick = {
+                val jsonText = controller.exportJson()
+                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("DevEdit layout", jsonText))
+                Toast.makeText(context, "Layout JSON copied to clipboard", Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Export layout JSON", tint = Color.White)
             }
             IconButton(onClick = { if (screen.isNotEmpty()) controller.resetScreen(screen) }) {
                 Icon(Icons.Default.RestartAlt, contentDescription = "Reset screen", tint = Color.White)

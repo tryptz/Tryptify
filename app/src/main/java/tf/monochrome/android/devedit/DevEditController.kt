@@ -174,6 +174,9 @@ class DevEditController @Inject constructor(
         repository.save(_layout.value)
     }
 
+    /** Current layout serialized to JSON — for exporting/bundling as the app default. */
+    fun exportJson(): String = repository.exportJson(_layout.value)
+
     private inline fun update(block: (DevEditLayout) -> DevEditLayout) {
         _layout.value = block(_layout.value)
     }
