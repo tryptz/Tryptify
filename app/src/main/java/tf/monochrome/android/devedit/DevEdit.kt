@@ -47,6 +47,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
@@ -73,6 +75,12 @@ private val DevAccent = Color(0xFF8ED081)
 @Composable
 fun DevEditRoot(controller: DevEditController, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalDevEditController provides controller) {
+        // Report this screen's size so saved/exported layouts record the design
+        // reference, enabling proportional scaling across phone sizes.
+        val config = LocalConfiguration.current
+        LaunchedEffect(config.screenWidthDp, config.screenHeightDp) {
+            controller.setScreenSize(config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat())
+        }
         Box(modifier = Modifier.fillMaxSize()) {
             content()
             val master by controller.masterEnabled.collectAsState()
@@ -247,9 +255,17 @@ fun DevEditable(
     if (override.hidden && !active) return
 
     val gridStep = controller.gridStep
+    // Offsets are in dp (density/resolution-independent). When the layout records
+    // the design screen size, scale them to this screen so the arrangement holds
+    // across different phone sizes.
+    val config = LocalConfiguration.current
+    val sx = if (layout.refWidthDp > 0f) config.screenWidthDp / layout.refWidthDp else 1f
+    val sy = if (layout.refHeightDp > 0f) config.screenHeightDp / layout.refHeightDp else 1f
     val offsetMod = Modifier.offset {
-        val ox = if (snapOn) snapToStep(override.offsetX, gridStep) else override.offsetX
-        val oy = if (snapOn) snapToStep(override.offsetY, gridStep) else override.offsetY
+        val rawX = override.offsetX * sx
+        val rawY = override.offsetY * sy
+        val ox = if (snapOn) snapToStep(rawX, gridStep) else rawX
+        val oy = if (snapOn) snapToStep(rawY, gridStep) else rawY
         IntOffset(ox.dp.roundToPx(), oy.dp.roundToPx())
     }
 
