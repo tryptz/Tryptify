@@ -17,9 +17,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.text.style.TextOverflow
+import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.CoverImage
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -100,6 +104,7 @@ fun HomeScreen(
     val showSourceFilter by searchViewModel.showSourceFilter.collectAsState()
     val isLoadingMore by searchViewModel.isLoadingMore.collectAsState()
     val endReached by searchViewModel.endReached.collectAsState()
+    val recommendations by searchViewModel.recommendations.collectAsState()
     val hasSearchResults = searchQuery.isNotBlank()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember {
@@ -229,6 +234,30 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 160.dp)
             ) {
+                if (recommendations.isNotEmpty()) {
+                    item { SectionHeader(title = "Recommended") }
+                    items(recommendations, key = { it.label }) { row ->
+                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Text(
+                                text = row.label,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 6.dp)
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(row.tracks, key = { it.id }) { track ->
+                                    RecommendationCard(
+                                        track = track,
+                                        onClick = { playerViewModel.playUnifiedTrack(track, row.tracks) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 if (recentTracks.isNotEmpty()) {
                     item {
                         SectionHeader(title = "Recently Played")
@@ -261,3 +290,35 @@ fun HomeScreen(
     }
 }
 
+
+@androidx.compose.runtime.Composable
+private fun RecommendationCard(track: UnifiedTrack, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(140.dp)
+            .clickable(onClick = onClick)
+            .padding(4.dp)
+    ) {
+        CoverImage(
+            url = track.artworkUri,
+            contentDescription = track.title,
+            size = 132.dp,
+            cornerRadius = MonoDimens.radiusSm
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = track.artistName,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
