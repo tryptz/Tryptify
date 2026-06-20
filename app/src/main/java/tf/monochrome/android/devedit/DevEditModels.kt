@@ -15,6 +15,11 @@ data class DevEditLayout(
     val boxes: Map<String, List<FreeformBox>> = emptyMap(),
     val snapToGrid: Boolean = false,
     val gridStep: Float = 16f,
+    // Screen size (in dp) the layout was designed on. When > 0, element offsets
+    // are scaled to the current screen relative to this, so the arrangement
+    // holds across phone sizes. 0 = treat offsets as absolute dp (no scaling).
+    val refWidthDp: Float = 0f,
+    val refHeightDp: Float = 0f,
 )
 
 @Serializable

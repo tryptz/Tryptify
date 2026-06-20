@@ -101,6 +101,21 @@ class DevEditController @Inject constructor(
 
     fun setCurrentScreen(id: String) { _currentScreen.value = id }
 
+    // Current screen size in dp (reported by DevEditRoot). Stamped into the
+    // layout on save/export so it can be scaled to other phones on load.
+    private var screenWidthDp = 0f
+    private var screenHeightDp = 0f
+    fun setScreenSize(widthDp: Float, heightDp: Float) {
+        screenWidthDp = widthDp
+        screenHeightDp = heightDp
+    }
+
+    /** Stamp the current screen size as the layout's design reference. */
+    private fun withRef(layout: DevEditLayout): DevEditLayout =
+        if (screenWidthDp > 0f && screenHeightDp > 0f) {
+            layout.copy(refWidthDp = screenWidthDp, refHeightDp = screenHeightDp)
+        } else layout
+
     private fun key(screen: String, element: String) = "$screen/$element"
 
     fun moveElement(screen: String, element: String, dx: Float, dy: Float) {
@@ -169,13 +184,15 @@ class DevEditController @Inject constructor(
         }
     }
 
-    /** Persist the current layout to internal storage. */
+    /** Persist the current layout (stamped with this screen's size) to storage. */
     fun save() {
-        repository.save(_layout.value)
+        val stamped = withRef(_layout.value)
+        _layout.value = stamped
+        repository.save(stamped)
     }
 
-    /** Current layout serialized to JSON — for exporting/bundling as the app default. */
-    fun exportJson(): String = repository.exportJson(_layout.value)
+    /** Current layout (stamped with this screen's size) serialized to JSON. */
+    fun exportJson(): String = repository.exportJson(withRef(_layout.value))
 
     private inline fun update(block: (DevEditLayout) -> DevEditLayout) {
         _layout.value = block(_layout.value)
