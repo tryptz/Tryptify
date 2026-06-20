@@ -1,0 +1,97 @@
+{
+    "elements": {
+        "profile/profile_header": {
+            "offsetX": 128.0,
+            "offsetY": 0.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "stats/section_plays_over_time": {
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "oxford/inflator_output_fader": {
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "oxford/inflator_tab_content": {
+            "offsetX": 0.0,
+            "offsetY": -48.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "oxford/inflator_buttons": {
+            "offsetX": 0.0,
+            "offsetY": -400.0,
+            "scale": 1.1,
+            "hidden": false
+        },
+        "oxford/inflator_curve_fader": {
+            "offsetX": 0.0,
+            "offsetY": 144.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "oxford/inflator_effect_fader": {
+            "offsetX": 0.0,
+            "offsetY": 144.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "player/transport": {
+            "offsetX": 0.0,
+            "offsetY": 128.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "player/actionDock": {
+            "offsetX": 0.0,
+            "offsetY": 128.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "player/progress": {
+            "offsetX": 0.0,
+            "offsetY": 128.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "player/trackInfo": {
+            "offsetX": 0.0,
+            "offsetY": 128.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "player/hero": {
+            "offsetX": 0.0,
+            "offsetY": 80.0,
+            "scale": 1.5,
+            "hidden": false
+        },
+        "home/home_header": {
+            "offsetX": 0.0,
+            "offsetY": 16.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "home/home_search_bar": {
+            "offsetX": 0.0,
+            "offsetY": 16.0,
+            "scale": 1.0,
+            "hidden": false
+        },
+        "home/section_recently_played": {
+            "offsetX": 16.0,
+            "offsetY": 16.0,
+            "scale": 1.0,
+            "hidden": false
+        }
+    },
+    "boxes": {},
+    "snapToGrid": true,
+    "gridStep": 16.0
+}
