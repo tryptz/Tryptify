@@ -93,5 +93,7 @@
     },
     "boxes": {},
     "snapToGrid": true,
-    "gridStep": 16.0
+    "gridStep": 16.0,
+    "refWidthDp": 428.0,
+    "refHeightDp": 932.0
 }
