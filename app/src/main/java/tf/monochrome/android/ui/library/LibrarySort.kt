@@ -34,6 +34,7 @@ val ARTIST_SORT_KEYS = listOf(
     LibrarySortKey.NAME, LibrarySortKey.TRACKS, LibrarySortKey.ALBUMS,
 )
 
+@JvmName("applySortTracks")
 fun List<UnifiedTrack>.applySort(sort: LibrarySort): List<UnifiedTrack> {
     val comparator: Comparator<UnifiedTrack> = when (sort.key) {
         LibrarySortKey.DATE -> compareBy { it.dateModified ?: 0L }
@@ -47,6 +48,7 @@ fun List<UnifiedTrack>.applySort(sort: LibrarySort): List<UnifiedTrack> {
     return if (sort.ascending) sorted else sorted.reversed()
 }
 
+@JvmName("applySortAlbums")
 fun List<UnifiedAlbum>.applySort(sort: LibrarySort): List<UnifiedAlbum> {
     val comparator: Comparator<UnifiedAlbum> = when (sort.key) {
         LibrarySortKey.DATE -> compareBy { it.year ?: 0 }
@@ -60,6 +62,7 @@ fun List<UnifiedAlbum>.applySort(sort: LibrarySort): List<UnifiedAlbum> {
     return if (sort.ascending) sorted else sorted.reversed()
 }
 
+@JvmName("applySortArtists")
 fun List<UnifiedArtist>.applySort(sort: LibrarySort): List<UnifiedArtist> {
     val comparator: Comparator<UnifiedArtist> = when (sort.key) {
         LibrarySortKey.TRACKS -> compareBy { it.trackCount }
