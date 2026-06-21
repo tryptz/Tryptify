@@ -67,10 +67,19 @@ class MediaScanner @Inject constructor(
                     val maybeMissedArt = existing != null &&
                         !existing.hasEmbeddedArt &&
                         existing.artworkCacheKey == null
+                    // Re-read rows that were indexed before artist-from-title
+                    // recovery existed: no artist tag, but a "Artist - Title"
+                    // shaped title we can now split. Self-heals (artist gets
+                    // populated, so the next scan skips them) and stays cheap
+                    // by only targeting files that can actually benefit.
+                    val derivableArtist = existing != null &&
+                        existing.artist == null &&
+                        existing.title?.contains(" - ") == true
                     if (existing == null ||
                         existing.lastModified < audioFile.dateModified ||
                         artworkMissing ||
-                        maybeMissedArt
+                        maybeMissedArt ||
+                        derivableArtist
                     ) {
                         val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
                         val trackEntity = buildTrackEntity(audioFile, tags)
