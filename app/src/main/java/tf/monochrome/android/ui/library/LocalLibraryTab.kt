@@ -601,24 +601,27 @@ fun SongList(
                         .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (track.artworkUri != null) {
-                        AsyncImage(
-                            model = track.artworkUri,
+                    // Music-note placeholder sits underneath the artwork: if the
+                    // cover loads (cached JPG, sidecar, or embedded art pulled on
+                    // demand by AudioFileCoverFetcher) it covers the icon; if the
+                    // file genuinely has no art the icon stays visible.
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(MonoDimens.shapeSm),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.MusicNote,
                             contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(MonoDimens.shapeSm)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
-                    } else {
-                        Box(
-                            modifier = Modifier.size(48.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.MusicNote,
+                        if (track.artworkUri != null) {
+                            AsyncImage(
+                                model = track.artworkUri,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.matchParentSize()
                             )
                         }
                     }
