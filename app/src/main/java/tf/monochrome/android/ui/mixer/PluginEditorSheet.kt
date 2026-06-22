@@ -23,9 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -459,8 +459,12 @@ private fun FLKnobControl(
     var isTouching by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
 
-    // Track previous fraction for detent haptics
-    val prevFraction = remember { mutableFloatStateOf(fraction) }
+    // The pointerInput gesture coroutine is keyed on (min, max) so it is not
+    // restarted on every value change. Read the latest value / callback through
+    // updated-state holders to avoid capturing a stale `value` in the closure,
+    // which would make the knob snap back and appear frozen while dragging.
+    val latestValue by rememberUpdatedState(value)
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
 
     Column(
         modifier = modifier.padding(horizontal = 4.dp, vertical = 6.dp),
@@ -489,11 +493,16 @@ private fun FLKnobControl(
                     val cy = size.height / 2f
 
                     awaitEachGesture {
-                        val down = awaitFirstDown()
+                        val down = awaitFirstDown(requireUnconsumed = false)
                         isTouching = true
                         var lastPos = down.position
-                        var totalVertical = 0f
                         var lastAngle: Float? = null
+                        val range = max - min
+                        // Seed a running accumulator from the live value at the
+                        // start of the gesture, then drive the knob off it. This
+                        // keeps each move relative to the actual current value
+                        // instead of a stale closure-captured one.
+                        var current = latestValue
 
                         while (true) {
                             val event = awaitPointerEvent()
@@ -512,14 +521,12 @@ private fun FLKnobControl(
                                 (pos.x - cx) * (pos.x - cx) + (pos.y - cy) * (pos.y - cy)
                             )
 
-                            val range = max - min
-                            val currentVal = value
+                            val oldFrac = ((current - min) / range).coerceIn(0f, 1f)
 
                             if (distFromCenter > cx * 1.5f) {
                                 // ── Fine-tune mode: far from knob, horizontal drag ──
                                 val sensitivity = range / 800f
-                                val newVal = (currentVal + dx * sensitivity).coerceIn(min, max)
-                                onValueChange(newVal)
+                                current = (current + dx * sensitivity).coerceIn(min, max)
                             } else if (distFromCenter > cx * 0.3f) {
                                 // ── Rotary mode: circular drag around knob ──
                                 val angle = kotlin.math.atan2(pos.y - cy, pos.x - cx)
@@ -529,22 +536,21 @@ private fun FLKnobControl(
                                     if (delta > Math.PI.toFloat()) delta -= 2f * Math.PI.toFloat()
                                     if (delta < -Math.PI.toFloat()) delta += 2f * Math.PI.toFloat()
                                     // Map rotation to value change (full circle = full range)
-                                    val newVal = (currentVal + delta / (1.5f * Math.PI.toFloat()) * range)
+                                    current = (current + delta / (1.5f * Math.PI.toFloat()) * range)
                                         .coerceIn(min, max)
-                                    onValueChange(newVal)
                                 }
                                 lastAngle = angle
                             } else {
                                 // ── Vertical drag mode: standard coarse control ──
                                 val sensitivity = range / 250f
-                                val newVal = (currentVal - dy * sensitivity).coerceIn(min, max)
-                                onValueChange(newVal)
+                                current = (current - dy * sensitivity).coerceIn(min, max)
                                 lastAngle = null
                             }
 
+                            latestOnValueChange(current)
+
                             // Haptic detents at min, max, center, default
-                            val newFrac = ((value - min) / range).coerceIn(0f, 1f)
-                            val oldFrac = prevFraction.floatValue
+                            val newFrac = ((current - min) / range).coerceIn(0f, 1f)
                             val detents = listOf(0f, 0.5f, 1f)
                             for (d in detents) {
                                 if ((oldFrac < d && newFrac >= d) || (oldFrac > d && newFrac <= d)) {
@@ -552,7 +558,6 @@ private fun FLKnobControl(
                                     break
                                 }
                             }
-                            prevFraction.floatValue = newFrac
 
                             lastPos = pos
                             change.consume()

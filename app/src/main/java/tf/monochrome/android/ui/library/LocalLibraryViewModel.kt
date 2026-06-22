@@ -51,6 +51,35 @@ class LocalLibraryViewModel @Inject constructor(
     val localArtists: StateFlow<List<UnifiedArtist>> = localMediaRepository.getAllArtists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // ── Sorting ─────────────────────────────────────────────────────
+    // Per-tab sort selection; the displayed lists below re-sort whenever either
+    // the data or the chosen order changes. Defaults to A→Z by name.
+
+    private val _songSort = MutableStateFlow(LibrarySort(LibrarySortKey.NAME))
+    val songSort: StateFlow<LibrarySort> = _songSort.asStateFlow()
+
+    private val _albumSort = MutableStateFlow(LibrarySort(LibrarySortKey.NAME))
+    val albumSort: StateFlow<LibrarySort> = _albumSort.asStateFlow()
+
+    private val _artistSort = MutableStateFlow(LibrarySort(LibrarySortKey.NAME))
+    val artistSort: StateFlow<LibrarySort> = _artistSort.asStateFlow()
+
+    fun setSongSort(sort: LibrarySort) { _songSort.value = sort }
+    fun setAlbumSort(sort: LibrarySort) { _albumSort.value = sort }
+    fun setArtistSort(sort: LibrarySort) { _artistSort.value = sort }
+
+    val sortedTracks: StateFlow<List<UnifiedTrack>> = combine(localTracks, _songSort) { tracks, sort ->
+        tracks.applySort(sort)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val sortedAlbums: StateFlow<List<UnifiedAlbum>> = combine(localAlbums, _albumSort) { albums, sort ->
+        albums.applySort(sort)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val sortedArtists: StateFlow<List<UnifiedArtist>> = combine(localArtists, _artistSort) { artists, sort ->
+        artists.applySort(sort)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val localGenres: StateFlow<List<LocalGenreEntity>> = localMediaRepository.getAllGenres()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

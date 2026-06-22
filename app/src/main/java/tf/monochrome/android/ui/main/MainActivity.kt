@@ -17,8 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.compositionLocalOf
-import eightbitlab.com.blurview.BlurTarget
+import android.widget.FrameLayout
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -47,11 +46,10 @@ import tf.monochrome.android.audio.eq.FrequencyTargets
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.performance.PerformanceProfile
 
-val LocalBlurTarget = compositionLocalOf<BlurTarget?> { null }
-
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject lateinit var devEditController: tf.monochrome.android.devedit.DevEditController
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
     @Inject lateinit var queueManager: QueueManager
@@ -102,13 +100,14 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Create BlurTarget to wrap Compose content for BlurView backdrop blur
-        val blurTarget = BlurTarget(this)
+        // Root container wrapping the Compose content. (Real glass blur is
+        // handled by Haze in-Compose; no native BlurView wrapper is needed.)
+        val rootContainer = FrameLayout(this)
         val composeView = androidx.compose.ui.platform.ComposeView(this)
-        blurTarget.addView(composeView, ViewGroup.LayoutParams(
+        rootContainer.addView(composeView, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
-        setContentView(blurTarget)
+        setContentView(rootContainer)
 
         composeView.setContent {
             val themeName by preferences.theme.collectAsState(initial = "monochrome_dark")
@@ -139,7 +138,6 @@ class MainActivity : ComponentActivity() {
             }
 
             CompositionLocalProvider(
-                LocalBlurTarget provides blurTarget,
                 LocalPerformanceProfile provides performanceProfile,
             ) {
                 MonochromeTheme(
@@ -170,7 +168,9 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        MonochromeNavHost()
+                        tf.monochrome.android.devedit.DevEditRoot(devEditController) {
+                            MonochromeNavHost()
+                        }
                     }
                 }
             }

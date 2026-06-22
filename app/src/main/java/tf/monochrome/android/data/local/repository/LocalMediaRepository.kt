@@ -18,6 +18,7 @@ import tf.monochrome.android.domain.model.TrackLyrics
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -113,7 +114,12 @@ class LocalMediaRepository @Inject constructor(
                 albumArtistName = albumArtist,
                 albumTitle = album,
                 albumId = albumId?.let { "local_album_$it" },
-                artworkUri = artworkCacheKey,
+                // Fall back to the audio file's own file:// URI when the scan
+                // didn't cache a JPG (or it was evicted). The registered
+                // AudioFileCoverFetcher extracts the embedded picture on demand,
+                // so song rows show the cover even on cache misses — matching
+                // what toLegacyTrack() already does for the player.
+                artworkUri = artworkCacheKey ?: android.net.Uri.fromFile(File(filePath)).toString(),
                 codec = codec,
                 sampleRate = sampleRate,
                 bitDepth = bitDepth,
@@ -131,7 +137,8 @@ class LocalMediaRepository @Inject constructor(
                     sampleRate = sampleRate,
                     bitDepth = bitDepth
                 ),
-                sourceType = SourceType.LOCAL
+                sourceType = SourceType.LOCAL,
+                dateModified = lastModified
             )
         }
 

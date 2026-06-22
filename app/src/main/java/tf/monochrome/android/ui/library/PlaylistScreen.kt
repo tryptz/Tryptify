@@ -193,6 +193,7 @@ fun PlaylistScreen(
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             item {
+                tf.monochrome.android.devedit.DevEditable("playlist_hero", Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -221,6 +222,7 @@ fun PlaylistScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    tf.monochrome.android.devedit.DevEditable("playlist_action_row", Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -261,6 +263,8 @@ fun PlaylistScreen(
                             Icon(Icons.Default.Download, contentDescription = "Download All")
                         }
                     }
+                    }
+                }
                 }
             }
 

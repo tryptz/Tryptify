@@ -149,17 +149,19 @@ fun SettingsScreen(
             }
         }
 
-        when (selectedTab) {
-            0 -> AppearanceTab(viewModel)
-            1 -> InterfaceTab(viewModel)
-            2 -> ScrobblingTab(viewModel)
-            3 -> AudioTab(viewModel, navController)
-            4 -> EqualizerTab(navController)
-            5 -> LibrarySettingsTab(viewModel)
-            6 -> DownloadsTab(viewModel)
-            7 -> InstancesTab(viewModel)
-            8 -> SystemTab(viewModel, navController)
-            9 -> AboutTab()
+        tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[selectedTab])}") {
+            when (selectedTab) {
+                0 -> AppearanceTab(viewModel)
+                1 -> InterfaceTab(viewModel)
+                2 -> ScrobblingTab(viewModel)
+                3 -> AudioTab(viewModel, navController)
+                4 -> EqualizerTab(navController)
+                5 -> LibrarySettingsTab(viewModel)
+                6 -> DownloadsTab(viewModel)
+                7 -> InstancesTab(viewModel)
+                8 -> SystemTab(viewModel, navController)
+                9 -> AboutTab()
+            }
         }
     }
 }
@@ -1344,13 +1346,9 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 // ─── Tab 6: Instances ──────────────────────────────────────────────────
 @Composable
 private fun InstancesTab(viewModel: SettingsViewModel) {
-    val apiInstances by viewModel.apiInstances.collectAsState()
-    val streamingInstances by viewModel.streamingInstances.collectAsState()
     val customEndpoint by viewModel.customEndpoint.collectAsState()
     val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsState()
-    val devModeEnabled by viewModel.devModeEnabled.collectAsState()
     val sourceMode by viewModel.sourceMode.collectAsState()
-    val refreshing by viewModel.instancesRefreshing.collectAsState()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
 
@@ -1391,13 +1389,6 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        SettingSwitchItem(
-            title = "Dev Mode",
-            subtitle = "Route all Tidal API/streaming requests through your own server. Requires a compatible Tidal HiFi instance at the URL below.",
-            checked = devModeEnabled,
-            onCheckedChange = { viewModel.setDevModeEnabled(it) }
-        )
-
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1409,7 +1400,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Used for search, browse, and streaming when Dev Mode is on",
+                    text = "Your own Tidal HiFi server — used for search, browse, and streaming.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1430,7 +1421,6 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                     )
                 },
                 singleLine = true,
-                enabled = devModeEnabled,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     viewModel.setCustomEndpoint(latestInput.value.trim().ifBlank { null })
@@ -1494,33 +1484,6 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SettingsGroupHeader("API Instances")
-            Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = { viewModel.refreshInstances() }) {
-                if (refreshing) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-            }
-        }
-
-        if (apiInstances.isEmpty()) {
-            Text("No API instances loaded", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            apiInstances.forEach { instance ->
-                InstanceCard(url = instance.url, version = instance.version)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Streaming Instances")
-        if (streamingInstances.isEmpty()) {
-            Text("No streaming instances loaded", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            streamingInstances.forEach { instance ->
-                InstanceCard(url = instance.url, version = instance.version)
-            }
-        }
     }
 }
 
@@ -1710,6 +1673,17 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             subtitle = "Live logcat stream for this process — copy or export as a file for bug reports",
             onClick = { navController.navigate(Screen.DebugLog.route) },
         )
+
+        val devEdit = tf.monochrome.android.devedit.LocalDevEditController.current
+        if (devEdit != null) {
+            val devEnabled = devEdit.masterEnabled.collectAsState().value
+            SettingSwitchItem(
+                title = "DevEdit layout mode",
+                subtitle = "Unlocks a per-screen Edit button. Drag, hide & add UI elements; the toolbar's Save writes the layout to internal storage",
+                checked = devEnabled,
+                onCheckedChange = { devEdit.setMasterEnabled(it) },
+            )
+        }
     }
 }
 
@@ -1760,7 +1734,7 @@ private fun AboutTab() {
             }
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "Tryptify version 1.5.1 · 2026",
+                text = "Tryptify version 1.6.0 · 2026",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -1797,41 +1771,53 @@ private fun SettingsTabContent(content: @Composable () -> Unit) {
     }
 }
 
+// Slugify a label into a stable DevEdit element id (e.g. "Gapless Playback" →
+// "gapless_playback"). Used so wrapping the shared setting rows yields stable,
+// human-readable ids that persist across launches.
+internal fun devSlug(text: String): String =
+    text.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifEmpty { "item" }
+
 @Composable
 private fun SettingsGroupHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
-    )
+    tf.monochrome.android.devedit.DevEditable("hdr_${devSlug(title)}", Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
+        )
+    }
 }
 
 @Composable
 fun SettingItem(title: String, subtitle: String, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp)
-    ) {
-        Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    tf.monochrome.android.devedit.DevEditable("item_${devSlug(title)}", Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 12.dp)
+        ) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
 @Composable
 fun SettingSwitchItem(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    tf.monochrome.android.devedit.DevEditable("sw_${devSlug(title)}", Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

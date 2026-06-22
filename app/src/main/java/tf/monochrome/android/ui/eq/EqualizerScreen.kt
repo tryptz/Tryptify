@@ -168,6 +168,7 @@ fun EqualizerScreen(
         ) {
             // ─── Title Section ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_title_section", Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -202,10 +203,12 @@ fun EqualizerScreen(
                         )
                     }
                 }
+              }
             }
 
             // ─── Interactive Frequency Graph ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_graph", Modifier.fillMaxWidth()) {
                 FrequencyResponseGraph(
                     originalCurve = originalMeasurement,
                     targetCurve = selectedTarget.data,
@@ -217,10 +220,12 @@ fun EqualizerScreen(
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
+              }
             }
 
             // ─── Headphone Model Selector ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_headphone_selector", Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     SectionLabel("HEADPHONE MODEL")
                     SelectorRow(
@@ -244,10 +249,12 @@ fun EqualizerScreen(
                         }
                     )
                 }
+              }
             }
 
             // ─── Target Curve Selector ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_target_selector", Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     SectionLabel("TARGET")
                     Box {
@@ -312,10 +319,12 @@ fun EqualizerScreen(
                         }
                     }
                 }
+              }
             }
 
             // ─── Parameters Row (Filter Bands / Max Hz / Sample Rate) ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_parameters_row", Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -348,10 +357,12 @@ fun EqualizerScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+              }
             }
 
             // ─── Action Row (Download + AutoEQ Button) ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_action_row", Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -398,10 +409,13 @@ fun EqualizerScreen(
                         )
                     }
                 }
+              }
             }
 
             // ─── Saved Profiles Section ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_saved_profiles_header", Modifier.fillMaxWidth()) {
+               Column {
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
@@ -447,6 +461,8 @@ fun EqualizerScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+               }
+              }
             }
 
             if (showProfilesExpanded) {
@@ -540,6 +556,7 @@ fun EqualizerScreen(
 
             // ─── Database Section ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_database_section", Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -592,6 +609,7 @@ fun EqualizerScreen(
                         )
                     }
                 }
+              }
             }
 
             // ─── Error Display ───
@@ -615,6 +633,8 @@ fun EqualizerScreen(
 
             // ─── Collapsible EQ Bands Section ───
             item {
+              tf.monochrome.android.devedit.DevEditable("eq_bands_header", Modifier.fillMaxWidth()) {
+               Column {
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
@@ -641,11 +661,14 @@ fun EqualizerScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+               }
+              }
             }
 
             if (showBandsExpanded) {
                 // Preamp
                 item {
+                  tf.monochrome.android.devedit.DevEditable("eq_preamp_slider", Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -671,6 +694,7 @@ fun EqualizerScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                  }
                 }
 
                 // Band sliders
@@ -684,6 +708,7 @@ fun EqualizerScreen(
 
                 // Action buttons
                 item {
+                  tf.monochrome.android.devedit.DevEditable("eq_bands_action_buttons", Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -719,6 +744,7 @@ fun EqualizerScreen(
                             }
                         }
                     }
+                  }
                 }
             }
         }

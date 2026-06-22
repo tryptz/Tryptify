@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -105,7 +106,7 @@ fun VisualizerComponent(
 
     Box(
         modifier = modifier
-            .clip(if (isFullscreen) RoundedCornerShape(0.dp) else RoundedCornerShape(28.dp))
+            .clip(RectangleShape)
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
@@ -337,7 +338,7 @@ private fun ProjectMStatusOverlay(
 ) {
     Surface(
         modifier = modifier
-            .padding(16.dp)
+            .padding(10.dp)
             .liquidGlass(
                 shape = RoundedCornerShape(999.dp),
                 tintAlpha = 0.12f,
@@ -348,13 +349,13 @@ private fun ProjectMStatusOverlay(
         contentColor = Color.White
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(8.dp)
+                    .size(6.dp)
                     .graphicsLayer { alpha = 0.92f }
                     .clip(RoundedCornerShape(999.dp))
                     .background(
@@ -369,7 +370,7 @@ private fun ProjectMStatusOverlay(
             )
             Text(
                 text = engineStatus.badge,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.92f),
                 maxLines = 1,
                 softWrap = false,
@@ -378,7 +379,7 @@ private fun ProjectMStatusOverlay(
             if (showFps && engineStatus.isNativeReady) {
                 Text(
                     text = "• $currentFps FPS",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     color = Color.White.copy(alpha = 0.92f),
                     maxLines = 1,
                     softWrap = false,

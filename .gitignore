@@ -87,3 +87,5 @@ monochrome_tf_reference-*.pdf
 *.py
 old_HomeViewModel.kt
 !monochrome-library-2026-03-23.json
+!app/src/main/assets/devedit_default_layout.json
+!app/src/main/assets/qobuz_recommendations.json

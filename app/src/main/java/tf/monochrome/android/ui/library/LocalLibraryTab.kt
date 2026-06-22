@@ -29,7 +29,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
@@ -41,6 +44,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -78,6 +83,9 @@ import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
@@ -92,8 +100,12 @@ fun LocalLibraryTab(
     onShuffleAll: (List<UnifiedTrack>) -> Unit
 ) {
     val localTracks by viewModel.localTracks.collectAsState()
-    val localAlbums by viewModel.localAlbums.collectAsState()
-    val localArtists by viewModel.localArtists.collectAsState()
+    val sortedTracks by viewModel.sortedTracks.collectAsState()
+    val sortedAlbums by viewModel.sortedAlbums.collectAsState()
+    val sortedArtists by viewModel.sortedArtists.collectAsState()
+    val songSort by viewModel.songSort.collectAsState()
+    val albumSort by viewModel.albumSort.collectAsState()
+    val artistSort by viewModel.artistSort.collectAsState()
     val localGenres by viewModel.localGenres.collectAsState()
     val rootFolders by viewModel.displayRootFolders.collectAsState()
     val scanProgress by viewModel.scanProgress.collectAsState()
@@ -217,6 +229,14 @@ fun LocalLibraryTab(
                     )
                 }
             }
+            if (selectedSubTab in 0..2) {
+                val (keys, current, onChange) = when (selectedSubTab) {
+                    0 -> Triple(ALBUM_SORT_KEYS, albumSort, viewModel::setAlbumSort)
+                    1 -> Triple(ARTIST_SORT_KEYS, artistSort, viewModel::setArtistSort)
+                    else -> Triple(SONG_SORT_KEYS, songSort, viewModel::setSongSort)
+                }
+                SortMenu(keys = keys, current = current, onChange = onChange)
+            }
             IconButton(onClick = { showSearch = !showSearch; if (!showSearch) viewModel.setSearchQuery("") }) {
                 Icon(Icons.Default.Search, contentDescription = "Search")
             }
@@ -252,9 +272,9 @@ fun LocalLibraryTab(
             localGenres.map { it.name to it.trackCount }
         }
         when (selectedSubTab) {
-            0 -> AlbumGrid(albums = localAlbums, onAlbumClick = onAlbumClick)
-            1 -> ArtistList(artists = localArtists, onArtistClick = onArtistClick)
-            2 -> SongList(tracks = localTracks, onTrackClick = onTrackClick)
+            0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
+            1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
+            2 -> SongList(tracks = sortedTracks, onTrackClick = onTrackClick)
             3 -> GenreList(
                 genres = genrePairs,
                 onGenreClick = onGenreClick
@@ -290,6 +310,51 @@ fun LocalLibraryTab(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Sort affordance for the Albums / Artists / Songs tabs. Tapping the icon opens a
+ * menu of the tab's available [keys]; selecting the current key flips the
+ * direction, selecting another switches to it ascending. The active key shows an
+ * up/down arrow.
+ */
+@Composable
+private fun SortMenu(
+    keys: List<LibrarySortKey>,
+    current: LibrarySort,
+    onChange: (LibrarySort) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            keys.forEach { key ->
+                val selected = key == current.key
+                DropdownMenuItem(
+                    text = { Text(key.label) },
+                    onClick = {
+                        onChange(
+                            if (selected) current.copy(ascending = !current.ascending)
+                            else LibrarySort(key, ascending = true)
+                        )
+                        expanded = false
+                    },
+                    trailingIcon = {
+                        if (selected) {
+                            Icon(
+                                if (current.ascending) Icons.Default.ArrowUpward
+                                else Icons.Default.ArrowDownward,
+                                contentDescription = if (current.ascending) "Ascending" else "Descending",
+                                modifier = Modifier.size(MonoDimens.iconSm),
+                            )
+                        }
+                    },
+                )
             }
         }
     }
@@ -521,25 +586,29 @@ fun SongList(
         contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
     ) {
         items(tracks, key = { it.id }) { track ->
-            Row(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
                     .bounceClick(onClick = { onTrackClick(track, tracks) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.listItemPaddingV),
-                verticalAlignment = Alignment.CenterVertically
+                    .liquidGlass(shape = MonoDimens.shapeMd),
+                shape = MonoDimens.shapeMd,
+                color = Color.Transparent,
             ) {
-                if (track.artworkUri != null) {
-                    AsyncImage(
-                        model = track.artworkUri,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Music-note placeholder sits underneath the artwork: if the
+                    // cover loads (cached JPG, sidecar, or embedded art pulled on
+                    // demand by AudioFileCoverFetcher) it covers the icon; if the
+                    // file genuinely has no art the icon stays visible.
+                    Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(MonoDimens.shapeSm)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.size(48.dp),
+                            .clip(MonoDimens.shapeSm),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -547,40 +616,48 @@ fun SongList(
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
-                    }
-                }
-                Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        track.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Row {
-                        Text(
-                            track.artistName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        track.qualityBadge?.let { badge ->
-                            Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
-                            Text(
-                                badge,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        if (track.artworkUri != null) {
+                            AsyncImage(
+                                model = track.artworkUri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.matchParentSize()
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            track.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row {
+                            Text(
+                                track.artistName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            track.qualityBadge?.let { badge ->
+                                Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                                Text(
+                                    badge,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        track.formattedDuration,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Text(
-                    track.formattedDuration,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }

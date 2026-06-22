@@ -107,6 +107,7 @@ fun LocalArtistDetailScreen(
                 ) {
                     // Artist header
                     item {
+                        tf.monochrome.android.devedit.DevEditable("artist_hero", Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -176,11 +177,12 @@ fun LocalArtistDetailScreen(
                                 }
                             }
                         }
+                        }
                     }
 
                     // Albums section
                     if (albums.isNotEmpty()) {
-                        item { SectionHeader(title = "Albums") }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_albums_header", Modifier.fillMaxWidth()) { SectionHeader(title = "Albums") } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -203,7 +205,7 @@ fun LocalArtistDetailScreen(
 
                     // All tracks
                     if (sortedTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "All Tracks") }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_tracks_header", Modifier.fillMaxWidth()) { SectionHeader(title = "All Tracks") } }
                         items(sortedTracks, key = { it.id }) { track ->
                             ArtistTrackRow(
                                 track = track,

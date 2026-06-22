@@ -236,8 +236,12 @@ fun MonochromeNavHost() {
                     val key = tabRoutes[page]
                     tabStateHolder.SaveableStateProvider(key) {
                         when (page) {
-                            0 -> HomeScreen(navController = navController, playerViewModel = playerViewModel)
-                            1 -> LibraryScreen(navController = navController, playerViewModel = playerViewModel)
+                            0 -> tf.monochrome.android.devedit.DevEditScreen("home") {
+                                HomeScreen(navController = navController, playerViewModel = playerViewModel)
+                            }
+                            1 -> tf.monochrome.android.devedit.DevEditScreen("library") {
+                                LibraryScreen(navController = navController, playerViewModel = playerViewModel)
+                            }
                         }
                     }
                 }
@@ -261,19 +265,25 @@ fun MonochromeNavHost() {
                     route = Screen.AlbumDetail.route,
                     arguments = listOf(navArgument("albumId") { type = NavType.LongType })
                 ) {
-                    AlbumDetailScreen(navController = navController, playerViewModel = playerViewModel)
+                    tf.monochrome.android.devedit.DevEditScreen("album_detail") {
+                        AlbumDetailScreen(navController = navController, playerViewModel = playerViewModel)
+                    }
                 }
                 composable(
                     route = Screen.ArtistDetail.route,
                     arguments = listOf(navArgument("artistId") { type = NavType.LongType })
                 ) {
-                    ArtistDetailScreen(navController = navController, playerViewModel = playerViewModel)
+                    tf.monochrome.android.devedit.DevEditScreen("artist_detail") {
+                        ArtistDetailScreen(navController = navController, playerViewModel = playerViewModel)
+                    }
                 }
                 composable(
                     route = Screen.PlaylistDetail.route,
                     arguments = listOf(navArgument("playlistId") { type = NavType.StringType })
                 ) {
-                    PlaylistScreen(navController = navController, playerViewModel = playerViewModel)
+                    tf.monochrome.android.devedit.DevEditScreen("playlist_detail") {
+                        PlaylistScreen(navController = navController, playerViewModel = playerViewModel)
+                    }
                 }
                 composable(Screen.NowPlaying.route) {
                     NowPlayingScreen(navController = navController, playerViewModel = playerViewModel)
@@ -289,25 +299,37 @@ fun MonochromeNavHost() {
                     SettingsScreen(navController = navController, initialTab = tab)
                 }
                 composable(Screen.Equalizer.route) {
-                    EqualizerScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("equalizer") {
+                        EqualizerScreen(navController = navController)
+                    }
                 }
                 composable(Screen.ParametricEq.route) {
-                    ParametricEqScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("parametric_eq") {
+                        ParametricEqScreen(navController = navController)
+                    }
                 }
                 composable(Screen.ParametricEqEdit.route) {
-                    ParametricEqEditScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("parametric_eq_edit") {
+                        ParametricEqEditScreen(navController = navController)
+                    }
                 }
                 composable(Screen.Mixer.route) {
-                    MixerScreen(
-                        navController = navController,
-                        viewModel = hiltViewModel()
-                    )
+                    tf.monochrome.android.devedit.DevEditScreen("mixer") {
+                        MixerScreen(
+                            navController = navController,
+                            viewModel = hiltViewModel()
+                        )
+                    }
                 }
                 composable(Screen.CarMode.route) {
-                    CarModeScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("car_mode") {
+                        CarModeScreen(navController = navController)
+                    }
                 }
                 composable(Screen.DebugLog.route) {
-                    DebugLogScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("debug_log") {
+                        DebugLogScreen(navController = navController)
+                    }
                 }
                 composable(
                     route = Screen.Oxford.route,
@@ -318,25 +340,35 @@ fun MonochromeNavHost() {
                 ) { backStackEntry ->
                     val tab = backStackEntry.arguments?.getInt("tab") ?: 0
                     val vm: OxfordViewModel = hiltViewModel()
-                    OxfordEffectsTabs(
-                        inflator = vm.inflator,
-                        compressor = vm.compressor,
-                        initialTab = tab,
-                        onBack = { navController.popBackStack() },
-                        modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
-                    )
+                    tf.monochrome.android.devedit.DevEditScreen("oxford") {
+                        OxfordEffectsTabs(
+                            inflator = vm.inflator,
+                            compressor = vm.compressor,
+                            initialTab = tab,
+                            onBack = { navController.popBackStack() },
+                            modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
+                        )
+                    }
                 }
                 composable(Screen.Downloads.route) {
-                    DownloadsScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("downloads") {
+                        DownloadsScreen(navController = navController)
+                    }
                 }
                 composable(Screen.Profile.route) {
-                    ProfileScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("profile") {
+                        ProfileScreen(navController = navController)
+                    }
                 }
                 composable(Screen.Stats.route) {
-                    StatsScreen(navController = navController)
+                    tf.monochrome.android.devedit.DevEditScreen("stats") {
+                        StatsScreen(navController = navController)
+                    }
                 }
                 composable(Screen.ListeningStats.route) {
-                    ListeningStatsScreen(onBack = { navController.popBackStack() })
+                    tf.monochrome.android.devedit.DevEditScreen("listening_stats") {
+                        ListeningStatsScreen(onBack = { navController.popBackStack() })
+                    }
                 }
                 composable(
                     route = Screen.FolderBrowser.route,
@@ -345,67 +377,75 @@ fun MonochromeNavHost() {
                     val folderPath = java.net.URLDecoder.decode(
                         backStackEntry.arguments?.getString("folderPath") ?: "", "UTF-8"
                     )
-                    FolderBrowserScreen(
-                        folderPath = folderPath,
-                        navController = navController,
-                        onPlayTrack = { track, queue ->
-                            playerViewModel.playUnifiedTrack(track, queue)
-                        },
-                        onPlayAll = { tracks ->
-                            playerViewModel.playAllUnified(tracks)
-                        }
-                    )
+                    tf.monochrome.android.devedit.DevEditScreen("folder_browser") {
+                        FolderBrowserScreen(
+                            folderPath = folderPath,
+                            navController = navController,
+                            onPlayTrack = { track, queue ->
+                                playerViewModel.playUnifiedTrack(track, queue)
+                            },
+                            onPlayAll = { tracks ->
+                                playerViewModel.playAllUnified(tracks)
+                            }
+                        )
+                    }
                 }
                 composable(
                     route = Screen.LocalAlbumDetail.route,
                     arguments = listOf(navArgument("albumId") { type = NavType.LongType })
                 ) {
-                    LocalAlbumDetailScreen(
-                        navController = navController,
-                        onPlayTrack = { track, queue ->
-                            playerViewModel.playUnifiedTrack(track, queue)
-                        },
-                        onPlayAll = { tracks ->
-                            playerViewModel.playAllUnified(tracks)
-                        },
-                        onShuffleAll = { tracks ->
-                            playerViewModel.shufflePlayUnified(tracks)
-                        }
-                    )
+                    tf.monochrome.android.devedit.DevEditScreen("local_album_detail") {
+                        LocalAlbumDetailScreen(
+                            navController = navController,
+                            onPlayTrack = { track, queue ->
+                                playerViewModel.playUnifiedTrack(track, queue)
+                            },
+                            onPlayAll = { tracks ->
+                                playerViewModel.playAllUnified(tracks)
+                            },
+                            onShuffleAll = { tracks ->
+                                playerViewModel.shufflePlayUnified(tracks)
+                            }
+                        )
+                    }
                 }
                 composable(
                     route = Screen.LocalArtistDetail.route,
                     arguments = listOf(navArgument("artistId") { type = NavType.LongType })
                 ) {
-                    LocalArtistDetailScreen(
-                        navController = navController,
-                        onPlayTrack = { track, queue ->
-                            playerViewModel.playUnifiedTrack(track, queue)
-                        },
-                        onPlayAll = { tracks ->
-                            playerViewModel.playAllUnified(tracks)
-                        },
-                        onShuffleAll = { tracks ->
-                            playerViewModel.shufflePlayUnified(tracks)
-                        }
-                    )
+                    tf.monochrome.android.devedit.DevEditScreen("local_artist_detail") {
+                        LocalArtistDetailScreen(
+                            navController = navController,
+                            onPlayTrack = { track, queue ->
+                                playerViewModel.playUnifiedTrack(track, queue)
+                            },
+                            onPlayAll = { tracks ->
+                                playerViewModel.playAllUnified(tracks)
+                            },
+                            onShuffleAll = { tracks ->
+                                playerViewModel.shufflePlayUnified(tracks)
+                            }
+                        )
+                    }
                 }
                 composable(
                     route = Screen.LocalGenreDetail.route,
                     arguments = listOf(navArgument("genre") { type = NavType.StringType })
                 ) {
-                    LocalGenreDetailScreen(
-                        navController = navController,
-                        onPlayTrack = { track, queue ->
-                            playerViewModel.playUnifiedTrack(track, queue)
-                        },
-                        onPlayAll = { tracks ->
-                            playerViewModel.playAllUnified(tracks)
-                        },
-                        onShuffleAll = { tracks ->
-                            playerViewModel.shufflePlayUnified(tracks)
-                        }
-                    )
+                    tf.monochrome.android.devedit.DevEditScreen("local_genre_detail") {
+                        LocalGenreDetailScreen(
+                            navController = navController,
+                            onPlayTrack = { track, queue ->
+                                playerViewModel.playUnifiedTrack(track, queue)
+                            },
+                            onPlayAll = { tracks ->
+                                playerViewModel.playAllUnified(tracks)
+                            },
+                            onShuffleAll = { tracks ->
+                                playerViewModel.shufflePlayUnified(tracks)
+                            }
+                        )
+                    }
                 }
             }
         }

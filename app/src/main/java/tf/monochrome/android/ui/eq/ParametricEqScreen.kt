@@ -91,6 +91,7 @@ fun ParametricEqScreen(
         ) {
             // Title
             item {
+              tf.monochrome.android.devedit.DevEditable("peq_title_section", Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -121,10 +122,12 @@ fun ParametricEqScreen(
                     }
                     Switch(checked = enabled, onCheckedChange = { viewModel.setEnabled(it) })
                 }
+              }
             }
 
             // Mini preview graph with live spectrum behind the EQ curve
             item {
+              tf.monochrome.android.devedit.DevEditable("peq_preview_graph", Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (spectrumEnabled && spectrumBins.isNotEmpty()) {
                         SpectrumOverlay(
@@ -144,10 +147,12 @@ fun ParametricEqScreen(
                         maxAbsDragGain = EqLimits.PARAMETRIC_MAX_BAND_DB,
                     )
                 }
+              }
             }
 
             // Edit pill button
             item {
+              tf.monochrome.android.devedit.DevEditable("peq_edit_button", Modifier.fillMaxWidth()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -179,10 +184,12 @@ fun ParametricEqScreen(
                         )
                     }
                 }
+              }
             }
 
             // Save-as-preset button
             item {
+              tf.monochrome.android.devedit.DevEditable("peq_save_button", Modifier.fillMaxWidth()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -215,11 +222,13 @@ fun ParametricEqScreen(
                         )
                     }
                 }
+              }
             }
 
             // Saved profiles
             if (allPresets.isNotEmpty()) {
                 item {
+                  tf.monochrome.android.devedit.DevEditable("peq_saved_profiles_header", Modifier.fillMaxWidth()) {
                     Text(
                         "SAVED PROFILES",
                         style = MaterialTheme.typography.labelSmall,
@@ -228,6 +237,7 @@ fun ParametricEqScreen(
                         letterSpacing = 1.sp,
                         modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 6.dp)
                     )
+                  }
                 }
 
                 items(items = allPresets, key = { it.id }) { preset ->

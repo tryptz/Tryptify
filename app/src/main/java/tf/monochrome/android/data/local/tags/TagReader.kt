@@ -158,9 +158,24 @@ class TagReader @Inject constructor(
         }
         val hasArtOrSidecar = artworkCacheKey != null
 
+        // Many sideloaded files (yt-dlp, loose rips) carry no ARTIST tag and
+        // stuff the whole "Artist - Title" string into the title. When the
+        // artist tag is genuinely absent, recover it from that convention so
+        // the library doesn't show a wall of "Unknown Artist".
+        val tagArtist = artist?.takeIf { it.isNotBlank() }
+        var finalArtist = tagArtist
+        var finalTitle = title?.takeIf { it.isNotBlank() }
+        if (tagArtist == null) {
+            val (derivedArtist, derivedTitle) = deriveArtistFromTitle(title, filePath)
+            if (derivedArtist != null) {
+                finalArtist = derivedArtist
+                finalTitle = derivedTitle
+            }
+        }
+
         return AudioTags(
-            title = title,
-            artist = artist,
+            title = finalTitle,
+            artist = finalArtist,
             albumArtist = albumArtist,
             album = album,
             genre = genre,
@@ -182,6 +197,27 @@ class TagReader @Inject constructor(
             fileSizeBytes = fileSize,
             lastModified = lastModified
         )
+    }
+
+    /**
+     * Recover "Artist" / "Title" from a title formatted as `Artist - Title`,
+     * used only when the file has no ARTIST tag at all. Falls back to the file
+     * name (sans extension) when the title tag is also missing.
+     *
+     * Only the spaced hyphen-minus (` - `) is treated as the separator. En/em
+     * dashes (`–`, `—`) are routinely used *inside* a title (e.g. "Heroine —
+     * Pat B Remix"), so splitting on them would mangle good titles. Returns
+     * `(null, originalTitle)` when nothing can be confidently derived.
+     */
+    private fun deriveArtistFromTitle(rawTitle: String?, filePath: String): Pair<String?, String?> {
+        val base = rawTitle?.takeIf { it.isNotBlank() }
+            ?: File(filePath).nameWithoutExtension.takeIf { it.isNotBlank() }
+            ?: return null to rawTitle
+        val idx = base.indexOf(" - ")
+        if (idx <= 0) return null to rawTitle
+        val artist = base.substring(0, idx).trim()
+        val title = base.substring(idx + 3).trim()
+        return if (artist.isNotEmpty() && title.isNotEmpty()) artist to title else null to rawTitle
     }
 
     private fun parseTrackNumber(raw: String?): Pair<Int?, Int?> {

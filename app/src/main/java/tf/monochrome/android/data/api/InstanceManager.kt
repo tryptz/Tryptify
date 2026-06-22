@@ -1,16 +1,6 @@
 package tf.monochrome.android.data.api
 
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.data.preferences.PreferencesManager
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,199 +12,37 @@ data class Instance(
     val version: String? = null
 )
 
+/**
+ * Resolves API/streaming/download endpoints SOLELY from the URLs the user
+ * configures in Settings → Instances:
+ *  - Tidal HiFi URL ([PreferencesManager.customApiEndpoint]) for API + streaming.
+ *  - Qobuz URL ([PreferencesManager.qobuzInstanceUrl]) for downloads.
+ *
+ * There is no public instance pool, uptime discovery, or hardcoded fallback —
+ * the app only ever talks to the server the user gives it ("dev instance mode").
+ */
 @Singleton
 class InstanceManager @Inject constructor(
-    private val httpClient: HttpClient,
     private val preferences: PreferencesManager,
-    private val json: Json
 ) {
-    companion object {
-        private val UPTIME_URLS = listOf(
-            "https://tidal-uptime.jiffy-puffs-1j.workers.dev/",
-            "https://tidal-uptime.props-76styles.workers.dev/"
-        )
-        private const val CACHE_DURATION_MS = 15 * 60 * 1000L
-        private const val UPTIME_FETCH_TIMEOUT_MS = 5_000L
-
-        private val FALLBACK_API_INSTANCES = listOf(
-            Instance("https://tidal-api.binimum.org"),
-            Instance("https://hifi.geeked.wtf"),
-            Instance("https://monochrome-api.samidy.com"),
-        )
-
-        private val FALLBACK_STREAMING_INSTANCES = listOf(
-            Instance("https://tidal-api.binimum.org"),
-            Instance("https://hifi.geeked.wtf"),
-            Instance("https://monochrome-api.samidy.com"),
-        )
-    }
-
-    private var cachedApiInstances: List<Instance>? = null
-    private var cachedStreamingInstances: List<Instance>? = null
-    private var cacheTimestamp: Long = 0L
-
     suspend fun getInstances(type: InstanceType): List<Instance> {
-        // Downloads pin to the user-configured Qobuz instance (Settings →
-        // Instances → Qobuz URL) when set, regardless of Dev Mode. If unset,
-        // fall through and serve the public streaming pool.
+        // Downloads prefer the configured Qobuz instance; otherwise fall through
+        // to the user's main (Tidal HiFi) endpoint.
         if (type == InstanceType.DOWNLOAD) {
             val qobuz = preferences.qobuzInstanceUrl.first()?.trim()?.takeIf { it.isNotBlank() }
-            if (qobuz != null) {
-                return listOf(Instance(qobuz.trimEnd('/')))
-            }
+            if (qobuz != null) return listOf(Instance(qobuz.trimEnd('/')))
         }
-        val effectiveType = if (type == InstanceType.DOWNLOAD) InstanceType.STREAMING else type
-
-        // Dev Mode: route all requests through the user-specified custom endpoint.
-        // When disabled, ignore any saved URL and fall through to the normal
-        // instance resolution so stale overrides don't silently redirect traffic.
-        if (preferences.devModeEnabled.first()) {
-            val customEndpoint = preferences.customApiEndpoint.first()
-            if (customEndpoint != null) {
-                return listOf(Instance(customEndpoint.trimEnd('/')))
-            }
-        }
-
-        // Check memory cache
-        if (isCacheValid()) {
-            val cached = when (effectiveType) {
-                InstanceType.API -> cachedApiInstances
-                InstanceType.STREAMING -> cachedStreamingInstances
-                InstanceType.DOWNLOAD -> null
-            }
-            if (!cached.isNullOrEmpty()) return cached.shuffled()
-        }
-
-        // Try loading from DataStore cache
-        val storedCache = preferences.instancesCache.first()
-        val storedTimestamp = preferences.instancesCacheTimestamp.first()
-        if (storedCache != null && System.currentTimeMillis() - storedTimestamp < CACHE_DURATION_MS) {
-            parseAndCacheInstances(storedCache)
-            val cached = when (effectiveType) {
-                InstanceType.API -> cachedApiInstances
-                InstanceType.STREAMING -> cachedStreamingInstances
-                InstanceType.DOWNLOAD -> null
-            }
-            if (!cached.isNullOrEmpty()) return cached.shuffled()
-        }
-
-        // Fetch fresh instances from uptime APIs
-        val fetched = fetchFromUptimeApis()
-        if (fetched != null) {
-            parseAndCacheInstances(fetched)
-            preferences.saveInstancesCache(fetched)
-            val cached = when (effectiveType) {
-                InstanceType.API -> cachedApiInstances
-                InstanceType.STREAMING -> cachedStreamingInstances
-                InstanceType.DOWNLOAD -> null
-            }
-            if (!cached.isNullOrEmpty()) return cached.shuffled()
-        }
-
-        // Fallback to hardcoded instances
-        return when (effectiveType) {
-            InstanceType.API -> FALLBACK_API_INSTANCES.shuffled()
-            InstanceType.STREAMING -> FALLBACK_STREAMING_INSTANCES.shuffled()
-            InstanceType.DOWNLOAD -> emptyList()
-        }
+        val custom = preferences.customApiEndpoint.first()?.trim()?.takeIf { it.isNotBlank() }
+        return if (custom != null) listOf(Instance(custom.trimEnd('/'))) else emptyList()
     }
 
-    suspend fun refreshInstances() {
-        val fetched = fetchFromUptimeApis()
-        if (fetched != null) {
-            parseAndCacheInstances(fetched)
-            preferences.saveInstancesCache(fetched)
-        }
-    }
+    // No remote pool to refresh — instances come only from the user's URL.
+    suspend fun refreshInstances() {}
 
     // Strict resolution of the configured Qobuz instance — null when unset.
-    // Unlike getInstances(DOWNLOAD), this never falls back to the TIDAL pool,
-    // so callers like Qobuz-only search don't accidentally duplicate TIDAL
-    // results when the user hasn't configured a Qobuz endpoint.
     suspend fun qobuzInstanceOrNull(): Instance? {
         val raw = preferences.qobuzInstanceUrl.first()?.trim()?.takeIf { it.isNotBlank() }
             ?: return null
         return Instance(raw.trimEnd('/'))
-    }
-
-    private fun isCacheValid(): Boolean {
-        return System.currentTimeMillis() - cacheTimestamp < CACHE_DURATION_MS
-    }
-
-    private suspend fun fetchFromUptimeApis(): String? {
-        val shuffledUrls = UPTIME_URLS.shuffled()
-        for (url in shuffledUrls) {
-            // Hard 5-second ceiling per uptime URL so one unreachable CF worker
-            // can't leave Home's "Your Mix" spinner spinning forever while the
-            // HTTP client waits on its default (much longer) socket timeout.
-            val body = withTimeoutOrNull(UPTIME_FETCH_TIMEOUT_MS) {
-                runCatching { httpClient.get(url).bodyAsText() }.getOrNull()
-            }
-            if (!body.isNullOrBlank()) return body
-        }
-        return null
-    }
-
-    private fun parseAndCacheInstances(jsonString: String) {
-        try {
-            val parsed = json.parseToJsonElement(jsonString)
-            val apiList = mutableListOf<Instance>()
-            val streamingList = mutableListOf<Instance>()
-
-            when (parsed) {
-                is JsonObject -> {
-                    // Format: { api: [...], streaming: [...] }
-                    parsed["api"]?.jsonArray?.forEach { element ->
-                        parseInstance(element.jsonObject)?.let { apiList.add(it) }
-                    }
-                    parsed["streaming"]?.jsonArray?.forEach { element ->
-                        parseInstance(element.jsonObject)?.let { streamingList.add(it) }
-                    }
-                    // Also check "instances" key
-                    parsed["instances"]?.jsonArray?.forEach { element ->
-                        val obj = element.jsonObject
-                        val instance = parseInstance(obj)
-                        if (instance != null) {
-                            val type = obj["type"]?.jsonPrimitive?.content
-                            when (type) {
-                                "streaming" -> streamingList.add(instance)
-                                else -> apiList.add(instance)
-                            }
-                        }
-                    }
-                }
-                is JsonArray -> {
-                    // Format: [{ url, type, version }, ...]
-                    parsed.forEach { element ->
-                        val obj = element.jsonObject
-                        val instance = parseInstance(obj)
-                        if (instance != null) {
-                            val type = obj["type"]?.jsonPrimitive?.content
-                            when (type) {
-                                "streaming" -> streamingList.add(instance)
-                                else -> apiList.add(instance)
-                            }
-                        }
-                    }
-                }
-                else -> return
-            }
-
-            if (apiList.isNotEmpty()) cachedApiInstances = apiList
-            if (streamingList.isNotEmpty()) cachedStreamingInstances = streamingList
-            // If streaming is empty, use API instances as fallback for streaming too
-            if (streamingList.isEmpty() && apiList.isNotEmpty()) {
-                cachedStreamingInstances = apiList
-            }
-            cacheTimestamp = System.currentTimeMillis()
-        } catch (_: Exception) {
-            // Parse failed, will use fallback
-        }
-    }
-
-    private fun parseInstance(obj: JsonObject): Instance? {
-        val url = obj["url"]?.jsonPrimitive?.content ?: return null
-        val version = obj["version"]?.jsonPrimitive?.content
-        return Instance(url.trimEnd('/'), version)
     }
 }

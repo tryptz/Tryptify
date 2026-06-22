@@ -67,13 +67,17 @@ fun ListeningStatsScreen(
         ) {
             // Summary Card
             item {
-                StatsSummaryCard(totalPlays = totalPlays)
+                tf.monochrome.android.devedit.DevEditable("summary_card", Modifier.fillMaxWidth()) {
+                    StatsSummaryCard(totalPlays = totalPlays)
+                }
             }
 
             // Top Artists Section
             if (topArtists.isNotEmpty()) {
                 item {
-                    SectionHeader("Top Artists")
+                    tf.monochrome.android.devedit.DevEditable("section_header_top_artists", Modifier.fillMaxWidth()) {
+                        SectionHeader("Top Artists")
+                    }
                 }
                 itemsIndexed(topArtists) { index, artist ->
                     ArtistRankCard(index + 1, artist)
@@ -83,7 +87,9 @@ fun ListeningStatsScreen(
             // Top Albums Section
             if (topAlbums.isNotEmpty()) {
                 item {
-                    SectionHeader("Top Albums")
+                    tf.monochrome.android.devedit.DevEditable("section_header_top_albums", Modifier.fillMaxWidth()) {
+                        SectionHeader("Top Albums")
+                    }
                 }
                 itemsIndexed(topAlbums) { index, album ->
                     AlbumRankCard(index + 1, album)

@@ -31,7 +31,8 @@ import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
 class SearchViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val unifiedLibrarySearch: SearchUnifiedLibraryUseCase,
-    private val preferences: PreferencesManager
+    private val preferences: PreferencesManager,
+    private val seedsRepository: tf.monochrome.android.data.repository.RecommendationSeedsRepository,
 ) : ViewModel() {
 
     /**
@@ -62,7 +63,12 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_COLLECTION = 70
         private const val SOURCE_BOOST_API = 50
         private const val DEFAULT_ARTIST_NAME = "Unknown Artist"
+        // Tracks shown per curated recommendation row in the search empty state.
+        private const val RECOMMENDATION_ROW_SIZE = 12
     }
+
+    /** A curated recommendation row shown in the search empty state. */
+    data class RecommendationRow(val label: String, val tracks: List<UnifiedTrack>)
 
     enum class SearchTypeFilter(val label: String) {
         ALL("All"),
@@ -90,10 +96,11 @@ class SearchViewModel @Inject constructor(
     // a page is in-flight.
     private class PageState {
         var nextOffset: Int = 0
+        var qobuzOffset: Int = 0
         var tidalEnd: Boolean = false
         var qobuzEnd: Boolean = false
         @Volatile var inFlight: Boolean = false
-        fun reset() { nextOffset = 0; tidalEnd = false; qobuzEnd = false; inFlight = false }
+        fun reset() { nextOffset = 0; qobuzOffset = 0; tidalEnd = false; qobuzEnd = false; inFlight = false }
         fun done(): Boolean = tidalEnd && qobuzEnd
     }
 
@@ -141,6 +148,47 @@ class SearchViewModel @Inject constructor(
 
     val searchHistory: StateFlow<List<String>> = preferences.searchHistory
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Curated Qobuz recommendations shown before the user types anything.
+    private val _recommendations = MutableStateFlow<List<RecommendationRow>>(emptyList())
+    val recommendations: StateFlow<List<RecommendationRow>> = _recommendations.asStateFlow()
+    private val _recommendationsLoading = MutableStateFlow(false)
+    val recommendationsLoading: StateFlow<Boolean> = _recommendationsLoading.asStateFlow()
+    private var recommendationsJob: Job? = null
+
+    init { loadRecommendations() }
+
+    /**
+     * Fill the curated recommendation rows from Qobuz (one search per seed,
+     * in parallel). Runs once and caches; a no-op when Qobuz is disabled
+     * (source mode TIDAL_ONLY) or unconfigured (searchQobuz returns empty).
+     */
+    fun loadRecommendations() {
+        if (_recommendations.value.isNotEmpty() || recommendationsJob?.isActive == true) return
+        recommendationsJob = viewModelScope.launch {
+            if (preferences.sourceMode.first() == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY) {
+                return@launch
+            }
+            _recommendationsLoading.value = true
+            try {
+                val seeds = seedsRepository.seeds()
+                val rows = coroutineScope {
+                    seeds.map { seed ->
+                        async {
+                            val tracks = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                                runCatching { repository.searchQobuz(seed.query) }.getOrNull()?.getOrNull()
+                            }?.tracks?.take(RECOMMENDATION_ROW_SIZE)?.map { it.toQobuzUnifiedTrack() }
+                                ?: emptyList()
+                            RecommendationRow(seed.label, tracks)
+                        }
+                    }.map { it.await() }
+                }.filter { it.tracks.isNotEmpty() }
+                _recommendations.value = rows
+            } finally {
+                _recommendationsLoading.value = false
+            }
+        }
+    }
 
     val tracks: StateFlow<List<UnifiedTrack>> = combine(
         _allTracks,
@@ -335,83 +383,118 @@ class SearchViewModel @Inject constructor(
         _isSearching.value = false
     }
 
-    // Qobuz returns one combined envelope per call; we only paginate the
-    // TIDAL side from loadMore, so always mark Qobuz "end" after the initial
-    // seed. The Qobuz arg is accepted for symmetry with the call sites and
-    // future per-type Qobuz paging.
-    private fun seedPageEnd(state: PageState, tidalCount: Int, @Suppress("unused") qobuzCount: Int, @Suppress("unused") qobuzAvailable: Boolean) {
+    // Seed paging state from the initial page. Both TIDAL and Qobuz now
+    // paginate from loadMore: TIDAL by a PAGE_SIZE offset, Qobuz by the number
+    // of items already shown for this type (one combined envelope per call).
+    private fun seedPageEnd(state: PageState, tidalCount: Int, qobuzCount: Int, qobuzAvailable: Boolean) {
         if (tidalCount < PAGE_SIZE) state.tidalEnd = true
-        state.qobuzEnd = true
+        state.qobuzEnd = !qobuzAvailable || qobuzCount == 0
+        state.qobuzOffset = qobuzCount
         state.nextOffset = PAGE_SIZE
     }
 
     /**
-     * Append the next page of results for [type] from TIDAL. Called by the
-     * Compose UI when the user scrolls near the end of a list. No-op if a
-     * page is already in-flight, the query is blank, or the type has
-     * exhausted both backends. Only TIDAL is paginated incrementally —
-     * Qobuz returns a single combined envelope at initial-search time.
+     * Append the next page of results for [type]. Called by the Compose UI when
+     * the user scrolls near the end of a list. No-op if a page is already
+     * in-flight, the query is blank, or the type has exhausted BOTH backends.
+     * Now pages TIDAL (PAGE_SIZE offset) and Qobuz (offset = items shown so far)
+     * so Qobuz results keep loading on scroll instead of stopping after page 1.
      */
     fun loadMore(type: SearchPageType) {
         val q = _query.value.trim()
         if (q.isBlank()) return
         val state = pageFor(type)
         if (state.inFlight || state.done()) return
-        if (state.tidalEnd) return // nothing left to fetch (Qobuz isn't paged here)
         state.inFlight = true
         _isLoadingMore.value = true
         loadMoreJob = viewModelScope.launch {
             try {
-                val offset = state.nextOffset
-                val newItems: List<Any> = when (type) {
-                    SearchPageType.TRACKS ->
-                        repository.searchTracks(q, offset, PAGE_SIZE).getOrDefault(emptyList())
-                    SearchPageType.ALBUMS ->
-                        repository.searchAlbums(q, offset, PAGE_SIZE).getOrDefault(emptyList())
-                    SearchPageType.ARTISTS ->
-                        repository.searchArtists(q, offset, PAGE_SIZE).getOrDefault(emptyList())
-                    SearchPageType.PLAYLISTS ->
-                        repository.searchPlaylists(q, offset, PAGE_SIZE).getOrDefault(emptyList())
-                }
-                if (newItems.size < PAGE_SIZE) state.tidalEnd = true
-                state.nextOffset = offset + PAGE_SIZE
-
-                if (newItems.isNotEmpty()) {
-                    when (type) {
-                        SearchPageType.TRACKS -> {
-                            @Suppress("UNCHECKED_CAST")
-                            val tracks = (newItems as List<Track>).map { it.toUnifiedTrack() }
-                            _allTracks.value = scoreTracks(q, _allTracks.value + tracks)
-                        }
-                        SearchPageType.ALBUMS -> {
-                            @Suppress("UNCHECKED_CAST")
-                            _allAlbums.value = scoreItems(q, (_allAlbums.value + (newItems as List<Album>)).distinctBy { it.id }) {
-                                listOf(it.title, it.displayArtist)
-                            }
-                        }
-                        SearchPageType.ARTISTS -> {
-                            @Suppress("UNCHECKED_CAST")
-                            _allArtists.value = scoreItems(q, (_allArtists.value + (newItems as List<Artist>)).distinctBy { it.id }) {
-                                listOf(it.name)
-                            }
-                        }
-                        SearchPageType.PLAYLISTS -> {
-                            @Suppress("UNCHECKED_CAST")
-                            _allPlaylists.value = scoreItems(q, (_allPlaylists.value + (newItems as List<Playlist>)).distinctBy { it.uuid }) {
-                                listOfNotNull(it.title, it.creator?.name, it.description)
-                            }
-                        }
+                // --- TIDAL page (incremental offset paging) ---
+                if (!state.tidalEnd) {
+                    val offset = state.nextOffset
+                    val tidalItems: List<Any> = when (type) {
+                        SearchPageType.TRACKS ->
+                            repository.searchTracks(q, offset, PAGE_SIZE).getOrDefault(emptyList())
+                        SearchPageType.ALBUMS ->
+                            repository.searchAlbums(q, offset, PAGE_SIZE).getOrDefault(emptyList())
+                        SearchPageType.ARTISTS ->
+                            repository.searchArtists(q, offset, PAGE_SIZE).getOrDefault(emptyList())
+                        SearchPageType.PLAYLISTS ->
+                            repository.searchPlaylists(q, offset, PAGE_SIZE).getOrDefault(emptyList())
                     }
+                    if (tidalItems.size < PAGE_SIZE) state.tidalEnd = true
+                    state.nextOffset = offset + PAGE_SIZE
+                    appendPage(type, tidalItems, isQobuz = false, q = q)
+                }
+
+                // --- Qobuz page (one combined envelope; offset = items shown). ---
+                // Qobuz has no playlists. Dedup makes a backend that ignores
+                // &offset= harmless: a repeated page adds nothing → we mark end.
+                if (!state.qobuzEnd && type != SearchPageType.PLAYLISTS) {
+                    val before = currentCountFor(type)
+                    val qobuz = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                        runCatching { repository.searchQobuz(q, state.qobuzOffset) }.getOrNull()?.getOrNull()
+                    }
+                    val qItems: List<Any> = when (type) {
+                        SearchPageType.TRACKS -> qobuz?.tracks ?: emptyList()
+                        SearchPageType.ALBUMS -> qobuz?.albums ?: emptyList()
+                        SearchPageType.ARTISTS -> qobuz?.artists ?: emptyList()
+                        SearchPageType.PLAYLISTS -> emptyList()
+                    }
+                    state.qobuzOffset += qItems.size
+                    appendPage(type, qItems, isQobuz = true, q = q)
+                    if (qItems.isEmpty() || currentCountFor(type) == before) state.qobuzEnd = true
+                } else if (type == SearchPageType.PLAYLISTS) {
+                    state.qobuzEnd = true
                 }
             } catch (_: Exception) {
                 // Swallow — a failed page just stops paging for this type.
                 state.tidalEnd = true
+                state.qobuzEnd = true
             } finally {
                 state.inFlight = false
                 _endReached.value = tracksPage.done() && albumsPage.done() &&
                     artistsPage.done() && playlistsPage.done()
                 _isLoadingMore.value = tracksPage.inFlight || albumsPage.inFlight ||
                     artistsPage.inFlight || playlistsPage.inFlight
+            }
+        }
+    }
+
+    private fun currentCountFor(type: SearchPageType): Int = when (type) {
+        SearchPageType.TRACKS -> _allTracks.value.size
+        SearchPageType.ALBUMS -> _allAlbums.value.size
+        SearchPageType.ARTISTS -> _allArtists.value.size
+        SearchPageType.PLAYLISTS -> _allPlaylists.value.size
+    }
+
+    private fun appendPage(type: SearchPageType, items: List<Any>, isQobuz: Boolean, q: String) {
+        if (items.isEmpty()) return
+        when (type) {
+            SearchPageType.TRACKS -> {
+                @Suppress("UNCHECKED_CAST")
+                val mapped = (items as List<Track>).map {
+                    if (isQobuz) it.toQobuzUnifiedTrack() else it.toUnifiedTrack()
+                }
+                _allTracks.value = scoreTracks(q, _allTracks.value + mapped)
+            }
+            SearchPageType.ALBUMS -> {
+                @Suppress("UNCHECKED_CAST")
+                _allAlbums.value = scoreItems(q, (_allAlbums.value + (items as List<Album>)).distinctBy { it.id }) {
+                    listOf(it.title, it.displayArtist)
+                }
+            }
+            SearchPageType.ARTISTS -> {
+                @Suppress("UNCHECKED_CAST")
+                _allArtists.value = scoreItems(q, (_allArtists.value + (items as List<Artist>)).distinctBy { it.id }) {
+                    listOf(it.name)
+                }
+            }
+            SearchPageType.PLAYLISTS -> {
+                @Suppress("UNCHECKED_CAST")
+                _allPlaylists.value = scoreItems(q, (_allPlaylists.value + (items as List<Playlist>)).distinctBy { it.uuid }) {
+                    listOfNotNull(it.title, it.creator?.name, it.description)
+                }
             }
         }
     }

@@ -549,17 +549,19 @@ fun InflatorScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            FaderColumn(
-                label = "INPUT",
-                readout = formatDb(state.inputDb),
-                value = state.inputDb,
-                valueRange = -6f..12f,
-                onValueChange = effect::setInputDb,
-                peakL = peak.left, peakR = peak.right,
-                modifier = Modifier.weight(1f),
-                meterStereo = true,
-                meterMinDb = -42f, meterMaxDb = 0f,
-            )
+            tf.monochrome.android.devedit.DevEditable("inflator_input_fader", Modifier.weight(1f)) {
+                FaderColumn(
+                    label = "INPUT",
+                    readout = formatDb(state.inputDb),
+                    value = state.inputDb,
+                    valueRange = -6f..12f,
+                    onValueChange = effect::setInputDb,
+                    peakL = peak.left, peakR = peak.right,
+                    modifier = Modifier.fillMaxSize(),
+                    meterStereo = true,
+                    meterMinDb = -42f, meterMaxDb = 0f,
+                )
+            }
 
             Column(
                 modifier = Modifier.weight(1.1f),
@@ -569,69 +571,77 @@ fun InflatorScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    FaderColumn(
-                        label = "EFFECT",
-                        readout = "${state.effectPct.roundToInt()} %",
-                        value = state.effectPct,
-                        valueRange = 0f..100f,
-                        onValueChange = effect::setEffectPct,
-                        peakL = peak.left, peakR = peak.right,
-                        meterStereo = true,
-                        meterMinDb = -42f, meterMaxDb = 0f,
-                        modifier = Modifier.weight(1f),
-                    )
-                    FaderColumn(
-                        label = "CURVE",
-                        readout = formatCurve(state.curve),
-                        value = state.curve,
-                        valueRange = -50f..50f,
-                        onValueChange = effect::setCurve,
-                        peakL = 0f, peakR = 0f,
-                        meterStereo = false,
-                        meterMinDb = -50f, meterMaxDb = 50f,
-                        modifier = Modifier.weight(1f),
-                    )
+                    tf.monochrome.android.devedit.DevEditable("inflator_effect_fader", Modifier.weight(1f)) {
+                        FaderColumn(
+                            label = "EFFECT",
+                            readout = "${state.effectPct.roundToInt()} %",
+                            value = state.effectPct,
+                            valueRange = 0f..100f,
+                            onValueChange = effect::setEffectPct,
+                            peakL = peak.left, peakR = peak.right,
+                            meterStereo = true,
+                            meterMinDb = -42f, meterMaxDb = 0f,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    tf.monochrome.android.devedit.DevEditable("inflator_curve_fader", Modifier.weight(1f)) {
+                        FaderColumn(
+                            label = "CURVE",
+                            readout = formatCurve(state.curve),
+                            value = state.curve,
+                            valueRange = -50f..50f,
+                            onValueChange = effect::setCurve,
+                            peakL = 0f, peakR = 0f,
+                            meterStereo = false,
+                            meterMinDb = -50f, meterMaxDb = 50f,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    OxfordButton(
-                        label = "CLIP 0 dB",
-                        active = state.clipZeroDb,
-                        activeColor = MaterialTheme.colorScheme.errorContainer,
-                        onClick = { effect.setClipZeroDb(!state.clipZeroDb) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OxfordButton(
-                        label = "BAND SPLIT",
-                        active = state.bandSplit,
-                        activeColor = MaterialTheme.colorScheme.secondaryContainer,
-                        onClick = { effect.setBandSplit(!state.bandSplit) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OxfordButton(
-                        label = "EFFECT IN",
-                        active = state.effectIn,
-                        activeColor = MaterialTheme.colorScheme.primary,
-                        onClick = { effect.setEffectIn(!state.effectIn) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                tf.monochrome.android.devedit.DevEditable("inflator_buttons", Modifier.fillMaxWidth()) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        OxfordButton(
+                            label = "CLIP 0 dB",
+                            active = state.clipZeroDb,
+                            activeColor = MaterialTheme.colorScheme.errorContainer,
+                            onClick = { effect.setClipZeroDb(!state.clipZeroDb) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OxfordButton(
+                            label = "BAND SPLIT",
+                            active = state.bandSplit,
+                            activeColor = MaterialTheme.colorScheme.secondaryContainer,
+                            onClick = { effect.setBandSplit(!state.bandSplit) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OxfordButton(
+                            label = "EFFECT IN",
+                            active = state.effectIn,
+                            activeColor = MaterialTheme.colorScheme.primary,
+                            onClick = { effect.setEffectIn(!state.effectIn) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
 
-            FaderColumn(
-                label = "OUTPUT",
-                readout = formatDb(state.outputDb),
-                value = state.outputDb,
-                valueRange = -12f..0f,
-                onValueChange = effect::setOutputDb,
-                peakL = peak.left, peakR = peak.right,
-                modifier = Modifier.weight(1f),
-                meterStereo = true,
-                meterMinDb = -40f, meterMaxDb = 0f,
-            )
+            tf.monochrome.android.devedit.DevEditable("inflator_output_fader", Modifier.weight(1f)) {
+                FaderColumn(
+                    label = "OUTPUT",
+                    readout = formatDb(state.outputDb),
+                    value = state.outputDb,
+                    valueRange = -12f..0f,
+                    onValueChange = effect::setOutputDb,
+                    peakL = peak.left, peakR = peak.right,
+                    modifier = Modifier.fillMaxSize(),
+                    meterStereo = true,
+                    meterMinDb = -40f, meterMaxDb = 0f,
+                )
+            }
         }
     }
 }
@@ -676,46 +686,54 @@ fun CompressorScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FaderColumn(
-                label = "THRESH",
-                readout = formatDb(state.thresholdDb),
-                value = state.thresholdDb,
-                valueRange = -60f..0f,
-                onValueChange = effect::setThresholdDb,
-                peakL = peak.left, peakR = peak.right,
-                modifier = Modifier.weight(1f),
-                meterMinDb = -60f, meterMaxDb = 0f,
-            )
-            FaderColumn(
-                label = "RATIO",
-                readout = formatRatio(state.ratio),
-                value = state.ratio,
-                valueRange = 1f..20f,
-                onValueChange = effect::setRatio,
-                peakL = 0f, peakR = 0f,
-                meterStereo = false,
-                modifier = Modifier.weight(0.9f),
-            )
-            FaderColumn(
-                label = "ATTACK",
-                readout = formatMs(state.attackMs),
-                value = state.attackMs.coerceIn(0.1f, 200f),
-                valueRange = 0.1f..200f,
-                onValueChange = effect::setAttackMs,
-                peakL = 0f, peakR = 0f,
-                meterStereo = false,
-                modifier = Modifier.weight(0.9f),
-            )
-            FaderColumn(
-                label = "RELEASE",
-                readout = formatMs(state.releaseMs),
-                value = state.releaseMs,
-                valueRange = 5f..2000f,
-                onValueChange = effect::setReleaseMs,
-                peakL = 0f, peakR = 0f,
-                meterStereo = false,
-                modifier = Modifier.weight(0.9f),
-            )
+            tf.monochrome.android.devedit.DevEditable("compressor_thresh_fader", Modifier.weight(1f)) {
+                FaderColumn(
+                    label = "THRESH",
+                    readout = formatDb(state.thresholdDb),
+                    value = state.thresholdDb,
+                    valueRange = -60f..0f,
+                    onValueChange = effect::setThresholdDb,
+                    peakL = peak.left, peakR = peak.right,
+                    modifier = Modifier.fillMaxSize(),
+                    meterMinDb = -60f, meterMaxDb = 0f,
+                )
+            }
+            tf.monochrome.android.devedit.DevEditable("compressor_ratio_fader", Modifier.weight(0.9f)) {
+                FaderColumn(
+                    label = "RATIO",
+                    readout = formatRatio(state.ratio),
+                    value = state.ratio,
+                    valueRange = 1f..20f,
+                    onValueChange = effect::setRatio,
+                    peakL = 0f, peakR = 0f,
+                    meterStereo = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            tf.monochrome.android.devedit.DevEditable("compressor_attack_fader", Modifier.weight(0.9f)) {
+                FaderColumn(
+                    label = "ATTACK",
+                    readout = formatMs(state.attackMs),
+                    value = state.attackMs.coerceIn(0.1f, 200f),
+                    valueRange = 0.1f..200f,
+                    onValueChange = effect::setAttackMs,
+                    peakL = 0f, peakR = 0f,
+                    meterStereo = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            tf.monochrome.android.devedit.DevEditable("compressor_release_fader", Modifier.weight(0.9f)) {
+                FaderColumn(
+                    label = "RELEASE",
+                    readout = formatMs(state.releaseMs),
+                    value = state.releaseMs,
+                    valueRange = 5f..2000f,
+                    onValueChange = effect::setReleaseMs,
+                    peakL = 0f, peakR = 0f,
+                    meterStereo = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -729,33 +747,39 @@ fun CompressorScreen(
                 Spacer(Modifier.height(4.dp))
                 LcdReadout(text = "-${"%.1f".format(grDb)} dB")
                 Spacer(Modifier.height(10.dp))
-                LedMeter(
-                    peakL = grDbToFakePeak(grDb),
-                    peakR = grDbToFakePeak(grDb),
-                    stereo = false,
-                    minDb = -20f,
-                    maxDb = 0f,
-                    modifier = Modifier.weight(1f).width(12.dp),
-                )
+                tf.monochrome.android.devedit.DevEditable("compressor_gr_meter", Modifier.weight(1f).width(12.dp)) {
+                    LedMeter(
+                        peakL = grDbToFakePeak(grDb),
+                        peakR = grDbToFakePeak(grDb),
+                        stereo = false,
+                        minDb = -20f,
+                        maxDb = 0f,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
-                FaderColumn(
-                    label = "MAKEUP",
-                    readout = formatDbSigned(state.makeupDb),
-                    value = state.makeupDb,
-                    valueRange = -12f..24f,
-                    onValueChange = effect::setMakeupDb,
-                    peakL = 0f, peakR = 0f,
-                    meterStereo = false,
-                    modifier = Modifier.height(100.dp).fillMaxWidth(),
-                )
+                tf.monochrome.android.devedit.DevEditable("compressor_makeup_fader", Modifier.fillMaxWidth()) {
+                    FaderColumn(
+                        label = "MAKEUP",
+                        readout = formatDbSigned(state.makeupDb),
+                        value = state.makeupDb,
+                        valueRange = -12f..24f,
+                        onValueChange = effect::setMakeupDb,
+                        peakL = 0f, peakR = 0f,
+                        meterStereo = false,
+                        modifier = Modifier.height(100.dp).fillMaxWidth(),
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
-                OxfordButton(
-                    label = "EFFECT IN",
-                    active = !state.bypass,
-                    activeColor = MaterialTheme.colorScheme.primary,
-                    onClick = { effect.setBypass(!state.bypass) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                tf.monochrome.android.devedit.DevEditable("compressor_effect_in_button", Modifier.fillMaxWidth()) {
+                    OxfordButton(
+                        label = "EFFECT IN",
+                        active = !state.bypass,
+                        activeColor = MaterialTheme.colorScheme.primary,
+                        onClick = { effect.setBypass(!state.bypass) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
@@ -825,14 +849,18 @@ fun OxfordEffectsTabs(
         }
         Spacer(Modifier.height(12.dp))
         when (selected) {
-            0 -> CompressorScreen(
-                effect = compressor,
-                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
-            )
-            else -> InflatorScreen(
-                effect = inflator,
-                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
-            )
+            0 -> tf.monochrome.android.devedit.DevEditable("compressor_tab_content", Modifier.fillMaxWidth()) {
+                CompressorScreen(
+                    effect = compressor,
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
+            else -> tf.monochrome.android.devedit.DevEditable("inflator_tab_content", Modifier.fillMaxWidth()) {
+                InflatorScreen(
+                    effect = inflator,
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
         }
     }
 }

@@ -63,11 +63,13 @@ fun CarModeScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         if (showEqSettings) {
-            EqSettingsSheet(
-                bandCount = bandCount,
-                onBandCountChange = { viewModel.setBandCount(it) },
-                onDismiss = { showEqSettings = false }
-            )
+            tf.monochrome.android.devedit.DevEditable("eq_settings_sheet", Modifier.fillMaxSize()) {
+                EqSettingsSheet(
+                    bandCount = bandCount,
+                    onBandCountChange = { viewModel.setBandCount(it) },
+                    onDismiss = { showEqSettings = false }
+                )
+            }
         } else {
             // Main car mode layout
             Row(
@@ -95,101 +97,107 @@ fun CarModeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Track info
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = currentTrack?.title ?: "Not playing",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = currentTrack?.displayArtist ?: "---",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = currentTrack?.album?.title ?: "---",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                    tf.monochrome.android.devedit.DevEditable("track_info", Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = currentTrack?.title ?: "Not playing",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 24.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = currentTrack?.displayArtist ?: "---",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 16.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = currentTrack?.album?.title ?: "---",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Play/pause + skip controls
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = { playerViewModel.skipToPrevious() },
-                            modifier = Modifier.size(60.dp)
+                    tf.monochrome.android.devedit.DevEditable("transport_row", Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.SkipPrevious, "Previous", modifier = Modifier.size(40.dp))
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(MaterialTheme.colorScheme.primary)
-                                .clickable { playerViewModel.togglePlayPause() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (isPlaying) "⏸" else "▶",
-                                fontSize = 32.sp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        IconButton(
-                            onClick = { playerViewModel.skipToNext() },
-                            modifier = Modifier.size(60.dp)
-                        ) {
-                            Icon(Icons.Default.SkipNext, "Next", modifier = Modifier.size(40.dp))
+                            IconButton(
+                                onClick = { playerViewModel.skipToPrevious() },
+                                modifier = Modifier.size(60.dp)
+                            ) {
+                                Icon(Icons.Default.SkipPrevious, "Previous", modifier = Modifier.size(40.dp))
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .clickable { playerViewModel.togglePlayPause() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isPlaying) "⏸" else "▶",
+                                    fontSize = 32.sp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            IconButton(
+                                onClick = { playerViewModel.skipToNext() },
+                                modifier = Modifier.size(60.dp)
+                            ) {
+                                Icon(Icons.Default.SkipNext, "Next", modifier = Modifier.size(40.dp))
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // EQ settings button
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { showEqSettings = true }
-                            .padding(12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
+                    tf.monochrome.android.devedit.DevEditable("eq_settings_button", Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { showEqSettings = true }
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Tune, "EQ Settings", modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("EQ ($bandCount bands)", fontWeight = FontWeight.SemiBold)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Tune, "EQ Settings", modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("EQ ($bandCount bands)", fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
                 }
@@ -197,13 +205,18 @@ fun CarModeScreen(
                 Spacer(modifier = Modifier.width(24.dp))
 
                 // Right: Graphic EQ
-                GraphicEqComponent(
-                    bands = eqBands,
-                    onBandChange = { index, value -> viewModel.updateBand(index, value) },
-                    modifier = Modifier
+                tf.monochrome.android.devedit.DevEditable(
+                    "graphic_eq",
+                    Modifier
                         .weight(0.65f)
                         .fillMaxHeight()
-                )
+                ) {
+                    GraphicEqComponent(
+                        bands = eqBands,
+                        onBandChange = { index, value -> viewModel.updateBand(index, value) },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
     }

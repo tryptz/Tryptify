@@ -85,6 +85,7 @@ fun ParametricEqEditScreen(
             .verticalScroll(rememberScrollState())
     ) {
         // Top bar
+        tf.monochrome.android.devedit.DevEditable("peq_edit_top_bar", Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -125,8 +126,10 @@ fun ParametricEqEditScreen(
                 )
             }
         }
+        }
 
         // FFT size toggle (4K / 8K / 16K)
+        tf.monochrome.android.devedit.DevEditable("peq_edit_fft_toggle", Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -156,8 +159,10 @@ fun ParametricEqEditScreen(
                 onClick = { viewModel.setFftSize(SpectrumAnalyzerTap.FFT_SIZE_16K) }
             )
         }
+        }
 
         // Interactive graph with live spectrum overlay
+        tf.monochrome.android.devedit.DevEditable("peq_edit_graph", Modifier.fillMaxWidth()) {
         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
             FrequencyResponseGraph(
                 originalCurve = emptyList(),
@@ -172,8 +177,10 @@ fun ParametricEqEditScreen(
                 onBandDragged = { id, f, g -> viewModel.updateBandByDrag(id, f, g) }
             )
         }
+        }
 
         // Band strip with add button
+        tf.monochrome.android.devedit.DevEditable("peq_edit_band_strip", Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             SectionLabel("BANDS")
             Row(
@@ -209,11 +216,13 @@ fun ParametricEqEditScreen(
                 }
             }
         }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         // Selected band detail
         if (selectedBand != null) {
+            tf.monochrome.android.devedit.DevEditable("peq_edit_selected_band", Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -301,11 +310,13 @@ fun ParametricEqEditScreen(
                     onChange = { viewModel.updateBand(selectedBand.copy(q = it)) }
                 )
             }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Preamp slider
+        tf.monochrome.android.devedit.DevEditable("peq_edit_preamp", Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
             SectionLabel("PREAMP")
             ValueSlider(
@@ -315,6 +326,7 @@ fun ParametricEqEditScreen(
                 display = "%+.1f dB".format(currentPreamp),
                 onChange = { viewModel.setPreamp(it) }
             )
+        }
         }
 
         Spacer(modifier = Modifier.height(32.dp))

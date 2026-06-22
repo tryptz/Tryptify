@@ -43,7 +43,12 @@ fun Modifier.liquidGlass(
     val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
     val tintColor = if (isDark) Color.Black else Color.White
     val adaptedTintAlpha = if (isDark) (tintAlpha * 1.4f).coerceAtMost(0.50f) else tintAlpha
-    val borderColor = MaterialTheme.colorScheme.outline
+    // Clear, theme-independent specular rim: a translucent white edge on dark
+    // themes (and a dark edge on light themes), matching the "Clear" theme's
+    // visible outline. Using a luminance-based color instead of the per-scheme
+    // colorScheme.outline keeps UI-element outlines clearly visible on every
+    // theme by default (many schemes' outline color is too low-contrast to read).
+    val borderColor = if (isDark) Color.White else Color.Black
 
     // LOW-tier devices skip the full glass chrome — no backdrop blur, no specular
     // rim, no refraction overlay. Those three layers together are the dominant

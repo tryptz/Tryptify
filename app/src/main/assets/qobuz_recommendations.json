@@ -1,0 +1,9 @@
+[
+    { "label": "Hardstyle", "query": "hardstyle" },
+    { "label": "Electronic", "query": "electronic" },
+    { "label": "Lo-fi beats", "query": "lofi" },
+    { "label": "Pop hits", "query": "pop hits" },
+    { "label": "Hip-hop", "query": "hip hop" },
+    { "label": "Jazz", "query": "jazz" },
+    { "label": "Classical", "query": "classical" }
+]

@@ -346,7 +346,11 @@ data class UnifiedTrack(
 
     // Source
     val source: PlaybackSource,
-    val sourceType: SourceType
+    val sourceType: SourceType,
+
+    // File date (epoch millis) for local tracks — used for "sort by date".
+    // Null for streaming sources.
+    val dateModified: Long? = null
 ) {
     val displayArtist: String
         get() = artistName

@@ -18,6 +18,10 @@ fun SectionHeader(
     modifier: Modifier = Modifier,
     onSeeAllClick: (() -> Unit)? = null
 ) {
+    tf.monochrome.android.devedit.DevEditable(
+        elementId = "section_" + title.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_'),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -39,5 +43,6 @@ fun SectionHeader(
                 )
             }
         }
+    }
     }
 }
