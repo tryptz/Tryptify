@@ -436,15 +436,15 @@ private fun VisualizerHeroOverlay(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.padding(12.dp)
-            .liquidGlass(shape = RoundedCornerShape(20.dp), tintAlpha = 0.26f),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.padding(10.dp)
+            .liquidGlass(shape = RoundedCornerShape(18.dp), tintAlpha = 0.26f),
+        shape = RoundedCornerShape(18.dp),
         color = Color.Transparent,
         contentColor = Color.White,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -457,7 +457,8 @@ private fun VisualizerHeroOverlay(
                 ) {
                     Text(
                         text = currentPreset?.displayName ?: "Bundled projectM presets",
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -483,7 +484,7 @@ private fun VisualizerHeroOverlay(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
@@ -727,16 +728,16 @@ private fun VisualizerActionPill(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = accent.copy(alpha = 0.14f),
         contentColor = accent,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(15.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
