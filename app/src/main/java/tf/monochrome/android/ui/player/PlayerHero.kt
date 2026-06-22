@@ -302,7 +302,8 @@ private fun VisualizerHero(
         // Outside fullscreen the visualizer is locked to the album-art aspect
         // ratio so its dimensions match the cover artwork exactly.
         modifier = if (isFullscreen) modifier else modifier.aspectRatio(PlayerDesignTokens.AlbumArtAspectRatio),
-        shape = if (isFullscreen) RoundedCornerShape(0.dp) else RoundedCornerShape(PlayerDesignTokens.HeroCorner),
+        // Square corners (matching the album-art hero) in both states.
+        shape = RectangleShape,
         color = Color.Black,
     ) {
         val interactionSource = remember { MutableInteractionSource() }

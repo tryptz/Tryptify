@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -105,7 +106,7 @@ fun VisualizerComponent(
 
     Box(
         modifier = modifier
-            .clip(if (isFullscreen) RoundedCornerShape(0.dp) else RoundedCornerShape(28.dp))
+            .clip(RectangleShape)
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
