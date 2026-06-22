@@ -28,35 +28,48 @@ visualizer.
 
 ---
 
-## What's new in 1.5.0
+## What's new in 1.6.0
 
-- **Rebrand to Tryptify.** Launcher name, About tab, and version footer updated;
-  package, app id, and existing user data are untouched.
-- **Qobuz catalog source.** Pickable source mode in Settings — TIDAL only,
-  Qobuz only, or both fanned out in parallel at search time. Album / artist /
-  track detail screens, `QobuzCached` stream resolution via the configured
-  trypt-hifi instance, and per-track QobuzIdRegistry routing so a Qobuz id
-  never accidentally falls through to TIDAL.
-- **Bit-perfect USB DAC bypass.** UAPP-style libusb-backed UAC1 and UAC2
-  driver, end-to-end iso pump, sample-accurate feedback-EP pacing, software
-  volume + hardware-key control, exclusive-mode interface claim. EQ, AutoEQ,
-  and the mixer DSP keep working on the bypass path.
-- **Rig-aware AutoEQ.** 12 squig.link sources merged with the existing AutoEq
-  GitHub catalog, rig taxonomy (B&K 5128, GRAS 43AG-7 / 43AC-10 / 45CA-10, IEC
-  711 clone, MiniDSP EARS, Uploaded), pinned-left "Uploaded" section, instant
-  chip feedback, long-press delete on user uploads, FR measurement cached
-  across sessions.
-- **Synced karaoke lyrics** with a blurred-album-art backdrop, plus an LRCLib
-  fallback when TIDAL has no lyrics for a track.
-- **Per-track Share** sends the FLAC directly (downloading on demand if it
-  isn't already local).
-- **Polish:** infinite-scroll unified search, downloaded-album art in the
-  catalog, Ko-fi link in a new About tab, NDK bumped to `29.0.14206865` with
-  explicit `libc++_shared`, vsync toggle for the ProjectM surface, and a
-  pile of audio-safety / lint / volume-state fixes.
+### Added
 
-A full per-commit list lives in
-[the 1.5.0 release notes](https://github.com/tryptz/monotrypt.android/releases/tag/1.5.0).
+#### DevEdit layout mode
+- **Drag-to-arrange editor** — New per-screen layout mode with an edit button and glow indicator. Move, resize, and rearrange UI elements directly on the screen.
+- **Adopted app-wide** — Wired through the player first, then Settings, and every remaining screen (detail, mixer, Oxford, stats, home, library, EQ).
+- **Grid snapping** — Optional grid snap for moving and resizing elements, with resize snapping to grid steps when enabled.
+- **Resizable elements** — Album art and other elements can be resized in edit mode.
+- **Bundled default layout** — Ships a default layout arrangement for all users, scaled across phone sizes (resolution-robust) against a 428×932dp design reference. Current layout can be exported to JSON.
+
+#### Player
+- **Rebuilt Now Playing screen** — `NowPlayingScreen` split into a composable shell for a cleaner main player layout.
+- **Square album-art hero** — Album art rendered as a true square with sharp edges (rounded corners removed) and a drop shadow.
+- **Dynamic album coloring** — Action dock, status cards, and transport side buttons now adopt the accent color extracted from the album art.
+- **Swipe-up audio tools** — Audio-tools reworked into a dock with a pull-up panel that pulls from the bottom edge, freeing the area below the dock; pitch toggle added to the speed sheet.
+- **Compact album-art controls** — Small, icon-only controls over the album art that auto-hide quickly; album-art pill shrunk.
+
+#### Local library
+- **Sorting** — Sort Albums, Songs, and Artists by date, name, file type, and time.
+- **Artist recovery** — Recovers the artist from an `Artist - Title` filename when no artist tag is present.
+- **Embedded cover art** — Shows embedded album art for local songs that have no cached cover.
+
+#### Search
+- **Deeper Qobuz results** — More Qobuz search results plus curated Qobuz recommendations.
+
+### Changed
+- **Status grid** — Replaced Sleep timer with Mixer; AutoEQ now routes to the AutoEQ page. Deduplicated AutoEQ and added a toggle to turn the visualizer off.
+- **Glass outlines** — Clear, visible glass outlines enabled by default on every theme.
+- **Songs list** — Local Songs list now uses the carded style to match Favorites.
+- **projectM visualizer** — Control panel made more compact (and tightened further); visualizer locked to the album-art aspect ratio with a shrunk status badge and rounded corners removed.
+- **Instances** — Only the user's own instance URL is used; the public instance pool and the inaccurate sync claim were dropped.
+
+### Fixed
+- **DSP knobs** — Fixed frozen DSP plugin knobs caused by stale value capture.
+- **Album color** — Fixed album color extraction so action buttons no longer stay stuck on the default blue.
+- **Player layout** — Fixed the player hero overflowing and overlapping the top bar and track info.
+- **JVM signature clash** — Resolved an `applySort` signature clash with `@JvmName`.
+- **CI** — Removed BlurView to fix the JitPack CI failure (album art now uses a shadow instead).
+
+### Internal
+- Bumped version to 1.6.0 (versionCode 160).
 
 ---
 
