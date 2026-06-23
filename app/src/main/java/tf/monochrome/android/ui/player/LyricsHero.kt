@@ -26,8 +26,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -117,6 +122,89 @@ internal fun LyricsHeroPanel(
                 onSeekTo = onSeekTo,
             )
             else -> UnsyncedLyricsView(lines = lyrics.lines)
+        }
+    }
+}
+
+/**
+ * Compact lyrics surface bound to the album-art slot. Unlike [LyricsHeroPanel]
+ * (a full-bleed treatment), this is sized by its caller to exactly cover the
+ * square cover area and is meant to be crossfaded in as the album art fades
+ * out. The lyric lines dissolve into transparency at the top and bottom edges
+ * via a `DstIn` gradient mask so they read as floating inside the artwork frame
+ * rather than being hard-cropped.
+ */
+@Composable
+internal fun LyricsHeroBox(
+    lyrics: Lyrics?,
+    isLoading: Boolean,
+    albumColors: AlbumColors,
+    positionMs: StateFlow<Long>,
+    onSeekTo: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RectangleShape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        albumColors.dominant.copy(alpha = 0.42f),
+                        Color.Black.copy(alpha = 0.62f),
+                        albumColors.dominant.copy(alpha = 0.48f),
+                    )
+                )
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                // Offscreen compositing is required for the DstIn blend below to
+                // mask against the already-drawn lyric content.
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    val edge = (size.height * 0.16f).coerceAtMost(120f)
+                    val top = edge / size.height
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            top to Color.Black,
+                            1f - top to Color.Black,
+                            1f to Color.Transparent,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
+        ) {
+            when {
+                isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Loading lyrics…",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White.copy(alpha = 0.85f),
+                    )
+                }
+                lyrics == null || lyrics.lines.isEmpty() -> Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "No lyrics available for this track.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+                lyrics.isSynced -> SyncedLyricsView(
+                    lines = lyrics.lines,
+                    positionMs = positionMs,
+                    accent = albumColors.vibrant,
+                    onSeekTo = onSeekTo,
+                )
+                else -> UnsyncedLyricsView(lines = lyrics.lines)
+            }
         }
     }
 }

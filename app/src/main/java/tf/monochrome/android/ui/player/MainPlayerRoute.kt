@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.player
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -211,6 +212,12 @@ fun MainPlayerRoute(
         onPlayPause = playerViewModel::togglePlayPause,
         onForward10 = playerViewModel::forward10,
         onNext = playerViewModel::skipToNext,
+        onLyrics = {
+            playerViewModel.setNowPlayingViewMode(
+                if (viewMode == NowPlayingViewMode.LYRICS) NowPlayingViewMode.COVER_ART
+                else NowPlayingViewMode.LYRICS
+            )
+        },
         onTimer = { showSleepSheet = true },
         onMixer = { navController.navigate(Screen.Mixer.route) },
         onPlaylist = { showQueueSheet = true },
@@ -253,13 +260,32 @@ fun MainPlayerRoute(
             )
         },
         hero = { heroModifier ->
+            // Lyrics mode dissolves the album art (or visualizer) and brings the
+            // lyric surface in, sized to exactly the same album slot. Everything
+            // else (square / circular / visualizer) is handled by PlayerHero.
+            androidx.compose.animation.Crossfade(
+                targetState = viewMode == NowPlayingViewMode.LYRICS,
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 500),
+                label = "lyricsHeroCrossfade",
+                modifier = heroModifier,
+            ) { lyricsMode ->
+            if (lyricsMode) {
+                LyricsHeroBox(
+                    lyrics = lyrics,
+                    isLoading = isLyricsLoading,
+                    albumColors = albumColors,
+                    positionMs = playerViewModel.positionMs,
+                    onSeekTo = playerViewModel::seekTo,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
             val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
                 PlayerHeroStyle.Visualizer
             } else {
                 heroStyle
             }
             PlayerHero(
-                modifier = heroModifier,
+                modifier = Modifier.fillMaxSize(),
                 style = effectiveStyle,
                 isFullscreen = isFullscreenActive,
                 track = currentTrack,
@@ -294,6 +320,8 @@ fun MainPlayerRoute(
                 onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
                 onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
             )
+            }
+            }
         },
     )
 }

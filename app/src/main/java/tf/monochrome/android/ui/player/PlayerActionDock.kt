@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
@@ -33,12 +34,14 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.liquidGlass
 
 /**
- * Compact tool row beneath the transport controls: Timer · Mixer/FX · Playlist.
+ * Compact tool row beneath the transport controls: Lyrics · Timer · Mixer/FX · Playlist.
  * (Monitoring + effect controls live in the pull-up "Audio tools" panel.)
  */
 @Composable
 fun PlayerActionDock(
     accent: Color,
+    lyricsActive: Boolean,
+    onLyrics: () -> Unit,
     onTimer: () -> Unit,
     onMixer: () -> Unit,
     onPlaylist: () -> Unit,
@@ -55,6 +58,7 @@ fun PlayerActionDock(
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
+        DockAction(Icons.Default.Lyrics, "Lyrics", accent, lyricsActive, onLyrics)
         DockAction(Icons.Default.Timer, "Timer", accent, false, onTimer)
         DockAction(Icons.Default.Tune, "Mixer/FX", accent, false, onMixer)
         DockAction(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", accent, false, onPlaylist)
