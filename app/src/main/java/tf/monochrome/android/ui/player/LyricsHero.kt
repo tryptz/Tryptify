@@ -3,8 +3,10 @@ package tf.monochrome.android.ui.player
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,13 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -130,9 +130,9 @@ internal fun LyricsHeroPanel(
  * Compact lyrics surface bound to the album-art slot. Unlike [LyricsHeroPanel]
  * (a full-bleed treatment), this is sized by its caller to exactly cover the
  * square cover area and is meant to be crossfaded in as the album art fades
- * out. The lyric lines dissolve into transparency at the top and bottom edges
- * via a `DstIn` gradient mask so they read as floating inside the artwork frame
- * rather than being hard-cropped.
+ * out. The surface itself is fully transparent — only the lyric lines show,
+ * over the player background — and they dissolve into transparency at the top
+ * and bottom edges via a `DstIn` gradient mask.
  */
 @Composable
 internal fun LyricsHeroBox(
@@ -145,66 +145,51 @@ internal fun LyricsHeroBox(
 ) {
     Box(
         modifier = modifier
-            .clip(RectangleShape)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        albumColors.dominant.copy(alpha = 0.42f),
-                        Color.Black.copy(alpha = 0.62f),
-                        albumColors.dominant.copy(alpha = 0.48f),
-                    )
+            // Offscreen compositing is required for the DstIn blend below to
+            // mask against the already-drawn lyric content.
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                val edge = (size.height * 0.16f).coerceAtMost(120f)
+                val top = edge / size.height
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        top to Color.Black,
+                        1f - top to Color.Black,
+                        1f to Color.Transparent,
+                    ),
+                    blendMode = BlendMode.DstIn,
                 )
-            ),
+            },
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                // Offscreen compositing is required for the DstIn blend below to
-                // mask against the already-drawn lyric content.
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    val edge = (size.height * 0.16f).coerceAtMost(120f)
-                    val top = edge / size.height
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            top to Color.Black,
-                            1f - top to Color.Black,
-                            1f to Color.Transparent,
-                        ),
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
-        ) {
-            when {
-                isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Loading lyrics…",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Color.White.copy(alpha = 0.85f),
-                    )
-                }
-                lyrics == null || lyrics.lines.isEmpty() -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "No lyrics available for this track.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                }
-                lyrics.isSynced -> SyncedLyricsView(
-                    lines = lyrics.lines,
-                    positionMs = positionMs,
-                    accent = albumColors.vibrant,
-                    onSeekTo = onSeekTo,
+        when {
+            isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "Loading lyrics…",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White.copy(alpha = 0.85f),
                 )
-                else -> UnsyncedLyricsView(lines = lyrics.lines)
             }
+            lyrics == null || lyrics.lines.isEmpty() -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "No lyrics available for this track.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+            }
+            lyrics.isSynced -> SyncedLyricsView(
+                lines = lyrics.lines,
+                positionMs = positionMs,
+                accent = albumColors.vibrant,
+                onSeekTo = onSeekTo,
+            )
+            else -> UnsyncedLyricsView(lines = lyrics.lines)
         }
     }
 }
@@ -229,20 +214,34 @@ internal fun SyncedLyricsView(
     }
 
     LaunchedEffect(currentLineIndex) {
-        if (currentLineIndex >= 0) {
-            listState.animateScrollToItem(index = currentLineIndex, scrollOffset = -300)
+        if (currentLineIndex < 0) return@LaunchedEffect
+        val viewport = listState.layoutInfo.viewportSize.height
+        // Coarse pass: pull the active line to roughly the vertical centre
+        // (and lay it out so the fine pass below can measure it).
+        listState.animateScrollToItem(index = currentLineIndex, scrollOffset = -(viewport / 2))
+        // Fine pass: nudge the line's midpoint onto the exact viewport centre.
+        val info = listState.layoutInfo
+        val target = info.visibleItemsInfo.firstOrNull { it.index == currentLineIndex }
+        if (target != null) {
+            val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            val itemCentre = target.offset + target.size / 2f
+            listState.animateScrollBy(itemCentre - viewportCentre)
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 28.dp),
-        contentPadding = PaddingValues(vertical = 80.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        itemsIndexed(lines) { index, line ->
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Half-height padding top and bottom lets any line — including the
+        // first and last — settle at the exact vertical centre.
+        val halfViewport = maxHeight / 2
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp),
+            contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
             if (line.words.isNotEmpty()) {
                 KaraokeWordLine(
@@ -274,6 +273,7 @@ internal fun SyncedLyricsView(
                         .padding(vertical = 6.dp),
                 )
             }
+        }
         }
     }
 }
