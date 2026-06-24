@@ -45,7 +45,6 @@ import coil3.request.crossfade
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import tf.monochrome.android.domain.model.LyricLine
-import tf.monochrome.android.domain.model.LyricWord
 import tf.monochrome.android.domain.model.Lyrics
 
 /**
@@ -274,16 +273,11 @@ internal fun SyncedLyricsView(
             itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
-            if (isActive || line.words.isNotEmpty()) {
-                // The active line (and any line that ships explicit word timing)
-                // illuminates word-by-word. Line-level sources like LRCLib carry
-                // no word tags, so we synthesise them from the line's window
-                // [start, nextStart] inside KaraokeLyricLine.
-                val lineEndMs = lines.getOrNull(index + 1)?.timeMs
-                    ?: (line.timeMs + SyntheticLineTailMs)
+            if (line.words.isNotEmpty()) {
+                // Only sources with real per-word timing (TIDAL enhanced LRC)
+                // illuminate word-by-word.
                 KaraokeLyricLine(
                     line = line,
-                    lineEndMs = lineEndMs,
                     isActive = isActive,
                     isPast = isPast,
                     position = position,
@@ -291,16 +285,21 @@ internal fun SyncedLyricsView(
                     onClick = { onSeekTo(line.timeMs) },
                 )
             } else {
+                // Line-level sources (LRCLib / Qobuz): illuminate the whole
+                // active line at once.
                 val color by animateColorAsState(
-                    targetValue = if (isPast) Color.White.copy(alpha = 0.35f)
-                    else Color.White.copy(alpha = 0.62f),
+                    targetValue = when {
+                        isActive -> accent
+                        isPast -> Color.White.copy(alpha = 0.35f)
+                        else -> Color.White.copy(alpha = 0.62f)
+                    },
                     label = "lyricColor",
                 )
                 Text(
                     text = line.text.ifBlank { "♪" },
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = if (isActive) 24.sp else 18.sp,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
                     ),
                     color = color,
                     modifier = Modifier
@@ -314,47 +313,16 @@ internal fun SyncedLyricsView(
     }
 }
 
-/** Tail given to the final line (which has no "next line" to bound it). */
-private const val SyntheticLineTailMs = 3000L
-
-/** Floor on a synthesised word's duration so very long lines still illuminate. */
-private const val MinSyntheticWordMs = 140L
-
-/**
- * Per-word timing for a line. Explicit word tags (TIDAL enhanced LRC) are used
- * as-is; line-level sources (LRCLib / Qobuz) get a synthesised split of the
- * line window [start, end] weighted by word length, so longer words hold the
- * highlight a little longer — close enough to read as natural karaoke.
- */
-private fun karaokeWords(line: LyricLine, lineEndMs: Long): List<LyricWord> {
-    if (line.words.isNotEmpty()) return line.words
-    val tokens = line.text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
-    if (tokens.isEmpty()) return listOf(LyricWord(line.timeMs, lineEndMs, line.text.ifBlank { "♪" }))
-    val start = line.timeMs
-    val end = lineEndMs.coerceAtLeast(start + MinSyntheticWordMs * tokens.size)
-    val span = end - start
-    val totalChars = tokens.sumOf { it.length }.coerceAtLeast(1)
-    var cursor = start
-    return tokens.map { token ->
-        val dur = (span * token.length / totalChars).coerceAtLeast(MinSyntheticWordMs)
-        val wordStart = cursor
-        cursor += dur
-        LyricWord(wordStart, cursor, token)
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun KaraokeLyricLine(
     line: LyricLine,
-    lineEndMs: Long,
     isActive: Boolean,
     isPast: Boolean,
     position: Long,
     accent: Color,
     onClick: () -> Unit,
 ) {
-    val words = remember(line, lineEndMs) { karaokeWords(line, lineEndMs) }
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -362,7 +330,7 @@ internal fun KaraokeLyricLine(
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.Start,
     ) {
-        words.forEach { word ->
+        line.words.forEach { word ->
             val target = when {
                 !isActive -> if (isPast) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.6f)
                 position >= word.endMs -> accent.copy(alpha = 0.9f)   // already sung
