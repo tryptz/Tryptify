@@ -750,20 +750,24 @@ class HiFiApiClient @Inject constructor(
                 val lineTimeMs = (minutes * 60 * 1000) + (seconds * 1000).toLong()
                 val lineContent = lineMatch.groupValues[3]
 
-                // Extract word-level sync if present
-                val words = mutableListOf<LyricWord>()
-                var lastTime = lineTimeMs
-                
-                lrcWordRegex.findAll(lineContent).forEach { wordMatch ->
+                // Extract word-level sync if present. In enhanced LRC each
+                // `<mm:ss.cs>` tag marks where ITS word starts, so word_i spans
+                // [t_i, t_{i+1}). The previous logic used the prior tag as the
+                // start, which shifted every word one slot early (and gave the
+                // first word a zero-width span) — i.e. karaoke was always out of
+                // sync. Pair each tag with the next tag's time as its end.
+                val rawWords = lrcWordRegex.findAll(lineContent).map { wordMatch ->
                     val wMinutes = wordMatch.groupValues[1].toLongOrNull() ?: 0
                     val wSeconds = wordMatch.groupValues[2].toDoubleOrNull() ?: 0.0
                     val wordTimeMs = (wMinutes * 60 * 1000) + (wSeconds * 1000).toLong()
                     var wordText = wordMatch.groupValues[3].trim()
-                    
                     if (convertToRomaji) wordText = RomajiConverter.convert(wordText)
-                    
-                    words.add(LyricWord(lastTime, wordTimeMs, wordText))
-                    lastTime = wordTimeMs
+                    wordTimeMs to wordText
+                }.filter { it.second.isNotBlank() }.toList()
+
+                val words = rawWords.mapIndexed { i, (startMs, wordText) ->
+                    val endMs = rawWords.getOrNull(i + 1)?.first ?: (startMs + 2000)
+                    LyricWord(startMs = startMs, endMs = endMs, text = wordText)
                 }
 
                 var finalText = if (words.isEmpty()) lineContent.trim() else words.joinToString(" ") { it.text }

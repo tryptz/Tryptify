@@ -275,6 +275,8 @@ fun MainPlayerRoute(
                     isLoading = isLyricsLoading,
                     albumColors = albumColors,
                     positionMs = playerViewModel.positionMs,
+                    isPlaying = isPlaying,
+                    speed = playbackSpeed,
                     onSeekTo = playerViewModel::seekTo,
                     modifier = Modifier.fillMaxSize(),
                 )
