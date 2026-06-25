@@ -217,18 +217,22 @@ internal fun SyncedLyricsView(
     LaunchedEffect(currentLineIndex) {
         val index = currentLineIndex
         if (index < 0) return@LaunchedEffect
-        val viewport = listState.layoutInfo.viewportSize.height
-        // Coarse pass: pull the active line to roughly the vertical centre
-        // (and lay it out so the fine pass below can measure it).
-        listState.animateScrollToItem(index = index, scrollOffset = -(viewport / 2))
-        // Fine pass: nudge the line's midpoint onto the exact viewport centre.
-        val info = listState.layoutInfo
-        val target = info.visibleItemsInfo.firstOrNull { it.index == index }
-        if (target != null) {
-            val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-            val itemCentre = target.offset + target.size / 2f
-            listState.animateScrollBy(itemCentre - viewportCentre)
+        // Bring the line on-screen first only if it's far away (a big seek);
+        // during normal playback the next active line is already visible just
+        // below centre, so this is skipped. A plain scrollToItem (no offset)
+        // is enough — the centring below does the rest. The previous version
+        // also ran a coarse animateScrollToItem(index, -(viewport/2)) which,
+        // combined with the half-viewport top padding, scrolled the line a
+        // full viewport ABOVE the viewport (offset -H) and then couldn't find
+        // it to centre — the line vanished off the top from ~the 3rd line on.
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+            listState.scrollToItem(index)
         }
+        val info = listState.layoutInfo
+        val target = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
+        val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+        val itemCentre = target.offset + target.size / 2f
+        listState.animateScrollBy(itemCentre - viewportCentre)
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
