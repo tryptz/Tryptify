@@ -105,6 +105,45 @@ tf.monochrome.android/
 - `MusicRepository` handles API calls to TIDAL HiFi backend
 - Native DSP state is managed by `DspEngineManager` (Kotlin) ↔ `dsp_engine.cpp` (C++ via JNI)
 
+## Home Discovery Feed (personalized "Discover" dashboard)
+
+The Home tab's recommendation section is a **personalized discovery tool**: rows of
+the newest releases tailored to the user's listening history and hearted songs, fetched
+through the **Qobuz instance**. It replaces the old static genre rows, which now serve
+only as a new-user/empty fallback.
+
+**End-to-end flow:**
+
+1. **Seeds** — `LibraryRepository.getSeedArtistNames(limit)` merges, in priority order,
+   hearted artists (`FavoriteDao.getFavoriteArtistsSnapshot`), artists of hearted tracks
+   (`getFavoriteTracksSnapshot`), and most-played history artists
+   (`HistoryDao.getTopArtists`), de-duped case-insensitively. Seeding by **name** (not id)
+   keeps the whole feed in the Qobuz namespace.
+2. **Build** — `DiscoveryFeedUseCase.build()` (`domain/usecase/`) fans out one
+   `MusicRepository.searchQobuz(name)` per seed in parallel (`async` + `withTimeoutOrNull`,
+   7s budget). For each artist it picks the **newest release** by `Album.releaseDate`,
+   resolves the album slug via `QobuzIdRegistry.albumSlugFor(id)`, fetches tracks with
+   `getQobuzAlbum(slug)`, and falls back to the search's top tracks if no album resolves.
+   Returns `DiscoveryRow(label, tracks: List<UnifiedTrack>)`, label `"New from <artist>"`.
+   It also calls `QobuzIdRegistry.registerArtist(id)` on each row's artist ids so the
+   artist screen routes via `getQobuzArtist` (getQobuzAlbum does **not** tag the album
+   artist — without this a dual-source setup can mis-route to the TIDAL pool).
+3. **ViewModel** — `HomeViewModel` exposes `discoveryRows`, `favoritesRow`
+   ("From your favorites" — hearted tracks mapped via `Track.toUnifiedTrackAuto(registry)`),
+   and `discoveryLoading`. Loaded in `loadHome()` alongside `recentTracks`.
+4. **UI** — `HomeScreen` renders `listOfNotNull(favoritesRow) + discoveryRows` under a
+   "Discover" header; if empty it falls back to `SearchViewModel.recommendations` (the
+   static genre seeds from `assets/qobuz_recommendations.json`). "Recently Played" stays
+   below. Each card (`RecommendationCard` in `DiscoveryRowSection`): **artwork/title tap
+   → play** (`PlayerViewModel.playUnifiedTrack`); **artist-name tap → artist page**
+   (`Screen.ArtistDetail.createRoute(artistId)`), clickable only when `artistId != null`.
+
+**Shared mappers** — `domain/usecase/TrackMappers.kt` holds the catalog `Track → UnifiedTrack`
+conversions (`toUnifiedTrack` = TIDAL/HiFiApi, `toQobuzUnifiedTrack` = QobuzCached, and
+`toUnifiedTrackAuto(registry)` which picks by `QobuzIdRegistry.isQobuzTrack`). Reused by
+both `SearchViewModel` and `DiscoveryFeedUseCase`. `UnifiedTrack.artistId: Long?` carries
+the catalog artist id used for artist-page navigation.
+
 ## File Locations
 
 | What | Where |
@@ -116,6 +155,10 @@ tf.monochrome.android/
 | Database | `data/db/MusicDatabase.kt` |
 | Room entities | `data/db/entity/Entities.kt` |
 | Domain models | `domain/model/Models.kt` |
+| Home / Discover feed | `ui/home/HomeScreen.kt`, `ui/home/HomeViewModel.kt` |
+| Discovery use case | `domain/usecase/DiscoveryFeedUseCase.kt` |
+| Track→UnifiedTrack mappers | `domain/usecase/TrackMappers.kt` |
+| Qobuz id/slug registry | `data/api/QobuzIdRegistry.kt` |
 | DI setup | `di/AppModule.kt`, `di/DatabaseModule.kt` |
 | DSP C++ engine | `app/src/main/cpp/dsp/dsp_engine.cpp` |
 | DSP processors | `app/src/main/cpp/dsp/snapins/*.h` (34 files) |
