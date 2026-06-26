@@ -257,6 +257,12 @@ fun MainPlayerRoute(
                 onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
                 onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
                 onOpenSettings = { navController.navigate(Screen.Settings.createRoute()) },
+                onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
+                    { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                },
+                onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
+                    { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                },
             )
         },
         hero = { heroModifier ->

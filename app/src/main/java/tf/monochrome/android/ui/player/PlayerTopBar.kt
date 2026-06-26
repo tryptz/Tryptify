@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -68,6 +69,8 @@ fun PlayerTopBar(
     onOpenVisualizer: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onOpenSettings: () -> Unit,
+    onGoToArtist: (() -> Unit)? = null,
+    onGoToAlbum: (() -> Unit)? = null,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -133,6 +136,20 @@ fun PlayerTopBar(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
+                    if (onGoToArtist != null) {
+                        DropdownMenuItem(
+                            text = { Text("Go to artist") },
+                            onClick = { onGoToArtist(); menuExpanded = false },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        )
+                    }
+                    if (onGoToAlbum != null) {
+                        DropdownMenuItem(
+                            text = { Text("Go to album") },
+                            onClick = { onGoToAlbum(); menuExpanded = false },
+                            leadingIcon = { Icon(Icons.Default.Album, contentDescription = null) },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(if (shuffleEnabled) "Shuffle: On" else "Shuffle: Off") },
                         onClick = { onToggleShuffle(); menuExpanded = false },
