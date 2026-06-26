@@ -247,7 +247,12 @@ fun HomeScreen(
                             label = row.label,
                             tracks = row.tracks,
                             onTrackClick = { track ->
-                                playerViewModel.playUnifiedTrack(track, row.tracks)
+                                // Discovery is a browse surface: tap opens the
+                                // artist page. Falls back to playback for tracks
+                                // without a catalog artist id (local/collection).
+                                track.artistId?.let { artistId ->
+                                    navController.navigate(Screen.ArtistDetail.createRoute(artistId))
+                                } ?: playerViewModel.playUnifiedTrack(track, row.tracks)
                             }
                         )
                     }
@@ -258,7 +263,12 @@ fun HomeScreen(
                             label = row.label,
                             tracks = row.tracks,
                             onTrackClick = { track ->
-                                playerViewModel.playUnifiedTrack(track, row.tracks)
+                                // Discovery is a browse surface: tap opens the
+                                // artist page. Falls back to playback for tracks
+                                // without a catalog artist id (local/collection).
+                                track.artistId?.let { artistId ->
+                                    navController.navigate(Screen.ArtistDetail.createRoute(artistId))
+                                } ?: playerViewModel.playUnifiedTrack(track, row.tracks)
                             }
                         )
                     }

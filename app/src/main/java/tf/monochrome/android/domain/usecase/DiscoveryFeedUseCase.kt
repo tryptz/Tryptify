@@ -47,12 +47,20 @@ class DiscoveryFeedUseCase @Inject constructor(
                 ?.let { registry.albumSlugFor(it.id) }
                 ?.let { slug -> music.getQobuzAlbum(slug).getOrNull()?.tracks }
                 ?.take(tracksPerRow)
-                ?.map { it.toQobuzUnifiedTrack() }
 
             // Fallback: if no resolvable newest album, surface the search's top
             // Qobuz tracks for this artist so the row still populates.
-            val tracks = albumTracks?.takeIf { it.isNotEmpty() }
-                ?: result.tracks.take(tracksPerRow).map { it.toQobuzUnifiedTrack() }
+            val sourceTracks = albumTracks?.takeIf { it.isNotEmpty() }
+                ?: result.tracks.take(tracksPerRow)
+
+            // Tag the artist ids we're about to wire navigation to as Qobuz, so
+            // ArtistDetailViewModel routes them to getQobuzArtist. getQobuzAlbum
+            // registers track ids + album slugs but not the album's artist id, so
+            // without this a dual-source setup could mis-route to the TIDAL pool.
+            sourceTracks.mapNotNull { it.artist?.id }.distinct()
+                .forEach { registry.registerArtist(it) }
+
+            val tracks = sourceTracks.map { it.toQobuzUnifiedTrack() }
 
             tracks.takeIf { it.isNotEmpty() }?.let { DiscoveryRow("New from $name", it) }
         }

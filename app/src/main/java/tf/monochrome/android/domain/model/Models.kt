@@ -316,6 +316,9 @@ data class UnifiedTrack(
     val artistName: String,
     val artistNames: List<String> = emptyList(),
     val albumArtistName: String? = null,
+    // Catalog artist id (Qobuz/TIDAL namespace) for artist-page navigation.
+    // Null for sources without a catalog artist id (local/collection).
+    val artistId: Long? = null,
 
     // Album info
     val albumTitle: String? = null,
