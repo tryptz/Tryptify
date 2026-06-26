@@ -36,26 +36,39 @@ class ArtistDetailViewModel @Inject constructor(
     }
 
     /**
-     * Qobuz-aware load — same pattern as AlbumDetailViewModel. When the
-     * registry has tagged this id as Qobuz (i.e. the user navigated from a
-     * Qobuz search hit or top-track row), hit /api/get-artist on trypt-hifi
-     * first; on failure, or for non-Qobuz ids, fall through to the TIDAL
-     * pool's /artist endpoint. Result-wrapped at both layers so a parse
-     * failure surfaces as a clean error string instead of a crash.
+     * Source-agnostic load with a two-way fallback. We try the most likely
+     * source first — Qobuz when the registry has tagged this id as Qobuz (a
+     * search hit / top-track / album row), otherwise the TIDAL pool — then fall
+     * back to the OTHER source if the first fails. This is what fixes the
+     * "No API instances available" error: on a Qobuz-only setup the TIDAL pool
+     * is empty, and an artist reached from a now-playing Qobuz track isn't
+     * pre-registered, so it must still resolve via /api/get-artist. Both layers
+     * are Result-wrapped so a miss surfaces as a clean error instead of a crash.
      */
     private fun loadArtist() {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
 
-            val qobuzResult = if (qobuzIdRegistry.isQobuzArtist(artistId)) {
-                repository.getQobuzArtist(artistId)
-            } else null
-
-            val finalResult = if (qobuzResult?.isSuccess == true) {
-                qobuzResult
+            // A fallback-played TIDAL track links its TIDAL artist id to the
+            // matched Qobuz artist id; use that for the Qobuz call when present.
+            val aliasQobuzId = qobuzIdRegistry.qobuzArtistIdFor(artistId)
+            val qobuzArtistId = aliasQobuzId ?: artistId
+            val preferQobuz = aliasQobuzId != null || qobuzIdRegistry.isQobuzArtist(artistId)
+            val primary = if (preferQobuz) {
+                repository.getQobuzArtist(qobuzArtistId)
             } else {
                 repository.getArtist(artistId)
+            }
+            val finalResult = if (primary.isSuccess) {
+                primary
+            } else {
+                val secondary = if (preferQobuz) {
+                    repository.getArtist(artistId)
+                } else {
+                    repository.getQobuzArtist(qobuzArtistId)
+                }
+                if (secondary.isSuccess) secondary else primary
             }
 
             finalResult

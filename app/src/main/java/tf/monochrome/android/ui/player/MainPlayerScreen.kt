@@ -108,6 +108,7 @@ fun MainPlayerScreen(
     onPlayPause: () -> Unit,
     onForward10: () -> Unit,
     onNext: () -> Unit,
+    onLyrics: () -> Unit,
     onTimer: () -> Unit,
     onMixer: () -> Unit,
     onPlaylist: () -> Unit,
@@ -212,6 +213,8 @@ fun MainPlayerScreen(
             DevEditable("actionDock", Modifier.fillMaxWidth()) {
                 PlayerActionDock(
                     accent = accent,
+                    lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
+                    onLyrics = onLyrics,
                     onTimer = onTimer,
                     onMixer = onMixer,
                     onPlaylist = onPlaylist,

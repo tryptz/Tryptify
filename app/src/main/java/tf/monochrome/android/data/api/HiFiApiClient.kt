@@ -34,6 +34,7 @@ import tf.monochrome.android.data.api.model.QobuzArtistTopTrack
 import tf.monochrome.android.data.api.model.QobuzDownloadEnvelope
 import tf.monochrome.android.data.api.model.QobuzNamedRef
 import tf.monochrome.android.data.api.model.QobuzPerson
+import tf.monochrome.android.data.api.model.QobuzRelease
 import tf.monochrome.android.data.api.model.QobuzSearchEnvelope
 import tf.monochrome.android.data.api.model.QobuzSimilarArtist
 import tf.monochrome.android.data.api.model.QobuzTrackItem
@@ -59,6 +60,13 @@ import tf.monochrome.android.util.RomajiConverter
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
+
+/** Minimal Qobuz match used by the TIDAL→Qobuz playback fallback. */
+data class QobuzTrackMatch(
+    val trackId: Long,
+    val albumSlug: String?,
+    val artistId: Long?,
+)
 
 @Singleton
 class HiFiApiClient @Inject constructor(
@@ -361,14 +369,75 @@ class HiFiApiClient @Inject constructor(
         )
         val topTracks = raw.topTracks.mapNotNull { it.toDomainTrack() }
         val similar = raw.similarArtists?.items?.mapNotNull { it.toDomainArtist() } ?: emptyList()
+
+        // Map the artist's full discography (the `releases` groups) into
+        // Albums / EPs / Singles so every release — and therefore every track —
+        // is reachable from the artist screen. Each release item is a
+        // QobuzAlbumItem; register its slug so AlbumDetail can resolve it.
+        val albums = mutableListOf<tf.monochrome.android.domain.model.Album>()
+        val eps = mutableListOf<tf.monochrome.android.domain.model.Album>()
+        val singles = mutableListOf<tf.monochrome.android.domain.model.Album>()
+        raw.releases.forEach { group ->
+            group.items.forEach { item ->
+                registerReleaseWithRegistry(item)
+                val album = item.toDomainAlbum()
+                when (group.type) {
+                    "epSingle" -> if ((item.tracksCount ?: 0) <= 1) singles.add(album) else eps.add(album)
+                    "album", "live", "compilation" -> albums.add(album)
+                    else -> { /* download / awardedRelease / next — skip */ }
+                }
+            }
+        }
+
         return ArtistDetail(
             artist = artist,
             topTracks = topTracks,
-            albums = emptyList(),
-            eps = emptyList(),
-            singles = emptyList(),
+            albums = albums,
+            eps = eps,
+            singles = singles,
             unreleasedTracks = emptyList(),
             similarArtists = similar,
+        )
+    }
+
+    /**
+     * Fetch a TIDAL track's ISRC from the metadata pool (InstanceType.API,
+     * separate from STREAMING) — so it's usually obtainable even when the
+     * track's *stream* can't be resolved, which is exactly when the Qobuz
+     * fallback needs it.
+     */
+    suspend fun getTidalIsrc(trackId: Long): String? = runCatching {
+        val infoBody = fetchWithRetry("/info/?id=$trackId")
+        json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody)).isrc?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    /**
+     * Resolve the Qobuz match for an ISRC. Qobuz indexes tracks by ISRC, so
+     * /api/get-music?q=<isrc> returns the exact recording — far more reliable
+     * than a title/artist match. Also carries the Qobuz album slug and artist
+     * id so the playback fallback can bridge "Go to album/artist". Returns null
+     * when Qobuz isn't configured or doesn't carry that ISRC.
+     */
+    suspend fun findQobuzTrackByIsrc(isrc: String): QobuzTrackMatch? {
+        if (isrc.isBlank()) return null
+        val instance = instanceManager.qobuzInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/get-music?q=${isrc.encodeUrl()}")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+        val items = envelope.data?.tracks?.items ?: return null
+        val match = items.firstOrNull { it.isrc?.equals(isrc, ignoreCase = true) == true } ?: return null
+        val id = match.id ?: return null
+        qobuzIdRegistry.registerTrack(id)
+        match.album?.let { registerAlbumWithRegistry(it) }
+        return QobuzTrackMatch(
+            trackId = id,
+            albumSlug = match.album?.id,
+            artistId = match.performer?.id,
         )
     }
 
@@ -377,6 +446,15 @@ class HiFiApiClient @Inject constructor(
     // otherwise — register that exact value so AlbumDetailViewModel's
     // registry lookup always resolves regardless of which path produced the id.
     private fun registerAlbumWithRegistry(item: QobuzAlbumItem) {
+        val albumId = item.qobuzId ?: item.id?.hashCode()?.toLong()
+        val slug = item.id
+        if (albumId != null && !slug.isNullOrBlank()) {
+            qobuzIdRegistry.registerAlbum(albumId, slug)
+        }
+    }
+
+    // Same registry side-channel for artist-page release items.
+    private fun registerReleaseWithRegistry(item: QobuzRelease) {
         val albumId = item.qobuzId ?: item.id?.hashCode()?.toLong()
         val slug = item.id
         if (albumId != null && !slug.isNullOrBlank()) {
@@ -652,6 +730,12 @@ class HiFiApiClient @Inject constructor(
     // --- Lyrics ---
 
     suspend fun getLyrics(trackId: Long, convertToRomaji: Boolean = false): Lyrics? {
+        // The /lyrics endpoint is keyed by TIDAL track id. Qobuz ids live in a
+        // separate namespace, so querying TIDAL with one either 404s or — worse
+        // — returns a *different* track's synced lyrics: right-looking text that
+        // is never in sync. Skip TIDAL for known Qobuz ids; callers fall back to
+        // the metadata-based LRCLib lookup instead.
+        if (qobuzIdRegistry.isQobuzTrack(trackId)) return null
         return try {
             val body = fetchWithRetry("/lyrics/?id=$trackId")
             val response = json.decodeFromString<LyricsResponse>(unwrapResponse(body))
@@ -750,20 +834,24 @@ class HiFiApiClient @Inject constructor(
                 val lineTimeMs = (minutes * 60 * 1000) + (seconds * 1000).toLong()
                 val lineContent = lineMatch.groupValues[3]
 
-                // Extract word-level sync if present
-                val words = mutableListOf<LyricWord>()
-                var lastTime = lineTimeMs
-                
-                lrcWordRegex.findAll(lineContent).forEach { wordMatch ->
+                // Extract word-level sync if present. In enhanced LRC each
+                // `<mm:ss.cs>` tag marks where ITS word starts, so word_i spans
+                // [t_i, t_{i+1}). The previous logic used the prior tag as the
+                // start, which shifted every word one slot early (and gave the
+                // first word a zero-width span) — i.e. karaoke was always out of
+                // sync. Pair each tag with the next tag's time as its end.
+                val rawWords = lrcWordRegex.findAll(lineContent).map { wordMatch ->
                     val wMinutes = wordMatch.groupValues[1].toLongOrNull() ?: 0
                     val wSeconds = wordMatch.groupValues[2].toDoubleOrNull() ?: 0.0
                     val wordTimeMs = (wMinutes * 60 * 1000) + (wSeconds * 1000).toLong()
                     var wordText = wordMatch.groupValues[3].trim()
-                    
                     if (convertToRomaji) wordText = RomajiConverter.convert(wordText)
-                    
-                    words.add(LyricWord(lastTime, wordTimeMs, wordText))
-                    lastTime = wordTimeMs
+                    wordTimeMs to wordText
+                }.filter { it.second.isNotBlank() }.toList()
+
+                val words = rawWords.mapIndexed { i, (startMs, wordText) ->
+                    val endMs = rawWords.getOrNull(i + 1)?.first ?: (startMs + 2000)
+                    LyricWord(startMs = startMs, endMs = endMs, text = wordText)
                 }
 
                 var finalText = if (words.isEmpty()) lineContent.trim() else words.joinToString(" ") { it.text }
@@ -893,6 +981,21 @@ class HiFiApiClient @Inject constructor(
 }
 
 // --- Qobuz item → domain mappers (file-private extensions) -----------------
+
+private fun QobuzRelease.toDomainAlbum(): tf.monochrome.android.domain.model.Album {
+    val cover = image?.large ?: image?.small ?: image?.thumbnail
+    val typeLabel = if ((tracksCount ?: 0) <= 4) "EP" else "ALBUM"
+    return tf.monochrome.android.domain.model.Album(
+        id = qobuzId ?: id?.hashCode()?.toLong() ?: 0L,
+        title = listOfNotNull(title.takeIf { it.isNotBlank() }, version?.takeIf { it.isNotBlank() })
+            .joinToString(" — "),
+        numberOfTracks = tracksCount,
+        cover = cover,
+        explicit = parentalWarning,
+        type = typeLabel,
+        duration = duration,
+    )
+}
 
 private fun QobuzAlbumItem.toDomainAlbum(): tf.monochrome.android.domain.model.Album {
     val resolvedArtist = artist?.toDomainArtistRef()

@@ -3,8 +3,10 @@ package tf.monochrome.android.ui.player
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,15 +21,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -121,6 +125,74 @@ internal fun LyricsHeroPanel(
     }
 }
 
+/**
+ * Compact lyrics surface bound to the album-art slot. Unlike [LyricsHeroPanel]
+ * (a full-bleed treatment), this is sized by its caller to exactly cover the
+ * square cover area and is meant to be crossfaded in as the album art fades
+ * out. The surface itself is fully transparent — only the lyric lines show,
+ * over the player background — and they dissolve into transparency at the top
+ * and bottom edges via a `DstIn` gradient mask.
+ */
+@Composable
+internal fun LyricsHeroBox(
+    lyrics: Lyrics?,
+    isLoading: Boolean,
+    albumColors: AlbumColors,
+    positionMs: StateFlow<Long>,
+    onSeekTo: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            // Offscreen compositing is required for the DstIn blend below to
+            // mask against the already-drawn lyric content.
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                val edge = (size.height * 0.16f).coerceAtMost(120f)
+                val top = edge / size.height
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        top to Color.Black,
+                        1f - top to Color.Black,
+                        1f to Color.Transparent,
+                    ),
+                    blendMode = BlendMode.DstIn,
+                )
+            },
+    ) {
+        when {
+            isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "Loading lyrics…",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White.copy(alpha = 0.85f),
+                )
+            }
+            lyrics == null || lyrics.lines.isEmpty() -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "No lyrics available for this track.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+            }
+            lyrics.isSynced -> SyncedLyricsView(
+                lines = lyrics.lines,
+                positionMs = positionMs,
+                accent = albumColors.vibrant,
+                onSeekTo = onSeekTo,
+            )
+            else -> UnsyncedLyricsView(lines = lyrics.lines)
+        }
+    }
+}
+
 @Composable
 internal fun SyncedLyricsView(
     lines: List<LyricLine>,
@@ -130,45 +202,72 @@ internal fun SyncedLyricsView(
 ) {
     val position by positionMs.collectAsState()
     val listState = rememberLazyListState()
-    var currentLineIndex by remember { mutableStateOf(-1) }
 
-    LaunchedEffect(position, lines) {
-        // indexOfLast gives the most recent line whose start has passed —
-        // exactly the karaoke "current line" semantics. Cheap on lists of
-        // a few hundred lines; no need for binary search.
-        val newIndex = lines.indexOfLast { it.timeMs <= position }
-        if (newIndex != currentLineIndex && newIndex >= 0) currentLineIndex = newIndex
+    // Active line = the most recent line whose start has passed. derivedStateOf
+    // recomputes when the position sample or the line list changes, but only
+    // notifies readers when the index value actually changes — so the highlight
+    // and the auto-scroll fire exactly once per line, never on every tick. (An
+    // earlier version extrapolated the position between samples, which jittered
+    // the index at line boundaries — the highlight looked stuck and the
+    // constant re-scroll ate taps. The polled position is stable and accurate.)
+    val currentLineIndex by remember(lines) {
+        derivedStateOf { lines.indexOfLast { it.timeMs <= position } }
     }
 
     LaunchedEffect(currentLineIndex) {
-        if (currentLineIndex >= 0) {
-            listState.animateScrollToItem(index = currentLineIndex, scrollOffset = -300)
+        val index = currentLineIndex
+        if (index < 0) return@LaunchedEffect
+        // Bring the line on-screen first only if it's far away (a big seek);
+        // during normal playback the next active line is already visible just
+        // below centre, so this is skipped. A plain scrollToItem (no offset)
+        // is enough — the centring below does the rest. The previous version
+        // also ran a coarse animateScrollToItem(index, -(viewport/2)) which,
+        // combined with the half-viewport top padding, scrolled the line a
+        // full viewport ABOVE the viewport (offset -H) and then couldn't find
+        // it to centre — the line vanished off the top from ~the 3rd line on.
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+            listState.scrollToItem(index)
         }
+        val info = listState.layoutInfo
+        val target = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
+        val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+        val itemCentre = target.offset + target.size / 2f
+        listState.animateScrollBy(itemCentre - viewportCentre)
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 28.dp),
-        contentPadding = PaddingValues(vertical = 80.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        itemsIndexed(lines) { index, line ->
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Half-height padding top and bottom lets any line — including the
+        // first and last — settle at the exact vertical centre.
+        val halfViewport = maxHeight / 2
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp),
+            contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
+            val isPast = index < currentLineIndex
             if (line.words.isNotEmpty()) {
-                KaraokeWordLine(
+                // Only sources with real per-word timing (TIDAL enhanced LRC)
+                // illuminate word-by-word.
+                KaraokeLyricLine(
                     line = line,
                     isActive = isActive,
+                    isPast = isPast,
                     position = position,
                     accent = accent,
                     onClick = { onSeekTo(line.timeMs) },
                 )
             } else {
+                // Line-level sources (LRCLib / Qobuz): illuminate the whole
+                // active line at once.
                 val color by animateColorAsState(
                     targetValue = when {
                         isActive -> accent
-                        index < currentLineIndex -> Color.White.copy(alpha = 0.35f)
+                        isPast -> Color.White.copy(alpha = 0.35f)
                         else -> Color.White.copy(alpha = 0.62f)
                     },
                     label = "lyricColor",
@@ -187,14 +286,16 @@ internal fun SyncedLyricsView(
                 )
             }
         }
+        }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun KaraokeWordLine(
+internal fun KaraokeLyricLine(
     line: LyricLine,
     isActive: Boolean,
+    isPast: Boolean,
     position: Long,
     accent: Color,
     onClick: () -> Unit,
@@ -207,17 +308,13 @@ internal fun KaraokeWordLine(
         horizontalArrangement = Arrangement.Start,
     ) {
         line.words.forEach { word ->
-            val isWordActive = position in word.startMs until word.endMs
-            val wasWordPlayed = position >= word.endMs
-            val color by animateColorAsState(
-                targetValue = when {
-                    isWordActive -> accent
-                    wasWordPlayed && isActive -> accent.copy(alpha = 0.85f)
-                    isActive -> Color.White.copy(alpha = 0.45f)
-                    else -> Color.White.copy(alpha = 0.4f)
-                },
-                label = "wordColor",
-            )
+            val target = when {
+                !isActive -> if (isPast) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.6f)
+                position >= word.endMs -> accent.copy(alpha = 0.9f)   // already sung
+                position >= word.startMs -> accent                    // lighting up now
+                else -> Color.White.copy(alpha = 0.45f)               // not yet reached
+            }
+            val color by animateColorAsState(targetValue = target, label = "wordColor")
             Text(
                 text = word.text + " ",
                 style = MaterialTheme.typography.titleMedium.copy(

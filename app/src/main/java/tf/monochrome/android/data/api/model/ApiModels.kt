@@ -218,7 +218,8 @@ data class TrackInfoResponse(
     val audioQuality: String? = null,
     val explicit: Boolean = false,
     val trackNumber: Int? = null,
-    val volumeNumber: Int? = null
+    val volumeNumber: Int? = null,
+    val isrc: String? = null
 )
 
 @Serializable

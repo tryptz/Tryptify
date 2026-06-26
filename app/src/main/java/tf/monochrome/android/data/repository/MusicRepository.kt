@@ -46,6 +46,13 @@ class MusicRepository @Inject constructor(
         apiClient.searchQobuz(query, offset)
     }
 
+    /** TIDAL track's ISRC (metadata pool) — used by the Qobuz playback fallback. */
+    suspend fun getTidalIsrc(trackId: Long): String? = apiClient.getTidalIsrc(trackId)
+
+    /** Qobuz match (track id + album slug + artist id) for an ISRC, or null. */
+    suspend fun findQobuzByIsrc(isrc: String): tf.monochrome.android.data.api.QobuzTrackMatch? =
+        apiClient.findQobuzTrackByIsrc(isrc)
+
     /**
      * Qobuz album-detail fetch. Returns Result.failure when the Qobuz instance
      * isn't configured or the lookup fails so the detail VM can fall back to
@@ -158,15 +165,25 @@ class MusicRepository @Inject constructor(
 
     // --- Lyrics ---
 
-    suspend fun getLyrics(trackId: Long, track: Track? = null): Result<Lyrics?> = runCatching {
+    suspend fun getLyrics(
+        trackId: Long,
+        track: Track? = null,
+        skipTidal: Boolean = false,
+    ): Result<Lyrics?> = runCatching {
         val romajiEnabled = preferences.romajiLyrics.first()
-        // TIDAL first — when it has the lyrics this is the highest-quality
-        // path (LRC + word-level timing on Tidal Hi-Fi).
-        val tidalLyrics = apiClient.getLyrics(trackId, romajiEnabled)
-        if (tidalLyrics != null) return@runCatching tidalLyrics
-        // Tidal returned 404 / empty — fall back to LRCLib (open API,
-        // no auth) using the track's metadata. Skip when we don't have
-        // enough info to make any reasonable query.
+        if (!skipTidal) {
+            // TIDAL by id — highest-quality path (LRC + word-level timing).
+            apiClient.getLyrics(trackId, romajiEnabled)?.let { return@runCatching it }
+        } else {
+            // Qobuz: the id can't be used on TIDAL (different namespace → wrong
+            // song), but TIDAL usually still HAS the song. Match it by metadata
+            // and use TIDAL's lyrics — the same working instance the player
+            // already streams from — before falling back to LRCLib, which may
+            // be unreachable on some networks and lacks word-level timing.
+            tidalLyricsByMetadata(track, romajiEnabled)?.let { return@runCatching it }
+        }
+        // Final fallback: LRCLib (open API, no auth) using the track's metadata.
+        // Skip when we don't have enough info to make any reasonable query.
         val title = track?.title?.takeIf { it.isNotBlank() } ?: return@runCatching null
         val artistName = (track.artist?.name ?: track.artists.firstOrNull()?.name)
             ?.takeIf { it.isNotBlank() } ?: return@runCatching null
@@ -177,6 +194,35 @@ class MusicRepository @Inject constructor(
             durationSeconds = track.duration.takeIf { it > 0 },
             convertToRomaji = romajiEnabled,
         )
+    }
+
+    /**
+     * Resolve lyrics for a non-TIDAL track (e.g. Qobuz) by finding the matching
+     * TIDAL track through catalogue search, then fetching that track's lyrics.
+     * Qobuz exposes no lyrics endpoint of its own, so this reuses the working
+     * TIDAL instance rather than depending solely on lrclib.net.
+     */
+    private suspend fun tidalLyricsByMetadata(track: Track?, romajiEnabled: Boolean): Lyrics? {
+        val rawTitle = track?.title?.takeIf { it.isNotBlank() } ?: return null
+        val artistName = (track.artist?.name ?: track.artists.firstOrNull()?.name)
+            ?.takeIf { it.isNotBlank() } ?: return null
+        // Qobuz appends the version with an em dash ("Song — Radio Edit"); drop
+        // it so the search matches the base track.
+        val title = rawTitle.substringBefore(" — ").trim().ifBlank { rawTitle }
+        val results = runCatching { apiClient.search("$title $artistName", 0, 5) }
+            .getOrNull()?.tracks?.takeIf { it.isNotEmpty() } ?: return null
+        val artistMatches = { c: Track ->
+            c.artist?.name?.contains(artistName, ignoreCase = true) == true ||
+                c.artists.any { it.name.contains(artistName, ignoreCase = true) }
+        }
+        // Prefer an exact (cleaned) title match; otherwise the closest title
+        // that still shares the artist. Never match on title alone.
+        val match = results.firstOrNull { c ->
+            c.title.substringBefore(" — ").trim().equals(title, ignoreCase = true) && artistMatches(c)
+        } ?: results.firstOrNull { c ->
+            c.title.contains(title, ignoreCase = true) && artistMatches(c)
+        } ?: return null
+        return apiClient.getLyrics(match.id, romajiEnabled)
     }
 
     // --- Quality ---

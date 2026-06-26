@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.detail
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -67,6 +70,7 @@ fun ArtistDetailScreen(
     var showContextMenuForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
     var showAddToPlaylistForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
     var showCreatePlaylistDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showAllTopTracks by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -170,7 +174,9 @@ fun ArtistDetailScreen(
 
                     if (detail.topTracks.isNotEmpty()) {
                         item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = "Top Tracks") } }
-                        items(detail.topTracks.take(5)) { track ->
+                        val visibleTracks =
+                            if (showAllTopTracks) detail.topTracks else detail.topTracks.take(5)
+                        items(visibleTracks) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
@@ -182,6 +188,15 @@ fun ArtistDetailScreen(
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 }
                             )
+                        }
+                        if (detail.topTracks.size > 5) {
+                            item {
+                                ShowAllTracksRow(
+                                    expanded = showAllTopTracks,
+                                    totalCount = detail.topTracks.size,
+                                    onToggle = { showAllTopTracks = !showAllTopTracks },
+                                )
+                            }
                         }
                     }
 
@@ -267,6 +282,40 @@ fun ArtistDetailScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * "Show all N tracks" / "Show less" toggle under the Top Tracks list. The
+ * Qobuz artist endpoint only returns top_tracks (no full discography), so this
+ * surfaces the complete list the catalogue provides rather than just the
+ * first five.
+ */
+@Composable
+private fun ShowAllTracksRow(
+    expanded: Boolean,
+    totalCount: Int,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = if (expanded) "Show less" else "Show all $totalCount tracks",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

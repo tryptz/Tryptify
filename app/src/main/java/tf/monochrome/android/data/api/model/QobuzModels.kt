@@ -100,6 +100,36 @@ data class QobuzArtistDetail(
     val images: QobuzArtistImages? = null,
     @SerialName("similar_artists") val similarArtists: QobuzSimilarArtists? = null,
     @SerialName("top_tracks") val topTracks: List<QobuzArtistTopTrack> = emptyList(),
+    // The artist's discography, grouped by release type ("album", "epSingle",
+    // "live", "compilation", …). Each group's items share the QobuzAlbumItem
+    // shape, so they map to domain Albums and become browsable on the artist
+    // screen (which is how the full track catalogue is reached for Qobuz).
+    val releases: List<QobuzReleaseGroup> = emptyList(),
+)
+
+@Serializable
+data class QobuzReleaseGroup(
+    val type: String? = null,
+    @SerialName("has_more") val hasMore: Boolean = false,
+    val items: List<QobuzRelease> = emptyList(),
+)
+
+// Release items in the artist payload look like album items but with some
+// fields in a DIFFERENT shape — notably `artist.name` is an object ({display})
+// here vs a plain string on QobuzAlbumItem.artist. Reusing QobuzAlbumItem makes
+// the strict decoder throw on that mismatch and fail the whole artist response,
+// so we decode only the fields we need, with safe types.
+@Serializable
+data class QobuzRelease(
+    val id: String? = null,                              // alphanumeric slug
+    @SerialName("qobuz_id") val qobuzId: Long? = null,
+    val title: String = "",
+    val version: String? = null,
+    val image: QobuzImage? = null,
+    val duration: Int? = null,
+    @SerialName("tracks_count") val tracksCount: Int? = null,
+    @SerialName("release_type") val releaseType: String? = null,
+    @SerialName("parental_warning") val parentalWarning: Boolean = false,
 )
 
 @Serializable

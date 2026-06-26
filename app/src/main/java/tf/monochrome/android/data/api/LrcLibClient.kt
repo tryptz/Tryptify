@@ -44,15 +44,37 @@ class LrcLibClient @Inject constructor(
     ): Lyrics? {
         if (title.isBlank() || artist.isBlank()) return null
 
-        // Prefer /api/get when all the exact-match params are available;
-        // fall back to /api/search for fuzzy matches.
-        val exact = if (!album.isNullOrBlank() && durationSeconds != null && durationSeconds > 0) {
-            tryGet(title, artist, album, durationSeconds)
-        } else null
-        val item = exact ?: trySearch(title, artist) ?: return null
+        // Qobuz appends the edition/version to the track and album titles with
+        // an em dash ("Song — Radio Edit"), and catalogues often carry trailing
+        // parenthetical tags ("Song (Remastered)"). LRCLib only has the base
+        // title, so we try the title as given first (matches TIDAL / clean
+        // metadata) then progressively cleaned variants. The album is cleaned
+        // the same way for the exact-match lookup.
+        val cleanAlbum = album?.let { stripDecorations(it) }?.takeIf { it.isNotBlank() } ?: album
+        val titleCandidates = linkedSetOf(
+            title.trim(),
+            stripVersion(title),
+            stripDecorations(title),
+        ).filter { it.isNotBlank() }
 
-        return parseLyricsRecord(item, convertToRomaji)
+        for (candidate in titleCandidates) {
+            // Prefer /api/get when all the exact-match params are available;
+            // fall back to /api/search for fuzzy matches.
+            val exact = if (!cleanAlbum.isNullOrBlank() && durationSeconds != null && durationSeconds > 0) {
+                tryGet(candidate, artist, cleanAlbum, durationSeconds)
+            } else null
+            val item = exact ?: trySearch(candidate, artist)
+            if (item != null) return parseLyricsRecord(item, convertToRomaji)
+        }
+        return null
     }
+
+    /** "Song — Radio Edit" → "Song" (Qobuz's em-dash version join). */
+    private fun stripVersion(raw: String): String = raw.substringBefore(" — ").trim()
+
+    /** Also drops a trailing parenthetical/bracket tag: "Song (Radio Edit)" → "Song". */
+    private fun stripDecorations(raw: String): String =
+        stripVersion(raw).replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]\\s*$"), "").trim()
 
     private suspend fun tryGet(title: String, artist: String, album: String, durationSeconds: Int): LrcLibRecord? {
         val url = buildString {
@@ -116,7 +138,11 @@ class LrcLibClient @Inject constructor(
 
     companion object {
         private const val BASE_URL = "https://lrclib.net"
-        private const val REQUEST_TIMEOUT_MS = 6_000L
+        // lrclib.net regularly takes 7-9s to answer a search/get, so a tight
+        // budget here silently dropped every result (→ "No lyrics available",
+        // most visibly for Qobuz tracks, which depend on LRCLib). Give it real
+        // headroom; the fetch is async behind a "Loading lyrics…" state.
+        private const val REQUEST_TIMEOUT_MS = 15_000L
     }
 }
 
