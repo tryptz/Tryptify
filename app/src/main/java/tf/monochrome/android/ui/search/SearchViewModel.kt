@@ -20,12 +20,13 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.Artist
-import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.Playlist
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
+import tf.monochrome.android.domain.usecase.toQobuzUnifiedTrack
+import tf.monochrome.android.domain.usecase.toUnifiedTrack
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -62,7 +63,6 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_LOCAL = 90
         private const val SOURCE_BOOST_COLLECTION = 70
         private const val SOURCE_BOOST_API = 50
-        private const val DEFAULT_ARTIST_NAME = "Unknown Artist"
         // Tracks shown per curated recommendation row in the search empty state.
         private const val RECOMMENDATION_ROW_SIZE = 12
     }
@@ -506,45 +506,6 @@ class SearchViewModel @Inject constructor(
         _allPlaylists.value = emptyList()
         _isSearching.value = false
     }
-
-    private fun Track.toUnifiedTrack(): UnifiedTrack = UnifiedTrack(
-        id = "api_$id",
-        title = title,
-        durationSeconds = duration,
-        trackNumber = trackNumber,
-        discNumber = volumeNumber,
-        explicit = explicit,
-        artistName = displayArtist.ifBlank { DEFAULT_ARTIST_NAME },
-        artistNames = artists.map { it.name }.ifEmpty { listOfNotNull(artist?.name) },
-        albumArtistName = artist?.name,
-        albumTitle = album?.title,
-        albumId = album?.id?.toString(),
-        artworkUri = coverUrl,
-        source = PlaybackSource.HiFiApi(tidalId = id),
-        sourceType = SourceType.API
-    )
-
-    // Qobuz tracks share the Track shape with TIDAL but are tagged so the UI
-    // can label them and so the existing dedup (distinctBy id) doesn't collapse
-    // a Qobuz hit onto the same numeric ID from TIDAL. Source is QobuzCached
-    // — playback fetches the file via /api/download-music into the app cache
-    // and ExoPlayer plays from the local file.
-    private fun Track.toQobuzUnifiedTrack(): UnifiedTrack = UnifiedTrack(
-        id = "qobuz_$id",
-        title = title,
-        durationSeconds = duration,
-        trackNumber = trackNumber,
-        discNumber = volumeNumber,
-        explicit = explicit,
-        artistName = displayArtist.ifBlank { DEFAULT_ARTIST_NAME },
-        artistNames = artists.map { it.name }.ifEmpty { listOfNotNull(artist?.name) },
-        albumArtistName = artist?.name,
-        albumTitle = album?.title,
-        albumId = album?.id?.toString(),
-        artworkUri = coverUrl,
-        source = PlaybackSource.QobuzCached(qobuzId = id),
-        sourceType = SourceType.QOBUZ,
-    )
 
     private fun scoreTracks(
         query: String,

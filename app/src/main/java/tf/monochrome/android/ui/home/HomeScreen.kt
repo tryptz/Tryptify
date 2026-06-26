@@ -89,6 +89,8 @@ fun HomeScreen(
 ) {
     val recentTracks by viewModel.recentTracks.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val discoveryRows by viewModel.discoveryRows.collectAsState()
+    val favoritesRow by viewModel.favoritesRow.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val libraryPlaylists by playerViewModel.playlists.collectAsState()
 
@@ -234,28 +236,31 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 160.dp)
             ) {
-                if (recommendations.isNotEmpty()) {
+                // Personalized discovery feed: "From your favorites" first, then
+                // "New from <artist>" rows. Falls back to the static genre seeds
+                // only when the user has no taste data (new user / Qobuz empty).
+                val personalizedRows = listOfNotNull(favoritesRow) + discoveryRows
+                if (personalizedRows.isNotEmpty()) {
+                    item { SectionHeader(title = "Discover") }
+                    items(personalizedRows, key = { it.label }) { row ->
+                        DiscoveryRowSection(
+                            label = row.label,
+                            tracks = row.tracks,
+                            onTrackClick = { track ->
+                                playerViewModel.playUnifiedTrack(track, row.tracks)
+                            }
+                        )
+                    }
+                } else if (recommendations.isNotEmpty()) {
                     item { SectionHeader(title = "Recommended") }
                     items(recommendations, key = { it.label }) { row ->
-                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                            Text(
-                                text = row.label,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 6.dp)
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(row.tracks, key = { it.id }) { track ->
-                                    RecommendationCard(
-                                        track = track,
-                                        onClick = { playerViewModel.playUnifiedTrack(track, row.tracks) }
-                                    )
-                                }
+                        DiscoveryRowSection(
+                            label = row.label,
+                            tracks = row.tracks,
+                            onTrackClick = { track ->
+                                playerViewModel.playUnifiedTrack(track, row.tracks)
                             }
-                        }
+                        )
                     }
                 }
                 if (recentTracks.isNotEmpty()) {
@@ -285,6 +290,31 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+
+@androidx.compose.runtime.Composable
+private fun DiscoveryRowSection(
+    label: String,
+    tracks: List<UnifiedTrack>,
+    onTrackClick: (UnifiedTrack) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 6.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                RecommendationCard(track = track, onClick = { onTrackClick(track) })
             }
         }
     }

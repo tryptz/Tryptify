@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.db.dao.DownloadDao
@@ -157,6 +158,24 @@ class LibraryRepository @Inject constructor(
 
     suspend fun getMostPlayed(limit: Int = 50): List<Track> {
         return historyDao.getMostPlayed(limit).map { it.toDomain() }
+    }
+
+    /**
+     * Artist names the user has shown taste for, ordered by signal strength:
+     * explicitly hearted artists first, then artists of hearted tracks, then
+     * the most-played artists from history. De-duped case-insensitively and
+     * capped at [limit]. Used to seed the personalized discovery feed; names
+     * (not ids) keep the downstream Qobuz lookups in one namespace.
+     */
+    suspend fun getSeedArtistNames(limit: Int = 6): List<String> {
+        val favArtists = favoriteDao.getFavoriteArtistsSnapshot().map { it.name }
+        val favTrackArtists = favoriteDao.getFavoriteTracksSnapshot().map { it.artistName }
+        val historyArtists = historyDao.getTopArtists(limit).first().map { it.name }
+        return (favArtists + favTrackArtists + historyArtists)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .take(limit)
     }
 
     // --- Playlists ---
