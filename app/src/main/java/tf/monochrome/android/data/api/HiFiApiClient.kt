@@ -34,6 +34,7 @@ import tf.monochrome.android.data.api.model.QobuzArtistTopTrack
 import tf.monochrome.android.data.api.model.QobuzDownloadEnvelope
 import tf.monochrome.android.data.api.model.QobuzNamedRef
 import tf.monochrome.android.data.api.model.QobuzPerson
+import tf.monochrome.android.data.api.model.QobuzRelease
 import tf.monochrome.android.data.api.model.QobuzSearchEnvelope
 import tf.monochrome.android.data.api.model.QobuzSimilarArtist
 import tf.monochrome.android.data.api.model.QobuzTrackItem
@@ -371,7 +372,7 @@ class HiFiApiClient @Inject constructor(
         val singles = mutableListOf<tf.monochrome.android.domain.model.Album>()
         raw.releases.forEach { group ->
             group.items.forEach { item ->
-                registerAlbumWithRegistry(item)
+                registerReleaseWithRegistry(item)
                 val album = item.toDomainAlbum()
                 when (group.type) {
                     "epSingle" -> if ((item.tracksCount ?: 0) <= 1) singles.add(album) else eps.add(album)
@@ -430,6 +431,15 @@ class HiFiApiClient @Inject constructor(
     // otherwise — register that exact value so AlbumDetailViewModel's
     // registry lookup always resolves regardless of which path produced the id.
     private fun registerAlbumWithRegistry(item: QobuzAlbumItem) {
+        val albumId = item.qobuzId ?: item.id?.hashCode()?.toLong()
+        val slug = item.id
+        if (albumId != null && !slug.isNullOrBlank()) {
+            qobuzIdRegistry.registerAlbum(albumId, slug)
+        }
+    }
+
+    // Same registry side-channel for artist-page release items.
+    private fun registerReleaseWithRegistry(item: QobuzRelease) {
         val albumId = item.qobuzId ?: item.id?.hashCode()?.toLong()
         val slug = item.id
         if (albumId != null && !slug.isNullOrBlank()) {
@@ -956,6 +966,21 @@ class HiFiApiClient @Inject constructor(
 }
 
 // --- Qobuz item → domain mappers (file-private extensions) -----------------
+
+private fun QobuzRelease.toDomainAlbum(): tf.monochrome.android.domain.model.Album {
+    val cover = image?.large ?: image?.small ?: image?.thumbnail
+    val typeLabel = if ((tracksCount ?: 0) <= 4) "EP" else "ALBUM"
+    return tf.monochrome.android.domain.model.Album(
+        id = qobuzId ?: id?.hashCode()?.toLong() ?: 0L,
+        title = listOfNotNull(title.takeIf { it.isNotBlank() }, version?.takeIf { it.isNotBlank() })
+            .joinToString(" — "),
+        numberOfTracks = tracksCount,
+        cover = cover,
+        explicit = parentalWarning,
+        type = typeLabel,
+        duration = duration,
+    )
+}
 
 private fun QobuzAlbumItem.toDomainAlbum(): tf.monochrome.android.domain.model.Album {
     val resolvedArtist = artist?.toDomainArtistRef()
