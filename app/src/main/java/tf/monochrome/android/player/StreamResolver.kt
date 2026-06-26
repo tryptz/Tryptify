@@ -6,6 +6,8 @@ import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
+import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.api.QobuzTrackMatch
 import tf.monochrome.android.data.cache.QobuzStreamCacheManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AudioQuality
@@ -38,6 +40,7 @@ data class ResolvedMedia(
 class StreamResolver @Inject constructor(
     private val repository: MusicRepository,
     private val qobuzCache: QobuzStreamCacheManager,
+    private val qobuzIdRegistry: QobuzIdRegistry,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -66,6 +69,8 @@ class StreamResolver @Inject constructor(
         val fallback = qobuzFallbackMediaItem(
             tidalId = track.id,
             knownIsrc = null,
+            tidalAlbumId = track.album?.id,
+            tidalArtistId = track.artist?.id,
             mediaId = track.id.toString(),
             title = track.title,
             artist = track.displayArtist,
@@ -209,6 +214,11 @@ class StreamResolver @Inject constructor(
             val fallback = qobuzFallbackMediaItem(
                 tidalId = source.tidalId,
                 knownIsrc = track.isrc,
+                // UnifiedTrack carries no numeric TIDAL album/artist ids, and
+                // main-player navigation keys off the legacy Track anyway, so
+                // there's nothing to bridge from this path.
+                tidalAlbumId = null,
+                tidalArtistId = null,
                 mediaId = track.id,
                 title = track.title,
                 artist = track.artistName,
@@ -268,6 +278,8 @@ class StreamResolver @Inject constructor(
     private suspend fun qobuzFallbackMediaItem(
         tidalId: Long,
         knownIsrc: String?,
+        tidalAlbumId: Long?,
+        tidalArtistId: Long?,
         mediaId: String,
         title: String,
         artist: String,
@@ -278,11 +290,23 @@ class StreamResolver @Inject constructor(
         discNumber: Int?,
     ): MediaItem? {
         val isrc = knownIsrc?.takeIf { it.isNotBlank() } ?: repository.getTidalIsrc(tidalId)
-        val qobuzId = isrc?.let { repository.findQobuzIdByIsrc(it) }
-            ?: metadataMatchQobuzId(title, artist, durationSeconds)
+        val match = isrc?.let { repository.findQobuzByIsrc(it) }
+            ?: metadataMatchQobuz(title, artist, durationSeconds)
             ?: return null
 
-        val file = runCatching { qobuzCache.getOrFetch(qobuzId, AudioQuality.LOSSLESS) }
+        // Bridge navigation: make the playing TIDAL album/artist ids resolve to
+        // the matched Qobuz release/artist so "Go to album/artist" on the main
+        // player works for a fallback-played track.
+        val albumSlug = match.albumSlug
+        if (tidalAlbumId != null && !albumSlug.isNullOrBlank()) {
+            qobuzIdRegistry.registerAlbum(tidalAlbumId, albumSlug)
+        }
+        val qobuzArtistId = match.artistId
+        if (tidalArtistId != null && qobuzArtistId != null) {
+            qobuzIdRegistry.registerArtistAlias(tidalArtistId, qobuzArtistId)
+        }
+
+        val file = runCatching { qobuzCache.getOrFetch(match.trackId, AudioQuality.LOSSLESS) }
             .getOrNull() ?: return null
 
         val metadata = MediaMetadata.Builder()
@@ -306,11 +330,11 @@ class StreamResolver @Inject constructor(
      * exact normalised title + artist (with a ~3s duration tolerance, then
      * duration-relaxed) so it never plays the wrong recording.
      */
-    private suspend fun metadataMatchQobuzId(
+    private suspend fun metadataMatchQobuz(
         title: String,
         artist: String,
         durationSeconds: Int,
-    ): Long? {
+    ): QobuzTrackMatch? {
         if (title.isBlank() || artist.isBlank()) return null
         // Qobuz joins the version onto its titles with an em dash; strip it so
         // the search and comparison line up with TIDAL's plain title.
@@ -327,8 +351,14 @@ class StreamResolver @Inject constructor(
                 CrossSourceMatcher.normalizeForMatching(cleanTitle) &&
                 CrossSourceMatcher.normalizeForMatching(c.displayArtist) ==
                 CrossSourceMatcher.normalizeForMatching(artist)
-        }
-        return match?.id
+        } ?: return null
+        // searchQobuz already registered the album slug under the Qobuz album
+        // id, so we can recover the slug for the navigation bridge.
+        return QobuzTrackMatch(
+            trackId = match.id,
+            albumSlug = match.album?.id?.let { qobuzIdRegistry.albumSlugFor(it) },
+            artistId = match.artist?.id,
+        )
     }
 
     private fun selectBestLink(

@@ -33,6 +33,11 @@ class QobuzIdRegistry @Inject constructor() {
     // path instead of falling through to TIDAL streaming with a Qobuz id
     // that TIDAL either doesn't have or maps to a different track.
     private val qobuzTrackIds: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    // Maps a foreign (e.g. TIDAL) artist id to the Qobuz artist id of the same
+    // artist. Populated by the TIDAL→Qobuz playback fallback so "Go to artist"
+    // for a fallback-played track resolves to the Qobuz artist (whose id lives
+    // in a different namespace than TIDAL's).
+    private val artistAliases = ConcurrentHashMap<Long, Long>()
 
     fun registerAlbum(qobuzId: Long, slug: String) {
         if (slug.isBlank()) return
@@ -52,4 +57,12 @@ class QobuzIdRegistry @Inject constructor() {
     }
 
     fun isQobuzTrack(id: Long): Boolean = id in qobuzTrackIds
+
+    /** Link a foreign (TIDAL) artist id to its Qobuz artist id. */
+    fun registerArtistAlias(foreignId: Long, qobuzId: Long) {
+        if (foreignId != qobuzId) artistAliases[foreignId] = qobuzId
+    }
+
+    /** The Qobuz artist id for a foreign (TIDAL) artist id, if one was linked. */
+    fun qobuzArtistIdFor(foreignId: Long): Long? = artistAliases[foreignId]
 }

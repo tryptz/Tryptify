@@ -50,9 +50,13 @@ class ArtistDetailViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
-            val preferQobuz = qobuzIdRegistry.isQobuzArtist(artistId)
+            // A fallback-played TIDAL track links its TIDAL artist id to the
+            // matched Qobuz artist id; use that for the Qobuz call when present.
+            val aliasQobuzId = qobuzIdRegistry.qobuzArtistIdFor(artistId)
+            val qobuzArtistId = aliasQobuzId ?: artistId
+            val preferQobuz = aliasQobuzId != null || qobuzIdRegistry.isQobuzArtist(artistId)
             val primary = if (preferQobuz) {
-                repository.getQobuzArtist(artistId)
+                repository.getQobuzArtist(qobuzArtistId)
             } else {
                 repository.getArtist(artistId)
             }
@@ -62,7 +66,7 @@ class ArtistDetailViewModel @Inject constructor(
                 val secondary = if (preferQobuz) {
                     repository.getArtist(artistId)
                 } else {
-                    repository.getQobuzArtist(artistId)
+                    repository.getQobuzArtist(qobuzArtistId)
                 }
                 if (secondary.isSuccess) secondary else primary
             }

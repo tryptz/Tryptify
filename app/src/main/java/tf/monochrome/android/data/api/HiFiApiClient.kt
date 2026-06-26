@@ -61,6 +61,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
 
+/** Minimal Qobuz match used by the TIDAL→Qobuz playback fallback. */
+data class QobuzTrackMatch(
+    val trackId: Long,
+    val albumSlug: String?,
+    val artistId: Long?,
+)
+
 @Singleton
 class HiFiApiClient @Inject constructor(
     private val instanceManager: InstanceManager,
@@ -405,12 +412,13 @@ class HiFiApiClient @Inject constructor(
     }.getOrNull()
 
     /**
-     * Resolve the Qobuz track id for an ISRC. Qobuz indexes tracks by ISRC, so
+     * Resolve the Qobuz match for an ISRC. Qobuz indexes tracks by ISRC, so
      * /api/get-music?q=<isrc> returns the exact recording — far more reliable
-     * than a title/artist match. Returns null when Qobuz isn't configured or
-     * doesn't carry that ISRC.
+     * than a title/artist match. Also carries the Qobuz album slug and artist
+     * id so the playback fallback can bridge "Go to album/artist". Returns null
+     * when Qobuz isn't configured or doesn't carry that ISRC.
      */
-    suspend fun findQobuzTrackIdByIsrc(isrc: String): Long? {
+    suspend fun findQobuzTrackByIsrc(isrc: String): QobuzTrackMatch? {
         if (isrc.isBlank()) return null
         val instance = instanceManager.qobuzInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
@@ -423,7 +431,14 @@ class HiFiApiClient @Inject constructor(
         } ?: return null
         val items = envelope.data?.tracks?.items ?: return null
         val match = items.firstOrNull { it.isrc?.equals(isrc, ignoreCase = true) == true } ?: return null
-        return match.id?.also { qobuzIdRegistry.registerTrack(it) }
+        val id = match.id ?: return null
+        qobuzIdRegistry.registerTrack(id)
+        match.album?.let { registerAlbumWithRegistry(it) }
+        return QobuzTrackMatch(
+            trackId = id,
+            albumSlug = match.album?.id,
+            artistId = match.performer?.id,
+        )
     }
 
     // Side-channel registry update for any QobuzAlbumItem we decode. Album.id
