@@ -64,6 +64,8 @@ class StreamResolver @Inject constructor(
         // manifest) — fall back to the same song on Qobuz so a TIDAL-built
         // playlist keeps playing.
         val fallback = qobuzFallbackMediaItem(
+            tidalId = track.id,
+            knownIsrc = null,
             mediaId = track.id.toString(),
             title = track.title,
             artist = track.displayArtist,
@@ -205,6 +207,8 @@ class StreamResolver @Inject constructor(
         // TIDAL unavailable — try the same song on Qobuz before giving up.
         if (!isPlayable) {
             val fallback = qobuzFallbackMediaItem(
+                tidalId = source.tidalId,
+                knownIsrc = track.isrc,
                 mediaId = track.id,
                 title = track.title,
                 artist = track.artistName,
@@ -249,13 +253,21 @@ class StreamResolver @Inject constructor(
     /**
      * Last-resort fallback for TIDAL (HiFiApi) tracks: when the TIDAL stream
      * can't be resolved (instance down, track pulled, no manifest), find the
-     * same song on Qobuz by metadata and play it from the Qobuz cache. This is
-     * what lets a playlist built from TIDAL keep playing when TIDAL is down.
+     * same recording on Qobuz and play it from the Qobuz cache. This is what
+     * lets a playlist built from TIDAL keep playing when TIDAL is down.
+     *
+     * Matching is ISRC-first — the ISRC uniquely identifies the recording
+     * across catalogues, so it can't grab the wrong song. The ISRC comes from
+     * the track itself when known, otherwise from TIDAL's metadata pool (which
+     * usually answers even when streaming doesn't). Only when no ISRC is
+     * available do we fall back to a strict title+artist metadata match.
      *
      * Returns null when Qobuz isn't configured, no confident match is found, or
      * the fetch fails — callers then skip the track exactly as before.
      */
     private suspend fun qobuzFallbackMediaItem(
+        tidalId: Long,
+        knownIsrc: String?,
         mediaId: String,
         title: String,
         artist: String,
@@ -265,28 +277,12 @@ class StreamResolver @Inject constructor(
         trackNumber: Int?,
         discNumber: Int?,
     ): MediaItem? {
-        if (title.isBlank() || artist.isBlank()) return null
-        // Qobuz joins the version onto its titles with an em dash; strip it so
-        // the search and the comparison line up with TIDAL's plain title.
-        val cleanTitle = title.substringBefore(" — ").trim().ifBlank { title }
-        val candidates = repository.searchQobuz("$cleanTitle $artist").getOrNull()?.tracks
+        val isrc = knownIsrc?.takeIf { it.isNotBlank() } ?: repository.getTidalIsrc(tidalId)
+        val qobuzId = isrc?.let { repository.findQobuzIdByIsrc(it) }
+            ?: metadataMatchQobuzId(title, artist, durationSeconds)
             ?: return null
-        // Tier 1: exact (normalised) title + artist within ~3s duration.
-        val match = candidates.firstOrNull { c ->
-            CrossSourceMatcher.fuzzyMatch(
-                cleanTitle, artist, durationSeconds,
-                c.title.substringBefore(" — ").trim(), c.displayArtist, c.duration,
-            )
-        } ?: candidates.firstOrNull { c ->
-            // Tier 2: catalogues sometimes disagree on duration by a few
-            // seconds — accept an exact title + artist match regardless.
-            CrossSourceMatcher.normalizeForMatching(c.title.substringBefore(" — ").trim()) ==
-                CrossSourceMatcher.normalizeForMatching(cleanTitle) &&
-                CrossSourceMatcher.normalizeForMatching(c.displayArtist) ==
-                CrossSourceMatcher.normalizeForMatching(artist)
-        } ?: return null
 
-        val file = runCatching { qobuzCache.getOrFetch(match.id, AudioQuality.LOSSLESS) }
+        val file = runCatching { qobuzCache.getOrFetch(qobuzId, AudioQuality.LOSSLESS) }
             .getOrNull() ?: return null
 
         val metadata = MediaMetadata.Builder()
@@ -303,6 +299,36 @@ class StreamResolver @Inject constructor(
             .setUri(Uri.fromFile(file))
             .setMediaMetadata(metadata)
             .build()
+    }
+
+    /**
+     * Title + artist fallback for when no ISRC is available. Strict on purpose:
+     * exact normalised title + artist (with a ~3s duration tolerance, then
+     * duration-relaxed) so it never plays the wrong recording.
+     */
+    private suspend fun metadataMatchQobuzId(
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+    ): Long? {
+        if (title.isBlank() || artist.isBlank()) return null
+        // Qobuz joins the version onto its titles with an em dash; strip it so
+        // the search and comparison line up with TIDAL's plain title.
+        val cleanTitle = title.substringBefore(" — ").trim().ifBlank { title }
+        val candidates = repository.searchQobuz("$cleanTitle $artist").getOrNull()?.tracks
+            ?: return null
+        val match = candidates.firstOrNull { c ->
+            CrossSourceMatcher.fuzzyMatch(
+                cleanTitle, artist, durationSeconds,
+                c.title.substringBefore(" — ").trim(), c.displayArtist, c.duration,
+            )
+        } ?: candidates.firstOrNull { c ->
+            CrossSourceMatcher.normalizeForMatching(c.title.substringBefore(" — ").trim()) ==
+                CrossSourceMatcher.normalizeForMatching(cleanTitle) &&
+                CrossSourceMatcher.normalizeForMatching(c.displayArtist) ==
+                CrossSourceMatcher.normalizeForMatching(artist)
+        }
+        return match?.id
     }
 
     private fun selectBestLink(

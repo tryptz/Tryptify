@@ -46,6 +46,12 @@ class MusicRepository @Inject constructor(
         apiClient.searchQobuz(query, offset)
     }
 
+    /** TIDAL track's ISRC (metadata pool) — used by the Qobuz playback fallback. */
+    suspend fun getTidalIsrc(trackId: Long): String? = apiClient.getTidalIsrc(trackId)
+
+    /** Qobuz track id for an ISRC, or null when not configured / not found. */
+    suspend fun findQobuzIdByIsrc(isrc: String): Long? = apiClient.findQobuzTrackIdByIsrc(isrc)
+
     /**
      * Qobuz album-detail fetch. Returns Result.failure when the Qobuz instance
      * isn't configured or the lookup fails so the detail VM can fall back to

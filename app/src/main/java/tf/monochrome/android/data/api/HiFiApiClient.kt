@@ -392,6 +392,39 @@ class HiFiApiClient @Inject constructor(
         )
     }
 
+    /**
+     * Fetch a TIDAL track's ISRC from the metadata pool (InstanceType.API,
+     * separate from STREAMING) — so it's usually obtainable even when the
+     * track's *stream* can't be resolved, which is exactly when the Qobuz
+     * fallback needs it.
+     */
+    suspend fun getTidalIsrc(trackId: Long): String? = runCatching {
+        val infoBody = fetchWithRetry("/info/?id=$trackId")
+        json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody)).isrc?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    /**
+     * Resolve the Qobuz track id for an ISRC. Qobuz indexes tracks by ISRC, so
+     * /api/get-music?q=<isrc> returns the exact recording — far more reliable
+     * than a title/artist match. Returns null when Qobuz isn't configured or
+     * doesn't carry that ISRC.
+     */
+    suspend fun findQobuzTrackIdByIsrc(isrc: String): Long? {
+        if (isrc.isBlank()) return null
+        val instance = instanceManager.qobuzInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/get-music?q=${isrc.encodeUrl()}")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+        val items = envelope.data?.tracks?.items ?: return null
+        val match = items.firstOrNull { it.isrc?.equals(isrc, ignoreCase = true) == true } ?: return null
+        return match.id?.also { qobuzIdRegistry.registerTrack(it) }
+    }
+
     // Side-channel registry update for any QobuzAlbumItem we decode. Album.id
     // produced by toDomainAlbum is qobuz_id when available and slug.hashCode()
     // otherwise — register that exact value so AlbumDetailViewModel's
