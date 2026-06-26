@@ -22,7 +22,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.text.style.TextOverflow
+import tf.monochrome.android.domain.model.UnifiedArtistRef
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.ClickableArtists
 import tf.monochrome.android.ui.components.CoverImage
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -247,8 +249,8 @@ fun HomeScreen(
                             label = row.label,
                             tracks = row.tracks,
                             onPlay = { track -> playerViewModel.playUnifiedTrack(track, row.tracks) },
-                            onArtistClick = { track ->
-                                track.artistId?.let { artistId ->
+                            onArtistClick = { artist ->
+                                artist.id?.let { artistId ->
                                     navController.navigate(Screen.ArtistDetail.createRoute(artistId))
                                 }
                             }
@@ -261,8 +263,8 @@ fun HomeScreen(
                             label = row.label,
                             tracks = row.tracks,
                             onPlay = { track -> playerViewModel.playUnifiedTrack(track, row.tracks) },
-                            onArtistClick = { track ->
-                                track.artistId?.let { artistId ->
+                            onArtistClick = { artist ->
+                                artist.id?.let { artistId ->
                                     navController.navigate(Screen.ArtistDetail.createRoute(artistId))
                                 }
                             }
@@ -307,7 +309,7 @@ private fun DiscoveryRowSection(
     label: String,
     tracks: List<UnifiedTrack>,
     onPlay: (UnifiedTrack) -> Unit,
-    onArtistClick: (UnifiedTrack) -> Unit
+    onArtistClick: (UnifiedArtistRef) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Text(
@@ -324,7 +326,7 @@ private fun DiscoveryRowSection(
                 RecommendationCard(
                     track = track,
                     onPlay = { onPlay(track) },
-                    onArtistClick = { onArtistClick(track) }
+                    onArtistClick = onArtistClick
                 )
             }
         }
@@ -336,11 +338,11 @@ private fun DiscoveryRowSection(
 private fun RecommendationCard(
     track: UnifiedTrack,
     onPlay: () -> Unit,
-    onArtistClick: () -> Unit
+    onArtistClick: (UnifiedArtistRef) -> Unit
 ) {
     Column(modifier = Modifier.width(140.dp).padding(4.dp)) {
-        // Artwork (and title) play the track; the artist name navigates to the
-        // artist page when a catalog artist id is available.
+        // Artwork (and title) play the track; each credited artist name navigates
+        // to that artist's page (supports multiple featured artists per track).
         CoverImage(
             url = track.artworkUri,
             contentDescription = track.title,
@@ -357,17 +359,10 @@ private fun RecommendationCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.clickable(onClick = onPlay)
         )
-        Text(
-            text = track.artistName,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = if (track.artistId != null) {
-                Modifier.clickable(onClick = onArtistClick)
-            } else {
-                Modifier
-            }
+        ClickableArtists(
+            artists = track.artists,
+            fallbackName = track.artistName,
+            onArtistClick = onArtistClick,
         )
     }
 }

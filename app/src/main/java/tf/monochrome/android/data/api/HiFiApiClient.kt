@@ -1028,13 +1028,22 @@ private fun QobuzTrackItem.toDomainTrack(
     val resolvedArtist = performer?.toDomainArtist()
         ?: album?.artist?.toDomainArtistRef()
         ?: fallbackAlbum?.artist
+    // Qobuz track payloads carry only a single `performer`; the structured
+    // multi-artist credits (main + featured, each with an id) live on the album.
+    // Merge the primary performer with the album's *performing* artists so a
+    // track credited to several artists can wire each name to its own profile.
+    // Composer/producer-only credits are dropped (not artist-page material).
+    val creditedArtists = (listOfNotNull(resolvedArtist) +
+        (album?.artists?.filter { it.isPerformingCredit() }?.map { it.toDomainArtistRef() } ?: emptyList()))
+        .filter { it.id != 0L }
+        .distinctBy { it.id }
     return tf.monochrome.android.domain.model.Track(
         id = id ?: 0L,
         title = listOfNotNull(title.takeIf { it.isNotBlank() }, version?.takeIf { it.isNotBlank() })
             .joinToString(" — "),
         duration = duration ?: 0,
         artist = resolvedArtist,
-        artists = listOfNotNull(resolvedArtist),
+        artists = creditedArtists.ifEmpty { listOfNotNull(resolvedArtist) },
         album = resolvedAlbum,
         audioQuality = if (hires) "HI_RES_LOSSLESS" else if ((maximumBitDepth ?: 0) >= 16) "LOSSLESS" else null,
         explicit = parentalWarning,
@@ -1063,6 +1072,22 @@ private fun QobuzArtistRef.toDomainArtistRef(): tf.monochrome.android.domain.mod
         name = name,
         picture = image?.large ?: image?.small ?: picture,
     )
+
+/**
+ * Whether this album credit is a performing artist (main or featured) — the kind
+ * worth a clickable artist link — versus a composer/producer/writer-only credit.
+ * Credits with no declared role are treated as performers (the common case for
+ * the album's primary artists). Role strings are matched leniently because Qobuz
+ * uses varying separators/casing (e.g. "main-artist", "MainArtist", "Featured Artist").
+ */
+private fun QobuzArtistRef.isPerformingCredit(): Boolean {
+    if (roles.isEmpty()) return true
+    return roles.any { role ->
+        val key = role.lowercase().filter { it.isLetter() }
+        key.contains("mainartist") || key.contains("featuredartist") ||
+            key.contains("performer") || key == "artist"
+    }
+}
 
 // Qobuz hashes artist images in the response; the actual URL is a templated
 // CDN path. "large" is a reasonable default for the artist detail screen.

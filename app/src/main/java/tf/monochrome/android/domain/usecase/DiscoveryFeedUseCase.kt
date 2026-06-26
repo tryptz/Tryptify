@@ -53,11 +53,13 @@ class DiscoveryFeedUseCase @Inject constructor(
             val sourceTracks = albumTracks?.takeIf { it.isNotEmpty() }
                 ?: result.tracks.take(tracksPerRow)
 
-            // Tag the artist ids we're about to wire navigation to as Qobuz, so
-            // ArtistDetailViewModel routes them to getQobuzArtist. getQobuzAlbum
-            // registers track ids + album slugs but not the album's artist id, so
-            // without this a dual-source setup could mis-route to the TIDAL pool.
-            sourceTracks.mapNotNull { it.artist?.id }.distinct()
+            // Tag every credited artist id (primary + featured) we're about to wire
+            // navigation to as Qobuz, so ArtistDetailViewModel routes them to
+            // getQobuzArtist. getQobuzAlbum registers track ids + album slugs but
+            // not artist ids, so without this a dual-source setup could mis-route
+            // a tapped featured artist to the TIDAL pool.
+            sourceTracks.flatMap { it.artists }.map { it.id }
+                .filter { it > 0L }.distinct()
                 .forEach { registry.registerArtist(it) }
 
             val tracks = sourceTracks.map { it.toQobuzUnifiedTrack() }
