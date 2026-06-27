@@ -20,8 +20,17 @@ Tryptify is an audiophile-grade music player whose interesting parts live below 
 | :---: | :---: |
 | ![Now Playing](docs/screenshots/player-now-playing.jpg) | ![Audio tools](docs/screenshots/player-audio-tools.jpg) |
 
-<!-- Drop additional shots into docs/screenshots/ and add them here:
-     mixer.jpg (DSP bus strips), autoeq.jpg (correction curve), usb-dac.jpg (bit-perfect status) -->
+| Library | AutoEQ |
+| :---: | :---: |
+| ![Library](docs/screenshots/library.jpg) | ![AutoEQ](docs/screenshots/autoeq.jpg) |
+
+| Compressor | Inflator |
+| :---: | :---: |
+| ![Compressor](docs/screenshots/compressor.jpg) | ![Inflator](docs/screenshots/inflator.jpg)<br>![Inflator alternate](docs/screenshots/inflator-alt.jpg) |
+
+| Settings | ProjectM Visualizer |
+| :---: | :---: |
+| ![Settings](docs/screenshots/settings.jpg) | ![ProjectM Visualizer](docs/screenshots/visualizer.jpg) |
 
 ---
 
