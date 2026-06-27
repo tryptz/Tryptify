@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -198,6 +199,19 @@ fun AlbumDetailScreen(
                                     Icon(
                                         Icons.Default.Shuffle,
                                         contentDescription = "Shuffle",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                FilledIconButton(
+                                    onClick = { viewModel.downloadAll() },
+                                    modifier = Modifier.size(48.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = "Download album",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }

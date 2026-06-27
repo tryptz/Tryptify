@@ -13,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import tf.monochrome.android.domain.model.Track
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,11 +26,27 @@ data class TrackDownloadState(
     val progress: Float = 0f
 )
 
+/** A single in-flight download with the metadata needed to render it (pill / monitor). */
+data class ActiveDownload(
+    val trackId: Long,
+    val title: String,
+    val artistName: String,
+    val artworkUri: String?,
+    val status: DownloadStatus,
+    val progress: Float,
+)
+
 @Singleton
 class DownloadManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val workManager = WorkManager.getInstance(context)
+
+    // Track metadata for rendering active downloads (title/artist/cover). WorkInfo
+    // can't carry it, so we keep it here, keyed by track id. Process-scoped: a
+    // download still in flight after a restart falls back to a generic label.
+    private data class DownloadMeta(val title: String, val artistName: String, val artworkUri: String?)
+    private val meta = ConcurrentHashMap<Long, DownloadMeta>()
 
     fun downloadTrack(track: Track) {
         enqueueDownload(track)
@@ -39,7 +56,22 @@ class DownloadManager @Inject constructor(
         tracks.forEach { enqueueDownload(it) }
     }
 
+    /** Cancel a single in-flight download. */
+    fun cancel(trackId: Long) {
+        workManager.cancelUniqueWork("download_$trackId")
+    }
+
+    /** Cancel everything still downloading or queued. */
+    fun cancelAll() {
+        workManager.cancelAllWorkByTag("download")
+    }
+
     private fun enqueueDownload(track: Track) {
+        meta[track.id] = DownloadMeta(
+            title = track.title,
+            artistName = track.artist?.name ?: track.displayArtist.ifBlank { "Unknown Artist" },
+            artworkUri = track.coverUrl,
+        )
         val inputData = workDataOf(
             DownloadWorker.KEY_TRACK_ID to track.id,
             DownloadWorker.KEY_TRACK_TITLE to track.title,
@@ -57,6 +89,9 @@ class DownloadManager @Inject constructor(
             .setInputData(inputData)
             .setConstraints(constraints)
             .addTag("download")
+            // Per-track tag so the aggregate observer can recover the track id
+            // from WorkInfo (which doesn't expose the unique work name).
+            .addTag("download_${track.id}")
             .build()
 
         workManager.enqueueUniqueWork(
@@ -115,4 +150,30 @@ class DownloadManager @Inject constructor(
                     .toMap()
             }
     }
+
+    /**
+     * Active downloads (queued + running) enriched with title/artist/cover, ready
+     * to render in the progress pill and the downloads monitor. Sorted with the
+     * currently-downloading items first.
+     */
+    fun observeActiveDownloads(): Flow<List<ActiveDownload>> =
+        observeAllActiveDownloads().map { stateById ->
+            stateById.entries
+                .map { (id, state) ->
+                    val m = meta[id]
+                    ActiveDownload(
+                        trackId = id,
+                        title = m?.title ?: "Track $id",
+                        artistName = m?.artistName ?: "",
+                        artworkUri = m?.artworkUri,
+                        status = state.status,
+                        progress = state.progress,
+                    )
+                }
+                .sortedWith(
+                    compareByDescending<ActiveDownload> { it.status == DownloadStatus.DOWNLOADING }
+                        .thenByDescending { it.progress }
+                        .thenBy { it.title }
+                )
+        }
 }

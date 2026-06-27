@@ -89,10 +89,19 @@ class DownloadWorker @AssistedInject constructor(
             }
             val audioData = output.toByteArray()
 
-            // Determine save location
+            // Detect what the backend actually delivered (not just what was
+            // requested): the download instance can downgrade HI_RES→LOSSLESS,
+            // and LOW/HIGH come back as MP3. Basing the extension/mime and the
+            // stored record on the real bytes keeps lossy files from being
+            // mislabelled .flac (breaks MediaStore + other players) and makes the
+            // saved quality accurate.
             val customFolderUri = preferences.downloadFolderUri.first()
+            val actualQuality = detectActualQuality(audioData, quality)
+            val isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
+            val fileExt = if (isFlac) "flac" else "mp3"
+            val audioMime = if (isFlac) "audio/flac" else "audio/mpeg"
             val sanitizedTitle = "${artistName} - ${trackTitle}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            val fileName = "$sanitizedTitle.flac"
+            val fileName = "$sanitizedTitle.$fileExt"
             val filePath: String
 
             if (customFolderUri != null) {
@@ -102,7 +111,7 @@ class DownloadWorker @AssistedInject constructor(
                 if (docFile != null && docFile.canWrite()) {
                     val existing = docFile.findFile(fileName)
                     existing?.delete()
-                    val newFile = docFile.createFile("audio/flac", sanitizedTitle)
+                    val newFile = docFile.createFile(audioMime, sanitizedTitle)
                     if (newFile != null) {
                         context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
                             out.write(audioData)
@@ -110,13 +119,13 @@ class DownloadWorker @AssistedInject constructor(
                         filePath = newFile.uri.toString()
                     } else {
                         // Fallback to internal
-                        filePath = saveToInternal(trackId, fileName, audioData)
+                        filePath = saveToInternal(trackId, fileExt, audioData)
                     }
                 } else {
-                    filePath = saveToInternal(trackId, fileName, audioData)
+                    filePath = saveToInternal(trackId, fileExt, audioData)
                 }
             } else {
-                filePath = saveToInternal(trackId, fileName, audioData)
+                filePath = saveToInternal(trackId, fileExt, audioData)
             }
 
             // Save lyrics if enabled. TIDAL is preferred (best quality
@@ -195,7 +204,7 @@ class DownloadWorker @AssistedInject constructor(
                     albumTitle = albumTitle,
                     albumCover = albumCover,
                     filePath = filePath,
-                    quality = quality.name,
+                    quality = actualQuality.name,
                     sizeBytes = audioData.size.toLong(),
                     downloadedAt = System.currentTimeMillis()
                 )
@@ -283,10 +292,33 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
-    private fun saveToInternal(trackId: Long, fileName: String, data: ByteArray): String {
+    /**
+     * Infer the format actually delivered from the file bytes, so the saved record
+     * reflects reality rather than the requested tier:
+     *  - "fLaC" magic → FLAC; read bits-per-sample from STREAMINFO to tell
+     *    HI_RES (≥24-bit) from LOSSLESS (16-bit), catching a HI_RES→LOSSLESS downgrade.
+     *  - anything else → lossy (MP3) → report as HIGH.
+     * Falls back to [requested] if the bytes are too short to classify.
+     */
+    private fun detectActualQuality(data: ByteArray, requested: AudioQuality): AudioQuality {
+        if (data.size < 4) return requested
+        val isFlac = data[0] == 'f'.code.toByte() && data[1] == 'L'.code.toByte() &&
+            data[2] == 'a'.code.toByte() && data[3] == 'C'.code.toByte()
+        if (!isFlac) return AudioQuality.HIGH
+        // STREAMINFO begins at byte 8 (4 magic + 4 block header). Bits-per-sample
+        // is the 5-bit field straddling bytes 20 (low bit) and 21 (high 4 bits),
+        // stored as value-1.
+        if (data.size < 22) return AudioQuality.LOSSLESS
+        val b20 = data[20].toInt() and 0xFF
+        val b21 = data[21].toInt() and 0xFF
+        val bitsPerSample = (((b20 and 0x01) shl 4) or (b21 shr 4)) + 1
+        return if (bitsPerSample >= 24) AudioQuality.HI_RES else AudioQuality.LOSSLESS
+    }
+
+    private fun saveToInternal(trackId: Long, ext: String, data: ByteArray): String {
         val downloadsDir = File(context.getExternalFilesDir(null), "downloads")
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
-        val targetFile = File(downloadsDir, "$trackId.flac")
+        val targetFile = File(downloadsDir, "$trackId.$ext")
         targetFile.writeBytes(data)
         return targetFile.absolutePath
     }

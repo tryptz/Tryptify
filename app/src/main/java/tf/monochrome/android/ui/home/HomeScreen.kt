@@ -88,8 +88,14 @@ fun HomeScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
     viewModel: HomeViewModel = hiltViewModel(),
-    searchViewModel: SearchViewModel = hiltViewModel()
+    searchViewModel: SearchViewModel = hiltViewModel(),
+    downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel()
 ) {
+    val activeDownloads by downloadCenter.active.collectAsState()
+    val downloadProgress by downloadCenter.overallProgress.collectAsState()
+    var showDownloadsMonitor by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
     val recentTracks by viewModel.recentTracks.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val discoveryRows by viewModel.discoveryRows.collectAsState()
@@ -168,6 +174,15 @@ fun HomeScreen(
         )
     }
 
+    if (showDownloadsMonitor) {
+        tf.monochrome.android.ui.downloads.DownloadsMonitorSheet(
+            downloads = activeDownloads,
+            onCancel = downloadCenter::cancel,
+            onCancelAll = downloadCenter::cancelAll,
+            onDismiss = { showDownloadsMonitor = false },
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         tf.monochrome.android.devedit.DevEditable("home_header", Modifier.fillMaxWidth()) {
             TopAppBar(
@@ -179,6 +194,11 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    tf.monochrome.android.ui.downloads.DownloadTopBarIndicator(
+                        activeCount = activeDownloads.size,
+                        overallProgress = downloadProgress,
+                        onClick = { showDownloadsMonitor = true },
+                    )
                     IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,

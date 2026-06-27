@@ -19,13 +19,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -72,6 +76,34 @@ fun ArtistDetailScreen(
     var showAddToPlaylistForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
     var showCreatePlaylistDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showAllTopTracks by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showDownloadConfirm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    if (showDownloadConfirm) {
+        val detail = artistDetail
+        val releaseCount = detail?.let { it.albums.size + it.eps.size + it.singles.size } ?: 0
+        AlertDialog(
+            onDismissRequest = { showDownloadConfirm = false },
+            icon = { Icon(Icons.Default.Download, contentDescription = null) },
+            title = { Text("Download all releases?") },
+            text = {
+                Text(
+                    "This will download every track from $releaseCount " +
+                        (if (releaseCount == 1) "release" else "releases") +
+                        " by ${detail?.artist?.name ?: "this artist"}. " +
+                        "Large discographies can use significant storage and data."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDownloadConfirm = false
+                    viewModel.downloadAllReleases()
+                }) { Text("Download") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDownloadConfirm = false }) { Text("Cancel") }
+            },
+        )
+    }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -118,11 +150,29 @@ fun ArtistDetailScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        val isDownloadingAll by viewModel.isDownloadingAll.collectAsState()
         TopAppBar(
             title = {},
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                if (artistDetail != null) {
+                    IconButton(
+                        onClick = { showDownloadConfirm = true },
+                        enabled = !isDownloadingAll,
+                    ) {
+                        if (isDownloadingAll) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Default.Download, contentDescription = "Download all releases")
+                        }
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(

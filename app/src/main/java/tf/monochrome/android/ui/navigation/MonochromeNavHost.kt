@@ -34,6 +34,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -489,6 +492,40 @@ fun MonochromeNavHost() {
                     hazeState = hazeState
                 )
             }
+        }
+
+        // ── Layer 3: Download progress pill + monitor (global chrome) ──
+        val downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel()
+        val activeDownloads by downloadCenter.active.collectAsState()
+        var pillHidden by rememberSaveable { mutableStateOf(false) }
+        var showDownloadsMonitor by rememberSaveable { mutableStateOf(false) }
+        // Re-show the pill whenever a fresh batch of downloads begins.
+        LaunchedEffect(activeDownloads.isNotEmpty()) {
+            if (activeDownloads.isNotEmpty()) pillHidden = false
+        }
+        val onChromeScreen = currentDestination?.route != Screen.NowPlaying.route &&
+            currentDestination?.route != Screen.Mixer.route
+        if (onChromeScreen && activeDownloads.isNotEmpty() && !pillHidden) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = navBarHeight + if (showMiniPlayer) 80.dp else 12.dp)
+                    .padding(horizontal = 8.dp)
+            ) {
+                tf.monochrome.android.ui.downloads.DownloadProgressPill(
+                    downloads = activeDownloads,
+                    onClick = { showDownloadsMonitor = true },
+                    onHide = { pillHidden = true },
+                )
+            }
+        }
+        if (showDownloadsMonitor) {
+            tf.monochrome.android.ui.downloads.DownloadsMonitorSheet(
+                downloads = activeDownloads,
+                onCancel = downloadCenter::cancel,
+                onCancelAll = downloadCenter::cancelAll,
+                onDismiss = { showDownloadsMonitor = false },
+            )
         }
     }
 }

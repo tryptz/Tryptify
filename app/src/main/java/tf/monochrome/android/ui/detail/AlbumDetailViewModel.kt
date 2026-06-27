@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AlbumDetail
 import javax.inject.Inject
@@ -18,6 +19,7 @@ class AlbumDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: MusicRepository,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val downloadManager: DownloadManager,
 ) : ViewModel() {
 
     private val albumId: Long = savedStateHandle.get<Long>("albumId") ?: 0L
@@ -65,4 +67,10 @@ class AlbumDetailViewModel @Inject constructor(
     }
 
     fun retry() = loadAlbum()
+
+    /** Queue every track on the loaded album for download. */
+    fun downloadAll() {
+        _albumDetail.value?.tracks?.takeIf { it.isNotEmpty() }
+            ?.let { downloadManager.downloadTracks(it) }
+    }
 }

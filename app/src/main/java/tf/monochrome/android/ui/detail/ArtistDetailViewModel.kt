@@ -8,7 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.ArtistDetail
 import javax.inject.Inject
@@ -18,6 +21,7 @@ class ArtistDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: MusicRepository,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val downloadManager: DownloadManager,
 ) : ViewModel() {
 
     private val artistId: Long = savedStateHandle.get<Long>("artistId") ?: 0L
@@ -79,4 +83,40 @@ class ArtistDetailViewModel @Inject constructor(
     }
 
     fun retry() = loadArtist()
+
+    private val _isDownloadingAll = MutableStateFlow(false)
+    val isDownloadingAll: StateFlow<Boolean> = _isDownloadingAll.asStateFlow()
+
+    /**
+     * Download every release for this artist. The artist payload carries albums but
+     * not their tracks, so each release is resolved (Qobuz slug first, else TIDAL)
+     * in parallel, then all resulting tracks are queued.
+     */
+    fun downloadAllReleases() {
+        val detail = _artistDetail.value ?: return
+        if (_isDownloadingAll.value) return
+        val releases = detail.albums + detail.eps + detail.singles
+        if (releases.isEmpty()) return
+        viewModelScope.launch {
+            _isDownloadingAll.value = true
+            try {
+                val tracks = coroutineScope {
+                    releases.map { album ->
+                        async {
+                            val slug = qobuzIdRegistry.albumSlugFor(album.id)
+                            val result = if (slug != null) {
+                                repository.getQobuzAlbum(slug)
+                            } else {
+                                repository.getAlbum(album.id)
+                            }
+                            result.getOrNull()?.tracks.orEmpty()
+                        }
+                    }.flatMap { it.await() }
+                }.distinctBy { it.id }
+                if (tracks.isNotEmpty()) downloadManager.downloadTracks(tracks)
+            } finally {
+                _isDownloadingAll.value = false
+            }
+        }
+    }
 }
