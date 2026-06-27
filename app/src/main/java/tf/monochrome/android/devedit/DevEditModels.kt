@@ -15,6 +15,11 @@ data class DevEditLayout(
     val boxes: Map<String, List<FreeformBox>> = emptyMap(),
     val snapToGrid: Boolean = false,
     val gridStep: Float = 16f,
+    // Version of the *bundled* default. When the asset's version is newer than
+    // what a device last force-applied, the bundled layout overwrites local edits
+    // once (see DevEditRepository.load). Bump this in the asset to push a new
+    // forced default to everyone. 0 = unversioned/local.
+    val version: Int = 0,
     // Screen size (in dp) the layout was designed on. When > 0, element offsets
     // are scaled to the current screen relative to this, so the arrangement
     // holds across phone sizes. 0 = treat offsets as absolute dp (no scaling).

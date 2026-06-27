@@ -25,23 +25,43 @@ class DevEditRepository @Inject constructor(
     }
 
     private val file: File get() = File(context.filesDir, FILE_NAME)
+    private val versionFile: File get() = File(context.filesDir, VERSION_FILE_NAME)
 
     fun load(): DevEditLayout {
+        val bundled = loadBundled()
+
+        // 0. Forced default: when the bundled layout's version is newer than the
+        //    one this device last applied, push it to EVERYONE — overwriting any
+        //    local edits — exactly once. Bump `version` in the asset to re-force.
+        if (bundled != null && bundled.version > lastForcedVersion()) {
+            save(bundled)
+            writeForcedVersion(bundled.version)
+            return bundled
+        }
+
         // 1. Per-device user edits take priority once they exist.
         if (file.exists()) {
             runCatching {
                 return json.decodeFromString(DevEditLayout.serializer(), file.readText())
             }
         }
-        // 2. Otherwise use the layout bundled with the app — the shipped default
-        //    that every user sees before editing anything with DevEdit.
-        runCatching {
-            context.assets.open(DEFAULT_ASSET).bufferedReader().use { reader ->
-                return json.decodeFromString(DevEditLayout.serializer(), reader.readText())
-            }
-        }
-        // 3. Nothing bundled yet → empty (pure code layout).
+        // 2. Otherwise the shipped default.
+        if (bundled != null) return bundled
+        // 3. Nothing bundled → empty (pure code layout).
         return DevEditLayout()
+    }
+
+    private fun loadBundled(): DevEditLayout? = runCatching {
+        context.assets.open(DEFAULT_ASSET).bufferedReader().use { reader ->
+            json.decodeFromString(DevEditLayout.serializer(), reader.readText())
+        }
+    }.getOrNull()
+
+    private fun lastForcedVersion(): Int =
+        runCatching { versionFile.readText().trim().toInt() }.getOrDefault(0)
+
+    private fun writeForcedVersion(version: Int) {
+        runCatching { versionFile.writeText(version.toString()) }
     }
 
     fun save(layout: DevEditLayout) {
@@ -58,6 +78,7 @@ class DevEditRepository @Inject constructor(
 
     private companion object {
         const val FILE_NAME = "devedit_layout.json"
+        const val VERSION_FILE_NAME = "devedit_forced_version"
         const val DEFAULT_ASSET = "devedit_default_layout.json"
     }
 }
