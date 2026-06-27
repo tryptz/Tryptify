@@ -158,12 +158,12 @@ class DevEditController @Inject constructor(
     }
 
     fun resizeBox(screen: String, id: String, dw: Float, dh: Float) {
+        // Keep boxes square (1:1): a diagonal drag drives a single uniform size.
+        val delta = (dw + dh) / 2f
         val list = (_layout.value.boxes[screen] ?: return).map {
             if (it.id == id) {
-                it.copy(
-                    width = (it.width + dw).coerceAtLeast(40f),
-                    height = (it.height + dh).coerceAtLeast(40f),
-                )
+                val size = (maxOf(it.width, it.height) + delta).coerceAtLeast(40f)
+                it.copy(width = size, height = size)
             } else it
         }
         update { it.copy(boxes = it.boxes + (screen to list)) }

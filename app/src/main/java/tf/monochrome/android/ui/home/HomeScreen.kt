@@ -22,7 +22,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.text.style.TextOverflow
+import tf.monochrome.android.domain.model.UnifiedArtistRef
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.ClickableArtists
 import tf.monochrome.android.ui.components.CoverImage
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -73,6 +75,7 @@ import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.search.SearchQueryField
 import tf.monochrome.android.ui.search.SearchResultsContent
@@ -89,6 +92,8 @@ fun HomeScreen(
 ) {
     val recentTracks by viewModel.recentTracks.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val discoveryRows by viewModel.discoveryRows.collectAsState()
+    val favoritesRow by viewModel.favoritesRow.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val libraryPlaylists by playerViewModel.playlists.collectAsState()
 
@@ -234,28 +239,37 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 160.dp)
             ) {
-                if (recommendations.isNotEmpty()) {
-                    item { SectionHeader(title = "Recommended") }
-                    items(recommendations, key = { it.label }) { row ->
-                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                            Text(
-                                text = row.label,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 6.dp)
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(row.tracks, key = { it.id }) { track ->
-                                    RecommendationCard(
-                                        track = track,
-                                        onClick = { playerViewModel.playUnifiedTrack(track, row.tracks) }
-                                    )
+                // Personalized discovery feed: "From your favorites" first, then
+                // "New from <artist>" rows. Falls back to the static genre seeds
+                // only when the user has no taste data (new user / Qobuz empty).
+                val personalizedRows = listOfNotNull(favoritesRow) + discoveryRows
+                if (personalizedRows.isNotEmpty()) {
+                    item { SectionHeader(title = "Discover") }
+                    items(personalizedRows, key = { it.label }) { row ->
+                        DiscoveryRowSection(
+                            label = row.label,
+                            tracks = row.tracks,
+                            onPlay = { track -> playerViewModel.playUnifiedTrack(track, row.tracks) },
+                            onArtistClick = { artist ->
+                                artist.id?.let { artistId ->
+                                    navController.navigate(Screen.ArtistDetail.createRoute(artistId))
                                 }
                             }
-                        }
+                        )
+                    }
+                } else if (recommendations.isNotEmpty()) {
+                    item { SectionHeader(title = "Recommended") }
+                    items(recommendations, key = { it.label }) { row ->
+                        DiscoveryRowSection(
+                            label = row.label,
+                            tracks = row.tracks,
+                            onPlay = { track -> playerViewModel.playUnifiedTrack(track, row.tracks) },
+                            onArtistClick = { artist ->
+                                artist.id?.let { artistId ->
+                                    navController.navigate(Screen.ArtistDetail.createRoute(artistId))
+                                }
+                            }
+                        )
                     }
                 }
                 if (recentTracks.isNotEmpty()) {
@@ -270,6 +284,7 @@ fun HomeScreen(
                             onClick = { playerViewModel.playTrack(track, recentTracks) },
                             onLongClick = { showContextMenuForTrack = track },
                             onMoreClick = { showContextMenuForTrack = track },
+                            onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                             onAlbumClick = track.album?.id?.let { albumId ->
                                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                             }
@@ -292,18 +307,50 @@ fun HomeScreen(
 
 
 @androidx.compose.runtime.Composable
-private fun RecommendationCard(track: UnifiedTrack, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .width(140.dp)
-            .clickable(onClick = onClick)
-            .padding(4.dp)
-    ) {
+private fun DiscoveryRowSection(
+    label: String,
+    tracks: List<UnifiedTrack>,
+    onPlay: (UnifiedTrack) -> Unit,
+    onArtistClick: (UnifiedArtistRef) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 6.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                RecommendationCard(
+                    track = track,
+                    onPlay = { onPlay(track) },
+                    onArtistClick = onArtistClick
+                )
+            }
+        }
+    }
+}
+
+
+@androidx.compose.runtime.Composable
+private fun RecommendationCard(
+    track: UnifiedTrack,
+    onPlay: () -> Unit,
+    onArtistClick: (UnifiedArtistRef) -> Unit
+) {
+    Column(modifier = Modifier.width(140.dp).padding(4.dp)) {
+        // Artwork (and title) play the track; each credited artist name navigates
+        // to that artist's page (supports multiple featured artists per track).
         CoverImage(
             url = track.artworkUri,
             contentDescription = track.title,
             size = 132.dp,
-            cornerRadius = MonoDimens.radiusSm
+            cornerRadius = MonoDimens.radiusSm,
+            modifier = Modifier.clickable(onClick = onPlay)
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
@@ -311,14 +358,13 @@ private fun RecommendationCard(track: UnifiedTrack, onClick: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.clickable(onClick = onPlay)
         )
-        Text(
-            text = track.artistName,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+        ClickableArtists(
+            artists = track.artists,
+            fallbackName = track.artistName,
+            onArtistClick = onArtistClick,
         )
     }
 }

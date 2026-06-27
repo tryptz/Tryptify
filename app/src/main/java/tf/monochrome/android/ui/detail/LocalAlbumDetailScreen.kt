@@ -45,8 +45,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.ClickableArtists
 import tf.monochrome.android.ui.components.ErrorScreen
 import tf.monochrome.android.ui.components.LoadingScreen
+import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -190,7 +192,8 @@ fun LocalAlbumDetailScreen(
                         LocalTrackRow(
                             track = track,
                             trackNumber = track.trackNumber ?: (index + 1),
-                            onClick = { onPlayTrack(track, tracks) }
+                            onClick = { onPlayTrack(track, tracks) },
+                            navController = navController
                         )
                     }
                 }
@@ -203,7 +206,8 @@ fun LocalAlbumDetailScreen(
 private fun LocalTrackRow(
     track: UnifiedTrack,
     trackNumber: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    navController: NavController
 ) {
     Surface(
         modifier = Modifier
@@ -233,12 +237,10 @@ private fun LocalTrackRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = track.artistName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                ClickableArtists(
+                    artists = track.artists,
+                    fallbackName = track.artistName,
+                    onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
                 )
             }
             if (track.qualityBadge != null) {

@@ -17,6 +17,7 @@ import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.TrackLyrics
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
+import tf.monochrome.android.domain.model.UnifiedArtistRef
 import tf.monochrome.android.domain.model.UnifiedTrack
 import java.io.File
 import javax.inject.Inject
@@ -112,6 +113,13 @@ class LocalMediaRepository @Inject constructor(
                 artistName = albumArtist ?: artist ?: "Unknown Artist",
                 artistNames = listOfNotNull(artist, albumArtist).distinct(),
                 albumArtistName = albumArtist,
+                // Local artist id (local_artists table) so song rows can link to
+                // LocalArtistDetail. Routing branches on sourceType == LOCAL.
+                artistId = artistId,
+                artists = artistId?.let { aid ->
+                    (artist ?: albumArtist)?.takeIf { it.isNotBlank() }
+                        ?.let { listOf(UnifiedArtistRef(id = aid, name = it)) }
+                } ?: emptyList(),
                 albumTitle = album,
                 albumId = albumId?.let { "local_album_$it" },
                 // Fall back to the audio file's own file:// URI when the scan

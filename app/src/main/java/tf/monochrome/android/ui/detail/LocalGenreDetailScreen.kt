@@ -46,6 +46,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.TrackArtistAlbumLine
+import tf.monochrome.android.ui.navigation.openAlbum
+import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -154,7 +157,8 @@ fun LocalGenreDetailScreen(
                 items(sortedTracks, key = { it.id }) { track ->
                     GenreTrackRow(
                         track = track,
-                        onClick = { onPlayTrack(track, sortedTracks) }
+                        onClick = { onPlayTrack(track, sortedTracks) },
+                        navController = navController
                     )
                 }
             }
@@ -165,7 +169,8 @@ fun LocalGenreDetailScreen(
 @Composable
 private fun GenreTrackRow(
     track: UnifiedTrack,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    navController: NavController
 ) {
     Surface(
         modifier = Modifier
@@ -211,12 +216,10 @@ private fun GenreTrackRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = track.artistName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                TrackArtistAlbumLine(
+                    track = track,
+                    onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                    onAlbumClick = { navController.openAlbum(track.albumId) },
                 )
             }
             val badge = track.qualityBadge

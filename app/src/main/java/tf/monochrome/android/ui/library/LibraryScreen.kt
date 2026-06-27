@@ -51,6 +51,7 @@ import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.settings.SettingsViewModel
 
@@ -196,6 +197,7 @@ fun LibraryScreen(
                                 onClick = { playerViewModel.playTrack(track, recentTracks) },
                                 onLongClick = { showContextMenuForTrack = track },
                                 onMoreClick = { showContextMenuForTrack = track },
+                                onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
@@ -214,6 +216,7 @@ fun LibraryScreen(
                                 onClick = { playerViewModel.playTrack(track, favoriteTracks) },
                                 onLongClick = { showContextMenuForTrack = track },
                                 onMoreClick = { showContextMenuForTrack = track },
+                                onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
@@ -253,7 +256,8 @@ fun LibraryScreen(
                     },
                     onShuffleAll = { tracks ->
                         playerViewModel.shufflePlayUnified(tracks)
-                    }
+                    },
+                    navController = navController
                 )
 
             "playlists" ->
@@ -352,6 +356,7 @@ fun LibraryScreen(
                                 onClick = { playerViewModel.playTrack(track, favoriteTracks) },
                                 onLongClick = { showContextMenuForTrack = track },
                                 onMoreClick = { showContextMenuForTrack = track },
+                                onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },

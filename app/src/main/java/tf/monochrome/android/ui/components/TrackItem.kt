@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.downloads.TrackDownloadState
 import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.domain.usecase.uiArtistRefs
 import tf.monochrome.android.ui.theme.ExplicitBadge
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -45,6 +46,7 @@ fun TrackItem(
     trackNumber: Int? = null,
     onMoreClick: (() -> Unit)? = null,
     onAlbumClick: (() -> Unit)? = null,
+    onArtistClick: ((Long) -> Unit)? = null,
     downloadState: TrackDownloadState? = null
 ) {
     Surface(
@@ -115,13 +117,22 @@ fun TrackItem(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = track.displayArtist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (onArtistClick != null) {
+                    ClickableArtists(
+                        artists = track.uiArtistRefs(),
+                        fallbackName = track.displayArtist,
+                        onArtistClick = { ref -> ref.id?.let { onArtistClick(it) } },
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                } else {
+                    Text(
+                        text = track.displayArtist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (track.album != null && onAlbumClick != null) {
                     Text(
                         text = " • ",

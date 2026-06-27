@@ -82,8 +82,12 @@ import tf.monochrome.android.data.local.scanner.ScanProgress
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
+import androidx.navigation.NavController
+import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
+import tf.monochrome.android.ui.navigation.openAlbum
+import tf.monochrome.android.ui.navigation.openArtist
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -97,7 +101,8 @@ fun LocalLibraryTab(
     onArtistClick: (UnifiedArtist) -> Unit,
     onGenreClick: (String) -> Unit,
     onFolderClick: (String) -> Unit,
-    onShuffleAll: (List<UnifiedTrack>) -> Unit
+    onShuffleAll: (List<UnifiedTrack>) -> Unit,
+    navController: NavController
 ) {
     val localTracks by viewModel.localTracks.collectAsState()
     val sortedTracks by viewModel.sortedTracks.collectAsState()
@@ -206,7 +211,7 @@ fun LocalLibraryTab(
 
         // Show search results when query is active
         if (showSearch && searchQuery.isNotBlank()) {
-            SongList(tracks = searchResults, onTrackClick = onTrackClick)
+            SongList(tracks = searchResults, onTrackClick = onTrackClick, navController = navController)
             return@Column
         }
 
@@ -274,7 +279,7 @@ fun LocalLibraryTab(
         when (selectedSubTab) {
             0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
             1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
-            2 -> SongList(tracks = sortedTracks, onTrackClick = onTrackClick)
+            2 -> SongList(tracks = sortedTracks, onTrackClick = onTrackClick, navController = navController)
             3 -> GenreList(
                 genres = genrePairs,
                 onGenreClick = onGenreClick
@@ -580,7 +585,8 @@ fun ArtistList(
 @Composable
 fun SongList(
     tracks: List<UnifiedTrack>,
-    onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit
+    onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
+    navController: NavController
 ) {
     LazyColumn(
         contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
@@ -634,12 +640,10 @@ fun SongList(
                             overflow = TextOverflow.Ellipsis
                         )
                         Row {
-                            Text(
-                                track.artistName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            TrackArtistAlbumLine(
+                                track = track,
+                                onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                                onAlbumClick = { navController.openAlbum(track.albumId) },
                                 modifier = Modifier.weight(1f, fill = false)
                             )
                             track.qualityBadge?.let { badge ->

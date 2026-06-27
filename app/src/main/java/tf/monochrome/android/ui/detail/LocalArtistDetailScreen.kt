@@ -56,7 +56,10 @@ import tf.monochrome.android.ui.components.ErrorScreen
 import tf.monochrome.android.ui.components.LoadingScreen
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.bounceClick
+import androidx.compose.foundation.clickable
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.isNavigableAlbumId
+import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -209,7 +212,8 @@ fun LocalArtistDetailScreen(
                         items(sortedTracks, key = { it.id }) { track ->
                             ArtistTrackRow(
                                 track = track,
-                                onClick = { onPlayTrack(track, sortedTracks) }
+                                onClick = { onPlayTrack(track, sortedTracks) },
+                                navController = navController
                             )
                         }
                     }
@@ -285,7 +289,8 @@ private fun LocalAlbumCard(
 @Composable
 private fun ArtistTrackRow(
     track: UnifiedTrack,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    navController: NavController
 ) {
     Surface(
         modifier = Modifier
@@ -331,13 +336,23 @@ private fun ArtistTrackRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = track.albumTitle ?: "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                val albumTitle = track.albumTitle
+                if (!albumTitle.isNullOrBlank()) {
+                    val albumLinkable = isNavigableAlbumId(track.albumId)
+                    Text(
+                        text = albumTitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (albumLinkable) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (albumLinkable) {
+                            Modifier.clickable { navController.openAlbum(track.albumId) }
+                        } else {
+                            Modifier
+                        }
+                    )
+                }
             }
             val badge = track.qualityBadge
             if (badge != null) {

@@ -45,6 +45,7 @@ import tf.monochrome.android.ui.components.LoadingScreen
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -215,6 +216,7 @@ fun AlbumDetailScreen(
                             onClick = { playerViewModel.playTrack(track, detail.tracks) },
                             onLongClick = { showContextMenuForTrack = track },
                             onMoreClick = { showContextMenuForTrack = track },
+                            onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                             showCover = false,
                             trackNumber = track.trackNumber ?: (index + 1)
                         )

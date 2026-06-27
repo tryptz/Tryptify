@@ -58,6 +58,7 @@ import tf.monochrome.android.domain.model.Artist
 import tf.monochrome.android.domain.model.Playlist
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.domain.model.UnifiedArtistRef
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.AlbumItem
@@ -66,10 +67,13 @@ import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.LoadingScreen
 import tf.monochrome.android.ui.components.SectionHeader
+import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.bounceCombinedClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.openAlbum
+import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -369,6 +373,8 @@ fun SearchResultsContent(
                             isLiked = favoriteTrackIds.contains(track.toLegacyTrack().id),
                             onLikeClick = { playerViewModel.toggleFavorite(track.toLegacyTrack()) },
                             onClick = { playerViewModel.playUnifiedTrack(track, tracks) },
+                            onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                            onAlbumClick = { navController.openAlbum(track.albumId) },
                             onMoreClick = if (track.sourceType == SourceType.API ||
                                 track.sourceType == SourceType.QOBUZ) {
                                 { showContextMenuForTrack = track.toLegacyTrack() }
@@ -489,6 +495,8 @@ private fun UnifiedSearchTrackItem(
     isLiked: Boolean,
     onLikeClick: () -> Unit,
     onClick: () -> Unit,
+    onArtistClick: (UnifiedArtistRef) -> Unit,
+    onAlbumClick: () -> Unit,
     onMoreClick: (() -> Unit)?
 ) {
     val legacyTrack = track.toLegacyTrack()
@@ -540,15 +548,10 @@ private fun UnifiedSearchTrackItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = buildString {
-                        append(track.artistName)
-                        track.albumTitle?.takeIf { it.isNotBlank() }?.let { append(" • $it") }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                TrackArtistAlbumLine(
+                    track = track,
+                    onArtistClick = onArtistClick,
+                    onAlbumClick = onAlbumClick,
                 )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

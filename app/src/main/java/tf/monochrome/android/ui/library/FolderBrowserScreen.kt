@@ -39,6 +39,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.TrackArtistAlbumLine
+import tf.monochrome.android.ui.navigation.openAlbum
+import tf.monochrome.android.ui.navigation.openArtist
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,12 +166,10 @@ fun FolderBrowserScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Row {
-                            Text(
-                                track.artistName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            TrackArtistAlbumLine(
+                                track = track,
+                                onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                                onAlbumClick = { navController.openAlbum(track.albumId) },
                                 modifier = Modifier.weight(1f, fill = false)
                             )
                             track.qualityBadge?.let { badge ->

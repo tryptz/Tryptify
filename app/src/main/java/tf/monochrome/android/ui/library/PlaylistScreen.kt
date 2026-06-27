@@ -57,6 +57,7 @@ import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -292,6 +293,7 @@ fun PlaylistScreen(
                             onClick = { playerViewModel.playTrack(track, tracks) },
                             onLongClick = { showContextMenuForTrack = track },
                             onMoreClick = { showContextMenuForTrack = track },
+                            onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                             onAlbumClick = track.album?.id?.let { albumId ->
                                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                             },

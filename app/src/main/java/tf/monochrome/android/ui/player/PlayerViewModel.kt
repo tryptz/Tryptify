@@ -71,6 +71,14 @@ class PlayerViewModel @Inject constructor(
 
     // --- State from QueueManager (runs in-process, no IPC needed) ---
     val currentTrack: StateFlow<Track?> = queueManager.currentTrack
+
+    // The full UnifiedTrack for the current track, when known (carries source,
+    // codec/sample-rate/bit-depth, and per-artist credits the legacy Track drops).
+    // Used by the player to show the source/format tag and to route artist taps
+    // to the right namespace (local vs catalog).
+    val currentUnifiedTrack: StateFlow<UnifiedTrack?> = currentTrack
+        .map { t -> t?.let { unifiedTrackRegistry[it.id] } }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), null)
     val queue: StateFlow<List<Track>> = queueManager.queue
     val currentIndex: StateFlow<Int> = queueManager.currentIndex
     val shuffleEnabled: StateFlow<Boolean> = queueManager.shuffleEnabled

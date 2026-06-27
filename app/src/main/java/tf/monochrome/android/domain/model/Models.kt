@@ -303,6 +303,18 @@ data class TrackLyrics(
     val ttml: String? = null
 )
 
+/**
+ * A single credited artist on a [UnifiedTrack]. [id] is the catalog
+ * (Qobuz/TIDAL) artist id used for artist-page navigation, or null when the
+ * source only exposes a name (e.g. a Qobuz free-text credit) — in which case
+ * the UI shows the name but doesn't make it a link.
+ */
+@Serializable
+data class UnifiedArtistRef(
+    val id: Long? = null,
+    val name: String,
+)
+
 @Serializable
 data class UnifiedTrack(
     val id: String,
@@ -316,6 +328,13 @@ data class UnifiedTrack(
     val artistName: String,
     val artistNames: List<String> = emptyList(),
     val albumArtistName: String? = null,
+    // Catalog artist id (Qobuz/TIDAL namespace) for artist-page navigation.
+    // Null for sources without a catalog artist id (local/collection).
+    val artistId: Long? = null,
+    // Per-artist credits (primary + featured), each carrying an optional catalog
+    // id, so a track with multiple artists can wire each name to its own profile.
+    // `artistId`/`artistName` above remain the single-primary convenience view.
+    val artists: List<UnifiedArtistRef> = emptyList(),
 
     // Album info
     val albumTitle: String? = null,

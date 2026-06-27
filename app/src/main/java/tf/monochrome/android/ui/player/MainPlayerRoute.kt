@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,7 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -16,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,9 +34,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -39,7 +47,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import tf.monochrome.android.domain.model.NowPlayingViewMode
+import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.openArtist
 import java.util.Locale
 
 /**
@@ -53,6 +63,7 @@ fun MainPlayerRoute(
     playerViewModel: PlayerViewModel,
 ) {
     val currentTrack by playerViewModel.currentTrack.collectAsState()
+    val currentUnified by playerViewModel.currentUnifiedTrack.collectAsState()
     val queue by playerViewModel.queue.collectAsState()
     val currentIndex by playerViewModel.currentIndex.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
@@ -174,6 +185,9 @@ fun MainPlayerRoute(
 
     val state = MainPlayerUiState(
         track = currentTrack,
+        sourceType = currentUnified?.sourceType,
+        artists = currentUnified?.artists ?: emptyList(),
+        qualityBadge = currentUnified?.qualityBadge,
         isPlaying = isPlaying,
         positionMs = positionMs,
         durationMs = durationMs,
@@ -201,10 +215,9 @@ fun MainPlayerRoute(
         isFullscreen = isFullscreenActive,
         formatTime = playerViewModel::formatTime,
         onToggleLike = playerViewModel::toggleLikeCurrentTrack,
-        onArtistClick = {
-            currentTrack?.artist?.id?.let { artistId ->
-                navController.navigate(Screen.ArtistDetail.createRoute(artistId))
-            }
+        onArtistClick = { artistId ->
+            // Source-aware so a local song's artist opens the local artist page.
+            navController.openArtist(currentUnified?.sourceType ?: SourceType.API, artistId)
         },
         onSeekCommit = playerViewModel::seekToFraction,
         onPrevious = playerViewModel::skipToPrevious,
@@ -397,6 +410,46 @@ private fun SpeedSheet(
                     activeTrackColor = PlayerGlowMint,
                 ),
             )
+            // Cute one-tap Nightcore: 1.10x speed with pitch riding the tempo
+            // (preserve-pitch off). Glows pink when active.
+            val nightcoreActive = kotlin.math.abs(speed - 1.10f) < 0.01f && !preservePitch
+            val nightcorePink = Color(0xFFFF4FD8)
+            Surface(
+                onClick = {
+                    onSpeedChange(1.10f)
+                    onPreservePitchChange(false)
+                },
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .shadow(
+                        elevation = if (nightcoreActive) 20.dp else 10.dp,
+                        shape = RoundedCornerShape(percent = 50),
+                        ambientColor = nightcorePink,
+                        spotColor = nightcorePink,
+                        clip = false,
+                    ),
+                shape = RoundedCornerShape(percent = 50),
+                color = if (nightcoreActive) nightcorePink.copy(alpha = 0.92f) else nightcorePink.copy(alpha = 0.14f),
+                contentColor = if (nightcoreActive) Color.Black else nightcorePink,
+                border = BorderStroke(1.dp, nightcorePink.copy(alpha = if (nightcoreActive) 1f else 0.55f)),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = "Nightcore",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0.5f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { preset ->
                     FilterChip(

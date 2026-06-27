@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -182,7 +183,12 @@ fun DevEditScreen(screenId: String, content: @Composable () -> Unit) {
                     DevEditScreenButton(
                         editing = isEditing,
                         onClick = { controller.toggleScreenEditing(screenId) },
-                        modifier = Modifier.align(Alignment.CenterEnd),
+                        // Bottom-end, lifted above the mini-player, so it never
+                        // floats over screen content (e.g. the sign-in form).
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .padding(bottom = 96.dp),
                     )
                 }
             }
