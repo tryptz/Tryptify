@@ -136,7 +136,10 @@ fun ProfileScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                // Center the form in the middle of the screen by default; it still
+                // scrolls when the keyboard opens or content overflows.
+                verticalArrangement = Arrangement.Center
             ) {
                 if (userProfile != null) {
                     SignedInView(
@@ -283,8 +286,6 @@ private fun SignedOutView(
     var password by remember { mutableStateOf("") }
     var isSignUp by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
-
-    Spacer(modifier = Modifier.height(40.dp))
 
     tf.monochrome.android.devedit.DevEditable("signin_header", Modifier.fillMaxWidth()) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
