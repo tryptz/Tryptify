@@ -89,6 +89,12 @@
             "offsetY": 16.0,
             "scale": 1.0,
             "hidden": false
+        },
+        "player/sourceTag": {
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "scale": 1.0,
+            "hidden": true
         }
     },
     "boxes": {},
