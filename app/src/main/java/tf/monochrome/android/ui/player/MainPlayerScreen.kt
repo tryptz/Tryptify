@@ -160,12 +160,14 @@ fun MainPlayerScreen(
             // Bound the hero to the smaller of the available width/height so a
             // full-width square can never overflow its slot and collide with the
             // track info below it.
-            DevEditable("hero", Modifier.fillMaxWidth().weight(1f)) {
-                BoxWithConstraints(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val side = minOf(maxWidth, maxHeight)
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                val side = minOf(maxWidth, maxHeight)
+                // Wrap only the square art (not the full-width slot) so the DevEdit
+                // highlight hugs the album-art ratio instead of a tall rectangle.
+                DevEditable("hero", Modifier) {
                     hero(Modifier.size(side))
                 }
             }

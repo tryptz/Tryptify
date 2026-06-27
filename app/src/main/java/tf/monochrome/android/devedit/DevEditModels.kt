@@ -35,8 +35,9 @@ data class FreeformBox(
     val id: String,
     val x: Float = 24f,
     val y: Float = 120f,
-    val width: Float = 160f,
-    val height: Float = 72f,
+    // Square by default (1:1) so movable highlights match album-art-style ratios.
+    val width: Float = 140f,
+    val height: Float = 140f,
     val label: String = "Box",
     val colorArgb: Long = 0x66448AFFL,
 )
