@@ -1,14 +1,14 @@
 package tf.monochrome.android.ui.player
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,20 +41,27 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.devedit.DevEditable
@@ -93,10 +100,6 @@ data class MainPlayerUiState(
     val inflatorEnabled: Boolean,
 )
 
-// Vertical drag distance (px) that commits a swipe-up / swipe-down on the
-// audio-tools panel.
-private const val SwipeThresholdPx = 48f
-
 /**
  * Pure, stateless layout for the redesigned main player. The audio-tools grid
  * (output / sound / speed / sleep) is hidden by default and revealed as an
@@ -132,7 +135,62 @@ fun MainPlayerScreen(
     hero: @Composable (Modifier) -> Unit,
 ) {
     val accent = state.albumColors.vibrant
-    var statusExpanded by remember { mutableStateOf(false) }
+
+    // ── Audio-tools sheet drag-to-reveal (swipe up to pull it in) ───────
+    // reveal 0 = hidden, 1 = fully open. A swipe up on the bottom handle (or a
+    // swipe down on the panel) writes `reveal` synchronously (zero-lag), and on
+    // release it settles to 0/1 by fling velocity (else position). `reveal` is
+    // read ONLY inside graphicsLayer{} (draw phase) and derivedStateOf, so the
+    // slide never recomposes the player content.
+    val scope = rememberCoroutineScope()
+    var reveal by remember { mutableFloatStateOf(0f) }
+    var panelH by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    val settleSpec = remember {
+        spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+    }
+    val animateRevealTo: (Float, Float) -> Unit = { target, initialVel ->
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            // Coerce: a fast fling into the critically-damped spring can overshoot
+            // past the endpoint, which would expose a gap above the sheet.
+            animate(reveal, target, initialVel, settleSpec) { value, _ -> reveal = value.coerceIn(0f, 1f) }
+        }
+    }
+    val dragState = rememberDraggableState { delta ->
+        // Up drag (negative delta) opens the sheet; down closes it.
+        if (panelH > 0f) reveal = (reveal - delta / panelH).coerceIn(0f, 1f)
+    }
+    val onDragStarted: suspend CoroutineScope.(Offset) -> Unit = {
+        settleJob?.cancel()
+        dragging = true
+    }
+    val onDragStopped: suspend CoroutineScope.(Float) -> Unit = { velocity ->
+        // reveal rises as the finger moves up, so reveal-velocity = -v / H.
+        val vReveal = if (panelH > 0f) -velocity / panelH else 0f
+        val target = when {
+            vReveal > 0.8f -> 1f          // fling up → open
+            vReveal < -0.8f -> 0f         // fling down → close
+            reveal > 0.5f -> 1f
+            else -> 0f
+        }
+        // Only carry velocity that agrees with the target (no reverse lurch).
+        val settleVel = if ((target == 1f) == (vReveal > 0f)) vReveal else 0f
+        dragging = false
+        animateRevealTo(target, settleVel)
+    }
+    // Boundary-only flags (derivedStateOf recomposes only when the bool flips).
+    val scrimVisible by remember { derivedStateOf { reveal > 0.001f || dragging } }
+    // `|| dragging` keeps the open-handle mounted for the WHOLE gesture: disposing
+    // the node that owns the active drag would cancel it (onDragStopped never
+    // fires), stranding `dragging` true and the scrim alive — locking the player.
+    val handleVisible by remember { derivedStateOf { reveal < 0.999f || dragging } }
+
+    // Back closes the open sheet (it's modal once the scrim is up). Gated on the
+    // boundary-only `scrimVisible` so Back falls through to normal navigation when
+    // closed, and so we never read `reveal` in composition.
+    BackHandler(enabled = scrimVisible) { animateRevealTo(0f, 0f) }
 
     Box(
         modifier = Modifier
@@ -250,58 +308,76 @@ fun MainPlayerScreen(
             Spacer(Modifier.weight(1f))
         }
 
-        // Thin bottom-edge pull strip — the only element that captures the
-        // audio-tools pull gesture. Everything above it stays interactive when
-        // the panel isn't pulled up. Hidden once the panel is open.
-        if (!statusExpanded) {
+        // Thin bottom-edge pull strip — captures the open gesture and fades out
+        // as the sheet rises. Removed once the sheet is fully open.
+        if (handleVisible) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .height(44.dp)
-                    .pointerInput(Unit) {
-                        var total = 0f
-                        detectVerticalDragGestures(
-                            onDragStart = { total = 0f },
-                            onVerticalDrag = { _, dy -> total += dy },
-                            onDragEnd = { if (total < -SwipeThresholdPx) statusExpanded = true },
-                        )
-                    },
+                    .graphicsLayer { alpha = 1f - reveal }
+                    .draggable(
+                        state = dragState,
+                        orientation = Orientation.Vertical,
+                        onDragStarted = onDragStarted,
+                        onDragStopped = onDragStopped,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                SwipeUpHandle(onClick = { statusExpanded = true })
+                SwipeUpHandle(onClick = { animateRevealTo(1f, 0f) })
             }
         }
 
-        // Scrim behind the overlay.
-        AnimatedVisibility(
-            visible = statusExpanded,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        // Scrim behind the sheet — opacity tracks the drag (draw-phase read).
+        if (scrimVisible) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .graphicsLayer { alpha = reveal }
                     .background(Color.Black.copy(alpha = 0.45f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { statusExpanded = false },
+                        onClick = { animateRevealTo(0f, 0f) },
                     ),
             )
         }
 
-        // Audio-tools overlay panel, sliding up over the player with a shadow.
-        AnimatedVisibility(
-            visible = statusExpanded,
-            enter = slideInVertically(animationSpec = tween(280)) { it } + fadeIn(tween(220)),
-            exit = slideOutVertically(animationSpec = tween(240)) { it } + fadeOut(tween(180)),
-            modifier = Modifier.align(Alignment.BottomCenter),
+        // Audio-tools sheet — ALWAYS composed so its height is known for the
+        // drag; translated to follow `reveal`; kept invisible until measured so
+        // it never flashes at its rest position on first layout.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .onSizeChanged { panelH = it.height.toFloat() }
+                .graphicsLayer {
+                    // Travel an extra shadow-height when closing so the 32dp
+                    // elevation shadow (which draws above the panel's top edge)
+                    // is pushed fully off-screen too — no dark band at rest.
+                    translationY = (1f - reveal) * (panelH + 32.dp.toPx())
+                    alpha = if (panelH > 0f) 1f else 0f
+                }
+                .draggable(
+                    state = dragState,
+                    orientation = Orientation.Vertical,
+                    onDragStarted = onDragStarted,
+                    onDragStopped = onDragStopped,
+                ),
         ) {
+            // Granular, stable params (not the whole `state`) so this always-
+            // composed sheet is SKIPPED on every position tick during playback.
             StatusOverlayPanel(
-                state = state,
+                accent = accent,
+                outputLabel = state.outputLabel,
+                soundLabel = state.soundLabel,
+                speedLabel = state.speedLabel,
+                visualizerActive = state.visualizerActive,
+                waveformActive = state.waveformActive,
+                compressorEnabled = state.compressorEnabled,
+                inflatorEnabled = state.inflatorEnabled,
                 onOutput = onOutput,
                 onSound = onSound,
                 onSpeed = onSpeed,
@@ -310,7 +386,7 @@ fun MainPlayerScreen(
                 onWaveform = onWaveform,
                 onCompressorToggle = onCompressorToggle,
                 onInflatorToggle = onInflatorToggle,
-                onDismiss = { statusExpanded = false },
+                onDismiss = { animateRevealTo(0f, 0f) },
             )
         }
     }
@@ -353,7 +429,14 @@ private fun SwipeUpHandle(onClick: () -> Unit) {
 
 @Composable
 private fun StatusOverlayPanel(
-    state: MainPlayerUiState,
+    accent: Color,
+    outputLabel: String,
+    soundLabel: String,
+    speedLabel: String,
+    visualizerActive: Boolean,
+    waveformActive: Boolean,
+    compressorEnabled: Boolean,
+    inflatorEnabled: Boolean,
     onOutput: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
@@ -364,21 +447,12 @@ private fun StatusOverlayPanel(
     onInflatorToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val accent = state.albumColors.vibrant
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 32.dp, shape = shape, clip = false)
-            .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f)
-            .pointerInput(Unit) {
-                var total = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { total = 0f },
-                    onVerticalDrag = { _, dy -> total += dy },
-                    onDragEnd = { if (total > SwipeThresholdPx) onDismiss() },
-                )
-            },
+            .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f),
         shape = shape,
         color = PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
     ) {
@@ -391,17 +465,26 @@ private fun StatusOverlayPanel(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Tap the handle (or swipe the sheet down / tap the scrim) to close.
             Box(
                 modifier = Modifier
-                    .width(40.dp)
-                    .height(4.dp)
-                    .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
-            )
+                    .clip(RoundedCornerShape(999.dp))
+                    .clickable(onClick = onDismiss)
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(4.dp)
+                        .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
+                )
+            }
             PlayerStatusGrid(
                 accent = accent,
-                outputLabel = state.outputLabel,
-                soundLabel = state.soundLabel,
-                speedLabel = state.speedLabel,
+                outputLabel = outputLabel,
+                soundLabel = soundLabel,
+                speedLabel = speedLabel,
                 mixerLabel = "FX",
                 onOutput = onOutput,
                 onSound = onSound,
@@ -414,13 +497,13 @@ private fun StatusOverlayPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OverlayAction(Icons.Default.Animation, "Visualizer", accent, state.visualizerActive, onVisualizer)
-                OverlayAction(Icons.Default.GraphicEq, "Waveform", accent, state.waveformActive, onWaveform)
+                OverlayAction(Icons.Default.Animation, "Visualizer", accent, visualizerActive, onVisualizer)
+                OverlayAction(Icons.Default.GraphicEq, "Waveform", accent, waveformActive, onWaveform)
             }
 
             // Effects toggles
-            ToggleRow("Compressor", "Oxford dynamics", state.compressorEnabled, accent, onCompressorToggle)
-            ToggleRow("Inflator", "Oxford loudness", state.inflatorEnabled, accent, onInflatorToggle)
+            ToggleRow("Compressor", "Oxford dynamics", compressorEnabled, accent, onCompressorToggle)
+            ToggleRow("Inflator", "Oxford loudness", inflatorEnabled, accent, onInflatorToggle)
         }
     }
 }

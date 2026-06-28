@@ -8,7 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,13 +33,16 @@ import kotlin.math.sin
  */
 @Composable
 fun PanKnob(
-    value: Float,               // -1 … +1
+    value: Float,               // -1 ... +1
     onValueChange: (Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    accentColor: Color = MaterialTheme.colorScheme.primary
 ) {
-    val trackColor  = MaterialTheme.colorScheme.surfaceContainerHigh
-    val activeColor = MaterialTheme.colorScheme.primary
-    val dotColor    = MaterialTheme.colorScheme.onPrimary
+    // A translucent-white ring reads as a recessed groove on the dark strip;
+    // the theme's surfaceContainer was too low-contrast to see the knob at all.
+    val trackColor  = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
+    val activeColor = accentColor
+    val dotColor    = if (accentColor.luminance() > 0.55f) Color.Black else Color.White
     val haptic      = LocalHapticFeedback.current
 
     // Remember whether we already fired a haptic for the centre detent

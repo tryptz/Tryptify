@@ -19,6 +19,7 @@ import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.audio.dsp.model.MixPreset
 import tf.monochrome.android.audio.dsp.model.MixPresetFile
+import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.MixPresetRepository
 import tf.monochrome.android.ui.mixer.canvas.model.CanvasOffset
 import tf.monochrome.android.ui.mixer.canvas.model.CanvasState
@@ -30,12 +31,21 @@ import javax.inject.Inject
 @HiltViewModel
 class MixerViewModel @Inject constructor(
     private val dspManager: DspEngineManager,
-    private val presetRepository: MixPresetRepository
+    private val presetRepository: MixPresetRepository,
+    private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
     val enabled: StateFlow<Boolean> = dspManager.enabled
     val buses: StateFlow<List<BusConfig>> = dspManager.buses
     val busLevels: StateFlow<List<BusLevels>> = dspManager.busLevels
+
+    /** Channel coloring mode: false = curated palette, true = album/theme-derived. */
+    val channelDynamicColor: StateFlow<Boolean> = preferencesManager.mixerChannelDynamic
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setChannelDynamicColor(enabled: Boolean) {
+        viewModelScope.launch { preferencesManager.setMixerChannelDynamic(enabled) }
+    }
 
     val presets: StateFlow<List<MixPreset>> = presetRepository.getAllPresets()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())

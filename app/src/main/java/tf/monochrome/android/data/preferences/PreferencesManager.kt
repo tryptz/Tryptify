@@ -160,6 +160,7 @@ class PreferencesManager @Inject constructor(
         // DSP Mixer
         private val DSP_ENABLED = booleanPreferencesKey("dsp_enabled")
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
+        private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
         private val USB_BIT_PERFECT_ENABLED = booleanPreferencesKey("usb_bit_perfect_enabled")
         private val USB_EXCLUSIVE_BIT_PERFECT_ENABLED =
@@ -795,6 +796,16 @@ class PreferencesManager @Inject constructor(
             if (json.isNullOrBlank()) it.remove(DSP_STATE_JSON)
             else it[DSP_STATE_JSON] = json
         }
+    }
+
+    /**
+     * Mixer channel coloring mode. false (default) = curated fixed palette
+     * (distinct per-bus colors); true = colors derived from the current
+     * album/theme accent so the strips track the dynamic player color.
+     */
+    val mixerChannelDynamic: Flow<Boolean> = dataStore.data.map { it[MIXER_CHANNEL_DYNAMIC] ?: false }
+    suspend fun setMixerChannelDynamic(enabled: Boolean) {
+        dataStore.edit { it[MIXER_CHANNEL_DYNAMIC] = enabled }
     }
 
     /**
