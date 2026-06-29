@@ -64,6 +64,7 @@ fun MainPlayerRoute(
 ) {
     val currentTrack by playerViewModel.currentTrack.collectAsState()
     val currentUnified by playerViewModel.currentUnifiedTrack.collectAsState()
+    val audioFeatures by playerViewModel.currentTrackFeatures.collectAsState()
     val queue by playerViewModel.queue.collectAsState()
     val currentIndex by playerViewModel.currentIndex.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
@@ -208,6 +209,7 @@ fun MainPlayerRoute(
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
+        audioFeatures = audioFeatures,
     )
 
     MainPlayerScreen(

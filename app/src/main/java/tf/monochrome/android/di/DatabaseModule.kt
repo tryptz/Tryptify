@@ -7,6 +7,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import tf.monochrome.android.data.analysis.AudioFeatureDao
+import tf.monochrome.android.data.analysis.AudioFeatureDatabase
 import tf.monochrome.android.data.db.MusicDatabase
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.dao.EqPresetDao
@@ -30,6 +32,22 @@ object DatabaseModule {
             "monochrome_db"
         ).fallbackToDestructiveMigration().build()
     }
+
+    // Separate DB for measured audio features — kept apart from MusicDatabase
+    // so its schema can evolve without that DB's destructive migration wiping
+    // the user's library.
+    @Provides
+    @Singleton
+    fun provideAudioFeatureDatabase(@ApplicationContext context: Context): AudioFeatureDatabase {
+        return Room.databaseBuilder(
+            context,
+            AudioFeatureDatabase::class.java,
+            "audio_features_db"
+        ).fallbackToDestructiveMigration().build()
+    }
+
+    @Provides
+    fun provideAudioFeatureDao(db: AudioFeatureDatabase): AudioFeatureDao = db.audioFeatureDao()
 
     @Provides
     fun provideFavoriteDao(db: MusicDatabase): FavoriteDao = db.favoriteDao()

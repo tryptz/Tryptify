@@ -84,6 +84,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController
 
+    @Inject
+    lateinit var audioAnalysisManager: tf.monochrome.android.data.analysis.AudioAnalysisManager
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -157,6 +160,10 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // and start publishing real status to Settings UI. Without this,
         // the toggle is a persisted boolean with no observable effect.
         usbExclusiveController.start()
+        // Kick off background analysis of the library's audio features
+        // (tempo/energy/key/…). The worker no-ops when the setting is off and
+        // resumes where it left off, so this is safe to call on every launch.
+        audioAnalysisManager.ensureScheduled()
         // Restore auth on app start, then register this device against whichever
         // user is signed in. The collector re-fires on sign-in / sign-out.
         appScope.launch {

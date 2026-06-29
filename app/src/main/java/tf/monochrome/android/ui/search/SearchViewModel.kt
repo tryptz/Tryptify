@@ -34,6 +34,8 @@ class SearchViewModel @Inject constructor(
     private val unifiedLibrarySearch: SearchUnifiedLibraryUseCase,
     private val preferences: PreferencesManager,
     private val seedsRepository: tf.monochrome.android.data.repository.RecommendationSeedsRepository,
+    private val recommendationRepository: tf.monochrome.android.data.recommendations.RecommendationRepository,
+    private val libraryRepository: tf.monochrome.android.data.repository.LibraryRepository,
 ) : ViewModel() {
 
     /**
@@ -65,6 +67,9 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_API = 50
         // Tracks shown per curated recommendation row in the search empty state.
         private const val RECOMMENDATION_ROW_SIZE = 12
+        // Smaller for the dataset "More like X" row — each track is resolved by
+        // its own HiFi search, so keep the fan-out bounded.
+        private const val DATASET_ROW_SIZE = 8
     }
 
     /** A curated recommendation row shown in the search empty state. */
@@ -173,7 +178,11 @@ class SearchViewModel @Inject constructor(
             try {
                 val seeds = seedsRepository.seeds()
                 val rows = coroutineScope {
-                    seeds.map { seed ->
+                    // "More like <favorite>" — a taste-seeded row driven by the
+                    // Spotify audio-feature dataset, resolved to playable tracks
+                    // via the HiFi API. Runs alongside the curated genre rows.
+                    val datasetRow = async { datasetMadeForYouRow() }
+                    val seedRows = seeds.map { seed ->
                         async {
                             val tracks = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
                                 runCatching { repository.searchQobuz(seed.query) }.getOrNull()?.getOrNull()
@@ -182,12 +191,27 @@ class SearchViewModel @Inject constructor(
                             RecommendationRow(seed.label, tracks)
                         }
                     }.map { it.await() }
+                    listOfNotNull(datasetRow.await()) + seedRows
                 }.filter { it.tracks.isNotEmpty() }
                 _recommendations.value = rows
             } finally {
                 _recommendationsLoading.value = false
             }
         }
+    }
+
+    /** "More like <a favorite>" row from the Spotify feature dataset, resolved via HiFi. */
+    private suspend fun datasetMadeForYouRow(): RecommendationRow? {
+        val favorites = runCatching { libraryRepository.getFavoriteTracks().first() }.getOrNull().orEmpty()
+        val seed = favorites.firstOrNull() ?: return null
+        val artist = seed.artist?.name ?: seed.artists.firstOrNull()?.name ?: return null
+        val row = recommendationRepository.similarRow(
+            label = "More like ${seed.title}",
+            seedArtist = artist,
+            seedTitle = seed.title,
+            perRow = DATASET_ROW_SIZE,
+        ) ?: return null
+        return RecommendationRow(row.label, row.tracks)
     }
 
     val tracks: StateFlow<List<UnifiedTrack>> = combine(

@@ -65,11 +65,17 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
+    @Inject lateinit var recommendationRepository: tf.monochrome.android.data.recommendations.RecommendationRepository
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var currentReplayGain: ReplayGainValues? = null
+
+    private companion object {
+        // How many radio tracks to append each time the queue runs dry.
+        const val RADIO_BATCH = 20
+    }
 
     private fun createSessionActivity(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -519,6 +525,32 @@ class PlaybackService : MediaSessionService() {
         val nextTrack = queueManager.next()
         if (nextTrack != null) {
             playQueue()
+            return
+        }
+        // Queue ran dry → Spotify-style autoplay radio: extend with similar
+        // tracks and keep playing (when enabled and we have a seed).
+        maybeAutoplayRadio()
+    }
+
+    @Volatile private var radioLoading = false
+
+    private fun maybeAutoplayRadio() {
+        if (radioLoading) return
+        serviceScope.launch {
+            if (!preferences.autoplaySimilar.first()) return@launch
+            val seed = queueManager.currentTrack.value ?: return@launch
+            radioLoading = true
+            try {
+                val existingIds = queueManager.currentQueue.map { it.id }.toSet()
+                val radio = recommendationRepository.radioTracks(seed, existingIds, limit = RADIO_BATCH)
+                if (radio.isEmpty()) return@launch
+                queueManager.addToQueue(radio)
+                if (queueManager.next() != null) playQueue()
+            } catch (_: Exception) {
+                // Radio is best-effort; a failure just leaves the queue ended.
+            } finally {
+                radioLoading = false
+            }
         }
     }
 

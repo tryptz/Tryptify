@@ -59,6 +59,7 @@ class PlayerViewModel @Inject constructor(
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
+    private val audioFeatureRepository: tf.monochrome.android.data.analysis.AudioFeatureRepository,
 ) : ViewModel() {
 
     /**
@@ -79,6 +80,13 @@ class PlayerViewModel @Inject constructor(
     val currentUnifiedTrack: StateFlow<UnifiedTrack?> = currentTrack
         .map { t -> t?.let { unifiedTrackRegistry[it.id] } }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), null)
+
+    // Measured objective audio features (tempo/energy/key/…) for the current
+    // track, when analysis has reached it. Null until analysed.
+    val currentTrackFeatures: StateFlow<tf.monochrome.android.data.analysis.AudioFeatureEntity?> =
+        currentUnifiedTrack
+            .map { t -> t?.let { audioFeatureRepository.featuresFor(it) } }
+            .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), null)
     val queue: StateFlow<List<Track>> = queueManager.queue
     val currentIndex: StateFlow<Int> = queueManager.currentIndex
     val shuffleEnabled: StateFlow<Boolean> = queueManager.shuffleEnabled

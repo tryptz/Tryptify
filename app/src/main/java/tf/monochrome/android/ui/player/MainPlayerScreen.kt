@@ -57,6 +57,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.style.TextAlign
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
@@ -98,6 +100,7 @@ data class MainPlayerUiState(
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
+    val audioFeatures: tf.monochrome.android.data.analysis.AudioFeatureEntity? = null,
 )
 
 /**
@@ -250,6 +253,15 @@ fun MainPlayerScreen(
                     onToggleLike = onToggleLike,
                     onArtistClick = onArtistClick,
                 )
+            }
+
+            // Measured audio features (tempo/energy/key/loudness/brightness),
+            // shown once the background analyzer has reached this track.
+            state.audioFeatures?.let { features ->
+                Spacer(Modifier.height(10.dp))
+                DevEditable("audioFeatures", Modifier.fillMaxWidth()) {
+                    AudioFeaturesStrip(features = features, accent = accent)
+                }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -649,6 +661,29 @@ private fun sourceTagLabel(sourceType: SourceType): String = when (sourceType) {
     SourceType.QOBUZ -> "Qobuz"
     SourceType.API -> "TIDAL"
     SourceType.COLLECTION -> "Collection"
+}
+
+@Composable
+private fun AudioFeaturesStrip(
+    features: tf.monochrome.android.data.analysis.AudioFeatureEntity,
+    accent: Color,
+) {
+    val parts = buildList {
+        if (features.tempoBpm > 1f) add("${features.tempoBpm.roundToInt()} BPM")
+        add("${(features.energy * 100).roundToInt()}% energy")
+        tf.monochrome.android.data.analysis.AudioFeatureAnalyzer
+            .keyLabel(features.musicalKey, features.mode)?.let { add(it) }
+        if (features.loudnessDb < 0f) add("${features.loudnessDb.roundToInt()} dB")
+        if (features.brightnessHz >= 1000f) add("${(features.brightnessHz / 1000f).roundToInt()}k Hz bright")
+        else if (features.brightnessHz > 1f) add("${features.brightnessHz.roundToInt()} Hz bright")
+    }
+    Text(
+        text = parts.joinToString("   ·   "),
+        style = MaterialTheme.typography.labelMedium,
+        color = accent.copy(alpha = 0.9f),
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

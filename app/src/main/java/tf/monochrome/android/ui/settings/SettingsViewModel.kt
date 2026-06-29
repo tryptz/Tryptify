@@ -48,8 +48,27 @@ class SettingsViewModel @Inject constructor(
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
+    private val audioFeatureRepository: tf.monochrome.android.data.analysis.AudioFeatureRepository,
+    private val audioAnalysisManager: tf.monochrome.android.data.analysis.AudioAnalysisManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    // --- Audio feature analysis ---
+    val analyzeAudioFeatures: StateFlow<Boolean> = preferences.analyzeAudioFeatures
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val audioFeaturesAnalyzed: StateFlow<Int> = audioFeatureRepository.observeAnalyzedCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val audioFeaturesTarget: StateFlow<Int> = preferences.audioAnalysisTarget
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    fun setAnalyzeAudioFeatures(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setAnalyzeAudioFeatures(enabled)
+            if (enabled) audioAnalysisManager.triggerNow()
+        }
+    }
+
+    fun analyzeAudioNow() = audioAnalysisManager.triggerNow()
 
     /** Honest live status of the libusb exclusive-output path. */
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
@@ -98,6 +117,8 @@ class SettingsViewModel @Inject constructor(
     val showExplicitBadges: StateFlow<Boolean> = preferences.showExplicitBadges
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val confirmClearQueue: StateFlow<Boolean> = preferences.confirmClearQueue
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val autoplaySimilar: StateFlow<Boolean> = preferences.autoplaySimilar
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- Scrobbling ---
@@ -309,6 +330,7 @@ class SettingsViewModel @Inject constructor(
 
     // --- Interface actions ---
     fun setGaplessPlayback(enabled: Boolean) { viewModelScope.launch { preferences.setGaplessPlayback(enabled) } }
+    fun setAutoplaySimilar(enabled: Boolean) { viewModelScope.launch { preferences.setAutoplaySimilar(enabled) } }
     fun setShowExplicitBadges(enabled: Boolean) { viewModelScope.launch { preferences.setShowExplicitBadges(enabled) } }
     fun setConfirmClearQueue(enabled: Boolean) { viewModelScope.launch { preferences.setConfirmClearQueue(enabled) } }
 

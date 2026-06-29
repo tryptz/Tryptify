@@ -3,6 +3,8 @@ package tf.monochrome.android.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +23,7 @@ class HomeViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val discoveryFeed: DiscoveryFeedUseCase,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val recommendationRepository: tf.monochrome.android.data.recommendations.RecommendationRepository,
 ) : ViewModel() {
 
     private val _recentTracks = MutableStateFlow<List<Track>>(emptyList())
@@ -70,7 +73,17 @@ class HomeViewModel @Inject constructor(
                     .takeIf { it.isNotEmpty() }
                     ?.let { DiscoveryRow("From your favorites", it) }
 
-                _discoveryRows.value = discoveryFeed.build(tracksPerRow = DISCOVERY_ROW_SIZE)
+                // "Because you played <X>" rows from the Spotify feature
+                // dataset, seeded from recent history (distinct artists),
+                // resolved to playable tracks via HiFi. Shown above the
+                // existing "New from <artist>" feed.
+                val history = runCatching { libraryRepository.getHistory().first() }.getOrNull().orEmpty()
+                val seeds = history
+                    .distinctBy { it.artist?.name ?: it.artists.firstOrNull()?.name }
+                    .take(MAX_DATASET_ROWS)
+                val datasetRows = datasetDiscoveryRows(seeds)
+
+                _discoveryRows.value = datasetRows + discoveryFeed.build(tracksPerRow = DISCOVERY_ROW_SIZE)
             } catch (_: Exception) {
                 // Leave rows empty — HomeScreen falls back to the genre seeds.
             } finally {
@@ -79,7 +92,25 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    private suspend fun datasetDiscoveryRows(seeds: List<Track>): List<DiscoveryRow> =
+        coroutineScope {
+            seeds.map { t ->
+                async {
+                    val artist = t.artist?.name ?: t.artists.firstOrNull()?.name
+                    artist?.let {
+                        recommendationRepository.similarRow(
+                            label = "Because you played ${t.title}",
+                            seedArtist = it,
+                            seedTitle = t.title,
+                            perRow = DISCOVERY_ROW_SIZE,
+                        )
+                    }?.let { row -> DiscoveryRow(row.label, row.tracks) }
+                }
+            }.map { it.await() }.filterNotNull()
+        }
+
     private companion object {
         const val DISCOVERY_ROW_SIZE = 12
+        const val MAX_DATASET_ROWS = 2
     }
 }

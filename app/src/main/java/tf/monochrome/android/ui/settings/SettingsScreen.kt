@@ -484,6 +484,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
 @Composable
 private fun InterfaceTab(viewModel: SettingsViewModel) {
     val gapless by viewModel.gaplessPlayback.collectAsState()
+    val autoplaySimilar by viewModel.autoplaySimilar.collectAsState()
     val explicit by viewModel.showExplicitBadges.collectAsState()
     val confirmQueue by viewModel.confirmClearQueue.collectAsState()
     val sensitivity by viewModel.visualizerSensitivity.collectAsState()
@@ -518,6 +519,12 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
             subtitle = "Remove silence between tracks",
             checked = gapless,
             onCheckedChange = { viewModel.setGaplessPlayback(it) }
+        )
+        SettingSwitchItem(
+            title = "Autoplay similar music",
+            subtitle = "Keep playing related tracks when your queue ends",
+            checked = autoplaySimilar,
+            onCheckedChange = { viewModel.setAutoplaySimilar(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1828,6 +1835,9 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
     val minTrackDuration by viewModel.minTrackDuration.collectAsState()
     val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsState()
     val libraryTabOrder by viewModel.libraryTabOrder.collectAsState()
+    val analyzeAudioFeatures by viewModel.analyzeAudioFeatures.collectAsState()
+    val audioFeaturesAnalyzed by viewModel.audioFeaturesAnalyzed.collectAsState()
+    val audioFeaturesTarget by viewModel.audioFeaturesTarget.collectAsState()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1850,6 +1860,47 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
                 checked = scanOnAppOpen,
                 onCheckedChange = { viewModel.setScanOnAppOpen(it) }
             )
+        }
+
+        item {
+            Text(
+                "Audio Analysis",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+
+        item {
+            SettingSwitchItem(
+                title = "Analyze audio features",
+                subtitle = "Measure tempo, energy, key, loudness & brightness for your library",
+                checked = analyzeAudioFeatures,
+                onCheckedChange = { viewModel.setAnalyzeAudioFeatures(it) }
+            )
+        }
+
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.analyzeAudioNow() }
+                    .padding(vertical = 12.dp)
+            ) {
+                Text(
+                    "Analyze now",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    if (audioFeaturesTarget > 0)
+                        "$audioFeaturesAnalyzed / $audioFeaturesTarget tracks analyzed"
+                    else
+                        "$audioFeaturesAnalyzed tracks analyzed",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         item {

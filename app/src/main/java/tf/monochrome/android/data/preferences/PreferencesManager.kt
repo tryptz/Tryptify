@@ -82,6 +82,11 @@ class PreferencesManager @Inject constructor(
         // Audio extras
         private val NORMALIZATION_ENABLED = booleanPreferencesKey("normalization_enabled")
         private val CROSSFADE_DURATION = intPreferencesKey("crossfade_duration")
+        // Spotify-style autoplay: extend a dry queue with similar tracks.
+        private val AUTOPLAY_SIMILAR = booleanPreferencesKey("autoplay_similar")
+        // On-device audio-feature analysis (tempo/energy/key/…) of the library.
+        private val ANALYZE_AUDIO_FEATURES = booleanPreferencesKey("analyze_audio_features")
+        private val AUDIO_ANALYSIS_TARGET = intPreferencesKey("audio_analysis_target")
 
         // Downloads
         private val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
@@ -460,6 +465,29 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setPreservePitch(enabled: Boolean) {
         dataStore.edit { it[PRESERVE_PITCH] = enabled }
+    }
+
+    // Spotify-style autoplay radio; on by default.
+    val autoplaySimilar: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[AUTOPLAY_SIMILAR] ?: true
+    }
+    suspend fun setAutoplaySimilar(enabled: Boolean) {
+        dataStore.edit { it[AUTOPLAY_SIMILAR] = enabled }
+    }
+
+    // On-device audio-feature analysis of the library; on by default.
+    val analyzeAudioFeatures: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[ANALYZE_AUDIO_FEATURES] ?: true
+    }
+    suspend fun setAnalyzeAudioFeatures(enabled: Boolean) {
+        dataStore.edit { it[ANALYZE_AUDIO_FEATURES] = enabled }
+    }
+    // Total tracks targeted by the current analysis pass (for progress display).
+    val audioAnalysisTarget: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[AUDIO_ANALYSIS_TARGET] ?: 0
+    }
+    suspend fun setAudioAnalysisTarget(total: Int) {
+        dataStore.edit { it[AUDIO_ANALYSIS_TARGET] = total }
     }
 
     // --- Font scale ---
