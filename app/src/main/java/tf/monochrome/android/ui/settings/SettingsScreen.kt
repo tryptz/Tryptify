@@ -32,8 +32,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
@@ -57,6 +59,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -66,6 +69,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.rememberModalBottomSheetState
 import android.content.Context
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import tf.monochrome.android.domain.model.NowPlayingViewMode
@@ -76,6 +80,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -104,7 +109,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About")
+private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "Radio", "System", "About")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -159,8 +164,9 @@ fun SettingsScreen(
                 5 -> LibrarySettingsTab(viewModel)
                 6 -> DownloadsTab(viewModel)
                 7 -> InstancesTab(viewModel)
-                8 -> SystemTab(viewModel, navController)
-                9 -> AboutTab()
+                8 -> RadioSettingsTab(viewModel)
+                9 -> SystemTab(viewModel, navController)
+                10 -> AboutTab()
             }
         }
     }
@@ -1493,6 +1499,416 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
 
     }
 }
+
+// ─── Tab 8: Radio ──────────────────────────────────────────────────────
+@Composable
+private fun RadioSettingsTab(viewModel: SettingsViewModel) {
+    val weights by viewModel.radioPlannerWeights.collectAsState()
+    var showTutorial by rememberSaveable { mutableStateOf(false) }
+
+    if (showTutorial) {
+        RadioWeightsTutorialSheet(onDismiss = { showTutorial = false })
+    }
+
+    SettingsTabContent {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Radio planner weights",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Tune how strongly the optional planner favors each recommendation signal.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(
+                onClick = { showTutorial = true },
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                    contentDescription = "Radio weights tutorial",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "0.00x ignores a signal, 1.00x is neutral, and 3.00x is the strongest allowed preference. Android still validates playable local and Qobuz tracks before anything enters the queue.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+        SettingsGroupHeader("Source preference")
+        RadioWeightSlider(
+            title = "Local library",
+            description = "Ranks owned tracks, downloaded files, and encrypted collection matches ahead of remote-only candidates when the planner builds search hints.",
+            valueCopy = RadioWeightValueCopy(
+                off = "The planner will not give local or downloaded matches any extra priority.",
+                reduced = "Local matches act as a light tie-breaker, but remote catalogs can lead.",
+                neutral = "Local availability gets the normal station-building priority.",
+                elevated = "Local matches are preferred before broad remote catalog exploration.",
+                strong = "Stations become strongly local-first and stay close to your owned library.",
+            ),
+            value = weights.localLibrary,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(localLibrary = it)) },
+        )
+        RadioWeightSlider(
+            title = "Qobuz",
+            description = "Raises Qobuz catalog searches and high-resolution alternatives when local identity matches are missing, stale, or too narrow.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Qobuz hints are suppressed unless Android already has another reason to use them.",
+                reduced = "Qobuz is available as a backup source, not a leading recommendation source.",
+                neutral = "Qobuz gets the default share of planner search and resolution hints.",
+                elevated = "Qobuz candidates are favored when the local library has weak coverage.",
+                strong = "The planner aggressively looks for Qobuz-quality versions and adjacent releases.",
+            ),
+            value = weights.qobuz,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(qobuz = it)) },
+        )
+        RadioWeightSlider(
+            title = "Spotify discovery",
+            description = "Uses Spotify taste metadata to widen artist, genre, and adjacent-track queries without bypassing Android-side playback validation.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Spotify-derived discovery hints are ignored for this station shape.",
+                reduced = "Spotify taste data only nudges searches when stronger signals agree.",
+                neutral = "Spotify discovery has its normal influence on widening the station.",
+                elevated = "Spotify metadata actively broadens artist and style exploration.",
+                strong = "Stations lean hard into Spotify-style discovery and adjacent catalog jumps.",
+            ),
+            value = weights.spotifyDiscovery,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(spotifyDiscovery = it)) },
+        )
+        RadioWeightSlider(
+            title = "MetaBrainz metadata",
+            description = "Uses MusicBrainz and AcousticBrainz-style identity, alias, tag, release, and recording context when the planner service has an index.",
+            valueCopy = RadioWeightValueCopy(
+                off = "MetaBrainz identity and tag hints are not used for candidate shaping.",
+                reduced = "MetaBrainz can clean up obvious identities but will not steer strongly.",
+                neutral = "MetaBrainz metadata gets the default role in matching and deduping.",
+                elevated = "Recording IDs, aliases, tags, and release context strongly guide candidates.",
+                strong = "Stations heavily trust MetaBrainz identity context for precise related tracks.",
+            ),
+            value = weights.metabrainzMetadata,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(metabrainzMetadata = it)) },
+        )
+        RadioWeightSlider(
+            title = "ListenBrainz graph",
+            description = "Uses co-listening edges and nearby-listener behavior from the planner index to find tracks people tend to play together.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Crowd listening graph edges are ignored.",
+                reduced = "Co-listening data can help ties but personal and identity signals lead.",
+                neutral = "ListenBrainz graph hints receive their normal discovery weight.",
+                elevated = "Co-listening relationships become a major source of adjacent tracks.",
+                strong = "Stations strongly follow crowd listening paths around the seed.",
+            ),
+            value = weights.listenbrainzGraph,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(listenbrainzGraph = it)) },
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Identity matching")
+        RadioWeightSlider(
+            title = "Canonical version bias",
+            description = "Prefers the canonical studio recording when metadata sees remasters, live cuts, radio edits, compilations, or duplicate release entries.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Alternate releases and duplicate versions are not pushed down by identity bias.",
+                reduced = "Canonical versions get a small preference, but variants can still surface.",
+                neutral = "The planner applies normal canonical-recording cleanup.",
+                elevated = "Canonical studio versions are preferred over most duplicate variants.",
+                strong = "The station aggressively avoids remasters, live cuts, edits, and duplicates.",
+            ),
+            value = weights.canonicalVersionBias,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(canonicalVersionBias = it)) },
+        )
+        RadioWeightSlider(
+            title = "Artist similarity",
+            description = "Keeps the station near related artists, collaborations, shared scenes, member projects, and artist-neighborhood matches.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Artist relationships do not influence the station shape.",
+                reduced = "Artist similarity is a soft nudge behind track and tag evidence.",
+                neutral = "Related artists receive the default matching weight.",
+                elevated = "Artist-neighborhood matches become a strong ranking signal.",
+                strong = "Stations stay very close to the seed artist's musical neighborhood.",
+            ),
+            value = weights.artistSimilarity,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(artistSimilarity = it)) },
+        )
+        RadioWeightSlider(
+            title = "Genre and tag similarity",
+            description = "Favors shared genre, style, mood, scene, and descriptive tags pulled from local metadata and planner-side indexes.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Shared genres and tags are ignored.",
+                reduced = "Tags help only when stronger identity or source signals agree.",
+                neutral = "Genre and tag overlap gets the default coherence weight.",
+                elevated = "Shared tags strongly hold the station inside a recognizable style lane.",
+                strong = "Stations become highly tag-coherent and avoid broad stylistic jumps.",
+            ),
+            value = weights.genreTagSimilarity,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(genreTagSimilarity = it)) },
+        )
+        RadioWeightSlider(
+            title = "Era consistency",
+            description = "Keeps recommendations near the seed's release period or scene era when release years are known.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Release year does not constrain the station.",
+                reduced = "Era is a light hint, so decade jumps are common.",
+                neutral = "The station keeps the default amount of release-period coherence.",
+                elevated = "Recommendations stay noticeably closer to the seed's era.",
+                strong = "Stations strongly prefer the same period and avoid large decade shifts.",
+            ),
+            value = weights.eraConsistency,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(eraConsistency = it)) },
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Discovery behavior")
+        RadioWeightSlider(
+            title = "Novelty",
+            description = "Raises unheard, less-played, or less-obvious candidates when the planner has enough context to branch away from the seed.",
+            valueCopy = RadioWeightValueCopy(
+                off = "The planner will not intentionally push unfamiliar tracks upward.",
+                reduced = "Novelty is gentle, so familiar candidates usually win close calls.",
+                neutral = "Discovery gets the default balance against familiarity.",
+                elevated = "Unheard and less-obvious candidates are promoted more often.",
+                strong = "Stations become deliberately exploratory and less predictable.",
+            ),
+            value = weights.novelty,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(novelty = it)) },
+        )
+        RadioWeightSlider(
+            title = "Familiarity",
+            description = "Pulls the station back toward known artists, proven local matches, familiar styles, and tracks that resemble recent listening.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Known artists and familiar tracks receive no extra comfort bias.",
+                reduced = "Familiarity is present but leaves plenty of room for discovery.",
+                neutral = "The station keeps the normal familiar-to-new balance.",
+                elevated = "Known artists, familiar styles, and proven matches are preferred.",
+                strong = "Stations become comfort-focused and stay close to known listening habits.",
+            ),
+            value = weights.familiarity,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(familiarity = it)) },
+        )
+        RadioWeightSlider(
+            title = "Mood continuity",
+            description = "Keeps energy, pacing, atmosphere, and listening context consistent across queue extensions.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Mood and energy continuity do not constrain the next tracks.",
+                reduced = "The queue can change energy quickly when other signals point elsewhere.",
+                neutral = "Mood continuity receives its normal station-smoothing weight.",
+                elevated = "Energy and atmosphere stay noticeably smoother between tracks.",
+                strong = "Stations strongly preserve the current mood and avoid abrupt turns.",
+            ),
+            value = weights.moodContinuity,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(moodContinuity = it)) },
+        )
+        RadioWeightSlider(
+            title = "Avoid recently played",
+            description = "Penalizes tracks, recordings, artists, albums, and queue identities that appeared recently in playback history.",
+            valueCopy = RadioWeightValueCopy(
+                off = "Recent playback does not reduce candidate priority.",
+                reduced = "Recent repeats are discouraged lightly but can still pass validation.",
+                neutral = "The planner applies its default repeat-avoidance pressure.",
+                elevated = "Recent tracks and identities are strongly pushed down.",
+                strong = "Stations aggressively avoid repeats from the recent queue and history.",
+            ),
+            value = weights.avoidRecentlyPlayed,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(avoidRecentlyPlayed = it)) },
+        )
+        RadioWeightSlider(
+            title = "Discovery distance",
+            description = "Controls how many similarity, identity, and listening-graph hops the planner is encouraged to take from the seed.",
+            valueCopy = RadioWeightValueCopy(
+                off = "The planner stays close to direct seed matches and avoids graph hops.",
+                reduced = "Discovery can move one small step away, but stays conservative.",
+                neutral = "The station uses the normal amount of graph and similarity distance.",
+                elevated = "The planner can make broader but still related jumps from the seed.",
+                strong = "Stations are allowed to roam far through metadata and listening graphs.",
+            ),
+            value = weights.discoveryDistance,
+            onValueChange = { viewModel.setRadioPlannerWeights(weights.copy(discoveryDistance = it)) },
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(onClick = { viewModel.resetRadioPlannerWeights() }) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Reset defaults")
+        }
+    }
+}
+
+@Composable
+private fun RadioWeightSlider(
+    title: String,
+    description: String,
+    valueCopy: RadioWeightValueCopy,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+) {
+    val safeValue = value.takeIf { !it.isNaN() && !it.isInfinite() }?.coerceIn(0f, 3f) ?: 1f
+    val currentDescription = radioWeightValueDescription(safeValue, valueCopy)
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = String.format(Locale.US, "%.2fx", safeValue),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text(
+            text = currentDescription,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Slider(
+            value = safeValue,
+            onValueChange = { raw ->
+                val rounded = (Math.round(raw.coerceIn(0f, 3f) * 4f) / 4f)
+                onValueChange(rounded)
+            },
+            valueRange = 0f..3f,
+            steps = 11,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Ignore", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Neutral", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Strong", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private data class RadioWeightValueCopy(
+    val off: String,
+    val reduced: String,
+    val neutral: String,
+    val elevated: String,
+    val strong: String,
+)
+
+private fun radioWeightValueDescription(
+    value: Float,
+    copy: RadioWeightValueCopy,
+): String {
+    val safeValue = value.takeIf { !it.isNaN() && !it.isInfinite() }?.coerceIn(0f, 3f) ?: 1f
+    val (label, body) = when {
+        safeValue == 0f -> "Off" to copy.off
+        safeValue < 0.85f -> "Reduced" to copy.reduced
+        safeValue < 1.15f -> "Neutral" to copy.neutral
+        safeValue < 2.25f -> "Raised" to copy.elevated
+        else -> "Strong" to copy.strong
+    }
+    return "$label: $body"
+}
+
+private data class RadioTutorialSection(val heading: String, val body: String)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RadioWeightsTutorialSheet(onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 4.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = "Radio weights",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "A quick guide to shaping planner hints without giving up Android-side queue validation.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            )
+            Spacer(Modifier.height(18.dp))
+            val sections = radioWeightTutorialSections()
+            sections.forEachIndexed { index, section ->
+                Text(
+                    text = section.heading,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = section.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (index != sections.lastIndex) {
+                    Spacer(Modifier.height(14.dp))
+                }
+            }
+        }
+    }
+}
+
+private fun radioWeightTutorialSections(): List<RadioTutorialSection> = listOf(
+    RadioTutorialSection(
+        "What the sliders do",
+        "These values are sent to the optional Tryptify-Playlist planner. They influence search terms, source boosts, identity matching, and candidate ranking hints. They do not directly enqueue tracks.",
+    ),
+    RadioTutorialSection(
+        "The scale",
+        "1.00x is neutral. Values below 1.00x reduce a signal, 0.00x asks the planner to ignore it, and values above 1.00x strengthen it. Each slider now explains the current setting in plain language.",
+    ),
+    RadioTutorialSection(
+        "Source preference",
+        "Local library, Qobuz, Spotify discovery, MetaBrainz, and ListenBrainz decide where the planner should look first. Raise local library for owned-music stations; raise discovery sources when the queue feels narrow.",
+    ),
+    RadioTutorialSection(
+        "Identity matching",
+        "Canonical version, artist similarity, genre/tag similarity, and era consistency reduce bad duplicates and steer the station toward the seed's musical neighborhood.",
+    ),
+    RadioTutorialSection(
+        "Discovery behavior",
+        "Novelty, familiarity, mood continuity, recently played avoidance, and discovery distance control how adventurous the station feels after the first few tracks.",
+    ),
+    RadioTutorialSection(
+        "Good starting points",
+        "For local-first radio, raise Local library and Avoid recently played. For exploration, raise Novelty and Discovery distance while lowering Familiarity. For album-era stations, raise Era consistency and Canonical version bias.",
+    ),
+)
 
 @Composable
 private fun InstanceCard(url: String, version: String?) {

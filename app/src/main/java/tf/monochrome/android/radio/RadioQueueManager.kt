@@ -145,6 +145,27 @@ class RadioQueueManager(
         }
     }
 
+    fun stopRadioIfActive() {
+        scope.launch {
+            mutex.withLock {
+                if (_radioState.value !is RadioState.Active && _radioState.value !is RadioState.Loading) {
+                    return@withLock
+                }
+                activeSeed = null
+                candidateBuffer.clear()
+                seenSpotifyIds.clear()
+                seenRadioKeys.clear()
+                failedRadioKeys.clear()
+                playedRadioKeys.clear()
+                resolvedCount = 0
+                skippedCount = 0
+                refillRunning = false
+                _radioState.value = RadioState.Idle
+                _events.tryEmit(RadioEvent.Snackbar("Radio stopped after queue reset."))
+            }
+        }
+    }
+
     private fun refillTail() {
         if (refillRunning) return
         val seed = activeSeed ?: return

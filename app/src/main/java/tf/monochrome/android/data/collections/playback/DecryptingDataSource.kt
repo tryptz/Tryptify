@@ -8,6 +8,8 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
 import tf.monochrome.android.data.collections.crypto.AesGcmDecryptor
+import tf.monochrome.android.data.collections.crypto.AesGcmKeySealer
+import tf.monochrome.android.data.collections.crypto.CollectionKeyUnavailableException
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -21,7 +23,8 @@ import java.io.InputStream
 class DecryptingDataSource(
     private val upstream: DataSource,
     private val encryptionKey: String,
-    private val decryptor: AesGcmDecryptor
+    private val decryptor: AesGcmDecryptor,
+    private val keySealer: AesGcmKeySealer,
 ) : DataSource {
 
     private var decryptedStream: InputStream? = null
@@ -39,8 +42,9 @@ class DecryptingDataSource(
             val encryptedData = readAllBytes(upstream)
             upstream.close()
 
-            // Decrypt
-            val keyBytes = android.util.Base64.decode(encryptionKey, android.util.Base64.DEFAULT)
+            // Decrypt. New imports store v1-sealed collection keys; legacy
+            // imports stored the raw base64 AES key and remain supported.
+            val keyBytes = keySealer.unsealOrDecodeLegacyKey(encryptionKey)
             val decryptedData = decryptor.decrypt(encryptedData, keyBytes)
 
             // Handle position/length from dataSpec
@@ -55,6 +59,8 @@ class DecryptingDataSource(
             bytesRemaining = length.toLong()
 
             return bytesRemaining
+        } catch (e: CollectionKeyUnavailableException) {
+            throw IOException(e.message ?: "Collection key unavailable", e)
         } catch (e: Exception) {
             throw IOException("Failed to decrypt audio data", e)
         }
@@ -99,13 +105,15 @@ class DecryptingDataSource(
     class Factory(
         private val upstreamFactory: DataSource.Factory,
         private val encryptionKey: String,
-        private val decryptor: AesGcmDecryptor
+        private val decryptor: AesGcmDecryptor,
+        private val keySealer: AesGcmKeySealer,
     ) : DataSource.Factory {
         override fun createDataSource(): DataSource {
             return DecryptingDataSource(
                 upstream = upstreamFactory.createDataSource(),
                 encryptionKey = encryptionKey,
-                decryptor = decryptor
+                decryptor = decryptor,
+                keySealer = keySealer,
             )
         }
     }

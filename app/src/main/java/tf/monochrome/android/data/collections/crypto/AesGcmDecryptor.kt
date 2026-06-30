@@ -1,6 +1,6 @@
 package tf.monochrome.android.data.collections.crypto
 
-import android.util.Base64
+import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -41,8 +41,8 @@ class AesGcmDecryptor @Inject constructor() {
      * Decrypt a base64-encoded string.
      */
     fun decryptBase64(base64Data: String, base64Key: String): ByteArray {
-        val encryptedBytes = Base64.decode(base64Data, Base64.DEFAULT)
-        val keyBytes = Base64.decode(base64Key, Base64.DEFAULT)
+        val encryptedBytes = Base64.getMimeDecoder().decode(base64Data)
+        val keyBytes = Base64.getMimeDecoder().decode(base64Key)
         return decrypt(encryptedBytes, keyBytes)
     }
 

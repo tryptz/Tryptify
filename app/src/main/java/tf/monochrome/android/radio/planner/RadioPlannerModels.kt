@@ -10,10 +10,12 @@ data class RadioPlannerRequest(
     val qobuzContext: PlannerQobuzContext = PlannerQobuzContext(),
     val internetContext: Map<String, String> = emptyMap(),
     val settings: PlannerSettings = PlannerSettings(),
+    val weights: RadioPlannerWeights = RadioPlannerWeights(),
     val sliders: Map<String, Float> = emptyMap(),
     val preset: Map<String, String> = emptyMap(),
     val sessionHistory: PlannerSessionHistory = PlannerSessionHistory(),
     val candidateSummary: PlannerCandidateSummary = PlannerCandidateSummary(),
+    val metabrainz: PlannerMetaBrainzContext? = null,
 )
 
 @Serializable
@@ -61,6 +63,24 @@ data class PlannerTrackMetadata(
     val albumTitle: String? = null,
     val isrc: String? = null,
     val source: String? = null,
+)
+
+@Serializable
+data class PlannerTrackIdentity(
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val isrc: String? = null,
+    val musicBrainzRecordingId: String? = null,
+    val musicBrainzReleaseId: String? = null,
+    val musicBrainzArtistIds: List<String> = emptyList(),
+)
+
+@Serializable
+data class PlannerMetaBrainzContext(
+    val seedIdentities: List<PlannerTrackIdentity> = emptyList(),
+    val localIdentities: List<PlannerTrackIdentity> = emptyList(),
+    val historyIdentities: List<PlannerTrackIdentity> = emptyList(),
 )
 
 @Serializable

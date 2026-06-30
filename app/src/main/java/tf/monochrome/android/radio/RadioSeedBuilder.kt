@@ -7,15 +7,19 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.player.QueueManager
+import tf.monochrome.android.player.UnifiedTrackRegistry
 import tf.monochrome.android.radio.planner.PlannerCandidateSummary
 import tf.monochrome.android.radio.planner.PlannerLocalMetadata
+import tf.monochrome.android.radio.planner.PlannerMetaBrainzContext
 import tf.monochrome.android.radio.planner.PlannerQobuzContext
 import tf.monochrome.android.radio.planner.PlannerSessionHistory
 import tf.monochrome.android.radio.planner.PlannerSettings
 import tf.monochrome.android.radio.planner.PlannerSpotifyContext
+import tf.monochrome.android.radio.planner.PlannerTrackIdentity
 import tf.monochrome.android.radio.planner.PlannerTrackMetadata
 import tf.monochrome.android.radio.planner.RadioPlan
 import tf.monochrome.android.radio.planner.RadioPlannerClient
@@ -51,6 +55,7 @@ class RadioSeedBuilder @Inject constructor(
     private val preferences: PreferencesManager,
     private val localMediaRepository: LocalMediaRepository,
     private val plannerClient: RadioPlannerClient,
+    private val unifiedTrackRegistry: UnifiedTrackRegistry,
 ) {
     suspend fun build(seed: RadioSeed): BuiltRadioSeed {
         val localSeeds = when (seed) {
@@ -144,33 +149,39 @@ class RadioSeedBuilder @Inject constructor(
         seed: RadioSeed,
         localSeeds: List<Track>,
         title: String,
-    ): RadioPlan? = plannerClient.plan(
-        RadioPlannerRequest(
-            seed = title.takeIf { it.isNotBlank() },
-            localMetadata = PlannerLocalMetadata(
-                seedTracks = localSeeds.map { it.toPlannerMetadata("local_seed") },
+    ): RadioPlan? {
+        val weights = preferences.radioPlannerWeights.first()
+        return plannerClient.plan(
+            RadioPlannerRequest(
+                seed = title.takeIf { it.isNotBlank() },
+                localMetadata = PlannerLocalMetadata(
+                    seedTracks = localSeeds.map { it.toPlannerMetadata("local_seed") },
+                ),
+                spotifyContext = PlannerSpotifyContext(),
+                qobuzContext = PlannerQobuzContext(preferred = true),
+                settings = PlannerSettings(
+                    targetTrackCount = INITIAL_POOL_SIZE,
+                    discoveryRatio = DISCOVERY_RATIO,
+                    familiarityRatio = FAMILIARITY_RATIO,
+                ),
+                weights = weights,
+                sliders = weights.toPlannerSliders(),
+                sessionHistory = PlannerSessionHistory(
+                    tracks = queueManager.playHistory.value.takeLast(8).map { it.toPlannerMetadata("history") },
+                ),
+                candidateSummary = PlannerCandidateSummary(
+                    localCandidateCount = localSeeds.size,
+                    targetTrackCount = INITIAL_POOL_SIZE,
+                ),
+                metabrainz = buildMetaBrainzContext(localSeeds),
             ),
-            spotifyContext = PlannerSpotifyContext(),
-            qobuzContext = PlannerQobuzContext(preferred = true),
-            settings = PlannerSettings(
-                targetTrackCount = INITIAL_POOL_SIZE,
-                discoveryRatio = DISCOVERY_RATIO,
-                familiarityRatio = FAMILIARITY_RATIO,
-            ),
-            sessionHistory = PlannerSessionHistory(
-                tracks = queueManager.playHistory.value.takeLast(8).map { it.toPlannerMetadata("history") },
-            ),
-            candidateSummary = PlannerCandidateSummary(
-                localCandidateCount = localSeeds.size,
-                targetTrackCount = INITIAL_POOL_SIZE,
-            ),
-        )
-    ).also { plan ->
-        if (plan?.safety?.needsFallback == true) {
-            Log.i(TAG, "planner fallback: ${plan.safety.fallbackReason.orEmpty()}")
-        }
-        if (seed == RadioSeed.FromListeningSession && plan == null) {
-            Log.d(TAG, "planner unavailable for listening-session radio")
+        ).also { plan ->
+            if (plan?.safety?.needsFallback == true) {
+                Log.i(TAG, "planner fallback: ${plan.safety.fallbackReason.orEmpty()}")
+            }
+            if (seed == RadioSeed.FromListeningSession && plan == null) {
+                Log.d(TAG, "planner unavailable for listening-session radio")
+            }
         }
     }
 
@@ -242,12 +253,79 @@ class RadioSeedBuilder @Inject constructor(
         is RadioSeed.FromTrack -> seed.track.title
     }
 
-    private fun Track.toPlannerMetadata(source: String): PlannerTrackMetadata = PlannerTrackMetadata(
-        title = title,
-        artistName = primaryArtistName(),
-        albumTitle = album?.title,
-        source = source,
-    )
+    private fun buildMetaBrainzContext(localSeeds: List<Track>): PlannerMetaBrainzContext {
+        val historyTracks = queueManager.playHistory.value.takeLast(HISTORY_IDENTITY_LIMIT)
+        val localQueueTracks = queueManager.currentQueue
+            .asSequence()
+            .mapNotNull { track -> unifiedTrackRegistry[track.id] }
+            .filter { track ->
+                track.sourceType == SourceType.LOCAL ||
+                    track.sourceType == SourceType.COLLECTION ||
+                    !track.isrc.isNullOrBlank() ||
+                    !track.musicBrainzTrackId.isNullOrBlank()
+            }
+            .mapNotNull { it.toPlannerIdentity() }
+            .distinctBy { it.identityKey() }
+            .take(LOCAL_IDENTITY_LIMIT)
+            .toList()
+
+        return PlannerMetaBrainzContext(
+            seedIdentities = localSeeds.mapNotNull { it.toPlannerIdentity() }
+                .distinctBy { it.identityKey() }
+                .take(SEED_IDENTITY_LIMIT),
+            localIdentities = localQueueTracks,
+            historyIdentities = historyTracks.mapNotNull { it.toPlannerIdentity() }
+                .distinctBy { it.identityKey() }
+                .take(HISTORY_IDENTITY_LIMIT),
+        )
+    }
+
+    private fun Track.toPlannerMetadata(source: String): PlannerTrackMetadata {
+        val unified = unifiedTrackRegistry[id]
+        return PlannerTrackMetadata(
+            title = title,
+            artistName = primaryArtistName(),
+            albumTitle = album?.title,
+            isrc = unified?.isrc?.cleanOrNull(),
+            source = source,
+        )
+    }
+
+    private fun Track.toPlannerIdentity(): PlannerTrackIdentity? {
+        val unified = unifiedTrackRegistry[id]
+        return PlannerTrackIdentity(
+            title = title.cleanOrNull() ?: return null,
+            artist = primaryArtistName()?.cleanOrNull() ?: return null,
+            album = album?.title.cleanOrNull(),
+            isrc = unified?.isrc.cleanOrNull(),
+            musicBrainzRecordingId = unified?.musicBrainzTrackId.cleanOrNull(),
+            musicBrainzReleaseId = null,
+            musicBrainzArtistIds = emptyList(),
+        )
+    }
+
+    private fun UnifiedTrack.toPlannerIdentity(): PlannerTrackIdentity? {
+        val cleanTitle = title.cleanOrNull() ?: return null
+        val cleanArtist = artistName.cleanOrNull() ?: return null
+        return PlannerTrackIdentity(
+            title = cleanTitle,
+            artist = cleanArtist,
+            album = albumTitle.cleanOrNull(),
+            isrc = isrc.cleanOrNull(),
+            musicBrainzRecordingId = musicBrainzTrackId.cleanOrNull(),
+            musicBrainzReleaseId = null,
+            musicBrainzArtistIds = emptyList(),
+        )
+    }
+
+    private fun PlannerTrackIdentity.identityKey(): String =
+        musicBrainzRecordingId
+            ?: isrc
+            ?: listOf(title, artist, album.orEmpty())
+                .joinToString("|") { it.trim().lowercase() }
+
+    private fun String?.cleanOrNull(): String? =
+        this?.trim()?.takeIf { it.isNotBlank() }
 
     private fun Track.primaryArtistName(): String? =
         (artist?.name ?: artists.firstOrNull()?.name ?: displayArtist)
@@ -273,5 +351,8 @@ class RadioSeedBuilder @Inject constructor(
         const val LOCAL_CANDIDATE_POOL = 50
         const val SEARCH_FALLBACK_QUERIES = 16
         const val SEARCH_FALLBACK_TARGET = 50
+        const val SEED_IDENTITY_LIMIT = 8
+        const val LOCAL_IDENTITY_LIMIT = 32
+        const val HISTORY_IDENTITY_LIMIT = 12
     }
 }

@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -36,11 +37,17 @@ import tf.monochrome.android.audio.dsp.MixBusProcessor
 import tf.monochrome.android.audio.eq.AutoEqProcessor
 import tf.monochrome.android.audio.eq.ParametricEqProcessor
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
+import tf.monochrome.android.data.collections.crypto.AesGcmDecryptor
+import tf.monochrome.android.data.collections.crypto.AesGcmKeySealer
+import tf.monochrome.android.data.collections.playback.DecryptingDataSource
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.scrobbling.ScrobblingService
+import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.EqBand
+import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.ReplayGainValues
+import tf.monochrome.android.domain.model.TrackStream
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
@@ -52,6 +59,7 @@ class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var streamResolver: StreamResolver
+    @Inject lateinit var playbackCoordinator: PlaybackCoordinator
     @Inject lateinit var replayGainProcessor: ReplayGainProcessor
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var libraryRepository: LibraryRepository
@@ -68,9 +76,12 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
     @Inject lateinit var recommendationRepository: tf.monochrome.android.data.recommendations.RecommendationRepository
     @Inject lateinit var audioFeatureAnalysisCoordinator: tf.monochrome.android.data.analysis.AudioFeatureAnalysisCoordinator
+    @Inject lateinit var aesGcmDecryptor: AesGcmDecryptor
+    @Inject lateinit var collectionKeySealer: AesGcmKeySealer
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
+    private lateinit var dynamicLoadControl: DynamicLoadControl
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var currentReplayGain: ReplayGainValues? = null
     private var currentUnifiedTrack: UnifiedTrack? = null
@@ -98,24 +109,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        // Tuned for hi-fi streaming: buffer 30 s minimum and 120 s cap so a
-        // brief cell-signal dip mid-track doesn't rebuffer, and the 48 kHz
-        // Opus / FLAC / ALAC tail has room without starving the audio
-        // thread. Playback starts after 2.5 s of buffered audio (down from
-        // the 5 s default) so tapping play feels immediate on a warm cache;
-        // rebuffer after an underrun waits for 5 s so we don't churn. See
-        // androidx.media3.exoplayer.DefaultLoadControl defaults — this
-        // widens the ceiling by 2-3× to absorb hi-bitrate streams.
-        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                /* minBufferMs */ 30_000,
-                /* maxBufferMs */ 120_000,
-                /* bufferForPlaybackMs */ 2_500,
-                /* bufferForPlaybackAfterRebufferMs */ 5_000,
-            )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .setTargetBufferBytes(C.LENGTH_UNSET)
-            .build()
+        dynamicLoadControl = DynamicLoadControl()
 
         player = ExoPlayer.Builder(this, buildRenderersFactory())
             .setAudioAttributes(
@@ -127,7 +121,7 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
-            .setLoadControl(loadControl)
+            .setLoadControl(dynamicLoadControl)
             .build()
             .apply {
                 // Spins up the next media item's decoder + fills 10 s of its
@@ -219,6 +213,12 @@ class PlaybackService : MediaSessionService() {
             .setSessionActivity(createSessionActivity())
             .setCallback(PlaybackResumptionCallback())
             .build()
+
+        serviceScope.launch {
+            playbackCoordinator.commands.collect { command ->
+                handlePlaybackCommand(command)
+            }
+        }
 
         // Seamlessly apply playback speed when settings change
         serviceScope.launch {
@@ -389,6 +389,31 @@ class PlaybackService : MediaSessionService() {
         return mediaSession
     }
 
+    private fun handlePlaybackCommand(command: PlaybackCommand) {
+        when (command) {
+            is PlaybackCommand.PlayCurrentQueue -> playQueue()
+            is PlaybackCommand.PlayResolvedTrack -> {
+                command.trackId.toLongOrNull()?.let { id ->
+                    val index = queueManager.currentQueue.indexOfFirst { it.id == id }
+                    if (index >= 0) queueManager.skipToIndex(index)
+                }
+                playQueue()
+            }
+            is PlaybackCommand.PlayMediaItem -> {
+                setDynamicLoadControlMode(command.mediaItem)
+                player.setMediaItem(command.mediaItem, command.startPositionMs)
+                player.prepare()
+                player.play()
+            }
+            PlaybackCommand.TogglePlayPause -> togglePlayPause()
+            PlaybackCommand.Pause -> player.pause()
+            PlaybackCommand.Stop -> player.stop()
+            PlaybackCommand.SkipNext -> skipToNext()
+            PlaybackCommand.SkipPrevious -> skipToPrevious()
+            is PlaybackCommand.SeekTo -> seekTo(command.positionMs)
+        }
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
@@ -422,6 +447,7 @@ class PlaybackService : MediaSessionService() {
                     return@launch
                 }
 
+                setDynamicLoadControlMode(mediaItem = mediaItem, trackStream = trackStream)
                 player.setMediaItem(mediaItem)
                 player.prepare()
                 player.play()
@@ -461,7 +487,8 @@ class PlaybackService : MediaSessionService() {
                         onTrackEnded()
                         return@launch
                     }
-                    player.setMediaItem(resolved.mediaItem)
+                    setDynamicLoadControlMode(resolved.mediaItem, unifiedTrack, resolved.trackStream)
+                    setResolvedMediaSource(resolved)
                     player.prepare()
                     player.play()
                     libraryRepository.addToHistory(currentTrack, unifiedTrack)
@@ -480,6 +507,8 @@ class PlaybackService : MediaSessionService() {
                     onTrackEnded()
                     return@launch
                 }
+
+                setDynamicLoadControlMode(mediaItem = mediaItem, trackStream = trackStream)
 
                 val streamUrl = trackStream?.streamUrl
                 if (streamUrl != null && streamUrl.isNotBlank()) {
@@ -520,6 +549,51 @@ class PlaybackService : MediaSessionService() {
                 onTrackEnded()
             }
         }
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun setResolvedMediaSource(resolved: ResolvedMedia) {
+        if (resolved.isEncrypted && !resolved.encryptionKey.isNullOrBlank()) {
+            val dataSourceFactory = DecryptingDataSource.Factory(
+                upstreamFactory = DefaultDataSource.Factory(this),
+                encryptionKey = resolved.encryptionKey,
+                decryptor = aesGcmDecryptor,
+                keySealer = collectionKeySealer,
+            )
+            val source = ProgressiveMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(resolved.mediaItem)
+            player.setMediaSource(source)
+        } else {
+            player.setMediaItem(resolved.mediaItem)
+        }
+    }
+
+    private fun setDynamicLoadControlMode(
+        mediaItem: MediaItem? = null,
+        unifiedTrack: UnifiedTrack? = null,
+        trackStream: TrackStream? = null,
+    ) {
+        val metadataHiRes = mediaItem?.mediaMetadata?.extras
+            ?.getBoolean(MEDIA_METADATA_IS_HI_RES, false) == true
+        val unifiedHiRes = unifiedTrack?.isHiResPlayback() == true
+        val streamHiRes = trackStream?.track?.audioQuality
+            ?.contains("HI_RES", ignoreCase = true) == true
+        dynamicLoadControl.setHiResMode(metadataHiRes || unifiedHiRes || streamHiRes)
+    }
+
+    private fun UnifiedTrack.isHiResPlayback(): Boolean {
+        val tagHiRes = qualityTags.orEmpty().any {
+            it.equals("HI_RES", ignoreCase = true) || it.equals("HI_RES_LOSSLESS", ignoreCase = true)
+        }
+        val sourceHiRes = when (val playbackSource = source) {
+            is PlaybackSource.CollectionDirect -> playbackSource.preferredQuality == AudioQuality.HI_RES
+            is PlaybackSource.HiFiApi -> playbackSource.preferredQuality == AudioQuality.HI_RES
+            is PlaybackSource.QobuzCached -> playbackSource.preferredQuality == AudioQuality.HI_RES
+            is PlaybackSource.LocalFile -> playbackSource.bitDepth?.let { it >= 24 } == true ||
+                playbackSource.sampleRate >= 88_200
+        }
+        return bitDepth?.let { it >= 24 } == true || sampleRate?.let { it >= 88_200 } == true ||
+            tagHiRes || sourceHiRes
     }
 
     fun skipToNext() {

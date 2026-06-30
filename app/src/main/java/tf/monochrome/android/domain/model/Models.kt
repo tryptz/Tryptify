@@ -2,6 +2,7 @@ package tf.monochrome.android.domain.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import tf.monochrome.android.util.DeterministicIdGenerator
 
 @Serializable
 data class Track(
@@ -404,7 +405,7 @@ data class UnifiedTrack(
         val tidalId = when (val s = source) {
             is PlaybackSource.HiFiApi -> s.tidalId
             is PlaybackSource.QobuzCached -> s.qobuzId
-            else -> id.hashCode().toLong()
+            else -> DeterministicIdGenerator.positiveLongFromStableText(id)
         }
         // Fall back to the audio file path for local sources when the scan
         // didn't manage to cache an artwork JPG. AudioFileCoverFetcher
@@ -418,13 +419,16 @@ data class UnifiedTrack(
             id = tidalId,
             title = title,
             duration = durationSeconds,
-            artist = Artist(id = artistName.hashCode().toLong(), name = artistName),
+            artist = Artist(
+                id = DeterministicIdGenerator.positiveLongFromStableText(artistName),
+                name = artistName,
+            ),
             // Build an Album whenever we have a title OR a cover/fallback.
             // Sideloaded downloads have null albumTitle but a content:// cover
             // URI; without this guard the player drops the artwork entirely.
             album = if (albumTitle != null || coverFallback != null) {
                 Album(
-                    id = albumId?.hashCode()?.toLong() ?: tidalId,
+                    id = albumId?.let { DeterministicIdGenerator.positiveLongFromStableText(it) } ?: tidalId,
                     title = albumTitle.orEmpty(),
                     cover = coverFallback
                 )

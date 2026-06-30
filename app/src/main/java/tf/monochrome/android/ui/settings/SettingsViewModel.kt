@@ -30,6 +30,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
+import tf.monochrome.android.radio.planner.RadioPlannerWeights
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import java.io.File
 import java.util.Locale
@@ -126,6 +127,9 @@ class SettingsViewModel @Inject constructor(
     val llmPlaylistRadioRecommendationsEnabled: StateFlow<Boolean> =
         preferences.llmPlaylistRadioRecommendationsEnabled
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val radioPlannerWeights: StateFlow<RadioPlannerWeights> =
+        preferences.radioPlannerWeights
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RadioPlannerWeights())
     val spotifyAuthState: StateFlow<tf.monochrome.android.spotify.auth.SpotifyAuthState> =
         spotifyAuthManager.authState
 
@@ -344,6 +348,12 @@ class SettingsViewModel @Inject constructor(
     }
     fun setLlmPlaylistRadioRecommendationsEnabled(enabled: Boolean) {
         viewModelScope.launch { preferences.setLlmPlaylistRadioRecommendationsEnabled(enabled) }
+    }
+    fun setRadioPlannerWeights(weights: RadioPlannerWeights) {
+        viewModelScope.launch { preferences.setRadioPlannerWeights(weights) }
+    }
+    fun resetRadioPlannerWeights() {
+        viewModelScope.launch { preferences.resetRadioPlannerWeights() }
     }
     fun startSpotifyAuth() = spotifyAuthManager.launchAuthActivity()
     fun disconnectSpotify() = spotifyAuthManager.disconnect()

@@ -3,16 +3,13 @@ package tf.monochrome.android.player
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.domain.model.Track
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class QueueManager @Inject constructor(
-    private val preferences: PreferencesManager
-) {
+class QueueManager @Inject constructor() {
     private val _queue = MutableStateFlow<List<Track>>(emptyList())
     val queue: StateFlow<List<Track>> = _queue.asStateFlow()
 
@@ -61,21 +58,98 @@ class QueueManager @Inject constructor(
         val insertIndex = (_currentIndex.value + 1).coerceAtMost(currentList.size)
         currentList.add(insertIndex, track)
         _queue.value = currentList
+        originalQueue = _queue.value
     }
 
     fun removeFromQueue(index: Int) {
+        removeAt(index)
+    }
+
+    fun clearUpcoming() {
+        val current = _currentIndex.value
+        if (current < 0) {
+            _queue.value = emptyList()
+            originalQueue = emptyList()
+            _currentIndex.value = -1
+            _currentTrack.value = null
+            return
+        }
+
+        val currentTrack = _queue.value.getOrNull(current) ?: return
+        _queue.value = listOf(currentTrack)
+        originalQueue = _queue.value
+        _currentIndex.value = 0
+        updateCurrentTrack()
+    }
+
+    fun removeAt(index: Int) {
         if (index < 0 || index >= _queue.value.size) return
         val currentList = _queue.value.toMutableList()
+        val current = _currentIndex.value
         currentList.removeAt(index)
         _queue.value = currentList
+        originalQueue = currentList
 
-        if (index < _currentIndex.value) {
-            _currentIndex.value = _currentIndex.value - 1
-        } else if (index == _currentIndex.value) {
-            // Current track removed, stay at same index (next track slides in)
-            _currentIndex.value = _currentIndex.value.coerceAtMost(currentList.size - 1)
+        _currentIndex.value = when {
+            currentList.isEmpty() -> -1
+            index < current -> current - 1
+            index == current -> current.coerceAtMost(currentList.lastIndex)
+            else -> current
         }
         updateCurrentTrack()
+    }
+
+    fun removeMany(indices: Set<Int>) {
+        if (indices.isEmpty()) return
+
+        val queue = _queue.value
+        val validIndices = indices.filterTo(mutableSetOf()) { it in queue.indices }
+        if (validIndices.isEmpty()) return
+
+        val current = _currentIndex.value
+        val currentTrack = queue.getOrNull(current)
+        val newQueue = queue.filterIndexed { index, _ -> index !in validIndices }
+
+        val newCurrent = when {
+            newQueue.isEmpty() -> -1
+            currentTrack == null -> -1
+            current in validIndices -> current.coerceAtMost(newQueue.lastIndex)
+            else -> newQueue.indexOfFirst { it.id == currentTrack.id }
+                .takeIf { it >= 0 }
+                ?: current.coerceAtMost(newQueue.lastIndex)
+        }
+
+        _queue.value = newQueue
+        originalQueue = newQueue
+        _currentIndex.value = newCurrent
+        updateCurrentTrack()
+    }
+
+    fun move(fromIndex: Int, toIndex: Int) {
+        val currentQueue = _queue.value
+        if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices) return
+        if (fromIndex == toIndex) return
+
+        val queue = currentQueue.toMutableList()
+        val currentTrack = queue.getOrNull(_currentIndex.value)
+        val item = queue.removeAt(fromIndex)
+        queue.add(toIndex, item)
+
+        _queue.value = queue
+        originalQueue = queue
+        _currentIndex.value = currentTrack
+            ?.let { track -> queue.indexOfFirst { it.id == track.id } }
+            ?.takeIf { it >= 0 }
+            ?: _currentIndex.value.coerceIn(0, queue.lastIndex)
+        updateCurrentTrack()
+    }
+
+    fun moveToPlayNext(index: Int) {
+        val queue = _queue.value
+        val current = _currentIndex.value
+        if (index !in queue.indices || current !in queue.indices || index == current) return
+        val target = (current + 1).coerceAtMost(queue.lastIndex)
+        move(index, target)
     }
 
     fun skipToIndex(index: Int) {

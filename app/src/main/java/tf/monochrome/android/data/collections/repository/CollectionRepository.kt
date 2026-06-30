@@ -12,6 +12,7 @@ import tf.monochrome.android.data.collections.db.CollectionDirectLinkEntity
 import tf.monochrome.android.data.collections.db.CollectionEntity
 import tf.monochrome.android.data.collections.db.CollectionTrackArtistCrossRef
 import tf.monochrome.android.data.collections.db.CollectionTrackEntity
+import tf.monochrome.android.data.collections.crypto.AesGcmKeySealer
 import tf.monochrome.android.data.collections.model.CollectionManifest
 import tf.monochrome.android.data.collections.parser.ManifestParser
 import tf.monochrome.android.domain.model.AudioCodec
@@ -23,6 +24,7 @@ import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import java.security.MessageDigest
+import java.util.Base64
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,7 +33,8 @@ import javax.inject.Singleton
 class CollectionRepository @Inject constructor(
     private val collectionDao: CollectionDao,
     private val manifestParser: ManifestParser,
-    private val json: Json
+    private val json: Json,
+    private val keySealer: AesGcmKeySealer,
 ) {
 
     // ── Import ──────────────────────────────────────────────────────
@@ -41,6 +44,7 @@ class CollectionRepository @Inject constructor(
             val manifest = manifestParser.parse(manifestJson).getOrThrow()
             val collectionId = UUID.randomUUID().toString()
             val manifestHash = sha256(manifestJson)
+            val sealedCollectionKey = keySealer.seal(decodeCollectionKey(manifest.encryption.key))
 
             // Check if already imported
             val existing = collectionDao.getAllCollections()
@@ -55,7 +59,7 @@ class CollectionRepository @Inject constructor(
                     collectionLink = manifest.collectionLink,
                     projectLink = manifest.projectLink,
                     encryptionType = manifest.encryption.type,
-                    encryptionKey = manifest.encryption.key,
+                    encryptionKey = sealedCollectionKey,
                     manifestHash = manifestHash
                 )
             )
@@ -283,8 +287,11 @@ class CollectionRepository @Inject constructor(
         )
     }
 
+    private fun decodeCollectionKey(encodedKey: String): ByteArray =
+        Base64.getMimeDecoder().decode(encodedKey)
+
     private fun sha256(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(input.toByteArray()).joinToString("") { "%02x".format(it) }
+        return digest.digest(input.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 }

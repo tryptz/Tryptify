@@ -35,9 +35,10 @@ import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
+import tf.monochrome.android.player.PlaybackCoordinator
 import tf.monochrome.android.player.PlaybackService
 import tf.monochrome.android.player.QueueManager
-import tf.monochrome.android.player.StreamResolver
+import tf.monochrome.android.radio.RadioQueueManager
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.usecase.toUnifiedTrackAuto
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
@@ -47,11 +48,12 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val queueManager: QueueManager,
-    private val streamResolver: StreamResolver,
+    private val playbackCoordinator: PlaybackCoordinator,
     private val repository: MusicRepository,
     private val libraryRepository: LibraryRepository,
     private val downloadManager: DownloadManager,
     private val preferences: PreferencesManager,
+    private val radioQueueManager: RadioQueueManager,
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
@@ -452,35 +454,48 @@ class PlayerViewModel @Inject constructor(
         queueManager.addNextInQueue(track)
     }
 
+    fun resetQueue() {
+        radioQueueManager.stopRadioIfActive()
+        queueManager.clearUpcoming()
+    }
+
+    fun removeFromQueue(index: Int) {
+        val removedCurrent = index == queueManager.currentQueueIndex
+        queueManager.removeAt(index)
+        stopRadioIfUpcomingQueueIsEmpty()
+        if (removedCurrent) resolveAndPlay()
+    }
+
+    fun removeSelectedFromQueue(indices: Set<Int>) {
+        if (indices.isEmpty()) return
+        val removedCurrent = queueManager.currentQueueIndex in indices
+        queueManager.removeMany(indices)
+        stopRadioIfUpcomingQueueIsEmpty()
+        if (removedCurrent) resolveAndPlay()
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        queueManager.move(fromIndex, toIndex)
+    }
+
+    fun playQueueItemNext(index: Int) {
+        queueManager.moveToPlayNext(index)
+    }
+
     fun togglePlayPause() {
-        mediaController?.let { mc ->
-            if (mc.isPlaying) mc.pause() else mc.play()
-        }
+        viewModelScope.launch { playbackCoordinator.togglePlayPause() }
     }
 
     fun skipToNext() {
-        val next = queueManager.next()
-        if (next != null) {
-            resolveAndPlay()
-        } else {
-            mediaController?.stop()
-        }
+        viewModelScope.launch { playbackCoordinator.skipNext() }
     }
 
     fun skipToPrevious() {
-        val position = mediaController?.currentPosition ?: 0
-        if (position > 3000) {
-            mediaController?.seekTo(0)
-            return
-        }
-        val prev = queueManager.previous()
-        if (prev != null) {
-            resolveAndPlay()
-        }
+        viewModelScope.launch { playbackCoordinator.skipPrevious() }
     }
 
     fun seekTo(positionMs: Long) {
-        mediaController?.seekTo(positionMs)
+        viewModelScope.launch { playbackCoordinator.seekTo(positionMs) }
         _positionMs.value = positionMs
     }
 
@@ -593,65 +608,17 @@ class PlayerViewModel @Inject constructor(
 
     private fun resolveAndPlay() {
         val track = queueManager.currentTrack.value ?: return
-        viewModelScope.launch {
-            try {
-                // Resolution priority:
-                //   1. unifiedTrackRegistry — local files / collections / Qobuz
-                //      tracks already promoted to UnifiedTrack at queue time.
-                //   2. qobuzIdRegistry — synthesize a QobuzCached UnifiedTrack
-                //      for tracks whose ids came in via getQobuzAlbum /
-                //      getQobuzArtist / searchQobuz but were enqueued as
-                //      legacy Track (e.g. an album-detail screen tap). Without
-                //      this step the legacy path below would call TIDAL
-                //      /track/?id=<qobuzId> which either 404s or returns the
-                //      wrong track because the numeric id doesn't match.
-                //   3. Legacy TIDAL path.
-                val unifiedTrack = unifiedTrackRegistry[track.id]
-                    ?: synthesizeQobuzUnifiedTrack(track)
-                if (unifiedTrack != null) {
-                    // Make sure the synthesized UnifiedTrack lands in the
-                    // registry so PlaybackService.onMediaItemTransition can
-                    // tag the history row with the right source. Otherwise
-                    // Recently Played would re-resolve via TIDAL after process
-                    // death.
-                    unifiedTrackRegistry.put(track.id, unifiedTrack)
-                    val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
-                    if (!resolved.isPlayable) {
-                        skipToNext()
-                        return@launch
-                    }
-                    mediaController?.let { mc ->
-                        mc.setMediaItem(resolved.mediaItem)
-                        mc.prepare()
-                        mc.play()
-                    }
-                    libraryRepository.addToHistory(track, unifiedTrack)
-                    launch { audioFeatureAnalysisCoordinator.analyzeIfNeeded(unifiedTrack, resolved) }
-                } else {
-                    // Legacy API path
-                    val (mediaItem, trackStream) = streamResolver.resolveMediaItem(track)
-                    if (mediaItem == null) {
-                        skipToNext()
-                        return@launch
-                    }
-                    mediaController?.let { mc ->
-                        mc.setMediaItem(mediaItem)
-                        mc.prepare()
-                        mc.play()
-                    }
-                    libraryRepository.addToHistory(track)
-                    launch {
-                        audioFeatureAnalysisCoordinator.analyzeIfNeeded(
-                            track = track,
-                            mediaItem = mediaItem,
-                            isDash = trackStream?.isDash == true,
-                        )
-                    }
-                }
-            } catch (_: Exception) {
-                // On error skip to next
-                skipToNext()
-            }
+        val unifiedTrack = unifiedTrackRegistry[track.id] ?: synthesizeQobuzUnifiedTrack(track)
+        if (unifiedTrack != null) {
+            unifiedTrackRegistry.put(track.id, unifiedTrack)
+        }
+        viewModelScope.launch { playbackCoordinator.requestPlayCurrentQueue() }
+    }
+
+    private fun stopRadioIfUpcomingQueueIsEmpty() {
+        val index = queueManager.currentQueueIndex
+        if (index >= 0 && queueManager.currentQueue.size - index - 1 <= 0) {
+            radioQueueManager.stopRadioIfActive()
         }
     }
 

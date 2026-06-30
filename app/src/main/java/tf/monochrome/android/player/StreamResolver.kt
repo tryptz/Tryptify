@@ -28,6 +28,8 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+const val MEDIA_METADATA_IS_HI_RES = "tf.monochrome.android.media.IS_HI_RES"
+
 data class ResolvedMedia(
     val mediaItem: MediaItem,
     val trackStream: TrackStream? = null,
@@ -49,10 +51,21 @@ class StreamResolver @Inject constructor(
     private val qobuzIdRegistry: QobuzIdRegistry,
 ) {
     private fun MediaMetadata.Builder.applyRadioExtras(track: UnifiedTrack): MediaMetadata.Builder {
-        if (track.qualityTags.orEmpty().contains(RADIO_QUALITY_TAG)) {
-            setExtras(Bundle().apply { putString(RADIO_SOURCE_EXTRA_KEY, RADIO_SOURCE_SPOTIFY) })
-        }
-        return this
+        return setExtras(
+            Bundle().apply {
+                putBoolean(MEDIA_METADATA_IS_HI_RES, track.isHiResTrack())
+                if (track.qualityTags.orEmpty().contains(RADIO_QUALITY_TAG)) {
+                    putString(RADIO_SOURCE_EXTRA_KEY, RADIO_SOURCE_SPOTIFY)
+                }
+            }
+        )
+    }
+
+    private fun UnifiedTrack.isHiResTrack(): Boolean {
+        val tags = qualityTags.orEmpty()
+        return bitDepth?.let { it >= 24 } == true ||
+            sampleRate?.let { it >= 88_200 } == true ||
+            tags.any { it.equals("HI_RES", ignoreCase = true) || it.equals("HI_RES_LOSSLESS", ignoreCase = true) }
     }
 
     private fun normalizeArtworkUri(raw: String?): Uri? {
