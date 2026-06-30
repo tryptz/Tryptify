@@ -109,6 +109,34 @@ class QueueManagerTest {
         assertNull(manager.currentTrack.value)
     }
 
+    @Test
+    fun addToQueueAndSelectFirstStartsIdleQueueAtFirstAppendedTrack() {
+        val manager = QueueManager()
+        val tracks = tracks(3)
+
+        val selected = manager.addToQueueAndSelectFirst(tracks)
+
+        assertEquals(true, selected)
+        assertEquals(tracks, manager.currentQueue)
+        assertEquals(0, manager.currentQueueIndex)
+        assertEquals(tracks[0], manager.currentTrack.value)
+    }
+
+    @Test
+    fun addToQueueAndSelectFirstPreservesExistingQueueAndSelectsFirstAppendedTrack() {
+        val manager = QueueManager()
+        val existing = tracks(2)
+        val appended = listOf(track(10), track(11))
+        manager.setQueue(existing, startIndex = 0)
+
+        val selected = manager.addToQueueAndSelectFirst(appended)
+
+        assertEquals(true, selected)
+        assertEquals(existing + appended, manager.currentQueue)
+        assertEquals(2, manager.currentQueueIndex)
+        assertEquals(appended[0], manager.currentTrack.value)
+    }
+
     private fun tracks(count: Int): List<Track> = (0 until count).map { track(it.toLong()) }
 
     private fun track(id: Long): Track = Track(

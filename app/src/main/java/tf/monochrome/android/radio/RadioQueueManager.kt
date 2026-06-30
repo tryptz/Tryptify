@@ -16,6 +16,7 @@ import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.player.PlaybackCoordinator
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.spotify.api.model.SpotifyTrack
 import tf.monochrome.android.spotify.repository.SpotifyRadioFailure
@@ -55,6 +56,7 @@ class RadioQueueManager(
     private val seedBuilder: RadioSeedBuilder,
     private val trackResolver: TrackResolver,
     private val queueManager: QueueManager,
+    private val playbackCoordinator: PlaybackCoordinator,
     private val libraryRepository: LibraryRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -97,21 +99,14 @@ class RadioQueueManager(
     fun startRadio(seed: RadioSeed) {
         scope.launch {
             mutex.withLock {
-                if (!spotifyRepository.isAuthenticated()) {
-                    spotifyRepository.launchAuth()
-                    _radioState.value = RadioState.Error("Spotify authorization is required")
-                    _events.tryEmit(RadioEvent.Snackbar(SpotifyRadioFailure.NotConnected.toSnackbar()))
-                    return@withLock
-                }
-
                 _events.tryEmit(RadioEvent.Snackbar("Radio started — finding similar tracks…"))
                 _radioState.value = RadioState.Loading
 
-                if (!spotifyRepository.hasUsableToken()) {
+                if (spotifyRepository.isAuthenticated() && !spotifyRepository.hasUsableToken()) {
                     spotifyRepository.launchAuth()
-                    _radioState.value = RadioState.Error("Spotify authorization is required")
-                    _events.tryEmit(RadioEvent.Snackbar(SpotifyRadioFailure.ReauthRequired.toSnackbar()))
-                    return@withLock
+                    _events.tryEmit(RadioEvent.Snackbar("Spotify needs reconnecting; using local/Qobuz radio where possible."))
+                } else if (!spotifyRepository.isAuthenticated()) {
+                    _events.tryEmit(RadioEvent.Snackbar("Spotify is not connected; using local/Qobuz radio where possible."))
                 }
                 resolvedCount = 0
                 skippedCount = 0
@@ -130,8 +125,15 @@ class RadioQueueManager(
                     seenRadioKeys += builtSeed.seedKeys
                     candidateBuffer.clear()
                     candidateBuffer.addAll(builtSeed.candidatePool)
-                    val added = appendRadioBatch(builtSeed, includeLocalCandidates = true)
-                    if (added > 0 && shouldRefillTail()) {
+                    val result = appendRadioBatch(
+                        seed = builtSeed,
+                        includeLocalCandidates = true,
+                        selectFirstAppended = seed shouldStartAtFirstRadioTrack queueManager,
+                    )
+                    if (result.selectedFirstAppended) {
+                        playbackCoordinator.requestPlayCurrentQueue()
+                    }
+                    if (result.appended > 0 && shouldRefillTail()) {
                         refillTail()
                     }
                 } catch (e: Exception) {
@@ -176,7 +178,11 @@ class RadioQueueManager(
                 var added = 0
                 try {
                     if (shouldRefillTail()) {
-                        added = appendRadioBatch(seed, includeLocalCandidates = false)
+                        added = appendRadioBatch(
+                            seed = seed,
+                            includeLocalCandidates = false,
+                            selectFirstAppended = false,
+                        ).appended
                     }
                 } finally {
                     refillRunning = false
@@ -191,7 +197,8 @@ class RadioQueueManager(
     private suspend fun appendRadioBatch(
         seed: BuiltRadioSeed,
         includeLocalCandidates: Boolean,
-    ): Int {
+        selectFirstAppended: Boolean,
+    ): RadioAppendResult {
         if (queueManager.shuffleEnabled.value) queueManager.toggleShuffle()
         queueManager.setRepeatMode(RepeatMode.OFF)
         refreshPlayedRadioKeys()
@@ -245,8 +252,11 @@ class RadioQueueManager(
 
         appendable.forEach { seenRadioKeys += keyOf(it.unifiedTrack) }
         val toAppend = appendable.map { it.legacyTrack }
-        if (toAppend.isNotEmpty()) {
-            queueManager.addToQueue(toAppend)
+        val selectedFirstAppended = if (selectFirstAppended) {
+            queueManager.addToQueueAndSelectFirst(toAppend)
+        } else {
+            if (toAppend.isNotEmpty()) queueManager.addToQueue(toAppend)
+            false
         }
 
         resolvedCount += toAppend.size
@@ -255,7 +265,7 @@ class RadioQueueManager(
             Log.w(TAG, "No similar tracks found for radio seed")
             _radioState.value = RadioState.Error("No similar tracks found")
             _events.tryEmit(RadioEvent.Snackbar("Couldn't find similar tracks for radio."))
-            return 0
+            return RadioAppendResult.Empty
         }
 
         val failedRatio = if (requested > 0) skippedTotal.toDouble() / requested.toDouble() else 0.0
@@ -275,7 +285,7 @@ class RadioQueueManager(
             _events.tryEmit(RadioEvent.Snackbar(SpotifyRadioFailure.NoResolvableTracks.toSnackbar()))
             RadioState.Error("No playable radio tracks found")
         }
-        return appended
+        return RadioAppendResult(appended, selectedFirstAppended)
     }
 
     private fun scoreLocalCandidates(seed: BuiltRadioSeed): List<ScoredRadioCandidate> =
@@ -412,6 +422,22 @@ class RadioQueueManager(
         SpotifyRadioFailure.RateLimited -> "Spotify is rate limiting radio. Trying again shortly."
         SpotifyRadioFailure.EndpointUnavailable -> "Spotify endpoint unavailable; using local/Qobuz only."
         SpotifyRadioFailure.NoResolvableTracks -> "No matching local or Qobuz tracks found."
+    }
+
+    private infix fun RadioSeed.shouldStartAtFirstRadioTrack(queueManager: QueueManager): Boolean =
+        when (this) {
+            RadioSeed.FromCurrentTrack -> queueManager.currentQueueIndex !in queueManager.currentQueue.indices
+            RadioSeed.FromListeningSession,
+            is RadioSeed.FromTrack -> true
+        }
+
+    private data class RadioAppendResult(
+        val appended: Int,
+        val selectedFirstAppended: Boolean,
+    ) {
+        companion object {
+            val Empty = RadioAppendResult(appended = 0, selectedFirstAppended = false)
+        }
     }
 
     private companion object {

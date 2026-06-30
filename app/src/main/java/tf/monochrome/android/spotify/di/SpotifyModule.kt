@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
 import tf.monochrome.android.data.repository.LibraryRepository
+import tf.monochrome.android.player.PlaybackCoordinator
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.radio.RadioQueueManager
 import tf.monochrome.android.radio.RadioSeedBuilder
@@ -40,12 +41,14 @@ object SpotifyModule {
         seedBuilder: RadioSeedBuilder,
         trackResolver: TrackResolver,
         queueManager: QueueManager,
+        playbackCoordinator: PlaybackCoordinator,
         libraryRepository: LibraryRepository,
     ): RadioQueueManager = RadioQueueManager(
         spotifyRepository = spotifyRepo,
         seedBuilder = seedBuilder,
         trackResolver = trackResolver,
         queueManager = queueManager,
+        playbackCoordinator = playbackCoordinator,
         libraryRepository = libraryRepository,
     )
 }

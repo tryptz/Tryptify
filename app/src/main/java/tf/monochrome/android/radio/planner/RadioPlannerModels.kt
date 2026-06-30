@@ -1,6 +1,7 @@
 package tf.monochrome.android.radio.planner
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class RadioPlannerRequest(
@@ -28,6 +29,11 @@ data class PlannerSpotifyContext(
     val seedSpotifyIds: List<String> = emptyList(),
     val recentSpotifyIds: List<String> = emptyList(),
     val topSpotifyIds: List<String> = emptyList(),
+    val currentTrack: PlannerTrackMetadata? = null,
+    val searchTracks: List<PlannerTrackMetadata> = emptyList(),
+    val recentTracks: List<PlannerTrackMetadata> = emptyList(),
+    val topTracks: List<PlannerTrackMetadata> = emptyList(),
+    val savedTracks: List<PlannerTrackMetadata> = emptyList(),
 )
 
 @Serializable
@@ -63,6 +69,54 @@ data class PlannerTrackMetadata(
     val albumTitle: String? = null,
     val isrc: String? = null,
     val source: String? = null,
+    val spotifyId: String? = null,
+)
+
+@Serializable
+data class RadioSongListRequest(
+    val query: String,
+    val targetTrackCount: Int = 12,
+    val localMetadata: PlannerLocalMetadata = PlannerLocalMetadata(),
+    val spotifyContext: PlannerSpotifyContext = PlannerSpotifyContext(),
+    val qobuzContext: PlannerQobuzContext = PlannerQobuzContext(),
+    val internetContext: Map<String, String> = emptyMap(),
+    val settings: PlannerSettings = PlannerSettings(),
+    val weights: RadioPlannerWeights = RadioPlannerWeights(),
+    val sliders: Map<String, Float> = emptyMap(),
+    val preset: Map<String, String> = emptyMap(),
+    val sessionHistory: PlannerSessionHistory = PlannerSessionHistory(),
+    val candidateSummary: PlannerCandidateSummary = PlannerCandidateSummary(),
+    val metabrainz: PlannerMetaBrainzContext? = null,
+)
+
+@Serializable
+data class RadioSongListResponse(
+    val query: String = "",
+    val message: String = "",
+    val songs: List<PlannerSong> = emptyList(),
+    val safety: SongListSafety = SongListSafety(),
+)
+
+@Serializable
+data class PlannerSong(
+    val artist: String = "",
+    val title: String = "",
+    val album: String? = null,
+    val reason: String = "",
+    val confidence: Float = 0f,
+) {
+    val displayTitle: String
+        get() = listOf(artist, title)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(" - ")
+}
+
+@Serializable
+data class SongListSafety(
+    val modelBacked: Boolean = false,
+    val confidence: Float = 0f,
+    val fallbackReason: String? = null,
 )
 
 @Serializable
@@ -86,6 +140,7 @@ data class PlannerMetaBrainzContext(
 @Serializable
 data class RadioPlan(
     val seedInterpretation: String = "",
+    val candidateHints: List<PlannerCandidateHint> = emptyList(),
     val queryMix: QueryMix = QueryMix(),
     val playlistShape: PlaylistShape = PlaylistShape(),
     val sourceWeights: SourceWeights = SourceWeights(),
@@ -94,8 +149,21 @@ data class RadioPlan(
     val safety: PlanSafety = PlanSafety(),
 ) {
     val isUseful: Boolean
-        get() = queryMix.allQueries.isNotEmpty() || scoringHints.hasBoosts
+        get() = candidateHints.isNotEmpty() || queryMix.allQueries.isNotEmpty() || scoringHints.hasBoosts
 }
+
+@Serializable
+data class PlannerCandidateHint(
+    val title: String = "",
+    val artist: String = "",
+    val album: String? = null,
+    val isrcs: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    @SerialName("release_year")
+    val releaseYear: Int? = null,
+    val score: Float = 0f,
+    val reasons: List<String> = emptyList(),
+)
 
 @Serializable
 data class QueryMix(

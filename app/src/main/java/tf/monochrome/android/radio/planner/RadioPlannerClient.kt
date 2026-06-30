@@ -36,6 +36,24 @@ class RadioPlannerClient @Inject constructor(
         }
     }
 
+    suspend fun songList(request: RadioSongListRequest): RadioSongListResponse? {
+        val baseUrl = BuildConfig.RADIO_PLANNER_URL.trim().trimEnd('/')
+        val apiKey = BuildConfig.RADIO_PLANNER_API_KEY.trim()
+        if (baseUrl.isBlank() || apiKey.isBlank()) return null
+
+        return withTimeoutOrNull(REQUEST_TIMEOUT_MS) {
+            runCatching {
+                httpClient.post("$baseUrl/api/radio/song-list") {
+                    header(HttpHeaders.Authorization, "Bearer $apiKey")
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.body<RadioSongListResponse>()
+            }.onFailure { error ->
+                Log.w(TAG, "Radio song-list tester unavailable: ${error.safeMessage()}")
+            }.getOrNull()?.takeIf { it.songs.isNotEmpty() || it.message.isNotBlank() }
+        }
+    }
+
     private fun Throwable.safeMessage(): String =
         this::class.java.simpleName + (message?.take(180)?.let { ": $it" } ?: "")
 

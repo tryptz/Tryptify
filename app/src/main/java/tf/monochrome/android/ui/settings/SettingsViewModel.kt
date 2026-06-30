@@ -23,18 +23,52 @@ import tf.monochrome.android.data.api.InstanceType
 import tf.monochrome.android.data.auth.AuthRepository
 import tf.monochrome.android.data.import_.PlaylistImporter
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.sync.BackupManager
 import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
+import tf.monochrome.android.domain.model.SourceType
+import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
+import tf.monochrome.android.player.QueueManager
+import tf.monochrome.android.player.UnifiedTrackRegistry
+import tf.monochrome.android.radio.planner.PlannerCandidateSummary
+import tf.monochrome.android.radio.planner.PlannerLocalMetadata
+import tf.monochrome.android.radio.planner.PlannerMetaBrainzContext
+import tf.monochrome.android.radio.planner.PlannerQobuzContext
+import tf.monochrome.android.radio.planner.PlannerSettings
+import tf.monochrome.android.radio.planner.PlannerSessionHistory
+import tf.monochrome.android.radio.planner.PlannerSong
+import tf.monochrome.android.radio.planner.PlannerSpotifyContext
+import tf.monochrome.android.radio.planner.PlannerTrackIdentity
+import tf.monochrome.android.radio.planner.PlannerTrackMetadata
+import tf.monochrome.android.radio.planner.RadioPlannerClient
 import tf.monochrome.android.radio.planner.RadioPlannerWeights
+import tf.monochrome.android.radio.planner.RadioSongListRequest
+import tf.monochrome.android.spotify.api.model.SpotifyTrack
+import tf.monochrome.android.spotify.repository.SpotifyRepository
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import java.io.File
 import java.util.Locale
 import javax.inject.Inject
+
+data class PlannerTesterUiState(
+    val loading: Boolean = false,
+    val submittedPrompt: String = "",
+    val responseTitle: String = "",
+    val responseDetail: String = "",
+    val songs: List<PlannerSong> = emptyList(),
+    val error: String? = null,
+    val requestId: Long = 0L,
+) {
+    val hasResponse: Boolean
+        get() = loading || submittedPrompt.isNotBlank() || responseTitle.isNotBlank() ||
+            songs.isNotEmpty() || error != null
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -46,12 +80,17 @@ class SettingsViewModel @Inject constructor(
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
+    private val libraryRepository: LibraryRepository,
+    private val queueManager: QueueManager,
+    private val unifiedTrackRegistry: UnifiedTrackRegistry,
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
     private val audioFeatureRepository: tf.monochrome.android.data.analysis.AudioFeatureRepository,
     private val audioAnalysisManager: tf.monochrome.android.data.analysis.AudioAnalysisManager,
     private val spotifyAuthManager: tf.monochrome.android.spotify.auth.SpotifyAuthManager,
+    private val spotifyRepository: SpotifyRepository,
+    private val radioPlannerClient: RadioPlannerClient,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -130,6 +169,8 @@ class SettingsViewModel @Inject constructor(
     val radioPlannerWeights: StateFlow<RadioPlannerWeights> =
         preferences.radioPlannerWeights
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RadioPlannerWeights())
+    private val _plannerTesterState = MutableStateFlow(PlannerTesterUiState())
+    val plannerTesterState: StateFlow<PlannerTesterUiState> = _plannerTesterState.asStateFlow()
     val spotifyAuthState: StateFlow<tf.monochrome.android.spotify.auth.SpotifyAuthState> =
         spotifyAuthManager.authState
 
@@ -355,6 +396,243 @@ class SettingsViewModel @Inject constructor(
     fun resetRadioPlannerWeights() {
         viewModelScope.launch { preferences.resetRadioPlannerWeights() }
     }
+    fun testPlannerQuery(prompt: String) {
+        val cleanPrompt = prompt.trim()
+        if (cleanPrompt.isBlank()) return
+        val requestId = System.nanoTime()
+        _plannerTesterState.value = PlannerTesterUiState(
+            loading = true,
+            submittedPrompt = cleanPrompt,
+            responseTitle = "Planner is thinking",
+            responseDetail = "Asking the Railway planner for a direct song list.",
+            requestId = requestId,
+        )
+        viewModelScope.launch {
+            val request = buildSongListRequest(cleanPrompt)
+            val response = radioPlannerClient.songList(request)
+            if (_plannerTesterState.value.requestId != requestId) return@launch
+            _plannerTesterState.value = when {
+                response == null -> PlannerTesterUiState(
+                    submittedPrompt = cleanPrompt,
+                    responseTitle = "Tryptify-Playlist unavailable",
+                    responseDetail = "Check the planner URL/key and Railway service, then try again.",
+                    error = "No song-list response was returned.",
+                    requestId = requestId,
+                )
+                response.songs.isEmpty() -> PlannerTesterUiState(
+                    submittedPrompt = cleanPrompt,
+                    responseTitle = response.message.ifBlank { "No songs returned" },
+                    responseDetail = response.safety.fallbackReason ?: "The LLM endpoint answered without direct song rows.",
+                    error = "No song rows were found in the song-list response.",
+                    requestId = requestId,
+                )
+                else -> PlannerTesterUiState(
+                    submittedPrompt = cleanPrompt,
+                    responseTitle = response.message.ifBlank { "Tryptify-Playlist song list" },
+                    responseDetail = buildString {
+                        append(if (response.safety.modelBacked) "LLM-backed" else "Fallback")
+                        append(" / confidence ")
+                        append(String.format(Locale.US, "%.0f", response.safety.confidence * 100f))
+                        append("%")
+                        response.safety.fallbackReason?.takeIf { it.isNotBlank() }?.let {
+                            append(" / ")
+                            append(it)
+                        }
+                    },
+                    songs = response.songs,
+                    requestId = requestId,
+                )
+            }
+        }
+    }
+
+    private suspend fun buildSongListRequest(prompt: String): RadioSongListRequest {
+        val weights = preferences.radioPlannerWeights.first().clamped()
+        val spotifyContext = buildSpotifyContext(prompt)
+        val queueHistory = queueManager.playHistory.value.takeLast(HISTORY_CONTEXT_LIMIT)
+        val persistentHistory = runCatching {
+            libraryRepository.getHistory().first().takeLast(HISTORY_CONTEXT_LIMIT)
+        }.getOrDefault(emptyList())
+        val sessionHistory = (queueHistory + persistentHistory)
+            .distinctBy { it.id }
+            .takeLast(HISTORY_CONTEXT_LIMIT)
+        val currentTrack = queueManager.currentTrack.value
+        val localSeeds = buildList {
+            add(
+                PlannerTrackMetadata(
+                    title = prompt,
+                    source = "manual_query",
+                ),
+            )
+            currentTrack?.toPlannerMetadata("current_track")?.let(::add)
+        }
+        val qobuzConfigured = preferences.qobuzInstanceUrl.first().isNullOrBlank().not()
+        val spotifyCandidateCount = spotifyContext.searchTracks.size +
+            spotifyContext.recentTracks.size +
+            spotifyContext.topTracks.size +
+            spotifyContext.savedTracks.size
+
+        return RadioSongListRequest(
+            query = prompt,
+            targetTrackCount = PLANNER_TEST_TARGET,
+            localMetadata = PlannerLocalMetadata(seedTracks = localSeeds),
+            spotifyContext = spotifyContext,
+            qobuzContext = PlannerQobuzContext(preferred = qobuzConfigured),
+            internetContext = mapOf(
+                "manualQuery" to prompt,
+                "surface" to "settings_radio_llm_tester",
+            ),
+            settings = PlannerSettings(
+                targetTrackCount = PLANNER_TEST_TARGET,
+                discoveryRatio = (0.35f * weights.discoveryDistance * weights.novelty).coerceIn(0.05f, 1f),
+                familiarityRatio = (0.55f * weights.familiarity).coerceIn(0.05f, 1f),
+                qobuzPreference = (0.75f * weights.qobuz).coerceIn(0f, 1f),
+            ),
+            weights = weights,
+            sliders = weights.toPlannerSliders(),
+            preset = mapOf(
+                "llmPlaylistRadioRecommendationsEnabled" to preferences.llmPlaylistRadioRecommendationsEnabled.first().toString(),
+                "spotifyAuthenticated" to spotifyRepository.isAuthenticated().toString(),
+                "spotifySyncCurrentPlaying" to preferences.spotifySyncCurrentPlaying.first().toString(),
+                "autoplaySimilar" to preferences.autoplaySimilar.first().toString(),
+                "sourceMode" to preferences.sourceMode.first().name,
+            ),
+            sessionHistory = PlannerSessionHistory(
+                tracks = sessionHistory.map { it.toPlannerMetadata("session_history") },
+            ),
+            candidateSummary = PlannerCandidateSummary(
+                localCandidateCount = queueManager.currentQueue.size,
+                spotifyCandidateCount = spotifyCandidateCount,
+                qobuzCandidateCount = if (qobuzConfigured) 1 else 0,
+                targetTrackCount = PLANNER_TEST_TARGET,
+            ),
+            metabrainz = buildPlannerMetaBrainzContext(currentTrack, sessionHistory),
+        )
+    }
+
+    private suspend fun buildSpotifyContext(prompt: String): PlannerSpotifyContext {
+        if (!spotifyRepository.isAuthenticated()) return PlannerSpotifyContext()
+
+        val searchTracks = runCatching {
+            spotifyRepository.searchTracks(prompt, SPOTIFY_CONTEXT_LIMIT)
+        }.getOrDefault(emptyList())
+        val recentTracks = runCatching {
+            spotifyRepository.getRecentlyPlayed()
+        }.getOrDefault(emptyList()).take(SPOTIFY_CONTEXT_LIMIT)
+        val topTracks = runCatching {
+            spotifyRepository.getTopTracks()
+        }.getOrDefault(emptyList()).take(SPOTIFY_CONTEXT_LIMIT)
+        val savedTracks = runCatching {
+            spotifyRepository.getSavedTracks()
+        }.getOrDefault(emptyList()).take(SPOTIFY_CONTEXT_LIMIT)
+        val currentTrack = if (preferences.spotifySyncCurrentPlaying.first()) {
+            runCatching { spotifyRepository.getCurrentlyPlaying() }.getOrNull()
+        } else {
+            null
+        }
+
+        return PlannerSpotifyContext(
+            seedSpotifyIds = searchTracks.mapNotNull { it.stableId.takeIf(String::isNotBlank) }.take(5),
+            recentSpotifyIds = recentTracks.mapNotNull { it.stableId.takeIf(String::isNotBlank) },
+            topSpotifyIds = topTracks.mapNotNull { it.stableId.takeIf(String::isNotBlank) },
+            currentTrack = currentTrack?.toPlannerMetadata("spotify_current"),
+            searchTracks = searchTracks.map { it.toPlannerMetadata("spotify_search") },
+            recentTracks = recentTracks.map { it.toPlannerMetadata("spotify_recent") },
+            topTracks = topTracks.map { it.toPlannerMetadata("spotify_top") },
+            savedTracks = savedTracks.map { it.toPlannerMetadata("spotify_saved") },
+        )
+    }
+
+    private fun buildPlannerMetaBrainzContext(
+        currentTrack: Track?,
+        sessionHistory: List<Track>,
+    ): PlannerMetaBrainzContext {
+        val queueIdentities = queueManager.currentQueue
+            .asSequence()
+            .mapNotNull { track -> unifiedTrackRegistry[track.id] }
+            .filter { track ->
+                track.sourceType == SourceType.LOCAL ||
+                    track.sourceType == SourceType.COLLECTION ||
+                    !track.isrc.isNullOrBlank() ||
+                    !track.musicBrainzTrackId.isNullOrBlank()
+            }
+            .mapNotNull { it.toPlannerIdentity() }
+            .distinctBy { it.identityKey() }
+            .take(LOCAL_IDENTITY_CONTEXT_LIMIT)
+            .toList()
+
+        return PlannerMetaBrainzContext(
+            seedIdentities = listOfNotNull(currentTrack?.toPlannerIdentity())
+                .distinctBy { it.identityKey() }
+                .take(SEED_IDENTITY_CONTEXT_LIMIT),
+            localIdentities = queueIdentities,
+            historyIdentities = sessionHistory.mapNotNull { it.toPlannerIdentity() }
+                .distinctBy { it.identityKey() }
+                .take(HISTORY_IDENTITY_CONTEXT_LIMIT),
+        )
+    }
+
+    private fun Track.toPlannerMetadata(source: String): PlannerTrackMetadata {
+        val unified = unifiedTrackRegistry[id]
+        return PlannerTrackMetadata(
+            title = title,
+            artistName = primaryArtistName(),
+            albumTitle = album?.title,
+            isrc = unified?.isrc?.cleanOrNull(),
+            source = source,
+        )
+    }
+
+    private fun SpotifyTrack.toPlannerMetadata(source: String): PlannerTrackMetadata =
+        PlannerTrackMetadata(
+            title = name,
+            artistName = primaryArtistName.takeIf { it.isNotBlank() },
+            albumTitle = album?.name,
+            isrc = externalIds?.isrc?.cleanOrNull(),
+            source = source,
+            spotifyId = stableId.takeIf { it.isNotBlank() },
+        )
+
+    private fun Track.toPlannerIdentity(): PlannerTrackIdentity? {
+        val unified = unifiedTrackRegistry[id]
+        return PlannerTrackIdentity(
+            title = title.cleanOrNull() ?: return null,
+            artist = primaryArtistName()?.cleanOrNull() ?: return null,
+            album = album?.title.cleanOrNull(),
+            isrc = unified?.isrc.cleanOrNull(),
+            musicBrainzRecordingId = unified?.musicBrainzTrackId.cleanOrNull(),
+            musicBrainzReleaseId = null,
+            musicBrainzArtistIds = emptyList(),
+        )
+    }
+
+    private fun UnifiedTrack.toPlannerIdentity(): PlannerTrackIdentity? {
+        val cleanTitle = title.cleanOrNull() ?: return null
+        val cleanArtist = artistName.cleanOrNull() ?: return null
+        return PlannerTrackIdentity(
+            title = cleanTitle,
+            artist = cleanArtist,
+            album = albumTitle.cleanOrNull(),
+            isrc = isrc.cleanOrNull(),
+            musicBrainzRecordingId = musicBrainzTrackId.cleanOrNull(),
+            musicBrainzReleaseId = null,
+            musicBrainzArtistIds = emptyList(),
+        )
+    }
+
+    private fun PlannerTrackIdentity.identityKey(): String =
+        musicBrainzRecordingId
+            ?: isrc
+            ?: listOf(title, artist, album.orEmpty())
+                .joinToString("|") { it.trim().lowercase() }
+
+    private fun Track.primaryArtistName(): String? =
+        (artist?.name ?: artists.firstOrNull()?.name ?: displayArtist)
+            .takeIf { it.isNotBlank() }
+
+    private fun String?.cleanOrNull(): String? =
+        this?.trim()?.takeIf { it.isNotBlank() }
+
     fun startSpotifyAuth() = spotifyAuthManager.launchAuthActivity()
     fun disconnectSpotify() = spotifyAuthManager.disconnect()
     fun setShowExplicitBadges(enabled: Boolean) { viewModelScope.launch { preferences.setShowExplicitBadges(enabled) } }
@@ -596,5 +874,14 @@ class SettingsViewModel @Inject constructor(
             bytes < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
             else -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
         }
+    }
+
+    private companion object {
+        const val PLANNER_TEST_TARGET = 12
+        const val SPOTIFY_CONTEXT_LIMIT = 12
+        const val HISTORY_CONTEXT_LIMIT = 12
+        const val SEED_IDENTITY_CONTEXT_LIMIT = 4
+        const val LOCAL_IDENTITY_CONTEXT_LIMIT = 24
+        const val HISTORY_IDENTITY_CONTEXT_LIMIT = 12
     }
 }

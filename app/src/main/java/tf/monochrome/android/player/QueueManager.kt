@@ -47,10 +47,14 @@ class QueueManager @Inject constructor() {
     }
 
     fun addToQueue(tracks: List<Track>) {
-        _queue.value = _queue.value + tracks
-        if (_shuffleEnabled.value) {
-            originalQueue = originalQueue + tracks
-        }
+        appendToQueue(tracks)
+    }
+
+    fun addToQueueAndSelectFirst(tracks: List<Track>): Boolean {
+        val firstAppendedIndex = appendToQueue(tracks) ?: return false
+        _currentIndex.value = firstAppendedIndex
+        updateCurrentTrack()
+        return true
     }
 
     fun addNextInQueue(track: Track) {
@@ -275,6 +279,16 @@ class QueueManager @Inject constructor() {
         if (nextTrack != null && _playHistory.value.lastOrNull()?.id != nextTrack.id) {
             _playHistory.value = (_playHistory.value + nextTrack).takeLast(MAX_PLAY_HISTORY)
         }
+    }
+
+    private fun appendToQueue(tracks: List<Track>): Int? {
+        if (tracks.isEmpty()) return null
+        val firstAppendedIndex = _queue.value.size
+        _queue.value = _queue.value + tracks
+        if (_shuffleEnabled.value) {
+            originalQueue = originalQueue + tracks
+        }
+        return firstAppendedIndex
     }
 
     private companion object {

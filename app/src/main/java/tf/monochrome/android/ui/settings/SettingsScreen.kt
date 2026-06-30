@@ -3,6 +3,14 @@ package tf.monochrome.android.ui.settings
 import android.content.Intent
 import androidx.core.net.toUri
 import java.util.Locale
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
@@ -35,6 +43,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
@@ -74,6 +83,7 @@ import android.content.Context
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -96,6 +106,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import kotlinx.coroutines.delay
 import tf.monochrome.android.domain.model.AudioQuality
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.CheckCircle
@@ -1551,6 +1562,9 @@ private fun RadioSettingsTab(viewModel: SettingsViewModel) {
         )
 
         Spacer(modifier = Modifier.height(20.dp))
+        PlannerLlmTester(viewModel)
+
+        Spacer(modifier = Modifier.height(20.dp))
         SettingsGroupHeader("Source preference")
         RadioWeightSlider(
             title = "Local library",
@@ -1749,6 +1763,212 @@ private fun RadioSettingsTab(viewModel: SettingsViewModel) {
         }
     }
 }
+
+@Composable
+private fun PlannerLlmTester(viewModel: SettingsViewModel) {
+    val state by viewModel.plannerTesterState.collectAsState()
+    var query by rememberSaveable { mutableStateOf("") }
+    val canSend = query.trim().isNotBlank() && !state.loading
+    val submit = {
+        if (canSend) viewModel.testPlannerQuery(query)
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Tryptify-Playlist LLM tester",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "Send the full radio context to Tryptify-Playlist and render its direct song-list response.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("dark trip hop with clean bass") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { submit() }),
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = submit,
+                enabled = canSend,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                if (state.loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Test planner",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = state.hasResponse,
+            enter = expandVertically(expandFrom = Alignment.Top, animationSpec = tween(260)) +
+                fadeIn(animationSpec = tween(180)),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = tween(180)) +
+                fadeOut(animationSpec = tween(120)),
+        ) {
+            PlannerChatBubble(
+                state = state,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlannerChatBubble(
+    state: PlannerTesterUiState,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+        ),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+            if (state.submittedPrompt.isNotBlank()) {
+                Text(
+                    text = state.submittedPrompt,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (state.loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                }
+                Text(
+                    text = state.responseTitle.ifBlank { "tryptz planner" },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            if (state.responseDetail.isNotBlank()) {
+                Text(
+                    text = state.responseDetail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.error == null) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            if (state.songs.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                PlannerSongRevealList(
+                    songs = state.songs,
+                    requestId = state.requestId,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlannerSongRevealList(
+    songs: List<tf.monochrome.android.radio.planner.PlannerSong>,
+    requestId: Long,
+) {
+    var revealCount by remember(requestId, songs.size) { mutableIntStateOf(0) }
+
+    LaunchedEffect(requestId, songs) {
+        revealCount = 0
+        songs.indices.forEach { index ->
+            delay(58L)
+            revealCount = index + 1
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        songs.forEachIndexed { index, song ->
+            AnimatedVisibility(
+                visible = index < revealCount,
+                enter = slideInVertically(
+                    animationSpec = tween(durationMillis = 220),
+                    initialOffsetY = { fullHeight -> -fullHeight },
+                ) + fadeIn(animationSpec = tween(durationMillis = 180)),
+                exit = slideOutVertically(
+                    animationSpec = tween(durationMillis = 160),
+                    targetOffsetY = { fullHeight -> -fullHeight },
+                ) + fadeOut(animationSpec = tween(durationMillis = 120)),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "${index + 1}.",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.width(28.dp),
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = song.displayTitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = songDetail(song),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun songDetail(song: tf.monochrome.android.radio.planner.PlannerSong): String =
+    buildList {
+        song.album?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+        song.reason.trim().takeIf { it.isNotBlank() }?.let(::add)
+    }.joinToString(" / ").ifBlank { "Tryptify-Playlist LLM" }
 
 @Composable
 private fun RadioWeightSlider(
