@@ -69,11 +69,18 @@ data class SpotifyTrack(
     val type: String = "track",
 )
 
-/** Item of /v1/playlists/{id}/tracks — track is null for removed/unavailable entries. */
+/**
+ * Item of /v1/playlists/{id}/items. The Feb 2026 Web API migration renamed
+ * the wrapper field `track` → `item`; both are kept so old-shaped responses
+ * still parse. Null for removed/unavailable entries.
+ */
 @Serializable
 data class SpotifyPlaylistTrackItem(
+    val item: SpotifyTrack? = null,
     val track: SpotifyTrack? = null,
-)
+) {
+    val trackOrItem: SpotifyTrack? get() = item ?: track
+}
 
 /** Item of /v1/me/tracks (Liked Songs). */
 @Serializable

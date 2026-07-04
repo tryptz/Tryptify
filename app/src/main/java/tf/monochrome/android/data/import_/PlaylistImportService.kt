@@ -78,7 +78,13 @@ class PlaylistImportService @Inject constructor(
             )
 
             val query = "${csvTrack.title} ${csvTrack.artist}"
-            val results = musicRepository.searchTracks(query).getOrNull().orEmpty()
+            // Qobuz first: searchQobuz registers every hit in QobuzIdRegistry,
+            // which is what routes the stored id to Qobuz playback later.
+            // Tidal is the per-track fallback when Qobuz has no result (or no
+            // Qobuz instance is configured, in which case it returns nothing).
+            val results = musicRepository.searchQobuz(query).getOrNull()?.tracks
+                ?.takeIf { it.isNotEmpty() }
+                ?: musicRepository.searchTracks(query).getOrNull().orEmpty()
 
             val bestMatch = if (strictAlbumMatch && csvTrack.album.isNotBlank()) {
                 results.find { it.album?.title?.equals(csvTrack.album, ignoreCase = true) == true }

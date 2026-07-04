@@ -30,20 +30,28 @@ class PlaylistImporter @Inject constructor(
             importService.reportFailure(message)
             return Result.failure(Exception(message))
         }
-        return importSpotifyPlaylist(playlistId, fallbackName = "Spotify Playlist", strictAlbumMatch)
+        return importSpotifyPlaylist(playlistId, knownName = null, strictAlbumMatch = strictAlbumMatch)
     }
 
+    /**
+     * @param knownName playlist name when the caller already has it (the
+     *   picker does) — skips the metadata request entirely. For URL imports
+     *   pass null; the name is then looked up best-effort and a metadata
+     *   failure does not abort the import (the /items call is what matters).
+     */
     suspend fun importSpotifyPlaylist(
         playlistId: String,
-        fallbackName: String,
+        knownName: String?,
         strictAlbumMatch: Boolean = false,
     ): Result<ImportProgress.Done> = runCatching {
         importService.reportFetching("Spotify")
-        val meta = spotifyApiClient.getPlaylistMeta(playlistId).getOrThrow()
         val tracks = spotifyApiClient.getPlaylistTracks(playlistId).getOrThrow()
         if (tracks.isEmpty()) throw Exception("This Spotify playlist has no importable tracks.")
+        val name = knownName?.takeIf { it.isNotBlank() }
+            ?: spotifyApiClient.getPlaylistMeta(playlistId).getOrNull()?.name?.takeIf { it.isNotBlank() }
+            ?: "Spotify Playlist"
         importService.importTracks(
-            name = meta.name.ifBlank { fallbackName },
+            name = name,
             description = "Imported from Spotify",
             tracks = tracks,
             strictAlbumMatch = strictAlbumMatch,

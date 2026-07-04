@@ -16,12 +16,8 @@ import javax.inject.Singleton
 class SpotifyNotConnectedException :
     Exception("Spotify is not connected. Connect your Spotify account in Settings first.")
 
-/** Thrown on 403 — the app is in Development mode and this account isn't allowlisted. */
-class SpotifyDevModeException :
-    Exception(
-        "Spotify denied access (403). This Spotify app is in Development mode — the Spotify " +
-            "account must be added to the allowlist in the Spotify Developer Dashboard (User Management).",
-    )
+/** Thrown on 403 — restricted content or a non-allowlisted Development-mode account. */
+class SpotifyForbiddenException(message: String) : Exception(message)
 
 class SpotifyNotFoundException :
     Exception("Playlist not found — it may be private, deleted, or the URL is wrong.")
@@ -47,15 +43,22 @@ class SpotifyApiClient @Inject constructor(
         json.decodeFromString<SpotifyPlaylistMeta>(resp.bodyAsText())
     }
 
-    /** All tracks of a playlist, following pagination past the 100-item page limit. */
+    /**
+     * All tracks of a playlist, following pagination past the 100-item page
+     * limit. Uses the /items endpoint introduced by the Feb 2026 Web API
+     * migration (the old /tracks endpoint now returns 403 for every
+     * Development-mode caller). Only works for playlists the user owns or
+     * collaborates on — Spotify no longer serves other playlists' contents
+     * to dev-mode apps.
+     */
     suspend fun getPlaylistTracks(playlistId: String): Result<List<CsvTrack>> = runCatching {
         paginate { offset ->
-            val fields = "items(track(name,duration_ms,is_local,type,artists(name),album(name))),next,total"
+            val fields = "items(item(name,duration_ms,is_local,type,artists(name),album(name))),next,total"
             val resp = authedGet(
-                "$API_BASE/playlists/$playlistId/tracks?limit=100&offset=$offset&fields=$fields",
+                "$API_BASE/playlists/$playlistId/items?limit=100&offset=$offset&fields=$fields",
             )
             json.decodeFromString<SpotifyPagingObject<SpotifyPlaylistTrackItem>>(resp.bodyAsText())
-        }.mapNotNull { it.track.toCsvTrackOrNull() }
+        }.mapNotNull { it.trackOrItem.toCsvTrackOrNull() }
     }
 
     /** The connected user's playlists (owned + followed). */
@@ -110,7 +113,7 @@ class SpotifyApiClient @Inject constructor(
                     }
                     forcedRefresh = true
                 }
-                403 -> throw SpotifyDevModeException()
+                403 -> throw SpotifyForbiddenException(buildForbiddenMessage(url, response.bodyAsText()))
                 404 -> throw SpotifyNotFoundException()
                 429 -> {
                     if (attempt >= MAX_RETRIES) {
@@ -127,6 +130,26 @@ class SpotifyApiClient @Inject constructor(
                     throw Exception("Spotify API error ${response.status.value}${detail?.let { ": $it" } ?: ""}")
                 }
             }
+        }
+    }
+
+    private fun buildForbiddenMessage(url: String, body: String): String {
+        val detail = runCatching {
+            json.decodeFromString<SpotifyErrorBody>(body).error?.message
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+        val hint = if (url.contains("/playlists/")) {
+            "Spotify only serves playlist contents for playlists you own or collaborate on " +
+                "(Feb 2026 API restriction for Development-mode apps). Also check that your " +
+                "Spotify account is allowlisted in the Developer Dashboard (User Management)."
+        } else {
+            "Check that your Spotify account is allowlisted in the Spotify Developer " +
+                "Dashboard (User Management) — the app is in Development mode."
+        }
+        return buildString {
+            append("Spotify denied access (403")
+            detail?.let { append(": ").append(it) }
+            append("). ")
+            append(hint)
         }
     }
 
