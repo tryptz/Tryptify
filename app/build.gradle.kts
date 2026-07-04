@@ -52,8 +52,8 @@ android {
         applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 162
-        versionName = "1.6.2"
+        versionCode = 164
+        versionName = "1.6.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
