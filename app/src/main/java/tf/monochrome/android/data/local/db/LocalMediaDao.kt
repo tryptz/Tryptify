@@ -62,14 +62,14 @@ interface LocalMediaDao {
     @Query("DELETE FROM local_tracks WHERE filePath = :path")
     suspend fun deleteTrackByPath(path: String)
 
-    @Query("DELETE FROM local_tracks WHERE filePath NOT IN (:existingPaths)")
-    suspend fun deleteTracksNotIn(existingPaths: Set<String>)
+    @Query("DELETE FROM local_tracks WHERE filePath IN (:paths)")
+    suspend fun deleteTracksByPaths(paths: List<String>)
 
     @Query("SELECT filePath FROM local_tracks")
     suspend fun getAllTrackPaths(): List<String>
 
-    @Query("SELECT filePath, lastModified FROM local_tracks")
-    suspend fun getAllTrackPathsWithModified(): List<TrackPathModified>
+    @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title FROM local_tracks")
+    suspend fun getAllTrackScanInfo(): List<TrackScanInfo>
 
     // ── Albums ──────────────────────────────────────────────────────
 
@@ -133,6 +133,9 @@ interface LocalMediaDao {
     @Upsert
     suspend fun upsertFolder(folder: LocalFolderEntity)
 
+    @Upsert
+    suspend fun upsertFolders(folders: List<LocalFolderEntity>)
+
     @Query("DELETE FROM local_folders")
     suspend fun clearFolders()
 
@@ -168,7 +171,16 @@ interface LocalMediaDao {
     }
 }
 
-data class TrackPathModified(
+/**
+ * Lightweight projection of the columns the scanner's re-read heuristics
+ * need, so a full scan can prefetch the whole table in one query instead
+ * of issuing a per-file SELECT.
+ */
+data class TrackScanInfo(
     val filePath: String,
-    val lastModified: Long
+    val lastModified: Long,
+    val artworkCacheKey: String?,
+    val hasEmbeddedArt: Boolean,
+    val artist: String?,
+    val title: String?
 )

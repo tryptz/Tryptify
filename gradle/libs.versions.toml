@@ -24,6 +24,7 @@ accompanist = "0.36.0"
 haze = "1.7.1"
 nextlibMedia3ext = "0.8.4"
 profileinstaller = "1.4.1"
+junit = "4.13.2"
 
 [libraries]
 # Compose
@@ -136,6 +137,9 @@ haze-materials = { group = "dev.chrisbanes.haze", name = "haze-materials", versi
 # NowPlayingScreen / MixerScreen / FLChannelStrip the first time the user
 # opens those screens.
 profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+
+# Testing
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

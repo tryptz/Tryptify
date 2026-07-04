@@ -290,4 +290,7 @@ dependencies {
     // Bundles app/src/main/baseline-prof.txt into the APK so ProfileInstaller
     // AOT-compiles hot Compose code paths on first launch.
     implementation(libs.profileinstaller)
+
+    // Testing
+    testImplementation(libs.junit)
 }
