@@ -1,4 +1,6 @@
 import java.util.Properties
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 plugins {
     alias(libs.plugins.android.application)
@@ -50,8 +52,8 @@ android {
         applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 162
-        versionName = "1.6.2"
+        versionCode = 164
+        versionName = "1.6.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -125,6 +127,60 @@ android {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
+    }
+
+    androidResources {
+        // Stored as-is in the APK; the zip's entries are already deflated, so
+        // letting AAPT re-compress it would only slow down runtime extraction.
+        noCompress += "presets.zip"
+    }
+}
+
+// Packs the ~9.8k raw .milk presets in src/main/projectm-assets/presets into a
+// single assets/projectm/presets.zip. Shipping one archive instead of individual
+// asset entries lets first-run installation extract everything in a single
+// ZipInputStream pass rather than ~10k separate AssetManager opens, which used
+// to freeze the app for the whole first launch.
+@CacheableTask
+abstract class PackProjectMPresetsTask : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val presetDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun pack() {
+        val root = presetDir.get().asFile
+        val outFile = outputDir.get().asFile.resolve("projectm/presets.zip")
+        outFile.parentFile.mkdirs()
+        ZipOutputStream(outFile.outputStream().buffered()).use { zip ->
+            root.walkTopDown()
+                .filter { it.isFile }
+                // Lexicographic order keeps the archive reproducible and matches
+                // the ordering the runtime catalog generator relies on for
+                // stable preset ids.
+                .sortedBy { it.relativeTo(root).invariantSeparatorsPath }
+                .forEach { file ->
+                    val entry = ZipEntry(file.relativeTo(root).invariantSeparatorsPath)
+                    entry.time = 0L
+                    zip.putNextEntry(entry)
+                    file.inputStream().use { it.copyTo(zip, 64 * 1024) }
+                    zip.closeEntry()
+                }
+        }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val pack = project.tasks.register<PackProjectMPresetsTask>(
+            "pack${variant.name.replaceFirstChar { it.uppercase() }}ProjectMPresets"
+        ) {
+            presetDir.set(layout.projectDirectory.dir("src/main/projectm-assets/presets"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(pack, PackProjectMPresetsTask::outputDir)
     }
 }
 

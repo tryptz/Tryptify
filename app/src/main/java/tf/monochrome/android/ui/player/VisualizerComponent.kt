@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
@@ -98,6 +99,12 @@ fun VisualizerComponent(
         ),
         label = "pulse"
     )
+
+    // Presets install lazily; opening the visualizer is what triggers the
+    // (first-run) install. The fallback layer below renders until READY.
+    LaunchedEffect(engineEnabled, repository) {
+        if (engineEnabled) repository?.requestPrepare()
+    }
 
     val intensity = (sensitivity / 100f).coerceIn(0.18f, 1f)
     val alpha = (brightness / 100f).coerceIn(0.25f, 1f)

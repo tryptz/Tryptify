@@ -2,6 +2,7 @@ package tf.monochrome.android.ui.settings
 
 import android.content.Intent
 import androidx.core.net.toUri
+import tf.monochrome.android.BuildConfig
 import java.util.Locale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
@@ -70,6 +71,7 @@ import android.content.Context
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -510,6 +512,11 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
     var showTextureDropdown by remember { mutableStateOf(false) }
     var showPresetDropdown by remember { mutableStateOf(false) }
     var showFftDropdown by remember { mutableStateOf(false) }
+
+    // Presets install lazily; make sure the preset dropdown has data.
+    LaunchedEffect(Unit) {
+        viewModel.prepareVisualizerEngine()
+    }
 
     SettingsTabContent {
         SettingsGroupHeader("Playback")
@@ -1734,7 +1741,7 @@ private fun AboutTab() {
             }
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "Tryptify version 1.6.2 · 2026",
+                text = "Tryptify version ${BuildConfig.VERSION_NAME} · 2026",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
