@@ -57,6 +57,15 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Spotify PKCE OAuth — client ID is public by design (no secret needed for
+        // the authorization-code-with-PKCE flow). Overridable via local.properties.
+        buildConfigField(
+            "String",
+            "SPOTIFY_CLIENT_ID",
+            "\"${localProperties.getProperty("spotify.clientId") ?: "c9e571c8b81948feb6573014a3efdd2c"}\"",
+        )
+        buildConfigField("String", "SPOTIFY_REDIRECT_URI", "\"tryptify://spotify-callback\"")
+
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"

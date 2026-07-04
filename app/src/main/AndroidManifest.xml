@@ -88,6 +88,16 @@
                     android:scheme="tf.monotrypt.android"
                     android:host="login-callback" />
             </intent-filter>
+
+            <!-- Spotify OAuth (PKCE) callback deep-link -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="tryptify"
+                    android:host="spotify-callback" />
+            </intent-filter>
         </activity>
 
         <!-- Media Playback Service -->

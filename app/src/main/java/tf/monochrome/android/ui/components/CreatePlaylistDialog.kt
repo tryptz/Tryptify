@@ -176,7 +176,7 @@ fun CreatePlaylistDialog(
 
                         if (selectedSource == "Spotify") {
                             Text(
-                                text = "Please use Exportify to export your Spotify playlist into a .csv.",
+                                text = "Connect Spotify in Settings → System to import playlists directly, or upload an Exportify .csv here.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

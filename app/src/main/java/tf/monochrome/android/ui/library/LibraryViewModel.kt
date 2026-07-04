@@ -13,16 +13,20 @@ import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.Artist
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.data.import_.CsvPlaylistParser
-import tf.monochrome.android.data.repository.MusicRepository
+import tf.monochrome.android.data.import_.ImportProgress
+import tf.monochrome.android.data.import_.PlaylistImportService
 import android.net.Uri
 import javax.inject.Inject
+
 
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val csvPlaylistParser: CsvPlaylistParser,
-    private val musicRepository: MusicRepository
+    private val playlistImportService: PlaylistImportService
 ) : ViewModel() {
+
+    val importProgress: StateFlow<ImportProgress> = playlistImportService.progress
 
     fun createPlaylist(name: String, description: String? = null) {
         viewModelScope.launch {
@@ -32,25 +36,13 @@ class LibraryViewModel @Inject constructor(
 
     fun importCsvPlaylist(uri: Uri, strictAlbumMatch: Boolean, name: String, description: String?) {
         viewModelScope.launch {
-            val playlistId = libraryRepository.createPlaylist(name, description)
-            val result = csvPlaylistParser.parseFromUri(uri)
-            val parsedPlaylist = result.getOrNull() ?: return@launch
-            
-            for (csvTrack in parsedPlaylist.tracks) {
-                val query = "${csvTrack.title} ${csvTrack.artist}"
-                val results = musicRepository.searchTracks(query).getOrNull() ?: continue
-                
-                val bestMatch = if (strictAlbumMatch && csvTrack.album.isNotBlank()) {
-                    results.find { it.album?.title?.equals(csvTrack.album, ignoreCase = true) == true }
-                        ?: results.firstOrNull()
-                } else {
-                    results.firstOrNull()
-                }
-
-                if (bestMatch != null) {
-                    libraryRepository.addTrackToPlaylist(playlistId, bestMatch)
-                }
+            playlistImportService.reportFetching("CSV")
+            val parsedPlaylist = csvPlaylistParser.parseFromUri(uri).getOrNull()
+            if (parsedPlaylist == null) {
+                playlistImportService.reportFailure("Could not parse the CSV file")
+                return@launch
             }
+            playlistImportService.importTracks(name, description, parsedPlaylist.tracks, strictAlbumMatch)
         }
     }
 
