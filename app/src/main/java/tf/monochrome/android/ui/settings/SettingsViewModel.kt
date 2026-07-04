@@ -194,6 +194,9 @@ class SettingsViewModel @Inject constructor(
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
 
+    /** Ensures presets are installed/loaded so the visualizer settings have data. */
+    fun prepareVisualizerEngine() = projectMEngineRepository.requestPrepare()
+
     // --- PocketBase Auth ---
     val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

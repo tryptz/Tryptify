@@ -3,7 +3,9 @@ package tf.monochrome.android.visualizer
 import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.BufferedInputStream
 import java.io.File
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.encodeToString
@@ -23,34 +25,38 @@ data class InstalledProjectMAssets(
 class ProjectMAssetInstaller @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val assetVersion = "v4"
+    private val assetVersion = "v5"
 
     fun ensureInstalled(): InstalledProjectMAssets {
-        val rootDir = File(context.filesDir, "projectm/$assetVersion")
+        val baseDir = File(context.filesDir, "projectm")
+        val rootDir = File(baseDir, assetVersion)
         val versionFile = File(rootDir, ".asset-version")
         val presetDir = File(rootDir, "presets")
         val textureDir = File(rootDir, "textures")
         val catalogFile = File(rootDir, "catalog.json")
 
-        val needsInstall = !rootDir.exists()
-                || versionFile.readTextOrNull() != assetVersion
+        val needsInstall = versionFile.readTextOrNull() != assetVersion
                 || !presetDir.exists()
+                || !catalogFile.exists()
 
         if (needsInstall) {
             Log.d(TAG, "Installing projectM assets ($assetVersion)…")
+            val startMs = System.currentTimeMillis()
             rootDir.deleteRecursively()
-            rootDir.mkdirs()
-            copyAssetTree("projectm", rootDir)
+            presetDir.mkdirs()
+            val relativePaths = extractPresetZip(presetDir)
+            writeCatalog(relativePaths.sorted(), catalogFile)
+            // Marker last: a process kill mid-install leaves the version file
+            // absent, so the next ensureInstalled() redoes the install cleanly.
             versionFile.writeText(assetVersion)
+            cleanupStaleVersions(baseDir)
+            Log.d(
+                TAG,
+                "Installed ${relativePaths.size} presets in ${System.currentTimeMillis() - startMs} ms"
+            )
         }
 
-        presetDir.mkdirs()
         textureDir.mkdirs()
-
-        // Auto-generate catalog from installed presets if missing or stale
-        if (!catalogFile.exists() || needsInstall) {
-            generateCatalog(presetDir, catalogFile)
-        }
 
         return InstalledProjectMAssets(
             rootDir = rootDir,
@@ -62,26 +68,49 @@ class ProjectMAssetInstaller @Inject constructor(
     }
 
     /**
-     * Walk the preset directory and build catalog.json from the discovered .milk files.
-     * Each preset gets an id derived from its relative path, a human-readable display name
-     * parsed from the filename, and tags inferred from the parent folder hierarchy.
+     * Extract the bundled preset archive (a single stored-in-APK zip built at
+     * compile time) into [presetDir] in one streaming pass. Returns the
+     * preset-relative paths of every extracted file. Vastly faster than the
+     * old per-file AssetManager copy of ~10k individually compressed assets.
      */
-    private fun generateCatalog(presetDir: File, catalogFile: File) {
-        val presets = mutableListOf<VisualizerPreset>()
-        val rootPath = presetDir.absolutePath
+    private fun extractPresetZip(presetDir: File): List<String> {
+        val relativePaths = mutableListOf<String>()
+        ZipInputStream(BufferedInputStream(context.assets.open(PRESET_ZIP_ASSET))).use { zip ->
+            val buffer = ByteArray(64 * 1024)
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val name = entry.name
+                if (!entry.isDirectory && !name.split('/').contains("..")) {
+                    val outFile = File(presetDir, name)
+                    outFile.parentFile?.mkdirs()
+                    outFile.outputStream().use { output ->
+                        var read = zip.read(buffer)
+                        while (read >= 0) {
+                            output.write(buffer, 0, read)
+                            read = zip.read(buffer)
+                        }
+                    }
+                    relativePaths.add(name)
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+        return relativePaths
+    }
 
+    /**
+     * Build catalog.json from the extracted entries' relative paths. Each preset
+     * gets an id derived from its relative path, a human-readable display name
+     * parsed from the filename, and tags inferred from the parent folder
+     * hierarchy. Input must be sorted so ids (including dedup counters) stay
+     * stable across installs and asset-version bumps.
+     */
+    private fun writeCatalog(relativePaths: List<String>, catalogFile: File) {
         val usedIds = mutableSetOf<String>()
-
-        presetDir.walkTopDown()
-            .filter { it.isFile && it.extension.equals("milk", ignoreCase = true) }
-            .sortedBy { it.absolutePath }
-            .forEach { file ->
-                val relativePath = file.absolutePath
-                    .removePrefix(rootPath)
-                    .trimStart(File.separatorChar, '/')
-                    .replace(File.separatorChar, '/')
-
-                // Build a stable id from the relative path
+        val presets = relativePaths
+            .filter { it.endsWith(".milk", ignoreCase = true) }
+            .map { relativePath ->
                 val baseId = "preset:" + relativePath
                     .removeSuffix(".milk")
                     .lowercase()
@@ -89,7 +118,6 @@ class ProjectMAssetInstaller @Inject constructor(
                     .replace(Regex("_+"), "_")
                     .trimEnd('_')
 
-                // Ensure ID is unique by appending a counter if needed
                 var id = baseId
                 var counter = 1
                 while (usedIds.contains(id)) {
@@ -97,58 +125,50 @@ class ProjectMAssetInstaller @Inject constructor(
                 }
                 usedIds.add(id)
 
-                // Human-readable name from filename
-                val displayName = file.nameWithoutExtension
+                val displayName = relativePath
+                    .substringAfterLast('/')
+                    .substringBeforeLast('.')
                     .replace("_", " ")
                     .trim()
 
-                // Tags from parent folder(s) relative to presetDir
-                val tagParts = relativePath.split("/").dropLast(1)
-                val tags = tagParts.map { folder ->
+                val tags = relativePath.split("/").dropLast(1).map { folder ->
                     VisualizerTag(
                         id = folder.lowercase().replace(Regex("[^a-z0-9]"), "_"),
                         label = folder
                     )
                 }
 
-                presets.add(
-                    VisualizerPreset(
-                        id = id,
-                        displayName = displayName,
-                        filePath = "presets/$relativePath",
-                        tags = tags,
-                        intensity = 50
-                    )
+                VisualizerPreset(
+                    id = id,
+                    displayName = displayName,
+                    filePath = "presets/$relativePath",
+                    tags = tags,
+                    intensity = 50
                 )
             }
 
-        val json = Json { prettyPrint = true }
-        catalogFile.writeText(json.encodeToString(presets))
+        catalogFile.writeText(Json.encodeToString(presets))
         Log.d(TAG, "Generated catalog.json with ${presets.size} presets")
     }
 
-    private fun copyAssetTree(assetPath: String, outputDir: File) {
-        val entries = context.assets.list(assetPath).orEmpty()
-        if (entries.isEmpty()) {
-            outputDir.parentFile?.mkdirs()
-            context.assets.open(assetPath).use { input ->
-                outputDir.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+    /**
+     * Reclaim storage held by previous asset versions (e.g. the v4 tree copied
+     * file-by-file by older builds). Runs after a successful install so an
+     * interrupted upgrade never deletes the only working copy.
+     */
+    private fun cleanupStaleVersions(baseDir: File) {
+        baseDir.listFiles()
+            ?.filter { it.isDirectory && it.name != assetVersion }
+            ?.forEach { stale ->
+                Log.d(TAG, "Removing stale projectM assets: ${stale.name}")
+                stale.deleteRecursively()
             }
-            return
-        }
-
-        outputDir.mkdirs()
-        entries.forEach { child ->
-            val childAssetPath = if (assetPath.isBlank()) child else "$assetPath/$child"
-            copyAssetTree(childAssetPath, File(outputDir, child))
-        }
     }
 
     private fun File.readTextOrNull(): String? = if (exists()) readText() else null
 
     companion object {
         private const val TAG = "ProjectMAssetInstaller"
+        private const val PRESET_ZIP_ASSET = "projectm/presets.zip"
     }
 }

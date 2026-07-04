@@ -4,12 +4,15 @@ import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,12 +35,16 @@ class ProjectMEngineRepository @Inject constructor(
     private val engineLock = Any()
     private val nativeBridge = ProjectMNativeBridge()
 
+    // Start in FALLBACK even when the native library is loaded: presets are
+    // installed lazily on first visualizer use, and reporting READY before
+    // they exist would let a GL surface attach and block its render thread
+    // on the install.
     private val _engineStatus = MutableStateFlow(
         VisualizerEngineStatus(
-            phase = if (ProjectMNativeBridge.isLibraryLoaded) VisualizerEnginePhase.READY else VisualizerEnginePhase.FALLBACK,
+            phase = VisualizerEnginePhase.FALLBACK,
             nativeLibraryLoaded = ProjectMNativeBridge.isLibraryLoaded,
             message = if (ProjectMNativeBridge.isLibraryLoaded) {
-                "projectM native bridge loaded."
+                "projectM idle. Presets load when the visualizer opens."
             } else {
                 "Native projectM bridge unavailable. Using fallback visualizer."
             }
@@ -85,10 +92,34 @@ class ProjectMEngineRepository @Inject constructor(
     private var fpsFrameCount = 0
     private var fpsStartTimeMs = 0L
 
+    // Preset installation/loading runs on its own minimum-priority thread so a
+    // first-run extraction of the bundled preset archive can never starve the
+    // shared IO dispatcher (Room, DataStore, Coil, session restore).
+    private val installDispatcher = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "projectm-install").apply { priority = Thread.MIN_PRIORITY }
+    }.asCoroutineDispatcher()
+    private val prepareRequested = AtomicBoolean(false)
+
     init {
         observePreferences()
-        scope.launch(Dispatchers.IO) {
-            prepareEngine()
+    }
+
+    /**
+     * Kick off asset installation + engine preparation in the background if it
+     * hasn't happened yet. Called from the visualizer UI entry points; cheap and
+     * idempotent, so callers can invoke it unconditionally. Nothing runs at app
+     * startup — first launch stays free of the ~130 MB preset install.
+     */
+    fun requestPrepare() {
+        if (installedAssets != null) return
+        if (!prepareRequested.compareAndSet(false, true)) return
+        scope.launch(installDispatcher) {
+            try {
+                prepareEngine()
+            } finally {
+                // Allow a retry from the UI if the install failed (ERROR phase).
+                prepareRequested.set(false)
+            }
         }
     }
 
