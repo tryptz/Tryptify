@@ -1,8 +1,13 @@
 package tf.monochrome.android.data.local.scanner
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import tf.monochrome.android.data.local.db.LocalAlbumEntity
@@ -12,9 +17,11 @@ import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.db.LocalMediaDao
 import tf.monochrome.android.data.local.db.LocalTrackEntity
 import tf.monochrome.android.data.local.db.ScanStateEntity
+import tf.monochrome.android.data.local.db.TrackScanInfo
 import tf.monochrome.android.data.local.tags.TagReader
 import java.io.File
 import java.text.Normalizer
+import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,68 +49,19 @@ class MediaScanner @Inject constructor(
             val mediaStoreFiles = mediaStoreSource.queryAllAudio(minDurationMs, excludedPaths)
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
 
-            var addedCount = 0
-            // Memoize sidecar cover art lookups by parent directory so we don't
-            // listFiles() once per track. A 500-track album → 1 directory scan.
-            val folderArtCache = HashMap<String, String?>()
+            // One projection query up front instead of a findByPath() SELECT
+            // per file — the re-read decision then runs entirely in memory.
+            val scanInfoByPath = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
 
-            mediaStoreFiles.forEachIndexed { index, audioFile ->
-                try {
-                    val existing = localMediaDao.findByPath(audioFile.absolutePath)
-                    // Android reaps the app cache/ directory under storage
-                    // pressure, leaving Room rows pointing at vanished
-                    // artwork files. mtime hasn't changed, so without this
-                    // extra check the refresh button would never repopulate
-                    // them and the user is stuck with empty cards.
-                    val artworkMissing = existing != null &&
-                        existing.artworkCacheKey != null &&
-                        !File(existing.artworkCacheKey).exists()
-                    // Re-tag tracks whose previous scan came up artwork-less.
-                    // The TagReader sidecar matcher has been extended over
-                    // time (per-track stem match was added later), so a
-                    // null cache key on an existing row may just mean "the
-                    // older scan logic missed it" — re-read so freshly-
-                    // installed cover detection logic gets a chance.
-                    val maybeMissedArt = existing != null &&
-                        !existing.hasEmbeddedArt &&
-                        existing.artworkCacheKey == null
-                    // Re-read rows that were indexed before artist-from-title
-                    // recovery existed: no artist tag, but a "Artist - Title"
-                    // shaped title we can now split. Self-heals (artist gets
-                    // populated, so the next scan skips them) and stays cheap
-                    // by only targeting files that can actually benefit.
-                    val derivableArtist = existing != null &&
-                        existing.artist == null &&
-                        existing.title?.contains(" - ") == true
-                    if (existing == null ||
-                        existing.lastModified < audioFile.dateModified ||
-                        artworkMissing ||
-                        maybeMissedArt ||
-                        derivableArtist
-                    ) {
-                        val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
-                        val trackEntity = buildTrackEntity(audioFile, tags)
-                        localMediaDao.insertTrack(trackEntity)
-                        addedCount++
-                    }
-                } catch (_: Exception) {
-                    // Skip individual file errors
-                }
-
-                if (index % 50 == 0 || index == mediaStoreFiles.size - 1) {
-                    emit(ScanProgress.Processing(
-                        current = index + 1,
-                        total = mediaStoreFiles.size,
-                        currentFile = audioFile.displayName
-                    ))
-                }
-            }
+            val addedCount = processFiles(
+                files = mediaStoreFiles,
+                shouldRead = { needsReRead(scanInfoByPath[it.absolutePath], it.dateModified) },
+                progressChunkSize = 50
+            )
 
             // Prune deleted files
             emit(ScanProgress.Grouping("Removing deleted tracks..."))
-            val existingPaths = mediaStoreFiles.map { it.absolutePath }.toSet()
-            localMediaDao.deleteTracksNotIn(existingPaths)
-            val removedCount = localMediaDao.getAllTrackPaths().size.let { mediaStoreFiles.size - it }
+            val removedCount = pruneDeleted(mediaStoreFiles.mapTo(HashSet()) { it.absolutePath })
 
             // Rebuild groupings
             emit(ScanProgress.Grouping("Building album & artist library..."))
@@ -147,26 +105,19 @@ class MediaScanner @Inject constructor(
             }
 
             emit(ScanProgress.Started(totalFiles = modifiedFiles.size))
-            var addedCount = 0
-            val folderArtCache = HashMap<String, String?>()
 
-            modifiedFiles.forEachIndexed { index, audioFile ->
-                try {
-                    val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
-                    val trackEntity = buildTrackEntity(audioFile, tags)
-                    localMediaDao.insertTrack(trackEntity)
-                    addedCount++
-                } catch (_: Exception) {}
-
-                if (index % 20 == 0 || index == modifiedFiles.size - 1) {
-                    emit(ScanProgress.Processing(index + 1, modifiedFiles.size, audioFile.displayName))
-                }
-            }
+            // MediaStore already filtered to files modified since the last
+            // scan, so every one of them needs a fresh tag read.
+            val addedCount = processFiles(
+                files = modifiedFiles,
+                shouldRead = { true },
+                progressChunkSize = 20
+            )
 
             // Check for deleted files
             val allMediaStorePaths = mediaStoreSource.queryAllAudio(minDurationMs)
-                .map { it.absolutePath }.toSet()
-            localMediaDao.deleteTracksNotIn(allMediaStorePaths)
+                .mapTo(HashSet()) { it.absolutePath }
+            pruneDeleted(allMediaStorePaths)
 
             rebuildGroupings()
             rebuildFolders()
@@ -178,7 +129,101 @@ class MediaScanner @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    private suspend fun buildTrackEntity(audioFile: AudioFileInfo, tags: tf.monochrome.android.data.local.tags.AudioTags): LocalTrackEntity {
+    /**
+     * Read tags for [files] with bounded parallelism and batch the resulting
+     * rows into the database, emitting [ScanProgress.Processing] once per
+     * [progressChunkSize] files (matching the old per-file loop's cadence).
+     *
+     * Tag extraction dominates scan time — each file costs a native
+     * MediaMetadataRetriever.setDataSource + metadata + artwork read — and
+     * the files are independent, so fan the reads out across cores. DB
+     * writes stay on the collector coroutine: one insertTracks() per
+     * [INSERT_BATCH_SIZE] rows instead of one transaction per file.
+     *
+     * Written as a FlowCollector extension so it can emit() from inside the
+     * callers' flow {} builders; emissions happen only between chunks, on
+     * the collector's own coroutine, because flow {} emit is not
+     * thread-safe from concurrent children.
+     *
+     * @return the number of tracks actually (re-)read and written.
+     */
+    private suspend fun FlowCollector<ScanProgress>.processFiles(
+        files: List<AudioFileInfo>,
+        shouldRead: (AudioFileInfo) -> Boolean,
+        progressChunkSize: Int
+    ): Int {
+        val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
+        val tagDispatcher = Dispatchers.IO.limitedParallelism(parallelism)
+        // Memoize sidecar cover art lookups by parent directory so we don't
+        // listFiles() once per track. A 500-track album → 1 directory scan.
+        // synchronizedMap (not ConcurrentHashMap) because "no art in this
+        // folder" is cached as a null value; a lost race just re-lists the
+        // same folder once with an identical result.
+        val folderArtCache = Collections.synchronizedMap(HashMap<String, String?>())
+
+        val pending = ArrayList<LocalTrackEntity>(INSERT_BATCH_SIZE)
+        var added = 0
+        var processed = 0
+
+        for (chunk in files.chunked(progressChunkSize)) {
+            val entities = coroutineScope {
+                chunk.map { audioFile ->
+                    async(tagDispatcher) {
+                        try {
+                            if (!shouldRead(audioFile)) return@async null
+                            val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
+                            buildTrackEntity(audioFile, tags)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            // Skip individual file errors
+                            null
+                        }
+                    }
+                }.awaitAll().filterNotNull()
+            }
+
+            pending += entities
+            added += entities.size
+            if (pending.size >= INSERT_BATCH_SIZE) {
+                localMediaDao.insertTracks(pending.toList())
+                pending.clear()
+            }
+
+            processed += chunk.size
+            emit(ScanProgress.Processing(
+                current = processed,
+                total = files.size,
+                currentFile = chunk.last().displayName
+            ))
+        }
+        if (pending.isNotEmpty()) {
+            localMediaDao.insertTracks(pending)
+        }
+        return added
+    }
+
+    /**
+     * Delete DB rows whose files no longer exist in MediaStore. The diff is
+     * computed in memory and deleted with positive IN-lists chunked under
+     * SQLite's 999 bound-variable limit (the old NOT IN variant bound the
+     * entire MediaStore path set into a single statement).
+     *
+     * @return the number of rows removed.
+     */
+    private suspend fun pruneDeleted(mediaStorePaths: Set<String>): Int {
+        val toDelete = localMediaDao.getAllTrackPaths().filterNot { it in mediaStorePaths }
+        if (toDelete.isNotEmpty()) {
+            musicDatabase.withTransaction {
+                toDelete.chunked(DELETE_CHUNK_SIZE).forEach {
+                    localMediaDao.deleteTracksByPaths(it)
+                }
+            }
+        }
+        return toDelete.size
+    }
+
+    private fun buildTrackEntity(audioFile: AudioFileInfo, tags: tf.monochrome.android.data.local.tags.AudioTags): LocalTrackEntity {
         return LocalTrackEntity(
             filePath = audioFile.absolutePath,
             fileSizeBytes = audioFile.sizeBytes,
@@ -333,8 +378,6 @@ class MediaScanner @Inject constructor(
     }
 
     private suspend fun rebuildFolders() {
-        localMediaDao.clearFolders()
-
         val allPaths = localMediaDao.getAllTrackPaths()
         val folderMap = mutableMapOf<String, MutableList<String>>()
 
@@ -343,17 +386,24 @@ class MediaScanner @Inject constructor(
             folderMap.getOrPut(folder) { mutableListOf() }.add(path)
         }
 
-        for ((folderPath, filePaths) in folderMap) {
+        val folders = folderMap.map { (folderPath, filePaths) ->
             val parentPath = folderPath.substringBeforeLast('/').takeIf { it != folderPath }
-            localMediaDao.upsertFolder(
-                LocalFolderEntity(
-                    path = folderPath,
-                    parentPath = parentPath,
-                    displayName = folderPath.substringAfterLast('/'),
-                    trackCount = filePaths.size,
-                    totalDuration = 0 // Could compute from track durations
-                )
+            LocalFolderEntity(
+                path = folderPath,
+                parentPath = parentPath,
+                displayName = folderPath.substringAfterLast('/'),
+                trackCount = filePaths.size,
+                totalDuration = 0 // Could compute from track durations
             )
+        }
+
+        // Clear + repopulate atomically so folder-tab observers never see an
+        // empty list mid-scan, and the whole rebuild is one Room flush.
+        musicDatabase.withTransaction {
+            localMediaDao.clearFolders()
+            if (folders.isNotEmpty()) {
+                localMediaDao.upsertFolders(folders)
+            }
         }
     }
 
@@ -392,6 +442,48 @@ class MediaScanner @Inject constructor(
     }
 
     companion object {
+        /** Rows per insertTracks() call — one Room transaction per batch. */
+        private const val INSERT_BATCH_SIZE = 500
+
+        /** Paths per DELETE ... IN (...) — under SQLite's 999-variable limit. */
+        private const val DELETE_CHUNK_SIZE = 500
+
+        /**
+         * Decide whether a MediaStore file needs its tags (re-)read or the
+         * existing DB row can be kept as-is. Pure function so it's unit
+         * testable; [artworkFileExists] is injectable for the same reason.
+         */
+        fun needsReRead(
+            existing: TrackScanInfo?,
+            mediaStoreDateModified: Long,
+            artworkFileExists: (String) -> Boolean = { File(it).exists() }
+        ): Boolean {
+            if (existing == null) return true
+            if (existing.lastModified < mediaStoreDateModified) return true
+            // Android reaps the app cache/ directory under storage
+            // pressure, leaving Room rows pointing at vanished
+            // artwork files. mtime hasn't changed, so without this
+            // extra check the refresh button would never repopulate
+            // them and the user is stuck with empty cards.
+            if (existing.artworkCacheKey != null &&
+                !artworkFileExists(existing.artworkCacheKey)
+            ) return true
+            // Re-tag tracks whose previous scan came up artwork-less.
+            // The TagReader sidecar matcher has been extended over
+            // time (per-track stem match was added later), so a
+            // null cache key on an existing row may just mean "the
+            // older scan logic missed it" — re-read so freshly-
+            // installed cover detection logic gets a chance.
+            if (!existing.hasEmbeddedArt && existing.artworkCacheKey == null) return true
+            // Re-read rows that were indexed before artist-from-title
+            // recovery existed: no artist tag, but a "Artist - Title"
+            // shaped title we can now split. Self-heals (artist gets
+            // populated, so the next scan skips them) and stays cheap
+            // by only targeting files that can actually benefit.
+            if (existing.artist == null && existing.title?.contains(" - ") == true) return true
+            return false
+        }
+
         fun normalizeText(text: String): String {
             return Normalizer.normalize(text.trim().lowercase(), Normalizer.Form.NFC)
         }

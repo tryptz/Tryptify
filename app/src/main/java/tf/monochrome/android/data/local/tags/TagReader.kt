@@ -288,7 +288,10 @@ class TagReader @Inject constructor(
      * folder has no recognisable image.
      *
      * Pass a [cache] keyed by parent directory to avoid re-listing the same folder
-     * for every track in an album.
+     * for every track in an album. The scanner shares one (synchronized) cache
+     * across parallel tag-read workers; the containsKey/put sequence here is not
+     * atomic across calls, but a lost race just re-lists the same folder once
+     * with an identical result.
      */
     private fun findFolderCoverArt(
         filePath: String,
