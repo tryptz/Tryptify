@@ -76,6 +76,10 @@ fun ArtistDetailScreen(
     var showAddToPlaylistForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
     var showCreatePlaylistDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showAllTopTracks by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showAddToPlaylistForSelection by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<Long>()
+    androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
     var showDownloadConfirm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     if (showDownloadConfirm) {
@@ -135,7 +139,6 @@ fun ArtistDetailScreen(
 
     showAddToPlaylistForTrack?.let { track ->
         AddToPlaylistSheet(
-            track = track,
             playlists = playlists,
             onDismiss = { showAddToPlaylistForTrack = null },
             onPlaylistSelected = { playlist ->
@@ -144,6 +147,28 @@ fun ArtistDetailScreen(
             },
             onCreateNew = {
                 showAddToPlaylistForTrack = null
+                showCreatePlaylistDialog = true
+            }
+        )
+    }
+
+    if (showAddToPlaylistForSelection) {
+        AddToPlaylistSheet(
+            title = "Add ${selection.count} tracks to playlist",
+            playlists = playlists,
+            onDismiss = { showAddToPlaylistForSelection = false },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTracksToPlaylist(
+                    playlist.id,
+                    // Resolve against the FULL top-tracks list so selections made
+                    // while expanded still resolve after the list collapses.
+                    artistDetail?.topTracks.orEmpty().filter { it.id in selection.selectedIds },
+                )
+                showAddToPlaylistForSelection = false
+                selection.clear()
+            },
+            onCreateNew = {
+                showAddToPlaylistForSelection = false
                 showCreatePlaylistDialog = true
             }
         )
@@ -188,6 +213,17 @@ fun ArtistDetailScreen(
             )
             artistDetail != null -> {
                 val detail = artistDetail ?: return
+                androidx.compose.animation.AnimatedVisibility(visible = selection.active) {
+                    tf.monochrome.android.ui.components.TrackSelectionBar(
+                        selectedCount = selection.count,
+                        onClose = { selection.clear() },
+                        onAddToQueue = {
+                            playerViewModel.addToQueue(detail.topTracks.filter { it.id in selection.selectedIds })
+                            selection.clear()
+                        },
+                        onAddToPlaylist = { showAddToPlaylistForSelection = true }
+                    )
+                }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp)
@@ -232,13 +268,18 @@ fun ArtistDetailScreen(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
                                 onLikeClick = { playerViewModel.toggleFavorite(track) },
-                                onClick = { playerViewModel.playTrack(track, detail.topTracks) },
-                                onLongClick = { showContextMenuForTrack = track },
+                                onClick = {
+                                    if (selection.active) selection.toggle(track.id)
+                                    else playerViewModel.playTrack(track, detail.topTracks)
+                                },
+                                onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                                }
+                                },
+                                selectionMode = selection.active,
+                                selected = track.id in selection.selectedIds
                             )
                         }
                         if (detail.topTracks.size > 5) {

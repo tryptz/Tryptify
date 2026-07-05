@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
@@ -49,6 +50,7 @@ fun TrackContextMenu(
     onAddToQueue: () -> Unit,
     onToggleLike: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onRemoveFromPlaylist: (() -> Unit)? = null,
     onDownloadTrack: (() -> Unit)? = null,
     onShareFile: (() -> Unit)? = null,
     onGoToAlbum: (() -> Unit)? = null,
@@ -125,6 +127,15 @@ fun TrackContextMenu(
                 label = "Add to playlist",
                 onClick = { onAddToPlaylist(); onDismiss() }
             )
+
+            if (onRemoveFromPlaylist != null) {
+                ContextMenuItem(
+                    icon = Icons.Default.RemoveCircleOutline,
+                    label = "Remove from playlist",
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = { onRemoveFromPlaylist(); onDismiss() }
+                )
+            }
 
             if (onDownloadTrack != null) {
                 ContextMenuItem(

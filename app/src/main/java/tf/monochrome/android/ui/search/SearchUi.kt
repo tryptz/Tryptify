@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.search
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Clear
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,7 +73,9 @@ import tf.monochrome.android.ui.components.LoadingScreen
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.components.TrackContextMenu
+import tf.monochrome.android.ui.components.TrackSelectionBar
 import tf.monochrome.android.ui.components.bounceCombinedClick
+import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openAlbum
@@ -219,6 +225,11 @@ fun SearchResultsContent(
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
+
+    // UnifiedTrack ids are Strings ("api_…", "qobuz_…", "local_…").
+    val selection = rememberTrackSelectionState<String>()
+    BackHandler(enabled = selection.active) { selection.clear() }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -252,7 +263,6 @@ fun SearchResultsContent(
 
     showAddToPlaylistForTrack?.let { track ->
         AddToPlaylistSheet(
-            track = track,
             playlists = libraryPlaylists,
             onDismiss = { showAddToPlaylistForTrack = null },
             onPlaylistSelected = { playlist ->
@@ -261,6 +271,26 @@ fun SearchResultsContent(
             },
             onCreateNew = {
                 showAddToPlaylistForTrack = null
+                showCreatePlaylistDialog = true
+            }
+        )
+    }
+
+    if (showAddToPlaylistForSelection) {
+        AddToPlaylistSheet(
+            title = "Add ${selection.count} tracks to playlist",
+            playlists = libraryPlaylists,
+            onDismiss = { showAddToPlaylistForSelection = false },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTracksToPlaylist(
+                    playlist.id,
+                    tracks.filter { it.id in selection.selectedIds }.map { it.toLegacyTrack() },
+                )
+                showAddToPlaylistForSelection = false
+                selection.clear()
+            },
+            onCreateNew = {
+                showAddToPlaylistForSelection = false
                 showCreatePlaylistDialog = true
             }
         )
@@ -292,9 +322,21 @@ fun SearchResultsContent(
                 onLoadMore(SearchViewModel.SearchPageType.ALBUMS)
             }
 
+            Column(modifier = modifier.fillMaxSize()) {
+            AnimatedVisibility(visible = selection.active) {
+                TrackSelectionBar(
+                    selectedCount = selection.count,
+                    onClose = { selection.clear() },
+                    onAddToQueue = {
+                        playerViewModel.addUnifiedToQueue(tracks.filter { it.id in selection.selectedIds })
+                        selection.clear()
+                    },
+                    onAddToPlaylist = { showAddToPlaylistForSelection = true }
+                )
+            }
             LazyColumn(
                 state = columnState,
-                modifier = modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 item {
@@ -372,13 +414,19 @@ fun SearchResultsContent(
                             track = track,
                             isLiked = favoriteTrackIds.contains(track.toLegacyTrack().id),
                             onLikeClick = { playerViewModel.toggleFavorite(track.toLegacyTrack()) },
-                            onClick = { playerViewModel.playUnifiedTrack(track, tracks) },
+                            onClick = {
+                                if (selection.active) selection.toggle(track.id)
+                                else playerViewModel.playUnifiedTrack(track, tracks)
+                            },
+                            onLongClick = { selection.toggle(track.id) },
                             onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
                             onAlbumClick = { navController.openAlbum(track.albumId) },
                             onMoreClick = if (track.sourceType == SourceType.API ||
                                 track.sourceType == SourceType.QOBUZ) {
                                 { showContextMenuForTrack = track.toLegacyTrack() }
-                            } else null
+                            } else null,
+                            selectionMode = selection.active,
+                            selected = track.id in selection.selectedIds
                         )
                     }
                 }
@@ -412,6 +460,7 @@ fun SearchResultsContent(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -497,17 +546,23 @@ private fun UnifiedSearchTrackItem(
     onClick: () -> Unit,
     onArtistClick: (UnifiedArtistRef) -> Unit,
     onAlbumClick: () -> Unit,
-    onMoreClick: (() -> Unit)?
+    onMoreClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
+    selectionMode: Boolean = false,
+    selected: Boolean = false
 ) {
     val legacyTrack = track.toLegacyTrack()
+    // Same treatment as TrackItem: hide per-row affordances while selecting.
+    val effectiveOnLikeClick = onLikeClick.takeUnless { selectionMode }
+    val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
-            .bounceCombinedClick(onClick = onClick, onLongClick = onMoreClick)
+            .bounceCombinedClick(onClick = onClick, onLongClick = onLongClick ?: onMoreClick)
             .liquidGlass(shape = MonoDimens.shapeMd),
         shape = MonoDimens.shapeMd,
-        color = Color.Transparent
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent
     ) {
         Row(
             modifier = Modifier
@@ -515,6 +570,14 @@ private fun UnifiedSearchTrackItem(
                 .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (selectionMode) {
+                Icon(
+                    imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+                    contentDescription = if (selected) "Selected" else "Not selected",
+                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
+            }
             if (track.artworkUri != null) {
                 CoverImage(
                     url = track.artworkUri,
@@ -550,8 +613,8 @@ private fun UnifiedSearchTrackItem(
                 )
                 TrackArtistAlbumLine(
                     track = track,
-                    onArtistClick = onArtistClick,
-                    onAlbumClick = onAlbumClick,
+                    onArtistClick = if (selectionMode) ({}) else onArtistClick,
+                    onAlbumClick = if (selectionMode) ({}) else onAlbumClick,
                 )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -561,20 +624,22 @@ private fun UnifiedSearchTrackItem(
                     track.qualityBadge?.let { ResultBadge(text = it) }
                 }
             }
-            IconButton(onClick = onLikeClick) {
-                Icon(
-                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = if (isLiked) "Unlike" else "Like",
-                    tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (effectiveOnLikeClick != null) {
+                IconButton(onClick = effectiveOnLikeClick) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = if (isLiked) "Unlike" else "Like",
+                        tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             Text(
                 text = legacyTrack.formattedDuration,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (onMoreClick != null) {
-                IconButton(onClick = onMoreClick) {
+            if (effectiveOnMoreClick != null) {
+                IconButton(onClick = effectiveOnMoreClick) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More options",

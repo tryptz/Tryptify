@@ -125,6 +125,12 @@ class PreferencesManager @Inject constructor(
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val AI_RADIO_ENABLED = booleanPreferencesKey("ai_radio_enabled")
 
+        // Spotify (PKCE OAuth tokens for playlist import)
+        private val SPOTIFY_ACCESS_TOKEN = stringPreferencesKey("spotify_access_token")
+        private val SPOTIFY_REFRESH_TOKEN = stringPreferencesKey("spotify_refresh_token")
+        private val SPOTIFY_TOKEN_EXPIRES_AT = longPreferencesKey("spotify_token_expires_at")
+        private val SPOTIFY_USER_NAME = stringPreferencesKey("spotify_user_name")
+
         // PocketBase
         private val POCKETBASE_TOKEN = stringPreferencesKey("pocketbase_token")
         private val POCKETBASE_USER_ID = stringPreferencesKey("pocketbase_user_id")
@@ -646,6 +652,36 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[AI_RADIO_ENABLED] = enabled }
     }
 
+
+    // --- Spotify ---
+    val spotifyAccessToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_ACCESS_TOKEN] }
+    val spotifyRefreshToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_REFRESH_TOKEN] }
+    val spotifyTokenExpiresAt: Flow<Long> = dataStore.data.map { it[SPOTIFY_TOKEN_EXPIRES_AT] ?: 0L }
+    val spotifyUserName: Flow<String?> = dataStore.data.map { it[SPOTIFY_USER_NAME] }
+
+    suspend fun setSpotifyTokens(accessToken: String, refreshToken: String, expiresAtMillis: Long) {
+        dataStore.edit {
+            it[SPOTIFY_ACCESS_TOKEN] = accessToken
+            it[SPOTIFY_REFRESH_TOKEN] = refreshToken
+            it[SPOTIFY_TOKEN_EXPIRES_AT] = expiresAtMillis
+        }
+    }
+
+    suspend fun setSpotifyUserName(name: String?) {
+        dataStore.edit {
+            if (name.isNullOrBlank()) it.remove(SPOTIFY_USER_NAME)
+            else it[SPOTIFY_USER_NAME] = name
+        }
+    }
+
+    suspend fun clearSpotifyTokens() {
+        dataStore.edit {
+            it.remove(SPOTIFY_ACCESS_TOKEN)
+            it.remove(SPOTIFY_REFRESH_TOKEN)
+            it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
+            it.remove(SPOTIFY_USER_NAME)
+        }
+    }
 
     // --- PocketBase ---
     val pocketBaseToken: Flow<String?> = dataStore.data.map { it[POCKETBASE_TOKEN] }

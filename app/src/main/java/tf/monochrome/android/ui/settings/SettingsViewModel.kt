@@ -450,19 +450,13 @@ class SettingsViewModel @Inject constructor(
     // --- Playlist Import actions ---
     fun importPlaylist(url: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            val result = playlistImporter.importFromUrl(url)
-            result.onSuccess { tracks ->
-                if (tracks.isNotEmpty()) {
-                    // Create playlist and add tracks
-                    val id = preferences.customApiEndpoint.first() ?: "Imported"
-                    // Real implementation would use libraryRepository.createPlaylist(name, ...)
-                    onResult(true, "Imported ${tracks.size} tracks")
-                } else {
-                    onResult(false, "No tracks found or matched")
+            playlistImporter.importFromUrl(url)
+                .onSuccess { done ->
+                    onResult(true, "Imported ${done.matched}/${done.total} tracks into '${done.playlistName}'")
                 }
-            }.onFailure {
-                onResult(false, it.message ?: "Import failed")
-            }
+                .onFailure {
+                    onResult(false, it.message ?: "Import failed")
+                }
         }
     }
 

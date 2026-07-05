@@ -127,6 +127,12 @@ fun HomeScreen(
     var showCreatePlaylistDialog by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
+    var showAddToPlaylistForSelection by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
+
+    val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<Long>()
+    androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -160,7 +166,6 @@ fun HomeScreen(
 
     showAddToPlaylistForTrack?.let { track ->
         AddToPlaylistSheet(
-            track = track,
             playlists = libraryPlaylists,
             onDismiss = { showAddToPlaylistForTrack = null },
             onPlaylistSelected = { playlist ->
@@ -169,6 +174,26 @@ fun HomeScreen(
             },
             onCreateNew = {
                 showAddToPlaylistForTrack = null
+                showCreatePlaylistDialog = true
+            }
+        )
+    }
+
+    if (showAddToPlaylistForSelection) {
+        AddToPlaylistSheet(
+            title = "Add ${selection.count} tracks to playlist",
+            playlists = libraryPlaylists,
+            onDismiss = { showAddToPlaylistForSelection = false },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTracksToPlaylist(
+                    playlist.id,
+                    recentTracks.filter { it.id in selection.selectedIds },
+                )
+                showAddToPlaylistForSelection = false
+                selection.clear()
+            },
+            onCreateNew = {
+                showAddToPlaylistForSelection = false
                 showCreatePlaylistDialog = true
             }
         )
@@ -254,6 +279,23 @@ fun HomeScreen(
         } else if (isLoading) {
             LoadingScreen()
         } else {
+            androidx.compose.animation.AnimatedVisibility(visible = selection.active) {
+                tf.monochrome.android.ui.components.TrackSelectionBar(
+                    selectedCount = selection.count,
+                    onClose = { selection.clear() },
+                    onAddToQueue = {
+                        playerViewModel.addToQueue(recentTracks.filter { it.id in selection.selectedIds })
+                        selection.clear()
+                    },
+                    onAddToPlaylist = { showAddToPlaylistForSelection = true },
+                    onDelete = {
+                        playerViewModel.removeFromHistory(selection.selectedIds)
+                        selection.clear()
+                    },
+                    deleteContentDescription = "Remove from history"
+                )
+            }
+
             // ── Home content ────────────────────────────────────
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -301,13 +343,18 @@ fun HomeScreen(
                             track = track,
                             isLiked = favoriteTrackIds.contains(track.id),
                             onLikeClick = { playerViewModel.toggleFavorite(track) },
-                            onClick = { playerViewModel.playTrack(track, recentTracks) },
-                            onLongClick = { showContextMenuForTrack = track },
+                            onClick = {
+                                if (selection.active) selection.toggle(track.id)
+                                else playerViewModel.playTrack(track, recentTracks)
+                            },
+                            onLongClick = { selection.toggle(track.id) },
                             onMoreClick = { showContextMenuForTrack = track },
                             onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                             onAlbumClick = track.album?.id?.let { albumId ->
                                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                            }
+                            },
+                            selectionMode = selection.active,
+                            selected = track.id in selection.selectedIds
                         )
                     }
                 } else {

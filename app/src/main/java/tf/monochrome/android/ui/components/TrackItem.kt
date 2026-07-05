@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Explicit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,8 +49,17 @@ fun TrackItem(
     onMoreClick: (() -> Unit)? = null,
     onAlbumClick: (() -> Unit)? = null,
     onArtistClick: ((Long) -> Unit)? = null,
-    downloadState: TrackDownloadState? = null
+    downloadState: TrackDownloadState? = null,
+    selectionMode: Boolean = false,
+    selected: Boolean = false
 ) {
+    // While multi-selecting, per-row affordances (like, 3-dot, inline
+    // artist/album links) would steal taps meant for selection — hide them.
+    val effectiveOnLikeClick = onLikeClick.takeUnless { selectionMode }
+    val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode }
+    val effectiveOnAlbumClick = onAlbumClick.takeUnless { selectionMode }
+    val effectiveOnArtistClick = onArtistClick.takeUnless { selectionMode }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -59,7 +70,7 @@ fun TrackItem(
             )
             .liquidGlass(shape = MonoDimens.shapeMd),
         shape = MonoDimens.shapeMd,
-        color = Color.Transparent
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent
     ) {
         Row(
             modifier = Modifier
@@ -67,6 +78,15 @@ fun TrackItem(
                 .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selectionMode) {
+            Icon(
+                imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+                contentDescription = if (selected) "Selected" else "Not selected",
+                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
+        }
+
         if (trackNumber != null) {
             Text(
                 text = trackNumber.toString(),
@@ -77,8 +97,8 @@ fun TrackItem(
         }
 
         if (showCover) {
-            val coverModifier = if (onAlbumClick != null) {
-                Modifier.clickable { onAlbumClick() }
+            val coverModifier = if (effectiveOnAlbumClick != null) {
+                Modifier.clickable { effectiveOnAlbumClick() }
             } else {
                 Modifier
             }
@@ -117,11 +137,11 @@ fun TrackItem(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (onArtistClick != null) {
+                if (effectiveOnArtistClick != null) {
                     ClickableArtists(
                         artists = track.uiArtistRefs(),
                         fallbackName = track.displayArtist,
-                        onArtistClick = { ref -> ref.id?.let { onArtistClick(it) } },
+                        onArtistClick = { ref -> ref.id?.let { effectiveOnArtistClick(it) } },
                         modifier = Modifier.weight(1f, fill = false),
                     )
                 } else {
@@ -133,7 +153,7 @@ fun TrackItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (track.album != null && onAlbumClick != null) {
+                if (track.album != null && effectiveOnAlbumClick != null) {
                     Text(
                         text = " • ",
                         style = MaterialTheme.typography.bodySmall,
@@ -145,7 +165,7 @@ fun TrackItem(
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable(onClick = onAlbumClick)
+                        modifier = Modifier.clickable(onClick = effectiveOnAlbumClick)
                     )
                 } else if (track.album != null) {
                     Text(
@@ -159,8 +179,8 @@ fun TrackItem(
             }
         }
 
-        if (onLikeClick != null) {
-            IconButton(onClick = onLikeClick, modifier = Modifier.padding(start = 4.dp)) {
+        if (effectiveOnLikeClick != null) {
+            IconButton(onClick = effectiveOnLikeClick, modifier = Modifier.padding(start = 4.dp)) {
                 Icon(
                     imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = if (isLiked) "Unlike" else "Like",
@@ -178,7 +198,7 @@ fun TrackItem(
         }
 
         if (showDuration) {
-            Spacer(modifier = Modifier.width(if (onLikeClick == null) 8.dp else 4.dp))
+            Spacer(modifier = Modifier.width(if (effectiveOnLikeClick == null) 8.dp else 4.dp))
             Text(
                 text = track.formattedDuration,
                 style = MaterialTheme.typography.bodySmall,
@@ -186,8 +206,8 @@ fun TrackItem(
             )
         }
 
-        if (onMoreClick != null) {
-            IconButton(onClick = onMoreClick) {
+        if (effectiveOnMoreClick != null) {
+            IconButton(onClick = effectiveOnMoreClick) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "More options",

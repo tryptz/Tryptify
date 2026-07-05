@@ -1,6 +1,10 @@
 package tf.monochrome.android.ui.library
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,8 +22,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,7 +45,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
+import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CoverImage
+import tf.monochrome.android.ui.components.CreatePlaylistDialog
+import tf.monochrome.android.ui.components.TrackSelectionBar
+import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.player.PlayerViewModel
 
 @Composable
@@ -48,6 +60,43 @@ fun DownloadsScreen(
 ) {
     val downloadedTracks by viewModel.downloadedTracks.collectAsState()
     val albumGroups by viewModel.albumGroups.collectAsState()
+    val playlists by playerViewModel.playlists.collectAsState()
+
+    val selection = rememberTrackSelectionState<Long>()
+    BackHandler(enabled = selection.active) { selection.clear() }
+    var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+
+    if (showCreatePlaylistDialog) {
+        CreatePlaylistDialog(
+            onDismiss = { showCreatePlaylistDialog = false },
+            onSubmit = { name, description ->
+                playerViewModel.createPlaylist(name, description)
+                showCreatePlaylistDialog = false
+            }
+        )
+    }
+
+    if (showAddToPlaylistForSelection) {
+        AddToPlaylistSheet(
+            title = "Add ${selection.count} tracks to playlist",
+            playlists = playlists,
+            onDismiss = { showAddToPlaylistForSelection = false },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTracksToPlaylist(
+                    playlist.id,
+                    downloadedTracks.filter { it.id in selection.selectedIds }
+                        .map { it.toUnifiedTrack().toLegacyTrack() },
+                )
+                showAddToPlaylistForSelection = false
+                selection.clear()
+            },
+            onCreateNew = {
+                showAddToPlaylistForSelection = false
+                showCreatePlaylistDialog = true
+            }
+        )
+    }
 
     if (downloadedTracks.isEmpty()) {
         Box(
@@ -69,6 +118,27 @@ fun DownloadsScreen(
     // drives 'tap a track to play within the entire downloads queue', the
     // per-album lists drive 'tap an album card to play that album in order'.
     val allUnified = downloadedTracks.map { it.toUnifiedTrack() }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+    AnimatedVisibility(visible = selection.active) {
+        TrackSelectionBar(
+            selectedCount = selection.count,
+            onClose = { selection.clear() },
+            onAddToQueue = {
+                playerViewModel.addUnifiedToQueue(
+                    downloadedTracks.filter { it.id in selection.selectedIds }
+                        .map { it.toUnifiedTrack() },
+                )
+                selection.clear()
+            },
+            onAddToPlaylist = { showAddToPlaylistForSelection = true },
+            onDelete = {
+                viewModel.deleteDownloads(downloadedTracks.filter { it.id in selection.selectedIds })
+                selection.clear()
+            },
+            deleteContentDescription = "Delete downloads"
+        )
+    }
 
     LazyColumn(
         contentPadding = PaddingValues(bottom = 120.dp),
@@ -118,13 +188,20 @@ fun DownloadsScreen(
             DownloadedTrackRow(
                 track = track,
                 onClick = {
-                    val tappedUnified = track.toUnifiedTrack()
-                    playerViewModel.playUnifiedTrack(tappedUnified, allUnified)
+                    if (selection.active) {
+                        selection.toggle(track.id)
+                    } else {
+                        val tappedUnified = track.toUnifiedTrack()
+                        playerViewModel.playUnifiedTrack(tappedUnified, allUnified)
+                    }
                 },
+                onLongClick = { selection.toggle(track.id) },
                 onShare = { playerViewModel.shareDownloadedTrack(track) },
-                onDelete = { viewModel.deleteDownload(track) },
+                selectionMode = selection.active,
+                selected = track.id in selection.selectedIds,
             )
         }
+    }
     }
 }
 
@@ -164,20 +241,31 @@ private fun AlbumCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DownloadedTrackRow(
     track: DownloadedTrackEntity,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onShare: () -> Unit,
-    onDelete: () -> Unit,
+    selectionMode: Boolean,
+    selected: Boolean,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selectionMode) {
+            Icon(
+                imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+                contentDescription = if (selected) "Selected" else "Not selected",
+                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+        }
         CoverImage(
             url = track.albumCover,
             contentDescription = track.title,
@@ -203,19 +291,16 @@ private fun DownloadedTrackRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        IconButton(onClick = onShare) {
-            Icon(
-                Icons.Default.Share,
-                contentDescription = "Share Download",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Delete Download",
-                tint = MaterialTheme.colorScheme.error
-            )
+        // Deletion is intentionally not a per-row button anymore — long-press
+        // to select, then delete from the selection bar.
+        if (!selectionMode) {
+            IconButton(onClick = onShare) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = "Share Download",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

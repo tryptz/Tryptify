@@ -185,21 +185,27 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun deleteDownload(track: DownloadedTrackEntity) {
-        viewModelScope.launch {
-            if (track.filePath.startsWith("content://")) {
-                try {
-                    val uri = track.filePath.toUri()
-                    val docFile = DocumentFile.fromSingleUri(appCtx, uri)
-                    docFile?.delete()
-                } catch (e: Exception) {
-                    // Ignore exceptions during content deletion
-                }
-            } else {
-                val file = File(track.filePath)
-                if (file.exists()) file.delete()
+        viewModelScope.launch { deleteOne(track) }
+    }
+
+    fun deleteDownloads(tracks: List<DownloadedTrackEntity>) {
+        viewModelScope.launch { tracks.forEach { deleteOne(it) } }
+    }
+
+    private suspend fun deleteOne(track: DownloadedTrackEntity) {
+        if (track.filePath.startsWith("content://")) {
+            try {
+                val uri = track.filePath.toUri()
+                val docFile = DocumentFile.fromSingleUri(appCtx, uri)
+                docFile?.delete()
+            } catch (e: Exception) {
+                // Ignore exceptions during content deletion
             }
-            downloadDao.deleteDownloadedTrack(track.id)
+        } else {
+            val file = File(track.filePath)
+            if (file.exists()) file.delete()
         }
+        downloadDao.deleteDownloadedTrack(track.id)
     }
 
     companion object {

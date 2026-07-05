@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var devEditController: tf.monochrome.android.devedit.DevEditController
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
+    @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var performanceProfile: PerformanceProfile
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
@@ -261,10 +262,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Handle Supabase OAuth callback deep-link
+        // Route OAuth callback deep-links: Spotify (tryptify://spotify-callback)
+        // vs Supabase (tf.monotrypt.android://login-callback)
         val uri = intent.data ?: return
         lifecycleScope.launch {
-            supabaseAuthManager.handleDeepLink(uri)
+            if (uri.scheme == "tryptify" && uri.host == "spotify-callback") {
+                spotifyAuthManager.handleCallback(uri)
+            } else {
+                supabaseAuthManager.handleDeepLink(uri)
+            }
         }
     }
 }

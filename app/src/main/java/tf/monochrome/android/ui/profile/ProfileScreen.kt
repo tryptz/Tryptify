@@ -299,7 +299,7 @@ private fun SignedOutView(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Sign in to Monochrome",
+                text = "Sign in to Tryptify",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground

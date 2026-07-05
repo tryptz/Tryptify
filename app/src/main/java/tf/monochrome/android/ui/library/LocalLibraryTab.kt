@@ -393,9 +393,9 @@ private fun PermissionRequest(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 if (shouldShowRationale)
-                    "Monochrome needs access to your audio files to scan and play local music. Please grant the permission."
+                    "Tryptify needs access to your audio files to scan and play local music. Please grant the permission."
                 else
-                    "Grant access to your audio files so Monochrome can scan and play your local music library.",
+                    "Grant access to your audio files so Tryptify can scan and play your local music library.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
