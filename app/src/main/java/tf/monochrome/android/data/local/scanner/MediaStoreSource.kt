@@ -61,7 +61,8 @@ class MediaStoreSource @Inject constructor(
 
     fun queryAllAudio(
         minDurationMs: Long = 30_000,
-        excludedPaths: Set<String> = emptySet()
+        excludedPaths: Set<String> = emptySet(),
+        folderRoots: Set<String> = emptySet()
     ): List<AudioFileInfo> {
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -105,6 +106,10 @@ class MediaStoreSource @Inject constructor(
                 // Filter excluded paths
                 if (excludedPaths.any { path.startsWith(it) }) continue
 
+                // Restrict to user-chosen library roots. Empty set = no
+                // restriction (whole-device scan, the pre-onboarding default).
+                if (!isUnderRoots(path, folderRoots)) continue
+
                 val uri = Uri.withAppendedPath(collection, id.toString())
 
                 results.add(
@@ -126,7 +131,8 @@ class MediaStoreSource @Inject constructor(
 
     fun queryModifiedSince(
         sinceTimestamp: Long,
-        minDurationMs: Long = 30_000
+        minDurationMs: Long = 30_000,
+        folderRoots: Set<String> = emptySet()
     ): List<AudioFileInfo> {
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -157,6 +163,7 @@ class MediaStoreSource @Inject constructor(
 
             while (cursor.moveToNext()) {
                 val path = cursor.getString(dataCol) ?: continue
+                if (!isUnderRoots(path, folderRoots)) continue
                 val id = cursor.getLong(idCol)
                 val uri = Uri.withAppendedPath(collection, id.toString())
 
@@ -175,5 +182,64 @@ class MediaStoreSource @Inject constructor(
         }
 
         return results
+    }
+
+    /**
+     * Count indexed audio tracks under [path]. Used by onboarding's folder
+     * picker for the "Found N tracks in this folder" preview. Queries
+     * MediaStore rather than walking the tree so the number matches what a
+     * scan will actually import (the scanner is MediaStore-only — files the
+     * media indexer hasn't seen yet won't be found by either).
+     */
+    fun countAudioUnderPath(path: String, minDurationMs: Long = 30_000): Int {
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        }
+        val escaped = escapeLikePattern(path.trimEnd('/'))
+        val selection = buildString {
+            append("${MediaStore.Audio.Media.DATA} LIKE ? ESCAPE '\\'")
+            append(" AND ${MediaStore.Audio.Media.DURATION} >= ?")
+            append(" AND ${MediaStore.Audio.Media.IS_MUSIC} = 1")
+        }
+        val selectionArgs = arrayOf("$escaped/%", minDurationMs.toString())
+
+        var count = 0
+        contentResolver.query(
+            collection,
+            arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.MIME_TYPE),
+            selection, selectionArgs, null
+        )?.use { cursor ->
+            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+            while (cursor.moveToNext()) {
+                val filePath = cursor.getString(dataCol) ?: continue
+                if (!isAudioMime(cursor.getString(mimeCol))) continue
+                if (isExcludedExtension(filePath)) continue
+                count++
+            }
+        }
+        return count
+    }
+
+    companion object {
+        /**
+         * True when [path] falls under one of [roots] (or roots is empty =
+         * unrestricted). A root matches its own path and descendants only —
+         * the trailing '/' in the prefix check keeps /Music from also
+         * matching /MusicVideos.
+         */
+        fun isUnderRoots(path: String, roots: Set<String>): Boolean {
+            if (roots.isEmpty()) return true
+            return roots.any { root ->
+                val r = root.trimEnd('/')
+                path == r || path.startsWith("$r/")
+            }
+        }
+
+        /** Escape %, _ and \ for a LIKE pattern using '\' as the escape char. */
+        fun escapeLikePattern(value: String): String =
+            value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     }
 }

@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -91,6 +90,7 @@ import tf.monochrome.android.ui.navigation.openArtist
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.util.safTreeUriToPath
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -704,24 +704,6 @@ fun GenreList(
         }
     }
 }
-
-/**
- * Resolve a SAF tree URI (from `OpenDocumentTree`) to a best-guess filesystem path.
- * Handles "primary" (emulated) storage plus SD-card volume IDs. Returns null if the
- * URI isn't a recognized tree document — callers should fall back gracefully.
- */
-private fun safTreeUriToPath(uri: Uri): String? = runCatching {
-    val docId = DocumentsContract.getTreeDocumentId(uri)
-    val parts = docId.split(":", limit = 2)
-    if (parts.size != 2) return@runCatching null
-    val (type, path) = parts
-    val base = if (type.equals("primary", ignoreCase = true)) {
-        "/storage/emulated/0"
-    } else {
-        "/storage/$type"
-    }
-    if (path.isBlank()) base else "$base/$path".trimEnd('/')
-}.getOrNull()
 
 @Composable
 fun FolderList(
