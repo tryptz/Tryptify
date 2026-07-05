@@ -1583,6 +1583,11 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 
         Spacer(modifier = Modifier.height(20.dp))
         SettingsGroupHeader("Data")
+        SettingItem(
+            title = "Restart onboarding",
+            subtitle = "Run the first-time setup again. Your library and settings are kept.",
+            onClick = { viewModel.restartOnboarding() }
+        )
         OutlinedButton(
             onClick = { showClearAllDialog = true },
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
