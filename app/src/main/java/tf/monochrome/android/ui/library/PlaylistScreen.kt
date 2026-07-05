@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.library
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,7 +24,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,6 +57,8 @@ import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
+import tf.monochrome.android.ui.components.TrackSelectionBar
+import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -78,6 +81,10 @@ fun PlaylistScreen(
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
+
+    val selection = rememberTrackSelectionState<Long>()
+    BackHandler(enabled = selection.active) { selection.clear() }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -88,6 +95,7 @@ fun PlaylistScreen(
             onAddToQueue = { playerViewModel.addToQueue(listOf(track)) },
             onToggleLike = { playerViewModel.toggleFavorite(track) },
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
+            onRemoveFromPlaylist = { viewModel.removeTrack(track.id) },
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
@@ -111,7 +119,6 @@ fun PlaylistScreen(
 
     showAddToPlaylistForTrack?.let { track ->
         AddToPlaylistSheet(
-            track = track,
             playlists = playlists,
             onDismiss = { showAddToPlaylistForTrack = null },
             onPlaylistSelected = { playlist ->
@@ -120,6 +127,26 @@ fun PlaylistScreen(
             },
             onCreateNew = {
                 showAddToPlaylistForTrack = null
+                showCreatePlaylistDialog = true
+            }
+        )
+    }
+
+    if (showAddToPlaylistForSelection) {
+        AddToPlaylistSheet(
+            title = "Add ${selection.count} tracks to playlist",
+            playlists = playlists,
+            onDismiss = { showAddToPlaylistForSelection = false },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTracksToPlaylist(
+                    playlist.id,
+                    tracks.filter { it.id in selection.selectedIds },
+                )
+                showAddToPlaylistForSelection = false
+                selection.clear()
+            },
+            onCreateNew = {
+                showAddToPlaylistForSelection = false
                 showCreatePlaylistDialog = true
             }
         )
@@ -188,6 +215,23 @@ fun PlaylistScreen(
                 containerColor = Color.Transparent
             )
         )
+
+        AnimatedVisibility(visible = selection.active) {
+            TrackSelectionBar(
+                selectedCount = selection.count,
+                onClose = { selection.clear() },
+                onAddToQueue = {
+                    playerViewModel.addToQueue(tracks.filter { it.id in selection.selectedIds })
+                    selection.clear()
+                },
+                onAddToPlaylist = { showAddToPlaylistForSelection = true },
+                onDelete = {
+                    viewModel.removeTracks(selection.selectedIds)
+                    selection.clear()
+                },
+                deleteContentDescription = "Remove from playlist"
+            )
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -280,37 +324,24 @@ fun PlaylistScreen(
                 }
             } else {
                 items(tracks) { track ->
-                    // In a real app we might want custom TrackItem for playlists to show a remove button
-                    // But we can just use TrackItem with context menu for now.
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        TrackItem(
-                            track = track,
-                            isLiked = favoriteTrackIds.contains(track.id),
-                            onLikeClick = { playerViewModel.toggleFavorite(track) },
-                            onClick = { playerViewModel.playTrack(track, tracks) },
-                            onLongClick = { showContextMenuForTrack = track },
-                            onMoreClick = { showContextMenuForTrack = track },
-                            onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                            onAlbumClick = track.album?.id?.let { albumId ->
-                                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                            },
-                            downloadState = activeDownloads[track.id],
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(
-                            onClick = { viewModel.removeTrack(track.id) },
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.RemoveCircleOutline,
-                                contentDescription = "Remove from playlist",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    TrackItem(
+                        track = track,
+                        isLiked = favoriteTrackIds.contains(track.id),
+                        onLikeClick = { playerViewModel.toggleFavorite(track) },
+                        onClick = {
+                            if (selection.active) selection.toggle(track.id)
+                            else playerViewModel.playTrack(track, tracks)
+                        },
+                        onLongClick = { selection.toggle(track.id) },
+                        onMoreClick = { showContextMenuForTrack = track },
+                        onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
+                        onAlbumClick = track.album?.id?.let { albumId ->
+                            { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                        },
+                        downloadState = activeDownloads[track.id],
+                        selectionMode = selection.active,
+                        selected = track.id in selection.selectedIds
+                    )
                 }
             }
         }

@@ -49,6 +49,12 @@ class PlaylistViewModel @Inject constructor(
             libraryRepository.removeTrackFromPlaylist(playlistId, trackId)
         }
     }
+
+    fun removeTracks(trackIds: Collection<Long>) {
+        viewModelScope.launch {
+            trackIds.forEach { libraryRepository.removeTrackFromPlaylist(playlistId, it) }
+        }
+    }
     
     fun deletePlaylist() {
         viewModelScope.launch {

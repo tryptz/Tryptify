@@ -26,17 +26,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
-import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddToPlaylistSheet(
-    track: Track,
     playlists: List<UserPlaylistEntity>,
     onDismiss: () -> Unit,
     onPlaylistSelected: (UserPlaylistEntity) -> Unit,
-    onCreateNew: () -> Unit
+    onCreateNew: () -> Unit,
+    title: String = "Add to Playlist"
 ) {
     val sheetState = rememberModalBottomSheetState()
 
@@ -47,7 +46,7 @@ fun AddToPlaylistSheet(
     ) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
             Text(
-                text = "Add to Playlist",
+                text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)

@@ -418,6 +418,38 @@ class PlayerViewModel @Inject constructor(
         queueManager.addToQueue(tracks)
     }
 
+    /**
+     * Queue UnifiedTracks (search results, downloads): register each in the
+     * registry first — same as playAllUnified — so local/Qobuz items resolve
+     * to the right playback source when they come up.
+     */
+    fun addUnifiedToQueue(tracks: List<UnifiedTrack>) {
+        if (tracks.isEmpty()) return
+        tracks.forEach { unifiedTrackRegistry.put(it.toLegacyTrack().id, it) }
+        queueManager.addToQueue(tracks.map { it.toLegacyTrack() })
+    }
+
+    /** Bulk add from multi-select. */
+    fun addTracksToPlaylist(playlistId: String, tracks: List<Track>) {
+        viewModelScope.launch {
+            tracks.forEach { libraryRepository.addTrackToPlaylist(playlistId, it) }
+        }
+    }
+
+    /** Bulk unlike from multi-select. */
+    fun unlikeTracks(trackIds: Collection<Long>) {
+        viewModelScope.launch {
+            libraryRepository.removeFavoriteTracks(trackIds)
+        }
+    }
+
+    /** Bulk remove listening-history entries from multi-select. */
+    fun removeFromHistory(trackIds: Collection<Long>) {
+        viewModelScope.launch {
+            libraryRepository.removeFromHistory(trackIds)
+        }
+    }
+
     /** Insert a track right after the current one. */
     fun playNext(track: Track) {
         queueManager.addNextInQueue(track)

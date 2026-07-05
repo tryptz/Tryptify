@@ -76,6 +76,11 @@ class LibraryRepository @Inject constructor(
         }
     }
 
+    /** Explicit bulk unlike (idempotent — no toggle race on already-removed ids). */
+    suspend fun removeFavoriteTracks(trackIds: Collection<Long>) {
+        trackIds.forEach { favoriteDao.deleteFavoriteTrack(it) }
+    }
+
     suspend fun toggleFavoriteAlbum(album: Album) {
         if (favoriteDao.isFavoriteAlbum(album.id)) {
             favoriteDao.deleteFavoriteAlbum(album.id)
@@ -150,6 +155,11 @@ class LibraryRepository @Inject constructor(
     suspend fun clearHistory() {
         historyDao.clearHistory()
         playEventDao.clearAll()
+    }
+
+    /** Remove individual entries from listening history (play-event stats are kept). */
+    suspend fun removeFromHistory(trackIds: Collection<Long>) {
+        trackIds.forEach { historyDao.deleteByTrackId(it) }
     }
 
     // --- Play events / stats ---

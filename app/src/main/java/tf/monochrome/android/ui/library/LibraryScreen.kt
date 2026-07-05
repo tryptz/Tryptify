@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.library
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,6 +53,8 @@ import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
+import tf.monochrome.android.ui.components.TrackSelectionBar
+import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -88,6 +93,12 @@ fun LibraryScreen(
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
+    var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
+
+    val selection = rememberTrackSelectionState<Long>()
+    BackHandler(enabled = selection.active) { selection.clear() }
+    // Lists (and delete semantics) differ per tab — drop any selection on switch.
+    LaunchedEffect(selectedTabIndex) { selection.clear() }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -125,7 +136,6 @@ fun LibraryScreen(
 
     showAddToPlaylistForTrack?.let { track ->
         AddToPlaylistSheet(
-            track = track,
             playlists = playlists,
             onDismiss = { showAddToPlaylistForTrack = null },
             onPlaylistSelected = { playlist ->
@@ -134,6 +144,30 @@ fun LibraryScreen(
             },
             onCreateNew = {
                 showAddToPlaylistForTrack = null
+                showCreatePlaylistDialog = true
+            }
+        )
+    }
+
+    // Tracks that bulk-selection actions operate on; ids are unique across the
+    // overview's two sections, so a combined distinct list resolves either.
+    val selectableTracks = (recentTracks + favoriteTracks).distinctBy { it.id }
+
+    if (showAddToPlaylistForSelection) {
+        AddToPlaylistSheet(
+            title = "Add ${selection.count} tracks to playlist",
+            playlists = playlists,
+            onDismiss = { showAddToPlaylistForSelection = false },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTracksToPlaylist(
+                    playlist.id,
+                    selectableTracks.filter { it.id in selection.selectedIds },
+                )
+                showAddToPlaylistForSelection = false
+                selection.clear()
+            },
+            onCreateNew = {
+                showAddToPlaylistForSelection = false
                 showCreatePlaylistDialog = true
             }
         )
@@ -181,6 +215,25 @@ fun LibraryScreen(
 
         val currentSectionId = tabs.getOrNull(selectedTabIndex)?.first ?: "overview"
 
+        AnimatedVisibility(visible = selection.active) {
+            TrackSelectionBar(
+                selectedCount = selection.count,
+                onClose = { selection.clear() },
+                onAddToQueue = {
+                    playerViewModel.addToQueue(selectableTracks.filter { it.id in selection.selectedIds })
+                    selection.clear()
+                },
+                onAddToPlaylist = { showAddToPlaylistForSelection = true },
+                onDelete = if (currentSectionId == "favorites") {
+                    {
+                        playerViewModel.unlikeTracks(selection.selectedIds)
+                        selection.clear()
+                    }
+                } else null,
+                deleteContentDescription = "Unlike"
+            )
+        }
+
         when (currentSectionId) {
             "overview" ->
                 LazyColumn(
@@ -194,14 +247,19 @@ fun LibraryScreen(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
                                 onLikeClick = { playerViewModel.toggleFavorite(track) },
-                                onClick = { playerViewModel.playTrack(track, recentTracks) },
-                                onLongClick = { showContextMenuForTrack = track },
+                                onClick = {
+                                    if (selection.active) selection.toggle(track.id)
+                                    else playerViewModel.playTrack(track, recentTracks)
+                                },
+                                onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
-                                downloadState = activeDownloads[track.id]
+                                downloadState = activeDownloads[track.id],
+                                selectionMode = selection.active,
+                                selected = track.id in selection.selectedIds
                             )
                         }
                     }
@@ -213,14 +271,19 @@ fun LibraryScreen(
                                 track = track,
                                 isLiked = true,
                                 onLikeClick = { playerViewModel.toggleFavorite(track) },
-                                onClick = { playerViewModel.playTrack(track, favoriteTracks) },
-                                onLongClick = { showContextMenuForTrack = track },
+                                onClick = {
+                                    if (selection.active) selection.toggle(track.id)
+                                    else playerViewModel.playTrack(track, favoriteTracks)
+                                },
+                                onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
-                                downloadState = activeDownloads[track.id]
+                                downloadState = activeDownloads[track.id],
+                                selectionMode = selection.active,
+                                selected = track.id in selection.selectedIds
                             )
                         }
                     }
@@ -353,14 +416,19 @@ fun LibraryScreen(
                                 track = track,
                                 isLiked = true,
                                 onLikeClick = { playerViewModel.toggleFavorite(track) },
-                                onClick = { playerViewModel.playTrack(track, favoriteTracks) },
-                                onLongClick = { showContextMenuForTrack = track },
+                                onClick = {
+                                    if (selection.active) selection.toggle(track.id)
+                                    else playerViewModel.playTrack(track, favoriteTracks)
+                                },
+                                onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
-                                downloadState = activeDownloads[track.id]
+                                downloadState = activeDownloads[track.id],
+                                selectionMode = selection.active,
+                                selected = track.id in selection.selectedIds
                             )
                         }
                     }
