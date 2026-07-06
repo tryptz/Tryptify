@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import coil3.ImageLoader
+import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
@@ -85,7 +85,7 @@ fun rememberAlbumColors(imageUrl: String?): AlbumColors {
                 .allowHardware(false)
                 .size(256, 256)
                 .build()
-            val result = ImageLoader(context).execute(request)
+            val result = SingletonImageLoader.get(context).execute(request)
             (result as? SuccessResult)?.image?.toBitmap()
         } catch (_: Exception) {
             null
