@@ -188,6 +188,7 @@ fun MainPlayerRoute(
         sourceType = currentUnified?.sourceType,
         artists = currentUnified?.artists ?: emptyList(),
         qualityBadge = currentUnified?.qualityBadge,
+        channelBadge = currentUnified?.channelBadge ?: currentTrack?.channelBadge,
         isPlaying = isPlaying,
         positionMs = positionMs,
         durationMs = durationMs,

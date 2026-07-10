@@ -1049,6 +1049,7 @@ private fun QobuzTrackItem.toDomainTrack(
         explicit = parentalWarning,
         trackNumber = trackNumber,
         volumeNumber = mediaNumber,
+        channelCount = maximumChannelCount,
     )
 }
 
@@ -1137,6 +1138,7 @@ private fun QobuzArtistTopTrack.toDomainTrack(): tf.monochrome.android.domain.mo
         explicit = parentalWarning,
         trackNumber = physicalSupport?.trackNumber,
         volumeNumber = physicalSupport?.mediaNumber,
+        channelCount = audioInfo?.maximumChannelCount,
     )
 }
 

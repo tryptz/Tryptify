@@ -132,6 +132,8 @@ class SettingsViewModel @Inject constructor(
         usbAudioRouter.usbOutputDevice
             .map { it?.let(usbAudioRouter::describe) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val multichannelDownmixEnabled: StateFlow<Boolean> = preferences.multichannelDownmixEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -341,6 +343,9 @@ class SettingsViewModel @Inject constructor(
     fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch {
         preferences.setUsbExclusiveBitPerfectEnabled(enabled)
         if (enabled) preferences.setUsbBitPerfectEnabled(false)
+    } }
+    fun setMultichannelDownmixEnabled(enabled: Boolean) { viewModelScope.launch {
+        preferences.setMultichannelDownmixEnabled(enabled)
     } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
 

@@ -927,6 +927,9 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         UsbBitPerfectToggle(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
+        MultichannelDownmixToggle(viewModel)
+
+        Spacer(modifier = Modifier.height(8.dp))
         Text("Crossfade: ${crossfade}s", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         Text("Blend between tracks", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
@@ -1024,6 +1027,26 @@ private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
 private fun formatBlockSize(size: Int): String = when {
     size >= 1024 && size % 1024 == 0 -> "${size / 1024}K"
     else -> size.toString()
+}
+
+/**
+ * Multichannel (5.1/7.1) handling: fold down to stereo through the DSP/EQ
+ * chain (default), or pass multichannel PCM through to the device with
+ * DSP/EQ bypassed for those tracks. Applies from the next track / seek.
+ */
+@Composable
+private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
+    val enabled by viewModel.multichannelDownmixEnabled.collectAsState()
+    SettingSwitchItem(
+        title = "Downmix multichannel to stereo",
+        subtitle = if (enabled) {
+            "5.1/7.1 tracks fold into stereo (ITU-R BS.775) and run through DSP/EQ."
+        } else {
+            "Off — multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
+        },
+        checked = enabled,
+        onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
+    )
 }
 
 /**

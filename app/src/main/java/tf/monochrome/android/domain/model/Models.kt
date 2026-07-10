@@ -3,6 +3,20 @@ package tf.monochrome.android.domain.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * Human-readable channel-layout tag for a source channel count: "5.1" for 6,
+ * "7.1" for 8, "Nch" otherwise. Null for mono/stereo/unknown — the UI renders
+ * a pill only for genuinely multichannel tracks.
+ */
+fun channelBadgeFor(channelCount: Int?): String? =
+    channelCount?.takeIf { it > 2 }?.let {
+        when (it) {
+            6 -> "5.1"
+            8 -> "7.1"
+            else -> "${it}ch"
+        }
+    }
+
 @Serializable
 data class Track(
     val id: Long,
@@ -18,10 +32,16 @@ data class Track(
     val popularity: Int? = null,
     val type: String = "track",
     val isUnavailable: Boolean? = null,
-    val streamStartDate: String? = null
+    val streamStartDate: String? = null,
+    // Source channel count (e.g. Qobuz maximum_channel_count). Null/≤2 = stereo.
+    val channelCount: Int? = null
 ) {
     val displayArtist: String
         get() = artist?.name ?: artists.joinToString(", ") { it.name }
+
+    /** "5.1" / "7.1" / "Nch" pill for multichannel sources, null for stereo. */
+    val channelBadge: String?
+        get() = channelBadgeFor(channelCount)
 
     val formattedDuration: String
         get() {
@@ -349,6 +369,8 @@ data class UnifiedTrack(
     val bitDepth: Int? = null,
     val bitRate: Int? = null,
     val qualityTags: List<String>? = null,
+    // Source channel count (e.g. Qobuz maximum_channel_count). Null/≤2 = stereo.
+    val channelCount: Int? = null,
 
     // Replay gain
     val replayGainTrack: Float? = null,
@@ -399,6 +421,10 @@ data class UnifiedTrack(
             else -> null
         }
 
+    /** "5.1" / "7.1" / "Nch" pill for multichannel sources, null for stereo. */
+    val channelBadge: String?
+        get() = channelBadgeFor(channelCount)
+
     /** Convert to legacy Track model for backward compatibility */
     fun toLegacyTrack(): Track {
         val tidalId = when (val s = source) {
@@ -432,7 +458,8 @@ data class UnifiedTrack(
             audioQuality = codec?.displayName,
             explicit = explicit,
             trackNumber = trackNumber,
-            volumeNumber = discNumber
+            volumeNumber = discNumber,
+            channelCount = channelCount
         )
     }
 }

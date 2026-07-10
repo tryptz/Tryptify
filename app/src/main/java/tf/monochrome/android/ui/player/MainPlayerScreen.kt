@@ -78,6 +78,7 @@ data class MainPlayerUiState(
     val sourceType: SourceType? = null,
     val artists: List<UnifiedArtistRef> = emptyList(),
     val qualityBadge: String? = null,
+    val channelBadge: String? = null,
     val isPlaying: Boolean,
     val positionMs: Long,
     val durationMs: Long,
@@ -237,6 +238,7 @@ fun MainPlayerScreen(
                 PlayerSourceFormatTag(
                     sourceType = state.sourceType,
                     qualityBadge = state.qualityBadge,
+                    channelBadge = state.channelBadge,
                 )
             }
 
@@ -588,8 +590,9 @@ private fun ToggleRow(
 private fun PlayerSourceFormatTag(
     sourceType: SourceType?,
     qualityBadge: String?,
+    channelBadge: String? = null,
 ) {
-    if (sourceType == null && qualityBadge.isNullOrBlank()) return
+    if (sourceType == null && qualityBadge.isNullOrBlank() && channelBadge.isNullOrBlank()) return
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
@@ -628,6 +631,21 @@ private fun PlayerSourceFormatTag(
             ) {
                 Text(
                     text = qualityBadge,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.85f),
+                )
+            }
+        }
+        // Multichannel layout chip ("5.1"/"7.1") — separate from the codec
+        // chip so it stays visible whichever quality string is playing.
+        if (!channelBadge.isNullOrBlank()) {
+            Surface(
+                shape = RoundedCornerShape(percent = 50),
+                color = Color.White.copy(alpha = 0.12f),
+            ) {
+                Text(
+                    text = channelBadge,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.85f),

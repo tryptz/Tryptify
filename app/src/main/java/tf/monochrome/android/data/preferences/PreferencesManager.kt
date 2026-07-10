@@ -171,6 +171,8 @@ class PreferencesManager @Inject constructor(
         private val USB_BIT_PERFECT_ENABLED = booleanPreferencesKey("usb_bit_perfect_enabled")
         private val USB_EXCLUSIVE_BIT_PERFECT_ENABLED =
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
+        private val MULTICHANNEL_DOWNMIX_ENABLED =
+            booleanPreferencesKey("multichannel_downmix_enabled")
         // Powers of two mirroring the user-facing chip row in Settings.
         // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
         // both together if you add another step.
@@ -895,6 +897,19 @@ class PreferencesManager @Inject constructor(
         dataStore.data.map { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] ?: false }
     suspend fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) {
         dataStore.edit { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] = enabled }
+    }
+
+    /**
+     * Fold multichannel (5.1/7.1) tracks down to stereo (ITU-R BS.775) at
+     * the head of the AudioProcessor chain. Default true — the DSP/EQ
+     * stages are stereo-only. When false, multichannel PCM passes through
+     * to AudioTrack untouched (the device downmixes or outputs natively)
+     * and DSP/EQ are bypassed for those tracks.
+     */
+    val multichannelDownmixEnabled: Flow<Boolean> =
+        dataStore.data.map { it[MULTICHANNEL_DOWNMIX_ENABLED] ?: true }
+    suspend fun setMultichannelDownmixEnabled(enabled: Boolean) {
+        dataStore.edit { it[MULTICHANNEL_DOWNMIX_ENABLED] = enabled }
     }
 
     // --- Library / Local Media ---

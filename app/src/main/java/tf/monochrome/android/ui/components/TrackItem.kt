@@ -135,6 +135,10 @@ fun TrackItem(
                         modifier = Modifier.padding(top = 1.dp)
                     )
                 }
+                track.channelBadge?.let { badge ->
+                    Spacer(modifier = Modifier.width(4.dp))
+                    ChannelBadgePill(badge)
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (effectiveOnArtistClick != null) {
@@ -217,4 +221,24 @@ fun TrackItem(
         }
     }
 }
+}
+
+/**
+ * Small rounded pill for multichannel sources ("5.1", "7.1"). Rendered next
+ * to the title so surround availability is visible at a glance in any list.
+ */
+@Composable
+fun ChannelBadgePill(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+        )
+    }
 }
