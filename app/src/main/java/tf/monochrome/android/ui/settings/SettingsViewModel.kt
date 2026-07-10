@@ -533,6 +533,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Re-enter the first-run wizard without touching any data. MainActivity
+     * collects this flag, so flipping it swaps the whole tree to onboarding.
+     */
+    fun restartOnboarding() {
+        viewModelScope.launch { preferences.setOnboardingComplete(false) }
+    }
+
     private fun getDirSize(dir: File): Long {
         if (!dir.exists()) return 0
         return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }

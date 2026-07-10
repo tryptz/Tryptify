@@ -193,6 +193,9 @@ class PreferencesManager @Inject constructor(
         // Device / session (Supabase sync)
         private val DEVICE_LOCAL_ID = stringPreferencesKey("device_local_id")
         private val DEVICE_REMOTE_ID = stringPreferencesKey("device_remote_id")
+
+        // Onboarding
+        private val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -702,6 +705,14 @@ class PreferencesManager @Inject constructor(
             it.remove(POCKETBASE_USER_ID)
             it.remove(POCKETBASE_EMAIL)
         }
+    }
+
+    // --- Onboarding ---
+    // Missing key reads false so both fresh installs and updates from builds
+    // that never wrote it get routed into the first-run flow exactly once.
+    val onboardingComplete: Flow<Boolean> = dataStore.data.map { it[ONBOARDING_COMPLETE] ?: false }
+    suspend fun setOnboardingComplete(complete: Boolean) {
+        dataStore.edit { it[ONBOARDING_COMPLETE] = complete }
     }
 
     // --- EQ / AutoEQ ---

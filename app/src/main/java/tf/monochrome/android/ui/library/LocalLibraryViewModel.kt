@@ -20,13 +20,13 @@ import tf.monochrome.android.data.collections.repository.CollectionRepository
 import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
+import tf.monochrome.android.data.local.scanner.ScanCoordinator
 import tf.monochrome.android.data.local.scanner.ScanProgress
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.ImportCollectionUseCase
-import tf.monochrome.android.domain.usecase.ScanLocalMediaUseCase
 import tf.monochrome.android.data.sync.BackupManager
 import javax.inject.Inject
 
@@ -34,7 +34,7 @@ import javax.inject.Inject
 class LocalLibraryViewModel @Inject constructor(
     private val localMediaRepository: LocalMediaRepository,
     private val collectionRepository: CollectionRepository,
-    private val scanLocalMediaUseCase: ScanLocalMediaUseCase,
+    private val scanCoordinator: ScanCoordinator,
     private val importCollectionUseCase: ImportCollectionUseCase,
     private val backupManager: BackupManager,
     private val preferencesManager: PreferencesManager
@@ -133,36 +133,17 @@ class LocalLibraryViewModel @Inject constructor(
 
     // ── Scan state ──────────────────────────────────────────────────
 
-    private val _scanProgress = MutableStateFlow<ScanProgress?>(null)
-    val scanProgress: StateFlow<ScanProgress?> = _scanProgress.asStateFlow()
-
-    private val _isScanning = MutableStateFlow(false)
-    val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+    // Shared across every scan entry point (Library tab, FileObserver,
+    // onboarding ScanWorker) so worker-driven scans show progress here too.
+    val scanProgress: StateFlow<ScanProgress?> = scanCoordinator.scanProgress
+    val isScanning: StateFlow<Boolean> = scanCoordinator.isScanning
 
     fun startFullScan() {
-        if (_isScanning.value) return
-        viewModelScope.launch {
-            _isScanning.value = true
-            scanLocalMediaUseCase.fullScan().collect { progress ->
-                _scanProgress.value = progress
-                if (progress is ScanProgress.Complete || progress is ScanProgress.Error) {
-                    _isScanning.value = false
-                }
-            }
-        }
+        viewModelScope.launch { scanCoordinator.runFullScan() }
     }
 
     fun startIncrementalScan() {
-        if (_isScanning.value) return
-        viewModelScope.launch {
-            _isScanning.value = true
-            scanLocalMediaUseCase.incrementalScan().collect { progress ->
-                _scanProgress.value = progress
-                if (progress is ScanProgress.Complete || progress is ScanProgress.Error) {
-                    _isScanning.value = false
-                }
-            }
-        }
+        viewModelScope.launch { scanCoordinator.runIncrementalScan() }
     }
 
     // ── Collection import ───────────────────────────────────────────

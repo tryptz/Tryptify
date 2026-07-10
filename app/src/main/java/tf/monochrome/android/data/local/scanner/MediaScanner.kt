@@ -8,6 +8,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import tf.monochrome.android.data.local.db.LocalAlbumEntity
@@ -19,6 +20,7 @@ import tf.monochrome.android.data.local.db.LocalTrackEntity
 import tf.monochrome.android.data.local.db.ScanStateEntity
 import tf.monochrome.android.data.local.db.TrackScanInfo
 import tf.monochrome.android.data.local.tags.TagReader
+import tf.monochrome.android.data.preferences.PreferencesManager
 import java.io.File
 import java.text.Normalizer
 import java.util.Collections
@@ -38,7 +40,8 @@ class MediaScanner @Inject constructor(
     private val mediaStoreSource: MediaStoreSource,
     private val tagReader: TagReader,
     private val localMediaDao: LocalMediaDao,
-    private val musicDatabase: tf.monochrome.android.data.db.MusicDatabase
+    private val musicDatabase: tf.monochrome.android.data.db.MusicDatabase,
+    private val preferences: PreferencesManager
 ) {
 
     fun fullScan(
@@ -46,7 +49,13 @@ class MediaScanner @Inject constructor(
         excludedPaths: Set<String> = emptySet()
     ): Flow<ScanProgress> = flow {
         try {
-            val mediaStoreFiles = mediaStoreSource.queryAllAudio(minDurationMs, excludedPaths)
+            // User-chosen library roots restrict every MediaStore query in
+            // this scan (discovery AND pruning, so tracks outside the roots
+            // are removed consistently). Empty set = whole-device scan —
+            // the behavior for users who never picked folders in onboarding.
+            val folderRoots = preferences.userFolderRoots.first()
+            val mediaStoreFiles =
+                mediaStoreSource.queryAllAudio(minDurationMs, excludedPaths, folderRoots)
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
 
             // One projection query up front instead of a findByPath() SELECT
@@ -88,10 +97,12 @@ class MediaScanner @Inject constructor(
         minDurationMs: Long = 30_000
     ): Flow<ScanProgress> = flow {
         try {
+            val folderRoots = preferences.userFolderRoots.first()
             val scanState = localMediaDao.getScanState()
             val lastScan = scanState?.lastIncremental ?: scanState?.lastFullScan ?: 0
 
-            val modifiedFiles = mediaStoreSource.queryModifiedSince(lastScan, minDurationMs)
+            val modifiedFiles =
+                mediaStoreSource.queryModifiedSince(lastScan, minDurationMs, folderRoots)
             if (modifiedFiles.isEmpty()) {
                 // No new tag content to read, but still rebuild groupings so
                 // album-cover-into-track propagation runs and the UI picks up
@@ -114,8 +125,10 @@ class MediaScanner @Inject constructor(
                 progressChunkSize = 20
             )
 
-            // Check for deleted files
-            val allMediaStorePaths = mediaStoreSource.queryAllAudio(minDurationMs)
+            // Check for deleted files. Same roots filter as fullScan so the
+            // prune diff never mass-deletes tracks a full scan would keep.
+            val allMediaStorePaths = mediaStoreSource
+                .queryAllAudio(minDurationMs, folderRoots = folderRoots)
                 .mapTo(HashSet()) { it.absolutePath }
             pruneDeleted(allMediaStorePaths)
 

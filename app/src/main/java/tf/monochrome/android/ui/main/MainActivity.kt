@@ -24,7 +24,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.Font
@@ -33,11 +35,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.ui.navigation.MonochromeNavHost
+import tf.monochrome.android.ui.onboarding.OnboardingScreen
 import tf.monochrome.android.ui.theme.MonochromeTheme
 import tf.monochrome.android.ui.theme.rememberDynamicPalette
 import java.io.File
@@ -58,6 +62,15 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
 
+    /** Set once the onboarding flag has been read; releases the splash screen. */
+    @Volatile private var onboardingGateLoaded = false
+
+    /**
+     * Route the main app should open right after onboarding hands off
+     * ("library", "settings?tab=7"), null for the default start screen.
+     */
+    private var pendingPostRoute by mutableStateOf<String?>(null)
+
     // Registered-for-result launcher for POST_NOTIFICATIONS. Fires a one-shot
     // system prompt on Android 13+; the result doesn't block the UI either way
     // — if the user denies we just lose the playback notification, playback
@@ -66,7 +79,11 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
+        // Hold the system splash until the onboarding flag has been read, so
+        // neither the wizard nor the main UI flashes in before we know which
+        // one to show.
+        splash.setKeepOnScreenCondition { !onboardingGateLoaded }
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -78,7 +95,16 @@ class MainActivity : ComponentActivity() {
         // delegate sink path as expected.
         volumeControlStream = AudioManager.STREAM_MUSIC
 
-        maybeRequestNotificationPermission()
+        // Notification permission waits for onboarding: firing the system
+        // dialog on top of the Welcome screen would stack two prompts. For
+        // already-onboarded users the flag is true immediately and this
+        // behaves exactly like the old unconditional call.
+        lifecycleScope.launch {
+            preferences.onboardingComplete.first()
+            onboardingGateLoaded = true
+            preferences.onboardingComplete.first { it }
+            maybeRequestNotificationPermission()
+        }
 
         // Restore existing Supabase session on startup
         lifecycleScope.launch {
@@ -169,8 +195,20 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        tf.monochrome.android.devedit.DevEditRoot(devEditController) {
-                            MonochromeNavHost()
+                        // First-run gate. null = flag not read yet (splash is
+                        // still covering); false = wizard; true = main app.
+                        // Collected (not read once) so Settings flipping the
+                        // flag back re-enters onboarding on the next frame.
+                        val onboardingComplete by preferences.onboardingComplete
+                            .collectAsState(initial = null)
+                        when (onboardingComplete) {
+                            null -> Unit
+                            false -> OnboardingScreen(
+                                onFinished = { pendingPostRoute = it }
+                            )
+                            true -> tf.monochrome.android.devedit.DevEditRoot(devEditController) {
+                                MonochromeNavHost(initialRoute = pendingPostRoute)
+                            }
                         }
                     }
                 }

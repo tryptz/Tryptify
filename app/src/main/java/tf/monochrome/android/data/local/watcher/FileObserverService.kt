@@ -8,7 +8,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import tf.monochrome.android.data.local.scanner.MediaScanner
+import tf.monochrome.android.data.local.scanner.ScanCoordinator
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,7 +19,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class FileObserverService @Inject constructor(
-    private val mediaScanner: MediaScanner
+    private val scanCoordinator: ScanCoordinator
 ) {
     private val observers = mutableListOf<FileObserver>()
     // SupervisorJob so one failed incremental scan doesn't cancel the whole
@@ -54,7 +54,7 @@ class FileObserverService @Inject constructor(
                     debounceJob = scope.launch {
                         try {
                             delay(500)
-                            mediaScanner.incrementalScan().collect { /* consume flow */ }
+                            scanCoordinator.runIncrementalScan()
                         } catch (cancel: kotlinx.coroutines.CancellationException) {
                             throw cancel
                         } catch (t: Throwable) {

@@ -142,7 +142,7 @@ data class BottomNavItem(
 private val tabRoutes = listOf(Screen.Home.route, Screen.Library.route)
 
 @Composable
-fun MonochromeNavHost() {
+fun MonochromeNavHost(initialRoute: String? = null) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -175,6 +175,23 @@ fun MonochromeNavHost() {
     // Pager state for the two main tabs
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val scope = rememberCoroutineScope()
+
+    // One-shot landing route handed over by onboarding ("library" lands on
+    // the Library pager tab; anything else is a plain navigation target).
+    LaunchedEffect(Unit) {
+        when (initialRoute) {
+            null -> Unit
+            Screen.Library.route -> {
+                pagerState.scrollToPage(tabRoutes.indexOf(Screen.Library.route))
+                navController.navigate(Screen.Library.route) {
+                    popUpTo(Screen.Home.route) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+            else -> navController.navigate(initialRoute)
+        }
+    }
 
     // When the user swipes the pager, keep the NavController in sync.
     LaunchedEffect(pagerState.currentPage) {
