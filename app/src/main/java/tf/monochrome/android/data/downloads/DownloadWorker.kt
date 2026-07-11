@@ -44,7 +44,10 @@ class DownloadWorker @AssistedInject constructor(
         const val KEY_ALBUM_TITLE = "album_title"
         const val KEY_ALBUM_COVER = "album_cover"
         const val KEY_DURATION = "duration"
+        const val KEY_VERSION = "version"
+        const val KEY_IS_THX = "is_thx_spatial_audio"
         const val KEY_PROGRESS = "progress"
+        private const val TAG = "DownloadWorker"
     }
 
     override suspend fun doWork(): Result {
@@ -56,6 +59,8 @@ class DownloadWorker @AssistedInject constructor(
         val albumTitle = inputData.getString(KEY_ALBUM_TITLE)
         val albumCover = inputData.getString(KEY_ALBUM_COVER)
         val duration = inputData.getInt(KEY_DURATION, 0)
+        val version = inputData.getString(KEY_VERSION)
+        val isThxSpatialAudio = inputData.getBoolean(KEY_IS_THX, false)
 
         return try {
             // Get download quality preference
@@ -87,7 +92,7 @@ class DownloadWorker @AssistedInject constructor(
                     setProgress(workDataOf(KEY_PROGRESS to progress))
                 }
             }
-            val audioData = output.toByteArray()
+            var audioData = output.toByteArray()
 
             // Detect what the backend actually delivered (not just what was
             // requested): the download instance can downgrade HI_RES→LOSSLESS,
@@ -98,6 +103,29 @@ class DownloadWorker @AssistedInject constructor(
             val customFolderUri = preferences.downloadFolderUri.first()
             val actualQuality = detectActualQuality(audioData, quality)
             val isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
+
+            // The Qobuz CDN FLACs arrive with no embedded metadata, so a THX
+            // download would land on disk anonymous. Embed Vorbis comments now
+            // (only for THX/versioned FLACs, so ordinary downloads keep their
+            // current fast path) — TITLE without the version suffix, the raw
+            // VERSION string Qobuz uses, and a COMMENT marker for players that
+            // ignore VERSION. This lets a re-scan re-derive the THX flag from
+            // the file itself even if the downloads DB row is gone. Best-effort:
+            // a tagging failure never fails the download (the bytes are good).
+            if (isFlac && (isThxSpatialAudio || !version.isNullOrBlank())) {
+                val baseTitle = if (!version.isNullOrBlank()) {
+                    trackTitle.removeSuffix(" — $version").trim()
+                } else trackTitle
+                audioData = tagFlacBytes(
+                    data = audioData,
+                    title = baseTitle,
+                    artist = artistName,
+                    album = albumTitle,
+                    version = version,
+                    isThxSpatialAudio = isThxSpatialAudio,
+                )
+            }
+
             val fileExt = if (isFlac) "flac" else "mp3"
             val audioMime = if (isFlac) "audio/flac" else "audio/mpeg"
             val sanitizedTitle = "${artistName} - ${trackTitle}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
@@ -206,7 +234,9 @@ class DownloadWorker @AssistedInject constructor(
                     filePath = filePath,
                     quality = actualQuality.name,
                     sizeBytes = audioData.size.toLong(),
-                    downloadedAt = System.currentTimeMillis()
+                    downloadedAt = System.currentTimeMillis(),
+                    version = version,
+                    isThxSpatialAudio = isThxSpatialAudio
                 )
             )
 
@@ -321,5 +351,47 @@ class DownloadWorker @AssistedInject constructor(
         val targetFile = File(downloadsDir, "$trackId.$ext")
         targetFile.writeBytes(data)
         return targetFile.absolutePath
+    }
+
+    /**
+     * Embed Vorbis comments into FLAC bytes and return the re-tagged bytes.
+     * Works on a temp file (JAudioTagger is file-based) so it covers both the
+     * SAF and internal write paths uniformly. Best-effort: on any failure the
+     * original bytes are returned unchanged so the download still succeeds.
+     */
+    private fun tagFlacBytes(
+        data: ByteArray,
+        title: String,
+        artist: String,
+        album: String?,
+        version: String?,
+        isThxSpatialAudio: Boolean,
+    ): ByteArray {
+        val temp = try {
+            File.createTempFile("dl_tag", ".flac", context.cacheDir)
+        } catch (e: Exception) {
+            Log.w(TAG, "THX tag: temp file failed: ${e.message}")
+            return data
+        }
+        return try {
+            temp.writeBytes(data)
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(temp)
+            val tag = audioFile.tagOrCreateAndSetDefault as? org.jaudiotagger.tag.flac.FlacTag
+                ?: return data
+            if (title.isNotBlank()) tag.setField(org.jaudiotagger.tag.FieldKey.TITLE, title)
+            if (artist.isNotBlank()) tag.setField(org.jaudiotagger.tag.FieldKey.ARTIST, artist)
+            album?.takeIf { it.isNotBlank() }?.let { tag.setField(org.jaudiotagger.tag.FieldKey.ALBUM, it) }
+            // Raw VERSION comment — the field Qobuz itself uses for the release.
+            version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
+            // COMMENT marker as belt-and-braces for players that ignore VERSION.
+            if (isThxSpatialAudio) tag.setField(org.jaudiotagger.tag.FieldKey.COMMENT, "THX Spatial Audio")
+            audioFile.commit()
+            temp.readBytes()
+        } catch (e: Exception) {
+            Log.w(TAG, "THX tag: FLAC tagging failed for \"$title\": ${e.message}")
+            data
+        } finally {
+            temp.delete()
+        }
     }
 }

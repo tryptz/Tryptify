@@ -123,7 +123,7 @@ fun dynamicPlayerBackground(color: Color): Brush = Brush.verticalGradient(
 /** Soft radial glow behind the hero, tinted by the current album color. */
 @Composable
 fun DynamicAlbumGlow(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.fillMaxSize().graphicsLayer { alpha = 0.45f }) {
+    Canvas(modifier = modifier.fillMaxSize().dithered().graphicsLayer { alpha = 0.45f }) {
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(color.copy(alpha = 0.3f), Color.Transparent)

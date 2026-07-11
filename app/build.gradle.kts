@@ -223,6 +223,10 @@ dependencies {
     // and a long tail of codecs the platform MediaCodec can't handle.
     implementation(libs.nextlib.media3ext)
 
+    // JAudioTagger — write Vorbis comments into downloaded FLACs (THX designation)
+    // and read them back on rescan. Pure JVM; only text tags are touched.
+    implementation(libs.jaudiotagger)
+
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

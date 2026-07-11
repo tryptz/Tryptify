@@ -508,6 +508,12 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
     val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsState()
     val spectrumFftSize by viewModel.spectrumFftSize.collectAsState()
     val spectrumBins by viewModel.spectrumBins.collectAsState()
+    val lyricsRotation by viewModel.lyrics3dRotation.collectAsState()
+    val lyricsWaveSpeed by viewModel.lyrics3dWaveSpeed.collectAsState()
+    val lyricsShadowDepth by viewModel.lyrics3dShadowDepth.collectAsState()
+    val playerDynamicColor by viewModel.playerDynamicColor.collectAsState()
+    val appFps by viewModel.appTargetFps.collectAsState()
+    val appResolution by viewModel.appRenderResolution.collectAsState()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
     var showTextureDropdown by remember { mutableStateOf(false) }
     var showPresetDropdown by remember { mutableStateOf(false) }
@@ -543,6 +549,60 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
             onCheckedChange = { viewModel.setRomajiLyrics(it) }
         )
 
+        // App-wide frame rate and panel resolution, applied by selecting a
+        // matching display mode in MainActivity. Resolution options only list
+        // classes the panel can reach; a request maps to the nearest mode.
+        var showFpsDropdown by remember { mutableStateOf(false) }
+        SettingItem(
+            title = "Frame Rate",
+            subtitle = "Whole app: " + if (appFps == 0) "Unlocked (display max)" else "${appFps}fps",
+            onClick = { showFpsDropdown = true }
+        )
+        DropdownMenu(expanded = showFpsDropdown, onDismissRequest = { showFpsDropdown = false }) {
+            listOf(0, 60, 120).forEach { fps ->
+                DropdownMenuItem(
+                    text = { Text(if (fps == 0) "Unlocked" else "${fps}fps") },
+                    onClick = { viewModel.setAppTargetFps(fps); showFpsDropdown = false }
+                )
+            }
+        }
+
+        val context = LocalContext.current
+        var showResDropdown by remember { mutableStateOf(false) }
+        val nativeShortSide = remember {
+            val modes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                context.display?.supportedModes
+            } else null
+            modes?.maxOfOrNull { minOf(it.physicalWidth, it.physicalHeight) }
+                ?: minOf(
+                    context.resources.displayMetrics.widthPixels,
+                    context.resources.displayMetrics.heightPixels,
+                )
+        }
+        val resolutionOptions = remember(nativeShortSide) {
+            listOf(0) + listOf(720, 1080, 1440, 2160).filter { it <= nativeShortSide }
+        }
+        fun resolutionLabel(shortSide: Int) = when {
+            shortSide == 0 -> "Native"
+            shortSide >= 2160 -> "4K (2160p)"
+            shortSide >= 1440 -> "2K (1440p)"
+            shortSide >= 1080 -> "1080p"
+            else -> "720p"
+        }
+        SettingItem(
+            title = "Resolution",
+            subtitle = "Whole app: ${resolutionLabel(appResolution)} — nearest panel mode is used",
+            onClick = { showResDropdown = true }
+        )
+        DropdownMenu(expanded = showResDropdown, onDismissRequest = { showResDropdown = false }) {
+            resolutionOptions.forEach { shortSide ->
+                DropdownMenuItem(
+                    text = { Text(resolutionLabel(shortSide)) },
+                    onClick = { viewModel.setAppRenderResolution(shortSide); showResDropdown = false }
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Now Playing")
         val viewMode by viewModel.nowPlayingViewMode.collectAsState()
@@ -555,11 +615,62 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
         DropdownMenu(expanded = showModeDropdown, onDismissRequest = { showModeDropdown = false }) {
             NowPlayingViewMode.entries.forEach { mode ->
                 DropdownMenuItem(
-                    text = { Text(mode.displayName) }, 
+                    text = { Text(mode.displayName) },
                     onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
                 )
             }
         }
+        SettingSwitchItem(
+            title = "Dynamic Player Color",
+            subtitle = "Tint the player from the album art; off uses the theme color",
+            checked = playerDynamicColor,
+            onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Lyrics Appearance")
+        Text(
+            text = "3D Rotation: ${lyricsRotation.toInt()}°" + if (lyricsRotation < 0.5f) " (off)" else "",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "Tilt of the per-letter 3D ripple on the active line. 0 disables it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = lyricsRotation,
+            onValueChange = { viewModel.setLyrics3dRotation(it) },
+            valueRange = 0f..20f,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Wave Speed: ${String.format(java.util.Locale.US, "%.2f", lyricsWaveSpeed)}x",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Slider(
+            value = lyricsWaveSpeed,
+            onValueChange = { viewModel.setLyrics3dWaveSpeed(it) },
+            valueRange = 0.25f..3f,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Shadow Depth: ${(lyricsShadowDepth * 100).toInt()}%",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Slider(
+            value = lyricsShadowDepth,
+            onValueChange = { viewModel.setLyrics3dShadowDepth(it) },
+            valueRange = 0f..1f,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Spectrum Analyzer")
@@ -927,6 +1038,9 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         UsbBitPerfectToggle(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
+        MultichannelDownmixToggle(viewModel)
+
+        Spacer(modifier = Modifier.height(8.dp))
         Text("Crossfade: ${crossfade}s", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         Text("Blend between tracks", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
@@ -1024,6 +1138,26 @@ private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
 private fun formatBlockSize(size: Int): String = when {
     size >= 1024 && size % 1024 == 0 -> "${size / 1024}K"
     else -> size.toString()
+}
+
+/**
+ * Multichannel (5.1/7.1) handling: fold down to stereo through the DSP/EQ
+ * chain (default), or pass multichannel PCM through to the device with
+ * DSP/EQ bypassed for those tracks. Applies from the next track / seek.
+ */
+@Composable
+private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
+    val enabled by viewModel.multichannelDownmixEnabled.collectAsState()
+    SettingSwitchItem(
+        title = "Downmix multichannel to stereo",
+        subtitle = if (enabled) {
+            "5.1/7.1 tracks fold into stereo (ITU-R BS.775) and run through DSP/EQ."
+        } else {
+            "Off — multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
+        },
+        checked = enabled,
+        onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
+    )
 }
 
 /**

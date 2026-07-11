@@ -149,6 +149,17 @@ class MixBusProcessor @Inject constructor(
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
+        if (inputAudioFormat.channelCount > 2) {
+            // Multichannel passthrough (downmix toggle off): drop out of the
+            // pipeline instead of killing playback. Both trackers must clear —
+            // isActive() checks inputFormat too, and Media3's pipeline
+            // checkState()s that an active processor didn't return NOT_SET.
+            // The native engine stays alive; the next 1/2-ch configure+flush
+            // re-enters via the hot nativeReconfigure path.
+            pendingFormat = AudioFormat.NOT_SET
+            inputFormat = AudioFormat.NOT_SET
+            return AudioFormat.NOT_SET
+        }
         if (inputAudioFormat.channelCount != 1 && inputAudioFormat.channelCount != 2) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }

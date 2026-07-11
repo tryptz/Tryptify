@@ -237,6 +237,7 @@ data class QobuzTrackItem(
     @SerialName("hires_streamable") val hiresStreamable: Boolean = false,
     @SerialName("maximum_bit_depth") val maximumBitDepth: Int? = null,
     @SerialName("maximum_sampling_rate") val maximumSamplingRate: Double? = null,
+    @SerialName("maximum_channel_count") val maximumChannelCount: Int? = null,
     val isrc: String? = null,
 )
 

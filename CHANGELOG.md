@@ -4,6 +4,17 @@
 
 ### Added
 
+#### THX Spatial Audio
+- **THX detection + highlighted badge** — Qobuz marks THX Spatial Audio releases only via the `version`/`title` text (`isThxSpatialAudio` regex, mirroring trypt-hifi). The structured flag now flows through the Qobuz→domain mappers into `Track`/`Album`/`UnifiedTrack`/`UnifiedAlbum`, and a solid-primary "THX" pill renders in search rows and album cards, streaming album detail, the now-playing tag, downloaded-track rows, and every `TrackItem` list.
+- **Download tag survival** — `DownloadedTrackEntity` gains `version` + `isThxSpatialAudio` (Room migration 8→9, backfilled from existing titles); the download worker embeds Vorbis comments into the FLAC (`TITLE` without the version suffix, `VERSION` = the raw Qobuz string, `COMMENT` = "THX Spatial Audio") via JAudioTagger so the designation survives offline and export.
+- **Scanner re-derivation** — the library scanner detects THX from a scanned file's title/album, and for FLAC reads back the embedded `VERSION`/`COMMENT`, so re-scanned or sideloaded THX files light up the badge with no DB history (`local_tracks.isThxSpatialAudio`).
+
+#### Multichannel Downmix
+- **DownmixProcessor** — ITU-R BS.775 Lo/Ro multichannel (3.0–7.1) → stereo fold-down at the head of the AudioProcessor chain (both the DefaultAudioSink and exclusive-USB paths). Row-normalized coefficients (clip-proof by construction), LFE dropped, PCM16 + float, inactive passthrough for mono/stereo. Fixes fatal playback failure on 5.1/7.1 FLAC and FFmpeg-decoded surround sources.
+- **"Downmix multichannel to stereo" setting** (Audio Processing, default on) — off passes multichannel PCM straight to the device (`MixBusProcessor`/`AutoEqProcessor`/`ParametricEqProcessor` now deactivate for >2 ch instead of throwing, so DSP/EQ are bypassed rather than playback failing).
+- **5.1/7.1 track badges** — Qobuz `maximum_channel_count` now flows into `Track`/`UnifiedTrack.channelCount`; multichannel pills render in track rows and the now-playing source/format tag.
+- **LibusbAudioSink lazy-engage fix** — mid-stream bypass engagement now negotiates the DAC against the post-chain output format (matching `configure()`), instead of the sink input format's channel count.
+
 #### Native C++ DSP Engine
 - **Core engine** (`app/src/main/cpp/dsp/`) — 4 mix buses + 1 master bus with per-bus gain, pan, mute, and solo. Plugin chains up to 16 slots per bus. Full state serialization to JSON for preset save/load.
 - **JNI bridge** — Follows existing ProjectM native pattern. Separate `monochrome_dsp` shared library compiled with `-O3 -ffast-math` and ARM NEON auto-vectorization.

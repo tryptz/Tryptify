@@ -75,6 +75,15 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
+        if (inputAudioFormat.channelCount > 2) {
+            // Multichannel passthrough (downmix toggle off): go inactive
+            // instead of failing playback — EQ simply doesn't apply. Clear
+            // both trackers so isActive() reads false immediately (Media3's
+            // pipeline checkState()s active processors against NOT_SET).
+            pendingFormat = AudioFormat.NOT_SET
+            inputFormat = AudioFormat.NOT_SET
+            return AudioFormat.NOT_SET
+        }
         if (inputAudioFormat.channelCount != 1 && inputAudioFormat.channelCount != 2) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }

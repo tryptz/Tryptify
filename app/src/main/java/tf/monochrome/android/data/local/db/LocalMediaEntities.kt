@@ -63,6 +63,10 @@ data class LocalTrackEntity(
     val hasEmbeddedArt: Boolean = false,
     val artworkCacheKey: String? = null,
 
+    // THX Spatial Audio release — detected from embedded tags at scan time so
+    // sideloaded/re-scanned THX files light up the badge without a DB history.
+    val isThxSpatialAudio: Boolean = false,
+
     // Grouping references (populated during scan)
     val albumId: Long? = null,
     val artistId: Long? = null,
