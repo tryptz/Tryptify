@@ -74,6 +74,16 @@ class PreferencesManager @Inject constructor(
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
 
+        // Lyrics 3D appearance
+        private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
+        private val LYRICS_3D_WAVE_SPEED = floatPreferencesKey("lyrics_3d_wave_speed")
+        private val LYRICS_3D_SHADOW_DEPTH = floatPreferencesKey("lyrics_3d_shadow_depth")
+
+        // Player / display
+        private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
+        private val APP_TARGET_FPS = intPreferencesKey("app_target_fps")
+        private val APP_RENDER_RESOLUTION = intPreferencesKey("app_render_resolution")
+
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
         private val SHOW_EXPLICIT_BADGES = booleanPreferencesKey("show_explicit_badges")
@@ -1012,6 +1022,38 @@ class PreferencesManager @Inject constructor(
             if (id.isNullOrBlank()) it.remove(DEVICE_REMOTE_ID)
             else it[DEVICE_REMOTE_ID] = id
         }
+    }
+
+    // --- Lyrics 3D appearance ---
+    val lyrics3dRotation: Flow<Float> = dataStore.data.map { it[LYRICS_3D_ROTATION] ?: 9f }
+    val lyrics3dWaveSpeed: Flow<Float> = dataStore.data.map { it[LYRICS_3D_WAVE_SPEED] ?: 1f }
+    val lyrics3dShadowDepth: Flow<Float> = dataStore.data.map { it[LYRICS_3D_SHADOW_DEPTH] ?: 0.55f }
+    suspend fun setLyrics3dRotation(value: Float) {
+        dataStore.edit { it[LYRICS_3D_ROTATION] = value.coerceIn(0f, 20f) }
+    }
+    suspend fun setLyrics3dWaveSpeed(value: Float) {
+        dataStore.edit { it[LYRICS_3D_WAVE_SPEED] = value.coerceIn(0.25f, 3f) }
+    }
+    suspend fun setLyrics3dShadowDepth(value: Float) {
+        dataStore.edit { it[LYRICS_3D_SHADOW_DEPTH] = value.coerceIn(0f, 1f) }
+    }
+
+    // --- Player appearance ---
+    val playerDynamicColor: Flow<Boolean> = dataStore.data.map { it[PLAYER_DYNAMIC_COLOR] ?: true }
+    suspend fun setPlayerDynamicColor(enabled: Boolean) {
+        dataStore.edit { it[PLAYER_DYNAMIC_COLOR] = enabled }
+    }
+
+    // --- Display: app-wide frame rate & panel resolution ---
+    // 0 = unlocked (display max) / native resolution. Resolution is stored as
+    // the target shortest side in px (720 / 1080 / 1440 / 2160).
+    val appTargetFps: Flow<Int> = dataStore.data.map { it[APP_TARGET_FPS] ?: 0 }
+    val appRenderResolution: Flow<Int> = dataStore.data.map { it[APP_RENDER_RESOLUTION] ?: 0 }
+    suspend fun setAppTargetFps(fps: Int) {
+        dataStore.edit { it[APP_TARGET_FPS] = fps }
+    }
+    suspend fun setAppRenderResolution(shortSide: Int) {
+        dataStore.edit { it[APP_RENDER_RESOLUTION] = shortSide }
     }
 
     // --- Clear all prefs (System) ---

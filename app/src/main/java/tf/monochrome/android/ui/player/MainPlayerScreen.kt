@@ -1,9 +1,16 @@
 package tf.monochrome.android.ui.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -137,6 +144,10 @@ fun MainPlayerScreen(
     onInflatorToggle: (Boolean) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
+    // Expanded lyrics are NOT a separate element: the same hero slot grows to
+    // full-bleed while the player controls collapse away and the blurred
+    // artwork stain fades in behind everything.
+    lyricsExpanded: Boolean = false,
 ) {
     val accent = state.albumColors.vibrant
 
@@ -196,24 +207,51 @@ fun MainPlayerScreen(
     // closed, and so we never read `reveal` in composition.
     BackHandler(enabled = scrimVisible) { animateRevealTo(0f, 0f) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(dynamicPlayerBackground(state.albumColors.dominant)),
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Background on its own node so the dither layer wraps just the
+        // gradient, not the whole screen's content.
+        Box(
+            Modifier
+                .matchParentSize()
+                .dithered()
+                .background(dynamicPlayerBackground(state.albumColors.dominant)),
+        )
         DynamicAlbumGlow(state.albumColors.dominant)
+
+        // Expanded-lyrics backdrop: the artwork as a blurred stain fading in
+        // behind the player content — background only, not a new element.
+        val stainAlpha by animateFloatAsState(
+            targetValue = if (lyricsExpanded) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
+            label = "lyricsStain",
+        )
+        if (stainAlpha > 0.001f) {
+            LyricsBackdropStain(
+                coverUrl = state.track?.coverUrl,
+                albumColors = state.albumColors,
+                alpha = { stainAlpha },
+            )
+        }
 
         if (isFullscreen) {
             hero(Modifier.fillMaxSize())
             return@Box
         }
 
+        // Side padding relaxes for expanded lyrics so the (same) lyric surface
+        // spans the page; a small margin stays so words never touch the
+        // screen borders (the backdrop stain behind is full-bleed anyway).
+        val screenPad by animateDpAsState(
+            targetValue = if (lyricsExpanded) 8.dp else PlayerDesignTokens.ScreenPadding,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
+            label = "lyricsPad",
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = PlayerDesignTokens.ScreenPadding),
+                .padding(horizontal = screenPad),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             DevEditable("topBar", Modifier.fillMaxWidth()) { topBar() }
@@ -221,97 +259,127 @@ fun MainPlayerScreen(
             Spacer(Modifier.height(12.dp))
             // Bound the hero to the smaller of the available width/height so a
             // full-width square can never overflow its slot and collide with the
-            // track info below it.
+            // track info below it. For expanded lyrics the same slot animates
+            // out to fill everything the hidden controls freed up.
             BoxWithConstraints(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
                 val side = minOf(maxWidth, maxHeight)
+                val heroW by animateDpAsState(
+                    targetValue = if (lyricsExpanded) maxWidth else side,
+                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
+                    label = "heroW",
+                )
+                val heroH by animateDpAsState(
+                    targetValue = if (lyricsExpanded) maxHeight else side,
+                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
+                    label = "heroH",
+                )
                 // Wrap only the square art (not the full-width slot) so the DevEdit
                 // highlight hugs the album-art ratio instead of a tall rectangle.
-                DevEditable("hero", Modifier) {
-                    hero(Modifier.size(side))
+                // The saved DevEdit offset/scale are tuned for the compact square;
+                // applied to the expanded lyric surface they push text past the
+                // screen borders — so expanded renders 1:1, bypassing the override.
+                if (lyricsExpanded) {
+                    hero(Modifier.size(heroW, heroH))
+                } else {
+                    DevEditable("hero", Modifier) {
+                        hero(Modifier.size(heroW, heroH))
+                    }
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
-            // Source + format tag directly under the album art: which service the
-            // audio streams from (colour-coded) and the codec/bitrate it's playing.
-            DevEditable("sourceTag", Modifier.fillMaxWidth()) {
-                PlayerSourceFormatTag(
-                    sourceType = state.sourceType,
-                    qualityBadge = state.qualityBadge,
-                    channelBadge = state.channelBadge,
-                    isThxSpatialAudio = state.isThxSpatialAudio,
-                )
-            }
+            // Everything between the hero and the bottom free space is the
+            // player chrome; expanded lyrics collapse it away so the same
+            // lyric surface can take the room (no separate overlay element).
+            AnimatedVisibility(
+                visible = !lyricsExpanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                Spacer(Modifier.height(14.dp))
+                // Source + format tag directly under the album art: which service the
+                // audio streams from (colour-coded) and the codec/bitrate it's playing.
+                DevEditable("sourceTag", Modifier.fillMaxWidth()) {
+                    PlayerSourceFormatTag(
+                        sourceType = state.sourceType,
+                        qualityBadge = state.qualityBadge,
+                    )
+                }
 
-            Spacer(Modifier.height(14.dp))
-            DevEditable("trackInfo", Modifier.fillMaxWidth()) {
-                PlayerTrackInfo(
-                    track = state.track,
-                    artists = state.artists,
-                    isLiked = state.isLiked,
-                    accent = accent,
-                    onToggleLike = onToggleLike,
-                    onArtistClick = onArtistClick,
-                )
-            }
+                Spacer(Modifier.height(14.dp))
+                DevEditable("trackInfo", Modifier.fillMaxWidth()) {
+                    PlayerTrackInfo(
+                        track = state.track,
+                        artists = state.artists,
+                        isLiked = state.isLiked,
+                        accent = accent,
+                        onToggleLike = onToggleLike,
+                        onArtistClick = onArtistClick,
+                    )
+                }
 
-            Spacer(Modifier.height(16.dp))
-            var isSeeking by remember { mutableStateOf(false) }
-            var seekPosition by remember { mutableFloatStateOf(0f) }
-            val displayFraction = if (isSeeking) seekPosition else state.progress
-            val displayPositionMs =
-                if (isSeeking) (seekPosition * state.durationMs).toLong() else state.positionMs
-            DevEditable("progress", Modifier.fillMaxWidth()) {
-                PlayerProgress(
-                    fraction = displayFraction,
-                    elapsedLabel = formatTime(displayPositionMs),
-                    totalLabel = formatTime(state.durationMs),
-                    centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
-                    accent = accent,
-                    onSeek = { value ->
-                        isSeeking = true
-                        seekPosition = value
-                    },
-                    onSeekFinished = { value ->
-                        onSeekCommit(value)
-                        isSeeking = false
-                    },
-                )
-            }
+                Spacer(Modifier.height(16.dp))
+                var isSeeking by remember { mutableStateOf(false) }
+                var seekPosition by remember { mutableFloatStateOf(0f) }
+                val displayFraction = if (isSeeking) seekPosition else state.progress
+                val displayPositionMs =
+                    if (isSeeking) (seekPosition * state.durationMs).toLong() else state.positionMs
+                DevEditable("progress", Modifier.fillMaxWidth()) {
+                    PlayerProgress(
+                        fraction = displayFraction,
+                        elapsedLabel = formatTime(displayPositionMs),
+                        totalLabel = formatTime(state.durationMs),
+                        centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
+                        accent = accent,
+                        onSeek = { value ->
+                            isSeeking = true
+                            seekPosition = value
+                        },
+                        onSeekFinished = { value ->
+                            onSeekCommit(value)
+                            isSeeking = false
+                        },
+                    )
+                }
 
-            Spacer(Modifier.height(20.dp))
-            DevEditable("transport", Modifier.fillMaxWidth()) {
-                PlayerTransportControls(
-                    isPlaying = state.isPlaying,
-                    accent = accent,
-                    onPrevious = onPrevious,
-                    onRewind10 = onRewind10,
-                    onPlayPause = onPlayPause,
-                    onForward10 = onForward10,
-                    onNext = onNext,
-                )
-            }
+                Spacer(Modifier.height(20.dp))
+                DevEditable("transport", Modifier.fillMaxWidth()) {
+                    PlayerTransportControls(
+                        isPlaying = state.isPlaying,
+                        accent = accent,
+                        onPrevious = onPrevious,
+                        onRewind10 = onRewind10,
+                        onPlayPause = onPlayPause,
+                        onForward10 = onForward10,
+                        onNext = onNext,
+                    )
+                }
 
-            Spacer(Modifier.height(20.dp))
-            DevEditable("actionDock", Modifier.fillMaxWidth()) {
-                PlayerActionDock(
-                    accent = accent,
-                    lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
-                    onLyrics = onLyrics,
-                    onTimer = onTimer,
-                    onMixer = onMixer,
-                    onPlaylist = onPlaylist,
-                )
+                Spacer(Modifier.height(20.dp))
+                DevEditable("actionDock", Modifier.fillMaxWidth()) {
+                    PlayerActionDock(
+                        accent = accent,
+                        lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
+                        onLyrics = onLyrics,
+                        onTimer = onTimer,
+                        onMixer = onMixer,
+                        onPlaylist = onPlaylist,
+                    )
+                }
+                }
             }
 
             // Free, fully-interactive space below the dock. The audio-tools
             // pull gesture lives in a thin strip at the very bottom edge (added
             // as an overlay below), so anything placed in this area still works
             // when the panel isn't pulled up.
-            Spacer(Modifier.weight(1f))
+            if (!lyricsExpanded) Spacer(Modifier.weight(1f))
         }
 
         // Thin bottom-edge pull strip — captures the open gesture and fades out

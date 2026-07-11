@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.SupabaseAuthManager
@@ -113,18 +114,14 @@ class MainActivity : ComponentActivity() {
 
         FrequencyTargets.init(applicationContext)
 
-        // Force maximum available refresh rate (e.g. 120Hz)
-        window.attributes = window.attributes.apply {
-            val displayModes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                display?.supportedModes ?: emptyArray()
-            } else {
-                @Suppress("DEPRECATION")
-                windowManager.defaultDisplay.supportedModes
-            }
-            
-            displayModes.maxByOrNull { it.refreshRate }?.let { bestMode ->
-                preferredDisplayModeId = bestMode.modeId
-            }
+        // Apply the user's app-wide frame-rate / resolution preference by
+        // selecting a matching panel display mode. Defaults (0/0) mean
+        // unlocked refresh at native resolution — the old forced-max
+        // behaviour. Re-applies live whenever either setting changes.
+        lifecycleScope.launch {
+            combine(preferences.appTargetFps, preferences.appRenderResolution) { fps, res ->
+                fps to res
+            }.collect { (fps, res) -> applyDisplayMode(fps, res) }
         }
 
         // Root container wrapping the Compose content. (Real glass blur is
@@ -214,6 +211,34 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Picks the display mode closest to the requested short-side resolution
+     * and refresh rate; 0 means no cap (native resolution / maximum refresh).
+     * Panels expose a fixed mode list, so a request maps to the nearest
+     * supported mode — e.g. "720p" on a panel that only exposes 1080p and
+     * 1440p modes applies 1080p.
+     */
+    private fun applyDisplayMode(targetFps: Int, targetShortSide: Int) {
+        val modes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display?.supportedModes ?: emptyArray()
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.supportedModes
+        }
+        if (modes.isEmpty()) return
+        val nativeShort = modes.maxOf { minOf(it.physicalWidth, it.physicalHeight) }
+        val wantShort = if (targetShortSide <= 0) nativeShort else targetShortSide
+        val byShortSide = modes.groupBy { minOf(it.physicalWidth, it.physicalHeight) }
+        val chosenShort = byShortSide.keys.minByOrNull { kotlin.math.abs(it - wantShort) } ?: return
+        val candidates = byShortSide.getValue(chosenShort)
+        val chosen = if (targetFps <= 0) {
+            candidates.maxByOrNull { it.refreshRate }
+        } else {
+            candidates.minByOrNull { kotlin.math.abs(it.refreshRate - targetFps) }
+        } ?: return
+        window.attributes = window.attributes.apply { preferredDisplayModeId = chosen.modeId }
     }
 
     /**

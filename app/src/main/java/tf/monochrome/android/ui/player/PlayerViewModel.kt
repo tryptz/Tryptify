@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -118,6 +119,15 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 50)
     val visualizerBrightness: StateFlow<Int> = preferences.visualizerBrightness
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
+    val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val lyricsFx: StateFlow<LyricsFxSettings> = combine(
+        preferences.lyrics3dRotation,
+        preferences.lyrics3dWaveSpeed,
+        preferences.lyrics3dShadowDepth,
+    ) { rotation, speed, depth ->
+        LyricsFxSettings(rotationDegrees = rotation, waveSpeed = speed, shadowDepth = depth)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
     val romajiLyrics: StateFlow<Boolean> = preferences.romajiLyrics

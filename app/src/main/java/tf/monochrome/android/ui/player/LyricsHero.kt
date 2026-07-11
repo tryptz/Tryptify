@@ -4,15 +4,19 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,19 +25,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,6 +54,8 @@ import coil3.request.crossfade
 import kotlinx.coroutines.flow.StateFlow
 import tf.monochrome.android.domain.model.LyricLine
 import tf.monochrome.android.domain.model.Lyrics
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Lyrics-mode hero. Extracted from NowPlayingScreen.kt so the JIT compile
@@ -59,8 +71,24 @@ internal fun LyricsHeroPanel(
     albumColors: AlbumColors,
     positionMs: StateFlow<Long>,
     onSeekTo: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+    // Draw-phase alpha for the blurred-artwork backdrop, so the morph overlay
+    // can fade the stain in without recomposing every frame.
+    backdropAlpha: () -> Float = { 1f },
+    // Bottom fraction kept free of lyric lines (the backdrop still fills it),
+    // so the expanded overlay can leave the player's controls readable.
+    contentBottomFraction: Float = 0f,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
+        // Opaque base: the blurred art + gradient alone are translucent, and
+        // as a full-screen overlay that lets the player controls ghost
+        // through. Rides backdropAlpha so the morph still starts see-through.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = backdropAlpha() }
+                .background(Color.Black)
+        )
         // Blurred album cover backdrop. Modifier.blur is API 31+; on older
         // devices the modifier is a silent no-op so the cover still shows,
         // just sharper. Either way we layer a dimming gradient on top so
@@ -75,13 +103,16 @@ internal fun LyricsHeroPanel(
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
+                    .dithered()
                     .blur(40.dp)
-                    .graphicsLayer { alpha = 0.55f },
+                    .graphicsLayer { alpha = 0.55f * backdropAlpha() },
             )
         }
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .dithered()
+                .graphicsLayer { alpha = backdropAlpha() }
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
@@ -93,35 +124,101 @@ internal fun LyricsHeroPanel(
                 )
         )
 
-        when {
-            isLoading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Loading lyrics…",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.85f),
-                    )
-                }
-            }
-            lyrics == null || lyrics.lines.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "No lyrics available for this track.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                }
-            }
-            lyrics.isSynced -> SyncedLyricsView(
-                lines = lyrics.lines,
-                positionMs = positionMs,
-                accent = albumColors.vibrant,
-                onSeekTo = onSeekTo,
-            )
-            else -> UnsyncedLyricsView(lines = lyrics.lines)
+        // In the expanded overlay (bottom fraction reserved), also keep lines
+        // clear of the status bar and the player's top bar above the panel.
+        val chromeInset = if (contentBottomFraction > 0f) {
+            Modifier.statusBarsPadding().padding(top = 52.dp)
+        } else {
+            Modifier
         }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(chromeInset)
+                .fillMaxHeight(1f - contentBottomFraction.coerceIn(0f, 0.9f))
+                .lyricsEdgeFade(),
+        ) {
+            when {
+                isLoading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "Loading lyrics…",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White.copy(alpha = 0.85f),
+                        )
+                    }
+                }
+                lyrics == null || lyrics.lines.isEmpty() -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "No lyrics available for this track.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                        )
+                    }
+                }
+                lyrics.isSynced -> SyncedLyricsView(
+                    lines = lyrics.lines,
+                    positionMs = positionMs,
+                    accent = albumColors.vibrant,
+                    onSeekTo = onSeekTo,
+                )
+                else -> UnsyncedLyricsView(lines = lyrics.lines)
+            }
+        }
+    }
+}
+
+/**
+ * The album artwork as a full-screen blurred stain: opaque base + blurred
+ * cover + dominant-colour gradient. Pure backdrop for expanded lyrics —
+ * drawn behind the player content, never a foreground element.
+ */
+@Composable
+internal fun LyricsBackdropStain(
+    coverUrl: String?,
+    albumColors: AlbumColors,
+    alpha: () -> Float,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { this.alpha = alpha() }
+                .background(Color.Black)
+        )
+        if (!coverUrl.isNullOrBlank()) {
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(coverUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .dithered()
+                    .blur(40.dp)
+                    .graphicsLayer { this.alpha = 0.55f * alpha() },
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .dithered()
+                .graphicsLayer { this.alpha = alpha() }
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            albumColors.dominant.copy(alpha = 0.55f),
+                            Color.Black.copy(alpha = 0.78f),
+                            albumColors.dominant.copy(alpha = 0.65f),
+                        )
+                    )
+                )
+        )
     }
 }
 
@@ -133,6 +230,28 @@ internal fun LyricsHeroPanel(
  * over the player background — and they dissolve into transparency at the top
  * and bottom edges via a `DstIn` gradient mask.
  */
+/**
+ * Dissolves content into transparency at the top and bottom edges via a
+ * DstIn gradient mask. Offscreen compositing is required for the blend to
+ * mask against the already-drawn content.
+ */
+internal fun Modifier.lyricsEdgeFade(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val edge = (size.height * 0.16f).coerceAtMost(120f)
+        val top = edge / size.height
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to Color.Transparent,
+                top to Color.Black,
+                1f - top to Color.Black,
+                1f to Color.Transparent,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
 @Composable
 internal fun LyricsHeroBox(
     lyrics: Lyrics?,
@@ -142,26 +261,7 @@ internal fun LyricsHeroBox(
     onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier
-            // Offscreen compositing is required for the DstIn blend below to
-            // mask against the already-drawn lyric content.
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                val edge = (size.height * 0.16f).coerceAtMost(120f)
-                val top = edge / size.height
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        top to Color.Black,
-                        1f - top to Color.Black,
-                        1f to Color.Transparent,
-                    ),
-                    blendMode = BlendMode.DstIn,
-                )
-            },
-    ) {
+    Box(modifier = modifier.lyricsEdgeFade()) {
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -201,7 +301,12 @@ internal fun SyncedLyricsView(
     onSeekTo: (Long) -> Unit,
 ) {
     val position by positionMs.collectAsState()
-    val listState = rememberLazyListState()
+    // Start composed at the current line so a freshly created instance (the
+    // expand morph spawns one) never flashes the top of the song before the
+    // centring effect runs.
+    val initialLine = remember { lines.indexOfLast { it.timeMs <= positionMs.value }.coerceAtLeast(0) }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialLine)
+    val lastCentredLine = remember { mutableIntStateOf(initialLine) }
 
     // Active line = the most recent line whose start has passed. derivedStateOf
     // recomputes when the position sample or the line list changes, but only
@@ -214,38 +319,50 @@ internal fun SyncedLyricsView(
         derivedStateOf { lines.indexOfLast { it.timeMs <= position } }
     }
 
-    LaunchedEffect(currentLineIndex) {
-        val index = currentLineIndex
-        if (index < 0) return@LaunchedEffect
-        // Bring the line on-screen first only if it's far away (a big seek);
-        // during normal playback the next active line is already visible just
-        // below centre, so this is skipped. A plain scrollToItem (no offset)
-        // is enough — the centring below does the rest. The previous version
-        // also ran a coarse animateScrollToItem(index, -(viewport/2)) which,
-        // combined with the half-viewport top padding, scrolled the line a
-        // full viewport ABOVE the viewport (offset -H) and then couldn't find
-        // it to centre — the line vanished off the top from ~the 3rd line on.
-        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
-            listState.scrollToItem(index)
-        }
-        val info = listState.layoutInfo
-        val target = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
-        val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-        val itemCentre = target.offset + target.size / 2f
-        listState.animateScrollBy(itemCentre - viewportCentre)
-    }
-
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         // Half-height padding top and bottom lets any line — including the
         // first and last — settle at the exact vertical centre.
         val halfViewport = maxHeight / 2
+
+        // Keyed on maxHeight as well so the active line is re-centred while
+        // the surface is being resized (the expand/collapse morph animates
+        // the viewport every frame).
+        LaunchedEffect(currentLineIndex, maxHeight) {
+            val index = currentLineIndex
+            if (index < 0) return@LaunchedEffect
+            // Bring the line on-screen first only if it's far away (a big seek);
+            // during normal playback the next active line is already visible just
+            // below centre, so this is skipped. A plain scrollToItem (no offset)
+            // is enough — the centring below does the rest. The previous version
+            // also ran a coarse animateScrollToItem(index, -(viewport/2)) which,
+            // combined with the half-viewport top padding, scrolled the line a
+            // full viewport ABOVE the viewport (offset -H) and then couldn't find
+            // it to centre — the line vanished off the top from ~the 3rd line on.
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+                listState.scrollToItem(index)
+            }
+            val info = listState.layoutInfo
+            val target = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
+            val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            val itemCentre = target.offset + target.size / 2f
+            // Snap when re-centring the same line (first composition, or the
+            // morph resizing the viewport every frame); animate only when the
+            // song has actually advanced to a new line.
+            if (lastCentredLine.intValue == index) {
+                listState.scrollBy(itemCentre - viewportCentre)
+            } else {
+                listState.animateScrollBy(itemCentre - viewportCentre)
+            }
+            lastCentredLine.intValue = index
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 28.dp),
+                .padding(horizontal = 28.dp)
+                .liquidGlass(),
             contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
@@ -272,18 +389,33 @@ internal fun SyncedLyricsView(
                     },
                     label = "lyricColor",
                 )
-                Text(
-                    text = line.text.ifBlank { "♪" },
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = if (isActive) 24.sp else 18.sp,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                    ),
-                    color = color,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSeekTo(line.timeMs) }
-                        .padding(vertical = 6.dp),
+                // Fixed size: the active line is marked by colour/weight only.
+                // A size change reflows the list and shifts every line below,
+                // which makes the lyrics impossible to track while reading.
+                val lineStyle = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 18.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
                 )
+                val lineModifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSeekTo(line.timeMs) }
+                    .padding(vertical = 2.dp)
+                if (isActive && LocalLyricsFx.current.rotationDegrees > 0.05f) {
+                    Letters3DLine(
+                        text = line.text.ifBlank { "♪" },
+                        style = lineStyle,
+                        color = color,
+                        modifier = lineModifier,
+                    )
+                } else {
+                    Text(
+                        text = line.text.ifBlank { "♪" },
+                        style = lineStyle,
+                        color = color,
+                        modifier = lineModifier,
+                    )
+                }
             }
         }
         }
@@ -300,13 +432,17 @@ internal fun KaraokeLyricLine(
     accent: Color,
     onClick: () -> Unit,
 ) {
+    // One frame clock per line, and only while it is the active one.
+    val fx = LocalLyricsFx.current
+    val time = if (isActive && fx.rotationDegrees > 0.05f) rememberFrameSeconds() else null
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
+            .padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.Start,
     ) {
+        var letterBase = 0
         line.words.forEach { word ->
             val target = when {
                 !isActive -> if (isPast) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.6f)
@@ -315,16 +451,126 @@ internal fun KaraokeLyricLine(
                 else -> Color.White.copy(alpha = 0.45f)               // not yet reached
             }
             val color by animateColorAsState(targetValue = target, label = "wordColor")
-            Text(
-                text = word.text + " ",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = if (isActive) 24.sp else 18.sp,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                ),
-                color = color,
+            val display = word.text + " "
+            val wordStyle = MaterialTheme.typography.titleMedium.copy(
+                fontSize = 18.sp,
+                lineHeight = 22.sp,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
             )
+            if (time != null) {
+                val phaseBase = letterBase
+                Row {
+                    display.forEachIndexed { j, ch ->
+                        Letter3DText(
+                            text = ch.toString(),
+                            phase = (phaseBase + j) * 0.45f,
+                            style = wordStyle.copy(shadow = letter3DShadow(fx.shadowDepth)),
+                            color = color,
+                            time = time,
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = display,
+                    style = wordStyle,
+                    color = color,
+                )
+            }
+            letterBase += display.length
         }
     }
+}
+
+/**
+ * User-tunable 3D-letter animation parameters (Settings ▸ Lyrics Appearance).
+ * rotationDegrees 0 disables the per-letter path entirely (plain flat text).
+ */
+data class LyricsFxSettings(
+    val rotationDegrees: Float = 9f,
+    val waveSpeed: Float = 1f,
+    val shadowDepth: Float = 0.55f,
+)
+
+val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }
+
+private fun letter3DShadow(depth: Float) = Shadow(
+    color = Color.Black.copy(alpha = depth.coerceIn(0f, 1f)),
+    offset = Offset(0f, 2f + 8f * depth),
+    blurRadius = 3f + 14f * depth,
+)
+
+/**
+ * Active-line treatment: each character is its own Text inside a per-letter
+ * 3D transform — a ripple of rotation travelling along the line — with a
+ * baked-in drop shadow for depth. Word-wise FlowRow keeps wrapping at word
+ * boundaries like the plain Text it replaces, and the transforms are
+ * draw-only: layout, font size and spacing never change.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Letters3DLine(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val time = rememberFrameSeconds()
+    val shadowed = style.copy(shadow = letter3DShadow(LocalLyricsFx.current.shadowDepth))
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.Start) {
+        var letterBase = 0
+        val words = text.split(" ")
+        words.forEachIndexed { index, word ->
+            val display = if (index < words.lastIndex) "$word " else word
+            val phaseBase = letterBase
+            Row {
+                display.forEachIndexed { j, ch ->
+                    Letter3DText(
+                        text = ch.toString(),
+                        phase = (phaseBase + j) * 0.45f,
+                        style = shadowed,
+                        color = color,
+                        time = time,
+                    )
+                }
+            }
+            letterBase += display.length
+        }
+    }
+}
+
+@Composable
+private fun Letter3DText(
+    text: String,
+    phase: Float,
+    style: TextStyle,
+    color: Color,
+    time: State<Float>,
+) {
+    val fx = LocalLyricsFx.current
+    Text(
+        text = text,
+        style = style,
+        color = color,
+        modifier = Modifier.graphicsLayer {
+            val t = time.value * fx.waveSpeed
+            val p = t * 1.9f + phase
+            val intensity = (fx.rotationDegrees / 9f).coerceAtMost(2.5f)
+            // Ribbon model: letters ride the wave, tilt to follow its slope
+            // (rotationX = the wave's derivative), twist slowly around Y, and
+            // swell slightly on the toward-viewer swing. Keeping every term
+            // phase-locked to the same wave is what makes it read as 3D depth
+            // instead of independent flat jiggles.
+            translationY = 2.2.dp.toPx() * sin(p)
+            rotationX = -(fx.rotationDegrees * 1.3f) * cos(p)
+            rotationY = (fx.rotationDegrees * 0.9f) * sin(t * 0.8f + phase * 0.5f)
+            val depth = 1f + 0.06f * intensity * cos(p)
+            scaleX = depth
+            scaleY = depth
+            // Short camera distance = strong perspective on the tilts.
+            cameraDistance = 4f * density
+        },
+    )
 }
 
 @Composable
@@ -332,14 +578,15 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 28.dp),
+            .padding(horizontal = 28.dp)
+            .liquidGlass(),
         contentPadding = PaddingValues(vertical = 60.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp),
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 22.sp),
                 color = Color.White.copy(alpha = 0.85f),
             )
         }
