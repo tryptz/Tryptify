@@ -106,7 +106,9 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About")
+// "Radio" is appended after "About" so existing hardcoded tab indices
+// ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
+private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About", "Radio")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,6 +165,7 @@ fun SettingsScreen(
                 7 -> InstancesTab(viewModel)
                 8 -> SystemTab(viewModel, navController)
                 9 -> AboutTab()
+                10 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
             }
         }
     }

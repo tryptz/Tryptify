@@ -39,6 +39,7 @@ import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.player.PlaybackService
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.player.StreamResolver
+import tf.monochrome.android.radio.RadioQueueManager
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import javax.inject.Inject
@@ -56,6 +57,7 @@ class PlayerViewModel @Inject constructor(
     private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
     private val trackShareHelper: tf.monochrome.android.share.TrackShareHelper,
+    private val radioQueueManager: RadioQueueManager,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
@@ -463,6 +465,49 @@ class PlayerViewModel @Inject constructor(
     /** Insert a track right after the current one. */
     fun playNext(track: Track) {
         queueManager.addNextInQueue(track)
+    }
+
+    // --- Queue editing ---
+
+    /**
+     * Reset the queue: drop everything upcoming, keep the current track
+     * playing. Stops radio first so it can't instantly refill the tail the
+     * user just rejected.
+     */
+    fun resetQueue() {
+        radioQueueManager.onQueueReset()
+        queueManager.clearUpcoming()
+    }
+
+    fun removeFromQueue(index: Int) {
+        queueManager.removeFromQueue(index)
+    }
+
+    fun removeSelectedFromQueue(indices: Set<Int>) {
+        queueManager.removeMany(indices)
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        queueManager.move(fromIndex, toIndex)
+    }
+
+    fun playQueueItemNext(index: Int) {
+        queueManager.moveToPlayNext(index)
+    }
+
+    // --- Radio (queue maker) ---
+
+    val isRadioActive: StateFlow<Boolean> = radioQueueManager.isActive
+    val isRadioGenerating: StateFlow<Boolean> = radioQueueManager.isGenerating
+    val radioStatusMessage: StateFlow<String?> = radioQueueManager.statusMessage
+
+    /** Start radio seeded from the currently playing track. */
+    fun startRadio() {
+        radioQueueManager.startRadio()
+    }
+
+    fun stopRadio() {
+        radioQueueManager.stopRadio()
     }
 
     fun togglePlayPause() {

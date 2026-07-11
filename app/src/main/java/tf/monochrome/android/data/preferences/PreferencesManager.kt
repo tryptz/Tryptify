@@ -22,6 +22,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ReplayGainMode
 import tf.monochrome.android.performance.PerformanceProfile
+import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -134,6 +135,26 @@ class PreferencesManager @Inject constructor(
         // AI
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val AI_RADIO_ENABLED = booleanPreferencesKey("ai_radio_enabled")
+
+        // Radio planner (optional Tryptify-Playlist service)
+        const val DEFAULT_RADIO_PLANNER_URL = "https://tryptify-playlist-production.up.railway.app"
+        private val RADIO_PLANNER_ENABLED = booleanPreferencesKey("radio_planner_enabled")
+        private val RADIO_PLANNER_URL = stringPreferencesKey("radio_planner_url")
+        private val RADIO_PLANNER_API_KEY = stringPreferencesKey("radio_planner_api_key")
+        private val RADIO_WEIGHT_LOCAL_LIBRARY = floatPreferencesKey("radio_weight_local_library")
+        private val RADIO_WEIGHT_QOBUZ = floatPreferencesKey("radio_weight_qobuz")
+        private val RADIO_WEIGHT_SPOTIFY_DISCOVERY = floatPreferencesKey("radio_weight_spotify_discovery")
+        private val RADIO_WEIGHT_METABRAINZ_METADATA = floatPreferencesKey("radio_weight_metabrainz_metadata")
+        private val RADIO_WEIGHT_LISTENBRAINZ_GRAPH = floatPreferencesKey("radio_weight_listenbrainz_graph")
+        private val RADIO_WEIGHT_CANONICAL_VERSION_BIAS = floatPreferencesKey("radio_weight_canonical_version_bias")
+        private val RADIO_WEIGHT_NOVELTY = floatPreferencesKey("radio_weight_novelty")
+        private val RADIO_WEIGHT_FAMILIARITY = floatPreferencesKey("radio_weight_familiarity")
+        private val RADIO_WEIGHT_ARTIST_SIMILARITY = floatPreferencesKey("radio_weight_artist_similarity")
+        private val RADIO_WEIGHT_GENRE_TAG_SIMILARITY = floatPreferencesKey("radio_weight_genre_tag_similarity")
+        private val RADIO_WEIGHT_MOOD_CONTINUITY = floatPreferencesKey("radio_weight_mood_continuity")
+        private val RADIO_WEIGHT_ERA_CONSISTENCY = floatPreferencesKey("radio_weight_era_consistency")
+        private val RADIO_WEIGHT_AVOID_RECENTLY_PLAYED = floatPreferencesKey("radio_weight_avoid_recently_played")
+        private val RADIO_WEIGHT_DISCOVERY_DISTANCE = floatPreferencesKey("radio_weight_discovery_distance")
 
         // Spotify (PKCE OAuth tokens for playlist import)
         private val SPOTIFY_ACCESS_TOKEN = stringPreferencesKey("spotify_access_token")
@@ -665,6 +686,76 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setAiRadioEnabled(enabled: Boolean) {
         dataStore.edit { it[AI_RADIO_ENABLED] = enabled }
+    }
+
+    // --- Radio planner ---
+
+    val radioPlannerEnabled: Flow<Boolean> = dataStore.data.map { it[RADIO_PLANNER_ENABLED] ?: true }
+    val radioPlannerUrl: Flow<String> = dataStore.data.map {
+        it[RADIO_PLANNER_URL] ?: DEFAULT_RADIO_PLANNER_URL
+    }
+    val radioPlannerApiKey: Flow<String?> = dataStore.data.map { it[RADIO_PLANNER_API_KEY] }
+
+    suspend fun setRadioPlannerEnabled(enabled: Boolean) {
+        dataStore.edit { it[RADIO_PLANNER_ENABLED] = enabled }
+    }
+
+    suspend fun setRadioPlannerUrl(url: String?) {
+        dataStore.edit {
+            if (url.isNullOrBlank()) it.remove(RADIO_PLANNER_URL)
+            else it[RADIO_PLANNER_URL] = url.trim().trimEnd('/')
+        }
+    }
+
+    suspend fun setRadioPlannerApiKey(key: String?) {
+        dataStore.edit {
+            if (key.isNullOrBlank()) it.remove(RADIO_PLANNER_API_KEY)
+            else it[RADIO_PLANNER_API_KEY] = key.trim()
+        }
+    }
+
+    val radioPlannerWeights: Flow<RadioPlannerWeights> = dataStore.data.map { prefs ->
+        val defaults = RadioPlannerWeights.DEFAULT
+        RadioPlannerWeights(
+            localLibrary = prefs[RADIO_WEIGHT_LOCAL_LIBRARY] ?: defaults.localLibrary,
+            qobuz = prefs[RADIO_WEIGHT_QOBUZ] ?: defaults.qobuz,
+            spotifyDiscovery = prefs[RADIO_WEIGHT_SPOTIFY_DISCOVERY] ?: defaults.spotifyDiscovery,
+            metabrainzMetadata = prefs[RADIO_WEIGHT_METABRAINZ_METADATA] ?: defaults.metabrainzMetadata,
+            listenbrainzGraph = prefs[RADIO_WEIGHT_LISTENBRAINZ_GRAPH] ?: defaults.listenbrainzGraph,
+            canonicalVersionBias = prefs[RADIO_WEIGHT_CANONICAL_VERSION_BIAS] ?: defaults.canonicalVersionBias,
+            novelty = prefs[RADIO_WEIGHT_NOVELTY] ?: defaults.novelty,
+            familiarity = prefs[RADIO_WEIGHT_FAMILIARITY] ?: defaults.familiarity,
+            artistSimilarity = prefs[RADIO_WEIGHT_ARTIST_SIMILARITY] ?: defaults.artistSimilarity,
+            genreTagSimilarity = prefs[RADIO_WEIGHT_GENRE_TAG_SIMILARITY] ?: defaults.genreTagSimilarity,
+            moodContinuity = prefs[RADIO_WEIGHT_MOOD_CONTINUITY] ?: defaults.moodContinuity,
+            eraConsistency = prefs[RADIO_WEIGHT_ERA_CONSISTENCY] ?: defaults.eraConsistency,
+            avoidRecentlyPlayed = prefs[RADIO_WEIGHT_AVOID_RECENTLY_PLAYED] ?: defaults.avoidRecentlyPlayed,
+            discoveryDistance = prefs[RADIO_WEIGHT_DISCOVERY_DISTANCE] ?: defaults.discoveryDistance,
+        ).clamped()
+    }
+
+    suspend fun setRadioPlannerWeights(weights: RadioPlannerWeights) {
+        val clamped = weights.clamped()
+        dataStore.edit { prefs ->
+            prefs[RADIO_WEIGHT_LOCAL_LIBRARY] = clamped.localLibrary
+            prefs[RADIO_WEIGHT_QOBUZ] = clamped.qobuz
+            prefs[RADIO_WEIGHT_SPOTIFY_DISCOVERY] = clamped.spotifyDiscovery
+            prefs[RADIO_WEIGHT_METABRAINZ_METADATA] = clamped.metabrainzMetadata
+            prefs[RADIO_WEIGHT_LISTENBRAINZ_GRAPH] = clamped.listenbrainzGraph
+            prefs[RADIO_WEIGHT_CANONICAL_VERSION_BIAS] = clamped.canonicalVersionBias
+            prefs[RADIO_WEIGHT_NOVELTY] = clamped.novelty
+            prefs[RADIO_WEIGHT_FAMILIARITY] = clamped.familiarity
+            prefs[RADIO_WEIGHT_ARTIST_SIMILARITY] = clamped.artistSimilarity
+            prefs[RADIO_WEIGHT_GENRE_TAG_SIMILARITY] = clamped.genreTagSimilarity
+            prefs[RADIO_WEIGHT_MOOD_CONTINUITY] = clamped.moodContinuity
+            prefs[RADIO_WEIGHT_ERA_CONSISTENCY] = clamped.eraConsistency
+            prefs[RADIO_WEIGHT_AVOID_RECENTLY_PLAYED] = clamped.avoidRecentlyPlayed
+            prefs[RADIO_WEIGHT_DISCOVERY_DISTANCE] = clamped.discoveryDistance
+        }
+    }
+
+    suspend fun resetRadioPlannerWeights() {
+        setRadioPlannerWeights(RadioPlannerWeights.DEFAULT)
     }
 
 
