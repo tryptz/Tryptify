@@ -324,7 +324,10 @@ fun MainPlayerRoute(
                     modifier = heroModifier,
                 ) { lyricsMode ->
                 if (lyricsMode) {
-                    CompositionLocalProvider(LocalLyricsFx provides lyricsFx) {
+                    CompositionLocalProvider(
+                        LocalLyricsFx provides lyricsFx,
+                        LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
+                    ) {
                         LyricsHeroBox(
                             lyrics = lyrics,
                             isLoading = isLyricsLoading,

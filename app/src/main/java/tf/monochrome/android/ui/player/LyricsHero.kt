@@ -29,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.State
@@ -320,6 +321,31 @@ internal fun SyncedLyricsView(
         derivedStateOf { lines.indexOfLast { it.timeMs <= position } }
     }
 
+    // Bass-reactive treatment for the active line: pulse from the shared FFT
+    // tap, a frame clock for the ray sweep, and a pop-in spring per line
+    // change. All disabled (and the analyzer never acquired) at intensity 0.
+    val fx = LocalLyricsFx.current
+    val beatIntensity = fx.bassReact
+    val bassPulse = if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
+    val beatTime = if (beatIntensity > 0.01f) rememberFrameSeconds() else remember { mutableFloatStateOf(0f) }
+    // Pop-in: snap to 0 and spring (underdamped → overshoot) back to 1 every
+    // time the active line changes, so each new line pops in right on the
+    // beat that activated it. ~8% size swing keeps it punchy but readable.
+    val popIn = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(currentLineIndex) {
+        if (currentLineIndex >= 0 && beatIntensity > 0.01f) {
+            popIn.snapTo(0f)
+            popIn.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.38f,
+                    stiffness = 500f,
+                ),
+            )
+        }
+    }
+    val popScale: () -> Float = { 0.92f + 0.08f * popIn.value }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         // Half-height padding top and bottom lets any line — including the
         // first and last — settle at the exact vertical centre.
@@ -368,6 +394,13 @@ internal fun SyncedLyricsView(
             itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
+            // Bass treatment rides only the active line: scale pump + pop-in
+            // + god rays, all draw-phase.
+            val beatModifier = if (isActive && beatIntensity > 0.01f) {
+                Modifier.bassBeat(bassPulse, beatTime, popScale, accent, beatIntensity)
+            } else {
+                Modifier
+            }
             if (line.words.isNotEmpty()) {
                 // Only sources with real per-word timing (TIDAL enhanced LRC)
                 // illuminate word-by-word.
@@ -378,6 +411,7 @@ internal fun SyncedLyricsView(
                     position = position,
                     accent = accent,
                     onClick = { onSeekTo(line.timeMs) },
+                    beatModifier = beatModifier,
                 )
             } else {
                 // Line-level sources (LRCLib / Qobuz): illuminate the whole
@@ -401,7 +435,7 @@ internal fun SyncedLyricsView(
                     letterSpacing = (-0.2).sp,
                     fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
                 )
-                val lineModifier = Modifier
+                val lineModifier = beatModifier
                     .fillMaxWidth()
                     .clickable { onSeekTo(line.timeMs) }
                     .padding(vertical = 2.dp)
@@ -435,12 +469,13 @@ internal fun KaraokeLyricLine(
     position: Long,
     accent: Color,
     onClick: () -> Unit,
+    beatModifier: Modifier = Modifier,
 ) {
     // One frame clock per line, and only while it is the active one.
     val fx = LocalLyricsFx.current
     val time = if (isActive && fx.rotationDegrees > 0.05f) rememberFrameSeconds() else null
     FlowRow(
-        modifier = Modifier
+        modifier = beatModifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 2.dp),
@@ -499,6 +534,8 @@ data class LyricsFxSettings(
     val rotationDegrees: Float = 12f,
     val waveSpeed: Float = 1f,
     val shadowDepth: Float = 0.7f,
+    // 0 disables the bass-reactive treatment (pump/pop/god rays) entirely.
+    val bassReact: Float = 0.8f,
 )
 
 val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }

@@ -708,6 +708,26 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
             modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+        val lyricsBassReact by viewModel.lyricsBassReact.collectAsState()
+        Text(
+            text = "Bass Reaction: ${(lyricsBassReact * 100).toInt()}%" +
+                if (lyricsBassReact < 0.01f) " (off)" else "",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "The active line pumps, pops in, and radiates god rays with the kick/bass. 0 disables it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = lyricsBassReact,
+            onValueChange = { viewModel.setLyricsBassReact(it) },
+            valueRange = 0f..1f,
+            modifier = Modifier.fillMaxWidth()
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Spectrum Analyzer")
         SettingSwitchItem(

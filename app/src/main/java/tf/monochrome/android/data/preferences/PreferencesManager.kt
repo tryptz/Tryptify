@@ -89,6 +89,7 @@ class PreferencesManager @Inject constructor(
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
         private val LYRICS_3D_WAVE_SPEED = floatPreferencesKey("lyrics_3d_wave_speed")
         private val LYRICS_3D_SHADOW_DEPTH = floatPreferencesKey("lyrics_3d_shadow_depth")
+        private val LYRICS_BASS_REACT = floatPreferencesKey("lyrics_bass_react")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -1146,6 +1147,11 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setLyrics3dShadowDepth(value: Float) {
         dataStore.edit { it[LYRICS_3D_SHADOW_DEPTH] = value.coerceIn(0f, 1f) }
+    }
+
+    val lyricsBassReact: Flow<Float> = dataStore.data.map { it[LYRICS_BASS_REACT] ?: 0.8f }
+    suspend fun setLyricsBassReact(value: Float) {
+        dataStore.edit { it[LYRICS_BASS_REACT] = value.coerceIn(0f, 1f) }
     }
 
     // --- Player appearance ---

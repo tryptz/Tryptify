@@ -128,8 +128,14 @@ class PlayerViewModel @Inject constructor(
         preferences.lyrics3dRotation,
         preferences.lyrics3dWaveSpeed,
         preferences.lyrics3dShadowDepth,
-    ) { rotation, speed, depth ->
-        LyricsFxSettings(rotationDegrees = rotation, waveSpeed = speed, shadowDepth = depth)
+        preferences.lyricsBassReact,
+    ) { rotation, speed, depth, bass ->
+        LyricsFxSettings(
+            rotationDegrees = rotation,
+            waveSpeed = speed,
+            shadowDepth = depth,
+            bassReact = bass,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
