@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -395,8 +396,8 @@ internal fun SyncedLyricsView(
                 // Tracking is identical for active/inactive for the same
                 // reason — only weight may differ between the two states.
                 val lineStyle = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 18.sp,
-                    lineHeight = 22.sp,
+                    fontSize = 23.sp,
+                    lineHeight = 29.sp,
                     letterSpacing = (-0.2).sp,
                     fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
                 )
@@ -456,8 +457,8 @@ internal fun KaraokeLyricLine(
             val color by animateColorAsState(targetValue = target, label = "wordColor")
             val display = word.text + " "
             val wordStyle = MaterialTheme.typography.titleMedium.copy(
-                fontSize = 18.sp,
-                lineHeight = 22.sp,
+                fontSize = 23.sp,
+                lineHeight = 29.sp,
                 letterSpacing = (-0.2).sp,
                 fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
             )
@@ -467,7 +468,11 @@ internal fun KaraokeLyricLine(
                     display.forEachIndexed { j, ch ->
                         Letter3DText(
                             text = ch.toString(),
-                            phase = (phaseBase + j) * 0.45f,
+                            // Low spatial frequency: neighbouring letters stay
+                            // nearly in phase, so the line reads as one long
+                            // smooth ribbon. (0.45 rad/letter decorrelated
+                            // neighbours — scattered, jittery-looking text.)
+                            phase = (phaseBase + j) * LETTER_PHASE_STEP,
                             style = wordStyle.copy(shadow = letter3DShadow(fx.shadowDepth)),
                             color = color,
                             time = time,
@@ -497,6 +502,11 @@ data class LyricsFxSettings(
 )
 
 val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }
+
+// Wave spatial frequency in radians per letter. Small on purpose: adjacent
+// letters must move almost together for the wave to read as one smooth
+// ribbon travelling through the line.
+private const val LETTER_PHASE_STEP = 0.22f
 
 // Crisp contact shadow: a tight, dark edge right under the glyph so the
 // letterform reads as solid and sharp. (The previous wide blur — up to ~17px —
@@ -535,7 +545,7 @@ private fun Letters3DLine(
                 display.forEachIndexed { j, ch ->
                     Letter3DText(
                         text = ch.toString(),
-                        phase = (phaseBase + j) * 0.45f,
+                        phase = (phaseBase + j) * LETTER_PHASE_STEP,
                         style = shadowed,
                         color = color,
                         time = time,
@@ -559,7 +569,9 @@ private fun Letter3DText(
     Box(
         modifier = Modifier.graphicsLayer {
             val t = time.value * fx.waveSpeed
-            val p = t * 1.9f + phase
+            // Slow temporal frequency (1.5 rad/s): the wave glides instead of
+            // flickering — the eye tracks a slow ripple as one smooth motion.
+            val p = t * 1.5f + phase
             val intensity = (fx.rotationDegrees / 9f).coerceAtMost(2.5f)
             // Ribbon model: letters ride the wave, tilt to follow its slope
             // (rotationX = the wave's derivative), twist slowly around Y, and
@@ -579,16 +591,14 @@ private fun Letter3DText(
         // Extruded backing: the same glyph stamped in near-black a couple of
         // pixels down-right, inside the same transform layer so it tilts with
         // the letter. The pair reads as one solid letterform with block
-        // depth — not a glyph plus a detached shadow. Active line only, so
-        // the extra Text per letter stays cheap.
+        // depth — not a glyph plus a detached shadow. Layout offset, NOT a
+        // second graphicsLayer: an extra render node per letter doubled the
+        // per-frame layer updates on long lines and cost visible frames.
         Text(
             text = text,
             style = style.copy(shadow = null),
             color = Color.Black.copy(alpha = (0.45f + 0.4f * fx.shadowDepth).coerceIn(0f, 0.9f)),
-            modifier = Modifier.graphicsLayer {
-                translationX = 1.4f * density
-                translationY = 2.4f * density
-            },
+            modifier = Modifier.offset(x = 1.2.dp, y = 2.2.dp),
         )
         Text(text = text, style = style, color = color)
     }
@@ -607,7 +617,7 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 22.sp),
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp),
                 color = Color.White.copy(alpha = 0.85f),
             )
         }
