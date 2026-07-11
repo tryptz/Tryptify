@@ -392,10 +392,13 @@ internal fun SyncedLyricsView(
                 // Fixed size: the active line is marked by colour/weight only.
                 // A size change reflows the list and shifts every line below,
                 // which makes the lyrics impossible to track while reading.
+                // Tracking is identical for active/inactive for the same
+                // reason — only weight may differ between the two states.
                 val lineStyle = MaterialTheme.typography.titleMedium.copy(
                     fontSize = 18.sp,
                     lineHeight = 22.sp,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                    letterSpacing = (-0.2).sp,
+                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
                 )
                 val lineModifier = Modifier
                     .fillMaxWidth()
@@ -455,7 +458,8 @@ internal fun KaraokeLyricLine(
             val wordStyle = MaterialTheme.typography.titleMedium.copy(
                 fontSize = 18.sp,
                 lineHeight = 22.sp,
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                letterSpacing = (-0.2).sp,
+                fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
             )
             if (time != null) {
                 val phaseBase = letterBase
@@ -487,17 +491,21 @@ internal fun KaraokeLyricLine(
  * rotationDegrees 0 disables the per-letter path entirely (plain flat text).
  */
 data class LyricsFxSettings(
-    val rotationDegrees: Float = 9f,
+    val rotationDegrees: Float = 12f,
     val waveSpeed: Float = 1f,
-    val shadowDepth: Float = 0.55f,
+    val shadowDepth: Float = 0.7f,
 )
 
 val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }
 
+// Crisp contact shadow: a tight, dark edge right under the glyph so the
+// letterform reads as solid and sharp. (The previous wide blur — up to ~17px —
+// hazed the glyph edges and made the whole line look soft; block depth now
+// comes from the extruded backing glyph in Letter3DText instead.)
 private fun letter3DShadow(depth: Float) = Shadow(
-    color = Color.Black.copy(alpha = depth.coerceIn(0f, 1f)),
-    offset = Offset(0f, 2f + 8f * depth),
-    blurRadius = 3f + 14f * depth,
+    color = Color.Black.copy(alpha = (0.5f + 0.4f * depth).coerceIn(0f, 1f)),
+    offset = Offset(0f, 2f + 5f * depth),
+    blurRadius = 1f + 4f * depth,
 )
 
 /**
@@ -548,10 +556,7 @@ private fun Letter3DText(
     time: State<Float>,
 ) {
     val fx = LocalLyricsFx.current
-    Text(
-        text = text,
-        style = style,
-        color = color,
+    Box(
         modifier = Modifier.graphicsLayer {
             val t = time.value * fx.waveSpeed
             val p = t * 1.9f + phase
@@ -561,16 +566,32 @@ private fun Letter3DText(
             // swell slightly on the toward-viewer swing. Keeping every term
             // phase-locked to the same wave is what makes it read as 3D depth
             // instead of independent flat jiggles.
-            translationY = 2.2.dp.toPx() * sin(p)
-            rotationX = -(fx.rotationDegrees * 1.3f) * cos(p)
+            translationY = 3.dp.toPx() * sin(p)
+            rotationX = -(fx.rotationDegrees * 1.6f) * cos(p)
             rotationY = (fx.rotationDegrees * 0.9f) * sin(t * 0.8f + phase * 0.5f)
-            val depth = 1f + 0.06f * intensity * cos(p)
+            val depth = 1f + 0.09f * intensity * cos(p)
             scaleX = depth
             scaleY = depth
             // Short camera distance = strong perspective on the tilts.
             cameraDistance = 4f * density
         },
-    )
+    ) {
+        // Extruded backing: the same glyph stamped in near-black a couple of
+        // pixels down-right, inside the same transform layer so it tilts with
+        // the letter. The pair reads as one solid letterform with block
+        // depth — not a glyph plus a detached shadow. Active line only, so
+        // the extra Text per letter stays cheap.
+        Text(
+            text = text,
+            style = style.copy(shadow = null),
+            color = Color.Black.copy(alpha = (0.45f + 0.4f * fx.shadowDepth).coerceIn(0f, 0.9f)),
+            modifier = Modifier.graphicsLayer {
+                translationX = 1.4f * density
+                translationY = 2.4f * density
+            },
+        )
+        Text(text = text, style = style, color = color)
+    }
 }
 
 @Composable

@@ -1135,9 +1135,9 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Lyrics 3D appearance ---
-    val lyrics3dRotation: Flow<Float> = dataStore.data.map { it[LYRICS_3D_ROTATION] ?: 9f }
+    val lyrics3dRotation: Flow<Float> = dataStore.data.map { it[LYRICS_3D_ROTATION] ?: 12f }
     val lyrics3dWaveSpeed: Flow<Float> = dataStore.data.map { it[LYRICS_3D_WAVE_SPEED] ?: 1f }
-    val lyrics3dShadowDepth: Flow<Float> = dataStore.data.map { it[LYRICS_3D_SHADOW_DEPTH] ?: 0.55f }
+    val lyrics3dShadowDepth: Flow<Float> = dataStore.data.map { it[LYRICS_3D_SHADOW_DEPTH] ?: 0.7f }
     suspend fun setLyrics3dRotation(value: Float) {
         dataStore.edit { it[LYRICS_3D_ROTATION] = value.coerceIn(0f, 20f) }
     }

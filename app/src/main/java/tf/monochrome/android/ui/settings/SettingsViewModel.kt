@@ -165,11 +165,11 @@ class SettingsViewModel @Inject constructor(
             tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH
         )
     val lyrics3dRotation: StateFlow<Float> = preferences.lyrics3dRotation
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 9f)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 12f)
     val lyrics3dWaveSpeed: StateFlow<Float> = preferences.lyrics3dWaveSpeed
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1f)
     val lyrics3dShadowDepth: StateFlow<Float> = preferences.lyrics3dShadowDepth
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.55f)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.7f)
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val appTargetFps: StateFlow<Int> = preferences.appTargetFps
