@@ -552,6 +552,39 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
             onCheckedChange = { viewModel.setRomajiLyrics(it) }
         )
 
+        // Word-level lyrics provider — which karaoke-timing source(s) run when
+        // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
+        val lyricsProvider by viewModel.lyricsWordProvider.collectAsState()
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Text(
+                text = "Word-level lyrics provider",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            val providerOptions = listOf(
+                tf.monochrome.android.data.preferences.LyricsWordProvider.NETEASE_ONLY,
+                tf.monochrome.android.data.preferences.LyricsWordProvider.KUGOU_ONLY,
+                tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH,
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                providerOptions.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = lyricsProvider == mode,
+                        onClick = { viewModel.setLyricsWordProvider(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index, providerOptions.size),
+                    ) {
+                        Text(mode.displayName)
+                    }
+                }
+            }
+        }
+
         // App-wide frame rate and panel resolution, applied by selecting a
         // matching display mode in MainActivity. Resolution options only list
         // classes the panel can reach; a request maps to the nearest mode.

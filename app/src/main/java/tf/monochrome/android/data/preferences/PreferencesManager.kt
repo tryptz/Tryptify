@@ -31,6 +31,16 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 /** Which catalog(s) drive search and discovery surfaces. */
 enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
 
+/**
+ * Which word-level lyrics provider(s) to use when TIDAL has no synced lyrics.
+ * BOTH tries NetEase first, then Kugou — each is the other's fallback.
+ */
+enum class LyricsWordProvider(val displayName: String) {
+    NETEASE_ONLY("NetEase"),
+    KUGOU_ONLY("Kugou"),
+    BOTH("Both"),
+}
+
 @Singleton
 class PreferencesManager @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -116,6 +126,7 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_SENSITIVITY = intPreferencesKey("visualizer_sensitivity")
         private val VISUALIZER_BRIGHTNESS = intPreferencesKey("visualizer_brightness")
         private val ROMAJI_LYRICS = booleanPreferencesKey("romaji_lyrics")
+        private val LYRICS_WORD_PROVIDER = stringPreferencesKey("lyrics_word_provider")
         private val DOWNLOAD_LYRICS = booleanPreferencesKey("download_lyrics")
         private val NOW_PLAYING_VIEW_MODE = stringPreferencesKey("now_playing_view_mode")
         private val VISUALIZER_ENGINE_ENABLED = booleanPreferencesKey("visualizer_engine_enabled")
@@ -577,6 +588,11 @@ class PreferencesManager @Inject constructor(
     val visualizerSensitivity: Flow<Int> = dataStore.data.map { it[VISUALIZER_SENSITIVITY] ?: 50 }
     val visualizerBrightness: Flow<Int> = dataStore.data.map { it[VISUALIZER_BRIGHTNESS] ?: 80 }
     val romajiLyrics: Flow<Boolean> = dataStore.data.map { it[ROMAJI_LYRICS] ?: false }
+    val lyricsWordProvider: Flow<LyricsWordProvider> = dataStore.data.map { prefs ->
+        prefs[LYRICS_WORD_PROVIDER]
+            ?.let { raw -> runCatching { LyricsWordProvider.valueOf(raw) }.getOrNull() }
+            ?: LyricsWordProvider.BOTH
+    }
     val downloadLyrics: Flow<Boolean> = dataStore.data.map { it[DOWNLOAD_LYRICS] ?: false }
     val visualizerEngineEnabled: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_ENGINE_ENABLED] ?: true }
     val visualizerAutoShuffle: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_AUTO_SHUFFLE] ?: true }
@@ -608,6 +624,9 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setRomajiLyrics(enabled: Boolean) {
         dataStore.edit { it[ROMAJI_LYRICS] = enabled }
+    }
+    suspend fun setLyricsWordProvider(mode: LyricsWordProvider) {
+        dataStore.edit { it[LYRICS_WORD_PROVIDER] = mode.name }
     }
     suspend fun setDownloadLyrics(enabled: Boolean) {
         dataStore.edit { it[DOWNLOAD_LYRICS] = enabled }

@@ -158,6 +158,12 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
     val romajiLyrics: StateFlow<Boolean> = preferences.romajiLyrics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val lyricsWordProvider: StateFlow<tf.monochrome.android.data.preferences.LyricsWordProvider> =
+        preferences.lyricsWordProvider.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH
+        )
     val lyrics3dRotation: StateFlow<Float> = preferences.lyrics3dRotation
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 9f)
     val lyrics3dWaveSpeed: StateFlow<Float> = preferences.lyrics3dWaveSpeed
@@ -375,6 +381,9 @@ class SettingsViewModel @Inject constructor(
     fun setVisualizerSensitivity(value: Int) { viewModelScope.launch { preferences.setVisualizerSensitivity(value) } }
     fun setVisualizerBrightness(value: Int) { viewModelScope.launch { preferences.setVisualizerBrightness(value) } }
     fun setRomajiLyrics(enabled: Boolean) { viewModelScope.launch { preferences.setRomajiLyrics(enabled) } }
+    fun setLyricsWordProvider(mode: tf.monochrome.android.data.preferences.LyricsWordProvider) {
+        viewModelScope.launch { preferences.setLyricsWordProvider(mode) }
+    }
     fun setNowPlayingViewMode(mode: NowPlayingViewMode) { viewModelScope.launch { preferences.setNowPlayingViewMode(mode) } }
     fun setVisualizerEngineEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerEngineEnabled(enabled) } }
     fun setVisualizerAutoShuffle(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerAutoShuffle(enabled) } }

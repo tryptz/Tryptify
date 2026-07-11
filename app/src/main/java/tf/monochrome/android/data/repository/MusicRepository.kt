@@ -14,6 +14,7 @@ import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.api.KugouLyricsClient
 import tf.monochrome.android.data.api.LrcLibClient
 import tf.monochrome.android.data.api.NetEaseLyricsClient
+import tf.monochrome.android.data.preferences.LyricsWordProvider
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AiFilter
 import tf.monochrome.android.domain.model.Album
@@ -188,20 +189,27 @@ class MusicRepository @Inject constructor(
         }
         // No word-level lyrics from TIDAL — try free, no-auth catalogs that
         // carry per-word (karaoke-style) timing before falling back to
-        // LRCLib's line-level-only synced lyrics. Skip entirely when we
-        // don't have enough info to make any reasonable query.
+        // LRCLib's line-level-only synced lyrics. Which provider(s) run is
+        // user-selected: NetEase only, Kugou only, or both as each other's
+        // fallback (NetEase first). Skip entirely when we don't have enough
+        // info to make any reasonable query.
         val title = track?.title?.takeIf { it.isNotBlank() } ?: return@runCatching null
         val artistName = (track.artist?.name ?: track.artists.firstOrNull()?.name)
             ?.takeIf { it.isNotBlank() } ?: return@runCatching null
         val durationSeconds = track.duration.takeIf { it > 0 }
+        val wordProvider = preferences.lyricsWordProvider.first()
 
-        runCatching {
-            netEaseLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
-        }.getOrNull()?.let { return@runCatching it }
+        if (wordProvider != LyricsWordProvider.KUGOU_ONLY) {
+            runCatching {
+                netEaseLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
+            }.getOrNull()?.let { return@runCatching it }
+        }
 
-        runCatching {
-            kugouLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
-        }.getOrNull()?.let { return@runCatching it }
+        if (wordProvider != LyricsWordProvider.NETEASE_ONLY) {
+            runCatching {
+                kugouLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
+            }.getOrNull()?.let { return@runCatching it }
+        }
 
         lrcLibClient.lookup(
             title = title,
