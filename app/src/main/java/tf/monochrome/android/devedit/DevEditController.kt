@@ -75,12 +75,19 @@ class DevEditController @Inject constructor(
     /** Snap a box's stored position and size to the grid (no-op when snap off). */
     fun snapBoxToGrid(screen: String, id: String) {
         val list = (_layout.value.boxes[screen] ?: return).map {
-            if (it.id == id) it.copy(
-                x = snap(it.x),
-                y = snap(it.y),
-                width = snap(it.width).coerceAtLeast(gridStep),
-                height = snap(it.height).coerceAtLeast(gridStep),
-            ) else it
+            if (it.id == id) {
+                // Snap the height, then derive the width from the box's own
+                // aspect ratio — snapping both axes independently would
+                // stretch non-square boxes (e.g. a screen-ratio canvas).
+                val ratio = if (it.height > 0f) it.width / it.height else 1f
+                val height = snap(it.height).coerceAtLeast(gridStep)
+                it.copy(
+                    x = snap(it.x),
+                    y = snap(it.y),
+                    width = (height * ratio).coerceAtLeast(gridStep),
+                    height = height,
+                )
+            } else it
         }
         update { it.copy(boxes = it.boxes + (screen to list)) }
     }
@@ -150,6 +157,33 @@ class DevEditController @Inject constructor(
         update { it.copy(boxes = it.boxes + (screen to list)) }
     }
 
+    /**
+     * Adds a screen-sized canvas box: the detected device screen at 1:1 —
+     * full dp size, so its aspect ratio is exactly the physical screen's —
+     * with the panel's native pixel resolution in the label. Resizing keeps
+     * the ratio (see [resizeBox]), so the canvas is never stretched.
+     */
+    fun addScreenCanvas(screen: String, nativeWidthPx: Int, nativeHeightPx: Int) {
+        if (screenWidthDp <= 0f || screenHeightDp <= 0f) return
+        // Panel modes report physical dimensions in a fixed orientation;
+        // align them with the current dp orientation.
+        val portrait = screenHeightDp >= screenWidthDp
+        val pxW = if (portrait) minOf(nativeWidthPx, nativeHeightPx) else maxOf(nativeWidthPx, nativeHeightPx)
+        val pxH = if (portrait) maxOf(nativeWidthPx, nativeHeightPx) else minOf(nativeWidthPx, nativeHeightPx)
+        val box = FreeformBox(
+            id = UUID.randomUUID().toString(),
+            x = 0f,
+            y = 0f,
+            width = screenWidthDp,
+            height = screenHeightDp,
+            label = "Canvas ${pxW}×${pxH}px · ${screenWidthDp.toInt()}×${screenHeightDp.toInt()}dp",
+            // Much fainter than a normal box: it overlays the whole screen.
+            colorArgb = 0x148ED081L,
+        )
+        val list = (_layout.value.boxes[screen] ?: emptyList()) + box
+        update { it.copy(boxes = it.boxes + (screen to list)) }
+    }
+
     fun moveBox(screen: String, id: String, dx: Float, dy: Float) {
         val list = (_layout.value.boxes[screen] ?: return).map {
             if (it.id == id) it.copy(x = it.x + dx, y = it.y + dy) else it
@@ -158,12 +192,16 @@ class DevEditController @Inject constructor(
     }
 
     fun resizeBox(screen: String, id: String, dw: Float, dh: Float) {
-        // Keep boxes square (1:1): a diagonal drag drives a single uniform size.
+        // Uniform resize preserving each box's own aspect ratio: a diagonal
+        // drag drives the height and the width follows. Default boxes are
+        // square and stay square; a screen-ratio canvas keeps the exact
+        // device proportions — no stretching either way.
         val delta = (dw + dh) / 2f
         val list = (_layout.value.boxes[screen] ?: return).map {
             if (it.id == id) {
-                val size = (maxOf(it.width, it.height) + delta).coerceAtLeast(40f)
-                it.copy(width = size, height = size)
+                val ratio = if (it.height > 0f) it.width / it.height else 1f
+                val height = (it.height + delta).coerceAtLeast(40f)
+                it.copy(width = (height * ratio).coerceAtLeast(24f), height = height)
             } else it
         }
         update { it.copy(boxes = it.boxes + (screen to list)) }
