@@ -26,6 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.downloads.TrackDownloadState
@@ -135,6 +138,10 @@ fun TrackItem(
                         modifier = Modifier.padding(top = 1.dp)
                     )
                 }
+                if (track.isThxSpatialAudio) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    ThxBadgePill()
+                }
                 track.channelBadge?.let { badge ->
                     Spacer(modifier = Modifier.width(4.dp))
                     ChannelBadgePill(badge)
@@ -239,6 +246,28 @@ fun ChannelBadgePill(text: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+        )
+    }
+}
+
+/**
+ * Highlighted "THX" pill for Qobuz THX Spatial Audio releases. Deliberately
+ * stronger than the translucent quality/channel pills — solid primary fill —
+ * so the spatial designation stands out wherever a track is listed.
+ */
+@Composable
+fun ThxBadgePill(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.semantics { contentDescription = "THX Spatial Audio" },
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.primary,
+    ) {
+        Text(
+            text = "THX",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
         )
     }
 }

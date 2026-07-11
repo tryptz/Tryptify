@@ -24,6 +24,7 @@ accompanist = "0.36.0"
 haze = "1.7.1"
 nextlibMedia3ext = "0.8.4"
 profileinstaller = "1.4.1"
+jaudiotagger = "3.0.1"
 junit = "4.13.2"
 
 [libraries]
@@ -58,6 +59,12 @@ media3-cast = { group = "androidx.media3", name = "media3-cast", version.ref = "
 # without having to cross-compile FFmpeg ourselves. Covers codecs MediaCodec
 # can't: DSD, APE, TAK, WavPack, Musepack, TrueHD, DTS, MLP, etc. LGPL build.
 nextlib-media3ext = { group = "io.github.anilbeesetti.nextlib", name = "nextlib-media3ext", version.ref = "nextlibMedia3ext" }
+
+# JAudioTagger — pure-JVM audio metadata read/write. Used to embed Vorbis
+# comments (TITLE/VERSION/COMMENT) into downloaded FLACs and to read the THX
+# designation back from a file on rescan. MediaMetadataRetriever is read-only
+# and can't see custom Vorbis comments, hence a real tag library.
+jaudiotagger = { group = "net.jthink", name = "jaudiotagger", version.ref = "jaudiotagger" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }

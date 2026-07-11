@@ -263,6 +263,7 @@ class MediaScanner @Inject constructor(
             rgAlbumGain = tags.replayGainAlbum,
             hasEmbeddedArt = tags.hasEmbeddedArt,
             artworkCacheKey = tags.artworkCacheKey,
+            isThxSpatialAudio = tags.isThxSpatialAudio,
             lastScannedAt = System.currentTimeMillis()
         )
     }

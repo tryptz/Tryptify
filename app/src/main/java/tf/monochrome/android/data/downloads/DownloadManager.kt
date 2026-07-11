@@ -34,6 +34,7 @@ data class ActiveDownload(
     val artworkUri: String?,
     val status: DownloadStatus,
     val progress: Float,
+    val isThxSpatialAudio: Boolean = false,
 )
 
 @Singleton
@@ -45,7 +46,12 @@ class DownloadManager @Inject constructor(
     // Track metadata for rendering active downloads (title/artist/cover). WorkInfo
     // can't carry it, so we keep it here, keyed by track id. Process-scoped: a
     // download still in flight after a restart falls back to a generic label.
-    private data class DownloadMeta(val title: String, val artistName: String, val artworkUri: String?)
+    private data class DownloadMeta(
+        val title: String,
+        val artistName: String,
+        val artworkUri: String?,
+        val isThxSpatialAudio: Boolean,
+    )
     private val meta = ConcurrentHashMap<Long, DownloadMeta>()
 
     fun downloadTrack(track: Track) {
@@ -71,6 +77,7 @@ class DownloadManager @Inject constructor(
             title = track.title,
             artistName = track.artist?.name ?: track.displayArtist.ifBlank { "Unknown Artist" },
             artworkUri = track.coverUrl,
+            isThxSpatialAudio = track.isThxSpatialAudio,
         )
         val inputData = workDataOf(
             DownloadWorker.KEY_TRACK_ID to track.id,
@@ -78,7 +85,9 @@ class DownloadManager @Inject constructor(
             DownloadWorker.KEY_ARTIST_NAME to (track.artist?.name ?: "Unknown Artist"),
             DownloadWorker.KEY_ALBUM_TITLE to (track.album?.title),
             DownloadWorker.KEY_ALBUM_COVER to (track.album?.cover),
-            DownloadWorker.KEY_DURATION to track.duration
+            DownloadWorker.KEY_DURATION to track.duration,
+            DownloadWorker.KEY_VERSION to track.version,
+            DownloadWorker.KEY_IS_THX to track.isThxSpatialAudio,
         )
 
         val constraints = Constraints.Builder()
@@ -168,6 +177,7 @@ class DownloadManager @Inject constructor(
                         artworkUri = m?.artworkUri,
                         status = state.status,
                         progress = state.progress,
+                        isThxSpatialAudio = m?.isThxSpatialAudio ?: false,
                     )
                 }
                 .sortedWith(

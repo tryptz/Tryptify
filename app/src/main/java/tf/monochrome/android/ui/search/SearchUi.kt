@@ -621,6 +621,9 @@ private fun UnifiedSearchTrackItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ResultBadge(text = track.sourceType.label())
+                    if (track.isThxSpatialAudio) {
+                        tf.monochrome.android.ui.components.ThxBadgePill()
+                    }
                     track.qualityBadge?.let { ResultBadge(text = it) }
                 }
             }

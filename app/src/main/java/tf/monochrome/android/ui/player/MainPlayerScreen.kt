@@ -51,6 +51,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -79,6 +81,7 @@ data class MainPlayerUiState(
     val artists: List<UnifiedArtistRef> = emptyList(),
     val qualityBadge: String? = null,
     val channelBadge: String? = null,
+    val isThxSpatialAudio: Boolean = false,
     val isPlaying: Boolean,
     val positionMs: Long,
     val durationMs: Long,
@@ -239,6 +242,7 @@ fun MainPlayerScreen(
                     sourceType = state.sourceType,
                     qualityBadge = state.qualityBadge,
                     channelBadge = state.channelBadge,
+                    isThxSpatialAudio = state.isThxSpatialAudio,
                 )
             }
 
@@ -591,8 +595,9 @@ private fun PlayerSourceFormatTag(
     sourceType: SourceType?,
     qualityBadge: String?,
     channelBadge: String? = null,
+    isThxSpatialAudio: Boolean = false,
 ) {
-    if (sourceType == null && qualityBadge.isNullOrBlank() && channelBadge.isNullOrBlank()) return
+    if (sourceType == null && qualityBadge.isNullOrBlank() && channelBadge.isNullOrBlank() && !isThxSpatialAudio) return
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
@@ -622,6 +627,23 @@ private fun PlayerSourceFormatTag(
                         color = Color.White.copy(alpha = 0.92f),
                     )
                 }
+            }
+        }
+        // Highlighted THX Spatial Audio chip — solid fill so it reads stronger
+        // than the translucent source/quality/channel chips on this screen.
+        if (isThxSpatialAudio) {
+            Surface(
+                shape = RoundedCornerShape(percent = 50),
+                color = Color.White,
+                modifier = Modifier.semantics { contentDescription = "THX Spatial Audio" },
+            ) {
+                Text(
+                    text = "THX",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black.copy(alpha = 0.85f),
+                )
             }
         }
         if (!qualityBadge.isNullOrBlank()) {

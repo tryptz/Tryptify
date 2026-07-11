@@ -189,6 +189,7 @@ fun MainPlayerRoute(
         artists = currentUnified?.artists ?: emptyList(),
         qualityBadge = currentUnified?.qualityBadge,
         channelBadge = currentUnified?.channelBadge ?: currentTrack?.channelBadge,
+        isThxSpatialAudio = currentUnified?.isThxSpatialAudio ?: currentTrack?.isThxSpatialAudio ?: false,
         isPlaying = isPlaying,
         positionMs = positionMs,
         durationMs = durationMs,

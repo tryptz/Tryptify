@@ -994,6 +994,8 @@ private fun QobuzRelease.toDomainAlbum(): tf.monochrome.android.domain.model.Alb
         explicit = parentalWarning,
         type = typeLabel,
         duration = duration,
+        version = version,
+        isThxSpatialAudio = tf.monochrome.android.domain.model.isThxSpatialAudio(title, version),
     )
 }
 
@@ -1015,6 +1017,8 @@ private fun QobuzAlbumItem.toDomainAlbum(): tf.monochrome.android.domain.model.A
         explicit = explicit,
         type = typeLabel,
         duration = duration,
+        version = version,
+        isThxSpatialAudio = tf.monochrome.android.domain.model.isThxSpatialAudio(title, version),
     )
 }
 
@@ -1050,6 +1054,11 @@ private fun QobuzTrackItem.toDomainTrack(
         trackNumber = trackNumber,
         volumeNumber = mediaNumber,
         channelCount = maximumChannelCount,
+        version = version,
+        isThxSpatialAudio = tf.monochrome.android.domain.model.isThxSpatialAudio(
+            title = title, version = version,
+            albumTitle = album?.title, albumVersion = album?.version,
+        ) || (fallbackAlbum?.isThxSpatialAudio == true),
     )
 }
 
@@ -1139,6 +1148,11 @@ private fun QobuzArtistTopTrack.toDomainTrack(): tf.monochrome.android.domain.mo
         trackNumber = physicalSupport?.trackNumber,
         volumeNumber = physicalSupport?.mediaNumber,
         channelCount = audioInfo?.maximumChannelCount,
+        version = version,
+        isThxSpatialAudio = tf.monochrome.android.domain.model.isThxSpatialAudio(
+            title = title, version = version,
+            albumTitle = album?.title, albumVersion = album?.version,
+        ),
     )
 }
 
