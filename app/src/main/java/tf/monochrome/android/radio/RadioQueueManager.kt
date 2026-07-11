@@ -87,18 +87,30 @@ class RadioQueueManager @Inject constructor(
         }
     }
 
-    /** Starts radio seeded from the currently playing track. */
-    fun startRadio() {
-        val seed = queueManager.currentTrack.value ?: return
-        if (_isActive.value) return
-        seenTrackIds.clear()
-        seenTitleKeys.clear()
+    /**
+     * Starts radio. With no argument the currently playing track seeds the
+     * station; passing [seed] seeds from that specific track (queue radio on
+     * any queue row). An explicit seed while radio is already running
+     * re-seeds the station in place — the session dedupe survives so tracks
+     * suggested for the old seed don't repeat under the new one.
+     */
+    fun startRadio(seed: Track? = null) {
+        val seedTrack = seed ?: queueManager.currentTrack.value ?: return
+        if (_isActive.value) {
+            if (seed == null) return
+            // Re-seed: drop the in-flight generation, keep the dedupe state.
+            generationJob?.cancel()
+            _isGenerating.value = false
+        } else {
+            seenTrackIds.clear()
+            seenTitleKeys.clear()
+            // Never re-suggest anything already in the queue or the seed itself.
+            queueManager.currentQueue.forEach { remember(it) }
+        }
         consecutiveEmptyBatches = 0
-        // Never re-suggest anything already in the queue or the seed itself.
-        queueManager.currentQueue.forEach { remember(it) }
         _isActive.value = true
         _statusMessage.value = null
-        generate(seed)
+        generate(seedTrack)
     }
 
     fun stopRadio() {

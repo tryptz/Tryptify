@@ -406,6 +406,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onPlayAll = { tracks ->
                                 playerViewModel.playAllUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }
@@ -425,6 +428,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onShuffleAll = { tracks ->
                                 playerViewModel.shufflePlayUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }
@@ -444,6 +450,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onShuffleAll = { tracks ->
                                 playerViewModel.shufflePlayUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }
@@ -463,6 +472,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onShuffleAll = { tracks ->
                                 playerViewModel.shufflePlayUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }

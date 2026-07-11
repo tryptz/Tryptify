@@ -278,6 +278,7 @@ fun QueueSheet(
                                 expanded = menuIndex == index,
                                 onDismiss = { menuIndex = null },
                                 onPlayNext = { playerViewModel.playQueueItemNext(index) },
+                                onStartRadio = { playerViewModel.startRadioFrom(track) },
                                 onSelect = {
                                     selectionMode = true
                                     selectedIndices = setOf(index)
@@ -334,6 +335,7 @@ private fun QueueTrackMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onPlayNext: () -> Unit,
+    onStartRadio: () -> Unit,
     onSelect: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -346,6 +348,13 @@ private fun QueueTrackMenu(
             onClick = {
                 onDismiss()
                 onPlayNext()
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("Start radio from this song") },
+            onClick = {
+                onDismiss()
+                onStartRadio()
             }
         )
         DropdownMenuItem(

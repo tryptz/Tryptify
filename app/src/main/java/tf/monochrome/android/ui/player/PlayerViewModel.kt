@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -504,6 +505,30 @@ class PlayerViewModel @Inject constructor(
     /** Start radio seeded from the currently playing track. */
     fun startRadio() {
         radioQueueManager.startRadio()
+    }
+
+    /** Queue radio: (re)seed the station from a specific track. */
+    fun startRadioFrom(track: Track) {
+        radioQueueManager.startRadio(track)
+    }
+
+    /**
+     * Home-screen "Play radio": seed from whatever is playing, else the most
+     * recent history entry, else a favorite — and start playback when the
+     * seed isn't already playing. No-op only for a completely fresh library.
+     */
+    fun playRadio() {
+        viewModelScope.launch {
+            currentTrack.value?.let {
+                radioQueueManager.startRadio(it)
+                return@launch
+            }
+            val seed = libraryRepository.getHistory().firstOrNull()?.firstOrNull()
+                ?: libraryRepository.getFavoriteTracks().firstOrNull()?.firstOrNull()
+                ?: return@launch
+            playTrack(seed)
+            radioQueueManager.startRadio(seed)
+        }
     }
 
     fun stopRadio() {

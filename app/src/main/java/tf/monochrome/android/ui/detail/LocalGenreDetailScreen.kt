@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
@@ -58,6 +59,7 @@ fun LocalGenreDetailScreen(
     onPlayTrack: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onPlayAll: (List<UnifiedTrack>) -> Unit,
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
+    onAddToQueue: (UnifiedTrack) -> Unit,
     viewModel: LocalGenreDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsState()
@@ -158,6 +160,7 @@ fun LocalGenreDetailScreen(
                     GenreTrackRow(
                         track = track,
                         onClick = { onPlayTrack(track, sortedTracks) },
+                        onAddToQueue = { onAddToQueue(track) },
                         navController = navController
                     )
                 }
@@ -170,6 +173,7 @@ fun LocalGenreDetailScreen(
 private fun GenreTrackRow(
     track: UnifiedTrack,
     onClick: () -> Unit,
+    onAddToQueue: () -> Unit,
     navController: NavController
 ) {
     Surface(
@@ -242,6 +246,14 @@ private fun GenreTrackRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Filled.PlaylistAdd,
+                    contentDescription = "Add to queue",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
