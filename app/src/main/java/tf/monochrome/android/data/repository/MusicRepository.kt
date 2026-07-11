@@ -11,7 +11,9 @@ import kotlinx.coroutines.flow.first
 import tf.monochrome.android.data.ai.AudioSnippetFetcher
 import tf.monochrome.android.data.ai.GeminiClient
 import tf.monochrome.android.data.api.HiFiApiClient
+import tf.monochrome.android.data.api.KugouLyricsClient
 import tf.monochrome.android.data.api.LrcLibClient
+import tf.monochrome.android.data.api.NetEaseLyricsClient
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AiFilter
 import tf.monochrome.android.domain.model.Album
@@ -31,6 +33,8 @@ import javax.inject.Singleton
 class MusicRepository @Inject constructor(
     private val apiClient: HiFiApiClient,
     private val lrcLibClient: LrcLibClient,
+    private val netEaseLyricsClient: NetEaseLyricsClient,
+    private val kugouLyricsClient: KugouLyricsClient,
     private val preferences: PreferencesManager,
     private val geminiClient: GeminiClient,
     private val audioSnippetFetcher: AudioSnippetFetcher,
@@ -182,16 +186,28 @@ class MusicRepository @Inject constructor(
             // be unreachable on some networks and lacks word-level timing.
             tidalLyricsByMetadata(track, romajiEnabled)?.let { return@runCatching it }
         }
-        // Final fallback: LRCLib (open API, no auth) using the track's metadata.
-        // Skip when we don't have enough info to make any reasonable query.
+        // No word-level lyrics from TIDAL — try free, no-auth catalogs that
+        // carry per-word (karaoke-style) timing before falling back to
+        // LRCLib's line-level-only synced lyrics. Skip entirely when we
+        // don't have enough info to make any reasonable query.
         val title = track?.title?.takeIf { it.isNotBlank() } ?: return@runCatching null
         val artistName = (track.artist?.name ?: track.artists.firstOrNull()?.name)
             ?.takeIf { it.isNotBlank() } ?: return@runCatching null
+        val durationSeconds = track.duration.takeIf { it > 0 }
+
+        runCatching {
+            netEaseLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
+        }.getOrNull()?.let { return@runCatching it }
+
+        runCatching {
+            kugouLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
+        }.getOrNull()?.let { return@runCatching it }
+
         lrcLibClient.lookup(
             title = title,
             artist = artistName,
             album = track.album?.title,
-            durationSeconds = track.duration.takeIf { it > 0 },
+            durationSeconds = durationSeconds,
             convertToRomaji = romajiEnabled,
         )
     }
