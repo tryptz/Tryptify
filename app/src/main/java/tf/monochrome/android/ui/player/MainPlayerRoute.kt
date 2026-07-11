@@ -79,7 +79,11 @@ fun MainPlayerRoute(
     val repeatMode by playerViewModel.repeatMode.collectAsState()
     val isLiked by playerViewModel.isCurrentTrackLiked.collectAsState()
     val downloadState by playerViewModel.currentTrackDownloadState.collectAsState()
-    val isDownloaded by playerViewModel.isCurrentTrackDownloaded.collectAsState()
+    val isDownloadedRemote by playerViewModel.isCurrentTrackDownloaded.collectAsState()
+    val isLocalTrack by playerViewModel.isCurrentTrackLocal.collectAsState()
+    // A local file is already on disk — show it as on-device rather than
+    // offering a download that would try to fetch it from the catalog.
+    val isDownloaded = isDownloadedRemote || isLocalTrack
     val lyrics by playerViewModel.currentLyrics.collectAsState()
     val isLyricsLoading by playerViewModel.isLyricsLoading.collectAsState()
     val viewMode by playerViewModel.nowPlayingViewMode.collectAsState()

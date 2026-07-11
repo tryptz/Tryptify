@@ -785,14 +785,30 @@ class PlayerViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    /**
+     * True when the track resolves to a local file — it's already on disk, so
+     * download affordances should be hidden and download requests dropped.
+     * The registry is rehydrated from history/queue state, so this covers
+     * local tracks surfaced through Recently Played and playlists too.
+     */
+    fun isLocalTrack(track: Track): Boolean =
+        unifiedTrackRegistry[track.id]?.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile
+
+    /** Drives the player UI: a local file shows as on-device, never downloadable. */
+    val isCurrentTrackLocal: StateFlow<Boolean> = currentTrack
+        .map { track -> track != null && isLocalTrack(track) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     fun downloadTrack(track: Track) {
+        if (isLocalTrack(track)) return
         downloadManager.downloadTrack(track)
         observeTrackDownload(track.id)
     }
 
     fun downloadAllTracks(tracks: List<Track>) {
-        downloadManager.downloadTracks(tracks)
-        tracks.forEach { observeTrackDownload(it.id) }
+        val remote = tracks.filterNot(::isLocalTrack)
+        downloadManager.downloadTracks(remote)
+        remote.forEach { observeTrackDownload(it.id) }
     }
 
     /**
