@@ -21,7 +21,6 @@ import tf.monochrome.android.data.api.Instance
 import tf.monochrome.android.data.api.InstanceManager
 import tf.monochrome.android.data.api.InstanceType
 import tf.monochrome.android.data.auth.AuthRepository
-import tf.monochrome.android.data.import_.PlaylistImporter
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.sync.BackupManager
@@ -41,7 +40,6 @@ class SettingsViewModel @Inject constructor(
     private val instanceManager: InstanceManager,
     private val authRepository: AuthRepository,
     private val backupManager: BackupManager,
-    private val playlistImporter: PlaylistImporter,
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
@@ -479,18 +477,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // --- Playlist Import actions ---
-    fun importPlaylist(url: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            playlistImporter.importFromUrl(url)
-                .onSuccess { done ->
-                    onResult(true, "Imported ${done.matched}/${done.total} tracks into '${done.playlistName}'")
-                }
-                .onFailure {
-                    onResult(false, it.message ?: "Import failed")
-                }
-        }
-    }
+    // Playlist imports live in SpotifyImportViewModel, which routes them
+    // through SpotifyImportForegroundService — no in-ViewModel import path
+    // should exist here, or a big playlist dies when the screen closes.
 
     // --- Instance actions ---
     private fun loadInstances() {

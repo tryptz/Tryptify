@@ -1863,7 +1863,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { spotifyViewModel.importByUrl(importUrl, onResult = onImportResult) },
+                onClick = { spotifyViewModel.importByUrl(context, importUrl, onResult = onImportResult) },
                 enabled = spotifyConnected && importUrl.isNotBlank() && !isImporting
             ) {
                 Text("Import Playlist")
@@ -1945,11 +1945,11 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                 error = playlistsError,
                 onPick = { playlistId, name, strict ->
                     showSpotifyPicker = false
-                    spotifyViewModel.importPlaylist(playlistId, name, strict, onImportResult)
+                    spotifyViewModel.importPlaylist(context, playlistId, name, strict, onImportResult)
                 },
                 onPickLikedSongs = { strict ->
                     showSpotifyPicker = false
-                    spotifyViewModel.importLikedSongs(strict, onImportResult)
+                    spotifyViewModel.importLikedSongs(context, strict, onImportResult)
                 },
                 onDismiss = { showSpotifyPicker = false }
             )
