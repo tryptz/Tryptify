@@ -41,6 +41,10 @@ data class RadioPlanRequest(
     val history: List<PlannerHistoryItem> = emptyList(),
     val weights: RadioPlannerWeights = RadioPlannerWeights(),
     val metabrainz: PlannerMetaBrainzContext? = null,
+    // Target catalog the client resolves candidates against. Tryptify radio
+    // is Qobuz-specific (trypt-hifi instance), so the planner can bias its
+    // hints toward what that catalog actually carries.
+    val catalog: String = "qobuz",
 )
 
 /** One track hint the planner suggests. Advisory — Android resolves playability. */

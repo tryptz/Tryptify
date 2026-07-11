@@ -62,6 +62,7 @@ class RadioPlannerModelsTest {
         )
         val obj = json.parseToJsonElement(encoded).jsonObject
         assertEquals("chill jazz", obj["seed"]!!.jsonPrimitive.content)
+        assertEquals("qobuz", obj["catalog"]!!.jsonPrimitive.content)
         val weights = obj["weights"]!!.jsonObject
         assertEquals(1.3f, weights["avoid_recently_played"]!!.jsonPrimitive.float, 1e-4f)
         assertEquals(1.2f, weights["local_library"]!!.jsonPrimitive.float, 1e-4f)

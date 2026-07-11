@@ -58,7 +58,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
             GroupHeader("Radio planner")
             tf.monochrome.android.ui.settings.SettingSwitchItem(
                 title = "Use remote planner",
-                subtitle = "Ask the Tryptify-Playlist service for recommendation hints. Radio still works without it.",
+                subtitle = "Ask the Tryptify-Playlist service for Qobuz recommendation hints. Radio still works without it using similar-artist expansion.",
                 checked = plannerEnabled,
                 onCheckedChange = viewModel::setPlannerEnabled
             )

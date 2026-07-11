@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
@@ -24,15 +25,20 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The radio "queue maker": seeds from the playing track, asks the optional
- * Tryptify-Playlist planner for query/candidate hints, resolves them to real
- * catalog tracks, and appends batches through [QueueManager]. Refills as the
- * listener nears the queue tail.
+ * The radio "queue maker" for the Qobuz (trypt-hifi) catalog: seeds from the
+ * playing track, asks the Tryptify-Playlist planner for query/candidate
+ * hints, resolves everything against the configured Qobuz instance, and
+ * appends batches through [QueueManager]. Refills as the listener nears the
+ * queue tail.
  *
- * The planner is advisory only — this class always validates candidates
- * against the catalog and falls back to on-device recommendations when the
- * planner is unconfigured, slow, or down. It never mutates ExoPlayer; all
- * queue changes flow through [QueueManager].
+ * Resolution is Qobuz-first by design — `searchQobuz` registers every
+ * returned id in [QobuzIdRegistry], so appended tracks play through the
+ * QobuzCached path on the configured instance. The planner is advisory only:
+ * candidates are always validated against the catalog, and when the planner
+ * is unconfigured or down the station keeps running on Qobuz artist
+ * top-tracks and similar-artist expansion. TIDAL is used only as a last
+ * resort when no Qobuz instance is configured at all. This class never
+ * mutates ExoPlayer; all queue changes flow through [QueueManager].
  */
 @Singleton
 class RadioQueueManager @Inject constructor(
@@ -42,6 +48,7 @@ class RadioQueueManager @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val preferences: PreferencesManager,
     private val unifiedTrackRegistry: UnifiedTrackRegistry,
+    private val qobuzIdRegistry: QobuzIdRegistry,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -52,7 +59,7 @@ class RadioQueueManager @Inject constructor(
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
 
     // Human-readable note about the last generation ("Planner offline — using
-    // similar tracks", etc.) surfaced in the queue sheet.
+    // similar artists", etc.) surfaced in the queue sheet.
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
@@ -141,12 +148,19 @@ class RadioQueueManager @Inject constructor(
             .getOrDefault(emptyList())
             .take(HISTORY_CONTEXT_SIZE)
 
+        val qobuzConfigured =
+            preferences.qobuzInstanceUrl.first()?.isNotBlank() == true
+
         val plan = requestPlan(seed, history)
         _statusMessage.value = when {
-            plan == null -> "Using on-device recommendations"
+            !qobuzConfigured -> "No Qobuz instance set — using TIDAL fallback"
+            plan == null -> "Using Qobuz similar-artist recommendations"
             plan.fallbackReason != null -> "Planner fallback: ${plan.fallbackReason}"
             else -> null
         }
+
+        val search: suspend (String) -> List<Track> =
+            if (qobuzConfigured) ::searchQobuzTracks else ::searchTidalTracks
 
         val candidates = coroutineScope {
             // Planner hints resolved by search — bounded so a misbehaving
@@ -155,28 +169,27 @@ class RadioQueueManager @Inject constructor(
                 .filter { !it.title.isNullOrBlank() }
                 .take(MAX_HINTS)
                 .map { hint ->
-                    async { resolveHint(hint) }
+                    async { resolveHint(hint, search) }
                 }
             val queryResults = (plan?.queries.orEmpty())
                 .filter { it.isNotBlank() }
                 .take(MAX_QUERIES)
                 .map { query ->
-                    async {
-                        runCatching { repository.searchTracks(query, limit = 5).getOrThrow() }
-                            .getOrDefault(emptyList())
-                    }
+                    async { search(query).take(5) }
                 }
-            // Deterministic backbone: catalog recommendations for the seed.
-            // Always requested so radio works with the planner disabled and
-            // pads out thin planner batches.
-            val recommendations = async {
-                repository.getRecommendations(seed.id).getOrDefault(emptyList())
+            // Deterministic backbone so radio works with the planner disabled
+            // and pads out thin planner batches. Qobuz: seed artist's top
+            // tracks + similar-artist expansion. TIDAL (unconfigured Qobuz
+            // only): catalog track radio.
+            val backbone = async {
+                if (qobuzConfigured) qobuzBackbone(seed)
+                else repository.getRecommendations(seed.id).getOrDefault(emptyList())
             }
             val hints = hintResults.mapNotNull { it.await() }
             val queries = queryResults.flatMap { it.await() }
-            // Hints are the planner's strongest signal; recommendations next;
+            // Hints are the planner's strongest signal; the backbone next;
             // broad query results last.
-            hints + recommendations.await() + queries
+            hints + backbone.await() + queries
         }
 
         val historyIds = history.map { it.id }.toSet()
@@ -191,6 +204,55 @@ class RadioQueueManager @Inject constructor(
             .take(BATCH_SIZE)
             .toList()
     }
+
+    /**
+     * Qobuz on-device backbone: the seed artist's top tracks plus the top
+     * tracks of a few similar artists (both from the trypt-hifi
+     * /api/get-artist endpoint, which registers every id for QobuzCached
+     * playback), padded with a plain artist search when the seed's Qobuz
+     * artist id isn't known.
+     */
+    private suspend fun qobuzBackbone(seed: Track): List<Track> = coroutineScope {
+        val artistId = seedQobuzArtistId(seed)
+        val detail = artistId?.let { repository.getQobuzArtist(it).getOrNull() }
+        val similarTops = detail?.similarArtists.orEmpty()
+            .take(MAX_SIMILAR_ARTISTS)
+            .map { artist ->
+                async {
+                    repository.getQobuzArtist(artist.id).getOrNull()
+                        ?.topTracks.orEmpty().take(TOP_TRACKS_PER_ARTIST)
+                }
+            }
+        val artistSearch = async {
+            val artistName = seed.displayArtist
+            if (artistName.isBlank()) emptyList()
+            else searchQobuzTracks(artistName).take(TOP_TRACKS_PER_ARTIST)
+        }
+        detail?.topTracks.orEmpty().take(TOP_TRACKS_PER_ARTIST) +
+            similarTops.flatMap { it.await() } +
+            artistSearch.await()
+    }
+
+    /**
+     * The Qobuz artist id for the seed's primary artist. Direct when the seed
+     * came from Qobuz search/album/artist; via the TIDAL→Qobuz alias map when
+     * the playback fallback established one; null otherwise.
+     */
+    private fun seedQobuzArtistId(seed: Track): Long? {
+        val id = seed.artist?.id ?: seed.artists.firstOrNull()?.id ?: return null
+        return when {
+            qobuzIdRegistry.isQobuzArtist(id) -> id
+            else -> qobuzIdRegistry.qobuzArtistIdFor(id)
+        }
+    }
+
+    private suspend fun searchQobuzTracks(query: String): List<Track> =
+        repository.searchQobuz(query).getOrDefault(
+            tf.monochrome.android.domain.model.SearchResult()
+        ).tracks
+
+    private suspend fun searchTidalTracks(query: String): List<Track> =
+        repository.searchTracks(query, limit = 5).getOrDefault(emptyList())
 
     private suspend fun requestPlan(seed: Track, history: List<Track>): RadioPlanResponse? {
         if (!plannerClient.isConfigured()) return null
@@ -228,12 +290,14 @@ class RadioQueueManager @Inject constructor(
     }
 
     /** Search the catalog for a planner hint; require an artist match. */
-    private suspend fun resolveHint(hint: PlannerCandidateHint): Track? {
+    private suspend fun resolveHint(
+        hint: PlannerCandidateHint,
+        search: suspend (String) -> List<Track>,
+    ): Track? {
         val title = hint.title ?: return null
         val artist = hint.artist.orEmpty()
         val query = if (artist.isBlank()) title else "$title $artist"
-        val results = runCatching { repository.searchTracks(query, limit = 5).getOrThrow() }
-            .getOrDefault(emptyList())
+        val results = search(query).take(5)
         if (artist.isBlank()) return results.firstOrNull()
         return results.firstOrNull { candidate ->
             candidate.displayArtist.contains(artist, ignoreCase = true) ||
@@ -255,6 +319,8 @@ class RadioQueueManager @Inject constructor(
         private const val REFILL_THRESHOLD = 2
         private const val MAX_HINTS = 12
         private const val MAX_QUERIES = 6
+        private const val MAX_SIMILAR_ARTISTS = 3
+        private const val TOP_TRACKS_PER_ARTIST = 5
         private const val HISTORY_CONTEXT_SIZE = 30
         private const val IDENTITY_CONTEXT_SIZE = 10
         private const val MAX_EMPTY_BATCHES = 2
