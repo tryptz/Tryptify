@@ -175,9 +175,23 @@ class LibusbAudioSink(
         if (!bypassActive && pcmBytesPerFrame > 0 && driver.isOpen.value) {
             val fmt = configuredFormat
             if (fmt != null) {
-                val rate = fmt.sampleRate
-                val ch = fmt.channelCount
-                val bits = pcmBitsFromEncoding(fmt.pcmEncoding)
+                // Engage against the POST-chain format, like configure()
+                // does — with the downmixer active a 6-ch input emits
+                // stereo, and starting the DAC at the input's channel
+                // count would negotiate the wrong alt setting.
+                val chainOut = chain.outputFormat()
+                val rate: Int
+                val ch: Int
+                val bits: Int
+                if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
+                    rate = chainOut.sampleRate
+                    ch = chainOut.channelCount
+                    bits = pcmBitsFromEncoding(chainOut.encoding)
+                } else {
+                    rate = fmt.sampleRate
+                    ch = fmt.channelCount
+                    bits = pcmBitsFromEncoding(fmt.pcmEncoding)
+                }
                 val fmtHash = (rate * 31 + ch) * 31 + bits
                 if (rate > 0 && ch > 0 && bits > 0 &&
                     fmtHash != lastEngageFailHash) {

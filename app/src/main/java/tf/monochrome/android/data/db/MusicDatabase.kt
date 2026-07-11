@@ -2,6 +2,8 @@ package tf.monochrome.android.data.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.dao.FavoriteDao
@@ -66,7 +68,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -79,4 +81,30 @@ abstract class MusicDatabase : RoomDatabase() {
     abstract fun localMediaDao(): LocalMediaDao
     abstract fun collectionDao(): CollectionDao
     abstract fun mixPresetDao(): MixPresetDao
+
+    companion object {
+        /**
+         * v8 → v9: THX Spatial Audio designation. Adds the `version` +
+         * `isThxSpatialAudio` columns to downloaded tracks and an
+         * `isThxSpatialAudio` column to scanned local tracks, and backfills the
+         * flag for existing rows whose title/album already names the release.
+         * A real migration (not destructive fallback) so existing downloads and
+         * library scans survive the upgrade.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE downloaded_tracks ADD COLUMN version TEXT")
+                db.execSQL("ALTER TABLE downloaded_tracks ADD COLUMN isThxSpatialAudio INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "UPDATE downloaded_tracks SET isThxSpatialAudio = 1 " +
+                        "WHERE title LIKE '%THX Spatial Audio%'"
+                )
+                db.execSQL("ALTER TABLE local_tracks ADD COLUMN isThxSpatialAudio INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "UPDATE local_tracks SET isThxSpatialAudio = 1 " +
+                        "WHERE title LIKE '%THX Spatial Audio%' OR album LIKE '%THX Spatial Audio%'"
+                )
+            }
+        }
+    }
 }

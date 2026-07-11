@@ -176,12 +176,18 @@ fun DownloadsMonitorSheet(
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = d.title,
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (d.isThxSpatialAudio) {
+                                    tf.monochrome.android.ui.components.ThxBadgePill()
+                                    Spacer(Modifier.width(6.dp))
+                                }
+                                Text(
+                                    text = d.title,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             Text(
                                 text = if (d.status == DownloadStatus.DOWNLOADING) d.artistName else "Queued",
                                 style = MaterialTheme.typography.bodySmall,

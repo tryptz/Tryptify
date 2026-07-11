@@ -58,6 +58,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -85,6 +87,8 @@ data class MainPlayerUiState(
     val sourceType: SourceType? = null,
     val artists: List<UnifiedArtistRef> = emptyList(),
     val qualityBadge: String? = null,
+    val channelBadge: String? = null,
+    val isThxSpatialAudio: Boolean = false,
     val isPlaying: Boolean,
     val positionMs: Long,
     val durationMs: Long,
@@ -658,8 +662,10 @@ private fun ToggleRow(
 private fun PlayerSourceFormatTag(
     sourceType: SourceType?,
     qualityBadge: String?,
+    channelBadge: String? = null,
+    isThxSpatialAudio: Boolean = false,
 ) {
-    if (sourceType == null && qualityBadge.isNullOrBlank()) return
+    if (sourceType == null && qualityBadge.isNullOrBlank() && channelBadge.isNullOrBlank() && !isThxSpatialAudio) return
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
@@ -691,6 +697,23 @@ private fun PlayerSourceFormatTag(
                 }
             }
         }
+        // Highlighted THX Spatial Audio chip — solid fill so it reads stronger
+        // than the translucent source/quality/channel chips on this screen.
+        if (isThxSpatialAudio) {
+            Surface(
+                shape = RoundedCornerShape(percent = 50),
+                color = Color.White,
+                modifier = Modifier.semantics { contentDescription = "THX Spatial Audio" },
+            ) {
+                Text(
+                    text = "THX",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black.copy(alpha = 0.85f),
+                )
+            }
+        }
         if (!qualityBadge.isNullOrBlank()) {
             Surface(
                 shape = RoundedCornerShape(percent = 50),
@@ -698,6 +721,21 @@ private fun PlayerSourceFormatTag(
             ) {
                 Text(
                     text = qualityBadge,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.85f),
+                )
+            }
+        }
+        // Multichannel layout chip ("5.1"/"7.1") — separate from the codec
+        // chip so it stays visible whichever quality string is playing.
+        if (!channelBadge.isNullOrBlank()) {
+            Surface(
+                shape = RoundedCornerShape(percent = 50),
+                color = Color.White.copy(alpha = 0.12f),
+            ) {
+                Text(
+                    text = channelBadge,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.85f),

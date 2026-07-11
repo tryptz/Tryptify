@@ -152,7 +152,11 @@ data class DownloadedTrackEntity(
     val filePath: String,
     val quality: String,
     val sizeBytes: Long = 0,
-    val downloadedAt: Long = System.currentTimeMillis()
+    val downloadedAt: Long = System.currentTimeMillis(),
+    // Raw Qobuz release version string (e.g. "THX Spatial Audio version").
+    val version: String? = null,
+    // THX Spatial Audio release — survives offline so the badge persists.
+    val isThxSpatialAudio: Boolean = false
 )
 
 @Entity(

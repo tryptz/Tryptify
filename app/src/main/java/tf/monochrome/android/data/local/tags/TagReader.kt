@@ -47,6 +47,10 @@ data class AudioTags(
     val hasEmbeddedArt: Boolean = false,
     val artworkCacheKey: String? = null,
 
+    // THX Spatial Audio — detected from title/album text or, for FLAC, the
+    // embedded VERSION/COMMENT Vorbis fields a download wrote.
+    val isThxSpatialAudio: Boolean = false,
+
     // File info
     val filePath: String = "",
     val fileSizeBytes: Long = 0,
@@ -141,6 +145,16 @@ class TagReader @Inject constructor(
         // Determine codec
         val codec = detectCodec(mimeType, filePath)
 
+        // THX Spatial Audio detection. Cheap first: the phrase in title/album
+        // (covers sideloaded releases named that way). For FLAC, fall back to a
+        // guarded read of the embedded VERSION/COMMENT Vorbis fields — the ones
+        // a Tryptify download writes — so a re-scan re-derives the flag even
+        // when the folded phrase never reached title/album.
+        val thxFromText = tf.monochrome.android.domain.model.isThxSpatialAudio(
+            title = title, albumTitle = album,
+        )
+        val isThx = thxFromText || (codec == AudioCodec.FLAC && detectThxInFlacTags(filePath))
+
         // Extract and cache artwork. For MP4/M4A this reads the `covr` atom;
         // for FLAC/Vorbis/Opus this reads the METADATA_BLOCK_PICTURE/coverart;
         // for ID3v2 this reads APIC. If nothing is embedded, fall back to a
@@ -193,10 +207,39 @@ class TagReader @Inject constructor(
             durationSeconds = (durationMs / 1000).toInt(),
             hasEmbeddedArt = hasArtOrSidecar,
             artworkCacheKey = artworkCacheKey,
+            isThxSpatialAudio = isThx,
             filePath = filePath,
             fileSizeBytes = fileSize,
             lastModified = lastModified
         )
+    }
+
+    /**
+     * Reads a FLAC's embedded VERSION / COMMENT / TITLE / ALBUM Vorbis comments
+     * and reports whether any names a THX Spatial Audio release. Only touches
+     * the metadata blocks (no audio decode), FLAC-only, and fully guarded — any
+     * failure returns false so scanning never breaks on a malformed file.
+     * MediaMetadataRetriever can't surface custom Vorbis comments, hence the
+     * dedicated read here.
+     */
+    private fun detectThxInFlacTags(filePath: String): Boolean = try {
+        val file = File(filePath)
+        if (!file.exists()) {
+            false
+        } else {
+            val tag = org.jaudiotagger.audio.AudioFileIO.read(file).tag
+            val candidates = listOfNotNull(
+                tag?.getFirst(org.jaudiotagger.tag.FieldKey.TITLE),
+                tag?.getFirst(org.jaudiotagger.tag.FieldKey.ALBUM),
+                tag?.getFirst(org.jaudiotagger.tag.FieldKey.COMMENT),
+                (tag as? org.jaudiotagger.tag.flac.FlacTag)?.getFirst("VERSION"),
+            )
+            candidates.any {
+                tf.monochrome.android.domain.model.isThxSpatialAudio(version = it)
+            }
+        }
+    } catch (_: Exception) {
+        false
     }
 
     /**

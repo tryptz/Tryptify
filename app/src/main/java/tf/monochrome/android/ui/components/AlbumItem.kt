@@ -2,9 +2,11 @@ package tf.monochrome.android.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,13 +43,19 @@ fun AlbumItem(
             cornerRadius = MonoDimens.radiusSm
         )
         Spacer(modifier = Modifier.height(MonoDimens.spacingSm))
-        Text(
-            text = album.title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (album.isThxSpatialAudio) {
+                ThxBadgePill()
+                Spacer(modifier = Modifier.width(MonoDimens.spacingXs))
+            }
+            Text(
+                text = album.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Text(
             text = album.displayArtist,
             style = MaterialTheme.typography.bodySmall,

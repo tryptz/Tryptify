@@ -56,6 +56,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
+    @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     @Inject lateinit var dspManager: DspEngineManager
     @Inject lateinit var autoEqProcessor: AutoEqProcessor
@@ -215,6 +216,17 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        // Multichannel handling: fold 5.1/7.1 down to stereo (default) or,
+        // when the user turns the toggle off, pass multichannel PCM through
+        // to AudioTrack untouched (the stereo-only processors deactivate
+        // themselves for >2 ch). Takes effect on the next pipeline
+        // reconfigure (track change / seek), like the other DSP toggles.
+        serviceScope.launch {
+            preferences.multichannelDownmixEnabled.collect { enabled ->
+                downmixProcessor.setEnabled(enabled)
+            }
+        }
+
         // Listen to EQ changes and apply them
         serviceScope.launch {
             kotlinx.coroutines.flow.combine(
@@ -306,6 +318,7 @@ class PlaybackService : MediaSessionService() {
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         .setAudioProcessors(
                             arrayOf(
+                                downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
                                 mixBusProcessor,        // DSP engine (mixer/effects)
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
                                 parametricEqProcessor,  // Parametric EQ (after AutoEQ, stacks on top)
@@ -336,6 +349,7 @@ class PlaybackService : MediaSessionService() {
                         driver = libusbDriver,
                         volumeController = bypassVolumeController,
                         processors = listOf(
+                            downmixProcessor,
                             mixBusProcessor,
                             autoEqProcessor,
                             parametricEqProcessor,

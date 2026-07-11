@@ -47,6 +47,9 @@ fun Track.toUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     albumTitle = album?.title,
     albumId = album?.id?.toString(),
     artworkUri = coverUrl,
+    channelCount = channelCount,
+    version = version,
+    isThxSpatialAudio = isThxSpatialAudio,
     source = PlaybackSource.HiFiApi(tidalId = id),
     sourceType = SourceType.API,
 )
@@ -72,6 +75,9 @@ fun Track.toQobuzUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     albumTitle = album?.title,
     albumId = album?.id?.toString(),
     artworkUri = coverUrl,
+    channelCount = channelCount,
+    version = version,
+    isThxSpatialAudio = isThxSpatialAudio,
     source = PlaybackSource.QobuzCached(qobuzId = id),
     sourceType = SourceType.QOBUZ,
 )

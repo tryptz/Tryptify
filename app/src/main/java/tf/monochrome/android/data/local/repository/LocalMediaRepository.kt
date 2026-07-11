@@ -132,6 +132,8 @@ class LocalMediaRepository @Inject constructor(
                 sampleRate = sampleRate,
                 bitDepth = bitDepth,
                 bitRate = bitRate,
+                channelCount = channels,
+                isThxSpatialAudio = isThxSpatialAudio,
                 replayGainTrack = rgTrackGain,
                 replayGainAlbum = rgAlbumGain,
                 r128TrackGain = r128TrackGain,
