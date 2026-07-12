@@ -50,9 +50,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.LyricsFxSettings
@@ -71,16 +74,45 @@ import kotlin.math.exp
 class LyricsFxStudioViewModel @Inject constructor(
     private val preferences: PreferencesManager,
 ) : ViewModel() {
-    val fx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LyricsFxSettings.DEFAULT)
+    // An in-memory working copy is the source of truth for the Studio UI and the
+    // live preview, so every slider frame updates instantly with no I/O. A slider
+    // drag fires dozens of times a second; persisting each frame — JSON-encode +
+    // DataStore write, then reading the value back through the flow — was the
+    // studio's performance cliff. Persistence is debounced to the drag's tail.
+    private val _fx = MutableStateFlow(LyricsFxSettings.DEFAULT)
+    val fx: StateFlow<LyricsFxSettings> = _fx.asStateFlow()
+
+    private var userTouched = false
+    private var persistJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            // Seed once from the persisted settings; after the user starts tuning,
+            // the in-memory copy leads so our own debounced writes never echo back.
+            val persisted = preferences.lyricsFx.first()
+            if (!userTouched) _fx.value = persisted
+        }
+    }
 
     fun update(transform: (LyricsFxSettings) -> LyricsFxSettings) {
-        val next = transform(fx.value).clamped()
-        viewModelScope.launch { preferences.setLyricsFx(next) }
+        userTouched = true
+        _fx.value = transform(_fx.value).clamped()
+        schedulePersist()
     }
 
     fun applyPreset(preset: LyricsFxSettings) {
+        userTouched = true
+        _fx.value = preset.clamped()
+        persistJob?.cancel()
         viewModelScope.launch { preferences.setLyricsFx(preset) }
+    }
+
+    private fun schedulePersist() {
+        persistJob?.cancel()
+        persistJob = viewModelScope.launch {
+            delay(200)
+            preferences.setLyricsFx(_fx.value)
+        }
     }
 }
 
