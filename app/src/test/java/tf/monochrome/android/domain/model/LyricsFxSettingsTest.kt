@@ -81,4 +81,55 @@ class LyricsFxSettingsTest {
             assertEquals("$name preset should already be within range", preset, preset.clamped())
         }
     }
+
+    @Test
+    fun `clamped coerces the new ray and glass fields`() {
+        val c = LyricsFxSettings(
+            rayAngleDeg = 500f,
+            raySpreadDeg = -30f,
+            rayHueShift = 400f,
+            rayPulseAmount = 5f,
+            glassSampleRings = 9,
+        ).clamped()
+        assertEquals(360f, c.rayAngleDeg, 0f)
+        assertEquals(0f, c.raySpreadDeg, 0f)
+        assertEquals(180f, c.rayHueShift, 0f)
+        assertEquals(1f, c.rayPulseAmount, 0f)
+        assertEquals(3, c.glassSampleRings)
+    }
+
+    @Test
+    fun `new fields survive serialization`() {
+        val original = LyricsFxSettings(
+            customFont = true,
+            customFontPath = "/data/user/0/app/files/custom_fonts/MyFont.ttf",
+            rayFixedDirection = true,
+            rayAngleDeg = 135f,
+            raySpreadDeg = 90f,
+            rayHueShift = -45f,
+            glassSampleRings = 3,
+        )
+        val decoded = json.decodeFromString<LyricsFxSettings>(json.encodeToString(original))
+        assertEquals(original, decoded)
+    }
+
+    @Test
+    fun `applying a preset keeps the personal font and device settings`() {
+        val personal = LyricsFxSettings(
+            customFont = true,
+            customFontPath = "/fonts/Mine.ttf",
+            bluetoothDelayMs = 220f,
+            glassSampleRings = 1,
+        )
+        val theme = LyricsFxSettings.PRESETS.first { it.first == "Neon" }.second
+        val applied = theme.withPersonalFrom(personal)
+        assertTrue(applied.customFont)
+        assertEquals("/fonts/Mine.ttf", applied.customFontPath)
+        assertEquals(220f, applied.bluetoothDelayMs, 0f)
+        assertEquals(1, applied.glassSampleRings)
+        // Aesthetic fields still come from the theme.
+        assertEquals(theme.rayCount, applied.rayCount)
+        // …and the chip-selection helper recognises the match despite the carry-over.
+        assertTrue(applied.matchesPreset(theme))
+    }
 }

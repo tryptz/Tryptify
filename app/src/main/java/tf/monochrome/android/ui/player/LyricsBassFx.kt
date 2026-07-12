@@ -20,8 +20,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -29,8 +31,10 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -210,57 +214,138 @@ internal fun LyricsFxLayer(
                 val p = (pulse.value * fx.bassReact).coerceIn(0f, 1.6f)
                 if (p <= 0.03f) return@drawBehind
 
+                // Rays and glow share one album-accent colour, hue-rotated by the
+                // user's setting.
+                val rayColor = accent.shiftHue(fx.rayHueShift)
+
                 // One soft bloom behind the whole line.
                 anchors.lineCenter?.let { lc ->
                     val c = lc - origin
                     val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
-                    drawGlow(c, glowR, p, accent, fx)
+                    drawGlow(c, glowR, p, rayColor, fx)
                 }
 
                 // Per-glyph rays: each burst rooted on its own letter, sized to
-                // the glyph, sweeping with the glyph's wave phase.
+                // the glyph. Reach breathes with the pulse by rayPulseAmount.
                 if (fx.rayCount > 0) {
-                    val spin = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
+                    val spinRad = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
+                    val pulseReach = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * (0.5f + 0.5f * p)
                     anchors.glyphs.values.forEach { g ->
                         val c = g.center - origin
                         val glyph = max(g.halfW, g.halfH)
-                        val reach = glyph * 2f * (0.6f + 2.4f * fx.rayLength) * (0.5f + 0.5f * p)
-                        drawBeams(c, g.halfW * 0.55f, g.halfH * 0.55f, reach, p, accent, fx, spin + g.phase)
+                        val reach = glyph * 2f * (0.6f + 2.4f * fx.rayLength) * pulseReach
+                        drawBeams(c, g.halfW * 0.55f, g.halfH * 0.55f, reach, p, rayColor, fx, spinRad, g.phase, time.value)
                     }
                 }
             },
     )
 }
 
+/** Rotate a colour's hue by [degrees] (0 = unchanged), keeping saturation/value. */
+private fun Color.shiftHue(degrees: Float): Color {
+    if (degrees == 0f) return this
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(toArgb(), hsv)
+    hsv[0] = ((hsv[0] + degrees) % 360f + 360f) % 360f
+    return Color(android.graphics.Color.HSVToColor((alpha * 255f).toInt().coerceIn(0, 255), hsv))
+}
+
+/**
+ * Draws one glyph's god rays. Honours the full ray parameter set: direction +
+ * spread (or parallel directional shafts when [LyricsFxSettings.rayFixedDirection]),
+ * decay-shaped fade, width taper, per-beam length jitter, flicker, and how hard
+ * reach/width react to the bass pulse.
+ */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeams(
     center: Offset,
     rx: Float,
     ry: Float,
     reach: Float,
     p: Float,
-    accent: Color,
+    rayColor: Color,
     fx: LyricsFxSettings,
-    sweepRad: Float,
+    spinRad: Float,
+    seed: Float,
+    timeSec: Float,
 ) {
     val count = fx.rayCount
     if (count <= 0) return
+
+    val fixedRad = fx.rayAngleDeg * PI.toFloat() / 180f
+    val spreadRad = fx.raySpreadDeg * PI.toFloat() / 180f
+    val widthPulse = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * p
+    val stroke = (2f + (fx.rayWidthDp - 2f) * widthPulse).coerceAtLeast(1f) * density
+    val decay = fx.rayDecay.coerceIn(0.05f, 0.95f)
+
+    // Parallel-shaft geometry (fixed-direction mode): direction (sin,-cos) with
+    // 0 = up, clockwise; shafts spread along the perpendicular across the glyph.
+    val fdx = sin(fixedRad)
+    val fdy = -cos(fixedRad)
+    val perpX = cos(fixedRad)
+    val perpY = sin(fixedRad)
+    val shaftSpread = 3f * max(rx, ry)
+    val spacing = if (count > 1) shaftSpread / (count - 1) else 0f
+
     repeat(count) { i ->
-        val a = sweepRad + i * (2f * PI.toFloat() / count)
-        val dirX = cos(a)
-        val dirY = sin(a)
-        val start = Offset(center.x + dirX * rx, center.y + dirY * ry)
-        val end = Offset(start.x + dirX * reach, start.y + dirY * reach)
-        drawLine(
-            brush = Brush.linearGradient(
-                colors = listOf(accent.copy(alpha = fx.rayBrightness * p), Color.Transparent),
-                start = start,
-                end = end,
+        val rnd = abs(sin(i * 12.9898f + 3.7f) * 43758.545f).let { it - floor(it) }
+        val beamReach = reach * (1f - fx.rayLengthJitter * rnd)
+        val flick = if (fx.rayFlicker > 0f) {
+            (1f - fx.rayFlicker) + fx.rayFlicker * (0.5f + 0.5f * sin(timeSec * 7f + i * 1.7f + seed))
+        } else 1f
+        val alpha = (fx.rayBrightness * flick * widthPulse).coerceIn(0f, 1f)
+        if (alpha <= 0.003f) return@repeat
+
+        val ang: Float
+        val start: Offset
+        if (fx.rayFixedDirection) {
+            ang = fixedRad
+            val t = (i - (count - 1) / 2f) * spacing
+            start = Offset(center.x + perpX * t, center.y + perpY * t)
+        } else {
+            ang = if (fx.raySpreadDeg >= 359.5f) {
+                spinRad + seed + i * (2f * PI.toFloat() / count)
+            } else {
+                val frac = if (count > 1) (i / (count - 1f) - 0.5f) else 0f
+                fixedRad + spinRad + frac * spreadRad
+            }
+            start = Offset(center.x + sin(ang) * rx, center.y - cos(ang) * ry)
+        }
+        val dirX = if (fx.rayFixedDirection) fdx else sin(ang)
+        val dirY = if (fx.rayFixedDirection) fdy else -cos(ang)
+        val end = Offset(start.x + dirX * beamReach, start.y + dirY * beamReach)
+
+        val brush = Brush.linearGradient(
+            colorStops = arrayOf(
+                0f to rayColor.copy(alpha = alpha),
+                decay to rayColor.copy(alpha = alpha * 0.5f),
+                1f to Color.Transparent,
             ),
             start = start,
             end = end,
-            strokeWidth = (2f + (fx.rayWidthDp - 2f) * p).coerceAtLeast(1f) * density,
-            cap = StrokeCap.Round,
         )
+        if (fx.rayTaper > 0.01f) {
+            // Tapered spear: wide base → narrow tip, perpendicular to the beam.
+            val nx = -dirY
+            val ny = dirX
+            val half = stroke / 2f
+            val tip = half * (1f - fx.rayTaper)
+            val path = Path().apply {
+                moveTo(start.x + nx * half, start.y + ny * half)
+                lineTo(start.x - nx * half, start.y - ny * half)
+                lineTo(end.x - nx * tip, end.y - ny * tip)
+                lineTo(end.x + nx * tip, end.y + ny * tip)
+                close()
+            }
+            drawPath(path = path, brush = brush)
+        } else {
+            drawLine(
+                brush = brush,
+                start = start,
+                end = end,
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }
 

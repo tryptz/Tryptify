@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -36,7 +41,9 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +56,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import android.content.Context
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +66,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.ui.player.Letters3DLine
@@ -66,6 +76,8 @@ import tf.monochrome.android.ui.player.LyricGlyphAnchors
 import tf.monochrome.android.ui.player.LyricsFxLayer
 import tf.monochrome.android.ui.player.bassBeat
 import tf.monochrome.android.ui.player.liquidGlass
+import tf.monochrome.android.ui.player.rememberLyricFontFamily
+import tf.monochrome.android.ui.player.withLyricFont
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.exp
@@ -73,6 +85,7 @@ import kotlin.math.exp
 @HiltViewModel
 class LyricsFxStudioViewModel @Inject constructor(
     private val preferences: PreferencesManager,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
     // An in-memory working copy is the source of truth for the Studio UI and the
     // live preview, so every slider frame updates instantly with no I/O. A slider
@@ -85,6 +98,10 @@ class LyricsFxStudioViewModel @Inject constructor(
     private var userTouched = false
     private var persistJob: Job? = null
 
+    /** Fonts the user has imported (Settings › Appearance copies them here). */
+    private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
+    val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
+
     init {
         viewModelScope.launch {
             // Seed once from the persisted settings; after the user starts tuning,
@@ -92,6 +109,15 @@ class LyricsFxStudioViewModel @Inject constructor(
             val persisted = preferences.lyricsFx.first()
             if (!userTouched) _fx.value = persisted
         }
+        refreshFonts()
+    }
+
+    /** Re-list the imported font files (call when the Font section is shown). */
+    fun refreshFonts() {
+        _availableFonts.value = File(context.filesDir, "custom_fonts").listFiles()
+            ?.filter { it.isFile && (it.extension.equals("ttf", true) || it.extension.equals("otf", true)) }
+            ?.sortedBy { it.name.lowercase(java.util.Locale.US) }
+            ?: emptyList()
     }
 
     fun update(transform: (LyricsFxSettings) -> LyricsFxSettings) {
@@ -102,9 +128,12 @@ class LyricsFxStudioViewModel @Inject constructor(
 
     fun applyPreset(preset: LyricsFxSettings) {
         userTouched = true
-        _fx.value = preset.clamped()
+        // A theme changes only the look — keep the user's font, Bluetooth delay,
+        // and glass sample count (personal/device settings) across the switch.
+        val next = preset.withPersonalFrom(_fx.value).clamped()
+        _fx.value = next
         persistJob?.cancel()
-        viewModelScope.launch { preferences.setLyricsFx(preset) }
+        viewModelScope.launch { preferences.setLyricsFx(next) }
     }
 
     private fun schedulePersist() {
@@ -129,6 +158,7 @@ fun LyricsFxStudioScreen(
     viewModel: LyricsFxStudioViewModel = hiltViewModel(),
 ) {
     val fx by viewModel.fx.collectAsState()
+    val fonts by viewModel.availableFonts.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -154,7 +184,7 @@ fun LyricsFxStudioScreen(
             ) {
                 LyricsFxSettings.PRESETS.forEach { (name, preset) ->
                     FilterChip(
-                        selected = fx == preset,
+                        selected = fx.matchesPreset(preset),
                         onClick = { viewModel.applyPreset(preset) },
                         label = { Text(name) },
                         colors = FilterChipDefaults.filterChipColors(
@@ -177,6 +207,21 @@ fun LyricsFxStudioScreen(
                 }
                 FxSlider("Letter spacing", "%.2f sp".format(fx.letterSpacingSp), fx.letterSpacingSp, -1f..1f) {
                     viewModel.update { s -> s.copy(letterSpacingSp = it) }
+                }
+            }
+
+            item {
+                StudioSection("Font")
+                FxToggle(
+                    "Custom lyrics font", fx.customFont,
+                    description = "Use one of your imported fonts for the lyrics only.",
+                ) { viewModel.update { s -> s.copy(customFont = it) } }
+                if (fx.customFont) {
+                    FontPicker(
+                        fonts = fonts,
+                        selectedPath = fx.customFontPath,
+                        onSelect = { viewModel.update { s -> s.copy(customFontPath = it) } },
+                    )
                 }
             }
 
@@ -265,6 +310,56 @@ fun LyricsFxStudioScreen(
                 FxSlider("Glow brightness", "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f) {
                     viewModel.update { s -> s.copy(glowBrightness = it) }
                 }
+                FxToggle(
+                    "Fixed direction", fx.rayFixedDirection,
+                    description = "Off = radial burst; on = parallel shafts all aimed one way.",
+                ) { viewModel.update { s -> s.copy(rayFixedDirection = it) } }
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Ray direction",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            "%.0f°".format(fx.rayAngleDeg),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                        DirectionDial(
+                            angleDeg = fx.rayAngleDeg,
+                            onAngleChange = { viewModel.update { s -> s.copy(rayAngleDeg = it) } },
+                        )
+                    }
+                }
+                FxSlider(
+                    "Spread", "%.0f°".format(fx.raySpreadDeg), fx.raySpreadDeg, 0f..360f,
+                    description = "Fan cone width around the direction. 360° = full even burst.",
+                ) { viewModel.update { s -> s.copy(raySpreadDeg = it) } }
+                FxSlider(
+                    "Decay", "${(fx.rayDecay * 100).toInt()}%", fx.rayDecay, 0f..1f,
+                    description = "Where each beam fades out along its length.",
+                ) { viewModel.update { s -> s.copy(rayDecay = it) } }
+                FxSlider("Taper", "${(fx.rayTaper * 100).toInt()}%", fx.rayTaper, 0f..1f,
+                    description = "Narrow the beams toward their tips.",
+                ) { viewModel.update { s -> s.copy(rayTaper = it) } }
+                FxSlider(
+                    "Hue shift", "%+.0f°".format(fx.rayHueShift), fx.rayHueShift, -180f..180f,
+                    description = "Recolour the rays off the album accent.",
+                ) { viewModel.update { s -> s.copy(rayHueShift = it) } }
+                FxSlider("Flicker", "${(fx.rayFlicker * 100).toInt()}%", fx.rayFlicker, 0f..1f,
+                    description = "Twinkle/shimmer the beams over time.",
+                ) { viewModel.update { s -> s.copy(rayFlicker = it) } }
+                FxSlider("Length jitter", "${(fx.rayLengthJitter * 100).toInt()}%", fx.rayLengthJitter, 0f..1f,
+                    description = "Randomise each beam's length for an organic burst.",
+                ) { viewModel.update { s -> s.copy(rayLengthJitter = it) } }
+                FxSlider(
+                    "Pulse reactivity", "${(fx.rayPulseAmount * 100).toInt()}%", fx.rayPulseAmount, 0f..1f,
+                    description = "How much the beams grow/brighten on the bass. 0 = steady.",
+                ) { viewModel.update { s -> s.copy(rayPulseAmount = it) } }
             }
 
             item {
@@ -292,6 +387,11 @@ fun LyricsFxStudioScreen(
                     fx.glassDispersion, 0f..2f,
                     description = "Colour fringing where the edges refract.",
                 ) { viewModel.update { s -> s.copy(glassDispersion = it) } }
+                FxSlider(
+                    "Bevel samples", "${1 + 4 * fx.glassSampleRings} taps/px",
+                    fx.glassSampleRings.toFloat(), 1f..3f, steps = 1,
+                    description = "Shader taps per pixel: higher = smoother glass, heavier GPU.",
+                ) { viewModel.update { s -> s.copy(glassSampleRings = it.toInt()) } }
             }
 
             item {
@@ -341,7 +441,7 @@ private fun StudioPreview(fx: LyricsFxSettings) {
                     lineHeight = (fx.fontSizeSp * 1.26f).sp,
                     letterSpacing = fx.letterSpacingSp.sp,
                     fontWeight = FontWeight.ExtraBold,
-                ),
+                ).withLyricFont(rememberLyricFontFamily(fx)),
                 color = accent,
                 modifier = Modifier
                     .liquidGlass(tint = accent)
@@ -434,6 +534,71 @@ private fun FxToggle(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** Collapsible picker over the fonts the user imported (Settings › Appearance). */
+@Composable
+private fun FontPicker(
+    fonts: List<File>,
+    selectedPath: String,
+    onSelect: (String) -> Unit,
+) {
+    if (fonts.isEmpty()) {
+        Text(
+            text = "No imported fonts yet — add them in Settings › Appearance › Font Library.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+        return
+    }
+    var expanded by remember { mutableStateOf(false) }
+    val selectedName = fonts.firstOrNull { it.absolutePath == selectedPath }?.nameWithoutExtension
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Font: " + (selectedName ?: "choose…"),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                fonts.forEach { file ->
+                    val isSelected = file.absolutePath == selectedPath
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(file.absolutePath) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                        Text(
+                            text = file.nameWithoutExtension,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
         }
     }
 }

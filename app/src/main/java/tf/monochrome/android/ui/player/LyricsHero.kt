@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -464,7 +466,7 @@ internal fun SyncedLyricsView(
                     lineHeight = (fx.fontSizeSp * 1.26f).sp,
                     letterSpacing = fx.letterSpacingSp.sp,
                     fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-                )
+                ).withLyricFont(rememberLyricFontFamily(fx))
                 val lineModifier = beatModifier
                     .fillMaxWidth()
                     .clickable { onSeekTo(line.timeMs) }
@@ -540,7 +542,7 @@ internal fun KaraokeLyricLine(
                 lineHeight = (fx.fontSizeSp * 1.26f).sp,
                 letterSpacing = fx.letterSpacingSp.sp,
                 fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-            )
+            ).withLyricFont(rememberLyricFontFamily(fx))
             if (time != null) {
                 val phaseBase = letterBase
                 Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx))) {
@@ -573,6 +575,27 @@ internal fun KaraokeLyricLine(
 }
 
 val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }
+
+/**
+ * The imported font chosen for the lyrics, or null when the custom-font toggle
+ * is off / the file is missing (callers then keep the app theme typeface). Built
+ * from the same filesDir/custom_fonts store the Appearance settings import into.
+ */
+@Composable
+internal fun rememberLyricFontFamily(fx: LyricsFxSettings): FontFamily? {
+    if (!fx.customFont || fx.customFontPath.isBlank()) return null
+    val path = fx.customFontPath
+    return remember(path) {
+        runCatching {
+            val file = java.io.File(path)
+            if (file.exists()) FontFamily(Font(file)) else null
+        }.getOrNull()
+    }
+}
+
+/** Applies [family] to this style only when non-null, so the theme font stays the default. */
+internal fun TextStyle.withLyricFont(family: FontFamily?): TextStyle =
+    if (family != null) copy(fontFamily = family) else this
 
 // Crisp contact shadow: a tight, dark edge right under the glyph so the
 // letterform reads as solid and sharp. (The previous wide blur — up to ~17px —
@@ -716,7 +739,7 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontSize = fx.fontSizeSp.sp,
                     lineHeight = (fx.fontSizeSp * 1.26f).sp,
-                ),
+                ).withLyricFont(rememberLyricFontFamily(fx)),
                 color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),

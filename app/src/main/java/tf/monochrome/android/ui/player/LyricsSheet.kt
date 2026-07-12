@@ -115,6 +115,7 @@ private fun SyncedLyrics(
     // than the reported position over Bluetooth, so rewind the clock we match
     // lyrics against to keep them in step with what's heard.
     val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
+    val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     val listState = rememberLazyListState()
     var currentLineIndex by remember { mutableIntStateOf(-1) }
 
@@ -171,7 +172,7 @@ private fun SyncedLyrics(
                         fontSize = 23.sp,
                         lineHeight = 29.sp,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                    ),
+                    ).withLyricFont(lyricFont),
                     color = textColor,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
@@ -192,6 +193,7 @@ private fun KaraokeLine(
     position: Long,
     onClick: () -> Unit
 ) {
+    val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -220,7 +222,7 @@ private fun KaraokeLine(
                     fontSize = 23.sp,
                     lineHeight = 29.sp,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                ),
+                ).withLyricFont(lyricFont),
                 color = color
             )
         }
@@ -229,6 +231,7 @@ private fun KaraokeLine(
 
 @Composable
 private fun UnsyncedLyrics(lines: List<LyricLine>) {
+    val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -238,7 +241,8 @@ private fun UnsyncedLyrics(lines: List<LyricLine>) {
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp),
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp)
+                    .withLyricFont(lyricFont),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
                 modifier = Modifier

@@ -116,6 +116,7 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uRefraction", fx.glassRefraction)
             shader.setFloatUniform("uRimGain", fx.glassRimBrightness)
             shader.setFloatUniform("uDispersion", fx.glassDispersion)
+            shader.setFloatUniform("uSampleRings", fx.glassSampleRings.toFloat())
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -190,6 +191,7 @@ uniform float uBodyOpacity;   // glass body opacity (lower = more see-through)
 uniform float uRefraction;    // how hard the bevel lenses the backdrop
 uniform float uRimGain;       // brightness of the specular glass edge
 uniform float uDispersion;    // chromatic aberration at the refracting edges
+uniform float uSampleRings;   // bevel sample rings 1/2/3 → 5/9/13 taps per pixel
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -210,18 +212,33 @@ half4 main(float2 p) {
         return src;
     }
 
-    // Bevel normals from the glyph alpha field: a fine rim gradient plus a
-    // broader one so letters read as rounded glass, not flat stickers.
+    // Bevel normals from the glyph alpha field. The sample count is a user
+    // setting (uSampleRings): the fine cross is always taken; the broad ring and
+    // the diagonal ring are gated so lower quality skips those texture fetches —
+    // fewer taps per pixel is a real GPU saving.
     float aL1 = float(content.eval(p + float2(-1.25, 0.0)).a);
     float aR1 = float(content.eval(p + float2( 1.25, 0.0)).a);
     float aU1 = float(content.eval(p + float2(0.0, -1.25)).a);
     float aD1 = float(content.eval(p + float2(0.0,  1.25)).a);
-    float aL2 = float(content.eval(p + float2(-2.5, 0.0)).a);
-    float aR2 = float(content.eval(p + float2( 2.5, 0.0)).a);
-    float aU2 = float(content.eval(p + float2(0.0, -2.5)).a);
-    float aD2 = float(content.eval(p + float2(0.0,  2.5)).a);
-    float2 grad = float2((aL1 - aR1) + 0.4 * (aL2 - aR2),
-                         (aU1 - aD1) + 0.4 * (aU2 - aD2));
+    float2 grad = float2(aL1 - aR1, aU1 - aD1);
+
+    if (uSampleRings > 1.5) {
+        // Broad ring: rounder, softer bevel.
+        float aL2 = float(content.eval(p + float2(-2.5, 0.0)).a);
+        float aR2 = float(content.eval(p + float2( 2.5, 0.0)).a);
+        float aU2 = float(content.eval(p + float2(0.0, -2.5)).a);
+        float aD2 = float(content.eval(p + float2(0.0,  2.5)).a);
+        grad += 0.4 * float2(aL2 - aR2, aU2 - aD2);
+    }
+    if (uSampleRings > 2.5) {
+        // Diagonal ring: smoother normals on curved strokes.
+        float aNW = float(content.eval(p + float2(-1.8, -1.8)).a);
+        float aNE = float(content.eval(p + float2( 1.8, -1.8)).a);
+        float aSW = float(content.eval(p + float2(-1.8,  1.8)).a);
+        float aSE = float(content.eval(p + float2( 1.8,  1.8)).a);
+        grad += 0.3 * float2((aNW + aSW) - (aNE + aSE),
+                             (aNW + aNE) - (aSW + aSE));
+    }
 
     // Liquid: the surface itself undulates, so highlights swim over glyphs.
     float w1 = sin(p.x * 0.055 + uTime * 1.7) * cos(p.y * 0.081 - uTime * 1.3);
