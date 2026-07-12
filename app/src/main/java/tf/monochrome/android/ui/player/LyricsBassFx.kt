@@ -115,14 +115,20 @@ internal fun Modifier.bassBeat(
             val p = (pulse.value * intensity).coerceIn(0f, 1.6f)
             if (p <= 0.03f) return@drawBehind
             val c = center
-            val reach = size.maxDimension * (0.45f + 0.30f * p)
+            // Halo sized from the LINE HEIGHT, not the line width: rays as
+            // long as the line get clipped by the lyric surface's offscreen
+            // compositing bounds, and the straight cut edges silhouette the
+            // container as a visible rectangle. A height-scaled halo whose
+            // gradient reaches full transparency at its own endpoint fades
+            // out in open space — nothing left for the bounds to clip.
+            val reach = size.minDimension * (2.4f + 1.2f * p)
 
             // God rays first, glow on top: the glow softens the ray roots so
             // they appear to emerge from light rather than from a point.
             val rayBrush = Brush.linearGradient(
                 colors = listOf(accent.copy(alpha = 0.28f * p), Color.Transparent),
                 start = c,
-                end = Offset(c.x + reach * 1.3f, c.y),
+                end = Offset(c.x + reach, c.y),
             )
             val sweep = time.value * 10f // slow rotation, degrees/second
             repeat(RAY_COUNT) { i ->
@@ -130,12 +136,15 @@ internal fun Modifier.bassBeat(
                     drawLine(
                         brush = rayBrush,
                         start = c,
-                        end = Offset(c.x + reach * 1.3f, c.y),
+                        end = Offset(c.x + reach, c.y),
                         strokeWidth = (2f + 6f * p) * density,
                         cap = StrokeCap.Round,
                     )
                 }
             }
+            // Glow radius stays inside the ray reach so its gradient also
+            // completes before any container edge can slice it.
+            val glowR = reach * 0.8f
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
@@ -144,9 +153,9 @@ internal fun Modifier.bassBeat(
                         Color.Transparent,
                     ),
                     center = c,
-                    radius = reach,
+                    radius = glowR,
                 ),
-                radius = reach,
+                radius = glowR,
                 center = c,
             )
         }

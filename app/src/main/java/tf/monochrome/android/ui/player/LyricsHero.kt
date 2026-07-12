@@ -241,7 +241,10 @@ internal fun Modifier.lyricsEdgeFade(): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
-        val edge = (size.height * 0.16f).coerceAtMost(120f)
+        // Density-aware fade depth. The old cap was 120 raw PIXELS — ~40dp on
+        // a 3x panel — so lines sliced off at what looked like an invisible
+        // border instead of dissolving.
+        val edge = (size.height * 0.18f).coerceAtMost(56.dp.toPx())
         val top = edge / size.height
         drawRect(
             brush = Brush.verticalGradient(
@@ -451,6 +454,7 @@ internal fun SyncedLyricsView(
                         text = line.text.ifBlank { "♪" },
                         style = lineStyle,
                         color = color,
+                        textAlign = TextAlign.Center,
                         modifier = lineModifier,
                     )
                 }
@@ -479,7 +483,7 @@ internal fun KaraokeLyricLine(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.Start,
+        horizontalArrangement = Arrangement.Center,
     ) {
         var letterBase = 0
         line.words.forEach { word ->
@@ -572,7 +576,7 @@ private fun Letters3DLine(
 ) {
     val time = rememberFrameSeconds()
     val shadowed = style.copy(shadow = letter3DShadow(LocalLyricsFx.current.shadowDepth))
-    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.Start) {
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.Center) {
         var letterBase = 0
         val words = text.split(" ")
         words.forEachIndexed { index, word ->
@@ -656,6 +660,8 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
                 text = line.text.ifBlank { "" },
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp),
                 color = Color.White.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
