@@ -244,6 +244,21 @@ fun MainPlayerRoute(
         inflatorEnabled = inflatorEnabled,
     )
 
+    // Bass-reactive lyrics plumbing: one shared pulse (single analyzer stake)
+    // drives both the active line's pump and the full-screen ray backdrop; the
+    // anchor carries the active line's screen position from the lyric surface
+    // to the backdrop layer. Only alive while lyrics mode is showing.
+    val beatAnchor = remember { BeatRayAnchor() }
+    val lyricsBeatOn = viewMode == NowPlayingViewMode.LYRICS && lyricsFx.bassReact > 0.01f
+    val beatPulse: androidx.compose.runtime.State<Float>? =
+        if (lyricsBeatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer) else null
+
+    CompositionLocalProvider(
+        LocalLyricsFx provides lyricsFx,
+        LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
+        LocalBeatRayAnchor provides beatAnchor.takeIf { lyricsBeatOn },
+        LocalBeatPulse provides beatPulse,
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
         MainPlayerScreen(
             state = state,
@@ -324,31 +339,28 @@ fun MainPlayerRoute(
                     modifier = heroModifier,
                 ) { lyricsMode ->
                 if (lyricsMode) {
-                    CompositionLocalProvider(
-                        LocalLyricsFx provides lyricsFx,
-                        LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
-                    ) {
-                        LyricsHeroBox(
-                            lyrics = lyrics,
-                            isLoading = isLyricsLoading,
-                            albumColors = albumColors,
-                            positionMs = playerViewModel.positionMs,
-                            // One element, two states: compact taps expand
-                            // (synced lyrics only); expanded line taps seek and
-                            // gap taps collapse.
-                            onSeekTo = { timeMs ->
-                                if (lyricsExpanded) playerViewModel.seekTo(timeMs)
-                                else if (lyricsSynced) lyricsExpanded = true
-                            },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    enabled = lyricsSynced,
-                                ) { lyricsExpanded = !lyricsExpanded },
-                        )
-                    }
+                    // Fx/spectrum/beat locals are provided once around the
+                    // whole player (see the route-level provider).
+                    LyricsHeroBox(
+                        lyrics = lyrics,
+                        isLoading = isLyricsLoading,
+                        albumColors = albumColors,
+                        positionMs = playerViewModel.positionMs,
+                        // One element, two states: compact taps expand
+                        // (synced lyrics only); expanded line taps seek and
+                        // gap taps collapse.
+                        onSeekTo = { timeMs ->
+                            if (lyricsExpanded) playerViewModel.seekTo(timeMs)
+                            else if (lyricsSynced) lyricsExpanded = true
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = lyricsSynced,
+                            ) { lyricsExpanded = !lyricsExpanded },
+                    )
                 } else {
                 val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
                     PlayerHeroStyle.Visualizer
@@ -394,8 +406,19 @@ fun MainPlayerRoute(
                 }
                 }
             },
+            underlay = {
+                if (beatPulse != null) {
+                    BeatRaysBackdrop(
+                        anchor = beatAnchor,
+                        pulse = beatPulse,
+                        accent = albumColors.vibrant,
+                        intensity = lyricsFx.bassReact,
+                    )
+                }
+            },
             lyricsExpanded = lyricsExpanded,
         )
+    }
     }
 }
 

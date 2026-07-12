@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
@@ -37,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -329,8 +332,17 @@ internal fun SyncedLyricsView(
     // change. All disabled (and the analyzer never acquired) at intensity 0.
     val fx = LocalLyricsFx.current
     val beatIntensity = fx.bassReact
-    val bassPulse = if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
+    // Prefer the player-provided shared pulse (one analyzer stake, and the
+    // full-screen ray backdrop breathes in lockstep with the line pump).
+    val bassPulse = LocalBeatPulse.current
+        ?: if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
     val beatTime = if (beatIntensity > 0.01f) rememberFrameSeconds() else remember { mutableFloatStateOf(0f) }
+    // When the player composes a BeatRaysBackdrop behind itself, the active
+    // line reports its screen position there and skips its own halo drawing.
+    val rayAnchor = LocalBeatRayAnchor.current
+    DisposableEffect(rayAnchor) {
+        onDispose { rayAnchor?.center?.value = null }
+    }
     // Pop-in: snap to 0 and spring (underdamped → overshoot) back to 1 every
     // time the active line changes, so each new line pops in right on the
     // beat that activated it. ~8% size swing keeps it punchy but readable.
@@ -398,9 +410,25 @@ internal fun SyncedLyricsView(
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
             // Bass treatment rides only the active line: scale pump + pop-in
-            // + god rays, all draw-phase.
+            // + god rays, all draw-phase. With a ray anchor present the
+            // full-screen backdrop draws the light instead, and this line
+            // just publishes where it is on screen.
             val beatModifier = if (isActive && beatIntensity > 0.01f) {
-                Modifier.bassBeat(bassPulse, beatTime, popScale, accent, beatIntensity)
+                val base = Modifier.bassBeat(
+                    bassPulse, beatTime, popScale, accent, beatIntensity,
+                    drawHalo = rayAnchor == null,
+                )
+                if (rayAnchor != null) {
+                    base.onGloballyPositioned { coords ->
+                        rayAnchor.center.value = coords.boundsInRoot().center
+                        rayAnchor.halfSize.value = androidx.compose.ui.geometry.Size(
+                            coords.size.width / 2f,
+                            coords.size.height / 2f,
+                        )
+                    }
+                } else {
+                    base
+                }
             } else {
                 Modifier
             }
