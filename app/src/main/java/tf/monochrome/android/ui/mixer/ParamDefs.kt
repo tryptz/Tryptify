@@ -20,7 +20,7 @@ data class ParamDef(
 
 /**
  * Ordered parameter list per snapin type. Order and count mirror the native
- * `enum Params` in `cpp/dsp/snapins/*.h` (index == native param index).
+ * `enum Params` in the per-effect `cpp/dsp/snapins` headers (index == native param index).
  *
  * The `when` is intentionally exhaustive (no `else`): adding a new [SnapinType]
  * without a branch here is a compile error rather than a silently-empty editor.
