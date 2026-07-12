@@ -24,7 +24,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
@@ -38,8 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -59,6 +56,7 @@ import coil3.request.crossfade
 import kotlinx.coroutines.flow.StateFlow
 import tf.monochrome.android.domain.model.LyricLine
 import tf.monochrome.android.domain.model.Lyrics
+import tf.monochrome.android.domain.model.LyricsFxSettings
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -327,39 +325,30 @@ internal fun SyncedLyricsView(
         derivedStateOf { lines.indexOfLast { it.timeMs <= position } }
     }
 
-    // Bass-reactive treatment for the active line: pulse from the shared FFT
-    // tap, a frame clock for the ray sweep, and a pop-in spring per line
-    // change. All disabled (and the analyzer never acquired) at intensity 0.
+    // Bass-reactive FX for the active line: pulse from the FFT tap, a frame
+    // clock for the ray sweep, and a pop-in spring per line change. All
+    // disabled (and the analyzer never acquired) at intensity 0.
     val fx = LocalLyricsFx.current
     val beatIntensity = fx.bassReact
-    // Prefer the player-provided shared pulse (one analyzer stake, and the
-    // full-screen ray backdrop breathes in lockstep with the line pump).
-    val bassPulse = LocalBeatPulse.current
-        ?: if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
+    val bassPulse = if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
     val beatTime = if (beatIntensity > 0.01f) rememberFrameSeconds() else remember { mutableFloatStateOf(0f) }
-    // When the player composes a BeatRaysBackdrop behind itself, the active
-    // line reports its screen position there and skips its own halo drawing.
-    val rayAnchor = LocalBeatRayAnchor.current
-    DisposableEffect(rayAnchor) {
-        onDispose { rayAnchor?.center?.value = null }
-    }
     // Pop-in: snap to 0 and spring (underdamped → overshoot) back to 1 every
     // time the active line changes, so each new line pops in right on the
     // beat that activated it. ~8% size swing keeps it punchy but readable.
     val popIn = remember { androidx.compose.animation.core.Animatable(1f) }
     LaunchedEffect(currentLineIndex) {
-        if (currentLineIndex >= 0 && beatIntensity > 0.01f) {
+        if (currentLineIndex >= 0 && beatIntensity > 0.01f && fx.popAmount > 0.001f) {
             popIn.snapTo(0f)
             popIn.animateTo(
                 targetValue = 1f,
                 animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = 0.38f,
+                    dampingRatio = fx.springDampingRatio,
                     stiffness = 500f,
                 ),
             )
         }
     }
-    val popScale: () -> Float = { 0.92f + 0.08f * popIn.value }
+    val popScale: () -> Float = { (1f - fx.popAmount) + fx.popAmount * popIn.value }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         // Half-height padding top and bottom lets any line — including the
@@ -409,26 +398,10 @@ internal fun SyncedLyricsView(
             itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
-            // Bass treatment rides only the active line: scale pump + pop-in
-            // + god rays, all draw-phase. With a ray anchor present the
-            // full-screen backdrop draws the light instead, and this line
-            // just publishes where it is on screen.
+            // Bass FX rides only the active line: scale pump + pop-in + god
+            // rays/glow emanating from the letters. All draw-phase.
             val beatModifier = if (isActive && beatIntensity > 0.01f) {
-                val base = Modifier.bassBeat(
-                    bassPulse, beatTime, popScale, accent, beatIntensity,
-                    drawHalo = rayAnchor == null,
-                )
-                if (rayAnchor != null) {
-                    base.onGloballyPositioned { coords ->
-                        rayAnchor.center.value = coords.boundsInRoot().center
-                        rayAnchor.halfSize.value = androidx.compose.ui.geometry.Size(
-                            coords.size.width / 2f,
-                            coords.size.height / 2f,
-                        )
-                    }
-                } else {
-                    base
-                }
+                Modifier.bassBeat(bassPulse, beatTime, popScale, accent, fx)
             } else {
                 Modifier
             }
@@ -461,9 +434,9 @@ internal fun SyncedLyricsView(
                 // Tracking is identical for active/inactive for the same
                 // reason — only weight may differ between the two states.
                 val lineStyle = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 23.sp,
-                    lineHeight = 29.sp,
-                    letterSpacing = (-0.2).sp,
+                    fontSize = fx.fontSizeSp.sp,
+                    lineHeight = (fx.fontSizeSp * 1.26f).sp,
+                    letterSpacing = fx.letterSpacingSp.sp,
                     fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
                 )
                 val lineModifier = beatModifier
@@ -524,9 +497,9 @@ internal fun KaraokeLyricLine(
             val color by animateColorAsState(targetValue = target, label = "wordColor")
             val display = word.text + " "
             val wordStyle = MaterialTheme.typography.titleMedium.copy(
-                fontSize = 23.sp,
-                lineHeight = 29.sp,
-                letterSpacing = (-0.2).sp,
+                fontSize = fx.fontSizeSp.sp,
+                lineHeight = (fx.fontSizeSp * 1.26f).sp,
+                letterSpacing = fx.letterSpacingSp.sp,
                 fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
             )
             if (time != null) {
@@ -537,9 +510,8 @@ internal fun KaraokeLyricLine(
                             text = ch.toString(),
                             // Low spatial frequency: neighbouring letters stay
                             // nearly in phase, so the line reads as one long
-                            // smooth ribbon. (0.45 rad/letter decorrelated
-                            // neighbours — scattered, jittery-looking text.)
-                            phase = (phaseBase + j) * LETTER_PHASE_STEP,
+                            // smooth ribbon; the step is a Studio setting.
+                            phase = (phaseBase + j) * fx.wavePhaseStep,
                             style = wordStyle.copy(shadow = letter3DShadow(fx.shadowDepth)),
                             color = color,
                             time = time,
@@ -558,24 +530,7 @@ internal fun KaraokeLyricLine(
     }
 }
 
-/**
- * User-tunable 3D-letter animation parameters (Settings ▸ Lyrics Appearance).
- * rotationDegrees 0 disables the per-letter path entirely (plain flat text).
- */
-data class LyricsFxSettings(
-    val rotationDegrees: Float = 12f,
-    val waveSpeed: Float = 1f,
-    val shadowDepth: Float = 0.7f,
-    // 0 disables the bass-reactive treatment (pump/pop/god rays) entirely.
-    val bassReact: Float = 0.8f,
-)
-
 val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }
-
-// Wave spatial frequency in radians per letter. Small on purpose: adjacent
-// letters must move almost together for the wave to read as one smooth
-// ribbon travelling through the line.
-private const val LETTER_PHASE_STEP = 0.22f
 
 // Crisp contact shadow: a tight, dark edge right under the glyph so the
 // letterform reads as solid and sharp. (The previous wide blur — up to ~17px —
@@ -596,14 +551,15 @@ private fun letter3DShadow(depth: Float) = Shadow(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Letters3DLine(
+internal fun Letters3DLine(
     text: String,
     style: TextStyle,
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    val fx = LocalLyricsFx.current
     val time = rememberFrameSeconds()
-    val shadowed = style.copy(shadow = letter3DShadow(LocalLyricsFx.current.shadowDepth))
+    val shadowed = style.copy(shadow = letter3DShadow(fx.shadowDepth))
     FlowRow(modifier = modifier, horizontalArrangement = Arrangement.Center) {
         var letterBase = 0
         val words = text.split(" ")
@@ -614,7 +570,7 @@ private fun Letters3DLine(
                 display.forEachIndexed { j, ch ->
                     Letter3DText(
                         text = ch.toString(),
-                        phase = (phaseBase + j) * LETTER_PHASE_STEP,
+                        phase = (phaseBase + j) * fx.wavePhaseStep,
                         style = shadowed,
                         color = color,
                         time = time,
@@ -647,7 +603,7 @@ private fun Letter3DText(
             // swell slightly on the toward-viewer swing. Keeping every term
             // phase-locked to the same wave is what makes it read as 3D depth
             // instead of independent flat jiggles.
-            translationY = 3.dp.toPx() * sin(p)
+            translationY = fx.waveTravelDp.dp.toPx() * sin(p)
             rotationX = -(fx.rotationDegrees * 1.6f) * cos(p)
             rotationY = (fx.rotationDegrees * 0.9f) * sin(t * 0.8f + phase * 0.5f)
             val depth = 1f + 0.09f * intensity * cos(p)
@@ -684,9 +640,13 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         itemsIndexed(lines) { _, line ->
+            val fx = LocalLyricsFx.current
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp),
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = fx.fontSizeSp.sp,
+                    lineHeight = (fx.fontSizeSp * 1.26f).sp,
+                ),
                 color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),

@@ -129,6 +129,7 @@ sealed class Screen(val route: String) {
         fun createRoute(tab: Int = 0) = "oxford?tab=$tab"
     }
     data object DebugLog : Screen("debug_log")
+    data object LyricsFxStudio : Screen("lyrics_fx_studio")
 }
 
 data class BottomNavItem(
@@ -349,6 +350,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.DebugLog.route) {
                     tf.monochrome.android.devedit.DevEditScreen("debug_log") {
                         DebugLogScreen(navController = navController)
+                    }
+                }
+                composable(Screen.LyricsFxStudio.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("lyrics_fx_studio") {
+                        tf.monochrome.android.ui.settings.LyricsFxStudioScreen(navController = navController)
                     }
                 }
                 composable(

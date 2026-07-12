@@ -156,7 +156,7 @@ fun SettingsScreen(
         tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[selectedTab])}") {
             when (selectedTab) {
                 0 -> AppearanceTab(viewModel)
-                1 -> InterfaceTab(viewModel)
+                1 -> InterfaceTab(viewModel, navController)
                 2 -> ScrobblingTab(viewModel)
                 3 -> AudioTab(viewModel, navController)
                 4 -> EqualizerTab(navController)
@@ -487,7 +487,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
 
 // ─── Tab 2: Interface ──────────────────────────────────────────────────
 @Composable
-private fun InterfaceTab(viewModel: SettingsViewModel) {
+private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavController) {
     val gapless by viewModel.gaplessPlayback.collectAsState()
     val explicit by viewModel.showExplicitBadges.collectAsState()
     val confirmQueue by viewModel.confirmClearQueue.collectAsState()
@@ -511,9 +511,6 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
     val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsState()
     val spectrumFftSize by viewModel.spectrumFftSize.collectAsState()
     val spectrumBins by viewModel.spectrumBins.collectAsState()
-    val lyricsRotation by viewModel.lyrics3dRotation.collectAsState()
-    val lyricsWaveSpeed by viewModel.lyrics3dWaveSpeed.collectAsState()
-    val lyricsShadowDepth by viewModel.lyrics3dShadowDepth.collectAsState()
     val playerDynamicColor by viewModel.playerDynamicColor.collectAsState()
     val appFps by viewModel.appTargetFps.collectAsState()
     val appResolution by viewModel.appRenderResolution.collectAsState()
@@ -665,67 +662,10 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Lyrics Appearance")
-        Text(
-            text = "3D Rotation: ${lyricsRotation.toInt()}°" + if (lyricsRotation < 0.5f) " (off)" else "",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = "Tilt of the per-letter 3D ripple on the active line. 0 disables it.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Slider(
-            value = lyricsRotation,
-            onValueChange = { viewModel.setLyrics3dRotation(it) },
-            valueRange = 0f..20f,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Wave Speed: ${String.format(java.util.Locale.US, "%.2f", lyricsWaveSpeed)}x",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Slider(
-            value = lyricsWaveSpeed,
-            onValueChange = { viewModel.setLyrics3dWaveSpeed(it) },
-            valueRange = 0.25f..3f,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Shadow Depth: ${(lyricsShadowDepth * 100).toInt()}%",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Slider(
-            value = lyricsShadowDepth,
-            onValueChange = { viewModel.setLyrics3dShadowDepth(it) },
-            valueRange = 0f..1f,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-        val lyricsBassReact by viewModel.lyricsBassReact.collectAsState()
-        Text(
-            text = "Bass Reaction: ${(lyricsBassReact * 100).toInt()}%" +
-                if (lyricsBassReact < 0.01f) " (off)" else "",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = "The active line pumps, pops in, and radiates god rays with the kick/bass. 0 disables it.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Slider(
-            value = lyricsBassReact,
-            onValueChange = { viewModel.setLyricsBassReact(it) },
-            valueRange = 0f..1f,
-            modifier = Modifier.fillMaxWidth()
+        SettingItem(
+            title = "Lyrics FX Studio",
+            subtitle = "Live editor for type, the 3D letter wave, the beat engine, and god-ray FX",
+            onClick = { navController.navigate(Screen.LyricsFxStudio.route) },
         )
 
         Spacer(modifier = Modifier.height(16.dp))

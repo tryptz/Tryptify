@@ -19,6 +19,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.AudioQuality
+import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ReplayGainMode
 import tf.monochrome.android.performance.PerformanceProfile
@@ -85,11 +86,13 @@ class PreferencesManager @Inject constructor(
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
 
-        // Lyrics 3D appearance
+        // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
         private val LYRICS_3D_WAVE_SPEED = floatPreferencesKey("lyrics_3d_wave_speed")
         private val LYRICS_3D_SHADOW_DEPTH = floatPreferencesKey("lyrics_3d_shadow_depth")
         private val LYRICS_BASS_REACT = floatPreferencesKey("lyrics_bass_react")
+        // Full Lyrics FX Studio settings as one JSON blob (takes precedence).
+        private val LYRICS_FX_JSON = stringPreferencesKey("lyrics_fx_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -1152,6 +1155,28 @@ class PreferencesManager @Inject constructor(
     val lyricsBassReact: Flow<Float> = dataStore.data.map { it[LYRICS_BASS_REACT] ?: 0.8f }
     suspend fun setLyricsBassReact(value: Float) {
         dataStore.edit { it[LYRICS_BASS_REACT] = value.coerceIn(0f, 1f) }
+    }
+
+    /**
+     * Full Lyrics FX Studio settings. The JSON blob wins; installs that only
+     * ever used the old four sliders fall back to those legacy keys so their
+     * tuned look carries over the first time the Studio opens.
+     */
+    val lyricsFx: Flow<LyricsFxSettings> = dataStore.data.map { prefs ->
+        prefs[LYRICS_FX_JSON]
+            ?.let { raw -> runCatching { json.decodeFromString<LyricsFxSettings>(raw) }.getOrNull() }
+            ?.clamped()
+            ?: LyricsFxSettings(
+                rotationDegrees = prefs[LYRICS_3D_ROTATION] ?: 12f,
+                waveSpeed = prefs[LYRICS_3D_WAVE_SPEED] ?: 1f,
+                shadowDepth = prefs[LYRICS_3D_SHADOW_DEPTH] ?: 0.7f,
+                bassReact = prefs[LYRICS_BASS_REACT] ?: 0.8f,
+            ).clamped()
+    }
+
+    suspend fun setLyricsFx(settings: LyricsFxSettings) {
+        val clamped = settings.clamped()
+        dataStore.edit { it[LYRICS_FX_JSON] = json.encodeToString(clamped) }
     }
 
     // --- Player appearance ---

@@ -144,9 +144,6 @@ fun MainPlayerScreen(
     onInflatorToggle: (Boolean) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
-    // Full-screen layer between the background/stain and the player content —
-    // the audio-reactive god rays draw here so nothing can clip them.
-    underlay: @Composable () -> Unit = {},
     // Expanded lyrics are NOT a separate element: the same hero slot grows to
     // full-bleed while the player controls collapse away and the blurred
     // artwork stain fades in behind everything.
@@ -235,9 +232,6 @@ fun MainPlayerScreen(
                 alpha = { stainAlpha },
             )
         }
-
-        // Behind everything the user interacts with, above the backdrop.
-        underlay()
 
         if (isFullscreen) {
             hero(Modifier.fillMaxSize())
