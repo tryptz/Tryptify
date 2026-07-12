@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
@@ -76,7 +77,9 @@ fun InsertRack(
     onClose: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
-    val maxSlots = 6   // max plugins per bus in our DSP engine
+    // Show one empty "add" slot past the current plugins, capped at the engine max.
+    val plugins = bus?.plugins ?: emptyList()
+    val maxSlots = (plugins.size + 1).coerceAtMost(DspEngineManager.MAX_PLUGINS_PER_BUS)
 
     Column(
         modifier = modifier
@@ -129,8 +132,6 @@ fun InsertRack(
                 .padding(MonoDimens.spacingXs),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            val plugins = bus?.plugins ?: emptyList()
-
             for (slotIndex in 0 until maxSlots) {
                 val plugin    = plugins.getOrNull(slotIndex)
                 val isEditing = editingPlugin == Pair(busIndex, slotIndex)
@@ -477,15 +478,4 @@ private fun InlinePluginEditor(
 
         Spacer(modifier = Modifier.height(4.dp))
     }
-}
-
-private fun formatParamValue(value: Float, def: ParamDef): String {
-    val formatted = if (def.max - def.min > 100) {
-        "%.0f".format(value)
-    } else if (def.max - def.min > 10) {
-        "%.1f".format(value)
-    } else {
-        "%.2f".format(value)
-    }
-    return if (def.unit.isNotEmpty()) "$formatted ${def.unit}" else formatted
 }

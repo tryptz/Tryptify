@@ -244,6 +244,24 @@ fun MainPlayerRoute(
         inflatorEnabled = inflatorEnabled,
     )
 
+    // Bass-reactive lyrics: one shared pulse (single analyzer stake) drives
+    // both the active line's pump and the full-screen ray layer; the glyph
+    // registry carries each active letter's screen position to that layer, so
+    // the rays draw with NO clipping ancestor and can never be cut by a canvas.
+    val glyphAnchors = remember { LyricGlyphAnchors() }
+    val lyricsBeatOn = viewMode == NowPlayingViewMode.LYRICS && lyricsFx.bassReact > 0.01f
+    val beatPulse: androidx.compose.runtime.State<Float>? =
+        if (lyricsBeatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
+    androidx.compose.runtime.LaunchedEffect(lyricsBeatOn) {
+        if (!lyricsBeatOn) glyphAnchors.reset()
+    }
+
+    CompositionLocalProvider(
+        LocalLyricsFx provides lyricsFx,
+        LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
+        LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
+        LocalBeatPulse provides beatPulse,
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
         MainPlayerScreen(
             state = state,
@@ -324,31 +342,28 @@ fun MainPlayerRoute(
                     modifier = heroModifier,
                 ) { lyricsMode ->
                 if (lyricsMode) {
-                    CompositionLocalProvider(
-                        LocalLyricsFx provides lyricsFx,
-                        LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
-                    ) {
-                        LyricsHeroBox(
-                            lyrics = lyrics,
-                            isLoading = isLyricsLoading,
-                            albumColors = albumColors,
-                            positionMs = playerViewModel.positionMs,
-                            // One element, two states: compact taps expand
-                            // (synced lyrics only); expanded line taps seek and
-                            // gap taps collapse.
-                            onSeekTo = { timeMs ->
-                                if (lyricsExpanded) playerViewModel.seekTo(timeMs)
-                                else if (lyricsSynced) lyricsExpanded = true
-                            },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    enabled = lyricsSynced,
-                                ) { lyricsExpanded = !lyricsExpanded },
-                        )
-                    }
+                    // Fx/spectrum/beat locals are provided once around the
+                    // whole player (see the route-level provider).
+                    LyricsHeroBox(
+                        lyrics = lyrics,
+                        isLoading = isLyricsLoading,
+                        albumColors = albumColors,
+                        positionMs = playerViewModel.positionMs,
+                        // One element, two states: compact taps expand
+                        // (synced lyrics only); expanded line taps seek and
+                        // gap taps collapse.
+                        onSeekTo = { timeMs ->
+                            if (lyricsExpanded) playerViewModel.seekTo(timeMs)
+                            else if (lyricsSynced) lyricsExpanded = true
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = lyricsSynced,
+                            ) { lyricsExpanded = !lyricsExpanded },
+                    )
                 } else {
                 val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
                     PlayerHeroStyle.Visualizer
@@ -394,8 +409,19 @@ fun MainPlayerRoute(
                 }
                 }
             },
+            fxUnderlay = {
+                if (beatPulse != null) {
+                    LyricsFxLayer(
+                        anchors = glyphAnchors,
+                        pulse = beatPulse,
+                        accent = albumColors.vibrant,
+                        fx = lyricsFx,
+                    )
+                }
+            },
             lyricsExpanded = lyricsExpanded,
         )
+    }
     }
 }
 

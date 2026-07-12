@@ -31,6 +31,7 @@ import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Lyrics
+import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.domain.model.Track
@@ -124,19 +125,8 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val lyricsFx: StateFlow<LyricsFxSettings> = combine(
-        preferences.lyrics3dRotation,
-        preferences.lyrics3dWaveSpeed,
-        preferences.lyrics3dShadowDepth,
-        preferences.lyricsBassReact,
-    ) { rotation, speed, depth, bass ->
-        LyricsFxSettings(
-            rotationDegrees = rotation,
-            waveSpeed = speed,
-            shadowDepth = depth,
-            bassReact = bass,
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
+    val lyricsFx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
     val romajiLyrics: StateFlow<Boolean> = preferences.romajiLyrics
