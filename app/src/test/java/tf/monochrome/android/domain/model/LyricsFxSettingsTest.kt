@@ -90,12 +90,14 @@ class LyricsFxSettingsTest {
             rayHueShift = 400f,
             rayPulseAmount = 5f,
             glassSampleRings = 9,
+            fxaaStrength = 3f,
         ).clamped()
         assertEquals(360f, c.rayAngleDeg, 0f)
         assertEquals(0f, c.raySpreadDeg, 0f)
         assertEquals(180f, c.rayHueShift, 0f)
         assertEquals(1f, c.rayPulseAmount, 0f)
         assertEquals(3, c.glassSampleRings)
+        assertEquals(1f, c.fxaaStrength, 0f)
     }
 
     @Test
@@ -108,6 +110,8 @@ class LyricsFxSettingsTest {
             raySpreadDeg = 90f,
             rayHueShift = -45f,
             glassSampleRings = 3,
+            fxaa = true,
+            fxaaStrength = 0.4f,
         )
         val decoded = json.decodeFromString<LyricsFxSettings>(json.encodeToString(original))
         assertEquals(original, decoded)
@@ -120,6 +124,8 @@ class LyricsFxSettingsTest {
             customFontPath = "/fonts/Mine.ttf",
             bluetoothDelayMs = 220f,
             glassSampleRings = 1,
+            fxaa = true,
+            fxaaStrength = 0.9f,
         )
         val theme = LyricsFxSettings.PRESETS.first { it.first == "Neon" }.second
         val applied = theme.withPersonalFrom(personal)
@@ -127,6 +133,8 @@ class LyricsFxSettingsTest {
         assertEquals("/fonts/Mine.ttf", applied.customFontPath)
         assertEquals(220f, applied.bluetoothDelayMs, 0f)
         assertEquals(1, applied.glassSampleRings)
+        assertTrue(applied.fxaa)
+        assertEquals(0.9f, applied.fxaaStrength, 0f)
         // Aesthetic fields still come from the theme.
         assertEquals(theme.rayCount, applied.rayCount)
         // …and the chip-selection helper recognises the match despite the carry-over.

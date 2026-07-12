@@ -141,6 +141,7 @@ private fun SyncedLyrics(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
+            .fxaa()
             .liquidGlass(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -235,6 +236,7 @@ private fun UnsyncedLyrics(lines: List<LyricLine>) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .fxaa()
             .liquidGlass(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {

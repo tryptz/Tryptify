@@ -94,6 +94,38 @@ internal fun Modifier.dithered(): Modifier {
     }
 }
 
+/**
+ * Post-process FXAA (single-pass luma edge anti-aliasing) for the lyric
+ * surface: smooths the jagged edges the 3D letter tilts, the glass relight and
+ * a reduced panel resolution leave behind. Chain it OUTSIDE (before) the
+ * [liquidGlass] modifier so it runs on the glass output.
+ *
+ * Requires API 33 (RuntimeShader) and the fx toggle; below that, or if the
+ * shader fails to compile, the modifier is a no-op and lyrics render unchanged.
+ */
+@Composable
+internal fun Modifier.fxaa(): Modifier {
+    val fx = LocalLyricsFx.current
+    if (!fx.fxaa || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
+    return this.then(fxaaModifier(fx.fxaaStrength))
+}
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun fxaaModifier(strength: Float): Modifier {
+    val shader = remember { runCatching { RuntimeShader(FXAA_SRC) }.getOrNull() }
+        ?: return Modifier
+    return Modifier.graphicsLayer {
+        if (size.minDimension > 0f) {
+            shader.setFloatUniform("uSize", size.width, size.height)
+            shader.setFloatUniform("uStrength", strength)
+            renderEffect = RenderEffect
+                .createRuntimeShaderEffect(shader, "content")
+                .asComposeRenderEffect()
+        }
+    }
+}
+
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun liquidGlassModifier(
@@ -167,6 +199,60 @@ half4 main(float2 p) {
     float a = float(c.a);
     float3 rgb = clamp(float3(c.rgb) + d * a, 0.0, a);
     return half4(half3(rgb), c.a);
+}
+"""
+
+// Single-pass luma FXAA (the classic NVIDIA/Geeks3D formulation). Operates on
+// the premultiplied-alpha lyric surface: luma is read from premultiplied rgb so
+// glyph alpha-edges register, and the directional 4-tap blend runs on the full
+// premultiplied colour (averaging premultiplied samples stays valid). uStrength
+// cross-fades the anti-aliased result back over the original.
+private const val FXAA_SRC = """
+uniform shader content;
+uniform float2 uSize;
+uniform float uStrength;
+
+half4 main(float2 frag) {
+    float2 inv = 1.0 / uSize;
+    float3 luma = float3(0.299, 0.587, 0.114);
+    float SPAN_MAX = 8.0;
+    float REDUCE_MUL = 1.0 / 8.0;
+    float REDUCE_MIN = 1.0 / 128.0;
+
+    half4 c = content.eval(frag);
+    float lumaM  = dot(float3(c.rgb), luma);
+    float lumaNW = dot(float3(content.eval(frag + float2(-1.0, -1.0)).rgb), luma);
+    float lumaNE = dot(float3(content.eval(frag + float2( 1.0, -1.0)).rgb), luma);
+    float lumaSW = dot(float3(content.eval(frag + float2(-1.0,  1.0)).rgb), luma);
+    float lumaSE = dot(float3(content.eval(frag + float2( 1.0,  1.0)).rgb), luma);
+
+    float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+
+    // Flat region: nothing to smooth, return the source untouched.
+    if (lumaMax - lumaMin < 0.02) {
+        return c;
+    }
+
+    float2 dir = float2(
+        -((lumaNW + lumaNE) - (lumaSW + lumaSE)),
+         ((lumaNW + lumaSW) - (lumaNE + lumaSE)));
+    float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * (0.25 * REDUCE_MUL), REDUCE_MIN);
+    float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+    dir = clamp(dir * rcpDirMin, -SPAN_MAX, SPAN_MAX) * inv;
+
+    // Do the blend in float precision (the codebase's convention) to avoid
+    // half/float mismatch on scalar-vector ops, then convert back at the end.
+    float4 rgbA = 0.5 * (
+        float4(content.eval(frag + dir * (1.0 / 3.0 - 0.5))) +
+        float4(content.eval(frag + dir * (2.0 / 3.0 - 0.5))));
+    float4 rgbB = rgbA * 0.5 + 0.25 * (
+        float4(content.eval(frag + dir * -0.5)) +
+        float4(content.eval(frag + dir *  0.5)));
+
+    float lumaB = dot(rgbB.rgb, luma);
+    float4 aa = (lumaB < lumaMin || lumaB > lumaMax) ? rgbA : rgbB;
+    return half4(mix(float4(c), aa, uStrength));
 }
 """
 

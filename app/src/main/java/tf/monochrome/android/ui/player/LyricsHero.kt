@@ -408,6 +408,7 @@ internal fun SyncedLyricsView(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 28.dp)
+                .fxaa()
                 .liquidGlass(tint = accent),
             contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -728,6 +729,7 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 28.dp)
+            .fxaa()
             .liquidGlass(),
         contentPadding = PaddingValues(vertical = 60.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),

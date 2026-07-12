@@ -75,6 +75,7 @@ import tf.monochrome.android.ui.player.LocalLyricsFx
 import tf.monochrome.android.ui.player.LyricGlyphAnchors
 import tf.monochrome.android.ui.player.LyricsFxLayer
 import tf.monochrome.android.ui.player.bassBeat
+import tf.monochrome.android.ui.player.fxaa
 import tf.monochrome.android.ui.player.liquidGlass
 import tf.monochrome.android.ui.player.rememberLyricFontFamily
 import tf.monochrome.android.ui.player.withLyricFont
@@ -395,6 +396,21 @@ fun LyricsFxStudioScreen(
             }
 
             item {
+                StudioSection("Anti-aliasing")
+                FxToggle(
+                    "Anti-aliasing (FXAA)", fx.fxaa,
+                    description = "Smooths jagged edges on the 3D letters and glass (needs Android 13+).",
+                ) { viewModel.update { s -> s.copy(fxaa = it) } }
+                if (fx.fxaa) {
+                    FxSlider(
+                        "AA strength", "${(fx.fxaaStrength * 100).toInt()}%",
+                        fx.fxaaStrength, 0f..1f,
+                        description = "How hard edges are smoothed; higher softens more.",
+                    ) { viewModel.update { s -> s.copy(fxaaStrength = it) } }
+                }
+            }
+
+            item {
                 Spacer(Modifier.height(20.dp))
                 OutlinedButton(
                     onClick = { viewModel.applyPreset(LyricsFxSettings.DEFAULT) },
@@ -444,6 +460,7 @@ private fun StudioPreview(fx: LyricsFxSettings) {
                 ).withLyricFont(rememberLyricFontFamily(fx)),
                 color = accent,
                 modifier = Modifier
+                    .fxaa()
                     .liquidGlass(tint = accent)
                     .bassBeat(pulse, { 1f }, fx, anchors),
                 anchors = anchors,

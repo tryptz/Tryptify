@@ -52,6 +52,12 @@ data class LyricsFxSettings(
      */
     val glassSampleRings: Int = 2,
 
+    // ── Anti-aliasing (FXAA post-process) ──────────────────────────────
+    /** Post-process FXAA on the lyric surface to smooth jagged edges. Device/perf setting. */
+    val fxaa: Boolean = false,
+    /** How hard FXAA smooths edges (final blend of the AA result). Higher softens more. */
+    val fxaaStrength: Float = 0.75f,
+
     // ── 3D letter wave (active line) ───────────────────────────────────
     /** Tilt of the per-letter ripple. 0 disables the per-letter path entirely. */
     val rotationDegrees: Float = 12f,
@@ -130,6 +136,8 @@ data class LyricsFxSettings(
             glassRimBrightness = glassRimBrightness.c(0f, 2f, d.glassRimBrightness),
             glassDispersion = glassDispersion.c(0f, 2f, d.glassDispersion),
             glassSampleRings = glassSampleRings.coerceIn(1, 3),
+            fxaa = fxaa,
+            fxaaStrength = fxaaStrength.c(0f, 1f, d.fxaaStrength),
             rotationDegrees = rotationDegrees.c(0f, 25f, d.rotationDegrees),
             waveSpeed = waveSpeed.c(0.25f, 3f, d.waveSpeed),
             wavePhaseStep = wavePhaseStep.c(0.05f, 0.9f, d.wavePhaseStep),
@@ -169,6 +177,8 @@ data class LyricsFxSettings(
         customFontPath = other.customFontPath,
         bluetoothDelayMs = other.bluetoothDelayMs,
         glassSampleRings = other.glassSampleRings,
+        fxaa = other.fxaa,
+        fxaaStrength = other.fxaaStrength,
     )
 
     /**
