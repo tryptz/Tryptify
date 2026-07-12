@@ -330,8 +330,14 @@ internal fun SyncedLyricsView(
     // disabled (and the analyzer never acquired) at intensity 0.
     val fx = LocalLyricsFx.current
     val beatIntensity = fx.bassReact
-    val bassPulse = if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
-    val beatTime = if (beatIntensity > 0.01f) rememberFrameSeconds() else remember { mutableFloatStateOf(0f) }
+    // Prefer the player-provided shared pulse (one analyzer stake; the pump
+    // and the full-screen rays breathe together).
+    val bassPulse = LocalBeatPulse.current
+        ?: if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
+    // Shared glyph registry — the active line's letters publish their screen
+    // positions here and the full-screen LyricsFxLayer (in the player, no
+    // clipping ancestor) draws the rays there, so the light can never be cut.
+    val glyphAnchors = LocalLyricGlyphAnchors.current
     // Pop-in: snap to 0 and spring (underdamped → overshoot) back to 1 every
     // time the active line changes, so each new line pops in right on the
     // beat that activated it. ~8% size swing keeps it punchy but readable.
@@ -398,13 +404,18 @@ internal fun SyncedLyricsView(
             itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
-            // Bass FX rides only the active line: scale pump + pop-in + god
-            // rays/glow emanating from the letters. All draw-phase.
+            // Bass FX rides only the active line: the line pumps + pops
+            // (bassBeat) and reports its bounds; each glyph reports its screen
+            // position so the full-screen layer can draw per-letter rays.
+            val lineAnchors = if (isActive) glyphAnchors else null
             val beatModifier = if (isActive && beatIntensity > 0.01f) {
-                Modifier.bassBeat(bassPulse, beatTime, popScale, accent, fx)
+                Modifier.bassBeat(bassPulse, popScale, fx, lineAnchors)
             } else {
                 Modifier
             }
+            // Line index scopes glyph keys so an advancing active line's glyphs
+            // never collide with the outgoing one's during the transition.
+            val glyphKeyBase = index * 4096
             if (line.words.isNotEmpty()) {
                 // Only sources with real per-word timing (TIDAL enhanced LRC)
                 // illuminate word-by-word.
@@ -416,6 +427,8 @@ internal fun SyncedLyricsView(
                     accent = accent,
                     onClick = { onSeekTo(line.timeMs) },
                     beatModifier = beatModifier,
+                    anchors = lineAnchors,
+                    glyphKeyBase = glyphKeyBase,
                 )
             } else {
                 // Line-level sources (LRCLib / Qobuz): illuminate the whole
@@ -443,12 +456,18 @@ internal fun SyncedLyricsView(
                     .fillMaxWidth()
                     .clickable { onSeekTo(line.timeMs) }
                     .padding(vertical = 2.dp)
-                if (isActive && LocalLyricsFx.current.rotationDegrees > 0.05f) {
+                // Render letters individually (so each reports its position for
+                // rays) whenever the 3D wave OR the god rays are active.
+                val perLetter = isActive &&
+                    (fx.rotationDegrees > 0.05f || (beatIntensity > 0.01f && fx.rayCount > 0))
+                if (perLetter) {
                     Letters3DLine(
                         text = line.text.ifBlank { "♪" },
                         style = lineStyle,
                         color = color,
                         modifier = lineModifier,
+                        anchors = lineAnchors,
+                        glyphKeyBase = glyphKeyBase,
                     )
                 } else {
                     Text(
@@ -475,10 +494,15 @@ internal fun KaraokeLyricLine(
     accent: Color,
     onClick: () -> Unit,
     beatModifier: Modifier = Modifier,
+    anchors: LyricGlyphAnchors? = null,
+    glyphKeyBase: Int = 0,
 ) {
-    // One frame clock per line, and only while it is the active one.
+    // Render letters individually while active whenever the 3D wave OR the god
+    // rays are on (rays need per-glyph positions). One frame clock per line.
     val fx = LocalLyricsFx.current
-    val time = if (isActive && fx.rotationDegrees > 0.05f) rememberFrameSeconds() else null
+    val perLetter = isActive &&
+        (fx.rotationDegrees > 0.05f || (fx.bassReact > 0.01f && fx.rayCount > 0))
+    val time = if (perLetter) rememberFrameSeconds() else null
     FlowRow(
         modifier = beatModifier
             .fillMaxWidth()
@@ -506,15 +530,18 @@ internal fun KaraokeLyricLine(
                 val phaseBase = letterBase
                 Row {
                     display.forEachIndexed { j, ch ->
+                        val idx = phaseBase + j
                         Letter3DText(
                             text = ch.toString(),
                             // Low spatial frequency: neighbouring letters stay
                             // nearly in phase, so the line reads as one long
                             // smooth ribbon; the step is a Studio setting.
-                            phase = (phaseBase + j) * fx.wavePhaseStep,
+                            phase = idx * fx.wavePhaseStep,
                             style = wordStyle.copy(shadow = letter3DShadow(fx.shadowDepth)),
                             color = color,
                             time = time,
+                            anchors = anchors,
+                            glyphKey = glyphKeyBase + idx,
                         )
                     }
                 }
@@ -556,6 +583,8 @@ internal fun Letters3DLine(
     style: TextStyle,
     color: Color,
     modifier: Modifier = Modifier,
+    anchors: LyricGlyphAnchors? = null,
+    glyphKeyBase: Int = 0,
 ) {
     val fx = LocalLyricsFx.current
     val time = rememberFrameSeconds()
@@ -568,12 +597,15 @@ internal fun Letters3DLine(
             val phaseBase = letterBase
             Row {
                 display.forEachIndexed { j, ch ->
+                    val idx = phaseBase + j
                     Letter3DText(
                         text = ch.toString(),
-                        phase = (phaseBase + j) * fx.wavePhaseStep,
+                        phase = idx * fx.wavePhaseStep,
                         style = shadowed,
                         color = color,
                         time = time,
+                        anchors = anchors,
+                        glyphKey = glyphKeyBase + idx,
                     )
                 }
             }
@@ -589,10 +621,16 @@ private fun Letter3DText(
     style: TextStyle,
     color: Color,
     time: State<Float>,
+    anchors: LyricGlyphAnchors? = null,
+    glyphKey: Int = 0,
 ) {
     val fx = LocalLyricsFx.current
     Box(
-        modifier = Modifier.graphicsLayer {
+        // Report this glyph's screen position (behind the 3D transform) so the
+        // full-screen LyricsFxLayer can shoot its rays from here — uncut.
+        modifier = Modifier
+            .reportGlyphAnchor(anchors, glyphKey, phase)
+            .graphicsLayer {
             val t = time.value * fx.waveSpeed
             // Slow temporal frequency (1.5 rad/s): the wave glides instead of
             // flickering — the eye tracks a slow ripple as one smooth motion.

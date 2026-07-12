@@ -39,9 +39,9 @@ data class LyricsFxSettings(
     val popAmount: Float = 0.08f,
 
     // ── God rays / glow ────────────────────────────────────────────────
-    /** Number of beams around the active line. 0 turns rays off. */
-    val rayCount: Int = 12,
-    /** Beam length as a fraction of the screen's long edge (at full pulse). */
+    /** Beams radiating from EACH letter. 0 turns rays off. */
+    val rayCount: Int = 8,
+    /** Beam reach as a multiple of each glyph's size (grows with the pulse). */
     val rayLength: Float = 0.62f,
     /** Beam stroke width at full pulse, in dp. */
     val rayWidthDp: Float = 9f,
@@ -100,7 +100,7 @@ data class LyricsFxSettings(
                 pumpAmount = 0.14f,
                 bounce = 0.85f,
                 popAmount = 0.12f,
-                rayCount = 16,
+                rayCount = 12,
                 rayLength = 0.85f,
                 rayWidthDp = 11f,
                 rayBrightness = 0.34f,
@@ -116,7 +116,7 @@ data class LyricsFxSettings(
                 pumpAmount = 0.04f,
                 bounce = 0.4f,
                 popAmount = 0.04f,
-                rayCount = 6,
+                rayCount = 4,
                 rayLength = 0.35f,
                 rayBrightness = 0.14f,
                 glowRadiusDp = 30f,

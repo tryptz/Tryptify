@@ -1,26 +1,37 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -31,6 +42,38 @@ import kotlin.math.sqrt
  */
 val LocalLyricsSpectrum = compositionLocalOf<SpectrumAnalyzerTap?> { null }
 
+/** One glyph's screen position (root coordinates) + its wave phase. */
+data class GlyphAnchor(
+    val center: Offset,
+    val halfW: Float,
+    val halfH: Float,
+    val phase: Float,
+)
+
+/**
+ * Screen-position registry for the active line's glyphs. Each active
+ * [Letter3DText] reports its root-coordinate bounds here; [LyricsFxLayer] — a
+ * full-screen, UNCLIPPED layer — draws each glyph's god rays at that
+ * position. Because the FX draws on a layer with no clipping ancestor, the
+ * light is impossible to cut by any canvas/container: rays only ever run off
+ * the physical screen edge, never against a surface rectangle.
+ */
+class LyricGlyphAnchors {
+    val glyphs = mutableStateMapOf<Int, GlyphAnchor>()
+    var lineCenter by mutableStateOf<Offset?>(null)
+    var lineHalf by mutableStateOf(Size.Zero)
+    fun reset() {
+        glyphs.clear()
+        lineCenter = null
+        lineHalf = Size.Zero
+    }
+}
+
+val LocalLyricGlyphAnchors = compositionLocalOf<LyricGlyphAnchors?> { null }
+
+/** Shared bass pulse so the line pump and the full-screen rays use one analyzer stake and breathe together. */
+val LocalBeatPulse = compositionLocalOf<State<Float>?> { null }
+
 // 40–110 Hz — the kick/bass fundamentals — mapped into the tap's 256
 // log-spaced bins (20 Hz..20 kHz): log10(f/20)/3 * 255.
 private const val BASS_BIN_START = 26
@@ -39,12 +82,11 @@ private const val BASS_BIN_END = 62
 private const val SPRING_STIFFNESS = 300f
 
 /**
- * Per-frame bass pulse in 0..~1.3 (>1 on overshoot), built as:
- * FFT bass bins → dB → normalized level → attack/release envelope →
- * underdamped spring (attack, release, and bounce are Studio settings).
- * Read it from draw/layer lambdas only, so the pulse never causes
- * recomposition. Holds a ref-counted stake on the analyzer for exactly as
- * long as it is composed.
+ * Per-frame bass pulse in 0..~1.3 (>1 on overshoot). FFT bass bins → dB →
+ * normalized level → attack/release envelope → underdamped spring (attack,
+ * release, bounce are Studio settings). Read from draw/layer lambdas only, so
+ * the pulse never causes recomposition. Ref-counts a stake on the analyzer
+ * for exactly as long as it is composed.
  */
 @Composable
 internal fun rememberBassPulse(): State<Float> =
@@ -59,12 +101,9 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
         tap.acquire()
         onDispose { tap.release() }
     }
-    // Keyed on the envelope/spring tuning so Studio slider changes retune the
-    // engine live instead of waiting for the next composition of the player.
     LaunchedEffect(tap, fx.attackMs, fx.releaseMs, fx.bounce) {
         val attackSec = (fx.attackMs / 1000f).coerceAtLeast(0.001f)
         val releaseSec = (fx.releaseMs / 1000f).coerceAtLeast(0.01f)
-        // ζ = c / (2√k) → c = 2ζ√k. Lower ζ = more overshoot ring = bouncier.
         val springDamping = 2f * fx.springDampingRatio * sqrt(SPRING_STIFFNESS)
         var env = 0f
         var pos = 0f
@@ -75,22 +114,13 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
                 val dt = if (lastNanos < 0) 0.016f
                 else ((now - lastNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
                 lastNanos = now
-
-                // Average bass-band level. Bins are pink-compensated dB
-                // centred so the midband sits at 0 — a kick swings the bass
-                // band up to roughly +12 dB, which maps to level 1.0.
                 val bins = tap.spectrumBins.value
                 var sum = 0f
                 for (b in BASS_BIN_START..BASS_BIN_END) sum += bins[b]
                 val db = sum / (BASS_BIN_END - BASS_BIN_START + 1)
                 val raw = (db / 12f).coerceIn(0f, 1f)
-
-                // Fast attack snaps onto the kick; the release holds through
-                // it instead of flickering per frame.
                 val coef = if (raw > env) 1f - exp(-dt / attackSec) else 1f - exp(-dt / releaseSec)
                 env += (raw - env) * coef
-
-                // Spring integration (semi-implicit Euler — stable at any fps).
                 vel += ((env - pos) * SPRING_STIFFNESS - vel * springDamping) * dt
                 pos += vel * dt
                 pulse.floatValue = pos.coerceIn(0f, 1.6f)
@@ -101,54 +131,105 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
 }
 
 /**
- * Audio-reactive beat FX applied directly to a text (or any) element: the
- * element pumps with the bass (scale), pops in on activation, and radiates a
- * glow plus god rays that emanate from the element's own borders. Ray and
- * glow gradients reach full transparency at their own endpoints, so the light
- * dissolves in open space — no container edge is ever silhouetted, regardless
- * of the surface the element sits in.
- *
- * This is the "god ray" effect as an element modifier, matching the Studio's
- * mental model: the font is an element, the god ray is an FX on that element.
- * Everything reads [pulse]/[time]/[popScale] inside draw or layer lambdas —
- * zero recomposition per frame.
+ * Line-level part of the beat FX: the element pumps with the bass (scale) and
+ * pops in on activation. It also reports the line's root-coordinate bounds
+ * into [anchors] so [LyricsFxLayer] can bloom a glow behind the whole line.
+ * The RAYS are per-glyph (see [reportGlyphAnchor] + [LyricsFxLayer]); nothing
+ * is drawn inside this element, so nothing here can be clipped.
  */
 internal fun Modifier.bassBeat(
     pulse: State<Float>,
-    time: State<Float>,
     popScale: () -> Float,
-    accent: Color,
     fx: LyricsFxSettings,
+    anchors: LyricGlyphAnchors?,
 ): Modifier {
-    val intensity = fx.bassReact
-    if (intensity <= 0.01f) return this
-    val pumped = this.graphicsLayer {
-        val p = pulse.value * intensity
+    if (fx.bassReact <= 0.01f) return this
+    var mod = this.graphicsLayer {
+        val p = pulse.value * fx.bassReact
         val s = popScale() * (1f + fx.pumpAmount * p)
         scaleX = s
         scaleY = s
     }
-    // Nothing to draw when both rays and glow are off — keep the pump only.
-    if (fx.rayCount <= 0 && fx.glowBrightness <= 0.001f) return pumped
-    return pumped.drawBehind {
-        val p = (pulse.value * intensity).coerceIn(0f, 1.6f)
-        if (p <= 0.03f) return@drawBehind
-        val c = center
-
-        // Roots on an ellipse hugging the glyph block, so beams visibly leave
-        // the letter borders rather than radiating from a hidden box centre.
-        val rx = size.width * 0.46f
-        val ry = size.height * 0.5f
-        // Reach scales with the element's own size and the pulse, and the
-        // gradient dies before the endpoint — no fixed screen dependence,
-        // no visible cut.
-        val reach = size.height * (0.8f + 2.4f * fx.rayLength) * (0.55f + 0.45f * p)
-        val sweep = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
-        drawBeams(c, rx * 0.94f, ry * 0.9f, reach, p, accent, fx, sweep)
-
-        val glowR = ry + fx.glowRadiusDp.dp.toPx() * (1f + p)
-        drawGlow(c, glowR, p, accent, fx)
+    if (anchors != null) {
+        mod = mod.onGloballyPositioned { coords ->
+            anchors.lineCenter = coords.boundsInRoot().center
+            anchors.lineHalf = Size(coords.size.width / 2f, coords.size.height / 2f)
+        }
     }
+    return mod
+}
+
+/**
+ * Publishes a single glyph's screen position into [anchors] under [key] while
+ * composed, removing it on dispose. Applied to each active-line glyph so the
+ * full-screen [LyricsFxLayer] can draw that glyph's rays at its real screen
+ * location — per-letter, and impossible to clip.
+ */
+@Composable
+internal fun Modifier.reportGlyphAnchor(
+    anchors: LyricGlyphAnchors?,
+    key: Int,
+    phase: Float,
+): Modifier {
+    if (anchors == null) return this
+    DisposableEffect(anchors, key) {
+        onDispose { anchors.glyphs.remove(key) }
+    }
+    return this.onGloballyPositioned { coords ->
+        anchors.glyphs[key] = GlyphAnchor(
+            center = coords.boundsInRoot().center,
+            halfW = coords.size.width / 2f,
+            halfH = coords.size.height / 2f,
+            phase = phase,
+        )
+    }
+}
+
+/**
+ * Full-screen god-ray + glow layer. Draws each active glyph's rays at its
+ * reported screen position, plus one soft glow behind the whole line. Lives
+ * on a layer with no clipping ancestor, so the light can never be cut by a
+ * canvas — beams simply run off the screen edge at worst. Draw-phase only.
+ */
+@Composable
+internal fun LyricsFxLayer(
+    anchors: LyricGlyphAnchors,
+    pulse: State<Float>,
+    accent: Color,
+    fx: LyricsFxSettings,
+    modifier: Modifier = Modifier,
+) {
+    if (fx.bassReact <= 0.01f) return
+    val time = rememberFrameSeconds()
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    Box(
+        modifier
+            .fillMaxSize()
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            .drawBehind {
+                val p = (pulse.value * fx.bassReact).coerceIn(0f, 1.6f)
+                if (p <= 0.03f) return@drawBehind
+
+                // One soft bloom behind the whole line.
+                anchors.lineCenter?.let { lc ->
+                    val c = lc - origin
+                    val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
+                    drawGlow(c, glowR, p, accent, fx)
+                }
+
+                // Per-glyph rays: each burst rooted on its own letter, sized to
+                // the glyph, sweeping with the glyph's wave phase.
+                if (fx.rayCount > 0) {
+                    val spin = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
+                    anchors.glyphs.values.forEach { g ->
+                        val c = g.center - origin
+                        val glyph = max(g.halfW, g.halfH)
+                        val reach = glyph * 2f * (0.6f + 2.4f * fx.rayLength) * (0.5f + 0.5f * p)
+                        drawBeams(c, g.halfW * 0.55f, g.halfH * 0.55f, reach, p, accent, fx, spin + g.phase)
+                    }
+                }
+            },
+    )
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeams(

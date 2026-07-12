@@ -16,7 +16,7 @@ class LyricsFxSettingsTest {
         assertEquals(12f, d.rotationDegrees, 0f)
         assertEquals(0.22f, d.wavePhaseStep, 0f)
         assertEquals(0.8f, d.bassReact, 0f)
-        assertEquals(12, d.rayCount)
+        assertEquals(8, d.rayCount)
     }
 
     @Test

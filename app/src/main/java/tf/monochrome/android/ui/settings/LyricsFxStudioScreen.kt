@@ -56,9 +56,11 @@ import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.ui.player.Letters3DLine
+import tf.monochrome.android.ui.player.LocalLyricGlyphAnchors
 import tf.monochrome.android.ui.player.LocalLyricsFx
+import tf.monochrome.android.ui.player.LyricGlyphAnchors
+import tf.monochrome.android.ui.player.LyricsFxLayer
 import tf.monochrome.android.ui.player.bassBeat
-import tf.monochrome.android.ui.player.rememberFrameSeconds
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.exp
@@ -105,34 +107,35 @@ fun LyricsFxStudioScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
 
+        // Preview + presets are pinned above the scrolling sliders, so the
+        // live example stays locked in view while you tune every parameter.
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            StudioPreview(fx)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                LyricsFxSettings.PRESETS.forEach { (name, preset) ->
+                    FilterChip(
+                        selected = fx == preset,
+                        onClick = { viewModel.applyPreset(preset) },
+                        label = { Text(name) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    )
+                }
+            }
+        }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 48.dp),
         ) {
-            item { StudioPreview(fx) }
-
-            item {
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    LyricsFxSettings.PRESETS.forEach { (name, preset) ->
-                        FilterChip(
-                            selected = fx == preset,
-                            onClick = { viewModel.applyPreset(preset) },
-                            label = { Text(name) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            ),
-                        )
-                    }
-                }
-            }
-
             item {
                 StudioSection("Typography")
                 FxSlider("Font size", "%.0f sp".format(fx.fontSizeSp), fx.fontSizeSp, 14f..34f) {
@@ -240,18 +243,25 @@ fun LyricsFxStudioScreen(
 @Composable
 private fun StudioPreview(fx: LyricsFxSettings) {
     val pulse = rememberSyntheticKickPulse(fx)
-    val time = rememberFrameSeconds()
+    val anchors = remember { LyricGlyphAnchors() }
     val accent = MaterialTheme.colorScheme.primary
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(210.dp)
+            .height(190.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF121016)),
         contentAlignment = Alignment.Center,
     ) {
-        CompositionLocalProvider(LocalLyricsFx provides fx) {
+        CompositionLocalProvider(
+            LocalLyricsFx provides fx,
+            LocalLyricGlyphAnchors provides anchors,
+        ) {
+            // Same pipeline as the player: the ray/glow FX layer fills the
+            // frame and draws at each glyph's reported position, while the
+            // text element pumps and publishes its glyphs.
+            LyricsFxLayer(anchors = anchors, pulse = pulse, accent = accent, fx = fx)
             Letters3DLine(
                 text = "Feel the beat tonight",
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -261,7 +271,8 @@ private fun StudioPreview(fx: LyricsFxSettings) {
                     fontWeight = FontWeight.ExtraBold,
                 ),
                 color = accent,
-                modifier = Modifier.bassBeat(pulse, time, { 1f }, accent, fx),
+                modifier = Modifier.bassBeat(pulse, { 1f }, fx, anchors),
+                anchors = anchors,
             )
         }
         Text(

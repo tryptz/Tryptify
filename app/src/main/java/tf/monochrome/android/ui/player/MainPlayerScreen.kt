@@ -144,6 +144,10 @@ fun MainPlayerScreen(
     onInflatorToggle: (Boolean) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
+    // Full-screen, unclipped layer between the background/stain and the player
+    // content — the bass-reactive god rays draw here at each glyph's screen
+    // position, so the light can never be clipped by a canvas/container.
+    fxUnderlay: @Composable () -> Unit = {},
     // Expanded lyrics are NOT a separate element: the same hero slot grows to
     // full-bleed while the player controls collapse away and the blurred
     // artwork stain fades in behind everything.
@@ -232,6 +236,10 @@ fun MainPlayerScreen(
                 alpha = { stainAlpha },
             )
         }
+
+        // God rays / glow — full-screen, above the stain, behind the
+        // (transparent) lyric text, so the light shows through uncut.
+        fxUnderlay()
 
         if (isFullscreen) {
             hero(Modifier.fillMaxSize())
