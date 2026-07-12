@@ -240,7 +240,8 @@ fun SearchResultsContent(
             onAddToQueue = { playerViewModel.addToQueue(listOf(track)) },
             onToggleLike = { playerViewModel.toggleFavorite(track) },
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
-            onDownloadTrack = { playerViewModel.downloadTrack(track) },
+            onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
+            else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
@@ -621,6 +622,9 @@ private fun UnifiedSearchTrackItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ResultBadge(text = track.sourceType.label())
+                    if (track.isThxSpatialAudio) {
+                        tf.monochrome.android.ui.components.ThxBadgePill()
+                    }
                     track.qualityBadge?.let { ResultBadge(text = it) }
                 }
             }

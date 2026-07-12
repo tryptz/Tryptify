@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -121,6 +122,24 @@ private fun DevEditToolbar(controller: DevEditController, modifier: Modifier = M
             )
             IconButton(onClick = { if (screen.isNotEmpty()) controller.addBox(screen) }) {
                 Icon(Icons.Default.Add, contentDescription = "Add box", tint = Color.White)
+            }
+            IconButton(onClick = {
+                if (screen.isNotEmpty()) {
+                    // Native panel resolution = the largest supported display
+                    // mode, regardless of the mode the app currently runs at
+                    // (the in-app resolution setting can downscale it).
+                    val nativeMode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        context.display?.supportedModes
+                            ?.maxByOrNull { it.physicalWidth.toLong() * it.physicalHeight.toLong() }
+                    } else null
+                    controller.addScreenCanvas(
+                        screen,
+                        nativeMode?.physicalWidth ?: context.resources.displayMetrics.widthPixels,
+                        nativeMode?.physicalHeight ?: context.resources.displayMetrics.heightPixels,
+                    )
+                }
+            }) {
+                Icon(Icons.Default.AspectRatio, contentDescription = "Add screen canvas", tint = Color.White)
             }
             val snapOn by controller.snapToGrid.collectAsState()
             IconButton(onClick = { controller.toggleSnapToGrid() }) {

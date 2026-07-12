@@ -134,8 +134,10 @@ private fun SyncedLyrics(
 
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .liquidGlass(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         itemsIndexed(lines) { index, line ->
             val isActive = index == currentLineIndex
@@ -159,15 +161,19 @@ private fun SyncedLyrics(
 
                 Text(
                     text = line.text.ifBlank { "♪" },
+                    // Fixed size: the active line is marked by colour/weight only,
+                    // so the list never reflows mid-song (see LyricsHero.kt).
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = if (isActive) 22.sp else 18.sp,
+                        fontSize = 23.sp,
+                        lineHeight = 29.sp,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                     ),
                     color = textColor,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onSeekTo(line.timeMs) }
-                        .padding(vertical = 8.dp)
+                        .padding(vertical = 3.dp)
                 )
             }
         }
@@ -186,8 +192,8 @@ private fun KaraokeLine(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.Start,
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.Center,
         verticalArrangement = Arrangement.Center
     ) {
         line.words.forEach { word ->
@@ -207,7 +213,8 @@ private fun KaraokeLine(
             Text(
                 text = word.text + " ",
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = if (isActive) 22.sp else 18.sp,
+                    fontSize = 23.sp,
+                    lineHeight = 29.sp,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                 ),
                 color = color
@@ -219,17 +226,20 @@ private fun KaraokeLine(
 @Composable
 private fun UnsyncedLyrics(lines: List<LyricLine>) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .liquidGlass(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp),
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp),
                 color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 2.dp)
             )
         }
     }

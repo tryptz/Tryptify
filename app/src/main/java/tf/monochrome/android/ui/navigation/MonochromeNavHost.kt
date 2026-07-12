@@ -129,6 +129,7 @@ sealed class Screen(val route: String) {
         fun createRoute(tab: Int = 0) = "oxford?tab=$tab"
     }
     data object DebugLog : Screen("debug_log")
+    data object LyricsFxStudio : Screen("lyrics_fx_studio")
 }
 
 data class BottomNavItem(
@@ -351,6 +352,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         DebugLogScreen(navController = navController)
                     }
                 }
+                composable(Screen.LyricsFxStudio.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("lyrics_fx_studio") {
+                        tf.monochrome.android.ui.settings.LyricsFxStudioScreen(navController = navController)
+                    }
+                }
                 composable(
                     route = Screen.Oxford.route,
                     arguments = listOf(navArgument("tab") {
@@ -406,6 +412,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onPlayAll = { tracks ->
                                 playerViewModel.playAllUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }
@@ -425,6 +434,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onShuffleAll = { tracks ->
                                 playerViewModel.shufflePlayUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }
@@ -444,6 +456,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onShuffleAll = { tracks ->
                                 playerViewModel.shufflePlayUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }
@@ -463,6 +478,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onShuffleAll = { tracks ->
                                 playerViewModel.shufflePlayUnified(tracks)
+                            },
+                            onAddToQueue = { track ->
+                                playerViewModel.addUnifiedToQueue(listOf(track))
                             }
                         )
                     }

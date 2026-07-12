@@ -14,6 +14,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
+import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.readBytes
 import io.ktor.http.isSuccess
@@ -44,7 +45,10 @@ class DownloadWorker @AssistedInject constructor(
         const val KEY_ALBUM_TITLE = "album_title"
         const val KEY_ALBUM_COVER = "album_cover"
         const val KEY_DURATION = "duration"
+        const val KEY_VERSION = "version"
+        const val KEY_IS_THX = "is_thx_spatial_audio"
         const val KEY_PROGRESS = "progress"
+        private const val TAG = "DownloadWorker"
     }
 
     override suspend fun doWork(): Result {
@@ -56,6 +60,8 @@ class DownloadWorker @AssistedInject constructor(
         val albumTitle = inputData.getString(KEY_ALBUM_TITLE)
         val albumCover = inputData.getString(KEY_ALBUM_COVER)
         val duration = inputData.getInt(KEY_DURATION, 0)
+        val version = inputData.getString(KEY_VERSION)
+        val isThxSpatialAudio = inputData.getBoolean(KEY_IS_THX, false)
 
         return try {
             // Get download quality preference
@@ -66,38 +72,73 @@ class DownloadWorker @AssistedInject constructor(
             val streamUrl = streamResponse.streamUrl
                 ?: return Result.failure()
 
-            // Download audio bytes with progress
+            // Stream the audio into a temp FILE with progress. Never hold the
+            // whole payload in memory: a plain httpClient.get() in Ktor 3
+            // saves the entire body into a byte array (SavedCall) before the
+            // channel is even read — 30-60 MB per FLAC — and the previous
+            // ByteArrayOutputStream added a second full copy. Together they
+            // OOM-crashed devices near the 256 MB art heap limit.
             setProgress(workDataOf(KEY_PROGRESS to 0.05f))
-            val response = httpClient.get(streamUrl)
-            if (!response.status.isSuccess()) return Result.failure()
-
-            val contentLength = response.headers["Content-Length"]?.toLongOrNull() ?: -1L
-            val channel = response.bodyAsChannel()
-            val buffer = ByteArray(8192)
-            val output = java.io.ByteArrayOutputStream()
-            var totalRead = 0L
-
-            while (!channel.isClosedForRead) {
-                val read = channel.readAvailable(buffer)
-                if (read <= 0) break
-                output.write(buffer, 0, read)
-                totalRead += read
-                if (contentLength > 0) {
-                    val progress = (totalRead.toFloat() / contentLength).coerceIn(0.05f, 0.95f)
-                    setProgress(workDataOf(KEY_PROGRESS to progress))
+            val tempAudio = File.createTempFile("dl_audio", ".dl", context.cacheDir)
+            try {
+            val fetched = httpClient.prepareGet(streamUrl).execute { response ->
+                if (!response.status.isSuccess()) return@execute false
+                val contentLength = response.headers["Content-Length"]?.toLongOrNull() ?: -1L
+                val channel = response.bodyAsChannel()
+                val buffer = ByteArray(8192)
+                var totalRead = 0L
+                tempAudio.outputStream().use { out ->
+                    while (!channel.isClosedForRead) {
+                        val read = channel.readAvailable(buffer)
+                        if (read <= 0) break
+                        out.write(buffer, 0, read)
+                        totalRead += read
+                        if (contentLength > 0) {
+                            val progress = (totalRead.toFloat() / contentLength).coerceIn(0.05f, 0.95f)
+                            setProgress(workDataOf(KEY_PROGRESS to progress))
+                        }
+                    }
                 }
+                true
             }
-            val audioData = output.toByteArray()
+            if (!fetched) return Result.failure()
 
             // Detect what the backend actually delivered (not just what was
             // requested): the download instance can downgrade HI_RES→LOSSLESS,
             // and LOW/HIGH come back as MP3. Basing the extension/mime and the
             // stored record on the real bytes keeps lossy files from being
             // mislabelled .flac (breaks MediaStore + other players) and makes the
-            // saved quality accurate.
+            // saved quality accurate. Only the 22-byte header is read.
             val customFolderUri = preferences.downloadFolderUri.first()
-            val actualQuality = detectActualQuality(audioData, quality)
+            val header = ByteArray(22)
+            val headerRead = tempAudio.inputStream().use { it.read(header) }
+            val actualQuality =
+                detectActualQuality(if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0), quality)
             val isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
+
+            // The Qobuz CDN FLACs arrive with no embedded metadata, so a THX
+            // download would land on disk anonymous. Embed Vorbis comments now
+            // (only for THX/versioned FLACs, so ordinary downloads keep their
+            // current fast path) — TITLE without the version suffix, the raw
+            // VERSION string Qobuz uses, and a COMMENT marker for players that
+            // ignore VERSION. Tagging happens in place on the temp file
+            // (JAudioTagger is file-based). Best-effort: a tagging failure
+            // never fails the download (the bytes are good).
+            if (isFlac && (isThxSpatialAudio || !version.isNullOrBlank())) {
+                val baseTitle = if (!version.isNullOrBlank()) {
+                    trackTitle.removeSuffix(" — $version").trim()
+                } else trackTitle
+                tagFlacFile(
+                    file = tempAudio,
+                    title = baseTitle,
+                    artist = artistName,
+                    album = albumTitle,
+                    version = version,
+                    isThxSpatialAudio = isThxSpatialAudio,
+                )
+            }
+            val audioSizeBytes = tempAudio.length()
+
             val fileExt = if (isFlac) "flac" else "mp3"
             val audioMime = if (isFlac) "audio/flac" else "audio/mpeg"
             val sanitizedTitle = "${artistName} - ${trackTitle}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
@@ -114,18 +155,18 @@ class DownloadWorker @AssistedInject constructor(
                     val newFile = docFile.createFile(audioMime, sanitizedTitle)
                     if (newFile != null) {
                         context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                            out.write(audioData)
+                            tempAudio.inputStream().use { input -> input.copyTo(out) }
                         }
                         filePath = newFile.uri.toString()
                     } else {
                         // Fallback to internal
-                        filePath = saveToInternal(trackId, fileExt, audioData)
+                        filePath = saveToInternal(trackId, fileExt, tempAudio)
                     }
                 } else {
-                    filePath = saveToInternal(trackId, fileExt, audioData)
+                    filePath = saveToInternal(trackId, fileExt, tempAudio)
                 }
             } else {
-                filePath = saveToInternal(trackId, fileExt, audioData)
+                filePath = saveToInternal(trackId, fileExt, tempAudio)
             }
 
             // Save lyrics if enabled. TIDAL is preferred (best quality
@@ -205,12 +246,17 @@ class DownloadWorker @AssistedInject constructor(
                     albumCover = albumCover,
                     filePath = filePath,
                     quality = actualQuality.name,
-                    sizeBytes = audioData.size.toLong(),
-                    downloadedAt = System.currentTimeMillis()
+                    sizeBytes = audioSizeBytes,
+                    downloadedAt = System.currentTimeMillis(),
+                    version = version,
+                    isThxSpatialAudio = isThxSpatialAudio
                 )
             )
 
             Result.success()
+            } finally {
+                tempAudio.delete()
+            }
         } catch (_: Exception) {
             if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
@@ -315,11 +361,54 @@ class DownloadWorker @AssistedInject constructor(
         return if (bitsPerSample >= 24) AudioQuality.HI_RES else AudioQuality.LOSSLESS
     }
 
-    private fun saveToInternal(trackId: Long, ext: String, data: ByteArray): String {
+    /** Streamed copy from the download temp file — never a whole-file byte array. */
+    private fun saveToInternal(trackId: Long, ext: String, source: File): String {
         val downloadsDir = File(context.getExternalFilesDir(null), "downloads")
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
         val targetFile = File(downloadsDir, "$trackId.$ext")
-        targetFile.writeBytes(data)
+        source.inputStream().use { input ->
+            targetFile.outputStream().use { output -> input.copyTo(output) }
+        }
         return targetFile.absolutePath
+    }
+
+    /**
+     * Embed Vorbis comments into a FLAC file in place (JAudioTagger is
+     * file-based, so no byte-array round trip). The download temp carries a
+     * ".dl" extension and JAudioTagger picks its reader by extension, so the
+     * file is renamed to a ".flac" alias for the tagging and renamed back.
+     * Best-effort: on any failure the file is left playable and the download
+     * still succeeds.
+     */
+    private fun tagFlacFile(
+        file: File,
+        title: String,
+        artist: String,
+        album: String?,
+        version: String?,
+        isThxSpatialAudio: Boolean,
+    ) {
+        val alias = File(file.parentFile, "${file.nameWithoutExtension}_tag.flac")
+        if (!file.renameTo(alias)) {
+            Log.w(TAG, "THX tag: rename for tagging failed for \"$title\"")
+            return
+        }
+        try {
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(alias)
+            val tag = audioFile.tagOrCreateAndSetDefault as? org.jaudiotagger.tag.flac.FlacTag
+                ?: return
+            if (title.isNotBlank()) tag.setField(org.jaudiotagger.tag.FieldKey.TITLE, title)
+            if (artist.isNotBlank()) tag.setField(org.jaudiotagger.tag.FieldKey.ARTIST, artist)
+            album?.takeIf { it.isNotBlank() }?.let { tag.setField(org.jaudiotagger.tag.FieldKey.ALBUM, it) }
+            // Raw VERSION comment — the field Qobuz itself uses for the release.
+            version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
+            // COMMENT marker as belt-and-braces for players that ignore VERSION.
+            if (isThxSpatialAudio) tag.setField(org.jaudiotagger.tag.FieldKey.COMMENT, "THX Spatial Audio")
+            audioFile.commit()
+        } catch (e: Exception) {
+            Log.w(TAG, "THX tag: FLAC tagging failed for \"$title\": ${e.message}")
+        } finally {
+            alias.renameTo(file)
+        }
     }
 }

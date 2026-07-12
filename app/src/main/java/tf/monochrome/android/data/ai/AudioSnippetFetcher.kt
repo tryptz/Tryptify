@@ -1,10 +1,11 @@
 package tf.monochrome.android.data.ai
 
 import io.ktor.client.HttpClient
-import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.statement.bodyAsBytes
+import io.ktor.client.request.prepareGet
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.contentType
+import io.ktor.utils.io.readAvailable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,19 +23,26 @@ class AudioSnippetFetcher @Inject constructor(
     }
 
     suspend fun fetchSnippet(streamUrl: String): AudioSnippet {
-        val response = httpClient.get(streamUrl) {
+        // Streaming request (prepareGet) with a hard read cap: the Range
+        // header is only a hint — a server that ignores it returns the whole
+        // file, and a non-streaming get() would buffer all of it into memory
+        // (SavedCall) before the truncation ever ran. Here at most MAX_BYTES
+        // ever exist on the heap and the connection is dropped at the cap.
+        return httpClient.prepareGet(streamUrl) {
             header("Range", "bytes=0-${MAX_BYTES - 1}")
+        }.execute { response ->
+            val channel = response.bodyAsChannel()
+            val out = java.io.ByteArrayOutputStream(MAX_BYTES)
+            val buffer = ByteArray(16 * 1024)
+            while (!channel.isClosedForRead && out.size() < MAX_BYTES) {
+                val read = channel.readAvailable(buffer)
+                if (read <= 0) break
+                out.write(buffer, 0, minOf(read, MAX_BYTES - out.size()))
+            }
+            val mimeType = response.contentType()?.toString()?.split(";")?.firstOrNull()?.trim()
+                ?: inferMimeType(streamUrl)
+            AudioSnippet(bytes = out.toByteArray(), mimeType = mimeType)
         }
-
-        val bytes = response.bodyAsBytes()
-        val ct = response.contentType()
-        val mimeType = ct?.toString()?.split(";")?.firstOrNull()?.trim()
-            ?: inferMimeType(streamUrl)
-
-        return AudioSnippet(
-            bytes = if (bytes.size > MAX_BYTES) bytes.copyOf(MAX_BYTES) else bytes,
-            mimeType = mimeType
-        )
     }
 
     private fun inferMimeType(url: String): String {

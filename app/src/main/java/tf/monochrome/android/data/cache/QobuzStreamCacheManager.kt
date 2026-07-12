@@ -3,7 +3,7 @@ package tf.monochrome.android.data.cache
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
-import io.ktor.client.request.get
+import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
@@ -88,24 +88,34 @@ class QobuzStreamCacheManager @Inject constructor(
 
         val temp = File(cacheDir, "${target.name}.tmp").also { if (it.exists()) it.delete() }
         return try {
-            val response = httpClient.get(url)
-            if (!response.status.isSuccess()) {
+            // prepareGet + execute is the STREAMING request shape. A plain
+            // httpClient.get() in Ktor 3 saves the entire response body into
+            // a byte array before handing it over (SavedCall) — for a full
+            // FLAC that's a 30-60 MB heap allocation, which OOM-crashed the
+            // app on devices already near the 256 MB art heap limit.
+            val fetched = httpClient.prepareGet(url).execute { response ->
+                if (!response.status.isSuccess()) return@execute false
+                val channel = response.bodyAsChannel()
+                val buffer = ByteArray(BUFFER_BYTES)
+                temp.outputStream().use { out ->
+                    while (!channel.isClosedForRead) {
+                        val read = channel.readAvailable(buffer)
+                        if (read <= 0) break
+                        out.write(buffer, 0, read)
+                    }
+                }
+                true
+            }
+            if (!fetched) {
                 temp.delete()
                 return null
             }
-            val channel = response.bodyAsChannel()
-            val buffer = ByteArray(BUFFER_BYTES)
-            temp.outputStream().use { out ->
-                while (!channel.isClosedForRead) {
-                    val read = channel.readAvailable(buffer)
-                    if (read <= 0) break
-                    out.write(buffer, 0, read)
-                }
-            }
             // Atomic install. If rename fails (e.g. cross-mount), fall back to
-            // copying the bytes and removing the temp file.
+            // a streamed copy — never a whole-file byte array.
             if (!temp.renameTo(target)) {
-                target.writeBytes(temp.readBytes())
+                temp.inputStream().use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
                 temp.delete()
             }
             target.setLastModified(System.currentTimeMillis())

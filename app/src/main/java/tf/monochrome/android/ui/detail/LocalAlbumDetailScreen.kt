@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
@@ -58,6 +59,7 @@ fun LocalAlbumDetailScreen(
     onPlayTrack: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onPlayAll: (List<UnifiedTrack>) -> Unit,
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
+    onAddToQueue: (UnifiedTrack) -> Unit,
     viewModel: LocalAlbumDetailViewModel = hiltViewModel()
 ) {
     val album by viewModel.album.collectAsState()
@@ -193,6 +195,7 @@ fun LocalAlbumDetailScreen(
                             track = track,
                             trackNumber = track.trackNumber ?: (index + 1),
                             onClick = { onPlayTrack(track, tracks) },
+                            onAddToQueue = { onAddToQueue(track) },
                             navController = navController
                         )
                     }
@@ -207,6 +210,7 @@ private fun LocalTrackRow(
     track: UnifiedTrack,
     trackNumber: Int,
     onClick: () -> Unit,
+    onAddToQueue: () -> Unit,
     navController: NavController
 ) {
     Surface(
@@ -262,6 +266,14 @@ private fun LocalTrackRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Filled.PlaylistAdd,
+                    contentDescription = "Add to queue",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

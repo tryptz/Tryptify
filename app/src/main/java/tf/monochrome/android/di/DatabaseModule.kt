@@ -28,7 +28,12 @@ object DatabaseModule {
             context,
             MusicDatabase::class.java,
             "monochrome_db"
-        ).fallbackToDestructiveMigration().build()
+        )
+            .addMigrations(MusicDatabase.MIGRATION_8_9)
+            // Retained as a safety net for any version gap without an explicit
+            // migration; the THX upgrade (8→9) migrates in place above.
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
     }
 
     @Provides

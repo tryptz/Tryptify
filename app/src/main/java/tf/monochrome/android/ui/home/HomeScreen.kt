@@ -35,7 +35,9 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ButtonDefaults
@@ -118,6 +120,17 @@ fun HomeScreen(
     val recommendations by searchViewModel.recommendations.collectAsState()
     val hasSearchResults = searchQuery.isNotBlank()
 
+    // Search reveals on demand; radio is the resting primary action.
+    var searchOpen by androidx.compose.runtime.saveable.rememberSaveable {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
+    val searchFocus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.runtime.LaunchedEffect(searchOpen) {
+        if (searchOpen) searchFocus.requestFocus()
+    }
+    val isRadioActive by playerViewModel.isRadioActive.collectAsState()
+    val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsState()
+
     var showContextMenuForTrack by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<Track?>(null)
     }
@@ -143,7 +156,8 @@ fun HomeScreen(
             onAddToQueue = { playerViewModel.addToQueue(listOf(track)) },
             onToggleLike = { playerViewModel.toggleFavorite(track) },
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
-            onDownloadTrack = { playerViewModel.downloadTrack(track) },
+            onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
+            else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
@@ -219,6 +233,21 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = {
+                        if (searchOpen) {
+                            // Closing search also clears the query so the
+                            // home feed comes back.
+                            searchViewModel.onQueryChange("")
+                        }
+                        searchOpen = !searchOpen
+                    }) {
+                        Icon(
+                            if (searchOpen) Icons.Default.Clear else Icons.Default.Search,
+                            contentDescription = if (searchOpen) "Close search" else "Search",
+                            tint = if (searchOpen) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     tf.monochrome.android.ui.downloads.DownloadTopBarIndicator(
                         activeCount = activeDownloads.size,
                         overallProgress = downloadProgress,
@@ -246,13 +275,38 @@ fun HomeScreen(
             )
         }
 
-        // Search bar
-        tf.monochrome.android.devedit.DevEditable("home_search_bar", Modifier.fillMaxWidth()) {
-            SearchQueryField(
-                query = searchQuery,
-                onQueryChange = searchViewModel::onQueryChange,
-                onSubmit = searchViewModel::submitSearch
-            )
+        // Search — hidden by default, revealed by the top-bar search button.
+        // The field stays visible while a query is active so results keep
+        // their input attached.
+        AnimatedVisibility(
+            visible = searchOpen || hasSearchResults,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            tf.monochrome.android.devedit.DevEditable("home_search_bar", Modifier.fillMaxWidth()) {
+                SearchQueryField(
+                    query = searchQuery,
+                    onQueryChange = searchViewModel::onQueryChange,
+                    onSubmit = searchViewModel::submitSearch,
+                    modifier = Modifier.focusRequester(searchFocus)
+                )
+            }
+        }
+
+        // Play Radio — the home screen's primary action: seed a station from
+        // whatever is playing (falling back to recent history) and keep the
+        // queue topped up.
+        if (!searchOpen && !hasSearchResults) {
+            tf.monochrome.android.devedit.DevEditable("home_play_radio", Modifier.fillMaxWidth()) {
+                PlayRadioButton(
+                    isActive = isRadioActive,
+                    isGenerating = isRadioGenerating,
+                    onClick = {
+                        if (isRadioActive) playerViewModel.stopRadio()
+                        else playerViewModel.playRadio()
+                    }
+                )
+            }
         }
 
         if (hasSearchResults) {
@@ -369,6 +423,58 @@ fun HomeScreen(
                 }
             }
         }
+    }
+}
+
+
+@Composable
+private fun PlayRadioButton(
+    isActive: Boolean,
+    isGenerating: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(MonoDimens.shapePill)
+            .background(
+                if (isActive) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.primary
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val contentColor =
+            if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onPrimary
+        if (isGenerating) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = contentColor
+            )
+        } else {
+            Icon(
+                if (isActive) Icons.Default.GraphicEq else Icons.Default.Podcasts,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = when {
+                isGenerating -> "Finding similar tracks…"
+                isActive -> "Radio on — tap to stop"
+                else -> "Play Radio"
+            },
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = contentColor
+        )
     }
 }
 

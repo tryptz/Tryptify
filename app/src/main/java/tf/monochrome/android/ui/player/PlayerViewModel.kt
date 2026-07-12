@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -29,6 +31,7 @@ import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Lyrics
+import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.domain.model.Track
@@ -38,6 +41,7 @@ import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.player.PlaybackService
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.player.StreamResolver
+import tf.monochrome.android.radio.RadioQueueManager
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import javax.inject.Inject
@@ -55,6 +59,7 @@ class PlayerViewModel @Inject constructor(
     private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
     private val trackShareHelper: tf.monochrome.android.share.TrackShareHelper,
+    private val radioQueueManager: RadioQueueManager,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
@@ -118,6 +123,10 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 50)
     val visualizerBrightness: StateFlow<Int> = preferences.visualizerBrightness
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
+    val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val lyricsFx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
     val romajiLyrics: StateFlow<Boolean> = preferences.romajiLyrics
@@ -455,6 +464,73 @@ class PlayerViewModel @Inject constructor(
         queueManager.addNextInQueue(track)
     }
 
+    // --- Queue editing ---
+
+    /**
+     * Reset the queue: drop everything upcoming, keep the current track
+     * playing. Stops radio first so it can't instantly refill the tail the
+     * user just rejected.
+     */
+    fun resetQueue() {
+        radioQueueManager.onQueueReset()
+        queueManager.clearUpcoming()
+    }
+
+    fun removeFromQueue(index: Int) {
+        queueManager.removeFromQueue(index)
+    }
+
+    fun removeSelectedFromQueue(indices: Set<Int>) {
+        queueManager.removeMany(indices)
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        queueManager.move(fromIndex, toIndex)
+    }
+
+    fun playQueueItemNext(index: Int) {
+        queueManager.moveToPlayNext(index)
+    }
+
+    // --- Radio (queue maker) ---
+
+    val isRadioActive: StateFlow<Boolean> = radioQueueManager.isActive
+    val isRadioGenerating: StateFlow<Boolean> = radioQueueManager.isGenerating
+    val radioStatusMessage: StateFlow<String?> = radioQueueManager.statusMessage
+
+    /** Start radio seeded from the currently playing track. */
+    fun startRadio() {
+        radioQueueManager.startRadio()
+    }
+
+    /** Queue radio: (re)seed the station from a specific track. */
+    fun startRadioFrom(track: Track) {
+        radioQueueManager.startRadio(track)
+    }
+
+    /**
+     * Home-screen "Play radio": seed from whatever is playing, else the most
+     * recent history entry, else a favorite — and start playback when the
+     * seed isn't already playing. No-op only for a completely fresh library.
+     */
+    fun playRadio() {
+        viewModelScope.launch {
+            currentTrack.value?.let {
+                radioQueueManager.startRadio(it)
+                return@launch
+            }
+            val seed = libraryRepository.getHistory().firstOrNull()?.firstOrNull()
+                ?: libraryRepository.getFavoriteTracks().firstOrNull()?.firstOrNull()
+                ?: return@launch
+            playTrack(seed)
+            radioQueueManager.startRadio(seed)
+        }
+    }
+
+    fun stopRadio() {
+        radioQueueManager.stopRadio()
+    }
+
     fun togglePlayPause() {
         mediaController?.let { mc ->
             if (mc.isPlaying) mc.pause() else mc.play()
@@ -705,14 +781,30 @@ class PlayerViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    /**
+     * True when the track resolves to a local file — it's already on disk, so
+     * download affordances should be hidden and download requests dropped.
+     * The registry is rehydrated from history/queue state, so this covers
+     * local tracks surfaced through Recently Played and playlists too.
+     */
+    fun isLocalTrack(track: Track): Boolean =
+        unifiedTrackRegistry[track.id]?.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile
+
+    /** Drives the player UI: a local file shows as on-device, never downloadable. */
+    val isCurrentTrackLocal: StateFlow<Boolean> = currentTrack
+        .map { track -> track != null && isLocalTrack(track) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     fun downloadTrack(track: Track) {
+        if (isLocalTrack(track)) return
         downloadManager.downloadTrack(track)
         observeTrackDownload(track.id)
     }
 
     fun downloadAllTracks(tracks: List<Track>) {
-        downloadManager.downloadTracks(tracks)
-        tracks.forEach { observeTrackDownload(it.id) }
+        val remote = tracks.filterNot(::isLocalTrack)
+        downloadManager.downloadTracks(remote)
+        remote.forEach { observeTrackDownload(it.id) }
     }
 
     /**

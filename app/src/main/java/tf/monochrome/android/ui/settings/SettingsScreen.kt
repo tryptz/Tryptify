@@ -106,7 +106,9 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About")
+// "Radio" is appended after "About" so existing hardcoded tab indices
+// ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
+private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About", "Radio")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,7 +156,7 @@ fun SettingsScreen(
         tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[selectedTab])}") {
             when (selectedTab) {
                 0 -> AppearanceTab(viewModel)
-                1 -> InterfaceTab(viewModel)
+                1 -> InterfaceTab(viewModel, navController)
                 2 -> ScrobblingTab(viewModel)
                 3 -> AudioTab(viewModel, navController)
                 4 -> EqualizerTab(navController)
@@ -163,6 +165,7 @@ fun SettingsScreen(
                 7 -> InstancesTab(viewModel)
                 8 -> SystemTab(viewModel, navController)
                 9 -> AboutTab()
+                10 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
             }
         }
     }
@@ -484,7 +487,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
 
 // ─── Tab 2: Interface ──────────────────────────────────────────────────
 @Composable
-private fun InterfaceTab(viewModel: SettingsViewModel) {
+private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavController) {
     val gapless by viewModel.gaplessPlayback.collectAsState()
     val explicit by viewModel.showExplicitBadges.collectAsState()
     val confirmQueue by viewModel.confirmClearQueue.collectAsState()
@@ -508,6 +511,9 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
     val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsState()
     val spectrumFftSize by viewModel.spectrumFftSize.collectAsState()
     val spectrumBins by viewModel.spectrumBins.collectAsState()
+    val playerDynamicColor by viewModel.playerDynamicColor.collectAsState()
+    val appFps by viewModel.appTargetFps.collectAsState()
+    val appResolution by viewModel.appRenderResolution.collectAsState()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
     var showTextureDropdown by remember { mutableStateOf(false) }
     var showPresetDropdown by remember { mutableStateOf(false) }
@@ -543,6 +549,93 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
             onCheckedChange = { viewModel.setRomajiLyrics(it) }
         )
 
+        // Word-level lyrics provider — which karaoke-timing source(s) run when
+        // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
+        val lyricsProvider by viewModel.lyricsWordProvider.collectAsState()
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Text(
+                text = "Word-level lyrics provider",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            val providerOptions = listOf(
+                tf.monochrome.android.data.preferences.LyricsWordProvider.NETEASE_ONLY,
+                tf.monochrome.android.data.preferences.LyricsWordProvider.KUGOU_ONLY,
+                tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH,
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                providerOptions.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = lyricsProvider == mode,
+                        onClick = { viewModel.setLyricsWordProvider(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index, providerOptions.size),
+                    ) {
+                        Text(mode.displayName)
+                    }
+                }
+            }
+        }
+
+        // App-wide frame rate and panel resolution, applied by selecting a
+        // matching display mode in MainActivity. Resolution options only list
+        // classes the panel can reach; a request maps to the nearest mode.
+        var showFpsDropdown by remember { mutableStateOf(false) }
+        SettingItem(
+            title = "Frame Rate",
+            subtitle = "Whole app: " + if (appFps == 0) "Unlocked (display max)" else "${appFps}fps",
+            onClick = { showFpsDropdown = true }
+        )
+        DropdownMenu(expanded = showFpsDropdown, onDismissRequest = { showFpsDropdown = false }) {
+            listOf(0, 60, 120).forEach { fps ->
+                DropdownMenuItem(
+                    text = { Text(if (fps == 0) "Unlocked" else "${fps}fps") },
+                    onClick = { viewModel.setAppTargetFps(fps); showFpsDropdown = false }
+                )
+            }
+        }
+
+        val context = LocalContext.current
+        var showResDropdown by remember { mutableStateOf(false) }
+        val nativeShortSide = remember {
+            val modes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                context.display?.supportedModes
+            } else null
+            modes?.maxOfOrNull { minOf(it.physicalWidth, it.physicalHeight) }
+                ?: minOf(
+                    context.resources.displayMetrics.widthPixels,
+                    context.resources.displayMetrics.heightPixels,
+                )
+        }
+        val resolutionOptions = remember(nativeShortSide) {
+            listOf(0) + listOf(720, 1080, 1440, 2160).filter { it <= nativeShortSide }
+        }
+        fun resolutionLabel(shortSide: Int) = when {
+            shortSide == 0 -> "Native"
+            shortSide >= 2160 -> "4K (2160p)"
+            shortSide >= 1440 -> "2K (1440p)"
+            shortSide >= 1080 -> "1080p"
+            else -> "720p"
+        }
+        SettingItem(
+            title = "Resolution",
+            subtitle = "Whole app: ${resolutionLabel(appResolution)} — nearest panel mode is used",
+            onClick = { showResDropdown = true }
+        )
+        DropdownMenu(expanded = showResDropdown, onDismissRequest = { showResDropdown = false }) {
+            resolutionOptions.forEach { shortSide ->
+                DropdownMenuItem(
+                    text = { Text(resolutionLabel(shortSide)) },
+                    onClick = { viewModel.setAppRenderResolution(shortSide); showResDropdown = false }
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Now Playing")
         val viewMode by viewModel.nowPlayingViewMode.collectAsState()
@@ -555,11 +648,25 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
         DropdownMenu(expanded = showModeDropdown, onDismissRequest = { showModeDropdown = false }) {
             NowPlayingViewMode.entries.forEach { mode ->
                 DropdownMenuItem(
-                    text = { Text(mode.displayName) }, 
+                    text = { Text(mode.displayName) },
                     onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
                 )
             }
         }
+        SettingSwitchItem(
+            title = "Dynamic Player Color",
+            subtitle = "Tint the player from the album art; off uses the theme color",
+            checked = playerDynamicColor,
+            onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Lyrics Appearance")
+        SettingItem(
+            title = "Lyrics FX Studio",
+            subtitle = "Live editor for type, the 3D letter wave, the beat engine, and god-ray FX",
+            onClick = { navController.navigate(Screen.LyricsFxStudio.route) },
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Spectrum Analyzer")
@@ -927,6 +1034,9 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         UsbBitPerfectToggle(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
+        MultichannelDownmixToggle(viewModel)
+
+        Spacer(modifier = Modifier.height(8.dp))
         Text("Crossfade: ${crossfade}s", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         Text("Blend between tracks", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
@@ -1024,6 +1134,26 @@ private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
 private fun formatBlockSize(size: Int): String = when {
     size >= 1024 && size % 1024 == 0 -> "${size / 1024}K"
     else -> size.toString()
+}
+
+/**
+ * Multichannel (5.1/7.1) handling: fold down to stereo through the DSP/EQ
+ * chain (default), or pass multichannel PCM through to the device with
+ * DSP/EQ bypassed for those tracks. Applies from the next track / seek.
+ */
+@Composable
+private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
+    val enabled by viewModel.multichannelDownmixEnabled.collectAsState()
+    SettingSwitchItem(
+        title = "Downmix multichannel to stereo",
+        subtitle = if (enabled) {
+            "5.1/7.1 tracks fold into stereo (ITU-R BS.775) and run through DSP/EQ."
+        } else {
+            "Off — multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
+        },
+        checked = enabled,
+        onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
+    )
 }
 
 /**
@@ -1693,7 +1823,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { spotifyViewModel.importByUrl(importUrl, onResult = onImportResult) },
+                onClick = { spotifyViewModel.importByUrl(context, importUrl, onResult = onImportResult) },
                 enabled = spotifyConnected && importUrl.isNotBlank() && !isImporting
             ) {
                 Text("Import Playlist")
@@ -1775,11 +1905,11 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                 error = playlistsError,
                 onPick = { playlistId, name, strict ->
                     showSpotifyPicker = false
-                    spotifyViewModel.importPlaylist(playlistId, name, strict, onImportResult)
+                    spotifyViewModel.importPlaylist(context, playlistId, name, strict, onImportResult)
                 },
                 onPickLikedSongs = { strict ->
                     showSpotifyPicker = false
-                    spotifyViewModel.importLikedSongs(strict, onImportResult)
+                    spotifyViewModel.importLikedSongs(context, strict, onImportResult)
                 },
                 onDismiss = { showSpotifyPicker = false }
             )

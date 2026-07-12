@@ -1,7 +1,11 @@
 package tf.monochrome.android.ui.player
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,12 +30,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,7 +79,11 @@ fun MainPlayerRoute(
     val repeatMode by playerViewModel.repeatMode.collectAsState()
     val isLiked by playerViewModel.isCurrentTrackLiked.collectAsState()
     val downloadState by playerViewModel.currentTrackDownloadState.collectAsState()
-    val isDownloaded by playerViewModel.isCurrentTrackDownloaded.collectAsState()
+    val isDownloadedRemote by playerViewModel.isCurrentTrackDownloaded.collectAsState()
+    val isLocalTrack by playerViewModel.isCurrentTrackLocal.collectAsState()
+    // A local file is already on disk — show it as on-device rather than
+    // offering a download that would try to fetch it from the catalog.
+    val isDownloaded = isDownloadedRemote || isLocalTrack
     val lyrics by playerViewModel.currentLyrics.collectAsState()
     val isLyricsLoading by playerViewModel.isLyricsLoading.collectAsState()
     val viewMode by playerViewModel.nowPlayingViewMode.collectAsState()
@@ -115,6 +125,17 @@ fun MainPlayerRoute(
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
     var sleepMinutes by rememberSaveable { mutableIntStateOf(0) }
 
+    // Expanded lyrics: the SAME hero lyric surface grows to full-bleed while
+    // MainPlayerScreen collapses the player chrome — no separate overlay.
+    // Synced-only: lyrics without timestamps never expand, and losing sync
+    // (track change, unsynced source) or leaving lyrics mode collapses.
+    var lyricsExpanded by rememberSaveable { mutableStateOf(false) }
+    val lyricsSynced = lyrics?.isSynced == true
+    LaunchedEffect(viewMode, lyricsSynced) {
+        if (viewMode != NowPlayingViewMode.LYRICS || !lyricsSynced) lyricsExpanded = false
+    }
+    BackHandler(enabled = lyricsExpanded) { lyricsExpanded = false }
+
     // Self-contained sleep timer: pause playback once the chosen interval
     // elapses, then reset. Re-keys (and restarts) whenever the user changes it.
     LaunchedEffect(sleepMinutes) {
@@ -127,7 +148,18 @@ fun MainPlayerRoute(
 
     LaunchedEffect(isPlaying) { playerViewModel.setVisualizerPlaybackPaused(!isPlaying) }
 
-    val albumColors = rememberAlbumColors(currentTrack?.coverUrl)
+    val lyricsFx by playerViewModel.lyricsFx.collectAsState()
+    val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsState()
+
+    val extractedColors = rememberAlbumColors(currentTrack?.coverUrl)
+    // Player tint follows album art only when the user wants it; otherwise the
+    // theme's primary drives the same pipeline (background, glow, accents).
+    val themeAccent = MaterialTheme.colorScheme.primary
+    val albumColors = if (playerDynamicColor) {
+        extractedColors
+    } else {
+        AlbumColors(dominant = themeAccent, vibrant = themeAccent)
+    }
     val animatedDominant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.dominant,
         animationSpec = androidx.compose.animation.core.tween(durationMillis = 800),
@@ -188,6 +220,8 @@ fun MainPlayerRoute(
         sourceType = currentUnified?.sourceType,
         artists = currentUnified?.artists ?: emptyList(),
         qualityBadge = currentUnified?.qualityBadge,
+        channelBadge = currentUnified?.channelBadge ?: currentTrack?.channelBadge,
+        isThxSpatialAudio = currentUnified?.isThxSpatialAudio ?: currentTrack?.isThxSpatialAudio ?: false,
         isPlaying = isPlaying,
         positionMs = positionMs,
         durationMs = durationMs,
@@ -210,140 +244,187 @@ fun MainPlayerRoute(
         inflatorEnabled = inflatorEnabled,
     )
 
-    MainPlayerScreen(
-        state = state,
-        isFullscreen = isFullscreenActive,
-        formatTime = playerViewModel::formatTime,
-        onToggleLike = playerViewModel::toggleLikeCurrentTrack,
-        onArtistClick = { artistId ->
-            // Source-aware so a local song's artist opens the local artist page.
-            navController.openArtist(currentUnified?.sourceType ?: SourceType.API, artistId)
-        },
-        onSeekCommit = playerViewModel::seekToFraction,
-        onPrevious = playerViewModel::skipToPrevious,
-        onRewind10 = playerViewModel::rewind10,
-        onPlayPause = playerViewModel::togglePlayPause,
-        onForward10 = playerViewModel::forward10,
-        onNext = playerViewModel::skipToNext,
-        onLyrics = {
-            playerViewModel.setNowPlayingViewMode(
-                if (viewMode == NowPlayingViewMode.LYRICS) NowPlayingViewMode.COVER_ART
-                else NowPlayingViewMode.LYRICS
-            )
-        },
-        onTimer = { showSleepSheet = true },
-        onMixer = { navController.navigate(Screen.Mixer.route) },
-        onPlaylist = { showQueueSheet = true },
-        onOutput = { navController.navigate(Screen.Settings.createRoute()) },
-        onSound = { navController.navigate(Screen.Equalizer.route) },
-        onSpeed = { showSpeedSheet = true },
-        onVisualizer = {
-            playerViewModel.setNowPlayingViewMode(
-                if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
-                else NowPlayingViewMode.VISUALIZER
-            )
-        },
-        onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
-        onCompressorToggle = playerViewModel::setCompressorEnabled,
-        onInflatorToggle = playerViewModel::setInflatorEnabled,
-        topBar = {
-            PlayerTopBar(
-                speedLabel = state.speedLabel,
-                shuffleEnabled = shuffleEnabled,
-                repeatMode = repeatMode,
-                isDownloaded = isDownloaded,
-                downloadState = downloadState,
-                heroStyle = heroStyle,
-                onCollapse = { navController.popBackStack() },
-                onOutputClick = { navController.navigate(Screen.Settings.createRoute()) },
-                onSpeedClick = { showSpeedSheet = true },
-                onToggleShuffle = playerViewModel::toggleShuffle,
-                onCycleRepeat = playerViewModel::cycleRepeatMode,
-                onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
-                onCycleHeroStyle = {
-                    heroStyle = if (heroStyle == PlayerHeroStyle.Square) {
-                        PlayerHeroStyle.CircularProgress
-                    } else {
-                        PlayerHeroStyle.Square
-                    }
-                },
-                onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-                onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
-                onOpenSettings = { navController.navigate(Screen.Settings.createRoute()) },
-                onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
-                    { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
-                },
-                onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
-                    { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                },
-            )
-        },
-        hero = { heroModifier ->
-            // Lyrics mode dissolves the album art (or visualizer) and brings the
-            // lyric surface in, sized to exactly the same album slot. Everything
-            // else (square / circular / visualizer) is handled by PlayerHero.
-            androidx.compose.animation.Crossfade(
-                targetState = viewMode == NowPlayingViewMode.LYRICS,
-                animationSpec = androidx.compose.animation.core.tween(durationMillis = 500),
-                label = "lyricsHeroCrossfade",
-                modifier = heroModifier,
-            ) { lyricsMode ->
-            if (lyricsMode) {
-                LyricsHeroBox(
-                    lyrics = lyrics,
-                    isLoading = isLyricsLoading,
-                    albumColors = albumColors,
-                    positionMs = playerViewModel.positionMs,
-                    onSeekTo = playerViewModel::seekTo,
-                    modifier = Modifier.fillMaxSize(),
+    // Bass-reactive lyrics: one shared pulse (single analyzer stake) drives
+    // both the active line's pump and the full-screen ray layer; the glyph
+    // registry carries each active letter's screen position to that layer, so
+    // the rays draw with NO clipping ancestor and can never be cut by a canvas.
+    val glyphAnchors = remember { LyricGlyphAnchors() }
+    val lyricsBeatOn = viewMode == NowPlayingViewMode.LYRICS && lyricsFx.bassReact > 0.01f
+    val beatPulse: androidx.compose.runtime.State<Float>? =
+        if (lyricsBeatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
+    androidx.compose.runtime.LaunchedEffect(lyricsBeatOn) {
+        if (!lyricsBeatOn) glyphAnchors.reset()
+    }
+
+    CompositionLocalProvider(
+        LocalLyricsFx provides lyricsFx,
+        LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
+        LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
+        LocalBeatPulse provides beatPulse,
+    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        MainPlayerScreen(
+            state = state,
+            isFullscreen = isFullscreenActive,
+            formatTime = playerViewModel::formatTime,
+            onToggleLike = playerViewModel::toggleLikeCurrentTrack,
+            onArtistClick = { artistId ->
+                // Source-aware so a local song's artist opens the local artist page.
+                navController.openArtist(currentUnified?.sourceType ?: SourceType.API, artistId)
+            },
+            onSeekCommit = playerViewModel::seekToFraction,
+            onPrevious = playerViewModel::skipToPrevious,
+            onRewind10 = playerViewModel::rewind10,
+            onPlayPause = playerViewModel::togglePlayPause,
+            onForward10 = playerViewModel::forward10,
+            onNext = playerViewModel::skipToNext,
+            onLyrics = {
+                playerViewModel.setNowPlayingViewMode(
+                    if (viewMode == NowPlayingViewMode.LYRICS) NowPlayingViewMode.COVER_ART
+                    else NowPlayingViewMode.LYRICS
                 )
-            } else {
-            val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
-                PlayerHeroStyle.Visualizer
-            } else {
-                heroStyle
-            }
-            PlayerHero(
-                modifier = Modifier.fillMaxSize(),
-                style = effectiveStyle,
-                isFullscreen = isFullscreenActive,
-                track = currentTrack,
-                isPlaying = isPlaying,
-                progress = state.progress,
-                albumColors = albumColors,
-                visualizerSensitivity = visualizerSensitivity,
-                visualizerBrightness = visualizerBrightness,
-                visualizerEngineStatus = visualizerEngineStatus,
-                visualizerEngineEnabled = visualizerEngineEnabled,
-                visualizerShowFps = visualizerShowFps,
-                visualizerRepository = playerViewModel.visualizerRepository,
-                visualizerTouchWaveform = visualizerTouchWaveform,
-                currentVisualizerPreset = currentVisualizerPreset,
-                visualizerAutoShuffle = visualizerAutoShuffle,
-                onToggleVisualizerShuffle = playerViewModel::setVisualizerShuffle,
-                onNextPreset = playerViewModel::nextVisualizerPreset,
-                onOpenPresetBrowser = { showPresetSheet = true },
-                isPresetFavorite = currentVisualizerPreset?.id?.let { it in visualizerFavoritePresetIds } ?: false,
-                onTogglePresetFavorite = {
-                    currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
-                },
-                visualizerCompact = visualizerCompact,
-                onToggleCompact = playerViewModel::toggleVisualizerCompact,
-                onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
-                spectrumBins = spectrumBins,
-                spectrumColor = spectrumColor,
-                showSpectrum = showNpSpectrum,
-                onToggleShowSpectrum = {
-                    playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
-                },
-                onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-                onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
-            )
-            }
-            }
-        },
-    )
+            },
+            onTimer = { showSleepSheet = true },
+            onMixer = { navController.navigate(Screen.Mixer.route) },
+            onPlaylist = { showQueueSheet = true },
+            onOutput = { navController.navigate(Screen.Settings.createRoute()) },
+            onSound = { navController.navigate(Screen.Equalizer.route) },
+            onSpeed = { showSpeedSheet = true },
+            onVisualizer = {
+                playerViewModel.setNowPlayingViewMode(
+                    if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
+                    else NowPlayingViewMode.VISUALIZER
+                )
+            },
+            onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
+            onCompressorToggle = playerViewModel::setCompressorEnabled,
+            onInflatorToggle = playerViewModel::setInflatorEnabled,
+            topBar = {
+                PlayerTopBar(
+                    speedLabel = state.speedLabel,
+                    shuffleEnabled = shuffleEnabled,
+                    repeatMode = repeatMode,
+                    isDownloaded = isDownloaded,
+                    downloadState = downloadState,
+                    heroStyle = heroStyle,
+                    onCollapse = { navController.popBackStack() },
+                    onOutputClick = { navController.navigate(Screen.Settings.createRoute()) },
+                    onSpeedClick = { showSpeedSheet = true },
+                    onToggleShuffle = playerViewModel::toggleShuffle,
+                    onCycleRepeat = playerViewModel::cycleRepeatMode,
+                    onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
+                    onCycleHeroStyle = {
+                        heroStyle = if (heroStyle == PlayerHeroStyle.Square) {
+                            PlayerHeroStyle.CircularProgress
+                        } else {
+                            PlayerHeroStyle.Square
+                        }
+                    },
+                    onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
+                    onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
+                    onOpenSettings = { navController.navigate(Screen.Settings.createRoute()) },
+                    onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
+                        { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                    },
+                    onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
+                        { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                    },
+                )
+            },
+            hero = { heroModifier ->
+                // Lyrics mode dissolves the album art (or visualizer) and brings the
+                // lyric surface in, sized to exactly the same album slot. Everything
+                // else (square / circular / visualizer) is handled by PlayerHero.
+                androidx.compose.animation.Crossfade(
+                    targetState = viewMode == NowPlayingViewMode.LYRICS,
+                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 500),
+                    label = "lyricsHeroCrossfade",
+                    modifier = heroModifier,
+                ) { lyricsMode ->
+                if (lyricsMode) {
+                    // Fx/spectrum/beat locals are provided once around the
+                    // whole player (see the route-level provider).
+                    LyricsHeroBox(
+                        lyrics = lyrics,
+                        isLoading = isLyricsLoading,
+                        albumColors = albumColors,
+                        positionMs = playerViewModel.positionMs,
+                        // One element, two states: compact taps expand
+                        // (synced lyrics only); expanded line taps seek and
+                        // gap taps collapse.
+                        onSeekTo = { timeMs ->
+                            if (lyricsExpanded) playerViewModel.seekTo(timeMs)
+                            else if (lyricsSynced) lyricsExpanded = true
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = lyricsSynced,
+                            ) { lyricsExpanded = !lyricsExpanded },
+                    )
+                } else {
+                val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                    PlayerHeroStyle.Visualizer
+                } else {
+                    heroStyle
+                }
+                PlayerHero(
+                    modifier = Modifier.fillMaxSize(),
+                    style = effectiveStyle,
+                    isFullscreen = isFullscreenActive,
+                    track = currentTrack,
+                    isPlaying = isPlaying,
+                    progress = state.progress,
+                    albumColors = albumColors,
+                    visualizerSensitivity = visualizerSensitivity,
+                    visualizerBrightness = visualizerBrightness,
+                    visualizerEngineStatus = visualizerEngineStatus,
+                    visualizerEngineEnabled = visualizerEngineEnabled,
+                    visualizerShowFps = visualizerShowFps,
+                    visualizerRepository = playerViewModel.visualizerRepository,
+                    visualizerTouchWaveform = visualizerTouchWaveform,
+                    currentVisualizerPreset = currentVisualizerPreset,
+                    visualizerAutoShuffle = visualizerAutoShuffle,
+                    onToggleVisualizerShuffle = playerViewModel::setVisualizerShuffle,
+                    onNextPreset = playerViewModel::nextVisualizerPreset,
+                    onOpenPresetBrowser = { showPresetSheet = true },
+                    isPresetFavorite = currentVisualizerPreset?.id?.let { it in visualizerFavoritePresetIds } ?: false,
+                    onTogglePresetFavorite = {
+                        currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
+                    },
+                    visualizerCompact = visualizerCompact,
+                    onToggleCompact = playerViewModel::toggleVisualizerCompact,
+                    onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
+                    spectrumBins = spectrumBins,
+                    spectrumColor = spectrumColor,
+                    showSpectrum = showNpSpectrum,
+                    onToggleShowSpectrum = {
+                        playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
+                    },
+                    onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
+                    onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
+                )
+                }
+                }
+            },
+            fxUnderlay = {
+                if (beatPulse != null) {
+                    LyricsFxLayer(
+                        anchors = glyphAnchors,
+                        pulse = beatPulse,
+                        accent = albumColors.vibrant,
+                        fx = lyricsFx,
+                    )
+                }
+            },
+            lyricsExpanded = lyricsExpanded,
+        )
+    }
+    }
 }
+
 
 @Composable
 private fun HandleFullscreenInsets(isFullscreenActive: Boolean) {

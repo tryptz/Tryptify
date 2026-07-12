@@ -80,6 +80,7 @@ import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.player.DynamicAlbumGlow
 import tf.monochrome.android.ui.player.PlayerDesignTokens
+import tf.monochrome.android.ui.player.dithered
 import tf.monochrome.android.ui.player.dynamicPlayerBackground
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -233,9 +234,16 @@ fun MixerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(dynamicPlayerBackground(accent))
             .onSizeChanged { heightPx = it.height.toFloat() }
     ) {
+        // Background on its own node so the dither layer wraps just the
+        // gradient, not the whole screen's content.
+        Box(
+            Modifier
+                .matchParentSize()
+                .dithered()
+                .background(dynamicPlayerBackground(accent)),
+        )
         DynamicAlbumGlow(accent)
         if (composeCanvas) {
             // ── DSP Canvas View (slides down from the top) ───────────────
