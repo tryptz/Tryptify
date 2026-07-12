@@ -436,7 +436,13 @@ internal fun SyncedLyricsView(
                 // active line at once.
                 val color by animateColorAsState(
                     targetValue = when {
-                        isActive -> accent
+                        // The playing line is glass: a translucent fill so the
+                        // blurred backdrop reads THROUGH the letters and the
+                        // liquid-glass relight looks like a lit pane, not solid
+                        // paint. It still leads the eye via the accent colour and
+                        // the ExtraBold weight below, so lowering its opacity
+                        // doesn't cost the "which line is active" cue.
+                        isActive -> accent.copy(alpha = 0.72f)
                         isPast -> Color.White.copy(alpha = 0.35f)
                         else -> Color.White.copy(alpha = 0.62f)
                     },
@@ -513,10 +519,14 @@ internal fun KaraokeLyricLine(
     ) {
         var letterBase = 0
         line.words.forEach { word ->
+            // The active line is glass: its sung/lighting-up words carry a
+            // translucent fill so the backdrop shows through and the relight
+            // reads as a lit pane rather than solid paint. Colour still tracks
+            // the karaoke progress; only the opacity is pulled off full.
             val target = when {
                 !isActive -> if (isPast) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.6f)
-                position >= word.endMs -> accent.copy(alpha = 0.9f)   // already sung
-                position >= word.startMs -> accent                    // lighting up now
+                position >= word.endMs -> accent.copy(alpha = 0.66f)  // already sung
+                position >= word.startMs -> accent.copy(alpha = 0.78f) // lighting up now
                 else -> Color.White.copy(alpha = 0.45f)               // not yet reached
             }
             val color by animateColorAsState(targetValue = target, label = "wordColor")
