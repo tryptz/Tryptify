@@ -14,10 +14,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.sin
 
 /**
  * The shared FFT tap, provided by the player screen so lyric composables deep
@@ -115,41 +118,50 @@ internal fun Modifier.bassBeat(
             val p = (pulse.value * intensity).coerceIn(0f, 1.6f)
             if (p <= 0.03f) return@drawBehind
             val c = center
-            // Halo sized from the LINE HEIGHT, not the line width: rays as
-            // long as the line get clipped by the lyric surface's offscreen
-            // compositing bounds, and the straight cut edges silhouette the
-            // container as a visible rectangle. A height-scaled halo whose
-            // gradient reaches full transparency at its own endpoint fades
-            // out in open space — nothing left for the bounds to clip.
-            val reach = size.minDimension * (2.4f + 1.2f * p)
 
-            // God rays first, glow on top: the glow softens the ray roots so
-            // they appear to emerge from light rather than from a point.
-            val rayBrush = Brush.linearGradient(
-                colors = listOf(accent.copy(alpha = 0.28f * p), Color.Transparent),
-                start = c,
-                end = Offset(c.x + reach, c.y),
-            )
-            val sweep = time.value * 10f // slow rotation, degrees/second
+            // The light must NEVER meet the lyric surface's compositing
+            // bounds — a clipped gradient silhouettes the container as a
+            // rectangle with corners. Two rules enforce that regardless of
+            // line shape (single row or a tall wrapped block):
+            //  1. Ray roots sit on an ellipse hugging the glyph block, so
+            //     beams visibly leave the letter edges, not a box centre.
+            //  2. Ray length and glow radius are fixed dp (never scaled by
+            //     the box), and every gradient reaches full transparency at
+            //     its own endpoint — it dies in open space, so a boundary
+            //     has nothing to cut.
+            val rx = size.width * 0.30f // ≈ half-width of centred text
+            val ry = size.height * 0.5f
+            val rayLen = (40.dp.toPx() + 44.dp.toPx() * p).coerceAtMost(90.dp.toPx())
+            val sweep = time.value * (10f * PI.toFloat() / 180f) // slow orbit, rad/s
+
             repeat(RAY_COUNT) { i ->
-                rotate(degrees = sweep + i * (360f / RAY_COUNT), pivot = c) {
-                    drawLine(
-                        brush = rayBrush,
-                        start = c,
-                        end = Offset(c.x + reach, c.y),
-                        strokeWidth = (2f + 6f * p) * density,
-                        cap = StrokeCap.Round,
-                    )
-                }
+                val a = sweep + i * (2f * PI.toFloat() / RAY_COUNT)
+                val dirX = cos(a)
+                val dirY = sin(a)
+                // Root on the glyph-block ellipse; beam extends outward.
+                val start = Offset(c.x + dirX * rx * 0.92f, c.y + dirY * ry * 0.85f)
+                val end = Offset(start.x + dirX * rayLen, start.y + dirY * rayLen)
+                drawLine(
+                    brush = Brush.linearGradient(
+                        colors = listOf(accent.copy(alpha = 0.30f * p), Color.Transparent),
+                        start = start,
+                        end = end,
+                    ),
+                    start = start,
+                    end = end,
+                    strokeWidth = (2f + 6f * p) * density,
+                    cap = StrokeCap.Round,
+                )
             }
-            // Glow radius stays inside the ray reach so its gradient also
-            // completes before any container edge can slice it.
-            val glowR = reach * 0.8f
+
+            // Tight glow around the text block itself — fixed dp ceiling so a
+            // tall wrapped line can't inflate it into a box-filling wash.
+            val glowR = (ry + 26.dp.toPx() * (1f + p)).coerceAtMost(120.dp.toPx())
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        accent.copy(alpha = 0.30f * p),
-                        accent.copy(alpha = 0.10f * p),
+                        accent.copy(alpha = 0.26f * p),
+                        accent.copy(alpha = 0.08f * p),
                         Color.Transparent,
                     ),
                     center = c,
@@ -161,4 +173,4 @@ internal fun Modifier.bassBeat(
         }
 }
 
-private const val RAY_COUNT = 8
+private const val RAY_COUNT = 12
