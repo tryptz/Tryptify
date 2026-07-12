@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
@@ -528,7 +529,7 @@ internal fun KaraokeLyricLine(
             )
             if (time != null) {
                 val phaseBase = letterBase
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx))) {
                     display.forEachIndexed { j, ch ->
                         val idx = phaseBase + j
                         Letter3DText(
@@ -570,6 +571,23 @@ private fun letter3DShadow(depth: Float) = Shadow(
 )
 
 /**
+ * Horizontal breathing room laid out between adjacent per-letter 3D glyphs so
+ * they can never bleed into one another. Each [Letter3DText] swells toward the
+ * viewer (up to ~9% of its size per unit of ripple intensity) and stamps an
+ * extruded backing a couple of pixels to the right — both inside its own
+ * transform layer. CJK glyphs fill their advance box with no side bearing, so
+ * without a gap that peak swell plus the backing pushed neighbouring characters
+ * on top of each other. The gap is exactly the peak horizontal overflow, so at
+ * rest the line stays tight and at full swing the letters just kiss.
+ */
+private fun letterGapDp(fx: LyricsFxSettings): Dp {
+    val intensity = (fx.rotationDegrees / 9f).coerceAtMost(2.5f)
+    // fontSize * peakSwell = total width the glyph gains at the toward-viewer
+    // peak; +1.5dp covers the extruded backing (offset 1.2dp, scaled by depth).
+    return (fx.fontSizeSp * 0.09f * intensity + 1.5f).dp
+}
+
+/**
  * Active-line treatment: each character is its own Text inside a per-letter
  * 3D transform — a ripple of rotation travelling along the line — with a
  * baked-in drop shadow for depth. Word-wise FlowRow keeps wrapping at word
@@ -595,7 +613,7 @@ internal fun Letters3DLine(
         words.forEachIndexed { index, word ->
             val display = if (index < words.lastIndex) "$word " else word
             val phaseBase = letterBase
-            Row {
+            Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx))) {
                 display.forEachIndexed { j, ch ->
                     val idx = phaseBase + j
                     Letter3DText(
