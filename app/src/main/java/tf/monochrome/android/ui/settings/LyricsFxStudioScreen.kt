@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -61,6 +62,7 @@ import tf.monochrome.android.ui.player.LocalLyricsFx
 import tf.monochrome.android.ui.player.LyricGlyphAnchors
 import tf.monochrome.android.ui.player.LyricsFxLayer
 import tf.monochrome.android.ui.player.bassBeat
+import tf.monochrome.android.ui.player.liquidGlass
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.exp
@@ -223,6 +225,33 @@ fun LyricsFxStudioScreen(
             }
 
             item {
+                StudioSection("Liquid Glass")
+                FxToggle(
+                    "Liquid glass", fx.liquidGlass,
+                    description = "Refractive glass relight of the lyric surface (needs Android 13+).",
+                ) { viewModel.update { s -> s.copy(liquidGlass = it) } }
+                FxSlider(
+                    "Glass opacity", "${(fx.glassBodyOpacity * 100).toInt()}%",
+                    fx.glassBodyOpacity, 0.2f..1f,
+                    description = "Lower lets more of the backdrop read through the letters.",
+                ) { viewModel.update { s -> s.copy(glassBodyOpacity = it) } }
+                FxSlider(
+                    "Refraction", "%.2f".format(fx.glassRefraction), fx.glassRefraction, 0f..0.4f,
+                    description = "How hard the beveled edges lens the backdrop behind them.",
+                ) { viewModel.update { s -> s.copy(glassRefraction = it) } }
+                FxSlider(
+                    "Edge highlight", "${(fx.glassRimBrightness * 100).toInt()}%",
+                    fx.glassRimBrightness, 0f..2f,
+                    description = "Brightness of the specular glass rim.",
+                ) { viewModel.update { s -> s.copy(glassRimBrightness = it) } }
+                FxSlider(
+                    "Chromatic aberration", "${(fx.glassDispersion * 100).toInt()}%",
+                    fx.glassDispersion, 0f..2f,
+                    description = "Colour fringing where the edges refract.",
+                ) { viewModel.update { s -> s.copy(glassDispersion = it) } }
+            }
+
+            item {
                 Spacer(Modifier.height(20.dp))
                 OutlinedButton(
                     onClick = { viewModel.applyPreset(LyricsFxSettings.DEFAULT) },
@@ -271,7 +300,9 @@ private fun StudioPreview(fx: LyricsFxSettings) {
                     fontWeight = FontWeight.ExtraBold,
                 ),
                 color = accent,
-                modifier = Modifier.bassBeat(pulse, { 1f }, fx, anchors),
+                modifier = Modifier
+                    .liquidGlass(tint = accent)
+                    .bassBeat(pulse, { 1f }, fx, anchors),
                 anchors = anchors,
             )
         }
@@ -335,6 +366,33 @@ private fun StudioSection(title: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(bottom = 4.dp),
     )
+}
+
+@Composable
+private fun FxToggle(
+    label: String,
+    checked: Boolean,
+    description: String? = null,
+    onChange: (Boolean) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = checked, onCheckedChange = onChange)
+        }
+        description?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable

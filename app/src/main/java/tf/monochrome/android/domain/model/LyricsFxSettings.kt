@@ -14,6 +14,18 @@ data class LyricsFxSettings(
     val fontSizeSp: Float = 23f,
     val letterSpacingSp: Float = -0.2f,
 
+    // ── Liquid glass (refractive relight of the lyric surface) ─────────
+    /** Master toggle for the refractive glass relight. Off = flat solid text. */
+    val liquidGlass: Boolean = true,
+    /** Glass body opacity — lower lets more of the backdrop read through the letters. */
+    val glassBodyOpacity: Float = 0.62f,
+    /** Refraction strength — how hard the beveled edges lens the backdrop behind them. */
+    val glassRefraction: Float = 0.14f,
+    /** Rim highlight gain — brightness of the specular glass edge. */
+    val glassRimBrightness: Float = 1f,
+    /** Chromatic aberration — colour fringing where the edges refract. */
+    val glassDispersion: Float = 1f,
+
     // ── 3D letter wave (active line) ───────────────────────────────────
     /** Tilt of the per-letter ripple. 0 disables the per-letter path entirely. */
     val rotationDegrees: Float = 12f,
@@ -65,6 +77,11 @@ data class LyricsFxSettings(
         return LyricsFxSettings(
             fontSizeSp = fontSizeSp.c(14f, 34f, d.fontSizeSp),
             letterSpacingSp = letterSpacingSp.c(-1f, 1f, d.letterSpacingSp),
+            liquidGlass = liquidGlass,
+            glassBodyOpacity = glassBodyOpacity.c(0.2f, 1f, d.glassBodyOpacity),
+            glassRefraction = glassRefraction.c(0f, 0.4f, d.glassRefraction),
+            glassRimBrightness = glassRimBrightness.c(0f, 2f, d.glassRimBrightness),
+            glassDispersion = glassDispersion.c(0f, 2f, d.glassDispersion),
             rotationDegrees = rotationDegrees.c(0f, 25f, d.rotationDegrees),
             waveSpeed = waveSpeed.c(0.25f, 3f, d.waveSpeed),
             wavePhaseStep = wavePhaseStep.c(0.05f, 0.9f, d.wavePhaseStep),

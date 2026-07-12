@@ -47,8 +47,9 @@ internal fun Modifier.liquidGlass(
     enabled: Boolean = true,
     tint: Color = Color(0xFF8FB4FF),
 ): Modifier {
-    if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(liquidGlassModifier(tint))
+    val fx = LocalLyricsFx.current
+    if (!enabled || !fx.liquidGlass || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
+    return this.then(liquidGlassModifier(tint, fx))
 }
 
 // One process-wide epoch so every rememberFrameSeconds() instance reports the
@@ -95,7 +96,10 @@ internal fun Modifier.dithered(): Modifier {
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun liquidGlassModifier(tint: Color): Modifier {
+private fun liquidGlassModifier(
+    tint: Color,
+    fx: tf.monochrome.android.domain.model.LyricsFxSettings,
+): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() }
         ?: return Modifier
 
@@ -108,6 +112,10 @@ private fun liquidGlassModifier(tint: Color): Modifier {
             shader.setFloatUniform("uTime", timeSec.value)
             shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
             shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
+            shader.setFloatUniform("uBodyOpacity", fx.glassBodyOpacity)
+            shader.setFloatUniform("uRefraction", fx.glassRefraction)
+            shader.setFloatUniform("uRimGain", fx.glassRimBrightness)
+            shader.setFloatUniform("uDispersion", fx.glassDispersion)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -178,6 +186,10 @@ uniform float2 uSize;
 uniform float uTime;
 uniform float2 uTilt;
 uniform float3 uTint;
+uniform float uBodyOpacity;   // glass body opacity (lower = more see-through)
+uniform float uRefraction;    // how hard the bevel lenses the backdrop
+uniform float uRimGain;       // brightness of the specular glass edge
+uniform float uDispersion;    // chromatic aberration at the refracting edges
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -232,17 +244,19 @@ half4 main(float2 p) {
     float fres  = pow(1.0 - clamp(N.z, 0.0, 1.0), 3.0);
 
     // Chromatic dispersion: red/blue speculars from nudged normals.
-    float specR = pow(max(dot(normalize(N + float3(0.02, 0.0, 0.0)), H), 0.0), 110.0);
-    float specB = pow(max(dot(normalize(N - float3(0.02, 0.0, 0.0)), H), 0.0), 110.0);
+    float disp = 0.02 * uDispersion;
+    float specR = pow(max(dot(normalize(N + float3(disp, 0.0, 0.0)), H), 0.0), 110.0);
+    float specB = pow(max(dot(normalize(N - float3(disp, 0.0, 0.0)), H), 0.0), 110.0);
 
     // Refraction: the bevel slope bends where we read the backdrop, and each
     // colour channel bends by a slightly different amount (chromatic aberration
     // at the rim), so the glass genuinely lenses the field behind it.
     float2 uv = p / uSize;
-    float2 lens = slope * 0.14;
-    float fieldR = backdropField(uv + lens * 1.12);
+    float2 lens = slope * uRefraction;
+    float aberr = 0.12 * uDispersion;
+    float fieldR = backdropField(uv + lens * (1.0 + aberr));
     float fieldG = backdropField(uv + lens);
-    float fieldB = backdropField(uv + lens * 0.88);
+    float fieldB = backdropField(uv + lens * (1.0 - aberr));
     float3 bg = uTint * float3(fieldR, fieldG, fieldB);
 
     // A sheet of light sweeping diagonally across the whole surface.
@@ -260,9 +274,9 @@ half4 main(float2 p) {
     // rim's specular can shine as a crisp glass edge instead of being clamped
     // away. Dim past/upcoming lines (low src alpha) stay subtle automatically.
     float rim = clamp(spec * 1.3 + fres * 0.9, 0.0, 1.0);
-    float bodyOpacity = 0.62;
+    float bodyOpacity = uBodyOpacity;
     float outA = clamp(a * (bodyOpacity + (1.0 - bodyOpacity) * rim), 0.0, a);
-    float lightGain = 0.30 + 0.70 * lum;
+    float lightGain = (0.30 + 0.70 * lum) * uRimGain;
 
     float3 col = frost * (0.9 + 0.14 * band) * outA;   // premultiplied frost body
     col += (float3(specR, spec, specB) * 1.10
