@@ -149,6 +149,17 @@ fun LyricsFxStudioScreen(
             }
 
             item {
+                StudioSection("Playback Sync")
+                FxSlider(
+                    "Bluetooth sync delay",
+                    "%+d ms".format(fx.bluetoothDelayMs.toInt()),
+                    fx.bluetoothDelayMs, -500f..1500f, steps = 39,
+                    description = "Delays synced lyrics to line up with Bluetooth audio latency. " +
+                        "Raise it until the words land with what you hear; negative pulls them earlier.",
+                ) { viewModel.update { s -> s.copy(bluetoothDelayMs = it) } }
+            }
+
+            item {
                 StudioSection("3D Letter Wave")
                 FxSlider(
                     "Tilt", "%.0f°".format(fx.rotationDegrees) + if (fx.rotationDegrees < 0.5f) " (off)" else "",

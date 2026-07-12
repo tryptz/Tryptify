@@ -14,6 +14,15 @@ data class LyricsFxSettings(
     val fontSizeSp: Float = 23f,
     val letterSpacingSp: Float = -0.2f,
 
+    // ── Playback sync ──────────────────────────────────────────────────
+    /**
+     * Bluetooth sync delay in milliseconds. Bluetooth audio reaches the ears
+     * later than the reported playback position, so synced lyrics run ahead of
+     * what's heard; this pushes the lyric timeline back by the same amount.
+     * Positive = lyrics wait longer (the usual case); negative = lyrics lead.
+     */
+    val bluetoothDelayMs: Float = 0f,
+
     // ── Liquid glass (refractive relight of the lyric surface) ─────────
     /** Master toggle for the refractive glass relight. Off = flat solid text. */
     val liquidGlass: Boolean = true,
@@ -77,6 +86,7 @@ data class LyricsFxSettings(
         return LyricsFxSettings(
             fontSizeSp = fontSizeSp.c(14f, 34f, d.fontSizeSp),
             letterSpacingSp = letterSpacingSp.c(-1f, 1f, d.letterSpacingSp),
+            bluetoothDelayMs = bluetoothDelayMs.c(-500f, 1500f, d.bluetoothDelayMs),
             liquidGlass = liquidGlass,
             glassBodyOpacity = glassBodyOpacity.c(0.2f, 1f, d.glassBodyOpacity),
             glassRefraction = glassRefraction.c(0f, 0.4f, d.glassRefraction),

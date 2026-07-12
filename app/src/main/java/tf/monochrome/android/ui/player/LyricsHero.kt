@@ -308,10 +308,17 @@ internal fun SyncedLyricsView(
     onSeekTo: (Long) -> Unit,
 ) {
     val position by positionMs.collectAsState()
+    // Bluetooth sync delay: the audio reaches the ears later than the reported
+    // playback position, so lyrics run ahead. Rewinding the position we match
+    // against by the delay pushes the whole lyric timeline back into step with
+    // what's actually being heard. (Tunable in the Lyrics FX Studio.)
+    val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
     // Start composed at the current line so a freshly created instance (the
     // expand morph spawns one) never flashes the top of the song before the
     // centring effect runs.
-    val initialLine = remember { lines.indexOfLast { it.timeMs <= positionMs.value }.coerceAtLeast(0) }
+    val initialLine = remember {
+        lines.indexOfLast { it.timeMs <= positionMs.value - syncDelayMs }.coerceAtLeast(0)
+    }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialLine)
     val lastCentredLine = remember { mutableIntStateOf(initialLine) }
 
@@ -322,8 +329,9 @@ internal fun SyncedLyricsView(
     // earlier version extrapolated the position between samples, which jittered
     // the index at line boundaries — the highlight looked stuck and the
     // constant re-scroll ate taps. The polled position is stable and accurate.)
-    val currentLineIndex by remember(lines) {
-        derivedStateOf { lines.indexOfLast { it.timeMs <= position } }
+    // Keyed on the delay too so retuning it re-selects the active line at once.
+    val currentLineIndex by remember(lines, syncDelayMs) {
+        derivedStateOf { lines.indexOfLast { it.timeMs <= position - syncDelayMs } }
     }
 
     // Bass-reactive FX for the active line: pulse from the FFT tap, a frame
@@ -424,7 +432,8 @@ internal fun SyncedLyricsView(
                     line = line,
                     isActive = isActive,
                     isPast = isPast,
-                    position = position,
+                    // Word-level highlight rides the same Bluetooth-adjusted clock.
+                    position = position - syncDelayMs,
                     accent = accent,
                     onClick = { onSeekTo(line.timeMs) },
                     beatModifier = beatModifier,
