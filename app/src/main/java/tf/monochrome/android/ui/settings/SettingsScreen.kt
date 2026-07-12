@@ -106,7 +106,9 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About")
+// "Radio" is appended after "About" so existing hardcoded tab indices
+// ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
+private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About", "Radio")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,6 +165,7 @@ fun SettingsScreen(
                 7 -> InstancesTab(viewModel)
                 8 -> SystemTab(viewModel, navController)
                 9 -> AboutTab()
+                10 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
             }
         }
     }
@@ -549,6 +552,39 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
             onCheckedChange = { viewModel.setRomajiLyrics(it) }
         )
 
+        // Word-level lyrics provider — which karaoke-timing source(s) run when
+        // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
+        val lyricsProvider by viewModel.lyricsWordProvider.collectAsState()
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Text(
+                text = "Word-level lyrics provider",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            val providerOptions = listOf(
+                tf.monochrome.android.data.preferences.LyricsWordProvider.NETEASE_ONLY,
+                tf.monochrome.android.data.preferences.LyricsWordProvider.KUGOU_ONLY,
+                tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH,
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                providerOptions.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = lyricsProvider == mode,
+                        onClick = { viewModel.setLyricsWordProvider(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index, providerOptions.size),
+                    ) {
+                        Text(mode.displayName)
+                    }
+                }
+            }
+        }
+
         // App-wide frame rate and panel resolution, applied by selecting a
         // matching display mode in MainActivity. Resolution options only list
         // classes the panel can reach; a request maps to the nearest mode.
@@ -668,6 +704,26 @@ private fun InterfaceTab(viewModel: SettingsViewModel) {
         Slider(
             value = lyricsShadowDepth,
             onValueChange = { viewModel.setLyrics3dShadowDepth(it) },
+            valueRange = 0f..1f,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        val lyricsBassReact by viewModel.lyricsBassReact.collectAsState()
+        Text(
+            text = "Bass Reaction: ${(lyricsBassReact * 100).toInt()}%" +
+                if (lyricsBassReact < 0.01f) " (off)" else "",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "The active line pumps, pops in, and radiates god rays with the kick/bass. 0 disables it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = lyricsBassReact,
+            onValueChange = { viewModel.setLyricsBassReact(it) },
             valueRange = 0f..1f,
             modifier = Modifier.fillMaxWidth()
         )
@@ -1827,7 +1883,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { spotifyViewModel.importByUrl(importUrl, onResult = onImportResult) },
+                onClick = { spotifyViewModel.importByUrl(context, importUrl, onResult = onImportResult) },
                 enabled = spotifyConnected && importUrl.isNotBlank() && !isImporting
             ) {
                 Text("Import Playlist")
@@ -1909,11 +1965,11 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                 error = playlistsError,
                 onPick = { playlistId, name, strict ->
                     showSpotifyPicker = false
-                    spotifyViewModel.importPlaylist(playlistId, name, strict, onImportResult)
+                    spotifyViewModel.importPlaylist(context, playlistId, name, strict, onImportResult)
                 },
                 onPickLikedSongs = { strict ->
                     showSpotifyPicker = false
-                    spotifyViewModel.importLikedSongs(strict, onImportResult)
+                    spotifyViewModel.importLikedSongs(context, strict, onImportResult)
                 },
                 onDismiss = { showSpotifyPicker = false }
             )

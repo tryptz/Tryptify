@@ -240,7 +240,8 @@ fun SearchResultsContent(
             onAddToQueue = { playerViewModel.addToQueue(listOf(track)) },
             onToggleLike = { playerViewModel.toggleFavorite(track) },
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
-            onDownloadTrack = { playerViewModel.downloadTrack(track) },
+            onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
+            else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }

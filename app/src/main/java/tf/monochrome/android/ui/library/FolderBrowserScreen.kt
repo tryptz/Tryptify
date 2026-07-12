@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
@@ -50,7 +51,8 @@ fun FolderBrowserScreen(
     navController: NavController,
     viewModel: LocalLibraryViewModel = hiltViewModel(),
     onPlayTrack: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
-    onPlayAll: (List<UnifiedTrack>) -> Unit
+    onPlayAll: (List<UnifiedTrack>) -> Unit,
+    onAddToQueue: (UnifiedTrack) -> Unit
 ) {
     val subfolders by viewModel.getSubfolders(folderPath).collectAsState()
     val tracks by viewModel.getTracksInFolder(folderPath).collectAsState()
@@ -187,6 +189,17 @@ fun FolderBrowserScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    IconButton(
+                        onClick = { onAddToQueue(track) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.PlaylistAdd,
+                            contentDescription = "Add to queue",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

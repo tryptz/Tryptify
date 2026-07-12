@@ -21,7 +21,6 @@ import tf.monochrome.android.data.api.Instance
 import tf.monochrome.android.data.api.InstanceManager
 import tf.monochrome.android.data.api.InstanceType
 import tf.monochrome.android.data.auth.AuthRepository
-import tf.monochrome.android.data.import_.PlaylistImporter
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.sync.BackupManager
@@ -41,7 +40,6 @@ class SettingsViewModel @Inject constructor(
     private val instanceManager: InstanceManager,
     private val authRepository: AuthRepository,
     private val backupManager: BackupManager,
-    private val playlistImporter: PlaylistImporter,
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
@@ -158,12 +156,20 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
     val romajiLyrics: StateFlow<Boolean> = preferences.romajiLyrics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val lyricsWordProvider: StateFlow<tf.monochrome.android.data.preferences.LyricsWordProvider> =
+        preferences.lyricsWordProvider.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH
+        )
     val lyrics3dRotation: StateFlow<Float> = preferences.lyrics3dRotation
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 9f)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 12f)
     val lyrics3dWaveSpeed: StateFlow<Float> = preferences.lyrics3dWaveSpeed
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1f)
     val lyrics3dShadowDepth: StateFlow<Float> = preferences.lyrics3dShadowDepth
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.55f)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.7f)
+    val lyricsBassReact: StateFlow<Float> = preferences.lyricsBassReact
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.8f)
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val appTargetFps: StateFlow<Int> = preferences.appTargetFps
@@ -375,6 +381,9 @@ class SettingsViewModel @Inject constructor(
     fun setVisualizerSensitivity(value: Int) { viewModelScope.launch { preferences.setVisualizerSensitivity(value) } }
     fun setVisualizerBrightness(value: Int) { viewModelScope.launch { preferences.setVisualizerBrightness(value) } }
     fun setRomajiLyrics(enabled: Boolean) { viewModelScope.launch { preferences.setRomajiLyrics(enabled) } }
+    fun setLyricsWordProvider(mode: tf.monochrome.android.data.preferences.LyricsWordProvider) {
+        viewModelScope.launch { preferences.setLyricsWordProvider(mode) }
+    }
     fun setNowPlayingViewMode(mode: NowPlayingViewMode) { viewModelScope.launch { preferences.setNowPlayingViewMode(mode) } }
     fun setVisualizerEngineEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerEngineEnabled(enabled) } }
     fun setVisualizerAutoShuffle(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerAutoShuffle(enabled) } }
@@ -386,6 +395,7 @@ class SettingsViewModel @Inject constructor(
     fun setLyrics3dRotation(value: Float) { viewModelScope.launch { preferences.setLyrics3dRotation(value) } }
     fun setLyrics3dWaveSpeed(value: Float) { viewModelScope.launch { preferences.setLyrics3dWaveSpeed(value) } }
     fun setLyrics3dShadowDepth(value: Float) { viewModelScope.launch { preferences.setLyrics3dShadowDepth(value) } }
+    fun setLyricsBassReact(value: Float) { viewModelScope.launch { preferences.setLyricsBassReact(value) } }
     fun setPlayerDynamicColor(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerDynamicColor(enabled) } }
     fun setAppTargetFps(fps: Int) { viewModelScope.launch { preferences.setAppTargetFps(fps) } }
     fun setAppRenderResolution(shortSide: Int) { viewModelScope.launch { preferences.setAppRenderResolution(shortSide) } }
@@ -470,18 +480,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // --- Playlist Import actions ---
-    fun importPlaylist(url: String, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            playlistImporter.importFromUrl(url)
-                .onSuccess { done ->
-                    onResult(true, "Imported ${done.matched}/${done.total} tracks into '${done.playlistName}'")
-                }
-                .onFailure {
-                    onResult(false, it.message ?: "Import failed")
-                }
-        }
-    }
+    // Playlist imports live in SpotifyImportViewModel, which routes them
+    // through SpotifyImportForegroundService — no in-ViewModel import path
+    // should exist here, or a big playlist dies when the screen closes.
 
     // --- Instance actions ---
     private fun loadInstances() {

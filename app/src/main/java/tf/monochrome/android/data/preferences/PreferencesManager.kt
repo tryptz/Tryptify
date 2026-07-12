@@ -22,6 +22,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ReplayGainMode
 import tf.monochrome.android.performance.PerformanceProfile
+import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,6 +30,16 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 /** Which catalog(s) drive search and discovery surfaces. */
 enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
+
+/**
+ * Which word-level lyrics provider(s) to use when TIDAL has no synced lyrics.
+ * BOTH tries NetEase first, then Kugou — each is the other's fallback.
+ */
+enum class LyricsWordProvider(val displayName: String) {
+    NETEASE_ONLY("NetEase"),
+    KUGOU_ONLY("Kugou"),
+    BOTH("Both"),
+}
 
 @Singleton
 class PreferencesManager @Inject constructor(
@@ -78,6 +89,7 @@ class PreferencesManager @Inject constructor(
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
         private val LYRICS_3D_WAVE_SPEED = floatPreferencesKey("lyrics_3d_wave_speed")
         private val LYRICS_3D_SHADOW_DEPTH = floatPreferencesKey("lyrics_3d_shadow_depth")
+        private val LYRICS_BASS_REACT = floatPreferencesKey("lyrics_bass_react")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -115,6 +127,7 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_SENSITIVITY = intPreferencesKey("visualizer_sensitivity")
         private val VISUALIZER_BRIGHTNESS = intPreferencesKey("visualizer_brightness")
         private val ROMAJI_LYRICS = booleanPreferencesKey("romaji_lyrics")
+        private val LYRICS_WORD_PROVIDER = stringPreferencesKey("lyrics_word_provider")
         private val DOWNLOAD_LYRICS = booleanPreferencesKey("download_lyrics")
         private val NOW_PLAYING_VIEW_MODE = stringPreferencesKey("now_playing_view_mode")
         private val VISUALIZER_ENGINE_ENABLED = booleanPreferencesKey("visualizer_engine_enabled")
@@ -134,6 +147,26 @@ class PreferencesManager @Inject constructor(
         // AI
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val AI_RADIO_ENABLED = booleanPreferencesKey("ai_radio_enabled")
+
+        // Radio planner (optional Tryptify-Playlist service)
+        const val DEFAULT_RADIO_PLANNER_URL = "https://tryptify-playlist-production.up.railway.app"
+        private val RADIO_PLANNER_ENABLED = booleanPreferencesKey("radio_planner_enabled")
+        private val RADIO_PLANNER_URL = stringPreferencesKey("radio_planner_url")
+        private val RADIO_PLANNER_API_KEY = stringPreferencesKey("radio_planner_api_key")
+        private val RADIO_WEIGHT_LOCAL_LIBRARY = floatPreferencesKey("radio_weight_local_library")
+        private val RADIO_WEIGHT_QOBUZ = floatPreferencesKey("radio_weight_qobuz")
+        private val RADIO_WEIGHT_SPOTIFY_DISCOVERY = floatPreferencesKey("radio_weight_spotify_discovery")
+        private val RADIO_WEIGHT_METABRAINZ_METADATA = floatPreferencesKey("radio_weight_metabrainz_metadata")
+        private val RADIO_WEIGHT_LISTENBRAINZ_GRAPH = floatPreferencesKey("radio_weight_listenbrainz_graph")
+        private val RADIO_WEIGHT_CANONICAL_VERSION_BIAS = floatPreferencesKey("radio_weight_canonical_version_bias")
+        private val RADIO_WEIGHT_NOVELTY = floatPreferencesKey("radio_weight_novelty")
+        private val RADIO_WEIGHT_FAMILIARITY = floatPreferencesKey("radio_weight_familiarity")
+        private val RADIO_WEIGHT_ARTIST_SIMILARITY = floatPreferencesKey("radio_weight_artist_similarity")
+        private val RADIO_WEIGHT_GENRE_TAG_SIMILARITY = floatPreferencesKey("radio_weight_genre_tag_similarity")
+        private val RADIO_WEIGHT_MOOD_CONTINUITY = floatPreferencesKey("radio_weight_mood_continuity")
+        private val RADIO_WEIGHT_ERA_CONSISTENCY = floatPreferencesKey("radio_weight_era_consistency")
+        private val RADIO_WEIGHT_AVOID_RECENTLY_PLAYED = floatPreferencesKey("radio_weight_avoid_recently_played")
+        private val RADIO_WEIGHT_DISCOVERY_DISTANCE = floatPreferencesKey("radio_weight_discovery_distance")
 
         // Spotify (PKCE OAuth tokens for playlist import)
         private val SPOTIFY_ACCESS_TOKEN = stringPreferencesKey("spotify_access_token")
@@ -556,6 +589,11 @@ class PreferencesManager @Inject constructor(
     val visualizerSensitivity: Flow<Int> = dataStore.data.map { it[VISUALIZER_SENSITIVITY] ?: 50 }
     val visualizerBrightness: Flow<Int> = dataStore.data.map { it[VISUALIZER_BRIGHTNESS] ?: 80 }
     val romajiLyrics: Flow<Boolean> = dataStore.data.map { it[ROMAJI_LYRICS] ?: false }
+    val lyricsWordProvider: Flow<LyricsWordProvider> = dataStore.data.map { prefs ->
+        prefs[LYRICS_WORD_PROVIDER]
+            ?.let { raw -> runCatching { LyricsWordProvider.valueOf(raw) }.getOrNull() }
+            ?: LyricsWordProvider.BOTH
+    }
     val downloadLyrics: Flow<Boolean> = dataStore.data.map { it[DOWNLOAD_LYRICS] ?: false }
     val visualizerEngineEnabled: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_ENGINE_ENABLED] ?: true }
     val visualizerAutoShuffle: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_AUTO_SHUFFLE] ?: true }
@@ -587,6 +625,9 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setRomajiLyrics(enabled: Boolean) {
         dataStore.edit { it[ROMAJI_LYRICS] = enabled }
+    }
+    suspend fun setLyricsWordProvider(mode: LyricsWordProvider) {
+        dataStore.edit { it[LYRICS_WORD_PROVIDER] = mode.name }
     }
     suspend fun setDownloadLyrics(enabled: Boolean) {
         dataStore.edit { it[DOWNLOAD_LYRICS] = enabled }
@@ -665,6 +706,76 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setAiRadioEnabled(enabled: Boolean) {
         dataStore.edit { it[AI_RADIO_ENABLED] = enabled }
+    }
+
+    // --- Radio planner ---
+
+    val radioPlannerEnabled: Flow<Boolean> = dataStore.data.map { it[RADIO_PLANNER_ENABLED] ?: true }
+    val radioPlannerUrl: Flow<String> = dataStore.data.map {
+        it[RADIO_PLANNER_URL] ?: DEFAULT_RADIO_PLANNER_URL
+    }
+    val radioPlannerApiKey: Flow<String?> = dataStore.data.map { it[RADIO_PLANNER_API_KEY] }
+
+    suspend fun setRadioPlannerEnabled(enabled: Boolean) {
+        dataStore.edit { it[RADIO_PLANNER_ENABLED] = enabled }
+    }
+
+    suspend fun setRadioPlannerUrl(url: String?) {
+        dataStore.edit {
+            if (url.isNullOrBlank()) it.remove(RADIO_PLANNER_URL)
+            else it[RADIO_PLANNER_URL] = url.trim().trimEnd('/')
+        }
+    }
+
+    suspend fun setRadioPlannerApiKey(key: String?) {
+        dataStore.edit {
+            if (key.isNullOrBlank()) it.remove(RADIO_PLANNER_API_KEY)
+            else it[RADIO_PLANNER_API_KEY] = key.trim()
+        }
+    }
+
+    val radioPlannerWeights: Flow<RadioPlannerWeights> = dataStore.data.map { prefs ->
+        val defaults = RadioPlannerWeights.DEFAULT
+        RadioPlannerWeights(
+            localLibrary = prefs[RADIO_WEIGHT_LOCAL_LIBRARY] ?: defaults.localLibrary,
+            qobuz = prefs[RADIO_WEIGHT_QOBUZ] ?: defaults.qobuz,
+            spotifyDiscovery = prefs[RADIO_WEIGHT_SPOTIFY_DISCOVERY] ?: defaults.spotifyDiscovery,
+            metabrainzMetadata = prefs[RADIO_WEIGHT_METABRAINZ_METADATA] ?: defaults.metabrainzMetadata,
+            listenbrainzGraph = prefs[RADIO_WEIGHT_LISTENBRAINZ_GRAPH] ?: defaults.listenbrainzGraph,
+            canonicalVersionBias = prefs[RADIO_WEIGHT_CANONICAL_VERSION_BIAS] ?: defaults.canonicalVersionBias,
+            novelty = prefs[RADIO_WEIGHT_NOVELTY] ?: defaults.novelty,
+            familiarity = prefs[RADIO_WEIGHT_FAMILIARITY] ?: defaults.familiarity,
+            artistSimilarity = prefs[RADIO_WEIGHT_ARTIST_SIMILARITY] ?: defaults.artistSimilarity,
+            genreTagSimilarity = prefs[RADIO_WEIGHT_GENRE_TAG_SIMILARITY] ?: defaults.genreTagSimilarity,
+            moodContinuity = prefs[RADIO_WEIGHT_MOOD_CONTINUITY] ?: defaults.moodContinuity,
+            eraConsistency = prefs[RADIO_WEIGHT_ERA_CONSISTENCY] ?: defaults.eraConsistency,
+            avoidRecentlyPlayed = prefs[RADIO_WEIGHT_AVOID_RECENTLY_PLAYED] ?: defaults.avoidRecentlyPlayed,
+            discoveryDistance = prefs[RADIO_WEIGHT_DISCOVERY_DISTANCE] ?: defaults.discoveryDistance,
+        ).clamped()
+    }
+
+    suspend fun setRadioPlannerWeights(weights: RadioPlannerWeights) {
+        val clamped = weights.clamped()
+        dataStore.edit { prefs ->
+            prefs[RADIO_WEIGHT_LOCAL_LIBRARY] = clamped.localLibrary
+            prefs[RADIO_WEIGHT_QOBUZ] = clamped.qobuz
+            prefs[RADIO_WEIGHT_SPOTIFY_DISCOVERY] = clamped.spotifyDiscovery
+            prefs[RADIO_WEIGHT_METABRAINZ_METADATA] = clamped.metabrainzMetadata
+            prefs[RADIO_WEIGHT_LISTENBRAINZ_GRAPH] = clamped.listenbrainzGraph
+            prefs[RADIO_WEIGHT_CANONICAL_VERSION_BIAS] = clamped.canonicalVersionBias
+            prefs[RADIO_WEIGHT_NOVELTY] = clamped.novelty
+            prefs[RADIO_WEIGHT_FAMILIARITY] = clamped.familiarity
+            prefs[RADIO_WEIGHT_ARTIST_SIMILARITY] = clamped.artistSimilarity
+            prefs[RADIO_WEIGHT_GENRE_TAG_SIMILARITY] = clamped.genreTagSimilarity
+            prefs[RADIO_WEIGHT_MOOD_CONTINUITY] = clamped.moodContinuity
+            prefs[RADIO_WEIGHT_ERA_CONSISTENCY] = clamped.eraConsistency
+            prefs[RADIO_WEIGHT_AVOID_RECENTLY_PLAYED] = clamped.avoidRecentlyPlayed
+            prefs[RADIO_WEIGHT_DISCOVERY_DISTANCE] = clamped.discoveryDistance
+        }
+    }
+
+    suspend fun resetRadioPlannerWeights() {
+        setRadioPlannerWeights(RadioPlannerWeights.DEFAULT)
     }
 
 
@@ -1025,9 +1136,9 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Lyrics 3D appearance ---
-    val lyrics3dRotation: Flow<Float> = dataStore.data.map { it[LYRICS_3D_ROTATION] ?: 9f }
+    val lyrics3dRotation: Flow<Float> = dataStore.data.map { it[LYRICS_3D_ROTATION] ?: 12f }
     val lyrics3dWaveSpeed: Flow<Float> = dataStore.data.map { it[LYRICS_3D_WAVE_SPEED] ?: 1f }
-    val lyrics3dShadowDepth: Flow<Float> = dataStore.data.map { it[LYRICS_3D_SHADOW_DEPTH] ?: 0.55f }
+    val lyrics3dShadowDepth: Flow<Float> = dataStore.data.map { it[LYRICS_3D_SHADOW_DEPTH] ?: 0.7f }
     suspend fun setLyrics3dRotation(value: Float) {
         dataStore.edit { it[LYRICS_3D_ROTATION] = value.coerceIn(0f, 20f) }
     }
@@ -1036,6 +1147,11 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setLyrics3dShadowDepth(value: Float) {
         dataStore.edit { it[LYRICS_3D_SHADOW_DEPTH] = value.coerceIn(0f, 1f) }
+    }
+
+    val lyricsBassReact: Flow<Float> = dataStore.data.map { it[LYRICS_BASS_REACT] ?: 0.8f }
+    suspend fun setLyricsBassReact(value: Float) {
+        dataStore.edit { it[LYRICS_BASS_REACT] = value.coerceIn(0f, 1f) }
     }
 
     // --- Player appearance ---

@@ -164,11 +164,12 @@ private fun SyncedLyrics(
                     // Fixed size: the active line is marked by colour/weight only,
                     // so the list never reflows mid-song (see LyricsHero.kt).
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 18.sp,
-                        lineHeight = 22.sp,
+                        fontSize = 23.sp,
+                        lineHeight = 29.sp,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                     ),
                     color = textColor,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onSeekTo(line.timeMs) }
@@ -192,7 +193,7 @@ private fun KaraokeLine(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.Start,
+        horizontalArrangement = Arrangement.Center,
         verticalArrangement = Arrangement.Center
     ) {
         line.words.forEach { word ->
@@ -212,8 +213,8 @@ private fun KaraokeLine(
             Text(
                 text = word.text + " ",
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = 18.sp,
-                    lineHeight = 22.sp,
+                    fontSize = 23.sp,
+                    lineHeight = 29.sp,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                 ),
                 color = color
@@ -233,8 +234,9 @@ private fun UnsyncedLyrics(lines: List<LyricLine>) {
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 22.sp),
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp),
                 color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
