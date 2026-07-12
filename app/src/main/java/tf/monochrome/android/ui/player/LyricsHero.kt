@@ -336,6 +336,18 @@ internal fun SyncedLyricsView(
         derivedStateOf { lines.indexOfLast { it.timeMs <= position - syncDelayMs } }
     }
 
+    // Debug log: what's playing (once per song load) and each active-line change.
+    LaunchedEffect(lines) {
+        val wordLevel = lines.any { it.words.isNotEmpty() }
+        LyricsDebug.log("synced lyrics loaded: ${lines.size} lines, ${if (wordLevel) "word-level (karaoke)" else "line-level"}")
+    }
+    LaunchedEffect(currentLineIndex) {
+        val idx = currentLineIndex
+        if (idx in lines.indices) {
+            LyricsDebug.log("active line $idx/${lines.size}: \"${lines[idx].text.take(48)}\"")
+        }
+    }
+
     // Bass-reactive FX for the active line: pulse from the FFT tap, a frame
     // clock for the ray sweep, and a pop-in spring per line change. All
     // disabled (and the analyzer never acquired) at intensity 0.
@@ -589,8 +601,15 @@ internal fun rememberLyricFontFamily(fx: LyricsFxSettings): FontFamily? {
     return remember(path) {
         runCatching {
             val file = java.io.File(path)
-            if (file.exists()) FontFamily(Font(file)) else null
-        }.getOrNull()
+            if (file.exists()) {
+                LyricsDebug.log("custom font loaded: ${file.name}")
+                FontFamily(Font(file))
+            } else {
+                LyricsDebug.log("custom font MISSING, falling back to theme: $path")
+                null
+            }
+        }.onFailure { LyricsDebug.log("custom font FAILED to load ($path): ${it.message}") }
+            .getOrNull()
     }
 }
 
@@ -725,6 +744,7 @@ private fun Letter3DText(
 
 @Composable
 internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
+    LaunchedEffect(lines) { LyricsDebug.log("unsynced lyrics loaded: ${lines.size} lines (no timing)") }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()

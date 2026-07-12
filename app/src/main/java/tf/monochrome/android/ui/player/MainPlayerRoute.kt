@@ -253,7 +253,15 @@ fun MainPlayerRoute(
     val beatPulse: androidx.compose.runtime.State<Float>? =
         if (lyricsBeatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
     androidx.compose.runtime.LaunchedEffect(lyricsBeatOn) {
+        LyricsDebug.log("beat engine ${if (lyricsBeatOn) "acquired (FFT analyzer staked)" else "released"}")
         if (!lyricsBeatOn) glyphAnchors.reset()
+    }
+    // Log the active lyrics-FX configuration whenever it changes, and when the
+    // lyrics view is entered/left — so the Debug Log shows exactly what the
+    // lyric renderer is running.
+    androidx.compose.runtime.LaunchedEffect(lyricsFx) { LyricsDebug.log(LyricsDebug.summary(lyricsFx)) }
+    androidx.compose.runtime.LaunchedEffect(viewMode == NowPlayingViewMode.LYRICS) {
+        LyricsDebug.log("view mode: ${if (viewMode == NowPlayingViewMode.LYRICS) "LYRICS active" else "lyrics inactive"}")
     }
 
     CompositionLocalProvider(

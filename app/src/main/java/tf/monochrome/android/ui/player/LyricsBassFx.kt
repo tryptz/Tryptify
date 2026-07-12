@@ -103,7 +103,11 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
 
     DisposableEffect(tap) {
         tap.acquire()
-        onDispose { tap.release() }
+        LyricsDebug.log("FFT analyzer staked (bass pulse active)")
+        onDispose {
+            tap.release()
+            LyricsDebug.log("FFT analyzer released (bass pulse stopped)")
+        }
     }
     LaunchedEffect(tap, fx.attackMs, fx.releaseMs, fx.bounce) {
         val attackSec = (fx.attackMs / 1000f).coerceAtLeast(0.001f)

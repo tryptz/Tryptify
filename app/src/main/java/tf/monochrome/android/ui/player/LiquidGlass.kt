@@ -113,8 +113,12 @@ internal fun Modifier.fxaa(): Modifier {
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun fxaaModifier(strength: Float): Modifier {
-    val shader = remember { runCatching { RuntimeShader(FXAA_SRC) }.getOrNull() }
-        ?: return Modifier
+    val shader = remember {
+        runCatching { RuntimeShader(FXAA_SRC) }
+            .onSuccess { LyricsDebug.log("FXAA shader compiled") }
+            .onFailure { LyricsDebug.log("FXAA shader FAILED to compile: ${it.message}") }
+            .getOrNull()
+    } ?: return Modifier
     return Modifier.graphicsLayer {
         if (size.minDimension > 0f) {
             shader.setFloatUniform("uSize", size.width, size.height)
@@ -132,8 +136,12 @@ private fun liquidGlassModifier(
     tint: Color,
     fx: tf.monochrome.android.domain.model.LyricsFxSettings,
 ): Modifier {
-    val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() }
-        ?: return Modifier
+    val shader = remember {
+        runCatching { RuntimeShader(LIQUID_GLASS_SRC) }
+            .onSuccess { LyricsDebug.log("liquid-glass shader compiled") }
+            .onFailure { LyricsDebug.log("liquid-glass shader FAILED to compile: ${it.message}") }
+            .getOrNull()
+    } ?: return Modifier
 
     val timeSec = rememberFrameSeconds()
     val tilt = rememberGravityTilt()
