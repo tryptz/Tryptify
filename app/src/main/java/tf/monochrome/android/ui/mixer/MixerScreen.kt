@@ -128,7 +128,6 @@ fun MixerScreen(
     val editingPlugin by viewModel.editingPlugin.collectAsState()
     val presets by viewModel.presets.collectAsState()
     val currentPresetName by viewModel.currentPresetName.collectAsState()
-    val canvasState by viewModel.canvasState.collectAsState()
     val channelDynamicColor by viewModel.channelDynamicColor.collectAsState()
 
     val selectedBus = buses.getOrNull(selectedBusIndex)
@@ -193,9 +192,6 @@ fun MixerScreen(
     // (which would cancel its scope and skip the settle).
     val composeCanvas by remember { derivedStateOf { progress > 0.0001f || dragging } }
     val composeMixer by remember { derivedStateOf { progress < 0.9999f || dragging } }
-    // Plugin-editor sheet appears only once the reveal has settled on the
-    // canvas — not at the 0.5 midpoint mid-drag.
-    val canvasSettled by remember { derivedStateOf { progress > 0.9999f } }
 
     // ── Preset import / export (SAF document pickers) ───────────────────
     val context = LocalContext.current
@@ -275,28 +271,25 @@ fun MixerScreen(
                         IconButton(onClick = { animateProgressTo(0f, 0f) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = colorScheme.onSurface, modifier = Modifier.size(20.dp))
                         }
-                        Text("DSP Canvas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorScheme.onSurface)
+                        Text("FX Chain", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorScheme.onSurface)
                     }
                 }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    // Isolate audioAmplitude collection here so meter updates don't recompose entire screen
-                    val audioAmplitude by viewModel.audioAmplitude.collectAsState()
-
-                    tf.monochrome.android.ui.mixer.canvas.DspCanvas(
-                        state = canvasState,
-                        dspEnabled = enabled,
-                        audioAmplitude = audioAmplitude,
-                        onViewportPan = { viewModel.onViewportPan(it) },
-                        onViewportZoom = { zoom, centroid -> viewModel.onViewportZoom(zoom, centroid) },
-                        onNodeSelected = { viewModel.onNodeSelected(it) },
-                        onNodeDragStart = { viewModel.onNodeDragStart(it) },
-                        onNodeDrag = { id, delta -> viewModel.onNodeDrag(id, delta) },
-                        onNodeDragEnd = { viewModel.onNodeDragEnd(it) },
-                        onNodeDoubleTap = { viewModel.onNodeDoubleTap(it) },
-                        onNodeLongPress = { viewModel.onNodeLongPress(it) },
-                        onDeleteConfirmed = { viewModel.onDeleteConfirmed(it) },
-                        onDeleteCancelled = { viewModel.onDeleteCancelled() },
-                        onCanvasTap = { }
+                    tf.monochrome.android.ui.mixer.fxchain.FxChainPage(
+                        buses = buses,
+                        selectedBusIndex = selectedBusIndex,
+                        enabled = enabled,
+                        busAccent = { idx ->
+                            if (buses.getOrNull(idx)?.isMaster == true) accent
+                            else busAccent(channelDynamicColor, accent, idx)
+                        },
+                        onSelectBus = { viewModel.selectBus(it) },
+                        onAddEffect = { viewModel.showAddPlugin() },
+                        onBypass = { b, s -> viewModel.togglePluginBypass(b, s) },
+                        onRemove = { b, s -> viewModel.removePlugin(b, s) },
+                        onDryWet = { b, s, dw -> viewModel.setPluginDryWet(b, s, dw) },
+                        onParam = { b, s, p, v -> viewModel.setParameter(b, s, p, v) },
+                        onMove = { b, from, to -> viewModel.movePlugin(b, from, to) },
                     )
                 }
             }
@@ -372,7 +365,7 @@ fun MixerScreen(
                         )
                         NavIconButton(
                             icon = Icons.Default.AccountTree,
-                            contentDescription = "DSP Canvas",
+                            contentDescription = "FX Chain",
                             onClick = { animateProgressTo(1f, 0f) }
                         )
 
@@ -484,22 +477,6 @@ fun MixerScreen(
         )
     }
 
-    // ── Plugin editor sheet (canvas view) ───────────────────────────────
-    if (canvasSettled) {
-        editingPlugin?.let { (busIdx, slotIdx) ->
-            val bus = buses.getOrNull(busIdx)
-            val plugin = bus?.plugins?.getOrNull(slotIdx)
-            if (plugin != null) {
-                PluginEditorSheet(
-                    plugin = plugin,
-                    busIndex = busIdx,
-                    slotIndex = slotIdx,
-                    onParameterChange = { b, s, p, v -> viewModel.setParameter(b, s, p, v) },
-                    onDismiss = { viewModel.dismissPluginEditor() }
-                )
-            }
-        }
-    }
 }
 
 /** Consistent circular glass action button for the mixer header. */

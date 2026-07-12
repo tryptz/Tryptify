@@ -102,6 +102,9 @@ class DspEngineManager @Inject constructor(
     companion object {
         private const val TOTAL_BUSES = 5
 
+        // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
+        const val MAX_PLUGINS_PER_BUS = 16
+
         // Parameter bounds — mirror the native clamps in dsp_engine.cpp / snapin_processor.h.
         // Clamping in Kotlin keeps the StateFlow value in sync with what native actually stores.
         const val MIN_BUS_GAIN_DB = -60f
