@@ -428,6 +428,7 @@ fun MainPlayerRoute(
                 }
             },
             lyricsExpanded = lyricsExpanded,
+            lyricsMode = viewMode == NowPlayingViewMode.LYRICS,
         )
     }
     }

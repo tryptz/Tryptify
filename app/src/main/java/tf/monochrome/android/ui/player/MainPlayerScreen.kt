@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -152,6 +153,9 @@ fun MainPlayerScreen(
     // full-bleed while the player controls collapse away and the blurred
     // artwork stain fades in behind everything.
     lyricsExpanded: Boolean = false,
+    // Collapsed lyrics render as a full-screen-width rectangle (album height) so
+    // lines can reach the phone's edges; album art stays a padded square.
+    lyricsMode: Boolean = false,
 ) {
     val accent = state.albumColors.vibrant
 
@@ -274,6 +278,9 @@ fun MainPlayerScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 val side = minOf(maxWidth, maxHeight)
+                // Full phone-screen width = the padded slot width plus the side
+                // padding the Column already subtracted.
+                val fullWidth = maxWidth + screenPad * 2
                 val heroW by animateDpAsState(
                     targetValue = if (lyricsExpanded) maxWidth else side,
                     animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
@@ -284,16 +291,25 @@ fun MainPlayerScreen(
                     animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
                     label = "heroH",
                 )
+                // Collapsed lyrics: a rectangle the height of the album square but
+                // the FULL screen width (requiredWidth overrides the padded slot's
+                // constraint; the centred Box lets it overflow to both edges), so
+                // lines reach the borders. Album art keeps its padded square.
+                val heroMod = if (lyricsMode && !lyricsExpanded) {
+                    Modifier.requiredWidth(fullWidth).height(heroH)
+                } else {
+                    Modifier.size(heroW, heroH)
+                }
                 // Wrap only the square art (not the full-width slot) so the DevEdit
                 // highlight hugs the album-art ratio instead of a tall rectangle.
                 // The saved DevEdit offset/scale are tuned for the compact square;
-                // applied to the expanded lyric surface they push text past the
-                // screen borders — so expanded renders 1:1, bypassing the override.
-                if (lyricsExpanded) {
-                    hero(Modifier.size(heroW, heroH))
+                // applied to the expanded/full-width lyric surface they push text
+                // past the screen borders — so those render 1:1, bypassing it.
+                if (lyricsExpanded || lyricsMode) {
+                    hero(heroMod)
                 } else {
                     DevEditable("hero", Modifier) {
-                        hero(Modifier.size(heroW, heroH))
+                        hero(heroMod)
                     }
                 }
             }
