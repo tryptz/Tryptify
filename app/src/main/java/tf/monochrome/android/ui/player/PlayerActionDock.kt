@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,6 +70,18 @@ fun PlayerActionDock(
         painterResource(R.drawable.ic_glass_playlist),
     )
     Box(modifier = modifier.fillMaxWidth()) {
+        // Soft rounded-rect drop shadow lifting the whole glass slab off the
+        // player, matching the play button + transport icons (Studio-tunable).
+        val g = LocalPlayerGlass.current
+        if (g.enabled) {
+            GlassDropShadow(
+                color = androidx.compose.ui.graphics.lerp(Color.Black, accent, g.shadowTint)
+                    .copy(alpha = 0.26f + 0.5f * g.shadowDepth),
+                softness = g.shadowSoftness,
+                depth = g.shadowDepth,
+                shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerLarge),
+            )
+        }
         // The glass slab with the four icons carved out of it. Drawn in one
         // offscreen layer so the DstOut punch clears only the glyph shapes (not
         // the whole rectangle) and can't clear the player behind the dock.

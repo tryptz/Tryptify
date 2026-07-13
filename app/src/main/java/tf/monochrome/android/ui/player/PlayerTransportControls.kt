@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -33,10 +34,12 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 
@@ -63,7 +66,10 @@ fun PlayerTransportControls(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TransportIcon(painterResource(R.drawable.ic_glass_skip_previous), "Previous", accent, onPrevious)
+        TransportIcon(
+            painterResource(R.drawable.ic_glass_skip_previous), "Previous", accent, onPrevious,
+            size = PlayerDesignTokens.SkipIconSize,
+        )
         TransportIcon(painterResource(R.drawable.ic_glass_replay_10), "Rewind 10 seconds", accent, onRewind10)
 
         val interactionSource = remember { MutableInteractionSource() }
@@ -119,7 +125,10 @@ fun PlayerTransportControls(
         }
 
         TransportIcon(painterResource(R.drawable.ic_glass_forward_10), "Forward 10 seconds", accent, onForward10)
-        TransportIcon(painterResource(R.drawable.ic_glass_skip_next), "Next", accent, onNext)
+        TransportIcon(
+            painterResource(R.drawable.ic_glass_skip_next), "Next", accent, onNext,
+            size = PlayerDesignTokens.SkipIconSize,
+        )
     }
 }
 
@@ -184,14 +193,19 @@ private fun DrawScope.drawPlayPauseSymbol(
 }
 
 /**
- * A soft, perfectly ROUND drop shadow for the play button — a blurred, tinted
- * circle we draw ourselves instead of the platform elevation shadow (which
- * facets a CircleShape into a visible octagon on some GPUs). [depth] offsets +
- * darkens it, [softness] sets the blur radius. Below API 31 blur is a no-op, so
- * it degrades to a hard (still round) circle rather than an octagon.
+ * A soft drop shadow for a [shape] surface (the play disc, the dock slab) — a
+ * blurred, tinted shape we draw ourselves instead of the platform elevation
+ * shadow (which facets a CircleShape into a visible octagon on some GPUs).
+ * [depth] offsets + darkens it, [softness] sets the blur radius. Below API 31
+ * blur is a no-op, so it degrades to a hard (still true-shaped) fill.
  */
 @Composable
-internal fun BoxScope.GlassDropShadow(color: Color, softness: Float, depth: Float) {
+internal fun BoxScope.GlassDropShadow(
+    color: Color,
+    softness: Float,
+    depth: Float,
+    shape: Shape = CircleShape,
+) {
     Box(
         modifier = Modifier
             .matchParentSize()
@@ -200,20 +214,49 @@ internal fun BoxScope.GlassDropShadow(color: Color, softness: Float, depth: Floa
                 radius = (5f + softness * 22f).dp,
                 edgeTreatment = BlurredEdgeTreatment.Unbounded,
             )
-            .background(color, CircleShape),
+            .background(color, shape),
     )
 }
 
 @Composable
-private fun TransportIcon(painter: Painter, description: String, tint: Color, onClick: () -> Unit) {
+private fun TransportIcon(
+    painter: Painter,
+    description: String,
+    tint: Color,
+    onClick: () -> Unit,
+    size: Dp = PlayerDesignTokens.TransportIconSize,
+) {
+    val glass = LocalPlayerGlass.current
     IconButton(onClick = onClick) {
-        Icon(
-            painter = painter,
-            contentDescription = description,
-            modifier = Modifier
-                .size(PlayerDesignTokens.TransportIconSize)
-                .playerGlass(tint = tint),
-            tint = tint,
-        )
+        Box(contentAlignment = Alignment.Center) {
+            // Shape-accurate drop shadow: a blurred, tinted copy of the SAME glyph
+            // behind the glass icon, so the shadow traces the icon's real outline
+            // (a circle shadow can't fit a triangle/arrow). Tracks the Studio's
+            // shadow depth / softness / tint, matching the play button.
+            if (glass.enabled) {
+                val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, tint, glass.shadowTint)
+                    .copy(alpha = 0.30f + 0.5f * glass.shadowDepth)
+                Icon(
+                    painter = painter,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .requiredSize(size)
+                        .graphicsLayer { translationY = (1.5f + glass.shadowDepth * 4f).dp.toPx() }
+                        .blur(
+                            radius = (2f + glass.shadowSoftness * 12f).dp,
+                            edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                        ),
+                    tint = shadowColor,
+                )
+            }
+            Icon(
+                painter = painter,
+                contentDescription = description,
+                modifier = Modifier
+                    .requiredSize(size)
+                    .playerGlass(tint = tint),
+                tint = tint,
+            )
+        }
     }
 }

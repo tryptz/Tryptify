@@ -44,6 +44,8 @@ object PlayerDesignTokens {
 
     val PlayButtonSize = 72.dp
     val TransportIconSize = 34.dp
+    // Skip previous/next read 50% larger than the other transport glyphs.
+    val SkipIconSize = 51.dp
     val ActionIconSize = 24.dp
 
     val ProgressHeight = 4.dp
