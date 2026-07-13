@@ -225,12 +225,11 @@ fun MainPlayerScreen(
                 .background(dynamicPlayerBackground(state.albumColors.dominant)),
         )
         // Full-screen blurred, stretched album art (Apple-Music / Spotify style).
-        // Shown whenever the lyrics are on — collapsed OR fullscreen — and only
-        // then (album-art / visualizer views keep the plain gradient). Fades with
-        // the album↔lyrics transition instead of popping.
-        val lyricsOn = lyricsExpanded || lyricsMode
+        // Shown whenever the toggle is on — in EVERY view (album art, visualizer,
+        // and lyrics, collapsed or fullscreen), not just the lyrics views. Fades
+        // in/out instead of popping.
         val blurBgAlpha by animateFloatAsState(
-            targetValue = if (blurredBackground && lyricsOn) 1f else 0f,
+            targetValue = if (blurredBackground) 1f else 0f,
             animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
             label = "blurredBg",
         )
