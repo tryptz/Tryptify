@@ -8,7 +8,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,8 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,7 +35,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 
@@ -91,7 +87,7 @@ fun PlayerActionDock(
         },
         label = "dockBulge",
     )
-    val bulgeCenter = Offset((bulgeSlot.intValue + 0.5f) / icons.size, 0.42f)
+    val bulgeCenter = Offset((bulgeSlot.intValue + 0.5f) / icons.size, 0.5f)
     Box(modifier = modifier.fillMaxWidth()) {
         // Button glass tint: a custom colour chosen in the Studio, or the album
         // accent when none is set (tintColor == 0).
@@ -125,7 +121,7 @@ fun PlayerActionDock(
                 color = glassTint,
                 cornerRadius = CornerRadius(cornerPx, cornerPx),
             )
-            val iconPx = PlayerDesignTokens.ActionIconSize.toPx()
+            val iconPx = PlayerDesignTokens.DockIconSize.toPx()
             val cy = (DockRowVerticalPadding + DockItemVerticalPadding).toPx() + iconPx / 2f
             // DstOut: dest * (1 - src.alpha) → the opaque icon pixels erase the
             // slab, leaving an icon-shaped hole; everything else is untouched.
@@ -142,10 +138,10 @@ fun PlayerActionDock(
         }
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
-            DockLabel(Modifier.weight(1f), "Lyrics", accent, lyricsActive, sources[0], onLyrics)
-            DockLabel(Modifier.weight(1f), "Timer", accent, false, sources[1], onTimer)
-            DockLabel(Modifier.weight(1f), "Mixer/FX", accent, false, sources[2], onMixer)
-            DockLabel(Modifier.weight(1f), "Playlist", accent, false, sources[3], onPlaylist)
+            DockLabel(Modifier.weight(1f), "Lyrics", sources[0], onLyrics)
+            DockLabel(Modifier.weight(1f), "Timer", sources[1], onTimer)
+            DockLabel(Modifier.weight(1f), "Mixer/FX", sources[2], onMixer)
+            DockLabel(Modifier.weight(1f), "Playlist", sources[3], onPlaylist)
         }
     }
 }
@@ -154,8 +150,6 @@ fun PlayerActionDock(
 private fun DockLabel(
     modifier: Modifier,
     label: String,
-    accent: Color,
-    selected: Boolean,
     interactionSource: MutableInteractionSource,
     onClick: () -> Unit,
 ) {
@@ -165,24 +159,22 @@ private fun DockLabel(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "dockLabelScale",
     )
-    val labelTint = if (selected) accent else Color.White.copy(alpha = 0.7f)
 
+    // No text label: the tap target is the whole slot, and the (bigger) hollow
+    // icon carved into the glass slab above fills the space the label used to take.
     Column(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClickLabel = label,
+                onClick = onClick,
+            )
             .padding(vertical = DockItemVerticalPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Reserves the slot where the glass slab carries the hollow icon above.
-        Spacer(Modifier.size(PlayerDesignTokens.ActionIconSize))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = labelTint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // Reserves the slot the glass slab's hollow icon is punched into.
+        Spacer(Modifier.size(PlayerDesignTokens.DockIconSize))
     }
 }
