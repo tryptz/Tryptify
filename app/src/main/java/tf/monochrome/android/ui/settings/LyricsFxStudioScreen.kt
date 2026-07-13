@@ -96,6 +96,7 @@ import tf.monochrome.android.R
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxPreset
 import tf.monochrome.android.domain.model.LyricsFxSettings
+import tf.monochrome.android.domain.model.PlayerGlassPreset
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerActionDock
@@ -157,6 +158,12 @@ class LyricsFxStudioViewModel @Inject constructor(
             viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList(),
         )
 
+    /** The user's own saved Player Glass themes, alongside the built-in ones. */
+    val customPlayerGlassPresets: StateFlow<List<tf.monochrome.android.domain.model.PlayerGlassPreset>> =
+        preferences.customPlayerGlassPresets.stateIn(
+            viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList(),
+        )
+
     init {
         viewModelScope.launch {
             // Seed once from the persisted settings; after the user starts tuning,
@@ -195,6 +202,48 @@ class LyricsFxStudioViewModel @Inject constructor(
             delay(200)
             preferences.setPlayerGlass(_playerGlass.value)
         }
+    }
+
+    /** Apply a Player Glass theme — changes the material, keeps the user's colour/perf. */
+    fun applyPlayerGlassPreset(preset: tf.monochrome.android.domain.model.PlayerGlassSettings) {
+        playerGlassTouched = true
+        val next = preset.withPersonalFrom(_playerGlass.value).clamped()
+        _playerGlass.value = next
+        playerGlassPersistJob?.cancel()
+        viewModelScope.launch { preferences.setPlayerGlass(next) }
+    }
+
+    /** Save the current Player Glass as a named theme (blank ignored, same name overwrites). */
+    fun savePlayerGlassPreset(name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        val preset = tf.monochrome.android.domain.model.PlayerGlassPreset(clean, _playerGlass.value.clamped())
+        viewModelScope.launch {
+            val current = customPlayerGlassPresets.value.filterNot { it.name.equals(clean, ignoreCase = true) }
+            preferences.setCustomPlayerGlassPresets(current + preset)
+        }
+    }
+
+    fun deletePlayerGlassPreset(name: String) {
+        viewModelScope.launch {
+            preferences.setCustomPlayerGlassPresets(customPlayerGlassPresets.value.filterNot { it.name == name })
+        }
+    }
+
+    /** The shareable code for a Player Glass theme (prefix + compact JSON). */
+    fun exportPlayerGlassPreset(preset: tf.monochrome.android.domain.model.PlayerGlassPreset): String =
+        tf.monochrome.android.domain.model.PlayerGlassPreset.encode(preset)
+
+    /** Import a Player Glass theme from a shared code; returns the name or null. */
+    fun importPlayerGlassPresetCode(code: String): String? {
+        val decoded = tf.monochrome.android.domain.model.PlayerGlassPreset.decode(code) ?: return null
+        val existing = customPlayerGlassPresets.value.map { it.name }.toSet()
+        var name = decoded.name
+        var n = 2
+        while (name in existing) { name = "${decoded.name} ($n)"; n++ }
+        val toAdd = decoded.copy(name = name)
+        viewModelScope.launch { preferences.setCustomPlayerGlassPresets(customPlayerGlassPresets.value + toAdd) }
+        return name
     }
 
     fun applyPreset(preset: LyricsFxSettings) {
@@ -307,7 +356,17 @@ fun LyricsFxStudioScreen(
         }
 
         if (selectedTab == 1) {
-            PlayerGlassTab(playerGlass) { viewModel.updatePlayerGlass(it) }
+            val customGlassPresets by viewModel.customPlayerGlassPresets.collectAsState()
+            PlayerGlassTab(
+                glass = playerGlass,
+                customPresets = customGlassPresets,
+                onUpdate = { viewModel.updatePlayerGlass(it) },
+                onApplyPreset = { viewModel.applyPlayerGlassPreset(it) },
+                onSavePreset = { viewModel.savePlayerGlassPreset(it) },
+                onDeletePreset = { viewModel.deletePlayerGlassPreset(it) },
+                onExportPreset = { viewModel.exportPlayerGlassPreset(it) },
+                onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
+            )
             return@Column
         }
 
@@ -670,14 +729,25 @@ fun LyricsFxStudioScreen(
 @Composable
 private fun PlayerGlassTab(
     glass: PlayerGlassSettings,
+    customPresets: List<PlayerGlassPreset>,
     onUpdate: ((PlayerGlassSettings) -> PlayerGlassSettings) -> Unit,
+    onApplyPreset: (PlayerGlassSettings) -> Unit,
+    onSavePreset: (String) -> Unit,
+    onDeletePreset: (String) -> Unit,
+    onExportPreset: (PlayerGlassPreset) -> String,
+    onImportPreset: (String) -> String?,
 ) {
+    val context = LocalContext.current
     val accent = MaterialTheme.colorScheme.primary
     // Custom preview colours (0 = use the current album colour).
     val previewTint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
     val previewBgBrush = if (glass.previewBg != 0) SolidColor(Color(glass.previewBg)) else previewBackground(accent)
     var showBgPicker by remember { mutableStateOf(false) }
     var showTintPicker by remember { mutableStateOf(false) }
+    // Theme save / import / share dialog state (mirrors the Lyrics preset system).
+    var showGlassSaveDialog by remember { mutableStateOf(false) }
+    var showGlassImportDialog by remember { mutableStateOf(false) }
+    var glassPresetAction by remember { mutableStateOf<PlayerGlassPreset?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         // Pinned preview — stays locked in view while you tune the sliders,
         // just like the Lyrics editor.
@@ -777,9 +847,75 @@ private fun PlayerGlassTab(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
+        // ── Themes: built-in glass materials + the user's saved ones ─────────
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Themes",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { showGlassSaveDialog = true }) {
+                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Save")
+            }
+            TextButton(onClick = { showGlassImportDialog = true }) {
+                Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Import")
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PlayerGlassSettings.PRESETS.forEach { (name, preset) ->
+                FilterChip(
+                    selected = glass.matchesPreset(preset),
+                    onClick = { onApplyPreset(preset) },
+                    label = { Text(name) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                )
+            }
+            // The user's own saved themes. Tapping applies; the trailing icon
+            // opens a Share / Delete sheet for that theme.
+            customPresets.forEach { saved ->
+                FilterChip(
+                    selected = glass.matchesPreset(saved.settings),
+                    onClick = { onApplyPreset(saved.settings) },
+                    label = { Text(saved.name) },
+                    trailingIcon = {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Manage ${saved.name}",
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clickable { glassPresetAction = saved },
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                )
+            }
+        }
+
         // Colour swatches: preview background + button glass tint, each "current"
         // (album) or a custom colour picked from the bubble.
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             ColorSwatch(
                 label = "Background",
@@ -876,6 +1012,11 @@ private fun PlayerGlassTab(
             "Shadow tint", "${(glass.shadowTint * 100).toInt()}%", glass.shadowTint, 0f..1f,
             description = "Colour of the drop shadow: neutral black to accent glow.",
         ) { onUpdate { g -> g.copy(shadowTint = it) } }
+        Spacer(Modifier.height(20.dp))
+        OutlinedButton(
+            onClick = { onApplyPreset(PlayerGlassSettings.DEFAULT) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Reset to defaults") }
         Spacer(Modifier.height(48.dp))
         }
     }
@@ -894,6 +1035,119 @@ private fun PlayerGlassTab(
             initial = glass.tintColor,
             onPick = { c -> onUpdate { it.copy(tintColor = c) }; showTintPicker = false },
             onDismiss = { showTintPicker = false },
+        )
+    }
+
+    // ── Save the current glass as a named theme ──────────────────────────────
+    if (showGlassSaveDialog) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showGlassSaveDialog = false },
+            title = { Text("Save theme") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text("Theme name") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = name.isNotBlank(),
+                    onClick = {
+                        onSavePreset(name)
+                        showGlassSaveDialog = false
+                        android.widget.Toast.makeText(context, "Saved \"${name.trim()}\"", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showGlassSaveDialog = false }) { Text("Cancel") } },
+        )
+    }
+
+    // ── Import a shared theme code ────────────────────────────────────────────
+    if (showGlassImportDialog) {
+        var code by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showGlassImportDialog = false },
+            title = { Text("Import theme") },
+            text = {
+                Column {
+                    Text(
+                        "Paste a Player Glass theme code someone shared with you.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = code,
+                        onValueChange = { code = it },
+                        label = { Text("Theme code") },
+                        modifier = Modifier.fillMaxWidth().height(140.dp),
+                    )
+                    TextButton(onClick = {
+                        val clip = context.getSystemService(android.content.ClipboardManager::class.java)
+                        val primary = clip?.primaryClip
+                        if (primary != null && primary.itemCount > 0) {
+                            primary.getItemAt(0).coerceToText(context)?.let { code = it.toString() }
+                        }
+                    }) { Text("Paste from clipboard") }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = code.isNotBlank(),
+                    onClick = {
+                        val imported = onImportPreset(code)
+                        showGlassImportDialog = false
+                        android.widget.Toast.makeText(
+                            context,
+                            if (imported != null) "Imported \"$imported\"" else "That doesn't look like a valid theme code",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    },
+                ) { Text("Import") }
+            },
+            dismissButton = { TextButton(onClick = { showGlassImportDialog = false }) { Text("Cancel") } },
+        )
+    }
+
+    // ── Share / delete a saved theme ──────────────────────────────────────────
+    glassPresetAction?.let { target ->
+        AlertDialog(
+            onDismissRequest = { glassPresetAction = null },
+            title = { Text(target.name) },
+            text = { Text("Share this theme or remove it from your list.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_SUBJECT, "Player Glass theme: ${target.name}")
+                        putExtra(android.content.Intent.EXTRA_TEXT, onExportPreset(target))
+                    }
+                    context.startActivity(android.content.Intent.createChooser(send, "Share theme"))
+                    glassPresetAction = null
+                }) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Share")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        onDeletePreset(target.name)
+                        glassPresetAction = null
+                    }) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Delete")
+                    }
+                    TextButton(onClick = { glassPresetAction = null }) { Text("Close") }
+                }
+            },
         )
     }
 }

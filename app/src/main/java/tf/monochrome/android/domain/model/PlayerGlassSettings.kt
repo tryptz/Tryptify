@@ -1,6 +1,9 @@
 package tf.monochrome.android.domain.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * Liquid-glass parameters for the PLAYER chrome (the transport buttons) — the
@@ -77,7 +80,131 @@ data class PlayerGlassSettings(
         )
     }
 
+    /**
+     * The user's personal/perf settings — the chosen button-tint colour, the
+     * Studio-preview background, and the per-pixel quality — that a theme should
+     * carry over rather than overwrite. A theme changes only the glass MATERIAL.
+     */
+    fun withPersonalFrom(other: PlayerGlassSettings): PlayerGlassSettings = copy(
+        sampleRings = other.sampleRings,
+        tintColor = other.tintColor,
+        previewBg = other.previewBg,
+    )
+
+    /**
+     * True when this equals [preset] on every material field — i.e. once the
+     * personal fields (which themes never carry) are set aside. Lights the
+     * selected theme chip regardless of the user's colour/quality choices.
+     */
+    fun matchesPreset(preset: PlayerGlassSettings): Boolean = this == preset.withPersonalFrom(this)
+
     companion object {
         val DEFAULT = PlayerGlassSettings()
+
+        /**
+         * Built-in glass MATERIAL themes. Each varies only the aesthetic fields;
+         * tintColor / previewBg stay 0 so a theme never touches the user's colour.
+         */
+        val PRESETS: List<Pair<String, PlayerGlassSettings>> = listOf(
+            "Default" to DEFAULT,
+            "Chrome" to PlayerGlassSettings(
+                bodyOpacity = 0.62f, refraction = 0.12f, rimBrightness = 1.8f, dispersion = 0.7f,
+                roundness = 0.8f, depth = 1.2f, reflection = 1.7f, gloss = 0.85f,
+                surfaceMotion = 0.12f, edgeWidth = 0.25f, frost = 0f, shadowDepth = 0.5f,
+                shadowSoftness = 0.35f,
+            ),
+            "Frosted" to PlayerGlassSettings(
+                bodyOpacity = 0.7f, refraction = 0.1f, rimBrightness = 0.9f, dispersion = 0.6f,
+                roundness = 1.5f, depth = 0.9f, reflection = 0.55f, gloss = 0.18f,
+                surfaceMotion = 0.2f, edgeWidth = 0.7f, frost = 0.7f, shadowDepth = 0.4f,
+                shadowSoftness = 0.7f,
+            ),
+            "Liquid" to PlayerGlassSettings(
+                bodyOpacity = 0.44f, refraction = 0.3f, rimBrightness = 1.4f, dispersion = 1.4f,
+                roundness = 1.7f, depth = 1.6f, reflection = 1.2f, gloss = 0.5f,
+                surfaceMotion = 0.9f, edgeWidth = 0.6f, frost = 0.05f, shadowDepth = 0.5f,
+                shadowSoftness = 0.55f,
+            ),
+            "Crystal" to PlayerGlassSettings(
+                bodyOpacity = 0.5f, refraction = 0.22f, rimBrightness = 1.6f, dispersion = 2f,
+                roundness = 0.7f, depth = 1.4f, reflection = 1.3f, gloss = 0.8f,
+                surfaceMotion = 0.15f, edgeWidth = 0.2f, frost = 0f, shadowDepth = 0.45f,
+                shadowSoftness = 0.3f,
+            ),
+            "Bubble" to PlayerGlassSettings(
+                bodyOpacity = 0.32f, refraction = 0.34f, rimBrightness = 1.3f, dispersion = 1.1f,
+                roundness = 2f, depth = 2f, reflection = 1.1f, gloss = 0.55f,
+                surfaceMotion = 0.4f, edgeWidth = 0.85f, frost = 0f, shadowDepth = 0.6f,
+                shadowSoftness = 0.85f,
+            ),
+            "Minimal" to PlayerGlassSettings(
+                bodyOpacity = 0.85f, refraction = 0.05f, rimBrightness = 0.7f, dispersion = 0.3f,
+                roundness = 0.9f, depth = 0.7f, reflection = 0.35f, gloss = 0.3f,
+                surfaceMotion = 0.08f, edgeWidth = 0.35f, frost = 0f, shadowDepth = 0.25f,
+                shadowSoftness = 0.3f,
+            ),
+            "Neon" to PlayerGlassSettings(
+                bodyOpacity = 0.46f, refraction = 0.2f, rimBrightness = 2f, dispersion = 1.6f,
+                roundness = 1f, depth = 1.3f, reflection = 1.8f, gloss = 0.75f,
+                surfaceMotion = 0.35f, edgeWidth = 0.4f, frost = 0f, shadowDepth = 0.7f,
+                shadowSoftness = 0.7f, shadowTint = 1f,
+            ),
+            "Obsidian" to PlayerGlassSettings(
+                bodyOpacity = 0.4f, refraction = 0.14f, rimBrightness = 0.8f, dispersion = 0.5f,
+                roundness = 1.1f, depth = 1.5f, reflection = 0.4f, gloss = 0.25f,
+                surfaceMotion = 0.1f, edgeWidth = 0.5f, frost = 0.1f, shadowDepth = 0.6f,
+                shadowSoftness = 0.55f,
+            ),
+            "Pillow" to PlayerGlassSettings(
+                bodyOpacity = 0.58f, refraction = 0.14f, rimBrightness = 1f, dispersion = 0.8f,
+                roundness = 1.9f, depth = 1.1f, reflection = 0.7f, gloss = 0.3f,
+                surfaceMotion = 0.25f, edgeWidth = 0.75f, frost = 0.2f, shadowDepth = 0.8f,
+                shadowSoftness = 1f,
+            ),
+            "Mirror" to PlayerGlassSettings(
+                bodyOpacity = 0.7f, refraction = 0.08f, rimBrightness = 1.9f, dispersion = 0.6f,
+                roundness = 0.6f, depth = 1f, reflection = 2f, gloss = 1f,
+                surfaceMotion = 0.1f, edgeWidth = 0.15f, frost = 0f, shadowDepth = 0.5f,
+                shadowSoftness = 0.3f,
+            ),
+        )
+    }
+}
+
+/**
+ * A user-saved Player Glass theme: a name plus a full [PlayerGlassSettings]
+ * snapshot. Serialises to a compact, shareable code ([encode]/[decode]) so a
+ * whole glass look travels in one copy-pasteable string, exactly like the
+ * Lyrics FX presets.
+ */
+@Serializable
+data class PlayerGlassPreset(
+    val name: String,
+    val settings: PlayerGlassSettings,
+) {
+    companion object {
+        /** Marker so an imported blob is recognisably one of our glass codes. */
+        const val CODE_PREFIX = "TRYPTGLASS1:"
+
+        private val codec = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+        /** Encode a preset to a single shareable string (prefix + compact JSON). */
+        fun encode(preset: PlayerGlassPreset): String =
+            CODE_PREFIX + codec.encodeToString(preset.copy(settings = preset.settings.clamped()))
+
+        /**
+         * Decode a shared code back to a preset, tolerating the prefix being
+         * present or not and surrounding whitespace. Returns null if the text
+         * isn't a valid preset. Settings are re-clamped so a hand-edited or
+         * hostile code can't push values out of range.
+         */
+        fun decode(code: String): PlayerGlassPreset? = runCatching {
+            val trimmed = code.trim()
+            val start = trimmed.indexOf('{')
+            require(start >= 0) { "no preset payload" }
+            codec.decodeFromString<PlayerGlassPreset>(trimmed.substring(start)).let {
+                it.copy(name = it.name.trim().ifBlank { "Imported" }, settings = it.settings.clamped())
+            }
+        }.getOrNull()
     }
 }
