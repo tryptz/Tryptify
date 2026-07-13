@@ -16,11 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Lyrics
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,9 +26,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.R
 /**
  * Compact tool row beneath the transport controls: Lyrics · Timer · Mixer/FX · Playlist.
  * (Monitoring + effect controls live in the pull-up "Audio tools" panel.)
@@ -66,17 +63,17 @@ fun PlayerActionDock(
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            DockAction(Icons.Default.Lyrics, "Lyrics", accent, lyricsActive, onLyrics)
-            DockAction(Icons.Default.Timer, "Timer", accent, false, onTimer)
-            DockAction(Icons.Default.Tune, "Mixer/FX", accent, false, onMixer)
-            DockAction(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", accent, false, onPlaylist)
+            DockAction(painterResource(R.drawable.ic_glass_lyrics), "Lyrics", accent, lyricsActive, onLyrics)
+            DockAction(painterResource(R.drawable.ic_glass_timer), "Timer", accent, false, onTimer)
+            DockAction(painterResource(R.drawable.ic_glass_mixer), "Mixer/FX", accent, false, onMixer)
+            DockAction(painterResource(R.drawable.ic_glass_playlist), "Playlist", accent, false, onPlaylist)
         }
     }
 }
 
 @Composable
 private fun DockAction(
-    icon: ImageVector,
+    icon: Painter,
     label: String,
     accent: Color,
     selected: Boolean,
@@ -101,9 +98,11 @@ private fun DockAction(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(
-            imageVector = icon,
+            painter = icon,
             contentDescription = label,
-            modifier = Modifier.size(PlayerDesignTokens.ActionIconSize),
+            modifier = Modifier
+                .size(PlayerDesignTokens.ActionIconSize)
+                .playerGlass(tint = iconTint),
             tint = iconTint,
         )
         Text(
