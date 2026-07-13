@@ -54,6 +54,7 @@ fun PlayerActionDock(
                 shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerLarge),
                 tintAlpha = PlayerDesignTokens.GlassTintMedium,
                 borderAlpha = PlayerDesignTokens.GlassTintSoft,
+                liquid = true,
             )
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
