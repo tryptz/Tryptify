@@ -14,6 +14,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -247,6 +248,48 @@ class PreferencesManager @Inject constructor(
 
         // Onboarding
         private val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
+
+        // ── Settings cloud-sync allow-list ───────────────────────────────────
+        // ONLY these preferences are exported to the user's Supabase settings
+        // row. It is an allow-list on purpose: anything NOT here (auth tokens &
+        // OAuth secrets, device ids, per-device GPU/fps tuning, device-local
+        // file/SAF paths, caches, transient player state, one-shot flags, and
+        // the legacy lyrics keys superseded by LYRICS_FX_JSON) never leaves the
+        // device — and a newly added key defaults to "not synced" until it's
+        // deliberately added here.
+        val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
+            WIFI_QUALITY, CELLULAR_QUALITY, REPLAY_GAIN_MODE, REPLAY_GAIN_PREAMP,
+            THEME, DYNAMIC_COLORS, FONT_SCALE,
+            GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
+            NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
+            PLAYBACK_SPEED, PRESERVE_PITCH,
+            DOWNLOAD_QUALITY, DOWNLOAD_LYRICS,
+            LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
+            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, SOURCE_MODE, DEV_MODE_ENABLED,
+            NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
+            ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
+            LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON,
+            VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS,
+            VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
+            VISUALIZER_ROTATION_SECONDS, VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
+            VISUALIZER_TOUCH_WAVEFORM, VISUALIZER_FAVORITE_PRESETS,
+            SPECTRUM_ANALYZER_ENABLED, SPECTRUM_SHOW_ON_NOW_PLAYING, SPECTRUM_FFT_SIZE,
+            EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
+            EQ_CUSTOM_TARGETS_JSON, EQ_SELECTED_HEADPHONE_ID, EQ_SELECTED_HEADPHONE_NAME,
+            EQ_UPLOADED_HEADPHONES_JSON,
+            PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
+            DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
+            SCAN_ON_APP_OPEN, MIN_TRACK_DURATION_MS, BACKGROUND_SCAN_INTERVAL,
+            LIBRARY_TAB_ORDER, CAR_MODE_BAND_COUNT,
+            AI_RADIO_ENABLED, RADIO_PLANNER_ENABLED, RADIO_PLANNER_URL,
+            RADIO_WEIGHT_LOCAL_LIBRARY, RADIO_WEIGHT_QOBUZ, RADIO_WEIGHT_SPOTIFY_DISCOVERY,
+            RADIO_WEIGHT_METABRAINZ_METADATA, RADIO_WEIGHT_LISTENBRAINZ_GRAPH,
+            RADIO_WEIGHT_CANONICAL_VERSION_BIAS, RADIO_WEIGHT_NOVELTY, RADIO_WEIGHT_FAMILIARITY,
+            RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
+            RADIO_WEIGHT_MOOD_CONTINUITY, RADIO_WEIGHT_ERA_CONSISTENCY,
+            RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
+        )
+        private val SETTINGS_SYNC_KEY_NAMES: Set<String> = SETTINGS_SYNC_KEYS.map { it.name }.toSet()
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -1197,6 +1240,51 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setCustomLyricsFxPresets(presets: List<tf.monochrome.android.domain.model.LyricsFxPreset>) {
         dataStore.edit { it[LYRICS_FX_CUSTOM_PRESETS_JSON] = json.encodeToString(presets) }
+    }
+
+    // ── Settings cloud-sync (export / import the allow-listed prefs) ─────────
+
+    /** A tagged-JSON snapshot of only the [SETTINGS_SYNC_KEYS] prefs. */
+    suspend fun exportSettingsJson(): String =
+        SettingsSyncCodec.encode(syncSnapshotOf(dataStore.data.first()))
+
+    /** The allow-listed subset of a Preferences snapshot, keyed by name. */
+    private fun syncSnapshotOf(prefs: Preferences): Map<String, Any> =
+        prefs.asMap()
+            .filterKeys { it in SETTINGS_SYNC_KEYS }
+            .mapKeys { it.key.name }
+
+    /**
+     * Apply a settings snapshot pulled from the cloud, in a single atomic edit.
+     * Only keys on the allow-list are written (a hostile/stale blob can't set
+     * excluded or unknown keys), and each is stored under a freshly reconstructed
+     * key of the decoded value's type.
+     */
+    suspend fun importSettingsJson(payload: String) {
+        val decoded = SettingsSyncCodec.decode(payload)
+        if (decoded.isEmpty()) return
+        dataStore.edit { prefs ->
+            decoded.forEach { (name, value) ->
+                if (name !in SETTINGS_SYNC_KEY_NAMES) return@forEach
+                when (value) {
+                    is Boolean -> prefs[booleanPreferencesKey(name)] = value
+                    is Int -> prefs[intPreferencesKey(name)] = value
+                    is Long -> prefs[longPreferencesKey(name)] = value
+                    is Float -> prefs[floatPreferencesKey(name)] = value
+                    is Double -> prefs[doublePreferencesKey(name)] = value
+                    is String -> prefs[stringPreferencesKey(name)] = value
+                    is Set<*> -> prefs[stringSetPreferencesKey(name)] = value.map { it.toString() }.toSet()
+                }
+            }
+        }
+    }
+
+    /**
+     * Emits the allow-listed settings snapshot whenever any synced pref changes.
+     * The [SettingsSyncCoordinator] debounces this to push changes to the cloud.
+     */
+    val settingsSyncSnapshot: Flow<String> = dataStore.data.map { prefs ->
+        SettingsSyncCodec.encode(syncSnapshotOf(prefs))
     }
 
     // --- Player appearance ---

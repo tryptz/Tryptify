@@ -84,6 +84,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController
 
+    @Inject
+    lateinit var settingsSyncCoordinator: tf.monochrome.android.data.sync.SettingsSyncCoordinator
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -168,6 +171,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
                     else deviceRegistry.clearOnSignOut()
                 }
         }
+        // Auto-save app settings to the user's Supabase row: pull on sign-in,
+        // then push (debounced) whenever an allow-listed setting changes.
+        settingsSyncCoordinator.start(appScope)
     }
 
     private fun registerPlaybackNotificationChannel() {

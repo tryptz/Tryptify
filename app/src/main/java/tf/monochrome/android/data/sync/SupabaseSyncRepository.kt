@@ -182,6 +182,14 @@ data class SbPlaylistTrack(
     val added_at: String? = null
 )
 
+/** One row per user: a tagged-JSON blob of the user's allow-listed app settings. */
+@Serializable
+data class SbUserSettings(
+    val user_id: String? = null,
+    val payload: String,
+    val updated_at: String? = null,
+)
+
 // ─── Repository ───────────────────────────────────────────────────────────────
 
 @Singleton
@@ -192,11 +200,40 @@ class SupabaseSyncRepository @Inject constructor(
     private val mixPresetDao: MixPresetDao,
     private val playlistDao: PlaylistDao,
     private val playEventDao: PlayEventDao,
+    private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
 ) {
     private val supabase get() = authManager.supabase
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private fun userId(): String? = authManager.userProfile.value?.id
+
+    // ─── App settings (single JSON row per user) ─────────────────────────────
+
+    /** Upload the user's allow-listed settings snapshot (last-write-wins). */
+    suspend fun pushSettings() {
+        val uid = userId() ?: return
+        runCatching {
+            supabase.postgrest["user_settings"].upsert(
+                SbUserSettings(
+                    user_id = uid,
+                    payload = preferences.exportSettingsJson(),
+                    updated_at = java.time.Instant.now().toString(),
+                )
+            ) { onConflict = "user_id" }
+        }.onFailure { Log.e(TAG, "pushSettings failed: ${it.message}") }
+    }
+
+    /** Fetch the cloud settings row (if any) and apply it to local DataStore. */
+    suspend fun pullSettings() {
+        val uid = userId() ?: return
+        runCatching {
+            supabase.postgrest["user_settings"]
+                .select { filter { eq("user_id", uid) } }
+                .decodeSingleOrNull<SbUserSettings>()
+                ?.payload
+                ?.let { preferences.importSettingsJson(it) }
+        }.onFailure { Log.e(TAG, "pullSettings failed: ${it.message}") }
+    }
 
     // ─── EQ Presets ──────────────────────────────────────────────────────────
 
@@ -582,9 +619,10 @@ class SupabaseSyncRepository @Inject constructor(
      * Called once after sign-in. Pulls all cloud data and merges it into Room.
      * Existing local data wins on conflict — we don't overwrite local with cloud.
      */
-    suspend fun pullAll() {
-        val uid = userId() ?: return
+    suspend fun pullAll(): List<String> {
+        val uid = userId() ?: return listOf("not signed in")
         Log.d(TAG, "Starting full cloud pull for user $uid")
+        val failed = mutableListOf<String>()
 
         // Favorites
         runCatching {
@@ -608,7 +646,7 @@ class SupabaseSyncRepository @Inject constructor(
                     )
                 )
             }
-        }.onFailure { Log.e(TAG, "pull favorite_tracks: ${it.message}") }
+        }.onFailure { failed += "favorite_tracks"; Log.e(TAG, "pull favorite_tracks: ${it.message}") }
 
         runCatching {
             val albums = supabase.postgrest["favorite_albums"]
@@ -628,7 +666,7 @@ class SupabaseSyncRepository @Inject constructor(
                     )
                 )
             }
-        }.onFailure { Log.e(TAG, "pull favorite_albums: ${it.message}") }
+        }.onFailure { failed += "favorite_albums"; Log.e(TAG, "pull favorite_albums: ${it.message}") }
 
         runCatching {
             val artists = supabase.postgrest["favorite_artists"]
@@ -639,7 +677,7 @@ class SupabaseSyncRepository @Inject constructor(
                     FavoriteArtistEntity(id = a.id, name = a.name, picture = a.picture)
                 )
             }
-        }.onFailure { Log.e(TAG, "pull favorite_artists: ${it.message}") }
+        }.onFailure { failed += "favorite_artists"; Log.e(TAG, "pull favorite_artists: ${it.message}") }
 
         // Mix Presets
         runCatching {
@@ -656,7 +694,7 @@ class SupabaseSyncRepository @Inject constructor(
                     )
                 )
             }
-        }.onFailure { Log.e(TAG, "pull mix_presets: ${it.message}") }
+        }.onFailure { failed += "mix_presets"; Log.e(TAG, "pull mix_presets: ${it.message}") }
 
         // Playlists
         runCatching {
@@ -691,7 +729,7 @@ class SupabaseSyncRepository @Inject constructor(
                     )
                 }
             }
-        }.onFailure { Log.e(TAG, "pull playlists: ${it.message}") }
+        }.onFailure { failed += "playlists"; Log.e(TAG, "pull playlists: ${it.message}") }
 
         // Play events — pull the most recent 1000 and merge into Room so stats
         // come across on a new device. Skip events already present (same track
@@ -705,7 +743,10 @@ class SupabaseSyncRepository @Inject constructor(
                 }
                 .decodeList<SbPlayEvent>()
             events.forEach { e ->
-                playEventDao.insert(
+                // insertFromCloud is @Insert(onConflict = IGNORE) on the unique
+                // cloudRowId index — so re-pulling never duplicates local stats.
+                // Carrying cloudRowId is also what lets pushAll skip these rows.
+                playEventDao.insertFromCloud(
                     PlayEventEntity(
                         trackId = e.track_id,
                         title = e.title,
@@ -717,60 +758,59 @@ class SupabaseSyncRepository @Inject constructor(
                         albumCover = e.album_cover,
                         audioQuality = e.audio_quality,
                         source = e.source,
-                        playedAt = e.played_at_ms
+                        playedAt = e.played_at_ms,
+                        cloudRowId = e.id,
                     )
                 )
             }
-        }.onFailure { Log.e(TAG, "pull play_events: ${it.message}") }
+        }.onFailure { failed += "play_events"; Log.e(TAG, "pull play_events: ${it.message}") }
 
-        Log.d(TAG, "Cloud pull complete")
+        // App settings — apply the cloud snapshot to local DataStore.
+        runCatching { pullSettings() }
+            .onFailure { failed += "settings"; Log.e(TAG, "pull settings: ${it.message}") }
+
+        Log.d(TAG, "Cloud pull complete (${failed.size} failed sections)")
+        return failed
     }
 
     // ─── Full push (local → cloud) after import ─────────────────────────────
 
     /**
-     * Push all local favorites, playlists, and history to Supabase.
-     * Called after a JSON library import to sync imported data to cloud.
+     * Push all local library data + settings to Supabase.
+     * @return the names of any sections that failed (empty = full success). The
+     * caller must surface a non-empty result instead of reporting success — each
+     * section swallows its own exception so a failure here is otherwise silent.
      */
-    suspend fun pushAll() {
-        val uid = userId() ?: return
+    suspend fun pushAll(): List<String> {
+        val uid = userId() ?: return listOf("not signed in")
         Log.d(TAG, "Starting full cloud push for user $uid")
+        val failed = mutableListOf<String>()
+        suspend fun section(name: String, block: suspend () -> Unit) {
+            runCatching { block() }.onFailure { failed += name; Log.e(TAG, "push $name: ${it.message}") }
+        }
 
-        // Favorite tracks
-        runCatching {
-            favoritesDao.getFavoriteTracksSnapshot().forEach { pushFavoriteTrack(it) }
-        }.onFailure { Log.e(TAG, "push favorite_tracks: ${it.message}") }
-
-        // Favorite albums
-        runCatching {
-            favoritesDao.getFavoriteAlbumsSnapshot().forEach { pushFavoriteAlbum(it) }
-        }.onFailure { Log.e(TAG, "push favorite_albums: ${it.message}") }
-
-        // Favorite artists
-        runCatching {
-            favoritesDao.getFavoriteArtistsSnapshot().forEach { pushFavoriteArtist(it) }
-        }.onFailure { Log.e(TAG, "push favorite_artists: ${it.message}") }
-
-        // History (aggregated — one row per track)
-        runCatching {
-            historyDao.getHistorySnapshot(500).forEach { pushHistoryTrack(it) }
-        }.onFailure { Log.e(TAG, "push play_history: ${it.message}") }
-
-        // Play events (per-play scrobble log — drives Listening Stats)
-        runCatching {
-            playEventDao.getRecent(1000).forEach { pushPlayEvent(it) }
-        }.onFailure { Log.e(TAG, "push play_events: ${it.message}") }
-
-        // Playlists + tracks
-        runCatching {
+        section("favorite_tracks") { favoritesDao.getFavoriteTracksSnapshot().forEach { pushFavoriteTrack(it) } }
+        section("favorite_albums") { favoritesDao.getFavoriteAlbumsSnapshot().forEach { pushFavoriteAlbum(it) } }
+        section("favorite_artists") { favoritesDao.getFavoriteArtistsSnapshot().forEach { pushFavoriteArtist(it) } }
+        section("play_history") { historyDao.getHistorySnapshot(500).forEach { pushHistoryTrack(it) } }
+        // Play events: only push rows not already in the cloud (cloudRowId IS
+        // NULL), and record the assigned cloud id, so repeated syncs don't
+        // re-insert the same scrobble and inflate stats (the old code re-pushed
+        // the last 1000 every time).
+        section("play_events") {
+            playEventDao.getUnsynced(1000).forEach { e ->
+                pushPlayEvent(e)?.let { cloudId -> playEventDao.setCloudId(e.rowId, cloudId) }
+            }
+        }
+        section("playlists") {
             playlistDao.getAllPlaylistsSnapshot().forEach { playlist ->
                 pushPlaylist(playlist)
-                playlistDao.getPlaylistTracksSnapshot(playlist.id).forEach { track ->
-                    pushPlaylistTrack(track)
-                }
+                playlistDao.getPlaylistTracksSnapshot(playlist.id).forEach { track -> pushPlaylistTrack(track) }
             }
-        }.onFailure { Log.e(TAG, "push playlists: ${it.message}") }
+        }
+        section("settings") { pushSettings() }
 
-        Log.d(TAG, "Cloud push complete")
+        Log.d(TAG, "Cloud push complete (${failed.size} failed sections)")
+        return failed
     }
 }
