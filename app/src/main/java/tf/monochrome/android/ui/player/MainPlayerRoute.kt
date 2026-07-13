@@ -155,12 +155,16 @@ fun MainPlayerRoute(
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsState()
     val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsState()
+    val dynamicColors by playerViewModel.dynamicColors.collectAsState()
 
     val extractedColors = rememberAlbumColors(currentTrack?.coverUrl)
-    // Player tint follows album art only when the user wants it; otherwise the
-    // theme's primary drives the same pipeline (background, glow, accents).
+    // Player tint follows album art only when BOTH the master "Dynamic Colors"
+    // switch and the player-specific toggle are on — so turning off Dynamic
+    // Colors makes the whole player static (background, glow, accents, rays,
+    // glass), not just the app-wide theme. Otherwise the theme primary drives
+    // the same pipeline.
     val themeAccent = MaterialTheme.colorScheme.primary
-    val albumColors = if (playerDynamicColor) {
+    val albumColors = if (dynamicColors && playerDynamicColor) {
         extractedColors
     } else {
         AlbumColors(dominant = themeAccent, vibrant = themeAccent)

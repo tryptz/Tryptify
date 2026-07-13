@@ -351,7 +351,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
         }
         SettingSwitchItem(
             title = "Dynamic Colors",
-            subtitle = "Extract accent colors from album art",
+            subtitle = "Master switch: tint the app AND the player from album art. Off = everything uses the theme color",
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
@@ -656,7 +656,7 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
         }
         SettingSwitchItem(
             title = "Dynamic Player Color",
-            subtitle = "Tint the player from the album art; off uses the theme color",
+            subtitle = "Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color",
             checked = playerDynamicColor,
             onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
         )

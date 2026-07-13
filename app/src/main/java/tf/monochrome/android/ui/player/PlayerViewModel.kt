@@ -126,6 +126,11 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    // Master album-colour switch (Appearance › Dynamic Colors). When off, NO
+    // surface tints from album art — including the player — so turning it off
+    // makes everything static, not just the app-wide theme.
+    val dynamicColors: StateFlow<Boolean> = preferences.dynamicColors
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val lyricsFx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
