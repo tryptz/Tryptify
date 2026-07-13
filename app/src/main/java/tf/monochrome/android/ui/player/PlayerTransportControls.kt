@@ -4,11 +4,13 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,8 +23,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -72,40 +75,46 @@ fun PlayerTransportControls(
         )
         // Play/pause is a SOLID round glass disc with the play/pause symbol
         // punched out (hollow), so the backdrop shows through the glyph and the
-        // shader bevels both the disc rim and the cut-out edges. A drop shadow
-        // lifts it off the surface: shadow depth = darkness, softness = blur,
-        // tint = black -> accent-tinted glow (all tunable in the Studio).
-        val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, accent, glass.shadowTint)
-            .copy(alpha = 0.25f + 0.6f * glass.shadowDepth)
+        // shader bevels both the disc rim and the cut-out edges.
         Box(
             modifier = Modifier
                 .size(PlayerDesignTokens.PlayButtonSize)
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .shadow(
-                    elevation = (4f + glass.shadowSoftness * 26f).dp,
-                    shape = CircleShape,
-                    clip = false,
-                    ambientColor = shadowColor,
-                    spotColor = shadowColor,
-                )
-                .clip(CircleShape)
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onPlayPause,
-                ),
+                .graphicsLayer { scaleX = scale; scaleY = scale },
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(
+            // Drop shadow drawn by us as a blurred, tinted circle — a TRUE round
+            // shadow. The platform elevation shadow facets CircleShape into an
+            // octagon on some GPUs; a blurred circle stays perfectly round.
+            // Depth = darkness, softness = blur radius + offset, tint = black ->
+            // accent glow (all tunable in the Studio).
+            GlassDropShadow(
+                color = androidx.compose.ui.graphics.lerp(Color.Black, accent, glass.shadowTint)
+                    .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
+                softness = glass.shadowSoftness,
+                depth = glass.shadowDepth,
+            )
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .playerGlass(tint = accent)
-                    // Own offscreen layer so the punch-out (BlendMode.Clear) is
-                    // contained here and can't clear the player behind it — needed
-                    // when the glass effect is off or below API 33.
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = onPlayPause,
+                    ),
+                contentAlignment = Alignment.Center,
             ) {
-                drawGlassPlayPauseDisc(isPlaying = isPlaying, fill = accent)
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .playerGlass(tint = accent)
+                        // Own offscreen layer so the punch-out (BlendMode.Clear) is
+                        // contained here and can't clear the player behind it — needed
+                        // when the glass effect is off or below API 33.
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                ) {
+                    drawGlassPlayPauseDisc(isPlaying = isPlaying, fill = accent)
+                }
             }
         }
 
@@ -172,6 +181,27 @@ private fun DrawScope.drawPlayPauseSymbol(
         }
         drawPath(tri, color = color, blendMode = blend)
     }
+}
+
+/**
+ * A soft, perfectly ROUND drop shadow for the play button — a blurred, tinted
+ * circle we draw ourselves instead of the platform elevation shadow (which
+ * facets a CircleShape into a visible octagon on some GPUs). [depth] offsets +
+ * darkens it, [softness] sets the blur radius. Below API 31 blur is a no-op, so
+ * it degrades to a hard (still round) circle rather than an octagon.
+ */
+@Composable
+internal fun BoxScope.GlassDropShadow(color: Color, softness: Float, depth: Float) {
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .graphicsLayer { translationY = (2f + depth * 6f).dp.toPx() }
+            .blur(
+                radius = (5f + softness * 22f).dp,
+                edgeTreatment = BlurredEdgeTreatment.Unbounded,
+            )
+            .background(color, CircleShape),
+    )
 }
 
 @Composable

@@ -62,7 +62,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -98,6 +97,7 @@ import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerActionDock
+import tf.monochrome.android.ui.player.GlassDropShadow
 import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.Letters3DLine
@@ -763,29 +763,29 @@ private fun PlayerGlassTab(
                             Modifier.size(34.dp).playerGlass(accent), tint = accent,
                         )
                         // Solid glass disc with the play symbol punched out, plus the
-                        // drop shadow — matching the real play button.
-                        val discShadow = lerp(Color.Black, accent, glass.shadowTint)
-                            .copy(alpha = 0.25f + 0.6f * glass.shadowDepth)
+                        // same custom round drop shadow as the real play button.
                         Box(
-                            Modifier
-                                .size(64.dp)
-                                .shadow(
-                                    elevation = (4f + glass.shadowSoftness * 26f).dp,
-                                    shape = CircleShape,
-                                    clip = false,
-                                    ambientColor = discShadow,
-                                    spotColor = discShadow,
-                                )
-                                .clip(CircleShape),
+                            Modifier.size(64.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Canvas(
-                                Modifier
-                                    .fillMaxSize()
-                                    .playerGlass(accent)
-                                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                            GlassDropShadow(
+                                color = lerp(Color.Black, accent, glass.shadowTint)
+                                    .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
+                                softness = glass.shadowSoftness,
+                                depth = glass.shadowDepth,
+                            )
+                            Box(
+                                Modifier.fillMaxSize().clip(CircleShape),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                drawGlassPlayPauseDisc(isPlaying = false, fill = accent)
+                                Canvas(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .playerGlass(accent)
+                                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                                ) {
+                                    drawGlassPlayPauseDisc(isPlaying = false, fill = accent)
+                                }
                             }
                         }
                         Icon(
