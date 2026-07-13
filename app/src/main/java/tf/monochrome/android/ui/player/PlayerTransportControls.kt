@@ -59,13 +59,16 @@ fun PlayerTransportControls(
     modifier: Modifier = Modifier,
 ) {
     val glass = LocalPlayerGlass.current
+    // Button glass tint: a custom colour chosen in the Studio, or the album
+    // accent when none is set (tintColor == 0).
+    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TransportIcon(
-            painterResource(R.drawable.ic_glass_skip_previous), "Previous", accent, onPrevious,
+            painterResource(R.drawable.ic_glass_skip_previous), "Previous", tint, onPrevious,
             size = PlayerDesignTokens.SkipIconSize,
         )
 
@@ -91,7 +94,7 @@ fun PlayerTransportControls(
             // Depth = darkness, softness = blur radius + offset, tint = black ->
             // accent glow (all tunable in the Studio).
             GlassDropShadow(
-                color = androidx.compose.ui.graphics.lerp(Color.Black, accent, glass.shadowTint)
+                color = androidx.compose.ui.graphics.lerp(Color.Black, tint, glass.shadowTint)
                     .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
                 softness = glass.shadowSoftness,
                 depth = glass.shadowDepth,
@@ -110,19 +113,19 @@ fun PlayerTransportControls(
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .playerGlass(tint = accent)
+                        .playerGlass(tint = tint)
                         // Own offscreen layer so the punch-out (BlendMode.Clear) is
                         // contained here and can't clear the player behind it — needed
                         // when the glass effect is off or below API 33.
                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
                 ) {
-                    drawGlassPlayPauseDisc(isPlaying = isPlaying, fill = accent)
+                    drawGlassPlayPauseDisc(isPlaying = isPlaying, fill = tint)
                 }
             }
         }
 
         TransportIcon(
-            painterResource(R.drawable.ic_glass_skip_next), "Next", accent, onNext,
+            painterResource(R.drawable.ic_glass_skip_next), "Next", tint, onNext,
             size = PlayerDesignTokens.SkipIconSize,
         )
     }

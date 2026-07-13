@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -22,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -734,6 +736,11 @@ private fun PlayerGlassTab(
     onUpdate: ((PlayerGlassSettings) -> PlayerGlassSettings) -> Unit,
 ) {
     val accent = MaterialTheme.colorScheme.primary
+    // Custom preview colours (0 = use the current album colour).
+    val previewTint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
+    val previewBgBrush = if (glass.previewBg != 0) SolidColor(Color(glass.previewBg)) else previewBackground(accent)
+    var showBgPicker by remember { mutableStateOf(false) }
+    var showTintPicker by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxSize()) {
         // Pinned preview — stays locked in view while you tune the sliders,
         // just like the Lyrics editor.
@@ -747,7 +754,7 @@ private fun PlayerGlassTab(
                 .fillMaxWidth()
                 .height(232.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(previewBackground(accent)),
+                .background(previewBgBrush),
             contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(LocalPlayerGlass provides glass) {
@@ -763,7 +770,7 @@ private fun PlayerGlassTab(
                         // Real transport icon: bigger skip + shape-accurate shadow,
                         // exactly like the player.
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_previous), "Previous", accent, {},
+                            painterResource(R.drawable.ic_glass_skip_previous), "Previous", previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                         // Solid glass disc with the play symbol punched out, plus the
@@ -773,7 +780,7 @@ private fun PlayerGlassTab(
                             contentAlignment = Alignment.Center,
                         ) {
                             GlassDropShadow(
-                                color = lerp(Color.Black, accent, glass.shadowTint)
+                                color = lerp(Color.Black, previewTint, glass.shadowTint)
                                     .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
                                 softness = glass.shadowSoftness,
                                 depth = glass.shadowDepth,
@@ -785,15 +792,15 @@ private fun PlayerGlassTab(
                                 Canvas(
                                     Modifier
                                         .fillMaxSize()
-                                        .playerGlass(accent)
+                                        .playerGlass(previewTint)
                                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
                                 ) {
-                                    drawGlassPlayPauseDisc(isPlaying = false, fill = accent)
+                                    drawGlassPlayPauseDisc(isPlaying = false, fill = previewTint)
                                 }
                             }
                         }
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_next), "Next", accent, {},
+                            painterResource(R.drawable.ic_glass_skip_next), "Next", previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                     }
@@ -825,6 +832,24 @@ private fun PlayerGlassTab(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
+        // Colour swatches: preview background + button glass tint, each "current"
+        // (album) or a custom colour picked from the bubble.
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            ColorSwatch(
+                label = "Background",
+                color = if (glass.previewBg != 0) Color(glass.previewBg) else lerp(Color.Black, accent, 0.34f),
+                isCustom = glass.previewBg != 0,
+                onClick = { showBgPicker = true },
+            )
+            ColorSwatch(
+                label = "Button tint",
+                color = previewTint,
+                isCustom = glass.tintColor != 0,
+                onClick = { showTintPicker = true },
+            )
+        }
+        Spacer(Modifier.height(14.dp))
         StudioSection("Player Glass")
         FxToggle(
             "Button liquid glass", glass.enabled,
@@ -905,6 +930,98 @@ private fun PlayerGlassTab(
         Spacer(Modifier.height(48.dp))
         }
     }
+
+    if (showBgPicker) {
+        GlassColorPickerDialog(
+            title = "Preview background",
+            initial = glass.previewBg,
+            onPick = { c -> onUpdate { it.copy(previewBg = c) }; showBgPicker = false },
+            onDismiss = { showBgPicker = false },
+        )
+    }
+    if (showTintPicker) {
+        GlassColorPickerDialog(
+            title = "Button glass tint",
+            initial = glass.tintColor,
+            onPick = { c -> onUpdate { it.copy(tintColor = c) }; showTintPicker = false },
+            onDismiss = { showTintPicker = false },
+        )
+    }
+}
+
+/** A round colour bubble + label, showing "Current" (album) or "Custom". */
+@Composable
+private fun ColorSwatch(label: String, color: Color, isCustom: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(color)
+                .border(2.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                .clickable(onClick = onClick),
+        )
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.85f))
+        Text(
+            if (isCustom) "Custom" else "Current",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.45f),
+        )
+    }
+}
+
+/**
+ * A compact HSV colour picker dialog. [initial] is an ARGB int (0 = current
+ * album colour); [onPick] returns the chosen ARGB int, or 0 for "use current".
+ */
+@Composable
+private fun GlassColorPickerDialog(
+    title: String,
+    initial: Int,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val hsv = remember {
+        FloatArray(3).also { a ->
+            if (initial != 0) android.graphics.Color.colorToHSV(initial, a)
+            else { a[0] = 210f; a[1] = 0.55f; a[2] = 0.95f }
+        }
+    }
+    var h by remember { mutableFloatStateOf(hsv[0]) }
+    var s by remember { mutableFloatStateOf(hsv[1]) }
+    var v by remember { mutableFloatStateOf(hsv[2]) }
+    val preview = Color(android.graphics.Color.HSVToColor(floatArrayOf(h, s, v)))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(preview),
+                )
+                Text("Hue", style = MaterialTheme.typography.labelSmall)
+                Slider(value = h, onValueChange = { h = it }, valueRange = 0f..360f)
+                Text("Saturation", style = MaterialTheme.typography.labelSmall)
+                Slider(value = s, onValueChange = { s = it }, valueRange = 0f..1f)
+                Text("Brightness", style = MaterialTheme.typography.labelSmall)
+                Slider(value = v, onValueChange = { v = it }, valueRange = 0f..1f)
+                TextButton(onClick = { onPick(0) }) { Text("Use current album colour") }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onPick(android.graphics.Color.HSVToColor(floatArrayOf(h, s, v))) }) {
+                Text("Select")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /**

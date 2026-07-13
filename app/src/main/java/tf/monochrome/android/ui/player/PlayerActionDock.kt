@@ -93,12 +93,15 @@ fun PlayerActionDock(
     )
     val bulgeCenter = Offset((bulgeSlot.intValue + 0.5f) / icons.size, 0.42f)
     Box(modifier = modifier.fillMaxWidth()) {
+        // Button glass tint: a custom colour chosen in the Studio, or the album
+        // accent when none is set (tintColor == 0).
+        val g = LocalPlayerGlass.current
+        val glassTint = if (g.tintColor != 0) Color(g.tintColor) else accent
         // Soft rounded-rect drop shadow lifting the whole glass slab off the
         // player, matching the play button + transport icons (Studio-tunable).
-        val g = LocalPlayerGlass.current
         if (g.enabled) {
             GlassDropShadow(
-                color = androidx.compose.ui.graphics.lerp(Color.Black, accent, g.shadowTint)
+                color = androidx.compose.ui.graphics.lerp(Color.Black, glassTint, g.shadowTint)
                     .copy(alpha = 0.26f + 0.5f * g.shadowDepth),
                 softness = g.shadowSoftness,
                 depth = g.shadowDepth,
@@ -111,15 +114,15 @@ fun PlayerActionDock(
         Canvas(
             modifier = Modifier
                 .matchParentSize()
-                .playerGlass(tint = accent, bulgeCenter = bulgeCenter, bulgeAmount = { bulgeAmt })
+                .playerGlass(tint = glassTint, bulgeCenter = bulgeCenter, bulgeAmount = { bulgeAmt })
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()
-            // Same solid [accent] fill as the play-button disc, so the slab reads
+            // Same solid glass-tint fill as the play-button disc, so the slab reads
             // as the same coloured glass — the shader's body opacity makes it
             // see-through, matching the transport buttons exactly.
             drawRoundRect(
-                color = accent,
+                color = glassTint,
                 cornerRadius = CornerRadius(cornerPx, cornerPx),
             )
             val iconPx = PlayerDesignTokens.ActionIconSize.toPx()

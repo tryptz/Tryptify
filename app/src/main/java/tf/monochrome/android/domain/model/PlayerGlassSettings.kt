@@ -46,6 +46,10 @@ data class PlayerGlassSettings(
     val shadowSoftness: Float = 0.4f,
     /** Drop-shadow tint: 0 = neutral black, 1 = full accent-tinted glow. */
     val shadowTint: Float = 0f,
+    /** Button glass tint as an ARGB int; 0 = use the current album accent. */
+    val tintColor: Int = 0,
+    /** Studio-preview background as an ARGB int; 0 = the current album wash. */
+    val previewBg: Int = 0,
 ) {
     fun clamped(): PlayerGlassSettings {
         val d = DEFAULT
