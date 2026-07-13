@@ -26,6 +26,8 @@ data class PlayerGlassSettings(
     val roundness: Float = 1f,
     /** Profondeur / relief: 1 = neutral, higher = steeper, deeper 3D bevel. */
     val depth: Float = 1f,
+    /** Drop-shadow depth under the round play button (0 = flat, 1 = deepest). */
+    val shadowDepth: Float = 0.45f,
 ) {
     fun clamped(): PlayerGlassSettings {
         val d = DEFAULT
@@ -38,6 +40,7 @@ data class PlayerGlassSettings(
             sampleRings = sampleRings.coerceIn(1, 3),
             roundness = roundness.c(0.5f, 2f, d.roundness),
             depth = depth.c(0.5f, 2f, d.depth),
+            shadowDepth = shadowDepth.c(0f, 1f, d.shadowDepth),
         )
     }
 
