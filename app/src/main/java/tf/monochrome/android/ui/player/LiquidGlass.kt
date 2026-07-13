@@ -320,34 +320,67 @@ private fun playerGlassModifier(
     }
 }
 
-/** Low-pass-filtered gravity in [-1, 1] per axis; Offset.Zero if no sensor. */
+/**
+ * Low-pass-filtered gravity in [-1, 1] per axis; Offset.Zero if no sensor.
+ *
+ * Every glass surface (each lyric line, the panel, every player button) reads
+ * the same tilt, so instead of each modifier registering its OWN gravity
+ * listener — the player alone had ~7 running at once — they all share ONE
+ * process-wide [GravityTiltSource], ref-counted so the single hardware
+ * registration lives exactly as long as at least one glass surface is composed.
+ */
 @Composable
 private fun rememberGravityTilt(): State<Offset> {
     val context = LocalContext.current
-    val tilt = remember { mutableStateOf(Offset.Zero) }
     DisposableEffect(context) {
-        val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        val sensor = manager?.getDefaultSensor(Sensor.TYPE_GRAVITY)
-            ?: manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        val listener = object : SensorEventListener {
-            private var fx = 0f
-            private var fy = 0f
-            override fun onSensorChanged(event: SensorEvent) {
-                val gx = (event.values[0] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
-                val gy = (event.values[1] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
-                fx += (gx - fx) * 0.12f
-                fy += (gy - fy) * 0.12f
-                tilt.value = Offset(fx, fy)
-            }
-
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-        }
-        if (manager != null && sensor != null) {
-            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME)
-        }
-        onDispose { manager?.unregisterListener(listener) }
+        GravityTiltSource.acquire(context)
+        onDispose { GravityTiltSource.release() }
     }
-    return tilt
+    return GravityTiltSource.tilt
+}
+
+/**
+ * Shared, ref-counted gravity tilt for all liquid-glass surfaces. Registers a
+ * single [SensorEventListener] on the first [acquire] and unregisters it on the
+ * last [release]. All access is on the main thread (Compose effects + the
+ * main-Looper sensor callback), so the counter and filter need no locking.
+ */
+private object GravityTiltSource : SensorEventListener {
+    val tilt = mutableStateOf(Offset.Zero)
+    private var manager: SensorManager? = null
+    private var refCount = 0
+    private var fx = 0f
+    private var fy = 0f
+
+    fun acquire(context: Context) {
+        if (refCount++ > 0) return
+        val mgr = context.applicationContext
+            .getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val sensor = mgr?.getDefaultSensor(Sensor.TYPE_GRAVITY)
+            ?: mgr?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (mgr != null && sensor != null) {
+            manager = mgr
+            mgr.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME)
+        }
+    }
+
+    fun release() {
+        if (refCount <= 0) return
+        if (--refCount == 0) {
+            manager?.unregisterListener(this)
+            manager = null
+        }
+    }
+
+    override fun onSensorChanged(event: SensorEvent) {
+        val gx = (event.values[0] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
+        val gy = (event.values[1] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
+        fx += (gx - fx) * 0.12f
+        fy += (gy - fy) * 0.12f
+        tilt.value = Offset(fx, fy)
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 }
 
 // Static (not time-animated) noise: fixes banding without shimmer. Noise is
