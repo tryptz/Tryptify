@@ -313,9 +313,7 @@ fun MainPlayerRoute(
             },
             onSeekCommit = playerViewModel::seekToFraction,
             onPrevious = playerViewModel::skipToPrevious,
-            onRewind10 = playerViewModel::rewind10,
             onPlayPause = playerViewModel::togglePlayPause,
-            onForward10 = playerViewModel::forward10,
             onNext = playerViewModel::skipToNext,
             onLyrics = {
                 playerViewModel.setNowPlayingViewMode(

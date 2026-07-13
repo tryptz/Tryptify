@@ -128,9 +128,7 @@ fun MainPlayerScreen(
     onArtistClick: (Long) -> Unit,
     onSeekCommit: (Float) -> Unit,
     onPrevious: () -> Unit,
-    onRewind10: () -> Unit,
     onPlayPause: () -> Unit,
-    onForward10: () -> Unit,
     onNext: () -> Unit,
     onLyrics: () -> Unit,
     onTimer: () -> Unit,
@@ -404,9 +402,7 @@ fun MainPlayerScreen(
                         isPlaying = state.isPlaying,
                         accent = accent,
                         onPrevious = onPrevious,
-                        onRewind10 = onRewind10,
                         onPlayPause = onPlayPause,
-                        onForward10 = onForward10,
                         onNext = onNext,
                     )
                 }

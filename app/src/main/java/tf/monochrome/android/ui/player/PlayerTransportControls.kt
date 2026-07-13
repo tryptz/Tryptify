@@ -44,19 +44,17 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 
 /**
- * Primary transport row: previous · rewind 10s · play/pause · forward 10s ·
- * next. The icons are solid glyph shapes and carry the refractive [playerGlass]
- * treatment (tunable in the Studio's Player Glass tab), so the buttons read as
- * 3D liquid glass like the lyrics.
+ * Primary transport row: previous · play/pause · next. The icons are solid glyph
+ * shapes and carry the refractive [playerGlass] treatment (tunable in the
+ * Studio's Player Glass tab), so the buttons read as 3D liquid glass like the
+ * lyrics.
  */
 @Composable
 fun PlayerTransportControls(
     isPlaying: Boolean,
     accent: Color,
     onPrevious: () -> Unit,
-    onRewind10: () -> Unit,
     onPlayPause: () -> Unit,
-    onForward10: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -70,7 +68,6 @@ fun PlayerTransportControls(
             painterResource(R.drawable.ic_glass_skip_previous), "Previous", accent, onPrevious,
             size = PlayerDesignTokens.SkipIconSize,
         )
-        TransportIcon(painterResource(R.drawable.ic_glass_replay_10), "Rewind 10 seconds", accent, onRewind10)
 
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed by interactionSource.collectIsPressedAsState()
@@ -124,7 +121,6 @@ fun PlayerTransportControls(
             }
         }
 
-        TransportIcon(painterResource(R.drawable.ic_glass_forward_10), "Forward 10 seconds", accent, onForward10)
         TransportIcon(
             painterResource(R.drawable.ic_glass_skip_next), "Next", accent, onNext,
             size = PlayerDesignTokens.SkipIconSize,
@@ -219,7 +215,7 @@ internal fun BoxScope.GlassDropShadow(
 }
 
 @Composable
-private fun TransportIcon(
+internal fun TransportIcon(
     painter: Painter,
     description: String,
     tint: Color,

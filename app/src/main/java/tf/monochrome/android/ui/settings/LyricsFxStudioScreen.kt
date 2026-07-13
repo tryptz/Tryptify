@@ -98,6 +98,8 @@ import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerActionDock
 import tf.monochrome.android.ui.player.GlassDropShadow
+import tf.monochrome.android.ui.player.PlayerDesignTokens
+import tf.monochrome.android.ui.player.TransportIcon
 import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.Letters3DLine
@@ -755,12 +757,14 @@ private fun PlayerGlassTab(
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(22.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            painterResource(R.drawable.ic_glass_skip_previous), null,
-                            Modifier.size(34.dp).playerGlass(accent), tint = accent,
+                        // Real transport icon: bigger skip + shape-accurate shadow,
+                        // exactly like the player.
+                        TransportIcon(
+                            painterResource(R.drawable.ic_glass_skip_previous), "Previous", accent, {},
+                            size = PlayerDesignTokens.SkipIconSize,
                         )
                         // Solid glass disc with the play symbol punched out, plus the
                         // same custom round drop shadow as the real play button.
@@ -788,9 +792,9 @@ private fun PlayerGlassTab(
                                 }
                             }
                         }
-                        Icon(
-                            painterResource(R.drawable.ic_glass_skip_next), null,
-                            Modifier.size(34.dp).playerGlass(accent), tint = accent,
+                        TransportIcon(
+                            painterResource(R.drawable.ic_glass_skip_next), "Next", accent, {},
+                            size = PlayerDesignTokens.SkipIconSize,
                         )
                     }
                     // The real hollowed-slab dock, previewed under the same glass.
