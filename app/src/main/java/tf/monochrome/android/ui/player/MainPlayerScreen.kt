@@ -227,20 +227,31 @@ fun MainPlayerScreen(
                 .background(dynamicPlayerBackground(state.albumColors.dominant)),
         )
         // Full-screen blurred, stretched album art (Apple-Music / Spotify style).
-        // Sits directly over the gradient so the whole player floats over the
-        // artwork; the lyric liquid glass then refracts these album tones.
-        if (blurredBackground) {
+        // Shown whenever the lyrics are on — collapsed OR fullscreen — and only
+        // then (album-art / visualizer views keep the plain gradient). Fades with
+        // the album↔lyrics transition instead of popping.
+        val lyricsOn = lyricsExpanded || lyricsMode
+        val blurBgAlpha by animateFloatAsState(
+            targetValue = if (blurredBackground && lyricsOn) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
+            label = "blurredBg",
+        )
+        if (blurBgAlpha > 0.001f) {
             PlayerBlurredArtBackground(
                 coverUrl = state.track?.coverUrl,
                 albumColors = state.albumColors,
+                alpha = { blurBgAlpha },
             )
         }
         DynamicAlbumGlow(state.albumColors.dominant)
 
         // Expanded-lyrics backdrop: the artwork as a blurred stain fading in
-        // behind the player content — background only, not a new element.
+        // behind the player content — background only, not a new element. When
+        // the always-on blurred album background is enabled it already covers
+        // this (in every lyrics state), so the stain stands down to avoid
+        // double-darkening.
         val stainAlpha by animateFloatAsState(
-            targetValue = if (lyricsExpanded) 1f else 0f,
+            targetValue = if (lyricsExpanded && !blurredBackground) 1f else 0f,
             animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
             label = "lyricsStain",
         )

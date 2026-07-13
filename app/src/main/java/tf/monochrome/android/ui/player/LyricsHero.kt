@@ -191,8 +191,9 @@ internal fun LyricsHeroPanel(
 internal fun PlayerBlurredArtBackground(
     coverUrl: String?,
     albumColors: AlbumColors,
+    alpha: () -> Float = { 1f },
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha() }) {
         if (!coverUrl.isNullOrBlank()) {
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
