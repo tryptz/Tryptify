@@ -97,6 +97,7 @@ import tf.monochrome.android.domain.model.LyricsFxPreset
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.PlayerActionDock
 import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.Letters3DLine
@@ -736,49 +737,66 @@ private fun PlayerGlassTab(
         // just like the Lyrics editor.
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
-        // Live preview: the real transport buttons under the current button glass.
+        // Live preview: the real transport buttons AND the action dock under the
+        // current button glass — the dock is the same hollowed-slab glass, so it
+        // tunes with these sliders exactly like the play button.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(150.dp)
+                .height(232.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(previewBackground(accent)),
             contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(LocalPlayerGlass provides glass) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(22.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
-                    Icon(
-                        painterResource(R.drawable.ic_glass_skip_previous), null,
-                        Modifier.size(34.dp).playerGlass(accent), tint = accent,
-                    )
-                    // Solid glass disc with the play symbol punched out, plus the
-                    // drop shadow — matching the real play button.
-                    Box(
-                        Modifier
-                            .size(64.dp)
-                            .shadow(
-                                elevation = (glass.shadowDepth * 22f).dp,
-                                shape = CircleShape,
-                                clip = false,
-                            )
-                            .clip(CircleShape),
-                        contentAlignment = Alignment.Center,
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(22.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Canvas(
+                        Icon(
+                            painterResource(R.drawable.ic_glass_skip_previous), null,
+                            Modifier.size(34.dp).playerGlass(accent), tint = accent,
+                        )
+                        // Solid glass disc with the play symbol punched out, plus the
+                        // drop shadow — matching the real play button.
+                        Box(
                             Modifier
-                                .fillMaxSize()
-                                .playerGlass(accent)
-                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                                .size(64.dp)
+                                .shadow(
+                                    elevation = (glass.shadowDepth * 22f).dp,
+                                    shape = CircleShape,
+                                    clip = false,
+                                )
+                                .clip(CircleShape),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            drawGlassPlayPauseDisc(isPlaying = false, fill = accent)
+                            Canvas(
+                                Modifier
+                                    .fillMaxSize()
+                                    .playerGlass(accent)
+                                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                            ) {
+                                drawGlassPlayPauseDisc(isPlaying = false, fill = accent)
+                            }
                         }
+                        Icon(
+                            painterResource(R.drawable.ic_glass_skip_next), null,
+                            Modifier.size(34.dp).playerGlass(accent), tint = accent,
+                        )
                     }
-                    Icon(
-                        painterResource(R.drawable.ic_glass_skip_next), null,
-                        Modifier.size(34.dp).playerGlass(accent), tint = accent,
+                    // The real hollowed-slab dock, previewed under the same glass.
+                    PlayerActionDock(
+                        accent = accent,
+                        lyricsActive = false,
+                        onLyrics = {},
+                        onTimer = {},
+                        onMixer = {},
+                        onPlaylist = {},
                     )
                 }
             }
