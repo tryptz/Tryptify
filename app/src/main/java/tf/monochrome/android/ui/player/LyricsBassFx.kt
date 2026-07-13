@@ -289,6 +289,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeams(
     val perpY = sin(fixedRad)
     val shaftSpread = 3f * max(rx, ry)
     val spacing = if (count > 1) shaftSpread / (count - 1) else 0f
+    // One reusable Path for the tapered beams (drawPath consumes it synchronously),
+    // instead of allocating a fresh Path per beam per glyph per frame.
+    val beamPath = if (fx.rayTaper > 0.01f) Path() else null
 
     repeat(count) { i ->
         val rnd = abs(sin(i * 12.9898f + 3.7f) * 43758.545f).let { it - floor(it) }
@@ -327,20 +330,19 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeams(
             start = start,
             end = end,
         )
-        if (fx.rayTaper > 0.01f) {
+        if (beamPath != null) {
             // Tapered spear: wide base → narrow tip, perpendicular to the beam.
             val nx = -dirY
             val ny = dirX
             val half = stroke / 2f
             val tip = half * (1f - fx.rayTaper)
-            val path = Path().apply {
-                moveTo(start.x + nx * half, start.y + ny * half)
-                lineTo(start.x - nx * half, start.y - ny * half)
-                lineTo(end.x - nx * tip, end.y - ny * tip)
-                lineTo(end.x + nx * tip, end.y + ny * tip)
-                close()
-            }
-            drawPath(path = path, brush = brush)
+            beamPath.reset()
+            beamPath.moveTo(start.x + nx * half, start.y + ny * half)
+            beamPath.lineTo(start.x - nx * half, start.y - ny * half)
+            beamPath.lineTo(end.x - nx * tip, end.y - ny * tip)
+            beamPath.lineTo(end.x + nx * tip, end.y + ny * tip)
+            beamPath.close()
+            drawPath(path = beamPath, brush = brush)
         } else {
             drawLine(
                 brush = brush,

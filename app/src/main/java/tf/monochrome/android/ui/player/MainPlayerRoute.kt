@@ -268,6 +268,18 @@ fun MainPlayerRoute(
         LyricsDebug.log("view mode: ${if (viewMode == NowPlayingViewMode.LYRICS) "LYRICS active" else "lyrics inactive"}")
     }
 
+    // Hero dissolve progress (album/visualizer <-> lyrics), hoisted so the slot
+    // stays full-width for the WHOLE fade — otherwise leaving lyrics snapped the
+    // still-visible lyric surface from full-width back to the square instantly.
+    val lyricsProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (viewMode == NowPlayingViewMode.LYRICS) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 450),
+        label = "lyricsHeroDissolve",
+    )
+    // Slot is the full-width lyric rectangle whenever the lyric surface is at all
+    // visible (dissolving in or out). derivedStateOf flips only at the threshold.
+    val lyricsSlotWide by remember { derivedStateOf { lyricsProgress > 0.001f } }
+
     CompositionLocalProvider(
         LocalLyricsFx provides lyricsFx,
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
@@ -345,14 +357,10 @@ fun MainPlayerRoute(
             },
             hero = { heroModifier ->
                 // Manual dissolve between the album art / visualizer and the lyric
-                // surface. The built-in Crossfade snapped here; an explicit alpha
-                // animation is reliable, and it lets the fading art stay a centred
-                // square while the lyrics fill the full-width slot.
-                val lyricsProgress by androidx.compose.animation.core.animateFloatAsState(
-                    targetValue = if (viewMode == NowPlayingViewMode.LYRICS) 1f else 0f,
-                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 450),
-                    label = "lyricsHeroDissolve",
-                )
+                // surface (lyricsProgress is hoisted above). The built-in Crossfade
+                // snapped here; an explicit alpha animation is reliable, and it lets
+                // the fading art stay a centred square while the lyrics fill the
+                // full-width slot.
                 // Compose each side only while it is at all visible — derivedStateOf
                 // flips at the thresholds, not on every animation frame, so the
                 // (expensive) art/visualizer doesn't recompose mid-dissolve.
@@ -365,9 +373,10 @@ fun MainPlayerRoute(
                         } else {
                             heroStyle
                         }
-                        // In lyrics mode the slot is full-width, so keep the art a
-                        // centred square while it fades out; otherwise it fills the slot.
-                        val artMod = if (viewMode == NowPlayingViewMode.LYRICS) {
+                        // Keep the art a centred square whenever the slot is the
+                        // full-width lyric rectangle (i.e. any time lyrics are on
+                        // screen, including the fade-out); otherwise it fills the slot.
+                        val artMod = if (lyricsSlotWide) {
                             Modifier.fillMaxHeight().aspectRatio(1f)
                         } else {
                             Modifier.fillMaxSize()
@@ -448,7 +457,9 @@ fun MainPlayerRoute(
                 }
             },
             lyricsExpanded = lyricsExpanded,
-            lyricsMode = viewMode == NowPlayingViewMode.LYRICS,
+            // Slot stays the full-width rectangle for the whole dissolve, not just
+            // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
+            lyricsMode = lyricsSlotWide,
         )
     }
     }

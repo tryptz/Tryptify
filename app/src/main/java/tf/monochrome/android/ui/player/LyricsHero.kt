@@ -34,7 +34,7 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -244,22 +244,24 @@ internal fun LyricsBackdropStain(
  */
 internal fun Modifier.lyricsEdgeFade(): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
+    // drawWithCache builds the mask gradient once per size, not on every draw —
+    // and this surface redraws every frame (the glass shader animates).
+    .drawWithCache {
         // Density-aware fade depth. The old cap was 120 raw PIXELS — ~40dp on
         // a 3x panel — so lines sliced off at what looked like an invisible
         // border instead of dissolving.
         val edge = (size.height * 0.18f).coerceAtMost(56.dp.toPx())
         val top = edge / size.height
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to Color.Transparent,
-                top to Color.Black,
-                1f - top to Color.Black,
-                1f to Color.Transparent,
-            ),
-            blendMode = BlendMode.DstIn,
+        val mask = Brush.verticalGradient(
+            0f to Color.Transparent,
+            top to Color.Black,
+            1f - top to Color.Black,
+            1f to Color.Transparent,
         )
+        onDrawWithContent {
+            drawContent()
+            drawRect(brush = mask, blendMode = BlendMode.DstIn)
+        }
     }
 
 @Composable
@@ -384,6 +386,9 @@ internal fun SyncedLyricsView(
         // Half-height padding top and bottom lets any line — including the
         // first and last — settle at the exact vertical centre.
         val halfViewport = maxHeight / 2
+        // The line width is the same for every item (no per-item horizontal
+        // padding), so read it once here instead of a BoxWithConstraints per line.
+        val lineWidth = maxWidth
 
         // Keyed on maxHeight as well so the active line is re-centred while
         // the surface is being resized (the expand/collapse morph animates
@@ -432,8 +437,6 @@ internal fun SyncedLyricsView(
             // Each line gets ONE row: the font is fitted to the available width so
             // a long line reaches toward the screen edges (shrinking if it must)
             // instead of wrapping or being cut off inside the compact player.
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val availWidth = maxWidth
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
             // Bass FX rides only the active line: the line pumps + pops
@@ -454,7 +457,7 @@ internal fun SyncedLyricsView(
             // height never moves with the fitted size — the list never reflows.
             val fittedSp = rememberFittedLyricSizeSp(
                 text = line.text.ifBlank { "♪" },
-                availableWidth = availWidth,
+                availableWidth = lineWidth,
                 baseSp = fx.fontSizeSp,
                 style = MaterialTheme.typography.titleMedium.copy(
                     letterSpacing = fx.letterSpacingSp.sp,
@@ -527,7 +530,6 @@ internal fun SyncedLyricsView(
                     )
                 }
             }
-            }
         }
         }
     }
@@ -552,6 +554,15 @@ internal fun KaraokeLyricLine(
     val perLetter = isActive &&
         (fx.rotationDegrees > 0.05f || (fx.bassReact > 0.01f && fx.rayCount > 0))
     val time = if (perLetter) rememberFrameSeconds() else null
+    // Font + base style are identical for every word — build them ONCE per line
+    // instead of per word inside the loop (only the colour varies per word).
+    val lyricFont = rememberLyricFontFamily(fx)
+    val wordStyle = MaterialTheme.typography.titleMedium.copy(
+        fontSize = fontSizeSp.sp,
+        lineHeight = (fx.fontSizeSp * 1.26f).sp,
+        letterSpacing = fx.letterSpacingSp.sp,
+        fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
+    ).withLyricFont(lyricFont)
     // Single row (no wrap): the whole line stays on one line, fitted to width by
     // the caller. Overflow (a very long line) simply runs toward the screen edge.
     Row(
@@ -573,12 +584,6 @@ internal fun KaraokeLyricLine(
             }
             val color by animateColorAsState(targetValue = target, label = "wordColor")
             val display = word.text + " "
-            val wordStyle = MaterialTheme.typography.titleMedium.copy(
-                fontSize = fontSizeSp.sp,
-                lineHeight = (fx.fontSizeSp * 1.26f).sp,
-                letterSpacing = fx.letterSpacingSp.sp,
-                fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-            ).withLyricFont(rememberLyricFontFamily(fx))
             if (time != null) {
                 val phaseBase = letterBase
                 Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx, fontSizeSp))) {

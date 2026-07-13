@@ -121,7 +121,6 @@ private fun fxaaModifier(strength: Float): Modifier {
     } ?: return Modifier
     return Modifier.graphicsLayer {
         if (size.minDimension > 0f) {
-            shader.setFloatUniform("uSize", size.width, size.height)
             shader.setFloatUniform("uStrength", strength)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
@@ -217,11 +216,9 @@ half4 main(float2 p) {
 // cross-fades the anti-aliased result back over the original.
 private const val FXAA_SRC = """
 uniform shader content;
-uniform float2 uSize;
 uniform float uStrength;
 
 half4 main(float2 frag) {
-    float2 inv = 1.0 / uSize;
     float3 luma = float3(0.299, 0.587, 0.114);
     float SPAN_MAX = 8.0;
     float REDUCE_MUL = 1.0 / 8.0;
@@ -247,7 +244,9 @@ half4 main(float2 frag) {
          ((lumaNW + lumaSW) - (lumaNE + lumaSE)));
     float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * (0.25 * REDUCE_MUL), REDUCE_MIN);
     float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
-    dir = clamp(dir * rcpDirMin, -SPAN_MAX, SPAN_MAX) * inv;
+    // frag is in pixels (see the +/-1px luma taps above), so the blend offsets
+    // must stay in pixels too — no texel-size (1/uSize) scaling here.
+    dir = clamp(dir * rcpDirMin, -SPAN_MAX, SPAN_MAX);
 
     // Do the blend in float precision (the codebase's convention) to avoid
     // half/float mismatch on scalar-vector ops, then convert back at the end.

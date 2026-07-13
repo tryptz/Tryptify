@@ -59,6 +59,7 @@ import androidx.navigation.NavController
 import android.content.Context
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -113,12 +114,14 @@ class LyricsFxStudioViewModel @Inject constructor(
         refreshFonts()
     }
 
-    /** Re-list the imported font files (call when the Font section is shown). */
+    /** Re-list the imported font files off the main thread (directory I/O). */
     fun refreshFonts() {
-        _availableFonts.value = File(context.filesDir, "custom_fonts").listFiles()
-            ?.filter { it.isFile && (it.extension.equals("ttf", true) || it.extension.equals("otf", true)) }
-            ?.sortedBy { it.name.lowercase(java.util.Locale.US) }
-            ?: emptyList()
+        viewModelScope.launch(Dispatchers.IO) {
+            _availableFonts.value = File(context.filesDir, "custom_fonts").listFiles()
+                ?.filter { it.isFile && (it.extension.equals("ttf", true) || it.extension.equals("otf", true)) }
+                ?.sortedBy { it.name.lowercase(java.util.Locale.US) }
+                ?: emptyList()
+        }
     }
 
     fun update(transform: (LyricsFxSettings) -> LyricsFxSettings) {
@@ -160,6 +163,10 @@ fun LyricsFxStudioScreen(
 ) {
     val fx by viewModel.fx.collectAsState()
     val fonts by viewModel.availableFonts.collectAsState()
+
+    // Re-list imported fonts whenever the custom-font toggle turns on, so a font
+    // imported in Settings › Appearance since this screen opened shows up.
+    LaunchedEffect(fx.customFont) { if (fx.customFont) viewModel.refreshFonts() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
