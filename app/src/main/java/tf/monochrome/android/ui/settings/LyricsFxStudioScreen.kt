@@ -572,7 +572,7 @@ fun LyricsFxStudioScreen(
                 FxSlider(
                     "Bass reaction", "${(fx.bassReact * 100).toInt()}%" + if (fx.bassReact < 0.01f) " (off)" else "",
                     fx.bassReact, 0f..1f,
-                    description = "Master intensity for pump, pop-in, glow, and rays.",
+                    description = "Master intensity for pump, pop-in, and glow.",
                 ) { viewModel.update { s -> s.copy(bassReact = it) } }
                 FxSlider("Pump amount", "+${(fx.pumpAmount * 100).toInt()}%", fx.pumpAmount, 0f..0.25f) {
                     viewModel.update { s -> s.copy(pumpAmount = it) }
@@ -595,77 +595,13 @@ fun LyricsFxStudioScreen(
             }
 
             item {
-                StudioSection("God Rays & Glow")
-                FxSlider(
-                    "Rays per letter", "${fx.rayCount}" + if (fx.rayCount == 0) " (off)" else "",
-                    fx.rayCount.toFloat(), 0f..24f, steps = 23,
-                    description = "How many light shafts each letter throws (split up and down).",
-                ) { viewModel.update { s -> s.copy(rayCount = it.toInt()) } }
-                FxSlider("Ray length", "${(fx.rayLength * 100).toInt()}%", fx.rayLength, 0.1f..1f,
-                    description = "How far each shaft reaches from its letter.",
-                ) { viewModel.update { s -> s.copy(rayLength = it) } }
-                FxSlider("Ray width", "%.0f dp".format(fx.rayWidthDp), fx.rayWidthDp, 1f..16f) {
-                    viewModel.update { s -> s.copy(rayWidthDp = it) }
-                }
-                FxSlider("Ray brightness", "${(fx.rayBrightness * 100).toInt()}%", fx.rayBrightness, 0f..0.6f) {
-                    viewModel.update { s -> s.copy(rayBrightness = it) }
-                }
-                FxSlider(
-                    "Ray drift", "%.0f°/s".format(fx.raySpinDegPerSec), fx.raySpinDegPerSec, -60f..60f,
-                    description = "Slow sway of each letter's shafts; negative drifts the other way.",
-                ) { viewModel.update { s -> s.copy(raySpinDegPerSec = it) } }
+                StudioSection("Glow")
                 FxSlider("Glow radius", "+%.0f dp".format(fx.glowRadiusDp), fx.glowRadiusDp, 0f..160f) {
                     viewModel.update { s -> s.copy(glowRadiusDp = it) }
                 }
                 FxSlider("Glow brightness", "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f) {
                     viewModel.update { s -> s.copy(glowBrightness = it) }
                 }
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Ray direction",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            "%.0f°".format(fx.rayAngleDeg),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
-                        DirectionDial(
-                            angleDeg = fx.rayAngleDeg,
-                            onAngleChange = { viewModel.update { s -> s.copy(rayAngleDeg = it) } },
-                        )
-                    }
-                }
-                FxSlider(
-                    "Spread", "%.0f°".format(fx.raySpreadDeg), fx.raySpreadDeg, 0f..180f,
-                    description = "Fan of each letter's shafts. Tight = a vertical column; wide = a burst.",
-                ) { viewModel.update { s -> s.copy(raySpreadDeg = it) } }
-                FxSlider(
-                    "Decay", "${(fx.rayDecay * 100).toInt()}%", fx.rayDecay, 0f..1f,
-                    description = "Where each shaft fades out along its length.",
-                ) { viewModel.update { s -> s.copy(rayDecay = it) } }
-                FxSlider("Taper", "${(fx.rayTaper * 100).toInt()}%", fx.rayTaper, 0f..1f,
-                    description = "How much the shafts widen toward their tips.",
-                ) { viewModel.update { s -> s.copy(rayTaper = it) } }
-                FxSlider(
-                    "Hue shift", "%+.0f°".format(fx.rayHueShift), fx.rayHueShift, -180f..180f,
-                    description = "Recolour the rays off the album accent.",
-                ) { viewModel.update { s -> s.copy(rayHueShift = it) } }
-                FxSlider("Flicker", "${(fx.rayFlicker * 100).toInt()}%", fx.rayFlicker, 0f..1f,
-                    description = "Twinkle/shimmer the beams over time.",
-                ) { viewModel.update { s -> s.copy(rayFlicker = it) } }
-                FxSlider("Length jitter", "${(fx.rayLengthJitter * 100).toInt()}%", fx.rayLengthJitter, 0f..1f,
-                    description = "Randomise each beam's length for an organic burst.",
-                ) { viewModel.update { s -> s.copy(rayLengthJitter = it) } }
-                FxSlider(
-                    "Pulse reactivity", "${(fx.rayPulseAmount * 100).toInt()}%", fx.rayPulseAmount, 0f..1f,
-                    description = "How much the beams grow/brighten on the bass. 0 = steady.",
-                ) { viewModel.update { s -> s.copy(rayPulseAmount = it) } }
             }
 
             item {

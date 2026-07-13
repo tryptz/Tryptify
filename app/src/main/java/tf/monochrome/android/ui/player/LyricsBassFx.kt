@@ -18,25 +18,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.LyricsFxSettings
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
 import kotlin.math.exp
-import kotlin.math.floor
-import kotlin.math.max
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -194,10 +185,9 @@ internal fun Modifier.reportGlyphAnchor(
 }
 
 /**
- * Full-screen god-ray + glow layer. Draws each active glyph's rays at its
- * reported screen position, plus one soft glow behind the whole line. Lives
- * on a layer with no clipping ancestor, so the light can never be cut by a
- * canvas — beams simply run off the screen edge at worst. Draw-phase only.
+ * Full-screen glow layer: one soft album-accent bloom behind the whole active
+ * line, breathing with the bass. Lives on a layer with no clipping ancestor, so
+ * the light can never be cut by a canvas. Draw-phase only.
  */
 @Composable
 internal fun LyricsFxLayer(
@@ -208,7 +198,6 @@ internal fun LyricsFxLayer(
     modifier: Modifier = Modifier,
 ) {
     if (fx.bassReact <= 0.01f) return
-    val time = rememberFrameSeconds()
     var origin by remember { mutableStateOf(Offset.Zero) }
     Box(
         modifier
@@ -218,134 +207,14 @@ internal fun LyricsFxLayer(
                 val p = (pulse.value * fx.bassReact).coerceIn(0f, 1.6f)
                 if (p <= 0.03f) return@drawBehind
 
-                // Rays and glow share one album-accent colour, hue-rotated by the
-                // user's setting.
-                val rayColor = accent.shiftHue(fx.rayHueShift)
-
-                // One soft bloom behind the whole line.
+                // One soft album-accent bloom behind the whole active line.
                 anchors.lineCenter?.let { lc ->
                     val c = lc - origin
                     val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
-                    drawGlow(c, glowR, p, rayColor, fx)
-                }
-
-                // Per-letter god rays: each glyph is its own light source, emitting
-                // soft near-vertical shafts UP and DOWN through the letter (like the
-                // reference), additively blended so overlaps bloom. Rooted on every
-                // active glyph, sized to the glyph, breathing with the bass pulse.
-                if (fx.rayCount > 0) {
-                    val driftRad = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
-                    val pulseReach = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * (0.5f + 0.5f * p)
-                    anchors.glyphs.values.forEach { g ->
-                        val c = g.center - origin
-                        val glyph = max(g.halfW, g.halfH)
-                        // Reach scales with the glyph so bigger letters throw longer
-                        // light; rayLength stretches it, the pulse makes it breathe.
-                        val reach = glyph * (3f + 9f * fx.rayLength) * pulseReach
-                        drawLetterRays(c, reach, p, rayColor, fx, driftRad, g.phase, time.value)
-                    }
+                    drawGlow(c, glowR, p, accent, fx)
                 }
             },
     )
-}
-
-/** Rotate a colour's hue by [degrees] (0 = unchanged), keeping saturation/value. */
-private fun Color.shiftHue(degrees: Float): Color {
-    if (degrees == 0f) return this
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(toArgb(), hsv)
-    hsv[0] = ((hsv[0] + degrees) % 360f + 360f) % 360f
-    return Color(android.graphics.Color.HSVToColor((alpha * 255f).toInt().coerceIn(0, 255), hsv))
-}
-
-/**
- * Draws ONE glyph's god rays: the letter is its own light source, throwing soft
- * near-vertical shafts UP and DOWN through itself (like the reference), each a
- * translucent gradient blended additively so where a letter's shafts and its
- * neighbours' overlap the light blooms. The shaft origin sits ON the glyph so
- * the rays clearly emanate from the letter rather than from some far source.
- *
- * Honours the ray parameter set: [LyricsFxSettings.rayAngleDeg] tilts the
- * up/down axis, [raySpreadDeg] fans the shafts around it, [rayCount] is the
- * shafts per letter (split across the two directions), [rayLength]→reach,
- * [rayWidthDp] width, [rayBrightness] alpha, [rayDecay] the fade shape,
- * [rayTaper] how much they widen, [rayLengthJitter]/[rayFlicker] the variation,
- * [raySpinDegPerSec] a slow sway, and [rayPulseAmount] the bass reactivity.
- */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLetterRays(
-    center: Offset,
-    reach: Float,
-    p: Float,
-    rayColor: Color,
-    fx: LyricsFxSettings,
-    driftRad: Float,
-    seed: Float,
-    timeSec: Float,
-) {
-    val count = fx.rayCount.coerceIn(1, 12)
-    if (reach <= 1f) return
-
-    // rayAngleDeg tilts the emission axis; 0 = straight up/down. Shafts fan by
-    // raySpreadDeg around each of the two opposite directions.
-    val axisRad = fx.rayAngleDeg * PI.toFloat() / 180f
-    val spreadRad = fx.raySpreadDeg.coerceIn(0f, 180f) * PI.toFloat() / 180f
-
-    val widthPulse = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * p
-    val baseHalf = (fx.rayWidthDp * 0.6f * density) * (0.6f + 0.5f * widthPulse)
-    // Kept above the 0.12 peak stop below so the gradient offsets stay strictly
-    // increasing (Brush.linearGradient requires monotonic stops).
-    val decay = fx.rayDecay.coerceIn(0.2f, 0.9f)
-    // Soft, mostly-steady light with a bass lift; low alpha because the shafts
-    // pile up additively (that overlap is what reads as bright light).
-    val baseAlpha = (fx.rayBrightness * 0.85f * (0.72f + 0.28f * p)).coerceIn(0f, 0.6f)
-    val beamPath = Path()
-
-    repeat(count) { i ->
-        // Alternate shafts between the two opposite directions (up vs down), each
-        // side fanned within its own spread, so light pours out both faces of the
-        // letter — a vertical light column, not a one-sided fan.
-        val down = (i % 2 == 1)
-        val pairIdx = i / 2
-        val pairCount = (count + 1) / 2
-        val frac = if (pairCount > 1) (pairIdx / (pairCount - 1f) - 0.5f) else 0f
-        val wobble = 0.05f * sin(timeSec * 0.6f + i * 1.4f + seed)
-        val ang = axisRad + (if (down) PI.toFloat() else 0f) + driftRad * 0.12f + frac * spreadRad + wobble
-        val dirX = sin(ang)
-        val dirY = -cos(ang)
-
-        val rnd = abs(sin((i + seed) * 12.9898f + 3.7f) * 43758.545f).let { it - floor(it) }
-        val beamReach = reach * (1f - fx.rayLengthJitter * rnd)
-        val flick = if (fx.rayFlicker > 0f) {
-            (1f - fx.rayFlicker) + fx.rayFlicker * (0.5f + 0.5f * sin(timeSec * 6f + i * 1.7f + seed))
-        } else 1f
-        val alpha = (baseAlpha * flick).coerceIn(0f, 0.6f)
-        if (alpha <= 0.002f) return@repeat
-
-        val end = Offset(center.x + dirX * beamReach, center.y + dirY * beamReach)
-        val brush = Brush.linearGradient(
-            colorStops = arrayOf(
-                // Brightest at the letter, fading to nothing along the shaft.
-                0f to rayColor.copy(alpha = alpha),
-                decay to rayColor.copy(alpha = alpha * 0.4f),
-                1f to Color.Transparent,
-            ),
-            start = center,
-            end = end,
-        )
-        // Soft shaft: narrow at the letter, widening toward the tip as the light
-        // spreads (rayTaper controls how much). Perpendicular to the beam.
-        val nx = -dirY
-        val ny = dirX
-        val nearHalf = baseHalf * 0.4f
-        val farHalf = baseHalf * (0.9f + 1.1f * fx.rayTaper)
-        beamPath.reset()
-        beamPath.moveTo(center.x + nx * nearHalf, center.y + ny * nearHalf)
-        beamPath.lineTo(center.x - nx * nearHalf, center.y - ny * nearHalf)
-        beamPath.lineTo(end.x - nx * farHalf, end.y - ny * farHalf)
-        beamPath.lineTo(end.x + nx * farHalf, end.y + ny * farHalf)
-        beamPath.close()
-        drawPath(path = beamPath, brush = brush, blendMode = BlendMode.Plus)
-    }
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlow(

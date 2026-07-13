@@ -582,10 +582,8 @@ internal fun SyncedLyricsView(
                     .fillMaxWidth()
                     .clickable { onSeekTo(line.timeMs) }
                     .padding(vertical = 2.dp)
-                // Render letters individually (so each reports its position for
-                // rays) whenever the 3D wave OR the god rays are active.
-                val perLetter = isActive &&
-                    (fx.rotationDegrees > 0.05f || (beatIntensity > 0.01f && fx.rayCount > 0))
+                // Render letters individually whenever the 3D wave is active.
+                val perLetter = isActive && fx.rotationDegrees > 0.05f
                 if (perLetter) {
                     Letters3DLine(
                         text = line.text.ifBlank { "♪" },
@@ -628,11 +626,10 @@ internal fun KaraokeLyricLine(
     glyphKeyBase: Int = 0,
     fontSizeSp: Float = 23f,
 ) {
-    // Render letters individually while active whenever the 3D wave OR the god
-    // rays are on (rays need per-glyph positions). One frame clock per line.
+    // Render letters individually while active whenever the 3D wave is on.
+    // One frame clock per line.
     val fx = LocalLyricsFx.current
-    val perLetter = isActive &&
-        (fx.rotationDegrees > 0.05f || (fx.bassReact > 0.01f && fx.rayCount > 0))
+    val perLetter = isActive && fx.rotationDegrees > 0.05f
     val time = if (perLetter) rememberFrameSeconds() else null
     // Font + base style are identical for every word — build them ONCE per line
     // instead of per word inside the loop (only the colour varies per word).
