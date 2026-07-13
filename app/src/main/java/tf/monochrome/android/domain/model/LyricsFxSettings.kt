@@ -87,28 +87,28 @@ data class LyricsFxSettings(
     val popAmount: Float = 0.08f,
 
     // ── God rays / glow ────────────────────────────────────────────────
-    /** Beams radiating from EACH letter. 0 turns rays off. */
-    val rayCount: Int = 8,
-    /** Beam reach as a multiple of each glyph's size (grows with the pulse). */
-    val rayLength: Float = 0.62f,
-    /** Beam stroke width at full pulse, in dp. */
-    val rayWidthDp: Float = 9f,
-    /** Peak beam alpha. */
-    val rayBrightness: Float = 0.26f,
-    /** Orbit speed of the beam fan, degrees per second (negative = reverse). */
-    val raySpinDegPerSec: Float = 10f,
+    /** Number of crepuscular light shafts fanning from above the line. 0 = off. */
+    val rayCount: Int = 14,
+    /** Shaft reach as a fraction of the surface height (grows with the pulse). */
+    val rayLength: Float = 0.85f,
+    /** Shaft width at full pulse, in dp (shafts widen toward the tip). */
+    val rayWidthDp: Float = 10f,
+    /** Peak shaft alpha (shafts blend additively, so overlaps bloom). */
+    val rayBrightness: Float = 0.32f,
+    /** Drift speed of the fan, degrees per second (negative = reverse). */
+    val raySpinDegPerSec: Float = 6f,
     /** Extra glow radius beyond the line's own height, in dp. */
     val glowRadiusDp: Float = 44f,
     /** Peak glow alpha. */
     val glowBrightness: Float = 0.22f,
-    /** Off = radial burst; on = parallel directional shafts all aimed one way. */
+    /** Legacy: parallel-shaft mode (no longer changes the crepuscular renderer). */
     val rayFixedDirection: Boolean = false,
-    /** Light direction in degrees, 0 = up, clockwise (set by the studio joystick). */
+    /** Fan tilt in degrees, 0 = shafts pour straight down, clockwise (studio joystick). */
     val rayAngleDeg: Float = 0f,
-    /** Fan cone width around the angle. 360 = full even burst; small = tight cone. */
-    val raySpreadDeg: Float = 360f,
-    /** Falloff position along each beam where it fades out (0 = short, 1 = reaches the tip). */
-    val rayDecay: Float = 0.5f,
+    /** Fan cone width around the angle. 360 = full radial sun; ~140 = downward fan. */
+    val raySpreadDeg: Float = 150f,
+    /** Falloff position along each shaft where it fades out (0 = short, 1 = reaches the tip). */
+    val rayDecay: Float = 0.6f,
     /** Width taper from base to tip. 0 = even shaft, 1 = sharp spear. */
     val rayTaper: Float = 0f,
     /** Recolour the rays off the album accent, in degrees of hue rotation. */

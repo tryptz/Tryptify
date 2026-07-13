@@ -326,8 +326,8 @@ fun LyricsFxStudioScreen(
                     viewModel.update { s -> s.copy(rayBrightness = it) }
                 }
                 FxSlider(
-                    "Ray spin", "%.0f°/s".format(fx.raySpinDegPerSec), fx.raySpinDegPerSec, -60f..60f,
-                    description = "Orbit speed of the beam fan; negative spins the other way.",
+                    "Ray drift", "%.0f°/s".format(fx.raySpinDegPerSec), fx.raySpinDegPerSec, -60f..60f,
+                    description = "Slow sway of the whole light fan; negative drifts the other way.",
                 ) { viewModel.update { s -> s.copy(raySpinDegPerSec = it) } }
                 FxSlider("Glow radius", "+%.0f dp".format(fx.glowRadiusDp), fx.glowRadiusDp, 0f..160f) {
                     viewModel.update { s -> s.copy(glowRadiusDp = it) }
@@ -335,10 +335,6 @@ fun LyricsFxStudioScreen(
                 FxSlider("Glow brightness", "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f) {
                     viewModel.update { s -> s.copy(glowBrightness = it) }
                 }
-                FxToggle(
-                    "Fixed direction", fx.rayFixedDirection,
-                    description = "Off = radial burst; on = parallel shafts all aimed one way.",
-                ) { viewModel.update { s -> s.copy(rayFixedDirection = it) } }
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -362,14 +358,14 @@ fun LyricsFxStudioScreen(
                 }
                 FxSlider(
                     "Spread", "%.0f°".format(fx.raySpreadDeg), fx.raySpreadDeg, 0f..360f,
-                    description = "Fan cone width around the direction. 360° = full even burst.",
+                    description = "Fan cone width. ~150° pours down over the line; 360° = full sun.",
                 ) { viewModel.update { s -> s.copy(raySpreadDeg = it) } }
                 FxSlider(
                     "Decay", "${(fx.rayDecay * 100).toInt()}%", fx.rayDecay, 0f..1f,
-                    description = "Where each beam fades out along its length.",
+                    description = "Where each shaft fades out along its length.",
                 ) { viewModel.update { s -> s.copy(rayDecay = it) } }
                 FxSlider("Taper", "${(fx.rayTaper * 100).toInt()}%", fx.rayTaper, 0f..1f,
-                    description = "Narrow the beams toward their tips.",
+                    description = "How much the shafts widen toward their tips.",
                 ) { viewModel.update { s -> s.copy(rayTaper = it) } }
                 FxSlider(
                     "Hue shift", "%+.0f°".format(fx.rayHueShift), fx.rayHueShift, -180f..180f,

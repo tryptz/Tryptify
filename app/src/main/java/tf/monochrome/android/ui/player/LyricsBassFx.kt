@@ -18,10 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInRoot
@@ -35,7 +35,6 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
-import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -229,16 +228,17 @@ internal fun LyricsFxLayer(
                     drawGlow(c, glowR, p, rayColor, fx)
                 }
 
-                // Per-glyph rays: each burst rooted on its own letter, sized to
-                // the glyph. Reach breathes with the pulse by rayPulseAmount.
+                // Crepuscular god rays: soft, wide, volumetric light shafts fanning
+                // out from ONE source above the lyric line (like sun/underwater god
+                // rays), additively blended so overlaps bloom — instead of a busy
+                // starburst rooted on every letter. Reach breathes with the pulse.
                 if (fx.rayCount > 0) {
-                    val spinRad = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
-                    val pulseReach = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * (0.5f + 0.5f * p)
-                    anchors.glyphs.values.forEach { g ->
-                        val c = g.center - origin
-                        val glyph = max(g.halfW, g.halfH)
-                        val reach = glyph * 2f * (0.6f + 2.4f * fx.rayLength) * pulseReach
-                        drawBeams(c, g.halfW * 0.55f, g.halfH * 0.55f, reach, p, rayColor, fx, spinRad, g.phase, time.value)
+                    anchors.lineCenter?.let { lc ->
+                        val c = lc - origin
+                        val pulseReach = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * (0.5f + 0.5f * p)
+                        val reach = size.height * (0.5f + 1.0f * fx.rayLength) * pulseReach
+                        val driftRad = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
+                        drawGodRayShafts(c, reach, p, rayColor, fx, driftRad, time.value)
                     }
                 }
             },
@@ -255,103 +255,90 @@ private fun Color.shiftHue(degrees: Float): Color {
 }
 
 /**
- * Draws one glyph's god rays. Honours the full ray parameter set: direction +
- * spread (or parallel directional shafts when [LyricsFxSettings.rayFixedDirection]),
- * decay-shaped fade, width taper, per-beam length jitter, flicker, and how hard
- * reach/width react to the bass pulse.
+ * Draws the lyric line's crepuscular god rays: soft, wide light shafts fanning
+ * out from a single source above the line and blended additively so overlaps
+ * bloom into volumetric light (sun / underwater god-ray look), rather than a
+ * per-letter starburst.
+ *
+ * Honours the full ray parameter set: [LyricsFxSettings.rayAngleDeg] tilts the
+ * whole fan, [raySpreadDeg] is the fan's cone angle (360 → a full radial sun),
+ * [rayCount] the number of shafts, [rayLength]→reach, [rayWidthDp] shaft width,
+ * [rayBrightness] alpha, [rayDecay] the fade shape, [rayTaper] how much shafts
+ * widen toward the tip, [rayLengthJitter]/[rayFlicker] the per-shaft variation,
+ * [raySpinDegPerSec] a slow drift, and [rayPulseAmount] the bass reactivity.
  */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeams(
-    center: Offset,
-    rx: Float,
-    ry: Float,
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGodRayShafts(
+    lineCenter: Offset,
     reach: Float,
     p: Float,
     rayColor: Color,
     fx: LyricsFxSettings,
-    spinRad: Float,
-    seed: Float,
+    driftRad: Float,
     timeSec: Float,
 ) {
     val count = fx.rayCount
-    if (count <= 0) return
+    if (count <= 0 || reach <= 1f) return
 
-    val fixedRad = fx.rayAngleDeg * PI.toFloat() / 180f
-    val spreadRad = fx.raySpreadDeg * PI.toFloat() / 180f
+    // Base direction points DOWN (0 = up in this convention, so PI = down),
+    // tilted by rayAngleDeg; shafts spread across raySpreadDeg. The source sits
+    // above the line so the fan pours down through and past the lyric.
+    val baseRad = PI.toFloat() + fx.rayAngleDeg * PI.toFloat() / 180f
+    val spreadRad = fx.raySpreadDeg.coerceIn(0f, 360f) * PI.toFloat() / 180f
+    val source = Offset(lineCenter.x, lineCenter.y - reach * 0.42f)
+
     val widthPulse = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * p
-    val stroke = (2f + (fx.rayWidthDp - 2f) * widthPulse).coerceAtLeast(1f) * density
-    val decay = fx.rayDecay.coerceIn(0.05f, 0.95f)
-
-    // Parallel-shaft geometry (fixed-direction mode): direction (sin,-cos) with
-    // 0 = up, clockwise; shafts spread along the perpendicular across the glyph.
-    val fdx = sin(fixedRad)
-    val fdy = -cos(fixedRad)
-    val perpX = cos(fixedRad)
-    val perpY = sin(fixedRad)
-    val shaftSpread = 3f * max(rx, ry)
-    val spacing = if (count > 1) shaftSpread / (count - 1) else 0f
-    // One reusable Path for the tapered beams (drawPath consumes it synchronously),
-    // instead of allocating a fresh Path per beam per glyph per frame.
-    val beamPath = if (fx.rayTaper > 0.01f) Path() else null
+    val baseHalf = (fx.rayWidthDp * 1.3f * density) * (0.6f + 0.5f * widthPulse)
+    // Kept above the 0.10 peak stop below so the gradient stops stay strictly
+    // increasing (Brush.linearGradient requires monotonic offsets).
+    val decay = fx.rayDecay.coerceIn(0.2f, 0.95f)
+    // Volumetric shafts overlap additively, so each is faint; the pile-up near
+    // the source is what reads as bright light. Mostly steady ambient light with
+    // a bass lift on top, so the fan reads as continuous god rays (not a strobe).
+    val baseAlpha = (fx.rayBrightness * 0.7f * (0.78f + 0.22f * p)).coerceIn(0f, 0.6f)
+    val beamPath = Path()
 
     repeat(count) { i ->
+        val frac = if (count > 1) (i / (count - 1f) - 0.5f) else 0f
+        // Slow independent wobble so the fan gently breathes/shimmers.
+        val wobble = 0.05f * sin(timeSec * 0.5f + i * 1.3f)
+        val ang = baseRad + driftRad * 0.15f + frac * spreadRad + wobble
+        val dirX = sin(ang)
+        val dirY = -cos(ang)
+
         val rnd = abs(sin(i * 12.9898f + 3.7f) * 43758.545f).let { it - floor(it) }
         val beamReach = reach * (1f - fx.rayLengthJitter * rnd)
         val flick = if (fx.rayFlicker > 0f) {
-            (1f - fx.rayFlicker) + fx.rayFlicker * (0.5f + 0.5f * sin(timeSec * 7f + i * 1.7f + seed))
+            (1f - fx.rayFlicker) + fx.rayFlicker * (0.5f + 0.5f * sin(timeSec * 6f + i * 1.7f))
         } else 1f
-        val alpha = (fx.rayBrightness * flick * widthPulse).coerceIn(0f, 1f)
-        if (alpha <= 0.003f) return@repeat
+        val alpha = (baseAlpha * flick).coerceIn(0f, 0.6f)
+        if (alpha <= 0.002f) return@repeat
 
-        val ang: Float
-        val start: Offset
-        if (fx.rayFixedDirection) {
-            ang = fixedRad
-            val t = (i - (count - 1) / 2f) * spacing
-            start = Offset(center.x + perpX * t, center.y + perpY * t)
-        } else {
-            ang = if (fx.raySpreadDeg >= 359.5f) {
-                spinRad + seed + i * (2f * PI.toFloat() / count)
-            } else {
-                val frac = if (count > 1) (i / (count - 1f) - 0.5f) else 0f
-                fixedRad + spinRad + frac * spreadRad
-            }
-            start = Offset(center.x + sin(ang) * rx, center.y - cos(ang) * ry)
-        }
-        val dirX = if (fx.rayFixedDirection) fdx else sin(ang)
-        val dirY = if (fx.rayFixedDirection) fdy else -cos(ang)
-        val end = Offset(start.x + dirX * beamReach, start.y + dirY * beamReach)
-
+        val end = Offset(source.x + dirX * beamReach, source.y + dirY * beamReach)
         val brush = Brush.linearGradient(
             colorStops = arrayOf(
-                0f to rayColor.copy(alpha = alpha),
-                decay to rayColor.copy(alpha = alpha * 0.5f),
+                // Fade in from the source (which sits off above the text), peak,
+                // then decay to nothing so the shaft dissolves into the backdrop.
+                0f to Color.Transparent,
+                0.10f to rayColor.copy(alpha = alpha),
+                decay to rayColor.copy(alpha = alpha * 0.45f),
                 1f to Color.Transparent,
             ),
-            start = start,
+            start = source,
             end = end,
         )
-        if (beamPath != null) {
-            // Tapered spear: wide base → narrow tip, perpendicular to the beam.
-            val nx = -dirY
-            val ny = dirX
-            val half = stroke / 2f
-            val tip = half * (1f - fx.rayTaper)
-            beamPath.reset()
-            beamPath.moveTo(start.x + nx * half, start.y + ny * half)
-            beamPath.lineTo(start.x - nx * half, start.y - ny * half)
-            beamPath.lineTo(end.x - nx * tip, end.y - ny * tip)
-            beamPath.lineTo(end.x + nx * tip, end.y + ny * tip)
-            beamPath.close()
-            drawPath(path = beamPath, brush = brush)
-        } else {
-            drawLine(
-                brush = brush,
-                start = start,
-                end = end,
-                strokeWidth = stroke,
-                cap = StrokeCap.Round,
-            )
-        }
+        // Soft shaft: narrow near the source, widening toward the tip as light
+        // spreads (rayTaper controls how much). Perpendicular to the beam.
+        val nx = -dirY
+        val ny = dirX
+        val nearHalf = baseHalf * 0.35f
+        val farHalf = baseHalf * (0.9f + 1.1f * fx.rayTaper)
+        beamPath.reset()
+        beamPath.moveTo(source.x + nx * nearHalf, source.y + ny * nearHalf)
+        beamPath.lineTo(source.x - nx * nearHalf, source.y - ny * nearHalf)
+        beamPath.lineTo(end.x - nx * farHalf, end.y - ny * farHalf)
+        beamPath.lineTo(end.x + nx * farHalf, end.y + ny * farHalf)
+        beamPath.close()
+        drawPath(path = beamPath, brush = brush, blendMode = BlendMode.Plus)
     }
 }
 
