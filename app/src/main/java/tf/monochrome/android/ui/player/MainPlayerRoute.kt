@@ -384,9 +384,11 @@ fun MainPlayerRoute(
                         }
                         // Keep the art a centred square whenever the slot is the
                         // full-width lyric rectangle (i.e. any time lyrics are on
-                        // screen, including the fade-out); otherwise it fills the slot.
+                        // screen, including the fade-out). Bound it by WIDTH so the
+                        // now-taller lyric slot doesn't stretch the (dissolving) art
+                        // vertically; otherwise it fills the slot.
                         val artMod = if (lyricsSlotWide) {
-                            Modifier.fillMaxHeight().aspectRatio(1f)
+                            Modifier.fillMaxWidth().aspectRatio(1f)
                         } else {
                             Modifier.fillMaxSize()
                         }

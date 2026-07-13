@@ -438,9 +438,12 @@ internal fun SyncedLyricsView(
         // Half-height padding top and bottom lets any line — including the
         // first and last — settle at the exact vertical centre.
         val halfViewport = maxHeight / 2
-        // The line width is the same for every item, so read it once here (minus
-        // the user's edge margin) instead of a BoxWithConstraints per line.
-        val lineWidth = (maxWidth - fx.edgeMarginDp.dp * 2).coerceAtLeast(0.dp)
+        // The line width is the same for every item, so read it once here.
+        // A fixed bevel-safe inset (on top of the user's edge margin) keeps the
+        // outermost glyphs — and their puffy 3D glass bevels — off the layer's
+        // clip edge, so edge letters never get corner-cut against the border.
+        val sideInset = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
+        val lineWidth = (maxWidth - sideInset * 2).coerceAtLeast(0.dp)
 
         // Keyed on maxHeight as well so the active line is re-centred while
         // the surface is being resized (the expand/collapse morph animates
@@ -477,9 +480,10 @@ internal fun SyncedLyricsView(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                // Side margin between the lyrics and the edges (user setting; 0 by
-                // default so the hero uses the full screen width).
-                .padding(horizontal = fx.edgeMarginDp.dp)
+                // User edge margin + a fixed bevel-safe inset, so the outermost
+                // glyphs (and their glass bevels) never sit flush against the
+                // clip edge where they'd be corner-cut.
+                .padding(horizontal = sideInset)
                 .fxaa()
                 .liquidGlass(tint = accent),
             contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
@@ -704,6 +708,13 @@ internal fun TextStyle.withLyricFont(family: FontFamily?): TextStyle =
 
 /** Smallest lyric font we'll shrink to before a line is simply allowed to run wide. */
 private const val MIN_LYRIC_SP = 11f
+
+/**
+ * Fixed side inset that keeps the outermost glyphs (and their puffy 3D glass
+ * bevels) clear of the lyric layer's clip edge, so edge letters are never
+ * corner-cut against the screen border. Added on top of the user's edge margin.
+ */
+private val LYRIC_BEVEL_SAFE_DP = 14.dp
 
 /**
  * The largest font size (≤ [baseSp], down to [MIN_LYRIC_SP]) at which [text]

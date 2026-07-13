@@ -297,15 +297,19 @@ fun MainPlayerScreen(
                     animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
                     label = "heroW",
                 )
+                // Lyrics get the FULL hero region height (decoupled from the album
+                // square), so the 3D letters, their glass bevels and the per-letter
+                // god rays have vertical room instead of being corner-cut in a short
+                // album-height band. Album art alone stays the compact square.
                 val heroH by animateDpAsState(
-                    targetValue = if (lyricsExpanded) maxHeight else side,
+                    targetValue = if (lyricsExpanded || lyricsMode) maxHeight else side,
                     animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
                     label = "heroH",
                 )
-                // Collapsed lyrics: a rectangle the height of the album square but
-                // the FULL screen width (requiredWidth overrides the padded slot's
-                // constraint; the centred Box lets it overflow to both edges), so
-                // lines reach the borders. Album art keeps its padded square.
+                // Collapsed lyrics: a full-width rectangle spanning the whole hero
+                // region (requiredWidth overrides the padded slot; the centred Box
+                // lets it overflow to both edges), so lines reach the borders and
+                // have vertical breathing room. Album art keeps its padded square.
                 val heroMod = if (lyricsMode && !lyricsExpanded) {
                     Modifier.requiredWidth(fullWidth).height(heroH)
                 } else {
