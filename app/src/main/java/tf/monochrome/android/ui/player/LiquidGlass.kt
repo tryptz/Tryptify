@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -229,6 +230,56 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uRimGain", 1.30f)
             shader.setFloatUniform("uDispersion", 1.0f)
             shader.setFloatUniform("uSampleRings", 2f)
+            renderEffect = RenderEffect
+                .createRuntimeShaderEffect(shader, "content")
+                .asComposeRenderEffect()
+        }
+    }
+}
+
+/**
+ * Player-chrome glass settings (the transport buttons), provided at the player
+ * route from the persisted [tf.monochrome.android.domain.model.PlayerGlassSettings].
+ */
+val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings() }
+
+/**
+ * The SAME refractive lyric glass ([LIQUID_GLASS_SRC]) applied to a player
+ * button's icon, so the play/skip shapes read as 3D chrome liquid glass just
+ * like the active lyric line. Reads [LocalPlayerGlass] for its parameters
+ * (tunable in the Studio's "Player Glass" tab). Apply it to the Icon so the
+ * shader bevels the (solid) glyph shape. No-op when disabled, below API 33, or
+ * on shader-compile failure.
+ */
+@Composable
+internal fun Modifier.playerGlass(tint: Color): Modifier {
+    val g = LocalPlayerGlass.current
+    if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
+    return this.then(playerGlassModifier(tint, g))
+}
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun playerGlassModifier(
+    tint: Color,
+    g: tf.monochrome.android.domain.model.PlayerGlassSettings,
+): Modifier {
+    val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
+    val timeSec = rememberFrameSeconds()
+    val tilt = rememberGravityTilt()
+    return Modifier.graphicsLayer {
+        if (size.minDimension > 0f) {
+            shader.setFloatUniform("uSize", size.width, size.height)
+            shader.setFloatUniform("uTime", timeSec.value)
+            shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
+            shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
+            shader.setFloatUniform("uTint2", tint.red, tint.green, tint.blue)
+            shader.setFloatUniform("uBackdropMix", 0f)
+            shader.setFloatUniform("uBodyOpacity", g.bodyOpacity)
+            shader.setFloatUniform("uRefraction", g.refraction)
+            shader.setFloatUniform("uRimGain", g.rimBrightness)
+            shader.setFloatUniform("uDispersion", g.dispersion)
+            shader.setFloatUniform("uSampleRings", g.sampleRings.toFloat())
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()

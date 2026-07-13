@@ -96,6 +96,8 @@ class PreferencesManager @Inject constructor(
         private val LYRICS_FX_JSON = stringPreferencesKey("lyrics_fx_json")
         // User-saved Lyrics FX presets (a JSON array of {name, settings}).
         private val LYRICS_FX_CUSTOM_PRESETS_JSON = stringPreferencesKey("lyrics_fx_custom_presets_json")
+        // Player-chrome (transport button) liquid-glass settings, one JSON blob.
+        private val PLAYER_GLASS_JSON = stringPreferencesKey("player_glass_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -268,7 +270,7 @@ class PreferencesManager @Inject constructor(
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
-            LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON,
+            LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, PLAYER_GLASS_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
             VISUALIZER_ROTATION_SECONDS, VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
@@ -1240,6 +1242,18 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setCustomLyricsFxPresets(presets: List<tf.monochrome.android.domain.model.LyricsFxPreset>) {
         dataStore.edit { it[LYRICS_FX_CUSTOM_PRESETS_JSON] = json.encodeToString(presets) }
+    }
+
+    /** Player-chrome (transport button) liquid-glass settings. */
+    val playerGlass: Flow<tf.monochrome.android.domain.model.PlayerGlassSettings> = dataStore.data.map { prefs ->
+        prefs[PLAYER_GLASS_JSON]
+            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(raw) }.getOrNull() }
+            ?.clamped()
+            ?: tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT
+    }
+
+    suspend fun setPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
+        dataStore.edit { it[PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     // ── Settings cloud-sync (export / import the allow-listed prefs) ─────────

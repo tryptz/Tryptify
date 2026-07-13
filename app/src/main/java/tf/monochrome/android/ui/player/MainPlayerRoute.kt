@@ -154,6 +154,7 @@ fun MainPlayerRoute(
     LaunchedEffect(isPlaying) { playerViewModel.setVisualizerPlaybackPaused(!isPlaying) }
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsState()
+    val playerGlass by playerViewModel.playerGlass.collectAsState()
     val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsState()
     val dynamicColors by playerViewModel.dynamicColors.collectAsState()
 
@@ -297,6 +298,8 @@ fun MainPlayerRoute(
             dominant = albumColors.dominant,
             secondary = albumColors.vibrant,
         ),
+        // The transport buttons' refractive glass parameters (Studio › Player Glass).
+        LocalPlayerGlass provides playerGlass,
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
         MainPlayerScreen(

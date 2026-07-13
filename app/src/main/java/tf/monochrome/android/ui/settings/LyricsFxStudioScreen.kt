@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -80,9 +83,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 import tf.monochrome.android.data.preferences.PreferencesManager
+import androidx.compose.ui.res.painterResource
+import tf.monochrome.android.R
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxPreset
 import tf.monochrome.android.domain.model.LyricsFxSettings
+import tf.monochrome.android.domain.model.PlayerGlassSettings
+import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.Letters3DLine
 import tf.monochrome.android.ui.player.LocalBeatPulse
 import tf.monochrome.android.ui.player.LocalLyricGlyphAnchors
@@ -119,6 +127,12 @@ class LyricsFxStudioViewModel @Inject constructor(
     private var userTouched = false
     private var persistJob: Job? = null
 
+    /** Player-chrome (transport button) glass settings — the "Player Glass" tab. */
+    private val _playerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _playerGlass.asStateFlow()
+    private var playerGlassTouched = false
+    private var playerGlassPersistJob: Job? = null
+
     /** Fonts the user has imported (Settings › Appearance copies them here). */
     private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
     val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
@@ -135,6 +149,10 @@ class LyricsFxStudioViewModel @Inject constructor(
             // the in-memory copy leads so our own debounced writes never echo back.
             val persisted = preferences.lyricsFx.first()
             if (!userTouched) _fx.value = persisted
+        }
+        viewModelScope.launch {
+            val pg = preferences.playerGlass.first()
+            if (!playerGlassTouched) _playerGlass.value = pg
         }
         refreshFonts()
     }
@@ -153,6 +171,16 @@ class LyricsFxStudioViewModel @Inject constructor(
         userTouched = true
         _fx.value = transform(_fx.value).clamped()
         schedulePersist()
+    }
+
+    fun updatePlayerGlass(transform: (tf.monochrome.android.domain.model.PlayerGlassSettings) -> tf.monochrome.android.domain.model.PlayerGlassSettings) {
+        playerGlassTouched = true
+        _playerGlass.value = transform(_playerGlass.value).clamped()
+        playerGlassPersistJob?.cancel()
+        playerGlassPersistJob = viewModelScope.launch {
+            delay(200)
+            preferences.setPlayerGlass(_playerGlass.value)
+        }
     }
 
     fun applyPreset(preset: LyricsFxSettings) {
@@ -230,7 +258,11 @@ fun LyricsFxStudioScreen(
     val fonts by viewModel.availableFonts.collectAsState()
     val currentLyrics by viewModel.currentLyrics.collectAsState()
     val customPresets by viewModel.customPresets.collectAsState()
+    val playerGlass by viewModel.playerGlass.collectAsState()
     val context = LocalContext.current
+
+    // Which studio tab: 0 = Lyrics, 1 = Player Glass.
+    var selectedTab by remember { mutableStateOf(0) }
 
     // Preset save / import / share dialog state.
     var showSaveDialog by remember { mutableStateOf(false) }
@@ -251,6 +283,19 @@ fun LyricsFxStudioScreen(
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
+
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+        ) {
+            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lyrics") })
+            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Player Glass") })
+        }
+
+        if (selectedTab == 1) {
+            PlayerGlassTab(playerGlass) { viewModel.updatePlayerGlass(it) }
+            return@Column
+        }
 
         // Preview + presets are pinned above the scrolling sliders, so the
         // live example stays locked in view while you tune every parameter.
@@ -669,12 +714,89 @@ fun LyricsFxStudioScreen(
 }
 
 /**
- * Live preview: the production line renderer (3D letters + the bass-beat
- * element FX) driven by a synthetic 120 BPM kick pushed through the same
- * attack/release envelope + spring as the real bass pulse, so every slider
- * change is visible immediately, music or not. The god ray FX is applied to
- * the font element via [bassBeat] — exactly as it is on the active lyric line.
+ * The "Player Glass" tab: the same refractive-glass controls the lyrics have,
+ * for the player's transport buttons, over a live preview of the glass icons.
  */
+@Composable
+private fun PlayerGlassTab(
+    glass: PlayerGlassSettings,
+    onUpdate: ((PlayerGlassSettings) -> PlayerGlassSettings) -> Unit,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+    ) {
+        Spacer(Modifier.height(12.dp))
+        // Live preview: the real transport icons under the current button glass.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF121016)),
+            contentAlignment = Alignment.Center,
+        ) {
+            CompositionLocalProvider(LocalPlayerGlass provides glass) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(22.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_glass_skip_previous), null,
+                        Modifier.size(34.dp).playerGlass(accent), tint = accent,
+                    )
+                    Icon(
+                        painterResource(R.drawable.ic_glass_play), null,
+                        Modifier.size(58.dp).playerGlass(accent), tint = accent,
+                    )
+                    Icon(
+                        painterResource(R.drawable.ic_glass_skip_next), null,
+                        Modifier.size(34.dp).playerGlass(accent), tint = accent,
+                    )
+                }
+            }
+            Text(
+                text = "PREVIEW",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.35f),
+                modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+            )
+        }
+
+        StudioSection("Player Glass")
+        FxToggle(
+            "Button liquid glass", glass.enabled,
+            description = "3D refractive glass on the transport buttons (needs Android 13+).",
+        ) { onUpdate { g -> g.copy(enabled = it) } }
+        FxSlider(
+            "Glass opacity", "${(glass.bodyOpacity * 100).toInt()}%", glass.bodyOpacity, 0.2f..1f,
+            description = "Lower makes the buttons more see-through.",
+        ) { onUpdate { g -> g.copy(bodyOpacity = it) } }
+        FxSlider(
+            "Refraction", "%.2f".format(glass.refraction), glass.refraction, 0f..0.4f,
+            description = "How hard the beveled edges lens the backdrop behind them.",
+        ) { onUpdate { g -> g.copy(refraction = it) } }
+        FxSlider(
+            "Edge highlight", "${(glass.rimBrightness * 100).toInt()}%", glass.rimBrightness, 0f..2f,
+            description = "Brightness of the specular glass rim.",
+        ) { onUpdate { g -> g.copy(rimBrightness = it) } }
+        FxSlider(
+            "Chromatic aberration", "${(glass.dispersion * 100).toInt()}%", glass.dispersion, 0f..2f,
+            description = "Colour fringing at the refracting edges.",
+        ) { onUpdate { g -> g.copy(dispersion = it) } }
+        FxSlider(
+            "Per-pixel samples",
+            "${glass.sampleRings} (${when (glass.sampleRings) { 1 -> 5; 2 -> 9; else -> 13 }} taps)",
+            glass.sampleRings.toFloat(), 1f..3f, steps = 1,
+            description = "Bevel quality vs GPU cost.",
+        ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
+        Spacer(Modifier.height(48.dp))
+    }
+}
+
 @Composable
 private fun StudioPreview(
     fx: LyricsFxSettings,
