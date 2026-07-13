@@ -53,7 +53,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.isSp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
@@ -516,6 +515,7 @@ internal fun SyncedLyricsView(
                         modifier = lineModifier,
                         anchors = lineAnchors,
                         glyphKeyBase = glyphKeyBase,
+                        fontSizeSp = fittedSp,
                     )
                 } else {
                     Text(
@@ -724,18 +724,20 @@ internal fun Letters3DLine(
     modifier: Modifier = Modifier,
     anchors: LyricGlyphAnchors? = null,
     glyphKeyBase: Int = 0,
+    // The fitted size the caller used for [style], so the inter-letter gap scales
+    // with the actual glyph size (passed explicitly rather than read off [style]).
+    fontSizeSp: Float = 23f,
 ) {
     val fx = LocalLyricsFx.current
     val time = rememberFrameSeconds()
     val shadowed = style.copy(shadow = letter3DShadow(fx.shadowDepth))
-    val sizeSp = style.fontSize.takeIf { it.isSp }?.value ?: fx.fontSizeSp
     Row(modifier = modifier, horizontalArrangement = Arrangement.Center) {
         var letterBase = 0
         val words = text.split(" ")
         words.forEachIndexed { index, word ->
             val display = if (index < words.lastIndex) "$word " else word
             val phaseBase = letterBase
-            Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx, sizeSp))) {
+            Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx, fontSizeSp))) {
                 display.forEachIndexed { j, ch ->
                     val idx = phaseBase + j
                     Letter3DText(

@@ -471,6 +471,7 @@ private fun StudioPreview(fx: LyricsFxSettings) {
                     .liquidGlass(tint = accent)
                     .bassBeat(pulse, { 1f }, fx, anchors),
                 anchors = anchors,
+                fontSizeSp = fx.fontSizeSp,
             )
         }
         Text(
