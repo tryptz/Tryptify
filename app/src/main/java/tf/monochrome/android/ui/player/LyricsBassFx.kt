@@ -35,6 +35,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -228,17 +229,20 @@ internal fun LyricsFxLayer(
                     drawGlow(c, glowR, p, rayColor, fx)
                 }
 
-                // Crepuscular god rays: soft, wide, volumetric light shafts fanning
-                // out from ONE source above the lyric line (like sun/underwater god
-                // rays), additively blended so overlaps bloom — instead of a busy
-                // starburst rooted on every letter. Reach breathes with the pulse.
+                // Per-letter god rays: each glyph is its own light source, emitting
+                // soft near-vertical shafts UP and DOWN through the letter (like the
+                // reference), additively blended so overlaps bloom. Rooted on every
+                // active glyph, sized to the glyph, breathing with the bass pulse.
                 if (fx.rayCount > 0) {
-                    anchors.lineCenter?.let { lc ->
-                        val c = lc - origin
-                        val pulseReach = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * (0.5f + 0.5f * p)
-                        val reach = size.height * (0.5f + 1.0f * fx.rayLength) * pulseReach
-                        val driftRad = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
-                        drawGodRayShafts(c, reach, p, rayColor, fx, driftRad, time.value)
+                    val driftRad = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
+                    val pulseReach = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * (0.5f + 0.5f * p)
+                    anchors.glyphs.values.forEach { g ->
+                        val c = g.center - origin
+                        val glyph = max(g.halfW, g.halfH)
+                        // Reach scales with the glyph so bigger letters throw longer
+                        // light; rayLength stretches it, the pulse makes it breathe.
+                        val reach = glyph * (3f + 9f * fx.rayLength) * pulseReach
+                        drawLetterRays(c, reach, p, rayColor, fx, driftRad, g.phase, time.value)
                     }
                 }
             },
@@ -255,86 +259,88 @@ private fun Color.shiftHue(degrees: Float): Color {
 }
 
 /**
- * Draws the lyric line's crepuscular god rays: soft, wide light shafts fanning
- * out from a single source above the line and blended additively so overlaps
- * bloom into volumetric light (sun / underwater god-ray look), rather than a
- * per-letter starburst.
+ * Draws ONE glyph's god rays: the letter is its own light source, throwing soft
+ * near-vertical shafts UP and DOWN through itself (like the reference), each a
+ * translucent gradient blended additively so where a letter's shafts and its
+ * neighbours' overlap the light blooms. The shaft origin sits ON the glyph so
+ * the rays clearly emanate from the letter rather than from some far source.
  *
- * Honours the full ray parameter set: [LyricsFxSettings.rayAngleDeg] tilts the
- * whole fan, [raySpreadDeg] is the fan's cone angle (360 → a full radial sun),
- * [rayCount] the number of shafts, [rayLength]→reach, [rayWidthDp] shaft width,
- * [rayBrightness] alpha, [rayDecay] the fade shape, [rayTaper] how much shafts
- * widen toward the tip, [rayLengthJitter]/[rayFlicker] the per-shaft variation,
- * [raySpinDegPerSec] a slow drift, and [rayPulseAmount] the bass reactivity.
+ * Honours the ray parameter set: [LyricsFxSettings.rayAngleDeg] tilts the
+ * up/down axis, [raySpreadDeg] fans the shafts around it, [rayCount] is the
+ * shafts per letter (split across the two directions), [rayLength]→reach,
+ * [rayWidthDp] width, [rayBrightness] alpha, [rayDecay] the fade shape,
+ * [rayTaper] how much they widen, [rayLengthJitter]/[rayFlicker] the variation,
+ * [raySpinDegPerSec] a slow sway, and [rayPulseAmount] the bass reactivity.
  */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGodRayShafts(
-    lineCenter: Offset,
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLetterRays(
+    center: Offset,
     reach: Float,
     p: Float,
     rayColor: Color,
     fx: LyricsFxSettings,
     driftRad: Float,
+    seed: Float,
     timeSec: Float,
 ) {
-    val count = fx.rayCount
-    if (count <= 0 || reach <= 1f) return
+    val count = fx.rayCount.coerceIn(1, 12)
+    if (reach <= 1f) return
 
-    // Base direction points DOWN (0 = up in this convention, so PI = down),
-    // tilted by rayAngleDeg; shafts spread across raySpreadDeg. The source sits
-    // above the line so the fan pours down through and past the lyric.
-    val baseRad = PI.toFloat() + fx.rayAngleDeg * PI.toFloat() / 180f
-    val spreadRad = fx.raySpreadDeg.coerceIn(0f, 360f) * PI.toFloat() / 180f
-    val source = Offset(lineCenter.x, lineCenter.y - reach * 0.42f)
+    // rayAngleDeg tilts the emission axis; 0 = straight up/down. Shafts fan by
+    // raySpreadDeg around each of the two opposite directions.
+    val axisRad = fx.rayAngleDeg * PI.toFloat() / 180f
+    val spreadRad = fx.raySpreadDeg.coerceIn(0f, 180f) * PI.toFloat() / 180f
 
     val widthPulse = (1f - fx.rayPulseAmount) + fx.rayPulseAmount * p
-    val baseHalf = (fx.rayWidthDp * 1.3f * density) * (0.6f + 0.5f * widthPulse)
-    // Kept above the 0.10 peak stop below so the gradient stops stay strictly
-    // increasing (Brush.linearGradient requires monotonic offsets).
-    val decay = fx.rayDecay.coerceIn(0.2f, 0.95f)
-    // Volumetric shafts overlap additively, so each is faint; the pile-up near
-    // the source is what reads as bright light. Mostly steady ambient light with
-    // a bass lift on top, so the fan reads as continuous god rays (not a strobe).
-    val baseAlpha = (fx.rayBrightness * 0.7f * (0.78f + 0.22f * p)).coerceIn(0f, 0.6f)
+    val baseHalf = (fx.rayWidthDp * 0.6f * density) * (0.6f + 0.5f * widthPulse)
+    // Kept above the 0.12 peak stop below so the gradient offsets stay strictly
+    // increasing (Brush.linearGradient requires monotonic stops).
+    val decay = fx.rayDecay.coerceIn(0.2f, 0.9f)
+    // Soft, mostly-steady light with a bass lift; low alpha because the shafts
+    // pile up additively (that overlap is what reads as bright light).
+    val baseAlpha = (fx.rayBrightness * 0.85f * (0.72f + 0.28f * p)).coerceIn(0f, 0.6f)
     val beamPath = Path()
 
     repeat(count) { i ->
-        val frac = if (count > 1) (i / (count - 1f) - 0.5f) else 0f
-        // Slow independent wobble so the fan gently breathes/shimmers.
-        val wobble = 0.05f * sin(timeSec * 0.5f + i * 1.3f)
-        val ang = baseRad + driftRad * 0.15f + frac * spreadRad + wobble
+        // Alternate shafts between the two opposite directions (up vs down), each
+        // side fanned within its own spread, so light pours out both faces of the
+        // letter — a vertical light column, not a one-sided fan.
+        val down = (i % 2 == 1)
+        val pairIdx = i / 2
+        val pairCount = (count + 1) / 2
+        val frac = if (pairCount > 1) (pairIdx / (pairCount - 1f) - 0.5f) else 0f
+        val wobble = 0.05f * sin(timeSec * 0.6f + i * 1.4f + seed)
+        val ang = axisRad + (if (down) PI.toFloat() else 0f) + driftRad * 0.12f + frac * spreadRad + wobble
         val dirX = sin(ang)
         val dirY = -cos(ang)
 
-        val rnd = abs(sin(i * 12.9898f + 3.7f) * 43758.545f).let { it - floor(it) }
+        val rnd = abs(sin((i + seed) * 12.9898f + 3.7f) * 43758.545f).let { it - floor(it) }
         val beamReach = reach * (1f - fx.rayLengthJitter * rnd)
         val flick = if (fx.rayFlicker > 0f) {
-            (1f - fx.rayFlicker) + fx.rayFlicker * (0.5f + 0.5f * sin(timeSec * 6f + i * 1.7f))
+            (1f - fx.rayFlicker) + fx.rayFlicker * (0.5f + 0.5f * sin(timeSec * 6f + i * 1.7f + seed))
         } else 1f
         val alpha = (baseAlpha * flick).coerceIn(0f, 0.6f)
         if (alpha <= 0.002f) return@repeat
 
-        val end = Offset(source.x + dirX * beamReach, source.y + dirY * beamReach)
+        val end = Offset(center.x + dirX * beamReach, center.y + dirY * beamReach)
         val brush = Brush.linearGradient(
             colorStops = arrayOf(
-                // Fade in from the source (which sits off above the text), peak,
-                // then decay to nothing so the shaft dissolves into the backdrop.
-                0f to Color.Transparent,
-                0.10f to rayColor.copy(alpha = alpha),
-                decay to rayColor.copy(alpha = alpha * 0.45f),
+                // Brightest at the letter, fading to nothing along the shaft.
+                0f to rayColor.copy(alpha = alpha),
+                decay to rayColor.copy(alpha = alpha * 0.4f),
                 1f to Color.Transparent,
             ),
-            start = source,
+            start = center,
             end = end,
         )
-        // Soft shaft: narrow near the source, widening toward the tip as light
+        // Soft shaft: narrow at the letter, widening toward the tip as the light
         // spreads (rayTaper controls how much). Perpendicular to the beam.
         val nx = -dirY
         val ny = dirX
-        val nearHalf = baseHalf * 0.35f
+        val nearHalf = baseHalf * 0.4f
         val farHalf = baseHalf * (0.9f + 1.1f * fx.rayTaper)
         beamPath.reset()
-        beamPath.moveTo(source.x + nx * nearHalf, source.y + ny * nearHalf)
-        beamPath.lineTo(source.x - nx * nearHalf, source.y - ny * nearHalf)
+        beamPath.moveTo(center.x + nx * nearHalf, center.y + ny * nearHalf)
+        beamPath.lineTo(center.x - nx * nearHalf, center.y - ny * nearHalf)
         beamPath.lineTo(end.x - nx * farHalf, end.y - ny * farHalf)
         beamPath.lineTo(end.x + nx * farHalf, end.y + ny * farHalf)
         beamPath.close()

@@ -90,26 +90,26 @@ data class LyricsFxSettings(
     val popAmount: Float = 0.08f,
 
     // ── God rays / glow ────────────────────────────────────────────────
-    /** Number of crepuscular light shafts fanning from above the line. 0 = off. */
-    val rayCount: Int = 14,
-    /** Shaft reach as a fraction of the surface height (grows with the pulse). */
-    val rayLength: Float = 0.85f,
-    /** Shaft width at full pulse, in dp (shafts widen toward the tip). */
-    val rayWidthDp: Float = 10f,
+    /** Light shafts emitted PER LETTER (split up/down). 0 turns rays off. */
+    val rayCount: Int = 6,
+    /** Shaft reach as a multiple of each glyph's size (grows with the pulse). */
+    val rayLength: Float = 0.5f,
+    /** Shaft width in dp (shafts widen toward the tip; grows a little with the pulse). */
+    val rayWidthDp: Float = 8f,
     /** Peak shaft alpha (shafts blend additively, so overlaps bloom). */
-    val rayBrightness: Float = 0.32f,
-    /** Drift speed of the fan, degrees per second (negative = reverse). */
-    val raySpinDegPerSec: Float = 6f,
+    val rayBrightness: Float = 0.3f,
+    /** Slow sway of each letter's shaft fan, degrees per second (negative = reverse). */
+    val raySpinDegPerSec: Float = 4f,
     /** Extra glow radius beyond the line's own height, in dp. */
     val glowRadiusDp: Float = 44f,
     /** Peak glow alpha. */
     val glowBrightness: Float = 0.22f,
-    /** Legacy: parallel-shaft mode (no longer changes the crepuscular renderer). */
+    /** Legacy: parallel-shaft mode (no longer changes the per-letter renderer). */
     val rayFixedDirection: Boolean = false,
-    /** Fan tilt in degrees, 0 = shafts pour straight down, clockwise (studio joystick). */
+    /** Emission-axis tilt in degrees, 0 = shafts pour straight up/down from each letter. */
     val rayAngleDeg: Float = 0f,
-    /** Fan cone width around the angle. 360 = full radial sun; ~140 = downward fan. */
-    val raySpreadDeg: Float = 150f,
+    /** Fan spread of each letter's shafts around the axis (tight = near-vertical column). */
+    val raySpreadDeg: Float = 30f,
     /** Falloff position along each shaft where it fades out (0 = short, 1 = reaches the tip). */
     val rayDecay: Float = 0.6f,
     /** Width taper from base to tip. 0 = even shaft, 1 = sharp spear. */

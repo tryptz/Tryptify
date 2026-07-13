@@ -17,9 +17,9 @@ class LyricsFxSettingsTest {
         assertEquals(12f, d.rotationDegrees, 0f)
         assertEquals(0.22f, d.wavePhaseStep, 0f)
         assertEquals(0.8f, d.bassReact, 0f)
-        // Crepuscular god-ray default: a downward fan of soft shafts.
-        assertEquals(14, d.rayCount)
-        assertEquals(150f, d.raySpreadDeg, 0f)
+        // Per-letter god-ray default: a few soft near-vertical shafts per glyph.
+        assertEquals(6, d.rayCount)
+        assertEquals(30f, d.raySpreadDeg, 0f)
     }
 
     @Test

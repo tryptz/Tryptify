@@ -539,12 +539,13 @@ fun LyricsFxStudioScreen(
             item {
                 StudioSection("God Rays & Glow")
                 FxSlider(
-                    "Ray count", "${fx.rayCount}" + if (fx.rayCount == 0) " (off)" else "",
+                    "Rays per letter", "${fx.rayCount}" + if (fx.rayCount == 0) " (off)" else "",
                     fx.rayCount.toFloat(), 0f..24f, steps = 23,
+                    description = "How many light shafts each letter throws (split up and down).",
                 ) { viewModel.update { s -> s.copy(rayCount = it.toInt()) } }
-                FxSlider("Ray length", "${(fx.rayLength * 100).toInt()}% of screen", fx.rayLength, 0.1f..1f) {
-                    viewModel.update { s -> s.copy(rayLength = it) }
-                }
+                FxSlider("Ray length", "${(fx.rayLength * 100).toInt()}%", fx.rayLength, 0.1f..1f,
+                    description = "How far each shaft reaches from its letter.",
+                ) { viewModel.update { s -> s.copy(rayLength = it) } }
                 FxSlider("Ray width", "%.0f dp".format(fx.rayWidthDp), fx.rayWidthDp, 1f..16f) {
                     viewModel.update { s -> s.copy(rayWidthDp = it) }
                 }
@@ -553,7 +554,7 @@ fun LyricsFxStudioScreen(
                 }
                 FxSlider(
                     "Ray drift", "%.0f°/s".format(fx.raySpinDegPerSec), fx.raySpinDegPerSec, -60f..60f,
-                    description = "Slow sway of the whole light fan; negative drifts the other way.",
+                    description = "Slow sway of each letter's shafts; negative drifts the other way.",
                 ) { viewModel.update { s -> s.copy(raySpinDegPerSec = it) } }
                 FxSlider("Glow radius", "+%.0f dp".format(fx.glowRadiusDp), fx.glowRadiusDp, 0f..160f) {
                     viewModel.update { s -> s.copy(glowRadiusDp = it) }
@@ -583,8 +584,8 @@ fun LyricsFxStudioScreen(
                     }
                 }
                 FxSlider(
-                    "Spread", "%.0f°".format(fx.raySpreadDeg), fx.raySpreadDeg, 0f..360f,
-                    description = "Fan cone width. ~150° pours down over the line; 360° = full sun.",
+                    "Spread", "%.0f°".format(fx.raySpreadDeg), fx.raySpreadDeg, 0f..180f,
+                    description = "Fan of each letter's shafts. Tight = a vertical column; wide = a burst.",
                 ) { viewModel.update { s -> s.copy(raySpreadDeg = it) } }
                 FxSlider(
                     "Decay", "${(fx.rayDecay * 100).toInt()}%", fx.rayDecay, 0f..1f,
