@@ -126,6 +126,8 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val lyricsFx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode

@@ -512,6 +512,7 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
     val spectrumFftSize by viewModel.spectrumFftSize.collectAsState()
     val spectrumBins by viewModel.spectrumBins.collectAsState()
     val playerDynamicColor by viewModel.playerDynamicColor.collectAsState()
+    val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsState()
     val appFps by viewModel.appTargetFps.collectAsState()
     val appResolution by viewModel.appRenderResolution.collectAsState()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
@@ -658,6 +659,12 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             subtitle = "Tint the player from the album art; off uses the theme color",
             checked = playerDynamicColor,
             onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
+        )
+        SettingSwitchItem(
+            title = "Blurred Album Background",
+            subtitle = "Fill the player with the album art, stretched and heavily blurred",
+            checked = playerBlurredBackground,
+            onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))

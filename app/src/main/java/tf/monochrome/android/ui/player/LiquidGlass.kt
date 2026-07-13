@@ -48,9 +48,25 @@ internal fun Modifier.liquidGlass(
     tint: Color = Color(0xFF8FB4FF),
 ): Modifier {
     val fx = LocalLyricsFx.current
+    val backdrop = LocalPlayerBackdrop.current
     if (!enabled || !fx.liquidGlass || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(liquidGlassModifier(tint, fx))
+    return this.then(liquidGlassModifier(tint, fx, backdrop))
 }
+
+/**
+ * What actually sits behind the lyric glass, so the shader can lens the real
+ * album tones (Apple-OS style) instead of only a flat wash. Provided at the
+ * player route from the album palette + the "Blurred Album Background" setting.
+ * The default (disabled) leaves the glass numerically identical to the flat
+ * single-tint reconstruction it used before.
+ */
+internal data class PlayerBackdrop(
+    val blurredArt: Boolean = false,
+    val dominant: Color = Color(0xFF101018),
+    val secondary: Color = Color(0xFF101018),
+)
+
+internal val LocalPlayerBackdrop = androidx.compose.runtime.compositionLocalOf { PlayerBackdrop() }
 
 // One process-wide epoch so every rememberFrameSeconds() instance reports the
 // same timeline: a surface composed later (e.g. the lyrics expand morph)
@@ -134,6 +150,7 @@ private fun fxaaModifier(strength: Float): Modifier {
 private fun liquidGlassModifier(
     tint: Color,
     fx: tf.monochrome.android.domain.model.LyricsFxSettings,
+    backdrop: PlayerBackdrop,
 ): Modifier {
     val shader = remember {
         runCatching { RuntimeShader(LIQUID_GLASS_SRC) }
@@ -151,6 +168,13 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uTime", timeSec.value)
             shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
             shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
+            // Second album tone + how strongly the lensed backdrop bleeds into the
+            // glass body. Only non-zero when the blurred album background is on, so
+            // the glass reads as sitting over the real artwork (Apple-OS style);
+            // otherwise uBackdropMix = 0 keeps the flat single-tint look unchanged.
+            val secondary = backdrop.secondary
+            shader.setFloatUniform("uTint2", secondary.red, secondary.green, secondary.blue)
+            shader.setFloatUniform("uBackdropMix", if (backdrop.blurredArt) 0.6f else 0f)
             shader.setFloatUniform("uBodyOpacity", fx.glassBodyOpacity)
             shader.setFloatUniform("uRefraction", fx.glassRefraction)
             shader.setFloatUniform("uRimGain", fx.glassRimBrightness)
@@ -285,6 +309,8 @@ uniform float uRefraction;    // how hard the bevel lenses the backdrop
 uniform float uRimGain;       // brightness of the specular glass edge
 uniform float uDispersion;    // chromatic aberration at the refracting edges
 uniform float uSampleRings;   // bevel sample rings 1/2/3 → 5/9/13 taps per pixel
+uniform float3 uTint2;        // second album tone (blurred-art backdrop)
+uniform float uBackdropMix;   // 0 = flat single-tint wash; >0 = lens the album art
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -293,6 +319,15 @@ float backdropField(float2 uv) {
     float wash = mix(0.45, 0.0, clamp(uv.y, 0.0, 1.0));
     float glow = smoothstep(1.0, 0.0, distance(uv, float2(0.5, 0.22)) * 1.5);
     return clamp(wash + glow * 0.5, 0.0, 1.0);
+}
+
+// Album tone the glass lenses at uv. With the blurred cover behind the lyrics
+// (uBackdropMix > 0) this is a two-tone vertical album blend, so the refraction
+// carries real colour variation like a photo behind glass. With no blurred art
+// (uBackdropMix = 0) it collapses to uTint — identical to the old single tone.
+float3 backdropTintAt(float2 uv) {
+    float3 two = mix(uTint, uTint2, smoothstep(0.0, 1.0, clamp(uv.y, 0.0, 1.0)));
+    return mix(uTint, two, uBackdropMix);
 }
 
 half4 main(float2 p) {
@@ -364,10 +399,16 @@ half4 main(float2 p) {
     float2 uv = p / uSize;
     float2 lens = slope * uRefraction;
     float aberr = 0.12 * uDispersion;
-    float fieldR = backdropField(uv + lens * (1.0 + aberr));
-    float fieldG = backdropField(uv + lens);
-    float fieldB = backdropField(uv + lens * (1.0 - aberr));
-    float3 bg = uTint * float3(fieldR, fieldG, fieldB);
+    float2 uvR = uv + lens * (1.0 + aberr);
+    float2 uvG = uv + lens;
+    float2 uvB = uv + lens * (1.0 - aberr);
+    // Per-channel lens weight (as before) modulated by the local album tone, so
+    // when the blurred cover is behind the glass the refraction bends real colour
+    // (Apple-OS look); with no blurred art this equals uTint * field (unchanged).
+    float3 bg = float3(
+        backdropTintAt(uvR).r * backdropField(uvR),
+        backdropTintAt(uvG).g * backdropField(uvG),
+        backdropTintAt(uvB).b * backdropField(uvB));
 
     // A sheet of light sweeping diagonally across the whole surface.
     float band = 1.0 - smoothstep(0.0, 0.18,
@@ -377,7 +418,10 @@ half4 main(float2 p) {
     // legible), with the lensed backdrop bleeding in for depth.
     float3 tint = float3(src.rgb) / a;
     float lum = clamp(dot(tint, float3(0.299, 0.587, 0.114)), 0.0, 1.0);
-    float3 frost = mix(bg, tint, 0.7);
+    // Over the blurred album art the glass leans more see-through (more lensed
+    // backdrop, less solid frost) so it reads as real glass on the artwork;
+    // with no blurred art it holds the legible 0.7 glyph-colour mix.
+    float3 frost = mix(bg, tint, mix(0.7, 0.42, uBackdropMix));
 
     // Transparent body, opaque bright rim. Alpha is low across the letter face
     // (backdrop reads through) and climbs to full at the beveled edge, so the

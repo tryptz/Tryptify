@@ -156,6 +156,8 @@ fun MainPlayerScreen(
     // Collapsed lyrics render as a full-screen-width rectangle (album height) so
     // lines can reach the phone's edges; album art stays a padded square.
     lyricsMode: Boolean = false,
+    // Full-screen blurred, stretched album-art background (Appearance setting).
+    blurredBackground: Boolean = false,
 ) {
     val accent = state.albumColors.vibrant
 
@@ -224,6 +226,15 @@ fun MainPlayerScreen(
                 .dithered()
                 .background(dynamicPlayerBackground(state.albumColors.dominant)),
         )
+        // Full-screen blurred, stretched album art (Apple-Music / Spotify style).
+        // Sits directly over the gradient so the whole player floats over the
+        // artwork; the lyric liquid glass then refracts these album tones.
+        if (blurredBackground) {
+            PlayerBlurredArtBackground(
+                coverUrl = state.track?.coverUrl,
+                albumColors = state.albumColors,
+            )
+        }
         DynamicAlbumGlow(state.albumColors.dominant)
 
         // Expanded-lyrics backdrop: the artwork as a blurred stain fading in

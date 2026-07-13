@@ -96,6 +96,7 @@ class PreferencesManager @Inject constructor(
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
+        private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
         private val APP_TARGET_FPS = intPreferencesKey("app_target_fps")
         private val APP_RENDER_RESOLUTION = intPreferencesKey("app_render_resolution")
 
@@ -1183,6 +1184,13 @@ class PreferencesManager @Inject constructor(
     val playerDynamicColor: Flow<Boolean> = dataStore.data.map { it[PLAYER_DYNAMIC_COLOR] ?: true }
     suspend fun setPlayerDynamicColor(enabled: Boolean) {
         dataStore.edit { it[PLAYER_DYNAMIC_COLOR] = enabled }
+    }
+
+    // Full-screen blurred, stretched album-art background behind the player
+    // (Apple-Music / Spotify style). Off by default (keeps the flat gradient).
+    val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: false }
+    suspend fun setPlayerBlurredBackground(enabled: Boolean) {
+        dataStore.edit { it[PLAYER_BLURRED_BACKGROUND] = enabled }
     }
 
     // --- Display: app-wide frame rate & panel resolution ---

@@ -91,6 +91,7 @@ fun MainPlayerRoute(
     val lyrics by playerViewModel.currentLyrics.collectAsState()
     val isLyricsLoading by playerViewModel.isLyricsLoading.collectAsState()
     val viewMode by playerViewModel.nowPlayingViewMode.collectAsState()
+    val blurredBackground by playerViewModel.playerBlurredBackground.collectAsState()
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsState()
     val preservePitch by playerViewModel.preservePitch.collectAsState()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
@@ -285,6 +286,13 @@ fun MainPlayerRoute(
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
         LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
         LocalBeatPulse provides beatPulse,
+        // Tell the lyric glass what's behind it so it can lens the real album
+        // tones when the blurred album background is on (Apple-OS style).
+        LocalPlayerBackdrop provides PlayerBackdrop(
+            blurredArt = blurredBackground,
+            dominant = albumColors.dominant,
+            secondary = albumColors.vibrant,
+        ),
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
         MainPlayerScreen(
@@ -461,6 +469,7 @@ fun MainPlayerRoute(
             // Slot stays the full-width rectangle for the whole dissolve, not just
             // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
             lyricsMode = lyricsSlotWide,
+            blurredBackground = blurredBackground,
         )
     }
     }

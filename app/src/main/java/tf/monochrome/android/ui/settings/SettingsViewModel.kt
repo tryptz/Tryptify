@@ -172,6 +172,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.8f)
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val appTargetFps: StateFlow<Int> = preferences.appTargetFps
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val appRenderResolution: StateFlow<Int> = preferences.appRenderResolution
@@ -397,6 +399,7 @@ class SettingsViewModel @Inject constructor(
     fun setLyrics3dShadowDepth(value: Float) { viewModelScope.launch { preferences.setLyrics3dShadowDepth(value) } }
     fun setLyricsBassReact(value: Float) { viewModelScope.launch { preferences.setLyricsBassReact(value) } }
     fun setPlayerDynamicColor(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerDynamicColor(enabled) } }
+    fun setPlayerBlurredBackground(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerBlurredBackground(enabled) } }
     fun setAppTargetFps(fps: Int) { viewModelScope.launch { preferences.setAppTargetFps(fps) } }
     fun setAppRenderResolution(shortSide: Int) { viewModelScope.launch { preferences.setAppRenderResolution(shortSide) } }
     fun setVisualizerVsyncEnabled(value: Boolean) { viewModelScope.launch { preferences.setVisualizerVsyncEnabled(value) } }

@@ -180,6 +180,56 @@ internal fun LyricsHeroPanel(
 }
 
 /**
+ * Persistent full-screen album-art background (Appearance › "Blurred Album
+ * Background"): the cover stretched to fill the whole player and heavily
+ * blurred, the way Apple Music / Spotify paint the now-playing page. A soft
+ * album-tinted scrim keeps the foreground controls and lyrics legible, and
+ * the lyric liquid glass refracts these same album tones so the glass reads
+ * as sitting over the artwork.
+ */
+@Composable
+internal fun PlayerBlurredArtBackground(
+    coverUrl: String?,
+    albumColors: AlbumColors,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (!coverUrl.isNullOrBlank()) {
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(coverUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                // Crop = fill the whole rectangle (stretch to cover), so a square
+                // cover blooms across the full portrait screen.
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(64.dp)
+                    .dithered(),
+            )
+        }
+        // Album-tinted legibility scrim: darker top and bottom so the top bar and
+        // the transport/track text keep contrast over bright artwork; the middle
+        // stays clearer so the blurred art is clearly visible behind the hero.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .dithered()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.42f),
+                            albumColors.dominant.copy(alpha = 0.20f),
+                            Color.Black.copy(alpha = 0.55f),
+                        )
+                    )
+                )
+        )
+    }
+}
+
+/**
  * The album artwork as a full-screen blurred stain: opaque base + blurred
  * cover + dominant-colour gradient. Pure backdrop for expanded lyrics —
  * drawn behind the player content, never a foreground element.
