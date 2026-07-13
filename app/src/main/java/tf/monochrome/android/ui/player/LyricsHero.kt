@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -385,9 +387,9 @@ internal fun SyncedLyricsView(
         // Half-height padding top and bottom lets any line — including the
         // first and last — settle at the exact vertical centre.
         val halfViewport = maxHeight / 2
-        // The line width is the same for every item (no per-item horizontal
-        // padding), so read it once here instead of a BoxWithConstraints per line.
-        val lineWidth = maxWidth
+        // The line width is the same for every item, so read it once here (minus
+        // the user's edge margin) instead of a BoxWithConstraints per line.
+        val lineWidth = (maxWidth - fx.edgeMarginDp.dp * 2).coerceAtLeast(0.dp)
 
         // Keyed on maxHeight as well so the active line is re-centred while
         // the surface is being resized (the expand/collapse morph animates
@@ -424,9 +426,9 @@ internal fun SyncedLyricsView(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                // No side margin: the hero is now the full screen width, and each
-                // line is fitted to one row (with built-in slack), so lines reach
-                // the phone's edges instead of being boxed into the padded slot.
+                // Side margin between the lyrics and the edges (user setting; 0 by
+                // default so the hero uses the full screen width).
+                .padding(horizontal = fx.edgeMarginDp.dp)
                 .fxaa()
                 .liquidGlass(tint = accent),
             contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
@@ -462,6 +464,7 @@ internal fun SyncedLyricsView(
                     letterSpacing = fx.letterSpacingSp.sp,
                     fontWeight = weight,
                 ).withLyricFont(lyricFont),
+                maxRows = fx.maxWrapLines,
             )
             if (line.words.isNotEmpty()) {
                 // Only sources with real per-word timing (TIDAL enhanced LRC)
@@ -523,8 +526,8 @@ internal fun SyncedLyricsView(
                         style = lineStyle,
                         color = color,
                         textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = false,
+                        maxLines = fx.maxWrapLines,
+                        softWrap = fx.maxWrapLines > 1,
                         overflow = TextOverflow.Clip,
                         modifier = lineModifier,
                     )
@@ -535,6 +538,7 @@ internal fun SyncedLyricsView(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun KaraokeLyricLine(
     line: LyricLine,
@@ -563,15 +567,12 @@ internal fun KaraokeLyricLine(
         letterSpacing = fx.letterSpacingSp.sp,
         fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
     ).withLyricFont(lyricFont)
-    // Single row (no wrap): the whole line stays on one line, fitted to width by
-    // the caller. Overflow (a very long line) simply runs toward the screen edge.
-    Row(
-        modifier = beatModifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.Center,
-    ) {
+    // One row when maxWrapLines == 1, else a FlowRow that wraps between words.
+    val lineModifier = beatModifier
+        .fillMaxWidth()
+        .clickable(onClick = onClick)
+        .padding(vertical = 2.dp)
+    val content: @Composable () -> Unit = {
         var letterBase = 0
         line.words.forEach { word ->
             // Solid fills: the liquidGlass() shader turns the active line into
@@ -612,6 +613,11 @@ internal fun KaraokeLyricLine(
             }
             letterBase += display.length
         }
+    }
+    if (fx.maxWrapLines > 1) {
+        FlowRow(modifier = lineModifier, horizontalArrangement = Arrangement.Center) { content() }
+    } else {
+        Row(modifier = lineModifier, horizontalArrangement = Arrangement.Center) { content() }
     }
 }
 
@@ -663,21 +669,25 @@ internal fun rememberFittedLyricSizeSp(
     availableWidth: Dp,
     baseSp: Float,
     style: TextStyle,
+    maxRows: Int = 1,
 ): Float {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(text, availableWidth, baseSp, style.fontWeight, style.letterSpacing, style.fontFamily) {
+    return remember(text, availableWidth, baseSp, maxRows, style.fontWeight, style.letterSpacing, style.fontFamily) {
         if (text.isBlank()) return@remember baseSp
-        val maxPx = with(density) { availableWidth.toPx() } * 0.94f
-        if (maxPx <= 0f) return@remember baseSp
+        // Capacity is the total horizontal run the text may occupy across maxRows
+        // rows; if it exceeds that at the base size, shrink to fit (so a line wraps
+        // up to maxRows rows, then shrinks rather than wrapping further or clipping).
+        val capacity = with(density) { availableWidth.toPx() } * maxRows.coerceAtLeast(1) * 0.94f
+        if (capacity <= 0f) return@remember baseSp
         val measured = measurer.measure(
             text = text,
             style = style.copy(fontSize = baseSp.sp),
             maxLines = 1,
             softWrap = false,
         ).size.width.toFloat()
-        if (measured <= maxPx) baseSp
-        else (baseSp * (maxPx / measured)).coerceIn(MIN_LYRIC_SP, baseSp)
+        if (measured <= capacity) baseSp
+        else (baseSp * (capacity / measured)).coerceIn(MIN_LYRIC_SP, baseSp)
     }
 }
 
@@ -716,6 +726,7 @@ private fun letterGapDp(fx: LyricsFxSettings, fontSizeSp: Float = fx.fontSizeSp)
  * the caller fits [style]'s font size to the width. The transforms are
  * draw-only: layout, font size and spacing never change.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun Letters3DLine(
     text: String,
@@ -731,9 +742,12 @@ internal fun Letters3DLine(
     val fx = LocalLyricsFx.current
     val time = rememberFrameSeconds()
     val shadowed = style.copy(shadow = letter3DShadow(fx.shadowDepth))
-    Row(modifier = modifier, horizontalArrangement = Arrangement.Center) {
+    // Word-wise: each word's letters stay together in a Row; the outer container
+    // holds the words. A single row when maxWrapLines == 1, else a FlowRow that
+    // wraps between words up to that many rows (the fit sizes it to that budget).
+    val words = remember(text) { text.split(" ") }
+    val content: @Composable () -> Unit = {
         var letterBase = 0
-        val words = text.split(" ")
         words.forEachIndexed { index, word ->
             val display = if (index < words.lastIndex) "$word " else word
             val phaseBase = letterBase
@@ -753,6 +767,11 @@ internal fun Letters3DLine(
             }
             letterBase += display.length
         }
+    }
+    if (fx.maxWrapLines > 1) {
+        FlowRow(modifier = modifier, horizontalArrangement = Arrangement.Center) { content() }
+    } else {
+        Row(modifier = modifier, horizontalArrangement = Arrangement.Center) { content() }
     }
 }
 

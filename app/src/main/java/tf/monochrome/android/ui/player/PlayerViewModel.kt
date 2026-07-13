@@ -64,6 +64,7 @@ class PlayerViewModel @Inject constructor(
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
+    private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
 ) : ViewModel() {
 
     /**
@@ -222,6 +223,10 @@ class PlayerViewModel @Inject constructor(
         connectToService()
         startPositionPolling()
         observeCurrentTrackMeta()
+        // Mirror the now-playing lyrics + position into the app-scoped holder so
+        // other screens (the Lyrics FX Studio preview) can show the real lyrics.
+        viewModelScope.launch { _currentLyrics.collect { nowPlayingLyrics.setLyrics(it) } }
+        viewModelScope.launch { _positionMs.collect { nowPlayingLyrics.setPosition(it) } }
         viewModelScope.launch {
             downloadManager.observeAllActiveDownloads().collectLatest { active ->
                 _activeDownloads.value = active

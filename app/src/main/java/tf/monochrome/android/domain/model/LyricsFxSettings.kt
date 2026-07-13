@@ -13,6 +13,10 @@ data class LyricsFxSettings(
     // ── Typography ─────────────────────────────────────────────────────
     val fontSizeSp: Float = 23f,
     val letterSpacingSp: Float = -0.2f,
+    /** Side margin (dp) between the lyric lines and the screen/container edges. */
+    val edgeMarginDp: Float = 0f,
+    /** Max rows a single line may wrap to before it shrinks to fit (1 = never wrap). */
+    val maxWrapLines: Int = 1,
 
     // ── Playback sync ──────────────────────────────────────────────────
     /**
@@ -127,6 +131,8 @@ data class LyricsFxSettings(
         return LyricsFxSettings(
             fontSizeSp = fontSizeSp.c(14f, 34f, d.fontSizeSp),
             letterSpacingSp = letterSpacingSp.c(-1f, 1f, d.letterSpacingSp),
+            edgeMarginDp = edgeMarginDp.c(0f, 48f, d.edgeMarginDp),
+            maxWrapLines = maxWrapLines.coerceIn(1, 3),
             bluetoothDelayMs = bluetoothDelayMs.c(-500f, 1500f, d.bluetoothDelayMs),
             customFont = customFont,
             customFontPath = customFontPath,

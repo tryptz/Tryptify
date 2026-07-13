@@ -69,12 +69,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.ui.player.Letters3DLine
+import tf.monochrome.android.ui.player.LocalBeatPulse
 import tf.monochrome.android.ui.player.LocalLyricGlyphAnchors
 import tf.monochrome.android.ui.player.LocalLyricsFx
 import tf.monochrome.android.ui.player.LyricGlyphAnchors
 import tf.monochrome.android.ui.player.LyricsFxLayer
+import tf.monochrome.android.ui.player.SyncedLyricsView
 import tf.monochrome.android.ui.player.bassBeat
 import tf.monochrome.android.ui.player.fxaa
 import tf.monochrome.android.ui.player.liquidGlass
@@ -88,7 +91,11 @@ import kotlin.math.exp
 class LyricsFxStudioViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     @ApplicationContext private val context: Context,
+    nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
 ) : ViewModel() {
+    /** The currently-playing lyrics + position, so the preview can show them live. */
+    val currentLyrics: StateFlow<tf.monochrome.android.domain.model.Lyrics?> = nowPlayingLyrics.lyrics
+    val currentPositionMs: StateFlow<Long> = nowPlayingLyrics.positionMs
     // An in-memory working copy is the source of truth for the Studio UI and the
     // live preview, so every slider frame updates instantly with no I/O. A slider
     // drag fires dozens of times a second; persisting each frame — JSON-encode +
@@ -163,6 +170,7 @@ fun LyricsFxStudioScreen(
 ) {
     val fx by viewModel.fx.collectAsState()
     val fonts by viewModel.availableFonts.collectAsState()
+    val currentLyrics by viewModel.currentLyrics.collectAsState()
 
     // Re-list imported fonts whenever the custom-font toggle turns on, so a font
     // imported in Settings › Appearance since this screen opened shows up.
@@ -182,7 +190,7 @@ fun LyricsFxStudioScreen(
         // Preview + presets are pinned above the scrolling sliders, so the
         // live example stays locked in view while you tune every parameter.
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            StudioPreview(fx)
+            StudioPreview(fx, currentLyrics, viewModel.currentPositionMs)
             Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier
@@ -216,6 +224,15 @@ fun LyricsFxStudioScreen(
                 FxSlider("Letter spacing", "%.2f sp".format(fx.letterSpacingSp), fx.letterSpacingSp, -1f..1f) {
                     viewModel.update { s -> s.copy(letterSpacingSp = it) }
                 }
+                FxSlider(
+                    "Edge margin", "%.0f dp".format(fx.edgeMarginDp), fx.edgeMarginDp, 0f..48f,
+                    description = "Side spacing between the lyrics and the screen edges.",
+                ) { viewModel.update { s -> s.copy(edgeMarginDp = it) } }
+                FxSlider(
+                    "Lines per block", "${fx.maxWrapLines}" + if (fx.maxWrapLines == 1) " (no wrap)" else "",
+                    fx.maxWrapLines.toFloat(), 1f..3f, steps = 1,
+                    description = "How many rows a long line may wrap to before it shrinks to fit.",
+                ) { viewModel.update { s -> s.copy(maxWrapLines = it.toInt()) } }
             }
 
             item {
@@ -436,10 +453,17 @@ fun LyricsFxStudioScreen(
  * the font element via [bassBeat] — exactly as it is on the active lyric line.
  */
 @Composable
-private fun StudioPreview(fx: LyricsFxSettings) {
+private fun StudioPreview(
+    fx: LyricsFxSettings,
+    lyrics: Lyrics?,
+    positionMs: kotlinx.coroutines.flow.StateFlow<Long>,
+) {
     val pulse = rememberSyntheticKickPulse(fx)
     val anchors = remember { LyricGlyphAnchors() }
     val accent = MaterialTheme.colorScheme.primary
+    // Show the real currently-playing lyrics when there are synced lines; else a
+    // synthetic sample so the preview is never empty.
+    val playing = lyrics?.takeIf { it.isSynced && it.lines.isNotEmpty() }
 
     Box(
         modifier = Modifier
@@ -452,30 +476,41 @@ private fun StudioPreview(fx: LyricsFxSettings) {
         CompositionLocalProvider(
             LocalLyricsFx provides fx,
             LocalLyricGlyphAnchors provides anchors,
+            // Drive the beat FX from the synthetic kick even for real lyrics
+            // (there's no live audio analyzer on this screen).
+            LocalBeatPulse provides pulse,
         ) {
-            // Same pipeline as the player: the ray/glow FX layer fills the
-            // frame and draws at each glyph's reported position, while the
-            // text element pumps and publishes its glyphs.
+            // The ray/glow FX layer draws at each active glyph's reported position.
             LyricsFxLayer(anchors = anchors, pulse = pulse, accent = accent, fx = fx)
-            Letters3DLine(
-                text = "Feel the beat tonight",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = fx.fontSizeSp.sp,
-                    lineHeight = (fx.fontSizeSp * 1.26f).sp,
-                    letterSpacing = fx.letterSpacingSp.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                ).withLyricFont(rememberLyricFontFamily(fx)),
-                color = accent,
-                modifier = Modifier
-                    .fxaa()
-                    .liquidGlass(tint = accent)
-                    .bassBeat(pulse, { 1f }, fx, anchors),
-                anchors = anchors,
-                fontSizeSp = fx.fontSizeSp,
-            )
+            if (playing != null) {
+                // Exactly the production renderer, on the real lyric lines.
+                SyncedLyricsView(
+                    lines = playing.lines,
+                    positionMs = positionMs,
+                    accent = accent,
+                    onSeekTo = {},
+                )
+            } else {
+                Letters3DLine(
+                    text = "Feel the beat tonight",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = fx.fontSizeSp.sp,
+                        lineHeight = (fx.fontSizeSp * 1.26f).sp,
+                        letterSpacing = fx.letterSpacingSp.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    ).withLyricFont(rememberLyricFontFamily(fx)),
+                    color = accent,
+                    modifier = Modifier
+                        .fxaa()
+                        .liquidGlass(tint = accent)
+                        .bassBeat(pulse, { 1f }, fx, anchors),
+                    anchors = anchors,
+                    fontSizeSp = fx.fontSizeSp,
+                )
+            }
         }
         Text(
-            text = "PREVIEW · 120 BPM",
+            text = if (playing != null) "PREVIEW · now playing" else "PREVIEW · 120 BPM",
             style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = 0.35f),
             modifier = Modifier
