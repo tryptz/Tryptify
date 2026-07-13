@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,6 +24,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -138,10 +141,10 @@ fun PlayerActionDock(
         }
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
-            DockLabel(Modifier.weight(1f), "Lyrics", sources[0], onLyrics)
-            DockLabel(Modifier.weight(1f), "Timer", sources[1], onTimer)
-            DockLabel(Modifier.weight(1f), "Mixer/FX", sources[2], onMixer)
-            DockLabel(Modifier.weight(1f), "Playlist", sources[3], onPlaylist)
+            DockLabel(Modifier.weight(1f), "Lyrics", icons[0], glassTint, lyricsActive, sources[0], onLyrics)
+            DockLabel(Modifier.weight(1f), "Timer", icons[1], glassTint, false, sources[1], onTimer)
+            DockLabel(Modifier.weight(1f), "Mixer/FX", icons[2], glassTint, false, sources[2], onMixer)
+            DockLabel(Modifier.weight(1f), "Playlist", icons[3], glassTint, false, sources[3], onPlaylist)
         }
     }
 }
@@ -150,6 +153,9 @@ fun PlayerActionDock(
 private fun DockLabel(
     modifier: Modifier,
     label: String,
+    painter: Painter,
+    litColor: Color,
+    active: Boolean,
     interactionSource: MutableInteractionSource,
     onClick: () -> Unit,
 ) {
@@ -159,9 +165,17 @@ private fun DockLabel(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "dockLabelScale",
     )
+    // Fade the "lit" glyph in/out so toggling active glows on smoothly.
+    val lit by animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "dockLit",
+    )
 
     // No text label: the tap target is the whole slot, and the (bigger) hollow
     // icon carved into the glass slab above fills the space the label used to take.
+    // When active, a bright glyph + soft glow lights up over the hole — the way
+    // the Lyrics label used to light up when lyrics were on.
     Column(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -174,7 +188,30 @@ private fun DockLabel(
             .padding(vertical = DockItemVerticalPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Reserves the slot the glass slab's hollow icon is punched into.
-        Spacer(Modifier.size(PlayerDesignTokens.DockIconSize))
+        Box(contentAlignment = Alignment.Center) {
+            // Reserves the slot the glass slab's hollow icon is punched into.
+            Spacer(Modifier.size(PlayerDesignTokens.DockIconSize))
+            if (lit > 0.004f) {
+                // Soft bloom behind the lit glyph.
+                Icon(
+                    painter = painter,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(PlayerDesignTokens.DockIconSize)
+                        .graphicsLayer { alpha = lit }
+                        .blur(radius = 11.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded),
+                    tint = litColor.copy(alpha = 0.6f),
+                )
+                // Crisp lit glyph filling the hole.
+                Icon(
+                    painter = painter,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(PlayerDesignTokens.DockIconSize)
+                        .graphicsLayer { alpha = lit },
+                    tint = litColor,
+                )
+            }
+        }
     }
 }
