@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.components
 
 import android.os.Build
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.material3.MaterialTheme
