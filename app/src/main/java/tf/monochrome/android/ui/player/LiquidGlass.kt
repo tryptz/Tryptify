@@ -510,11 +510,15 @@ half4 main(float2 p) {
     }
 
     // Liquid: subtle surface undulation so highlights swim over the glass.
-    // uLiquid scales this unrest — the big button disc dials it down so its
-    // glass reads clean and smooth rather than cloudy.
+    // CRUCIAL: gate it by the real bevel strength (the geometric gradient BEFORE
+    // the ripple), so the undulation only lives where there already IS an edge.
+    // A big flat face — a button disc, the dock slab — has zero gradient inside,
+    // so it stays a clean, uniform surface instead of a lattice of ripple
+    // highlights. Thin glyphs are all edge, so lyrics keep their liquid life.
+    float edge = clamp(length(grad) * 1.5, 0.0, 1.0);
     float w1 = sin(p.x * 0.055 + uTime * 1.7) * cos(p.y * 0.081 - uTime * 1.3);
     float w2 = sin((p.x + p.y) * 0.035 - uTime * 0.9);
-    grad += 0.05 * uLiquid * float2(w1, w2) * a;
+    grad += 0.04 * uLiquid * float2(w1, w2) * a * edge;
 
     // Surface normal from the alpha heightfield. Depth (profondeur) scales how
     // hard the bevel tips the normal off the surface — the dominant "3D" knob,
@@ -572,8 +576,11 @@ half4 main(float2 p) {
     // Fresnel-blend the reflection over the body (edges reflect, the face
     // transmits), then add the dispersed glint. uRimGain scales both the
     // reflection and the glint, so "Edge highlight" is a real brightness knob.
+    // The glint is Fresnel-weighted too, so it rides the bevel edge rather than
+    // washing the whole flat face white (a front-facing flat surface would
+    // otherwise fire the specular uniformly).
     float3 col3 = mix(bodyCol, refl * uRimGain, clamp(fres * 1.1, 0.0, 1.0));
-    col3 += float3(specR, spec, specB) * uRimGain;
+    col3 += float3(specR, spec, specB) * uRimGain * fres;
 
     // Transparent face, opaque bright rim: alpha is low across the body (backdrop
     // reads through) and climbs to full where Fresnel and the glint peak, so the
