@@ -100,6 +100,7 @@ import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerActionDock
 import tf.monochrome.android.ui.player.GlassDropShadow
+import tf.monochrome.android.ui.player.GlassProgressTube
 import tf.monochrome.android.ui.player.PlayerDesignTokens
 import tf.monochrome.android.ui.player.TransportIcon
 import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
@@ -688,7 +689,7 @@ private fun PlayerGlassTab(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(232.dp)
+                .height(288.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(previewBgBrush),
             contentAlignment = Alignment.Center,
@@ -749,6 +750,14 @@ private fun PlayerGlassTab(
                         onMixer = {},
                         onPlaylist = {},
                     )
+                    // The glass thermometer scrubber, previewed at ~40%.
+                    GlassProgressTube(
+                        fraction = 0.4f,
+                        tint = previewTint,
+                        onSeek = {},
+                        onSeekFinished = {},
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
             Text(
@@ -791,6 +800,10 @@ private fun PlayerGlassTab(
             "Button liquid glass", glass.enabled,
             description = "3D refractive glass on the transport buttons (needs Android 13+).",
         ) { onUpdate { g -> g.copy(enabled = it) } }
+        FxToggle(
+            "Glass progress bar", glass.progressGlass,
+            description = "Thin glass tube scrubber that fills up, with a sine-wave bulge at the playhead dot.",
+        ) { onUpdate { g -> g.copy(progressGlass = it) } }
         FxSlider(
             "Glass opacity", "${(glass.bodyOpacity * 100).toInt()}%", glass.bodyOpacity, 0.2f..1f,
             description = "Lower makes the buttons more see-through.",

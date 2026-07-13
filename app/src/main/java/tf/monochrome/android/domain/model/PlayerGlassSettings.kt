@@ -50,6 +50,8 @@ data class PlayerGlassSettings(
     val tintColor: Int = 0,
     /** Studio-preview background as an ARGB int; 0 = the current album wash. */
     val previewBg: Int = 0,
+    /** Glass "thermometer" scrubber (tube + sine-bulge dot) vs a plain slider. */
+    val progressGlass: Boolean = true,
 ) {
     fun clamped(): PlayerGlassSettings {
         val d = DEFAULT

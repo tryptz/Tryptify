@@ -1,6 +1,12 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -16,16 +22,32 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
 
 /**
  * Scrubber plus elapsed / center-label / total time. The center label carries
  * the quality or queue-position context from the generated design.
+ *
+ * When the player glass is on with the "Glass progress bar" setting, the
+ * scrubber is a thin liquid-glass tube (a thermometer) that fills up, with a
+ * playhead dot that swells the tube into a smooth sine-wave bulge. Otherwise it
+ * falls back to a plain Material slider.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,43 +61,21 @@ fun PlayerProgress(
     onSeekFinished: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val dragged by interaction.collectIsDraggedAsState()
-    val thumbSize by animateDpAsState(
-        targetValue = if (dragged) 18.dp else PlayerDesignTokens.ProgressThumbSize,
-        label = "progressThumb",
-    )
-    val colors = SliderDefaults.colors(
-        thumbColor = accent,
-        activeTrackColor = accent,
-        inactiveTrackColor = Color.White.copy(alpha = 0.20f),
-    )
+    val glass = LocalPlayerGlass.current
+    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Slider(
-            value = fraction.coerceIn(0f, 1f),
-            onValueChange = onSeek,
-            onValueChangeFinished = { onSeekFinished(fraction) },
-            modifier = Modifier.fillMaxWidth(),
-            interactionSource = interaction,
-            colors = colors,
-            thumb = {
-                SliderDefaults.Thumb(
-                    interactionSource = interaction,
-                    colors = colors,
-                    thumbSize = DpSize(thumbSize, thumbSize),
-                )
-            },
-            track = { sliderState ->
-                SliderDefaults.Track(
-                    sliderState = sliderState,
-                    modifier = Modifier.height(PlayerDesignTokens.ProgressHeight),
-                    colors = colors,
-                    drawStopIndicator = null,
-                    thumbTrackGapSize = 0.dp,
-                )
-            },
-        )
+        if (glass.enabled && glass.progressGlass) {
+            GlassProgressTube(
+                fraction = fraction,
+                tint = tint,
+                onSeek = onSeek,
+                onSeekFinished = onSeekFinished,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            PlainSlider(fraction, tint, onSeek, onSeekFinished)
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -100,4 +100,139 @@ fun PlayerProgress(
             )
         }
     }
+}
+
+/**
+ * The liquid-glass "thermometer" scrubber: a thin tube whose vertical thickness
+ * follows a raised-cosine (sine-wave) bump centred on the playhead, so the dot
+ * reads as a smooth bulge in the tube. The played portion is filled with [tint];
+ * the whole thing is handed to the [playerGlass] shader, which bevels the tube
+ * and the bulge into refractive glass. Drag or tap to seek.
+ */
+@Composable
+internal fun GlassProgressTube(
+    fraction: Float,
+    tint: Color,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragging by remember { mutableStateOf(false) }
+    // The dot always shows a bulge; it swells further while dragging.
+    val bulge by animateFloatAsState(
+        targetValue = if (dragging) 1f else 0.6f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        label = "progressBulge",
+    )
+    val frac = fraction.coerceIn(0f, 1f)
+
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(34.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { pos ->
+                    val f = (pos.x / size.width).coerceIn(0f, 1f)
+                    onSeek(f)
+                    onSeekFinished(f)
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { pos ->
+                        dragging = true
+                        onSeek((pos.x / size.width).coerceIn(0f, 1f))
+                    },
+                    onDragEnd = { dragging = false; onSeekFinished(frac) },
+                    onDragCancel = { dragging = false },
+                    onHorizontalDrag = { change, _ ->
+                        onSeek((change.position.x / size.width).coerceIn(0f, 1f))
+                    },
+                )
+            }
+            .playerGlass(tint = tint)
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+    ) {
+        val w = size.width
+        val cy = size.height / 2f
+        val baseHalf = 2.6.dp.toPx()                          // thin tube half-thickness
+        val bulgeHalf = 7.dp.toPx() + 5.dp.toPx() * bulge     // dot half-thickness
+        val sigma = 26.dp.toPx()                              // bulge half-width
+        val inset = bulgeHalf                                 // keep the dot on-screen
+        val thumbX = inset + frac * (w - 2f * inset)
+
+        // Raised-cosine (sine-wave) contour: fat at the dot, thin along the tube.
+        fun halfAt(x: Float): Float {
+            val d = abs(x - thumbX)
+            val bump = if (d < sigma) 0.5f * (1f + cos(PI.toFloat() * d / sigma)) else 0f
+            return baseHalf + (bulgeHalf - baseHalf) * bump
+        }
+
+        val path = Path()
+        val step = 3f
+        path.moveTo(0f, cy - halfAt(0f))
+        var x = step
+        while (x < w) { path.lineTo(x, cy - halfAt(x)); x += step }
+        path.lineTo(w, cy - halfAt(w))
+        x = w - step
+        while (x > 0f) { path.lineTo(x, cy + halfAt(x)); x -= step }
+        path.lineTo(0f, cy + halfAt(0f))
+        path.close()
+
+        // Inactive glass tube.
+        drawPath(path, color = Color.White.copy(alpha = 0.22f))
+        // Filled (played) portion up to the dot.
+        clipRect(right = thumbX) { drawPath(path, color = tint) }
+        // A defined dot core at the playhead so the bulge reads as the thumb.
+        drawCircle(
+            color = tint,
+            radius = baseHalf + (bulgeHalf - baseHalf) * 0.6f,
+            center = Offset(thumbX, cy),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlainSlider(
+    fraction: Float,
+    tint: Color,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: (Float) -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val dragged by interaction.collectIsDraggedAsState()
+    val thumbSize by animateDpAsState(
+        targetValue = if (dragged) 18.dp else PlayerDesignTokens.ProgressThumbSize,
+        label = "progressThumb",
+    )
+    val colors = SliderDefaults.colors(
+        thumbColor = tint,
+        activeTrackColor = tint,
+        inactiveTrackColor = Color.White.copy(alpha = 0.20f),
+    )
+    Slider(
+        value = fraction.coerceIn(0f, 1f),
+        onValueChange = onSeek,
+        onValueChangeFinished = { onSeekFinished(fraction) },
+        modifier = Modifier.fillMaxWidth(),
+        interactionSource = interaction,
+        colors = colors,
+        thumb = {
+            SliderDefaults.Thumb(
+                interactionSource = interaction,
+                colors = colors,
+                thumbSize = DpSize(thumbSize, thumbSize),
+            )
+        },
+        track = { sliderState ->
+            SliderDefaults.Track(
+                sliderState = sliderState,
+                modifier = Modifier.height(PlayerDesignTokens.ProgressHeight),
+                colors = colors,
+                drawStopIndicator = null,
+                thumbTrackGapSize = 0.dp,
+            )
+        },
+    )
 }
