@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -210,9 +211,12 @@ internal fun PlayerBlurredArtBackground(
                     .dithered(),
             )
         }
-        // Album-tinted legibility scrim: darker top and bottom so the top bar and
-        // the transport/track text keep contrast over bright artwork; the middle
-        // stays clearer so the blurred art is clearly visible behind the hero.
+        // Album-tinted legibility scrim, Apple-Music style: a deep, moody
+        // darkening across the whole background so the stretched art reads as a
+        // dim backdrop, not a bright wallpaper. The middle keeps a *darkened*
+        // album tone (dominant mixed toward black) for colour without brightness,
+        // and the top/bottom fall off darker still for top-bar and transport
+        // legibility.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -220,9 +224,9 @@ internal fun PlayerBlurredArtBackground(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.42f),
-                            albumColors.dominant.copy(alpha = 0.20f),
-                            Color.Black.copy(alpha = 0.55f),
+                            Color.Black.copy(alpha = 0.58f),
+                            lerp(albumColors.dominant, Color.Black, 0.62f).copy(alpha = 0.52f),
+                            Color.Black.copy(alpha = 0.72f),
                         )
                     )
                 )
