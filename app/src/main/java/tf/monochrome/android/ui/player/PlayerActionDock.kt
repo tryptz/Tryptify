@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.player
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,11 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
@@ -69,6 +73,25 @@ fun PlayerActionDock(
         painterResource(R.drawable.ic_glass_mixer),
         painterResource(R.drawable.ic_glass_playlist),
     )
+    // Press-bulge: one shared interaction source per slot so the parent knows
+    // which button is held and can swell the glass under it. The bulge grows on
+    // press (spring) and recedes on release (tween); its centre follows the last
+    // pressed slot.
+    val sources = remember { List(icons.size) { MutableInteractionSource() } }
+    val pressed = sources.map { it.collectIsPressedAsState() }
+    val pressedIndex = pressed.indexOfFirst { it.value }
+    val bulgeSlot = remember { mutableIntStateOf(0) }
+    LaunchedEffect(pressedIndex) { if (pressedIndex >= 0) bulgeSlot.intValue = pressedIndex }
+    val bulgeAmt by animateFloatAsState(
+        targetValue = if (pressedIndex >= 0) 1f else 0f,
+        animationSpec = if (pressedIndex >= 0) {
+            spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
+        } else {
+            tween(durationMillis = 260)
+        },
+        label = "dockBulge",
+    )
+    val bulgeCenter = Offset((bulgeSlot.intValue + 0.5f) / icons.size, 0.42f)
     Box(modifier = modifier.fillMaxWidth()) {
         // Soft rounded-rect drop shadow lifting the whole glass slab off the
         // player, matching the play button + transport icons (Studio-tunable).
@@ -88,7 +111,7 @@ fun PlayerActionDock(
         Canvas(
             modifier = Modifier
                 .matchParentSize()
-                .playerGlass(tint = accent)
+                .playerGlass(tint = accent, bulgeCenter = bulgeCenter, bulgeAmount = { bulgeAmt })
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()
@@ -116,10 +139,10 @@ fun PlayerActionDock(
         }
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
-            DockLabel(Modifier.weight(1f), "Lyrics", accent, lyricsActive, onLyrics)
-            DockLabel(Modifier.weight(1f), "Timer", accent, false, onTimer)
-            DockLabel(Modifier.weight(1f), "Mixer/FX", accent, false, onMixer)
-            DockLabel(Modifier.weight(1f), "Playlist", accent, false, onPlaylist)
+            DockLabel(Modifier.weight(1f), "Lyrics", accent, lyricsActive, sources[0], onLyrics)
+            DockLabel(Modifier.weight(1f), "Timer", accent, false, sources[1], onTimer)
+            DockLabel(Modifier.weight(1f), "Mixer/FX", accent, false, sources[2], onMixer)
+            DockLabel(Modifier.weight(1f), "Playlist", accent, false, sources[3], onPlaylist)
         }
     }
 }
@@ -130,9 +153,9 @@ private fun DockLabel(
     label: String,
     accent: Color,
     selected: Boolean,
+    interactionSource: MutableInteractionSource,
     onClick: () -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,

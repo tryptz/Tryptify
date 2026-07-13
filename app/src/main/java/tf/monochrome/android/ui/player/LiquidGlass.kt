@@ -191,6 +191,8 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uLightAngle", 2.3561945f)   // 135°
             shader.setFloatUniform("uFresnelPower", 5f)
             shader.setFloatUniform("uFrost", 0f)
+            shader.setFloatUniform("uBulge", 0.5f, 0.5f)
+            shader.setFloatUniform("uBulgeAmt", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -250,6 +252,8 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uLightAngle", 2.3561945f)   // 135°
             shader.setFloatUniform("uFresnelPower", 5f)
             shader.setFloatUniform("uFrost", 0f)
+            shader.setFloatUniform("uBulge", 0.5f, 0.5f)
+            shader.setFloatUniform("uBulgeAmt", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -272,10 +276,14 @@ val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.P
  * on shader-compile failure.
  */
 @Composable
-internal fun Modifier.playerGlass(tint: Color): Modifier {
+internal fun Modifier.playerGlass(
+    tint: Color,
+    bulgeCenter: Offset = Offset(0.5f, 0.5f),
+    bulgeAmount: () -> Float = { 0f },
+): Modifier {
     val g = LocalPlayerGlass.current
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(playerGlassModifier(tint, g))
+    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount))
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -283,6 +291,8 @@ internal fun Modifier.playerGlass(tint: Color): Modifier {
 private fun playerGlassModifier(
     tint: Color,
     g: tf.monochrome.android.domain.model.PlayerGlassSettings,
+    bulgeCenter: Offset,
+    bulgeAmount: () -> Float,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     val timeSec = rememberFrameSeconds()
@@ -313,6 +323,8 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uLightAngle", g.lightAngleDeg * 0.017453292f)
             shader.setFloatUniform("uFresnelPower", 8f - 6f * g.edgeWidth)
             shader.setFloatUniform("uFrost", g.frost)
+            shader.setFloatUniform("uBulge", bulgeCenter.x, bulgeCenter.y)
+            shader.setFloatUniform("uBulgeAmt", bulgeAmount())
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -486,6 +498,8 @@ uniform float uTiltAmount;    // how strongly device tilt moves the light/reflec
 uniform float uLightAngle;    // key-light direction, radians
 uniform float uFresnelPower;  // Fresnel falloff: lower = broader reflective rim
 uniform float uFrost;         // frosted roughness: 0 = clear, higher = misted
+uniform float2 uBulge;        // press-bulge centre, normalized (0..1) in the surface
+uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -581,6 +595,18 @@ half4 main(float2 p) {
     float w1 = sin(p.x * 0.055 + uTime * 1.7) * cos(p.y * 0.081 - uTime * 1.3);
     float w2 = sin((p.x + p.y) * 0.035 - uTime * 0.9);
     grad += 0.04 * uLiquid * float2(w1, w2) * a * edge;
+
+    // Press bulge: a soft dome that swells the glass under a pressed button. The
+    // radial slope peaks mid-radius (derivative of a dome) so the surface reads as
+    // a smooth bump that lenses the backdrop; uBulgeAmt animates it in/out.
+    if (uBulgeAmt > 0.001) {
+        float2 bc = uBulge * uSize;
+        float R = uSize.x / 6.0;
+        float rr2 = distance(p, bc);
+        float dome = smoothstep(R, 0.0, rr2);
+        float2 bdir = (rr2 > 0.5) ? (p - bc) / rr2 : float2(0.0, 0.0);
+        grad += bdir * (dome * (1.0 - dome)) * uBulgeAmt * 10.0;
+    }
 
     // Surface normal from the alpha heightfield. Depth (profondeur) scales how
     // hard the bevel tips the normal off the surface — the dominant "3D" knob,
