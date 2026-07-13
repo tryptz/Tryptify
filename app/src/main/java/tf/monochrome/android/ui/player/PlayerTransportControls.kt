@@ -112,44 +112,64 @@ fun PlayerTransportControls(
 /**
  * Draws the play/pause round button: a solid [fill] disc with the play triangle
  * or pause bars *punched out* (cleared to transparent) so the glyph reads as a
- * hollow cut-out of the glass. Meant to be drawn inside a layer carrying the
- * [playerGlass] render effect, which bevels the disc edge and the cut-out edges
- * into refractive 3D glass.
+ * hollow cut-out of the glass. A dark, slightly larger copy is laid under the
+ * cut first, so a recessed shadow rim rings the hole and the hollow stays
+ * legible even over a bright backdrop. Meant to be drawn inside a layer carrying
+ * the [playerGlass] render effect, which bevels the disc edge and the cut-out
+ * edges into refractive 3D glass.
  */
 internal fun DrawScope.drawGlassPlayPauseDisc(isPlaying: Boolean, fill: Color) {
     val d = size.minDimension
     val cx = size.width / 2f
     val cy = size.height / 2f
     drawCircle(color = fill, radius = d / 2f)
+    // 1) A dark symbol at full size darkens the region around the cut.
+    drawPlayPauseSymbol(isPlaying, cx, cy, d, scale = 1f, color = Color.Black.copy(alpha = 0.55f), blend = BlendMode.SrcOver)
+    // 2) A smaller punch clears the hole, leaving that dark ring as a recessed
+    //    glass edge around the hollow glyph.
+    drawPlayPauseSymbol(isPlaying, cx, cy, d, scale = 0.78f, color = fill, blend = BlendMode.Clear)
+}
+
+/** One play/pause glyph, scaled about the button centre, for the layered cut. */
+private fun DrawScope.drawPlayPauseSymbol(
+    isPlaying: Boolean,
+    cx: Float,
+    cy: Float,
+    d: Float,
+    scale: Float,
+    color: Color,
+    blend: BlendMode,
+) {
     if (isPlaying) {
-        val barW = d * 0.11f
-        val barH = d * 0.34f
-        val gap = d * 0.10f
-        val corner = CornerRadius(barW * 0.42f, barW * 0.42f)
+        val barW = d * 0.11f * scale
+        val barH = d * 0.34f * scale
+        val gap = d * 0.10f * scale
+        val corner = CornerRadius(d * 0.046f * scale, d * 0.046f * scale)
         drawRoundRect(
-            color = fill,
+            color = color,
             topLeft = Offset(cx - gap / 2f - barW, cy - barH / 2f),
             size = Size(barW, barH),
             cornerRadius = corner,
-            blendMode = BlendMode.Clear,
+            blendMode = blend,
         )
         drawRoundRect(
-            color = fill,
+            color = color,
             topLeft = Offset(cx + gap / 2f, cy - barH / 2f),
             size = Size(barW, barH),
             cornerRadius = corner,
-            blendMode = BlendMode.Clear,
+            blendMode = blend,
         )
     } else {
-        val w = d * 0.32f
-        val h = d * 0.34f
+        val w = d * 0.32f * scale
+        val h = d * 0.34f * scale
+        val tcx = cx - d * 0.32f * 0.06f // optical-centre (scale-independent so passes stay concentric)
         val tri = Path().apply {
-            moveTo(cx - w * 0.40f, cy - h / 2f)
-            lineTo(cx - w * 0.40f, cy + h / 2f)
-            lineTo(cx + w * 0.60f, cy)
+            moveTo(tcx - w * 0.40f, cy - h / 2f)
+            lineTo(tcx - w * 0.40f, cy + h / 2f)
+            lineTo(tcx + w * 0.60f, cy)
             close()
         }
-        drawPath(tri, color = fill, blendMode = BlendMode.Clear)
+        drawPath(tri, color = color, blendMode = blend)
     }
 }
 

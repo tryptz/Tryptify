@@ -183,6 +183,7 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uSampleRings", fx.glassSampleRings.toFloat())
             shader.setFloatUniform("uRoundness", 1f)
             shader.setFloatUniform("uDepth", 1f)
+            shader.setFloatUniform("uLiquid", 1f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -234,6 +235,7 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uSampleRings", 2f)
             shader.setFloatUniform("uRoundness", 1f)
             shader.setFloatUniform("uDepth", 1f)
+            shader.setFloatUniform("uLiquid", 1f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -286,6 +288,9 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uSampleRings", g.sampleRings.toFloat())
             shader.setFloatUniform("uRoundness", g.roundness)
             shader.setFloatUniform("uDepth", g.depth)
+            // Calmer surface for the button chrome so the big disc reads clean
+            // and smooth rather than cloudy.
+            shader.setFloatUniform("uLiquid", 0.25f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -419,6 +424,7 @@ uniform float3 uTint2;        // second album tone (blurred-art backdrop)
 uniform float uBackdropMix;   // 0 = flat single-tint wash; >0 = lens the album art
 uniform float uRoundness;     // bevel shoulder width: 1 = neutral, higher = rounder/softer edge
 uniform float uDepth;         // profondeur: 1 = neutral, higher = steeper relief / more 3D
+uniform float uLiquid;        // surface unrest: 1 = full moving sheen, lower = calmer, cleaner glass
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -481,9 +487,11 @@ half4 main(float2 p) {
     }
 
     // Liquid: the surface itself undulates, so highlights swim over glyphs.
+    // uLiquid scales this unrest — the big button disc dials it down so its
+    // glass reads clean and smooth instead of cloudy/blotchy.
     float w1 = sin(p.x * 0.055 + uTime * 1.7) * cos(p.y * 0.081 - uTime * 1.3);
     float w2 = sin((p.x + p.y) * 0.035 - uTime * 0.9);
-    grad += 0.05 * float2(w1, w2) * a;
+    grad += 0.05 * uLiquid * float2(w1, w2) * a;
 
     float2 slope = grad;                        // raw bevel slope → lens displacement
     // Depth (profondeur): a shallower z base tips the bevel normal further off
@@ -548,10 +556,10 @@ half4 main(float2 p) {
     float outA = clamp(a * (bodyOpacity + (1.0 - bodyOpacity) * rim), 0.0, a);
     float lightGain = (0.30 + 0.70 * lum) * uRimGain;
 
-    float3 col = frost * (0.9 + 0.14 * band) * outA;   // premultiplied frost body
+    float3 col = frost * (0.9 + 0.14 * band * uLiquid) * outA;   // premultiplied frost body
     col += (float3(specR, spec, specB) * 1.10
             + float3(0.80, 0.90, 1.00) * (fres * 0.40)
-            + float3(sheen) * (0.05 + 0.22 * band)) * (outA * lightGain);
+            + float3(sheen) * (0.05 + 0.22 * band * uLiquid)) * (outA * lightGain);
     col = min(col, float3(outA));
     return half4(half3(col), half(outA));
 }
