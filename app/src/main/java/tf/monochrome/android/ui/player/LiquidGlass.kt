@@ -187,6 +187,55 @@ private fun liquidGlassModifier(
     }
 }
 
+/**
+ * The SAME refractive lyric glass ([LIQUID_GLASS_SRC]), applied to a solid PANEL
+ * surface (the player's dock / sheet) instead of glyphs — so the player chrome
+ * reads as the exact liquid glass the active lyric line does, not a flat frost.
+ *
+ * Apply it to a Box that already has a rounded, translucent fill: the shader
+ * bevels that fill's edges into a lit, tilt-reactive refractive rim (with
+ * chromatic dispersion and the animated light sweep) over a see-through,
+ * album-tinted body. Place it BEHIND the panel's content so the buttons and
+ * labels sitting on the glass stay crisp and untouched.
+ *
+ * Unlike [liquidGlass] it is NOT gated on the lyric-FX toggle (player chrome is
+ * always glass) and is tuned for a panel: a more present body and a stronger
+ * rim. Requires API 33; a no-op (plain fill) below that or on shader failure.
+ */
+@Composable
+internal fun Modifier.liquidGlassPanel(tint: Color): Modifier {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
+    return this.then(liquidGlassPanelModifier(tint))
+}
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun liquidGlassPanelModifier(tint: Color): Modifier {
+    val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
+    val timeSec = rememberFrameSeconds()
+    val tilt = rememberGravityTilt()
+    return Modifier.graphicsLayer {
+        if (size.minDimension > 0f) {
+            shader.setFloatUniform("uSize", size.width, size.height)
+            shader.setFloatUniform("uTime", timeSec.value)
+            shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
+            shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
+            shader.setFloatUniform("uTint2", tint.red, tint.green, tint.blue)
+            shader.setFloatUniform("uBackdropMix", 0f)
+            // Panel tuning: a body that stays fairly present (a panel, not a
+            // glyph), with a strong lit rim and gentle edge refraction.
+            shader.setFloatUniform("uBodyOpacity", 0.82f)
+            shader.setFloatUniform("uRefraction", 0.10f)
+            shader.setFloatUniform("uRimGain", 1.30f)
+            shader.setFloatUniform("uDispersion", 1.0f)
+            shader.setFloatUniform("uSampleRings", 2f)
+            renderEffect = RenderEffect
+                .createRuntimeShaderEffect(shader, "content")
+                .asComposeRenderEffect()
+        }
+    }
+}
+
 /** Low-pass-filtered gravity in [-1, 1] per axis; Offset.Zero if no sensor. */
 @Composable
 private fun rememberGravityTilt(): State<Offset> {

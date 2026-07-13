@@ -576,7 +576,7 @@ private fun StatusOverlayPanel(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 32.dp, shape = shape, clip = false)
-            .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f, liquid = true),
+            .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f),
         shape = shape,
         color = PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
     ) {

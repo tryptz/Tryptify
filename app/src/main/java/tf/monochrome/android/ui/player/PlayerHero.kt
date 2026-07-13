@@ -438,7 +438,7 @@ private fun VisualizerHeroOverlay(
 ) {
     Surface(
         modifier = modifier.padding(10.dp)
-            .liquidGlass(shape = RoundedCornerShape(18.dp), tintAlpha = 0.26f, liquid = true),
+            .liquidGlass(shape = RoundedCornerShape(18.dp), tintAlpha = 0.26f),
         shape = RoundedCornerShape(18.dp),
         color = Color.Transparent,
         contentColor = Color.White,
