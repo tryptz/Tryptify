@@ -72,16 +72,21 @@ fun PlayerTransportControls(
         )
         // Play/pause is a SOLID round glass disc with the play/pause symbol
         // punched out (hollow), so the backdrop shows through the glyph and the
-        // shader bevels both the disc rim and the cut-out edges. A soft drop
-        // shadow (tunable "shadow depth") lifts it off the surface for 3D depth.
+        // shader bevels both the disc rim and the cut-out edges. A drop shadow
+        // lifts it off the surface: shadow depth = darkness, softness = blur,
+        // tint = black -> accent-tinted glow (all tunable in the Studio).
+        val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, accent, glass.shadowTint)
+            .copy(alpha = 0.25f + 0.6f * glass.shadowDepth)
         Box(
             modifier = Modifier
                 .size(PlayerDesignTokens.PlayButtonSize)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .shadow(
-                    elevation = (glass.shadowDepth * 22f).dp,
+                    elevation = (4f + glass.shadowSoftness * 26f).dp,
                     shape = CircleShape,
                     clip = false,
+                    ambientColor = shadowColor,
+                    spotColor = shadowColor,
                 )
                 .clip(CircleShape)
                 .clickable(

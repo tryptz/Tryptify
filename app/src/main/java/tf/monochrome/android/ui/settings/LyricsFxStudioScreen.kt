@@ -764,13 +764,17 @@ private fun PlayerGlassTab(
                         )
                         // Solid glass disc with the play symbol punched out, plus the
                         // drop shadow — matching the real play button.
+                        val discShadow = lerp(Color.Black, accent, glass.shadowTint)
+                            .copy(alpha = 0.25f + 0.6f * glass.shadowDepth)
                         Box(
                             Modifier
                                 .size(64.dp)
                                 .shadow(
-                                    elevation = (glass.shadowDepth * 22f).dp,
+                                    elevation = (4f + glass.shadowSoftness * 26f).dp,
                                     shape = CircleShape,
                                     clip = false,
+                                    ambientColor = discShadow,
+                                    spotColor = discShadow,
                                 )
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center,
@@ -856,6 +860,44 @@ private fun PlayerGlassTab(
             glass.sampleRings.toFloat(), 1f..3f, steps = 1,
             description = "Bevel quality vs GPU cost.",
         ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
+        FxSlider(
+            "Reflection", "${(glass.reflection * 100).toInt()}%", glass.reflection, 0f..2f,
+            description = "How much of the room/environment reflection shows on the glass.",
+        ) { onUpdate { g -> g.copy(reflection = it) } }
+        FxSlider(
+            "Gloss", "${(glass.gloss * 100).toInt()}%", glass.gloss, 0f..1f,
+            description = "Highlight polish: soft frosted-wide glint to a tight mirror.",
+        ) { onUpdate { g -> g.copy(gloss = it) } }
+        FxSlider(
+            "Surface motion", "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
+            description = "Living-liquid shimmer on the glass surface (0 = still).",
+        ) { onUpdate { g -> g.copy(surfaceMotion = it) } }
+        FxSlider(
+            "Frosted blur", "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
+            description = "Frosts the glass, from clear to misted.",
+        ) { onUpdate { g -> g.copy(frost = it) } }
+
+        StudioSection("Light & shadow")
+        FxSlider(
+            "Tilt reactivity", "${(glass.tiltReactivity * 100).toInt()}%", glass.tiltReactivity, 0f..1.5f,
+            description = "How strongly tilting the phone moves the light and reflection.",
+        ) { onUpdate { g -> g.copy(tiltReactivity = it) } }
+        FxSlider(
+            "Light angle", "${glass.lightAngleDeg.toInt()}°", glass.lightAngleDeg, 0f..360f,
+            description = "Direction the key light comes from — where the highlights sit.",
+        ) { onUpdate { g -> g.copy(lightAngleDeg = it) } }
+        FxSlider(
+            "Edge width", "${(glass.edgeWidth * 100).toInt()}%", glass.edgeWidth, 0f..1f,
+            description = "Reflective rim: thin crisp edge to a broad glassy shoulder.",
+        ) { onUpdate { g -> g.copy(edgeWidth = it) } }
+        FxSlider(
+            "Shadow softness", "${(glass.shadowSoftness * 100).toInt()}%", glass.shadowSoftness, 0f..1f,
+            description = "Blur / spread of the drop shadow under the play button.",
+        ) { onUpdate { g -> g.copy(shadowSoftness = it) } }
+        FxSlider(
+            "Shadow tint", "${(glass.shadowTint * 100).toInt()}%", glass.shadowTint, 0f..1f,
+            description = "Colour of the drop shadow: neutral black to accent glow.",
+        ) { onUpdate { g -> g.copy(shadowTint = it) } }
         Spacer(Modifier.height(48.dp))
         }
     }

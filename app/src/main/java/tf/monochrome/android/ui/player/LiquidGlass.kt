@@ -184,6 +184,13 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uRoundness", 1f)
             shader.setFloatUniform("uDepth", 1f)
             shader.setFloatUniform("uLiquid", 1f)
+            // Lyrics keep the neutral (non-player-tunable) relight parameters.
+            shader.setFloatUniform("uReflection", 1f)
+            shader.setFloatUniform("uGloss", 90f)
+            shader.setFloatUniform("uTiltAmount", 0.7f)
+            shader.setFloatUniform("uLightAngle", 2.3561945f)   // 135°
+            shader.setFloatUniform("uFresnelPower", 5f)
+            shader.setFloatUniform("uFrost", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -236,6 +243,13 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uRoundness", 1f)
             shader.setFloatUniform("uDepth", 1f)
             shader.setFloatUniform("uLiquid", 1f)
+            // Panel keeps the neutral relight parameters.
+            shader.setFloatUniform("uReflection", 1f)
+            shader.setFloatUniform("uGloss", 90f)
+            shader.setFloatUniform("uTiltAmount", 0.7f)
+            shader.setFloatUniform("uLightAngle", 2.3561945f)   // 135°
+            shader.setFloatUniform("uFresnelPower", 5f)
+            shader.setFloatUniform("uFrost", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -288,9 +302,17 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uSampleRings", g.sampleRings.toFloat())
             shader.setFloatUniform("uRoundness", g.roundness)
             shader.setFloatUniform("uDepth", g.depth)
-            // Calmer surface for the button chrome so the big disc reads clean
-            // and smooth rather than cloudy.
-            shader.setFloatUniform("uLiquid", 0.25f)
+            // Player-tunable relight (Studio "Player Glass" tab). Surface motion
+            // replaces the old fixed 0.25 calm; gloss maps to a specular exponent
+            // (20 = soft/frosted-wide .. 260 = tight mirror), edge width to the
+            // Fresnel falloff (8 = thin crisp .. 2 = broad shoulder).
+            shader.setFloatUniform("uLiquid", g.surfaceMotion)
+            shader.setFloatUniform("uReflection", g.reflection)
+            shader.setFloatUniform("uGloss", 20f + 240f * g.gloss)
+            shader.setFloatUniform("uTiltAmount", g.tiltReactivity)
+            shader.setFloatUniform("uLightAngle", g.lightAngleDeg * 0.017453292f)
+            shader.setFloatUniform("uFresnelPower", 8f - 6f * g.edgeWidth)
+            shader.setFloatUniform("uFrost", g.frost)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -425,6 +447,12 @@ uniform float uBackdropMix;   // 0 = flat single-tint wash; >0 = lens the album 
 uniform float uRoundness;     // bevel shoulder width: 1 = neutral, higher = rounder/softer edge
 uniform float uDepth;         // profondeur: 1 = neutral, higher = steeper relief / more 3D
 uniform float uLiquid;        // surface unrest: 1 = full moving sheen, lower = calmer, cleaner glass
+uniform float uReflection;    // environment ("room") reflection strength
+uniform float uGloss;         // specular exponent: higher = tighter, mirror-polished glint
+uniform float uTiltAmount;    // how strongly device tilt moves the light/reflection
+uniform float uLightAngle;    // key-light direction, radians
+uniform float uFresnelPower;  // Fresnel falloff: lower = broader reflective rim
+uniform float uFrost;         // frosted roughness: 0 = clear, higher = misted
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -449,19 +477,20 @@ float3 backdropTintAt(float2 uv) {
 // glass catches a believable "room" that streaks across the bevel as the
 // surface normal turns — instead of one flat, generic highlight. Device tilt
 // and a slow drift move the lights so the reflections stay alive.
-float3 environment(float3 r, float2 tilt, float t, float liquid) {
+float3 environment(float3 r, float2 tilt, float2 keyDir, float t, float liquid) {
     float2 d = r.xy;
     // Screen y is down, so the bright sky is where the reflection points up
     // (r.y < 0): a soft top->bottom studio gradient.
     float up = clamp(0.5 - 0.5 * r.y, 0.0, 1.0);
     float3 sky = mix(float3(0.05, 0.06, 0.08), float3(0.82, 0.88, 1.0),
                      smoothstep(0.12, 0.96, up));
-    // Bright soft key light near the top, nudged by tilt + a slow drift.
-    float2 key = float2(-0.30, -0.62) + tilt * 0.5
+    // Bright soft key light placed along the chosen light angle (keyDir),
+    // nudged by device tilt + a slow drift.
+    float2 key = keyDir + tilt * 0.5
                + 0.06 * float2(sin(t * 0.40), cos(t * 0.33)) * liquid;
     float keyI = smoothstep(0.55, 0.0, distance(d, key));
     // Cooler fill light from the opposite corner.
-    float2 fill = float2(0.52, 0.5) - tilt * 0.4;
+    float2 fill = -keyDir * 0.85 - tilt * 0.4;
     float fillI = smoothstep(0.72, 0.0, distance(d, fill)) * 0.5;
     return sky + float3(1.0, 0.97, 0.92) * keyI * 1.7
               + float3(0.65, 0.82, 1.0) * fillI;
@@ -526,14 +555,23 @@ half4 main(float2 p) {
     float slopeGain = 3.5 * uDepth;
     float3 N = normalize(float3(grad * slopeGain, 1.0));
 
+    // Frost: per-pixel micro-roughness scatters the reflection, refraction and
+    // glint into a misted, frosted surface. Gated so uFrost = 0 is unchanged.
+    if (uFrost > 0.001) {
+        float h1 = fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+        float h2 = fract(sin(dot(p, float2(39.346, 11.135))) * 24634.6345);
+        N = normalize(N + float3((float2(h1, h2) - 0.5) * uFrost * 0.6, 0.0));
+    }
+
     float2 uv = p / uSize;
     float3 I = float3(0.0, 0.0, -1.0);   // view ray, into the screen
 
     // Fresnel (Schlick, F0 = 0.04 for glass): ~4% reflection head-on, climbing
     // to ~100% at grazing edges. This is what makes the rim catch the light and
-    // the face stay see-through — the core of the glass look.
+    // the face stay see-through — the core of the glass look. uFresnelPower sets
+    // how broad the reflective rim band is (lower = wider shoulder).
     float cosV = clamp(N.z, 0.0, 1.0);
-    float fres = 0.04 + 0.96 * pow(1.0 - cosV, 5.0);
+    float fres = 0.04 + 0.96 * pow(1.0 - cosV, uFresnelPower);
 
     // Refraction (Snell, via refract) with a per-channel index of refraction so
     // R/G/B bend by different amounts — true chromatic dispersion, strongest at
@@ -552,20 +590,24 @@ half4 main(float2 p) {
         backdropTintAt(uvB).b * backdropField(uvB));
 
     // Reflected environment: the room the glass catches, turning with N so the
-    // reflection streaks across the bevel as the surface curves.
-    float3 refl = environment(reflect(I, N), uTilt, uTime, uLiquid);
+    // reflection streaks across the bevel as the surface curves. The key light
+    // sits along uLightAngle; uTiltAmount scales how much device tilt sways it.
+    float2 keyDir = float2(cos(uLightAngle), -sin(uLightAngle)) * 0.69;
+    float3 refl = environment(reflect(I, N), uTilt * uTiltAmount, keyDir, uTime, uLiquid);
 
-    // Crisp specular glint from a tilt-driven key light, dispersed for sparkle.
+    // Crisp specular glint from the same key light (uLightAngle + tilt), with a
+    // uGloss-controlled exponent (higher = tighter mirror), dispersed for sparkle.
+    float2 lightXY = float2(cos(uLightAngle), -sin(uLightAngle));
     float3 L = normalize(float3(
-        -uTilt.x * 0.8 + 0.25 * sin(uTime * 0.37),
-         uTilt.y * 0.8 + 0.20 * cos(uTime * 0.29) - 0.5,
-         0.85));
+        lightXY.x * 0.5 - uTilt.x * 0.8 * uTiltAmount + 0.25 * sin(uTime * 0.37),
+        lightXY.y * 0.5 + uTilt.y * 0.8 * uTiltAmount + 0.20 * cos(uTime * 0.29),
+        0.85));
     float3 H = normalize(L + float3(0.0, 0.0, 1.0));
     float ndh   = max(dot(N, H), 0.0);
-    float spec  = pow(ndh, 90.0);
+    float spec  = pow(ndh, uGloss);
     float dsp   = 0.015 * uDispersion;
-    float specR = pow(max(dot(normalize(N + float3(dsp, 0.0, 0.0)), H), 0.0), 90.0);
-    float specB = pow(max(dot(normalize(N - float3(dsp, 0.0, 0.0)), H), 0.0), 90.0);
+    float specR = pow(max(dot(normalize(N + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
+    float specB = pow(max(dot(normalize(N - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
 
     // Body: the glyph's own colour (kept legible) with a hint of the lensed
     // backdrop; leans more see-through over real blurred art.
@@ -579,7 +621,7 @@ half4 main(float2 p) {
     // The glint is Fresnel-weighted too, so it rides the bevel edge rather than
     // washing the whole flat face white (a front-facing flat surface would
     // otherwise fire the specular uniformly).
-    float3 col3 = mix(bodyCol, refl * uRimGain, clamp(fres * 1.1, 0.0, 1.0));
+    float3 col3 = mix(bodyCol, refl * uReflection, clamp(fres * 1.1, 0.0, 1.0));
     col3 += float3(specR, spec, specB) * uRimGain * fres;
 
     // Transparent face, opaque bright rim: alpha is low across the body (backdrop
