@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -226,36 +225,42 @@ internal fun TransportIcon(
     size: Dp = PlayerDesignTokens.TransportIconSize,
 ) {
     val glass = LocalPlayerGlass.current
-    IconButton(onClick = onClick) {
-        Box(contentAlignment = Alignment.Center) {
-            // Shape-accurate drop shadow: a blurred, tinted copy of the SAME glyph
-            // behind the glass icon, so the shadow traces the icon's real outline
-            // (a circle shadow can't fit a triangle/arrow). Tracks the Studio's
-            // shadow depth / softness / tint, matching the play button.
-            if (glass.enabled) {
-                val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, tint, glass.shadowTint)
-                    .copy(alpha = 0.30f + 0.5f * glass.shadowDepth)
-                Icon(
-                    painter = painter,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .requiredSize(size)
-                        .graphicsLayer { translationY = (1.5f + glass.shadowDepth * 4f).dp.toPx() }
-                        .blur(
-                            radius = (2f + glass.shadowSoftness * 12f).dp,
-                            edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                        ),
-                    tint = shadowColor,
-                )
-            }
+    // A generously-sized clickable box (instead of the fixed 48dp IconButton) so
+    // the offset + blurred drop shadow has canvas room and isn't clipped by the
+    // transport row. The visible glyph stays `size`, centred in the box.
+    Box(
+        modifier = Modifier
+            .size(size + 40.dp)
+            .clickable(onClickLabel = description, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Shape-accurate drop shadow: a blurred, tinted copy of the SAME glyph
+        // behind the glass icon, so the shadow traces the icon's real outline
+        // (a circle shadow can't fit a triangle/arrow). Tracks the Studio's
+        // shadow depth / softness / tint, matching the play button.
+        if (glass.enabled) {
+            val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, tint, glass.shadowTint)
+                .copy(alpha = 0.30f + 0.5f * glass.shadowDepth)
             Icon(
                 painter = painter,
-                contentDescription = description,
+                contentDescription = null,
                 modifier = Modifier
                     .requiredSize(size)
-                    .playerGlass(tint = tint),
-                tint = tint,
+                    .graphicsLayer { translationY = (1.5f + glass.shadowDepth * 4f).dp.toPx() }
+                    .blur(
+                        radius = (2f + glass.shadowSoftness * 12f).dp,
+                        edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                    ),
+                tint = shadowColor,
             )
         }
+        Icon(
+            painter = painter,
+            contentDescription = description,
+            modifier = Modifier
+                .requiredSize(size)
+                .playerGlass(tint = tint),
+            tint = tint,
+        )
     }
 }
