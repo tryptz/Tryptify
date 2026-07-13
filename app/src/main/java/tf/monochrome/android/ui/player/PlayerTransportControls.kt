@@ -112,22 +112,18 @@ fun PlayerTransportControls(
 /**
  * Draws the play/pause round button: a solid [fill] disc with the play triangle
  * or pause bars *punched out* (cleared to transparent) so the glyph reads as a
- * hollow cut-out of the glass. A dark, slightly larger copy is laid under the
- * cut first, so a recessed shadow rim rings the hole and the hollow stays
- * legible even over a bright backdrop. Meant to be drawn inside a layer carrying
- * the [playerGlass] render effect, which bevels the disc edge and the cut-out
- * edges into refractive 3D glass.
+ * clean hollow cut-out of the glass — a single beveled glass edge, no double
+ * outline. Meant to be drawn inside a layer carrying the [playerGlass] render
+ * effect, which bevels the disc edge and the cut-out edges into refractive 3D
+ * glass.
  */
 internal fun DrawScope.drawGlassPlayPauseDisc(isPlaying: Boolean, fill: Color) {
     val d = size.minDimension
     val cx = size.width / 2f
     val cy = size.height / 2f
     drawCircle(color = fill, radius = d / 2f)
-    // 1) A dark symbol at full size darkens the region around the cut.
-    drawPlayPauseSymbol(isPlaying, cx, cy, d, scale = 1f, color = Color.Black.copy(alpha = 0.55f), blend = BlendMode.SrcOver)
-    // 2) A smaller punch clears the hole, leaving that dark ring as a recessed
-    //    glass edge around the hollow glyph.
-    drawPlayPauseSymbol(isPlaying, cx, cy, d, scale = 0.78f, color = fill, blend = BlendMode.Clear)
+    // One clean punch → the shader bevels a single glass edge around the hollow.
+    drawPlayPauseSymbol(isPlaying, cx, cy, d, scale = 1f, color = fill, blend = BlendMode.Clear)
 }
 
 /** One play/pause glyph, scaled about the button centre, for the layered cut. */
