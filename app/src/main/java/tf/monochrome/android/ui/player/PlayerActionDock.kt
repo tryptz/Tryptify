@@ -79,8 +79,11 @@ fun PlayerActionDock(
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()
+            // Same solid [accent] fill as the play-button disc, so the slab reads
+            // as the same coloured glass — the shader's body opacity makes it
+            // see-through, matching the transport buttons exactly.
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.20f),
+                color = accent,
                 cornerRadius = CornerRadius(cornerPx, cornerPx),
             )
             val iconPx = PlayerDesignTokens.ActionIconSize.toPx()
