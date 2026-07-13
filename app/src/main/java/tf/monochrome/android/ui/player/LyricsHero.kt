@@ -449,6 +449,22 @@ internal fun SyncedLyricsView(
         // clip edge, so edge letters never get corner-cut against the border.
         val sideInset = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
         val lineWidth = (maxWidth - sideInset * 2).coerceAtLeast(0.dp)
+        // Headroom for the active line's bass bounce. The line pumps + pops via a
+        // graphicsLayer scale (bassBeat), but it lives inside the lyric surface's
+        // glass render-layer, which only captures `lineWidth` — so a long line
+        // swelling past that would be clipped. Fit width-constrained lines to a
+        // slightly narrower box that reserves the PEAK bounce scale, so at full
+        // pump they just reach the edge and can never be cut. (The bass pulse
+        // caps at ~1.6 in rememberBassPulse; pop-in adds a small overshoot.)
+        // Short lines aren't width-constrained, so the fitter leaves them as-is.
+        val bounceHeadroom = if (fx.bassReact > 0.01f) {
+            val pumpPeak = 1f + fx.pumpAmount * fx.bassReact * 1.6f
+            val popPeak = 1f + fx.popAmount * 0.25f
+            (pumpPeak * popPeak).coerceIn(1f, 2f)
+        } else {
+            1f
+        }
+        val fitWidth = lineWidth / bounceHeadroom
 
         // Keyed on maxHeight as well so the active line is re-centred while
         // the surface is being resized (the expand/collapse morph animates
@@ -518,7 +534,7 @@ internal fun SyncedLyricsView(
             // height never moves with the fitted size — the list never reflows.
             val fittedSp = rememberFittedLyricSizeSp(
                 text = line.text.ifBlank { "♪" },
-                availableWidth = lineWidth,
+                availableWidth = fitWidth,
                 baseSp = fx.fontSizeSp,
                 style = MaterialTheme.typography.titleMedium.copy(
                     letterSpacing = fx.letterSpacingSp.sp,
