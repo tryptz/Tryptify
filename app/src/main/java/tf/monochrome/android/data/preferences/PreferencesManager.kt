@@ -93,6 +93,8 @@ class PreferencesManager @Inject constructor(
         private val LYRICS_BASS_REACT = floatPreferencesKey("lyrics_bass_react")
         // Full Lyrics FX Studio settings as one JSON blob (takes precedence).
         private val LYRICS_FX_JSON = stringPreferencesKey("lyrics_fx_json")
+        // User-saved Lyrics FX presets (a JSON array of {name, settings}).
+        private val LYRICS_FX_CUSTOM_PRESETS_JSON = stringPreferencesKey("lyrics_fx_custom_presets_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -1178,6 +1180,23 @@ class PreferencesManager @Inject constructor(
     suspend fun setLyricsFx(settings: LyricsFxSettings) {
         val clamped = settings.clamped()
         dataStore.edit { it[LYRICS_FX_JSON] = json.encodeToString(clamped) }
+    }
+
+    /** User-saved Lyrics FX presets (empty until the user saves one). */
+    val customLyricsFxPresets: Flow<List<tf.monochrome.android.domain.model.LyricsFxPreset>> =
+        dataStore.data.map { prefs ->
+            prefs[LYRICS_FX_CUSTOM_PRESETS_JSON]
+                ?.let { raw ->
+                    runCatching {
+                        json.decodeFromString<List<tf.monochrome.android.domain.model.LyricsFxPreset>>(raw)
+                    }.getOrNull()
+                }
+                ?.map { it.copy(settings = it.settings.clamped()) }
+                ?: emptyList()
+        }
+
+    suspend fun setCustomLyricsFxPresets(presets: List<tf.monochrome.android.domain.model.LyricsFxPreset>) {
+        dataStore.edit { it[LYRICS_FX_CUSTOM_PRESETS_JSON] = json.encodeToString(presets) }
     }
 
     // --- Player appearance ---

@@ -1,6 +1,9 @@
 package tf.monochrome.android.domain.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * Full parameter set for the lyric renderer — typography, the 3D letter wave,
@@ -328,5 +331,44 @@ data class LyricsFxSettings(
                 rayDecay = 0.5f, rayHueShift = -120f, rayFlicker = 0.15f, rayPulseAmount = 0.4f,
             ),
         )
+    }
+}
+
+/**
+ * A user-saved Lyrics FX preset: a name plus a full [LyricsFxSettings] snapshot.
+ * Serialises to a compact, shareable code (see [encode]/[decode]) so presets can
+ * be exported to a friend and imported back — the whole look travels in one
+ * copy-pasteable string.
+ */
+@Serializable
+data class LyricsFxPreset(
+    val name: String,
+    val settings: LyricsFxSettings,
+) {
+    companion object {
+        /** Marker so an imported blob is recognisably one of our preset codes. */
+        const val CODE_PREFIX = "TRYPTFX1:"
+
+        private val codec = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+        /** Encode a preset to a single shareable string (prefix + compact JSON). */
+        fun encode(preset: LyricsFxPreset): String =
+            CODE_PREFIX + codec.encodeToString(preset.copy(settings = preset.settings.clamped()))
+
+        /**
+         * Decode a shared code back to a preset, tolerating the prefix being
+         * present or not and any surrounding whitespace. Returns null if the
+         * text isn't a valid preset. The settings are re-clamped on the way in
+         * so a hand-edited or hostile code can't push values out of range.
+         */
+        fun decode(code: String): LyricsFxPreset? = runCatching {
+            val trimmed = code.trim()
+            val start = trimmed.indexOf('{')
+            if (start < 0) return null
+            val jsonBody = trimmed.substring(start)
+            codec.decodeFromString<LyricsFxPreset>(jsonBody).let {
+                it.copy(name = it.name.trim().ifBlank { "Imported" }, settings = it.settings.clamped())
+            }
+        }.getOrNull()
     }
 }

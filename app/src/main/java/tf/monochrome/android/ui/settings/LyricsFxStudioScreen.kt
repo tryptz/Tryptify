@@ -14,14 +14,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -29,9 +36,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -49,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,10 +76,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Lyrics
+import tf.monochrome.android.domain.model.LyricsFxPreset
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.ui.player.Letters3DLine
 import tf.monochrome.android.ui.player.LocalBeatPulse
@@ -111,6 +123,12 @@ class LyricsFxStudioViewModel @Inject constructor(
     private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
     val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
 
+    /** The user's own saved presets, alongside the built-in ones. */
+    val customPresets: StateFlow<List<tf.monochrome.android.domain.model.LyricsFxPreset>> =
+        preferences.customLyricsFxPresets.stateIn(
+            viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList(),
+        )
+
     init {
         viewModelScope.launch {
             // Seed once from the persisted settings; after the user starts tuning,
@@ -147,6 +165,46 @@ class LyricsFxStudioViewModel @Inject constructor(
         viewModelScope.launch { preferences.setLyricsFx(next) }
     }
 
+    /**
+     * Save the current settings as a named preset. A blank name is ignored; an
+     * existing name is overwritten so re-saving updates in place.
+     */
+    fun saveCurrentAsPreset(name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        val preset = tf.monochrome.android.domain.model.LyricsFxPreset(clean, _fx.value.clamped())
+        viewModelScope.launch {
+            val current = customPresets.value.filterNot { it.name.equals(clean, ignoreCase = true) }
+            preferences.setCustomLyricsFxPresets(current + preset)
+        }
+    }
+
+    fun deletePreset(name: String) {
+        viewModelScope.launch {
+            preferences.setCustomLyricsFxPresets(customPresets.value.filterNot { it.name == name })
+        }
+    }
+
+    /** The shareable code for a preset (prefix + compact JSON). */
+    fun exportPreset(preset: tf.monochrome.android.domain.model.LyricsFxPreset): String =
+        tf.monochrome.android.domain.model.LyricsFxPreset.encode(preset)
+
+    /**
+     * Import a preset from a shared code. Returns the imported name on success,
+     * or null if the text wasn't a valid preset. A clashing name is de-duped
+     * with a numeric suffix so an import never silently overwrites.
+     */
+    fun importPresetCode(code: String): String? {
+        val decoded = tf.monochrome.android.domain.model.LyricsFxPreset.decode(code) ?: return null
+        val existing = customPresets.value.map { it.name }.toSet()
+        var name = decoded.name
+        var n = 2
+        while (name in existing) { name = "${decoded.name} ($n)"; n++ }
+        val toAdd = decoded.copy(name = name)
+        viewModelScope.launch { preferences.setCustomLyricsFxPresets(customPresets.value + toAdd) }
+        return name
+    }
+
     private fun schedulePersist() {
         persistJob?.cancel()
         persistJob = viewModelScope.launch {
@@ -171,6 +229,13 @@ fun LyricsFxStudioScreen(
     val fx by viewModel.fx.collectAsState()
     val fonts by viewModel.availableFonts.collectAsState()
     val currentLyrics by viewModel.currentLyrics.collectAsState()
+    val customPresets by viewModel.customPresets.collectAsState()
+    val context = LocalContext.current
+
+    // Preset save / import / share dialog state.
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var presetAction by remember { mutableStateOf<LyricsFxPreset?>(null) }
 
     // Re-list imported fonts whenever the custom-font toggle turns on, so a font
     // imported in Settings › Appearance since this screen opened shows up.
@@ -192,6 +257,32 @@ fun LyricsFxStudioScreen(
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             StudioPreview(fx, currentLyrics, viewModel.currentPositionMs)
             Spacer(Modifier.height(12.dp))
+
+            // Preset bar header: a Save button (store the current look) and an
+            // Import button (paste a shared preset code) beside the "Presets" label.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Presets",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { showSaveDialog = true }) {
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Save")
+                }
+                TextButton(onClick = { showImportDialog = true }) {
+                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Import")
+                }
+            }
+            Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -209,7 +300,142 @@ fun LyricsFxStudioScreen(
                         ),
                     )
                 }
+                // The user's own saved presets. Tapping applies; the trailing
+                // icon opens a Share / Delete sheet for that preset.
+                customPresets.forEach { saved ->
+                    FilterChip(
+                        selected = fx.matchesPreset(saved.settings),
+                        onClick = { viewModel.applyPreset(saved.settings) },
+                        label = { Text(saved.name) },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Manage ${saved.name}",
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { presetAction = saved },
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    )
+                }
             }
+        }
+
+        // ── Save current settings as a named preset ─────────────────────────
+        if (showSaveDialog) {
+            var name by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { showSaveDialog = false },
+                title = { Text("Save preset") },
+                text = {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        singleLine = true,
+                        label = { Text("Preset name") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = name.isNotBlank(),
+                        onClick = {
+                            viewModel.saveCurrentAsPreset(name)
+                            showSaveDialog = false
+                            android.widget.Toast.makeText(context, "Saved \"${name.trim()}\"", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                    ) { Text("Save") }
+                },
+                dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") } },
+            )
+        }
+
+        // ── Import a shared preset code ──────────────────────────────────────
+        if (showImportDialog) {
+            var code by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { showImportDialog = false },
+                title = { Text("Import preset") },
+                text = {
+                    Column {
+                        Text(
+                            "Paste a preset code someone shared with you.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = code,
+                            onValueChange = { code = it },
+                            label = { Text("Preset code") },
+                            modifier = Modifier.fillMaxWidth().height(140.dp),
+                        )
+                        TextButton(onClick = {
+                            val clip = context.getSystemService(android.content.ClipboardManager::class.java)
+                            val primary = clip?.primaryClip
+                            if (primary != null && primary.itemCount > 0) {
+                                primary.getItemAt(0).coerceToText(context)?.let { code = it.toString() }
+                            }
+                        }) { Text("Paste from clipboard") }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = code.isNotBlank(),
+                        onClick = {
+                            val imported = viewModel.importPresetCode(code)
+                            showImportDialog = false
+                            android.widget.Toast.makeText(
+                                context,
+                                if (imported != null) "Imported \"$imported\"" else "That doesn't look like a valid preset code",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        },
+                    ) { Text("Import") }
+                },
+                dismissButton = { TextButton(onClick = { showImportDialog = false }) { Text("Cancel") } },
+            )
+        }
+
+        // ── Share / delete a saved preset ────────────────────────────────────
+        presetAction?.let { target ->
+            AlertDialog(
+                onDismissRequest = { presetAction = null },
+                title = { Text(target.name) },
+                text = { Text("Share this preset or remove it from your list.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Lyrics FX preset: ${target.name}")
+                            putExtra(android.content.Intent.EXTRA_TEXT, viewModel.exportPreset(target))
+                        }
+                        context.startActivity(android.content.Intent.createChooser(send, "Share preset"))
+                        presetAction = null
+                    }) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Share")
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = {
+                            viewModel.deletePreset(target.name)
+                            presetAction = null
+                        }) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Delete")
+                        }
+                        TextButton(onClick = { presetAction = null }) { Text("Close") }
+                    }
+                },
+            )
         }
 
         LazyColumn(

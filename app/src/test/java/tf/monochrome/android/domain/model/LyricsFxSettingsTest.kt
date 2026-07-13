@@ -2,6 +2,7 @@ package tf.monochrome.android.domain.model
 
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -141,5 +142,32 @@ class LyricsFxSettingsTest {
         assertEquals(theme.rayCount, applied.rayCount)
         // …and the chip-selection helper recognises the match despite the carry-over.
         assertTrue(applied.matchesPreset(theme))
+    }
+
+    @Test
+    fun `preset code round-trips through encode and decode`() {
+        val preset = LyricsFxPreset("My Look", LyricsFxSettings(fontSizeSp = 30f, rayCount = 20))
+        val code = LyricsFxPreset.encode(preset)
+        assertTrue("code carries the marker prefix", code.startsWith(LyricsFxPreset.CODE_PREFIX))
+        val back = LyricsFxPreset.decode(code)
+        assertEquals(preset.copy(settings = preset.settings.clamped()), back)
+    }
+
+    @Test
+    fun `decode tolerates a missing prefix and rejects junk`() {
+        val preset = LyricsFxPreset("Shared", LyricsFxSettings())
+        val withoutPrefix = LyricsFxPreset.encode(preset).removePrefix(LyricsFxPreset.CODE_PREFIX)
+        assertEquals("Shared", LyricsFxPreset.decode(withoutPrefix)?.name)
+        assertNull(LyricsFxPreset.decode("just some random text"))
+        assertNull(LyricsFxPreset.decode(""))
+    }
+
+    @Test
+    fun `decode re-clamps hostile out-of-range values`() {
+        val evil = LyricsFxPreset.CODE_PREFIX +
+            """{"name":"Evil","settings":{"fontSizeSp":9999.0,"rayCount":500}}"""
+        val decoded = LyricsFxPreset.decode(evil)!!
+        assertEquals(34f, decoded.settings.fontSizeSp, 0f)
+        assertEquals(24, decoded.settings.rayCount)
     }
 }
