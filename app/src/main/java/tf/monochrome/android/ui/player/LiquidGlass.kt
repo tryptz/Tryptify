@@ -181,6 +181,8 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uRimGain", fx.glassRimBrightness)
             shader.setFloatUniform("uDispersion", fx.glassDispersion)
             shader.setFloatUniform("uSampleRings", fx.glassSampleRings.toFloat())
+            shader.setFloatUniform("uRoundness", 1f)
+            shader.setFloatUniform("uDepth", 1f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -230,6 +232,8 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uRimGain", 1.30f)
             shader.setFloatUniform("uDispersion", 1.0f)
             shader.setFloatUniform("uSampleRings", 2f)
+            shader.setFloatUniform("uRoundness", 1f)
+            shader.setFloatUniform("uDepth", 1f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -280,6 +284,8 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uRimGain", g.rimBrightness)
             shader.setFloatUniform("uDispersion", g.dispersion)
             shader.setFloatUniform("uSampleRings", g.sampleRings.toFloat())
+            shader.setFloatUniform("uRoundness", g.roundness)
+            shader.setFloatUniform("uDepth", g.depth)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -411,6 +417,8 @@ uniform float uDispersion;    // chromatic aberration at the refracting edges
 uniform float uSampleRings;   // bevel sample rings 1/2/3 → 5/9/13 taps per pixel
 uniform float3 uTint2;        // second album tone (blurred-art backdrop)
 uniform float uBackdropMix;   // 0 = flat single-tint wash; >0 = lens the album art
+uniform float uRoundness;     // bevel shoulder width: 1 = neutral, higher = rounder/softer edge
+uniform float uDepth;         // profondeur: 1 = neutral, higher = steeper relief / more 3D
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -444,26 +452,30 @@ half4 main(float2 p) {
     // setting (uSampleRings): the fine cross is always taken; the broad ring and
     // the diagonal ring are gated so lower quality skips those texture fetches —
     // fewer taps per pixel is a real GPU saving.
-    float aL1 = float(content.eval(p + float2(-1.25, 0.0)).a);
-    float aR1 = float(content.eval(p + float2( 1.25, 0.0)).a);
-    float aU1 = float(content.eval(p + float2(0.0, -1.25)).a);
-    float aD1 = float(content.eval(p + float2(0.0,  1.25)).a);
+    // Roundness widens the taps: a broader sampling radius reads the alpha edge
+    // over a wider band, so the bevel shoulder rolls off round and pillowy
+    // instead of a tight, sharp edge (rr = 1 reproduces the original look).
+    float rr = uRoundness;
+    float aL1 = float(content.eval(p + float2(-1.25 * rr, 0.0)).a);
+    float aR1 = float(content.eval(p + float2( 1.25 * rr, 0.0)).a);
+    float aU1 = float(content.eval(p + float2(0.0, -1.25 * rr)).a);
+    float aD1 = float(content.eval(p + float2(0.0,  1.25 * rr)).a);
     float2 grad = float2(aL1 - aR1, aU1 - aD1);
 
     if (uSampleRings > 1.5) {
         // Broad ring: rounder, softer bevel.
-        float aL2 = float(content.eval(p + float2(-2.5, 0.0)).a);
-        float aR2 = float(content.eval(p + float2( 2.5, 0.0)).a);
-        float aU2 = float(content.eval(p + float2(0.0, -2.5)).a);
-        float aD2 = float(content.eval(p + float2(0.0,  2.5)).a);
+        float aL2 = float(content.eval(p + float2(-2.5 * rr, 0.0)).a);
+        float aR2 = float(content.eval(p + float2( 2.5 * rr, 0.0)).a);
+        float aU2 = float(content.eval(p + float2(0.0, -2.5 * rr)).a);
+        float aD2 = float(content.eval(p + float2(0.0,  2.5 * rr)).a);
         grad += 0.4 * float2(aL2 - aR2, aU2 - aD2);
     }
     if (uSampleRings > 2.5) {
         // Diagonal ring: smoother normals on curved strokes.
-        float aNW = float(content.eval(p + float2(-1.8, -1.8)).a);
-        float aNE = float(content.eval(p + float2( 1.8, -1.8)).a);
-        float aSW = float(content.eval(p + float2(-1.8,  1.8)).a);
-        float aSE = float(content.eval(p + float2( 1.8,  1.8)).a);
+        float aNW = float(content.eval(p + float2(-1.8 * rr, -1.8 * rr)).a);
+        float aNE = float(content.eval(p + float2( 1.8 * rr, -1.8 * rr)).a);
+        float aSW = float(content.eval(p + float2(-1.8 * rr,  1.8 * rr)).a);
+        float aSE = float(content.eval(p + float2( 1.8 * rr,  1.8 * rr)).a);
         grad += 0.3 * float2((aNW + aSW) - (aNE + aSE),
                              (aNW + aNE) - (aSW + aSE));
     }
@@ -474,7 +486,11 @@ half4 main(float2 p) {
     grad += 0.05 * float2(w1, w2) * a;
 
     float2 slope = grad;                        // raw bevel slope → lens displacement
-    float3 N = normalize(float3(grad, 0.62));
+    // Depth (profondeur): a shallower z base tips the bevel normal further off
+    // the surface, so the glass reads thicker with a deeper, rounder relief.
+    // uDepth = 1 keeps the original 0.62 z; higher = steeper, more 3D.
+    float zbase = clamp(0.62 / max(uDepth, 0.25), 0.14, 1.4);
+    float3 N = normalize(float3(grad, zbase));
 
     // Light = device tilt + slow autonomous drift, biased above the screen.
     float3 L = normalize(float3(

@@ -22,6 +22,10 @@ data class PlayerGlassSettings(
     val dispersion: Float = 1.2f,
     /** Bevel sample rings 1/2/3 → 5/9/13 taps per pixel (quality vs GPU cost). */
     val sampleRings: Int = 2,
+    /** Bevel shoulder width (1 = neutral, higher = rounder, softer glass edge). */
+    val roundness: Float = 1f,
+    /** Profondeur / relief: 1 = neutral, higher = steeper, deeper 3D bevel. */
+    val depth: Float = 1f,
 ) {
     fun clamped(): PlayerGlassSettings {
         val d = DEFAULT
@@ -32,6 +36,8 @@ data class PlayerGlassSettings(
             rimBrightness = rimBrightness.c(0f, 2f, d.rimBrightness),
             dispersion = dispersion.c(0f, 2f, d.dispersion),
             sampleRings = sampleRings.coerceIn(1, 3),
+            roundness = roundness.c(0.5f, 2f, d.roundness),
+            depth = depth.c(0.5f, 2f, d.depth),
         )
     }
 

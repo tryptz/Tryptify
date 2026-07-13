@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -61,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -748,10 +750,21 @@ private fun PlayerGlassTab(
                         painterResource(R.drawable.ic_glass_skip_previous), null,
                         Modifier.size(34.dp).playerGlass(accent), tint = accent,
                     )
-                    Icon(
-                        painterResource(R.drawable.ic_glass_play), null,
-                        Modifier.size(58.dp).playerGlass(accent), tint = accent,
-                    )
+                    // Hollow glass ring + centred glyph, matching the real button.
+                    Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                        Canvas(Modifier.fillMaxSize().playerGlass(accent)) {
+                            val stroke = size.minDimension * 0.12f
+                            drawCircle(
+                                color = accent,
+                                radius = (size.minDimension - stroke) / 2f,
+                                style = Stroke(width = stroke),
+                            )
+                        }
+                        Icon(
+                            painterResource(R.drawable.ic_glass_play), null,
+                            Modifier.size(30.dp).playerGlass(accent), tint = accent,
+                        )
+                    }
                     Icon(
                         painterResource(R.drawable.ic_glass_skip_next), null,
                         Modifier.size(34.dp).playerGlass(accent), tint = accent,
@@ -787,6 +800,14 @@ private fun PlayerGlassTab(
             "Chromatic aberration", "${(glass.dispersion * 100).toInt()}%", glass.dispersion, 0f..2f,
             description = "Colour fringing at the refracting edges.",
         ) { onUpdate { g -> g.copy(dispersion = it) } }
+        FxSlider(
+            "Roundness", "%.2f".format(glass.roundness), glass.roundness, 0.5f..2f,
+            description = "Rolls the glass edge from a sharp bevel to a round, pillowy shoulder.",
+        ) { onUpdate { g -> g.copy(roundness = it) } }
+        FxSlider(
+            "Depth (profondeur)", "%.2f".format(glass.depth), glass.depth, 0.5f..2f,
+            description = "How thick and deep the relief reads — higher pops the buttons more in 3D.",
+        ) { onUpdate { g -> g.copy(depth = it) } }
         FxSlider(
             "Per-pixel samples",
             "${glass.sampleRings} (${when (glass.sampleRings) { 1 -> 5; 2 -> 9; else -> 13 }} taps)",
