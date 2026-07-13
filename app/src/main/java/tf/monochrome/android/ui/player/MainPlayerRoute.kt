@@ -346,6 +346,7 @@ fun MainPlayerRoute(
                     },
                     onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
                     onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
+                    onOpenLyricsStudio = { navController.navigate(Screen.LyricsFxStudio.route) },
                     onOpenSettings = { navController.navigate(Screen.Settings.createRoute()) },
                     onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
                         { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }

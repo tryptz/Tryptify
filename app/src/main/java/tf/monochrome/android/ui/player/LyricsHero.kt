@@ -248,10 +248,11 @@ internal fun Modifier.lyricsEdgeFade(): Modifier = this
     // drawWithCache builds the mask gradient once per size, not on every draw —
     // and this surface redraws every frame (the glass shader animates).
     .drawWithCache {
-        // Density-aware fade depth. The old cap was 120 raw PIXELS — ~40dp on
-        // a 3x panel — so lines sliced off at what looked like an invisible
-        // border instead of dissolving.
-        val edge = (size.height * 0.18f).coerceAtMost(56.dp.toPx())
+        // Thin edge feather only: lines reach the top and bottom borders (like
+        // they now reach the side borders) instead of being padded away by a deep
+        // fade. Just enough of a feather to soften the scroll clip and the glass
+        // shader edge — not a visible top/bottom inset.
+        val edge = (size.height * 0.05f).coerceAtMost(14.dp.toPx())
         val top = edge / size.height
         val mask = Brush.verticalGradient(
             0f to Color.Transparent,

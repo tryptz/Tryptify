@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.DropdownMenu
@@ -68,6 +69,7 @@ fun PlayerTopBar(
     onCycleHeroStyle: () -> Unit,
     onOpenVisualizer: () -> Unit,
     onOpenEqualizer: () -> Unit,
+    onOpenLyricsStudio: () -> Unit,
     onOpenSettings: () -> Unit,
     onGoToArtist: (() -> Unit)? = null,
     onGoToAlbum: (() -> Unit)? = null,
@@ -210,6 +212,11 @@ fun PlayerTopBar(
                         text = { Text("Equalizer") },
                         onClick = { onOpenEqualizer(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.Equalizer, contentDescription = null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Lyrics FX Studio") },
+                        onClick = { onOpenLyricsStudio(); menuExpanded = false },
+                        leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
                     )
                     DropdownMenuItem(
                         text = { Text("Settings") },
