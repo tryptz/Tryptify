@@ -63,9 +63,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -729,20 +731,18 @@ private fun PlayerGlassTab(
     onUpdate: ((PlayerGlassSettings) -> PlayerGlassSettings) -> Unit,
 ) {
     val accent = MaterialTheme.colorScheme.primary
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Pinned preview — stays locked in view while you tune the sliders,
+        // just like the Lyrics editor.
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
-        // Live preview: the real transport icons under the current button glass.
+        // Live preview: the real transport buttons under the current button glass.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF121016)),
+                .background(previewBackground(accent)),
             contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(LocalPlayerGlass provides glass) {
@@ -789,7 +789,16 @@ private fun PlayerGlassTab(
                 modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
             )
         }
+        }
 
+        // Controls scroll below the pinned preview.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+        ) {
         StudioSection("Player Glass")
         FxToggle(
             "Button liquid glass", glass.enabled,
@@ -830,8 +839,22 @@ private fun PlayerGlassTab(
             description = "Bevel quality vs GPU cost.",
         ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
         Spacer(Modifier.height(48.dp))
+        }
     }
 }
+
+/**
+ * Preview backdrop tinted with the CURRENT theme/album [accent] — a dark
+ * vertical wash of the live colour, so the Studio previews sit on the same
+ * colour the player does instead of a fixed near-black.
+ */
+private fun previewBackground(accent: Color): Brush =
+    Brush.verticalGradient(
+        listOf(
+            lerp(Color.Black, accent, 0.34f),
+            lerp(Color.Black, accent, 0.10f),
+        ),
+    )
 
 @Composable
 private fun StudioPreview(
@@ -851,7 +874,7 @@ private fun StudioPreview(
             .fillMaxWidth()
             .height(190.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF121016)),
+            .background(previewBackground(accent)),
         contentAlignment = Alignment.Center,
     ) {
         CompositionLocalProvider(
