@@ -364,7 +364,10 @@ data class LyricsFxPreset(
         fun decode(code: String): LyricsFxPreset? = runCatching {
             val trimmed = code.trim()
             val start = trimmed.indexOf('{')
-            if (start < 0) return null
+            // No JSON object present → not a preset code. Throwing here is caught
+            // by runCatching and surfaces as null (a plain `return` isn't allowed
+            // from an expression-body function).
+            require(start >= 0) { "no preset payload" }
             val jsonBody = trimmed.substring(start)
             codec.decodeFromString<LyricsFxPreset>(jsonBody).let {
                 it.copy(name = it.name.trim().ifBlank { "Imported" }, settings = it.settings.clamped())
