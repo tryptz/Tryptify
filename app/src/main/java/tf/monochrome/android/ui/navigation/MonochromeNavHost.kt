@@ -507,7 +507,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             onSkipNextClick = { playerViewModel.skipToNext() },
                             onSkipPreviousClick = { playerViewModel.skipToPrevious() },
                             onClick = { navController.navigate(Screen.NowPlaying.route) },
-                            modifier = Modifier.padding(horizontal = 8.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp),
                             hazeState = hazeState
                         )
                     }
@@ -534,6 +534,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         onSkipNextClick = { playerViewModel.skipToNext() },
                         onSkipPreviousClick = { playerViewModel.skipToPrevious() },
                         onClick = { navController.navigate(Screen.NowPlaying.route) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
                         hazeState = hazeState
                     )
                 }
