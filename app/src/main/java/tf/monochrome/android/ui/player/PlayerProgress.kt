@@ -22,6 +22,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -118,6 +119,10 @@ internal fun GlassProgressTube(
     modifier: Modifier = Modifier,
 ) {
     var dragging by remember { mutableStateOf(false) }
+    // The position the finger is currently over, committed on release. Held in a
+    // MutableState so the pointerInput(Unit) closures (created once) read/write
+    // the live value instead of a stale captured fraction.
+    var seekTarget by remember { mutableFloatStateOf(0f) }
     // The dot always shows a bulge; it swells further while dragging.
     val bulge by animateFloatAsState(
         targetValue = if (dragging) 1f else 0.6f,
@@ -141,12 +146,16 @@ internal fun GlassProgressTube(
                 detectHorizontalDragGestures(
                     onDragStart = { pos ->
                         dragging = true
-                        onSeek((pos.x / size.width).coerceIn(0f, 1f))
+                        val f = (pos.x / size.width).coerceIn(0f, 1f)
+                        seekTarget = f
+                        onSeek(f)
                     },
-                    onDragEnd = { dragging = false; onSeekFinished(frac) },
+                    onDragEnd = { dragging = false; onSeekFinished(seekTarget) },
                     onDragCancel = { dragging = false },
                     onHorizontalDrag = { change, _ ->
-                        onSeek((change.position.x / size.width).coerceIn(0f, 1f))
+                        val f = (change.position.x / size.width).coerceIn(0f, 1f)
+                        seekTarget = f
+                        onSeek(f)
                     },
                 )
             }
