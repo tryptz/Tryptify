@@ -93,11 +93,14 @@ import java.io.File
 import tf.monochrome.android.data.preferences.PreferencesManager
 import androidx.compose.ui.res.painterResource
 import tf.monochrome.android.R
+import tf.monochrome.android.domain.model.Artist
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxPreset
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.PlayerGlassPreset
 import tf.monochrome.android.domain.model.PlayerGlassSettings
+import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.ui.components.MiniPlayer
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerActionDock
 import tf.monochrome.android.ui.player.GlassDropShadow
@@ -424,6 +427,7 @@ fun LyricsFxStudioScreen(
                     onDeletePreset = { viewModel.deletePlayerGlassPreset(it) },
                     onExportPreset = { viewModel.exportPlayerGlassPreset(it) },
                     onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
+                    previewMini = true,
                 )
             }
             return@Column
@@ -795,6 +799,7 @@ private fun PlayerGlassTab(
     onDeletePreset: (String) -> Unit,
     onExportPreset: (PlayerGlassPreset) -> String,
     onImportPreset: (String) -> String?,
+    previewMini: Boolean = false,
 ) {
     val context = LocalContext.current
     val accent = MaterialTheme.colorScheme.primary
@@ -824,6 +829,27 @@ private fun PlayerGlassTab(
             contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(LocalPlayerGlass provides glass) {
+                if (previewMini) {
+                    // The real mini player bar under the current glass — the exact
+                    // component the nav host shows, so tuning is what-you-see.
+                    val sampleTrack = remember {
+                        Track(
+                            id = 0L,
+                            title = "The Business",
+                            artist = Artist(id = 0L, name = "Tiësto"),
+                        )
+                    }
+                    MiniPlayer(
+                        track = sampleTrack,
+                        isPlaying = false,
+                        progressProvider = { 0.4f },
+                        onPlayPauseClick = {},
+                        onSkipNextClick = {},
+                        onSkipPreviousClick = {},
+                        onClick = {},
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                } else {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -887,6 +913,7 @@ private fun PlayerGlassTab(
                         onSeekFinished = {},
                         modifier = Modifier.fillMaxWidth(),
                     )
+                }
                 }
             }
             Text(
