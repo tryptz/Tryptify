@@ -111,12 +111,17 @@ private fun SyncedLyrics(
     onSeekTo: (Long) -> Unit
 ) {
     val position by positionMs.collectAsState()
+    // Bluetooth sync delay (tunable in the Lyrics FX Studio): audio lands later
+    // than the reported position over Bluetooth, so rewind the clock we match
+    // lyrics against to keep them in step with what's heard.
+    val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
+    val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     val listState = rememberLazyListState()
     var currentLineIndex by remember { mutableIntStateOf(-1) }
 
-    // Find current line based on playback position
-    LaunchedEffect(position) {
-        val newIndex = lines.indexOfLast { it.timeMs <= position }
+    // Find current line based on the Bluetooth-adjusted playback position.
+    LaunchedEffect(position, syncDelayMs) {
+        val newIndex = lines.indexOfLast { it.timeMs <= position - syncDelayMs }
         if (newIndex != currentLineIndex && newIndex >= 0) {
             currentLineIndex = newIndex
         }
@@ -136,6 +141,7 @@ private fun SyncedLyrics(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
+            .fxaa()
             .liquidGlass(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -146,7 +152,7 @@ private fun SyncedLyrics(
                 KaraokeLine(
                     line = line,
                     isActive = isActive,
-                    position = position,
+                    position = position - syncDelayMs,
                     onClick = { onSeekTo(line.timeMs) }
                 )
             } else {
@@ -167,7 +173,7 @@ private fun SyncedLyrics(
                         fontSize = 23.sp,
                         lineHeight = 29.sp,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                    ),
+                    ).withLyricFont(lyricFont),
                     color = textColor,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
@@ -188,6 +194,7 @@ private fun KaraokeLine(
     position: Long,
     onClick: () -> Unit
 ) {
+    val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -216,7 +223,7 @@ private fun KaraokeLine(
                     fontSize = 23.sp,
                     lineHeight = 29.sp,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                ),
+                ).withLyricFont(lyricFont),
                 color = color
             )
         }
@@ -225,16 +232,19 @@ private fun KaraokeLine(
 
 @Composable
 private fun UnsyncedLyrics(lines: List<LyricLine>) {
+    val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .fxaa()
             .liquidGlass(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp),
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp)
+                    .withLyricFont(lyricFont),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
                 modifier = Modifier

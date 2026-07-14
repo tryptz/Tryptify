@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Timer: a stopwatch — chunky ring body, top crossbar + winding stem, and a
+         solid hand — so the liquid-glass shader bevels each into 3D chrome. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.5,1 h7 v2.2 h-7 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11,3 h2 v3.8 h-2 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M4.8,14 A7.2,7.2 0 1 1 19.2,14 A7.2,7.2 0 1 1 4.8,14 Z M6.8,14 A5.2,5.2 0 1 0 17.2,14 A5.2,5.2 0 1 0 6.8,14 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11.3,14 h1.4 v-4.8 h-1.4 z" />
+</vector>

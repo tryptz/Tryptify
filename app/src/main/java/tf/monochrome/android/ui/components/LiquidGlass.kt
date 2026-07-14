@@ -37,7 +37,7 @@ fun Modifier.liquidGlass(
     borderAlpha: Float = MonoDimens.glassBorderAlpha,
     borderWidth: Dp = MonoDimens.glassBorderWidth,
     blurRadius: Dp = MonoDimens.glassBlurRadius,
-    showRefraction: Boolean = true
+    showRefraction: Boolean = true,
 ) = composed {
     val profile = LocalPerformanceProfile.current
     val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f

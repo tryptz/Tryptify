@@ -38,9 +38,15 @@ class ProfileViewModel @Inject constructor(
             _isSyncing.value = true
             _syncStatus.value = null
             try {
-                supabaseSyncRepository.pushAll()
-                supabaseSyncRepository.pullAll()
-                _syncStatus.value = "Sync complete"
+                // Each section swallows its own error, so a failure is only
+                // visible via these returned section names — don't report
+                // success unless both came back clean.
+                val failed = (supabaseSyncRepository.pushAll() + supabaseSyncRepository.pullAll()).distinct()
+                _syncStatus.value = if (failed.isEmpty()) {
+                    "Sync complete"
+                } else {
+                    "Sync finished with issues: ${failed.joinToString(", ")}"
+                }
             } catch (e: Exception) {
                 _syncStatus.value = "Sync failed: ${e.message ?: "unknown error"}"
             } finally {

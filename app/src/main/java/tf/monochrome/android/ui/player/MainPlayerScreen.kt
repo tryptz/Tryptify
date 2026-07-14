@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -127,9 +128,7 @@ fun MainPlayerScreen(
     onArtistClick: (Long) -> Unit,
     onSeekCommit: (Float) -> Unit,
     onPrevious: () -> Unit,
-    onRewind10: () -> Unit,
     onPlayPause: () -> Unit,
-    onForward10: () -> Unit,
     onNext: () -> Unit,
     onLyrics: () -> Unit,
     onTimer: () -> Unit,
@@ -152,6 +151,11 @@ fun MainPlayerScreen(
     // full-bleed while the player controls collapse away and the blurred
     // artwork stain fades in behind everything.
     lyricsExpanded: Boolean = false,
+    // Collapsed lyrics render as a full-screen-width rectangle (album height) so
+    // lines can reach the phone's edges; album art stays a padded square.
+    lyricsMode: Boolean = false,
+    // Full-screen blurred, stretched album-art background (Appearance setting).
+    blurredBackground: Boolean = false,
 ) {
     val accent = state.albumColors.vibrant
 
@@ -220,12 +224,31 @@ fun MainPlayerScreen(
                 .dithered()
                 .background(dynamicPlayerBackground(state.albumColors.dominant)),
         )
+        // Full-screen blurred, stretched album art (Apple-Music / Spotify style).
+        // Shown whenever the toggle is on — in EVERY view (album art, visualizer,
+        // and lyrics, collapsed or fullscreen), not just the lyrics views. Fades
+        // in/out instead of popping.
+        val blurBgAlpha by animateFloatAsState(
+            targetValue = if (blurredBackground) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
+            label = "blurredBg",
+        )
+        if (blurBgAlpha > 0.001f) {
+            PlayerBlurredArtBackground(
+                coverUrl = state.track?.coverUrl,
+                albumColors = state.albumColors,
+                alpha = { blurBgAlpha },
+            )
+        }
         DynamicAlbumGlow(state.albumColors.dominant)
 
         // Expanded-lyrics backdrop: the artwork as a blurred stain fading in
-        // behind the player content — background only, not a new element.
+        // behind the player content — background only, not a new element. When
+        // the always-on blurred album background is enabled it already covers
+        // this (in every lyrics state), so the stain stands down to avoid
+        // double-darkening.
         val stainAlpha by animateFloatAsState(
-            targetValue = if (lyricsExpanded) 1f else 0f,
+            targetValue = if (lyricsExpanded && !blurredBackground) 1f else 0f,
             animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
             label = "lyricsStain",
         )
@@ -274,26 +297,42 @@ fun MainPlayerScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 val side = minOf(maxWidth, maxHeight)
+                // Full phone-screen width = the padded slot width plus the side
+                // padding the Column already subtracted.
+                val fullWidth = maxWidth + screenPad * 2
                 val heroW by animateDpAsState(
                     targetValue = if (lyricsExpanded) maxWidth else side,
                     animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
                     label = "heroW",
                 )
+                // Lyrics get the FULL hero region height (decoupled from the album
+                // square), so the 3D letters, their glass bevels and the per-letter
+                // god rays have vertical room instead of being corner-cut in a short
+                // album-height band. Album art alone stays the compact square.
                 val heroH by animateDpAsState(
-                    targetValue = if (lyricsExpanded) maxHeight else side,
+                    targetValue = if (lyricsExpanded || lyricsMode) maxHeight else side,
                     animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
                     label = "heroH",
                 )
+                // Collapsed lyrics: a full-width rectangle spanning the whole hero
+                // region (requiredWidth overrides the padded slot; the centred Box
+                // lets it overflow to both edges), so lines reach the borders and
+                // have vertical breathing room. Album art keeps its padded square.
+                val heroMod = if (lyricsMode && !lyricsExpanded) {
+                    Modifier.requiredWidth(fullWidth).height(heroH)
+                } else {
+                    Modifier.size(heroW, heroH)
+                }
                 // Wrap only the square art (not the full-width slot) so the DevEdit
                 // highlight hugs the album-art ratio instead of a tall rectangle.
                 // The saved DevEdit offset/scale are tuned for the compact square;
-                // applied to the expanded lyric surface they push text past the
-                // screen borders — so expanded renders 1:1, bypassing the override.
-                if (lyricsExpanded) {
-                    hero(Modifier.size(heroW, heroH))
+                // applied to the expanded/full-width lyric surface they push text
+                // past the screen borders — so those render 1:1, bypassing it.
+                if (lyricsExpanded || lyricsMode) {
+                    hero(heroMod)
                 } else {
                     DevEditable("hero", Modifier) {
-                        hero(Modifier.size(heroW, heroH))
+                        hero(heroMod)
                     }
                 }
             }
@@ -362,9 +401,7 @@ fun MainPlayerScreen(
                         isPlaying = state.isPlaying,
                         accent = accent,
                         onPrevious = onPrevious,
-                        onRewind10 = onRewind10,
                         onPlayPause = onPlayPause,
-                        onForward10 = onForward10,
                         onNext = onNext,
                     )
                 }

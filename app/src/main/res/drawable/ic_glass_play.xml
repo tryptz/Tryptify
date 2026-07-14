@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Solid play triangle: a chunky filled shape so the liquid-glass shader
+         bevels it into a 3D chrome wedge (thin outline icons bevel poorly). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7,4.5 L7,19.5 L19.5,12 Z" />
+</vector>

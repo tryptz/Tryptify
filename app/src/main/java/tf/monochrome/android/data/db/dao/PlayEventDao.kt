@@ -32,6 +32,10 @@ interface PlayEventDao {
     @Query("SELECT * FROM play_events ORDER BY playedAt DESC LIMIT :limit")
     suspend fun getRecent(limit: Int = 1000): List<PlayEventEntity>
 
+    /** Events not yet pushed to the cloud (cloudRowId IS NULL) — for pushAll. */
+    @Query("SELECT * FROM play_events WHERE cloudRowId IS NULL ORDER BY playedAt DESC LIMIT :limit")
+    suspend fun getUnsynced(limit: Int = 1000): List<PlayEventEntity>
+
     @Query("DELETE FROM play_events WHERE playedAt < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
 

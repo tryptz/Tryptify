@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Rewind 10s: a bold counter-clockwise circular arrow (thick ring band with
+         a gap + arrowhead at the top-left) around a solid "10", so the
+         liquid-glass shader bevels it into clean 3D chrome. -->
+    <!-- Ring band (~314deg arc, gap at top). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15.6,3.53 A9.2,9.2 0 1 1 8.4,3.53 L9.34,5.74 A6.8,6.8 0 1 0 14.66,5.74 Z" />
+    <!-- Arrowhead at the left of the gap, pointing left (counter-clockwise). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6.3,4.6 L9.0,2.8 L9.5,5.9 Z" />
+    <!-- "1" -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.4,9.8 h1.2 v5.0 h-1.2 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.6,13.9 h2.8 v0.9 h-2.8 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.4,9.8 L8.0,10.8 L8.6,11.6 L9.4,11.05 Z" />
+    <!-- "0" ring -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M11.6,12.3 A2.6,2.6 0 1 1 16.8,12.3 A2.6,2.6 0 1 1 11.6,12.3 Z M12.85,12.3 A1.35,1.35 0 1 0 15.55,12.3 A1.35,1.35 0 1 0 12.85,12.3 Z" />
+</vector>

@@ -351,7 +351,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
         }
         SettingSwitchItem(
             title = "Dynamic Colors",
-            subtitle = "Extract accent colors from album art",
+            subtitle = "Master switch: tint the app AND the player from album art. Off = everything uses the theme color",
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
@@ -512,6 +512,7 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
     val spectrumFftSize by viewModel.spectrumFftSize.collectAsState()
     val spectrumBins by viewModel.spectrumBins.collectAsState()
     val playerDynamicColor by viewModel.playerDynamicColor.collectAsState()
+    val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsState()
     val appFps by viewModel.appTargetFps.collectAsState()
     val appResolution by viewModel.appRenderResolution.collectAsState()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
@@ -655,9 +656,15 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
         }
         SettingSwitchItem(
             title = "Dynamic Player Color",
-            subtitle = "Tint the player from the album art; off uses the theme color",
+            subtitle = "Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color",
             checked = playerDynamicColor,
             onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
+        )
+        SettingSwitchItem(
+            title = "Blurred Album Background",
+            subtitle = "Behind the lyrics (collapsed and fullscreen): the album art stretched and heavily blurred",
+            checked = playerBlurredBackground,
+            onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))

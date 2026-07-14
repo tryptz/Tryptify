@@ -64,6 +64,7 @@ class PlayerViewModel @Inject constructor(
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
+    private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
 ) : ViewModel() {
 
     /**
@@ -125,6 +126,17 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80)
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    // Master album-colour switch (Appearance › Dynamic Colors). When off, NO
+    // surface tints from album art — including the player — so turning it off
+    // makes everything static, not just the app-wide theme.
+    val dynamicColors: StateFlow<Boolean> = preferences.dynamicColors
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.playerGlass
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.miniPlayerGlass
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
     val lyricsFx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
@@ -222,6 +234,10 @@ class PlayerViewModel @Inject constructor(
         connectToService()
         startPositionPolling()
         observeCurrentTrackMeta()
+        // Mirror the now-playing lyrics + position into the app-scoped holder so
+        // other screens (the Lyrics FX Studio preview) can show the real lyrics.
+        viewModelScope.launch { _currentLyrics.collect { nowPlayingLyrics.setLyrics(it) } }
+        viewModelScope.launch { _positionMs.collect { nowPlayingLyrics.setPosition(it) } }
         viewModelScope.launch {
             downloadManager.observeAllActiveDownloads().collectLatest { active ->
                 _activeDownloads.value = active

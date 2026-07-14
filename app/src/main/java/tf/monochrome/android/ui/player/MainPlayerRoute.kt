@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -34,6 +36,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -87,6 +91,7 @@ fun MainPlayerRoute(
     val lyrics by playerViewModel.currentLyrics.collectAsState()
     val isLyricsLoading by playerViewModel.isLyricsLoading.collectAsState()
     val viewMode by playerViewModel.nowPlayingViewMode.collectAsState()
+    val blurredBackground by playerViewModel.playerBlurredBackground.collectAsState()
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsState()
     val preservePitch by playerViewModel.preservePitch.collectAsState()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
@@ -149,13 +154,18 @@ fun MainPlayerRoute(
     LaunchedEffect(isPlaying) { playerViewModel.setVisualizerPlaybackPaused(!isPlaying) }
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsState()
+    val playerGlass by playerViewModel.playerGlass.collectAsState()
     val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsState()
+    val dynamicColors by playerViewModel.dynamicColors.collectAsState()
 
     val extractedColors = rememberAlbumColors(currentTrack?.coverUrl)
-    // Player tint follows album art only when the user wants it; otherwise the
-    // theme's primary drives the same pipeline (background, glow, accents).
+    // Player tint follows album art only when BOTH the master "Dynamic Colors"
+    // switch and the player-specific toggle are on — so turning off Dynamic
+    // Colors makes the whole player static (background, glow, accents, rays,
+    // glass), not just the app-wide theme. Otherwise the theme primary drives
+    // the same pipeline.
     val themeAccent = MaterialTheme.colorScheme.primary
-    val albumColors = if (playerDynamicColor) {
+    val albumColors = if (dynamicColors && playerDynamicColor) {
         extractedColors
     } else {
         AlbumColors(dominant = themeAccent, vibrant = themeAccent)
@@ -253,14 +263,43 @@ fun MainPlayerRoute(
     val beatPulse: androidx.compose.runtime.State<Float>? =
         if (lyricsBeatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
     androidx.compose.runtime.LaunchedEffect(lyricsBeatOn) {
+        LyricsDebug.log("beat engine ${if (lyricsBeatOn) "acquired (FFT analyzer staked)" else "released"}")
         if (!lyricsBeatOn) glyphAnchors.reset()
     }
+    // Log the active lyrics-FX configuration whenever it changes, and when the
+    // lyrics view is entered/left — so the Debug Log shows exactly what the
+    // lyric renderer is running.
+    androidx.compose.runtime.LaunchedEffect(lyricsFx) { LyricsDebug.log(LyricsDebug.summary(lyricsFx)) }
+    androidx.compose.runtime.LaunchedEffect(viewMode == NowPlayingViewMode.LYRICS) {
+        LyricsDebug.log("view mode: ${if (viewMode == NowPlayingViewMode.LYRICS) "LYRICS active" else "lyrics inactive"}")
+    }
+
+    // Hero dissolve progress (album/visualizer <-> lyrics), hoisted so the slot
+    // stays full-width for the WHOLE fade — otherwise leaving lyrics snapped the
+    // still-visible lyric surface from full-width back to the square instantly.
+    val lyricsProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (viewMode == NowPlayingViewMode.LYRICS) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 450),
+        label = "lyricsHeroDissolve",
+    )
+    // Slot is the full-width lyric rectangle whenever the lyric surface is at all
+    // visible (dissolving in or out). derivedStateOf flips only at the threshold.
+    val lyricsSlotWide by remember { derivedStateOf { lyricsProgress > 0.001f } }
 
     CompositionLocalProvider(
         LocalLyricsFx provides lyricsFx,
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
         LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
         LocalBeatPulse provides beatPulse,
+        // Tell the lyric glass what's behind it so it can lens the real album
+        // tones when the blurred album background is on (Apple-OS style).
+        LocalPlayerBackdrop provides PlayerBackdrop(
+            blurredArt = blurredBackground,
+            dominant = albumColors.dominant,
+            secondary = albumColors.vibrant,
+        ),
+        // The transport buttons' refractive glass parameters (Studio › Player Glass).
+        LocalPlayerGlass provides playerGlass,
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
         MainPlayerScreen(
@@ -274,9 +313,7 @@ fun MainPlayerRoute(
             },
             onSeekCommit = playerViewModel::seekToFraction,
             onPrevious = playerViewModel::skipToPrevious,
-            onRewind10 = playerViewModel::rewind10,
             onPlayPause = playerViewModel::togglePlayPause,
-            onForward10 = playerViewModel::forward10,
             onNext = playerViewModel::skipToNext,
             onLyrics = {
                 playerViewModel.setNowPlayingViewMode(
@@ -322,6 +359,7 @@ fun MainPlayerRoute(
                     },
                     onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
                     onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
+                    onOpenLyricsStudio = { navController.navigate(Screen.LyricsFxStudio.route) },
                     onOpenSettings = { navController.navigate(Screen.Settings.createRoute()) },
                     onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
                         { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
@@ -332,81 +370,96 @@ fun MainPlayerRoute(
                 )
             },
             hero = { heroModifier ->
-                // Lyrics mode dissolves the album art (or visualizer) and brings the
-                // lyric surface in, sized to exactly the same album slot. Everything
-                // else (square / circular / visualizer) is handled by PlayerHero.
-                androidx.compose.animation.Crossfade(
-                    targetState = viewMode == NowPlayingViewMode.LYRICS,
-                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 500),
-                    label = "lyricsHeroCrossfade",
-                    modifier = heroModifier,
-                ) { lyricsMode ->
-                if (lyricsMode) {
-                    // Fx/spectrum/beat locals are provided once around the
-                    // whole player (see the route-level provider).
-                    LyricsHeroBox(
-                        lyrics = lyrics,
-                        isLoading = isLyricsLoading,
-                        albumColors = albumColors,
-                        positionMs = playerViewModel.positionMs,
-                        // One element, two states: compact taps expand
-                        // (synced lyrics only); expanded line taps seek and
-                        // gap taps collapse.
-                        onSeekTo = { timeMs ->
-                            if (lyricsExpanded) playerViewModel.seekTo(timeMs)
-                            else if (lyricsSynced) lyricsExpanded = true
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                enabled = lyricsSynced,
-                            ) { lyricsExpanded = !lyricsExpanded },
-                    )
-                } else {
-                val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
-                    PlayerHeroStyle.Visualizer
-                } else {
-                    heroStyle
-                }
-                PlayerHero(
-                    modifier = Modifier.fillMaxSize(),
-                    style = effectiveStyle,
-                    isFullscreen = isFullscreenActive,
-                    track = currentTrack,
-                    isPlaying = isPlaying,
-                    progress = state.progress,
-                    albumColors = albumColors,
-                    visualizerSensitivity = visualizerSensitivity,
-                    visualizerBrightness = visualizerBrightness,
-                    visualizerEngineStatus = visualizerEngineStatus,
-                    visualizerEngineEnabled = visualizerEngineEnabled,
-                    visualizerShowFps = visualizerShowFps,
-                    visualizerRepository = playerViewModel.visualizerRepository,
-                    visualizerTouchWaveform = visualizerTouchWaveform,
-                    currentVisualizerPreset = currentVisualizerPreset,
-                    visualizerAutoShuffle = visualizerAutoShuffle,
-                    onToggleVisualizerShuffle = playerViewModel::setVisualizerShuffle,
-                    onNextPreset = playerViewModel::nextVisualizerPreset,
-                    onOpenPresetBrowser = { showPresetSheet = true },
-                    isPresetFavorite = currentVisualizerPreset?.id?.let { it in visualizerFavoritePresetIds } ?: false,
-                    onTogglePresetFavorite = {
-                        currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
-                    },
-                    visualizerCompact = visualizerCompact,
-                    onToggleCompact = playerViewModel::toggleVisualizerCompact,
-                    onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
-                    spectrumBins = spectrumBins,
-                    spectrumColor = spectrumColor,
-                    showSpectrum = showNpSpectrum,
-                    onToggleShowSpectrum = {
-                        playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
-                    },
-                    onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-                    onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
-                )
-                }
+                // Manual dissolve between the album art / visualizer and the lyric
+                // surface (lyricsProgress is hoisted above). The built-in Crossfade
+                // snapped here; an explicit alpha animation is reliable, and it lets
+                // the fading art stay a centred square while the lyrics fill the
+                // full-width slot.
+                // Compose each side only while it is at all visible — derivedStateOf
+                // flips at the thresholds, not on every animation frame, so the
+                // (expensive) art/visualizer doesn't recompose mid-dissolve.
+                val showAlbumHero by remember { derivedStateOf { lyricsProgress < 0.999f } }
+                val showLyricsHero by remember { derivedStateOf { lyricsProgress > 0.001f } }
+                Box(modifier = heroModifier, contentAlignment = Alignment.Center) {
+                    if (showAlbumHero) {
+                        val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                            PlayerHeroStyle.Visualizer
+                        } else {
+                            heroStyle
+                        }
+                        // Keep the art a centred square whenever the slot is the
+                        // full-width lyric rectangle (i.e. any time lyrics are on
+                        // screen, including the fade-out). Bound it by WIDTH so the
+                        // now-taller lyric slot doesn't stretch the (dissolving) art
+                        // vertically; otherwise it fills the slot.
+                        val artMod = if (lyricsSlotWide) {
+                            Modifier.fillMaxWidth().aspectRatio(1f)
+                        } else {
+                            Modifier.fillMaxSize()
+                        }
+                        PlayerHero(
+                            modifier = artMod.graphicsLayer { alpha = 1f - lyricsProgress },
+                            style = effectiveStyle,
+                            isFullscreen = isFullscreenActive,
+                            track = currentTrack,
+                            isPlaying = isPlaying,
+                            progress = state.progress,
+                            albumColors = albumColors,
+                            visualizerSensitivity = visualizerSensitivity,
+                            visualizerBrightness = visualizerBrightness,
+                            visualizerEngineStatus = visualizerEngineStatus,
+                            visualizerEngineEnabled = visualizerEngineEnabled,
+                            visualizerShowFps = visualizerShowFps,
+                            visualizerRepository = playerViewModel.visualizerRepository,
+                            visualizerTouchWaveform = visualizerTouchWaveform,
+                            currentVisualizerPreset = currentVisualizerPreset,
+                            visualizerAutoShuffle = visualizerAutoShuffle,
+                            onToggleVisualizerShuffle = playerViewModel::setVisualizerShuffle,
+                            onNextPreset = playerViewModel::nextVisualizerPreset,
+                            onOpenPresetBrowser = { showPresetSheet = true },
+                            isPresetFavorite = currentVisualizerPreset?.id?.let { it in visualizerFavoritePresetIds } ?: false,
+                            onTogglePresetFavorite = {
+                                currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
+                            },
+                            visualizerCompact = visualizerCompact,
+                            onToggleCompact = playerViewModel::toggleVisualizerCompact,
+                            onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
+                            spectrumBins = spectrumBins,
+                            spectrumColor = spectrumColor,
+                            showSpectrum = showNpSpectrum,
+                            onToggleShowSpectrum = {
+                                playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
+                            },
+                            onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
+                            onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
+                        )
+                    }
+                    if (showLyricsHero) {
+                        // Fx/spectrum/beat locals are provided once around the
+                        // whole player (see the route-level provider). Rendered on
+                        // top of the art so it fades in over it.
+                        LyricsHeroBox(
+                            lyrics = lyrics,
+                            isLoading = isLyricsLoading,
+                            albumColors = albumColors,
+                            positionMs = playerViewModel.positionMs,
+                            // One element, two states: compact taps expand
+                            // (synced lyrics only); expanded line taps seek and
+                            // gap taps collapse.
+                            onSeekTo = { timeMs ->
+                                if (lyricsExpanded) playerViewModel.seekTo(timeMs)
+                                else if (lyricsSynced) lyricsExpanded = true
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = lyricsProgress }
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    enabled = lyricsSynced,
+                                ) { lyricsExpanded = !lyricsExpanded },
+                        )
+                    }
                 }
             },
             fxUnderlay = {
@@ -420,6 +473,10 @@ fun MainPlayerRoute(
                 }
             },
             lyricsExpanded = lyricsExpanded,
+            // Slot stays the full-width rectangle for the whole dissolve, not just
+            // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
+            lyricsMode = lyricsSlotWide,
+            blurredBackground = blurredBackground,
         )
     }
     }

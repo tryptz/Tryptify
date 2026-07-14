@@ -20,7 +20,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -28,11 +27,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.LyricsFxSettings
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.exp
-import kotlin.math.max
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -99,7 +94,11 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
 
     DisposableEffect(tap) {
         tap.acquire()
-        onDispose { tap.release() }
+        LyricsDebug.log("FFT analyzer staked (bass pulse active)")
+        onDispose {
+            tap.release()
+            LyricsDebug.log("FFT analyzer released (bass pulse stopped)")
+        }
     }
     LaunchedEffect(tap, fx.attackMs, fx.releaseMs, fx.bounce) {
         val attackSec = (fx.attackMs / 1000f).coerceAtLeast(0.001f)
@@ -186,10 +185,9 @@ internal fun Modifier.reportGlyphAnchor(
 }
 
 /**
- * Full-screen god-ray + glow layer. Draws each active glyph's rays at its
- * reported screen position, plus one soft glow behind the whole line. Lives
- * on a layer with no clipping ancestor, so the light can never be cut by a
- * canvas — beams simply run off the screen edge at worst. Draw-phase only.
+ * Full-screen glow layer: one soft album-accent bloom behind the whole active
+ * line, breathing with the bass. Lives on a layer with no clipping ancestor, so
+ * the light can never be cut by a canvas. Draw-phase only.
  */
 @Composable
 internal fun LyricsFxLayer(
@@ -200,7 +198,6 @@ internal fun LyricsFxLayer(
     modifier: Modifier = Modifier,
 ) {
     if (fx.bassReact <= 0.01f) return
-    val time = rememberFrameSeconds()
     var origin by remember { mutableStateOf(Offset.Zero) }
     Box(
         modifier
@@ -210,58 +207,14 @@ internal fun LyricsFxLayer(
                 val p = (pulse.value * fx.bassReact).coerceIn(0f, 1.6f)
                 if (p <= 0.03f) return@drawBehind
 
-                // One soft bloom behind the whole line.
+                // One soft album-accent bloom behind the whole active line.
                 anchors.lineCenter?.let { lc ->
                     val c = lc - origin
                     val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
                     drawGlow(c, glowR, p, accent, fx)
                 }
-
-                // Per-glyph rays: each burst rooted on its own letter, sized to
-                // the glyph, sweeping with the glyph's wave phase.
-                if (fx.rayCount > 0) {
-                    val spin = time.value * (fx.raySpinDegPerSec * PI.toFloat() / 180f)
-                    anchors.glyphs.values.forEach { g ->
-                        val c = g.center - origin
-                        val glyph = max(g.halfW, g.halfH)
-                        val reach = glyph * 2f * (0.6f + 2.4f * fx.rayLength) * (0.5f + 0.5f * p)
-                        drawBeams(c, g.halfW * 0.55f, g.halfH * 0.55f, reach, p, accent, fx, spin + g.phase)
-                    }
-                }
             },
     )
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeams(
-    center: Offset,
-    rx: Float,
-    ry: Float,
-    reach: Float,
-    p: Float,
-    accent: Color,
-    fx: LyricsFxSettings,
-    sweepRad: Float,
-) {
-    val count = fx.rayCount
-    if (count <= 0) return
-    repeat(count) { i ->
-        val a = sweepRad + i * (2f * PI.toFloat() / count)
-        val dirX = cos(a)
-        val dirY = sin(a)
-        val start = Offset(center.x + dirX * rx, center.y + dirY * ry)
-        val end = Offset(start.x + dirX * reach, start.y + dirY * reach)
-        drawLine(
-            brush = Brush.linearGradient(
-                colors = listOf(accent.copy(alpha = fx.rayBrightness * p), Color.Transparent),
-                start = start,
-                end = end,
-            ),
-            start = start,
-            end = end,
-            strokeWidth = (2f + (fx.rayWidthDp - 2f) * p).coerceAtLeast(1f) * density,
-            cap = StrokeCap.Round,
-        )
-    }
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlow(

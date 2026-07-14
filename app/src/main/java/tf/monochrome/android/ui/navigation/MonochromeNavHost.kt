@@ -31,6 +31,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -152,6 +153,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
     val currentTrack by playerViewModel.currentTrack.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
+    // Mini-player glass settings (its own blob; Studio › Mini Player tab).
+    val miniPlayerGlass by playerViewModel.miniPlayerGlass.collectAsState()
 
     // Position/duration tick every 250 ms. Keep them as State<Long> and read
     // only inside the draw-scope progress lambda below — reading `.value` here
@@ -493,17 +496,21 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                 // Mini player — sits below nav bar with its own space
                 if (showMiniPlayer) {
-                    MiniPlayer(
-                        track = currentTrack,
-                        isPlaying = isPlaying,
-                        progressProvider = progressProvider,
-                        onPlayPauseClick = { playerViewModel.togglePlayPause() },
-                        onSkipNextClick = { playerViewModel.skipToNext() },
-                        onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                        onClick = { navController.navigate(Screen.NowPlaying.route) },
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        hazeState = hazeState
-                    )
+                    CompositionLocalProvider(
+                        tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
+                    ) {
+                        MiniPlayer(
+                            track = currentTrack,
+                            isPlaying = isPlaying,
+                            progressProvider = progressProvider,
+                            onPlayPauseClick = { playerViewModel.togglePlayPause() },
+                            onSkipNextClick = { playerViewModel.skipToNext() },
+                            onSkipPreviousClick = { playerViewModel.skipToPrevious() },
+                            onClick = { navController.navigate(Screen.NowPlaying.route) },
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            hazeState = hazeState
+                        )
+                    }
                 }
 
                 // Fill the system nav bar area
@@ -516,16 +523,21 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     .align(Alignment.BottomCenter)
                     .padding(bottom = navBarHeight)
             ) {
-                MiniPlayer(
-                    track = currentTrack,
-                    isPlaying = isPlaying,
-                    progressProvider = progressProvider,
-                    onPlayPauseClick = { playerViewModel.togglePlayPause() },
-                    onSkipNextClick = { playerViewModel.skipToNext() },
-                    onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                    onClick = { navController.navigate(Screen.NowPlaying.route) },
-                    hazeState = hazeState
-                )
+                CompositionLocalProvider(
+                    tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
+                ) {
+                    MiniPlayer(
+                        track = currentTrack,
+                        isPlaying = isPlaying,
+                        progressProvider = progressProvider,
+                        onPlayPauseClick = { playerViewModel.togglePlayPause() },
+                        onSkipNextClick = { playerViewModel.skipToNext() },
+                        onSkipPreviousClick = { playerViewModel.skipToPrevious() },
+                        onClick = { navController.navigate(Screen.NowPlaying.route) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        hazeState = hazeState
+                    )
+                }
             }
         }
 

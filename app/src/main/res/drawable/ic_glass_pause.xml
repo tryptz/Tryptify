@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Two solid bars — chunky so the glass shader bevels them into 3D chrome. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6.5,4.5 h4 v15 h-4 z M13.5,4.5 h4 v15 h-4 z" />
+</vector>

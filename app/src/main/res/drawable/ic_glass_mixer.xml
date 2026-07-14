@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Mixer/FX: three slider tracks each with a chunky knob, so the liquid-glass
+         shader bevels the bars and the round knobs into 3D chrome. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,5.1 h18 v1.8 h-18 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.6,6 A2.4,2.4 0 1 0 10.4,6 A2.4,2.4 0 1 0 5.6,6 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,11.1 h18 v1.8 h-18 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12.6,12 A2.4,2.4 0 1 0 17.4,12 A2.4,2.4 0 1 0 12.6,12 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,17.1 h18 v1.8 h-18 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4.6,18 A2.4,2.4 0 1 0 9.4,18 A2.4,2.4 0 1 0 4.6,18 Z" />
+</vector>
