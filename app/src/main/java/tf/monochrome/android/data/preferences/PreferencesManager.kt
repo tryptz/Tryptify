@@ -100,6 +100,9 @@ class PreferencesManager @Inject constructor(
         private val PLAYER_GLASS_JSON = stringPreferencesKey("player_glass_json")
         // User-saved Player Glass themes (a JSON array of {name, settings}).
         private val PLAYER_GLASS_CUSTOM_PRESETS_JSON = stringPreferencesKey("player_glass_custom_presets_json")
+        // Mini-player liquid-glass settings — same shape as PLAYER_GLASS_JSON but
+        // tuned independently (Lyrics FX Studio › "Mini Player" tab).
+        private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -273,7 +276,7 @@ class PreferencesManager @Inject constructor(
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, PLAYER_GLASS_JSON,
-            PLAYER_GLASS_CUSTOM_PRESETS_JSON,
+            PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
             VISUALIZER_ROTATION_SECONDS, VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
@@ -1257,6 +1260,18 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
         dataStore.edit { it[PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
+    /** Mini-player glass settings (its own blob, same shape as [playerGlass]). */
+    val miniPlayerGlass: Flow<tf.monochrome.android.domain.model.PlayerGlassSettings> = dataStore.data.map { prefs ->
+        prefs[MINI_PLAYER_GLASS_JSON]
+            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(raw) }.getOrNull() }
+            ?.clamped()
+            ?: tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT
+    }
+
+    suspend fun setMiniPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
+        dataStore.edit { it[MINI_PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     /** User-saved Player Glass themes (empty until the user saves one). */

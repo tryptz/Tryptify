@@ -148,6 +148,12 @@ class LyricsFxStudioViewModel @Inject constructor(
     private var playerGlassTouched = false
     private var playerGlassPersistJob: Job? = null
 
+    /** Mini-player glass settings — the "Mini Player" tab (its own blob, same shape). */
+    private val _miniPlayerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _miniPlayerGlass.asStateFlow()
+    private var miniPlayerGlassTouched = false
+    private var miniPlayerGlassPersistJob: Job? = null
+
     /** Fonts the user has imported (Settings › Appearance copies them here). */
     private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
     val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
@@ -174,6 +180,10 @@ class LyricsFxStudioViewModel @Inject constructor(
         viewModelScope.launch {
             val pg = preferences.playerGlass.first()
             if (!playerGlassTouched) _playerGlass.value = pg
+        }
+        viewModelScope.launch {
+            val mpg = preferences.miniPlayerGlass.first()
+            if (!miniPlayerGlassTouched) _miniPlayerGlass.value = mpg
         }
         refreshFonts()
     }
@@ -244,6 +254,38 @@ class LyricsFxStudioViewModel @Inject constructor(
         val toAdd = decoded.copy(name = name)
         viewModelScope.launch { preferences.setCustomPlayerGlassPresets(customPlayerGlassPresets.value + toAdd) }
         return name
+    }
+
+    // ── Mini-player glass (same controls + shared theme pool as Player Glass) ──
+
+    fun updateMiniPlayerGlass(transform: (tf.monochrome.android.domain.model.PlayerGlassSettings) -> tf.monochrome.android.domain.model.PlayerGlassSettings) {
+        miniPlayerGlassTouched = true
+        _miniPlayerGlass.value = transform(_miniPlayerGlass.value).clamped()
+        miniPlayerGlassPersistJob?.cancel()
+        miniPlayerGlassPersistJob = viewModelScope.launch {
+            delay(200)
+            preferences.setMiniPlayerGlass(_miniPlayerGlass.value)
+        }
+    }
+
+    /** Apply a theme to the mini player — changes the material, keeps colour/perf. */
+    fun applyMiniPlayerGlassPreset(preset: tf.monochrome.android.domain.model.PlayerGlassSettings) {
+        miniPlayerGlassTouched = true
+        val next = preset.withPersonalFrom(_miniPlayerGlass.value).clamped()
+        _miniPlayerGlass.value = next
+        miniPlayerGlassPersistJob?.cancel()
+        viewModelScope.launch { preferences.setMiniPlayerGlass(next) }
+    }
+
+    /** Save the current mini-player glass as a named theme (into the shared pool). */
+    fun saveMiniPlayerGlassPreset(name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        val preset = tf.monochrome.android.domain.model.PlayerGlassPreset(clean, _miniPlayerGlass.value.clamped())
+        viewModelScope.launch {
+            val current = customPlayerGlassPresets.value.filterNot { it.name.equals(clean, ignoreCase = true) }
+            preferences.setCustomPlayerGlassPresets(current + preset)
+        }
     }
 
     fun applyPreset(preset: LyricsFxSettings) {
@@ -322,9 +364,10 @@ fun LyricsFxStudioScreen(
     val currentLyrics by viewModel.currentLyrics.collectAsState()
     val customPresets by viewModel.customPresets.collectAsState()
     val playerGlass by viewModel.playerGlass.collectAsState()
+    val miniPlayerGlass by viewModel.miniPlayerGlass.collectAsState()
     val context = LocalContext.current
 
-    // Which studio tab: 0 = Lyrics, 1 = Player Glass.
+    // Which studio tab: 0 = Lyrics, 1 = Player Glass, 2 = Mini Player.
     var selectedTab by remember { mutableStateOf(0) }
 
     // Preset save / import / share dialog state.
@@ -353,20 +396,36 @@ fun LyricsFxStudioScreen(
         ) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lyrics") })
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Player Glass") })
+            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Mini Player") })
         }
 
-        if (selectedTab == 1) {
+        if (selectedTab == 1 || selectedTab == 2) {
+            // Both glass tabs share the same controls, preview, and theme pool;
+            // only which settings blob they edit differs.
             val customGlassPresets by viewModel.customPlayerGlassPresets.collectAsState()
-            PlayerGlassTab(
-                glass = playerGlass,
-                customPresets = customGlassPresets,
-                onUpdate = { viewModel.updatePlayerGlass(it) },
-                onApplyPreset = { viewModel.applyPlayerGlassPreset(it) },
-                onSavePreset = { viewModel.savePlayerGlassPreset(it) },
-                onDeletePreset = { viewModel.deletePlayerGlassPreset(it) },
-                onExportPreset = { viewModel.exportPlayerGlassPreset(it) },
-                onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
-            )
+            if (selectedTab == 1) {
+                PlayerGlassTab(
+                    glass = playerGlass,
+                    customPresets = customGlassPresets,
+                    onUpdate = { viewModel.updatePlayerGlass(it) },
+                    onApplyPreset = { viewModel.applyPlayerGlassPreset(it) },
+                    onSavePreset = { viewModel.savePlayerGlassPreset(it) },
+                    onDeletePreset = { viewModel.deletePlayerGlassPreset(it) },
+                    onExportPreset = { viewModel.exportPlayerGlassPreset(it) },
+                    onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
+                )
+            } else {
+                PlayerGlassTab(
+                    glass = miniPlayerGlass,
+                    customPresets = customGlassPresets,
+                    onUpdate = { viewModel.updateMiniPlayerGlass(it) },
+                    onApplyPreset = { viewModel.applyMiniPlayerGlassPreset(it) },
+                    onSavePreset = { viewModel.saveMiniPlayerGlassPreset(it) },
+                    onDeletePreset = { viewModel.deletePlayerGlassPreset(it) },
+                    onExportPreset = { viewModel.exportPlayerGlassPreset(it) },
+                    onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
+                )
+            }
             return@Column
         }
 

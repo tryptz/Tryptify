@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.player
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -78,6 +79,17 @@ fun PlayerTransportControls(
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
             label = "playScale",
         )
+        // Press-bulge: swell the glass under the disc while it's held, matching
+        // the dock and the other glass buttons.
+        val bulge by animateFloatAsState(
+            targetValue = if (isPressed) 1f else 0f,
+            animationSpec = if (isPressed) {
+                spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
+            } else {
+                tween(durationMillis = 260)
+            },
+            label = "playBulge",
+        )
         // Play/pause is a SOLID round glass disc with the play/pause symbol
         // punched out (hollow), so the backdrop shows through the glyph and the
         // shader bevels both the disc rim and the cut-out edges.
@@ -112,7 +124,7 @@ fun PlayerTransportControls(
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .playerGlass(tint = tint)
+                        .playerGlass(tint = tint, bulgeAmount = { bulge })
                         // Own offscreen layer so the punch-out (BlendMode.Clear) is
                         // contained here and can't clear the player behind it — needed
                         // when the glass effect is off or below API 33.
@@ -225,13 +237,32 @@ internal fun TransportIcon(
     size: Dp = PlayerDesignTokens.TransportIconSize,
 ) {
     val glass = LocalPlayerGlass.current
+    // Press-bulge: swell the glass glyph while it's held (spring in, tween out),
+    // matching the play disc and the dock — the bulge is the tap feedback, so no
+    // ripple indication.
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bulge by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = if (isPressed) {
+            spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
+        } else {
+            tween(durationMillis = 260)
+        },
+        label = "transportBulge",
+    )
     // A generously-sized clickable box (instead of the fixed 48dp IconButton) so
     // the offset + blurred drop shadow has canvas room and isn't clipped by the
     // transport row. The visible glyph stays `size`, centred in the box.
     Box(
         modifier = Modifier
             .size(size + 40.dp)
-            .clickable(onClickLabel = description, onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClickLabel = description,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         // Shape-accurate drop shadow: a blurred, tinted copy of the SAME glyph
@@ -259,7 +290,7 @@ internal fun TransportIcon(
             contentDescription = description,
             modifier = Modifier
                 .requiredSize(size)
-                .playerGlass(tint = tint),
+                .playerGlass(tint = tint, bulgeAmount = { bulge }),
             tint = tint,
         )
     }
