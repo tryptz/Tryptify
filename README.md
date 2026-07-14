@@ -32,6 +32,18 @@ Tryptify is an audiophile-grade music player whose interesting parts live below 
 | :---: | :---: |
 | ![Settings](docs/screenshots/settings.jpg) | ![ProjectM Visualizer](docs/screenshots/visualizer.jpg) |
 
+### Customizable player — album-adaptive liquid glass
+
+The same Now Playing screen, retinted per album. The liquid-glass transport buttons, the action dock, and the "thermometer" scrubber all pick up the artwork's colors automatically — or a fixed tint you choose in the Studio.
+
+| Purple | Teal |
+| :---: | :---: |
+| ![Album-adaptive glass — purple](docs/screenshots/player-glass-purple.jpg) | ![Album-adaptive glass — teal](docs/screenshots/player-glass-teal.jpg) |
+
+| Magenta | Blue |
+| :---: | :---: |
+| ![Album-adaptive glass — magenta](docs/screenshots/player-glass-magenta.jpg) | ![Album-adaptive glass — blue](docs/screenshots/player-glass-blue.jpg) |
+
 ---
 
 ## Highlights
@@ -41,6 +53,7 @@ Tryptify is an audiophile-grade music player whose interesting parts live below 
 - **Bit-perfect USB-DAC output** — a libusb **UAC1 + UAC2** driver that claims the streaming interface from the kernel and drives the isochronous endpoint directly, with asynchronous-feedback pacing and a watchdog fallback.
 - **Local library** — MediaStore indexing with an embedded-tag reader, incremental sync, and a filesystem watcher; ReplayGain (track/album with peak protection), gapless playback, drag-to-reorder queue, variable speed.
 - **Real-time visualizer** — a ProjectM OpenGL renderer tapping the post-DSP PCM, tinted by album-art color extraction.
+- **Customizable liquid-glass UI** — an AGSL refractive-glass material on the transport buttons, action dock, scrubber, mini player, and lyric type; a live **Lyrics FX Studio** with ~40 tunable parameters and two dozen built-in themes, **sharable presets** via copy-paste codes, and optional **cross-device settings sync** over Supabase.
 - **Modern Android surface** — Compose + Material 3 throughout, a Glance home-screen widget, an Android Auto media browser, Chromecast via Media3 Cast, 16 themes plus live system dark-mode and dynamic album-art coloring.
 
 ---
@@ -120,6 +133,40 @@ A libusb-backed Audio Class driver that takes the streaming interface from the k
 
 ---
 
+## Customizable UI · Liquid Glass Studio
+
+The player chrome is drawn on a real **liquid-glass material**, and nearly every visual detail is tunable in a live editor, savable as a preset, shareable as a code, and syncable across devices.
+
+### Liquid-glass material
+
+A single AGSL `RuntimeShader` implements **true refractive glass** rather than a blur-and-tint fake. It derives bevel normals from the drawn content's own alpha, renders the body see-through, reconstructs an album-tinted backdrop and **lenses it through the bevel with per-channel chromatic dispersion** (Snell refraction), then adds a Fresnel-weighted specular rim, a reflected procedural "studio" environment, an animated light sweep, optional frost, and a **press-bulge dome** so buttons swell under a finger. Light direction follows a shared, ref-counted **gravity/tilt sensor** (one hardware listener for every glass surface) plus slow autonomous drift.
+
+It is applied as Compose `Modifier` extensions to the transport buttons, the **action dock** (one glass slab with the Lyrics · Timer · Mixer · Playlist icons punched out of it as 3D-beveled cut-outs), the **`GlassProgressTube`** scrubber (a glass tube that fills, with a sine-wave bulge at the playhead), the mini player, and the lyric glyphs. Requires **Android 13 (API 33)+**; below that — or on any shader-compile failure — it degrades to flat content with no crash.
+
+### Lyrics FX Studio
+
+**Settings › Interface › Lyrics FX Studio** is a live-tuning screen: every parameter is a slider or toggle over a **pinned preview** that keeps animating while you scroll — it runs a synthetic 120 BPM kick through the real envelope + spring pipeline, so every knob is visible with no music playing (and shows the real now-playing lyrics when available). Three tabs:
+
+| Tab | Edits | Parameter groups |
+| --- | --- | --- |
+| **Lyrics** | `LyricsFxSettings` | Typography (size, tracking, margins, wrap) · Font (import custom `.ttf`/`.otf`) · Playback Sync (Bluetooth latency offset) · 3D Letter Wave (tilt, speed, tightness, travel, shadow) · Beat Engine (bass reaction, pump, attack, release, bounce, pop-in) · God Rays & Glow (count, length, width, brightness, spin, glow radius/brightness) · Liquid Glass · Anti-aliasing (FXAA) |
+| **Player Glass** | `PlayerGlassSettings` | Glass body (opacity, refraction, rim, dispersion, roundness, depth, frost, reflection, gloss, edge, surface motion) · Light & shadow (tilt reactivity, light angle, shadow depth/softness/tint) · colors (button tint, preview background) · quality (shader taps, glass scrubber on/off) |
+| **Mini Player** | a separate glass blob | the same Player-Glass controls over a live preview of the real mini player |
+
+Every field is range-guarded (`clamped()`) on both read and write, so no slider — or imported code — can push the renderer into an invalid state. Colors default to the live album accent but can be pinned to a custom HSV pick.
+
+**Built-in themes** — Player Glass: *Default, Chrome, Frosted, Liquid, Crystal, Bubble, Minimal, Neon, Obsidian, Pillow, Mirror*. Lyrics FX: *Default, Nightcore, Subtle, Still, Aurora, Neon, Frost, Ember, Cinematic, Vaporwave, Minimal Glass, Karaoke Pop, Sunbeam, Nightdrive*. Applying a theme changes only the look — your personal fields (custom font, Bluetooth delay, sample quality) are preserved.
+
+### Preset import / export
+
+Presets are shared peer-to-peer as a plain **copy-paste code** — no account or server needed. A code is a short prefix plus compact JSON: **`TRYPTFX1:`** for Lyrics FX presets, **`TRYPTGLASS1:`** for Player Glass themes. In the Studio you can **Save** a named preset, **Import** one (paste, or one-tap *Paste from clipboard*), or **Share** it out through the Android share sheet. Import de-duplicates a clashing name instead of overwriting, and **re-clamps every value on the way in**, so a hand-edited or hostile code can't push settings out of range.
+
+### Cross-device settings sync
+
+Signed-in users get automatic, silent, **last-write-wins** cloud backup of their preferences — including the Lyrics FX / Player Glass JSON and all saved presets — to a Supabase `user_settings` row. Only an explicit **allow-list** of keys leaves the device (`SETTINGS_SYNC_KEYS`); secrets, OAuth tokens, device ids, per-device GPU tuning, and local file paths never sync. The payload is a **type-tagged JSON** codec (`{"t":…,"v":…}`) so the DataStore round-trip stays type-exact across Int/Long/Float/Double, changes are debounced (~2 s) and de-duplicated, and the coordinator **pulls the cloud copy before it starts watching** so a fresh device can't clobber your settings on first launch. The table is protected by row-level security (own-row-only), and a trigger refreshes `updated_at` on every write to drive the merge.
+
+---
+
 ## Architecture
 
 Single-module app, package `tf.monochrome.android`.
@@ -136,14 +183,17 @@ tf.monochrome.android/
 │   ├── db/         # Room v8 (reactive Flow DAOs)
 │   ├── downloads/  # WorkManager offline downloader
 │   ├── local/      # MediaStore scanner + tag reader + fs watcher
-│   └── preferences/# DataStore settings
+│   ├── preferences/# DataStore settings + SettingsSyncCodec
+│   └── sync/       # SettingsSyncCoordinator, SupabaseSyncRepository
 ├── di/             # Hilt modules
-├── domain/         # Models + use cases (incl. MeasurementRig)
+├── domain/         # Models + use cases (MeasurementRig, LyricsFxSettings, PlayerGlassSettings)
 ├── player/         # Media3 PlaybackService, QueueManager, StreamResolver, ReplayGain
 ├── ui/
 │   ├── mixer/      # BusStrip, PluginSlot, PluginPicker, PluginEditor, DspCanvas
 │   ├── eq/         # Parametric + AutoEQ screens, FrequencyResponseGraph, rig chips
 │   ├── oxford/     # Inflator + Compressor screens
+│   ├── player/     # MainPlayer, LiquidGlass (AGSL), PlayerActionDock, PlayerProgress
+│   ├── settings/   # LyricsFxStudioScreen (Lyrics / Player Glass / Mini Player tabs)
 │   └── theme/      # Color schemes, Dimens, DynamicColorExtractor
 ├── visualizer/     # ProjectM OpenGL renderer + JNI audio tap
 └── widget/         # Glance Now Playing widget
@@ -169,7 +219,7 @@ Built with `-O3 -ffast-math`, NEON SIMD, denormal flush-to-zero. ABIs: `arm64-v8
 
 ### Persistence
 
-Room v8 with reactive `Flow<T>` DAOs for favorites, history, play events, playlists, downloads, cached lyrics, and EQ/mix presets. App settings (output mode, EQ state, theme) live in DataStore.
+Room v8 with reactive `Flow<T>` DAOs for favorites, history, play events, playlists, downloads, cached lyrics, and EQ/mix presets. App settings (output mode, EQ state, theme) live in DataStore, with the UI-customization state persisted as JSON blobs (`LYRICS_FX_JSON`, `PLAYER_GLASS_JSON`, `MINI_PLAYER_GLASS_JSON`, plus saved-preset lists). An allow-listed subset of DataStore keys optionally syncs to a Supabase `user_settings` row for cross-device backup.
 
 ---
 
