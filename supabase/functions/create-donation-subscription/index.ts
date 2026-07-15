@@ -35,6 +35,25 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
+// Subscription line items need a real Product id — inline `price_data` on a
+// subscription does NOT accept `product_data` (Stripe rejects it). We keep one
+// reusable "Tryptify Supporter" product and let per-amount prices be created
+// inline against it. Cached in the warm worker; found by metadata on cold start.
+let productId: string | null = null;
+async function getProductId(stripe: Stripe): Promise<string> {
+  if (productId) return productId;
+  const found = await stripe.products.search({
+    query: "metadata['key']:'tryptify-donation'",
+    limit: 1,
+  });
+  const product = found.data[0] ?? await stripe.products.create({
+    name: "Tryptify Supporter",
+    metadata: { key: "tryptify-donation" },
+  });
+  productId = product.id;
+  return productId;
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -107,12 +126,13 @@ Deno.serve(async (req) => {
       { apiVersion: "2024-06-20" },
     );
 
+    const product = await getProductId(stripe);
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{
         price_data: {
           currency,
-          product_data: { name: "Tryptify Supporter" },
+          product,
           unit_amount: amount,
           recurring: { interval: interval as Stripe.PriceCreateParams.Recurring.Interval },
         },
