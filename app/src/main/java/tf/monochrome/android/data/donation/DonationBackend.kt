@@ -53,6 +53,31 @@ class DonationBackend @Inject constructor(
         }
     }
 
+    /** Cancels the given subscription. Idempotent server-side: an already-cancelled
+     *  or missing subscription is reported as success so the local record can clear. */
+    suspend fun cancelSubscription(subscriptionId: String): Result<Unit> {
+        return try {
+            val response = httpClient.post("$FUNCTIONS_BASE_URL/cancel-donation-subscription") {
+                header("Authorization", "Bearer $SUPABASE_ANON_KEY")
+                header("apikey", SUPABASE_ANON_KEY)
+                contentType(ContentType.Application.Json)
+                setBody(CancelDonationRequest(subscriptionId))
+            }
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val detail = runCatching { response.body<String>() }.getOrDefault("")
+                Log.w(TAG, "Subscription cancel failed: ${response.status} $detail")
+                Result.failure(
+                    IllegalStateException("Couldn't cancel the donation (${response.status.value}).")
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Subscription cancel error", e)
+            Result.failure(e)
+        }
+    }
+
     private companion object {
         const val TAG = "DonationBackend"
 

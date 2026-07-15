@@ -10,8 +10,10 @@ import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.donation.CreateDonationRequest
 import tf.monochrome.android.data.donation.DonationBackend
+import tf.monochrome.android.data.donation.DonationStore
 import tf.monochrome.android.data.donation.DonationSubscription
 import tf.monochrome.android.data.donation.DonationTier
+import tf.monochrome.android.data.donation.SavedSubscription
 import javax.inject.Inject
 
 /**
@@ -19,15 +21,26 @@ import javax.inject.Inject
  * types — it prepares the subscription on the backend and hands the resulting
  * [DonationSubscription] to the composable, which owns the PaymentSheet and maps
  * its result back in via [onCompleted] / [onCanceled] / [onFailed].
+ *
+ * [active] is the persisted "is this device subscribed?" signal that drives the
+ * cancel button; it survives restarts via [DonationStore].
  */
 @HiltViewModel
 class DonateViewModel @Inject constructor(
     private val backend: DonationBackend,
     private val authManager: SupabaseAuthManager,
+    private val store: DonationStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<DonateUiState>(DonateUiState.Idle)
     val state: StateFlow<DonateUiState> = _state.asStateFlow()
+
+    /** The active subscription remembered on this device, or null if not subscribed. */
+    val active: StateFlow<SavedSubscription?> = store.active
+
+    // Held between "prepared on backend" and "PaymentSheet completed" so we can
+    // persist the subscription once payment actually succeeds.
+    private var pending: DonationSubscription? = null
 
     /** Kick off a subscription for [tier]; on success the UI presents the sheet. */
     fun donate(tier: DonationTier) {
@@ -44,7 +57,10 @@ class DonateViewModel @Inject constructor(
                 )
             )
             _state.value = result.fold(
-                onSuccess = { DonateUiState.ReadyToPresent(it) },
+                onSuccess = {
+                    pending = it
+                    DonateUiState.ReadyToPresent(it)
+                },
                 onFailure = {
                     DonateUiState.Failed(
                         it.message ?: "Something went wrong starting the donation."
@@ -62,14 +78,48 @@ class DonateViewModel @Inject constructor(
         }
     }
 
-    fun onCompleted() { _state.value = DonateUiState.Completed }
+    fun onCompleted() {
+        // Payment succeeded — remember the subscription so we can offer a cancel button.
+        pending?.let { sub ->
+            val subscriptionId = sub.subscriptionId
+            if (subscriptionId != null) store.save(subscriptionId, sub.customerId)
+        }
+        pending = null
+        _state.value = DonateUiState.Completed
+    }
 
     /** Donor dismissed the sheet — quietly return to the tier picker. */
-    fun onCanceled() { _state.value = DonateUiState.Idle }
+    fun onCanceled() {
+        pending = null
+        _state.value = DonateUiState.Idle
+    }
 
-    fun onFailed(message: String) { _state.value = DonateUiState.Failed(message) }
+    fun onFailed(message: String) {
+        pending = null
+        _state.value = DonateUiState.Failed(message)
+    }
 
-    /** Return to the initial tier-picker state (e.g. after showing a thank-you). */
+    /** Cancel the active subscription (stops future charges). Idempotent on the
+     *  backend, so a subscription already cancelled elsewhere still clears here. */
+    fun cancelSubscription() {
+        val sub = store.active.value ?: return
+        if (_state.value is DonateUiState.Canceling) return
+        _state.value = DonateUiState.Canceling
+        viewModelScope.launch {
+            val result = backend.cancelSubscription(sub.subscriptionId)
+            _state.value = result.fold(
+                onSuccess = {
+                    store.clear()
+                    DonateUiState.Canceled
+                },
+                onFailure = {
+                    DonateUiState.Failed(it.message ?: "Couldn't cancel the donation.")
+                },
+            )
+        }
+    }
+
+    /** Return to the initial state (e.g. after showing a thank-you / cancelled note). */
     fun reset() { _state.value = DonateUiState.Idle }
 }
 
@@ -79,5 +129,7 @@ sealed interface DonateUiState {
     data class ReadyToPresent(val subscription: DonationSubscription) : DonateUiState
     data object Presenting : DonateUiState
     data object Completed : DonateUiState
+    data object Canceling : DonateUiState
+    data object Canceled : DonateUiState
     data class Failed(val message: String) : DonateUiState
 }

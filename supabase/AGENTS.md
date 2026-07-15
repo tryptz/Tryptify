@@ -33,8 +33,8 @@ Read this whole file before acting. It is short on purpose. Follow it literally.
 
 | Thing | Value |
 | --- | --- |
-| Function name | `create-donation-subscription` |
-| Function path | `supabase/functions/create-donation-subscription/index.ts` |
+| Functions | `create-donation-subscription` (start a donation) · `cancel-donation-subscription` (stop future charges, idempotent) |
+| Function paths | `supabase/functions/<name>/index.ts` |
 | Supabase project ref | `lvzorvfhhopillzlwgau` |
 | Function URL | `https://lvzorvfhhopillzlwgau.supabase.co/functions/v1/create-donation-subscription` |
 | Runtime | Deno (Supabase Edge Functions) |
@@ -57,9 +57,10 @@ supabase secrets set STRIPE_SECRET_KEY=sk_xxx
 supabase secrets set STRIPE_PUBLISHABLE_KEY=pk_xxx
 ```
 
-**Deploy / redeploy the function** (`--no-verify-jwt` lets anonymous donors call it):
+**Deploy / redeploy the functions** (`--no-verify-jwt` lets anonymous donors call them; both share the same secrets):
 ```bash
 supabase functions deploy create-donation-subscription --no-verify-jwt
+supabase functions deploy cancel-donation-subscription --no-verify-jwt
 ```
 
 **List secrets** (shows names + digests, never values — safe):

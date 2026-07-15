@@ -38,6 +38,12 @@ data class DonationSubscription(
     val subscriptionId: String? = null,
 )
 
+/** Request sent to the `cancel-donation-subscription` Edge Function. */
+@Serializable
+data class CancelDonationRequest(
+    val subscriptionId: String,
+)
+
 /** A selectable recurring donation tier shown in the UI. */
 data class DonationTier(
     /** Minor units (cents). e.g. 500 == $5.00. */
