@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — MonoTrypt DSP Engine
+## [1.7.0] — MonoTrypt DSP Engine
 
 ### Added
 
