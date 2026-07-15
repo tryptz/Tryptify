@@ -16,14 +16,24 @@
 
 import Stripe from "npm:stripe@17";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
-  // Must match the version the Stripe Android SDK expects for the ephemeral key.
-  // If PaymentSheet logs an API-version warning, set this to the value it names.
-  apiVersion: "2024-06-20",
-  httpClient: Stripe.createFetchHttpClient(),
-});
-
 const PUBLISHABLE_KEY = Deno.env.get("STRIPE_PUBLISHABLE_KEY") ?? "";
+
+// Build the Stripe client lazily. `new Stripe("")` throws, so constructing it at
+// module scope would crash the whole worker on boot (before the handler's
+// keys-configured check could return a clean error) whenever the secret is unset.
+let stripeClient: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeClient) {
+    stripeClient = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
+      // Must match the version the Stripe Android SDK expects for the ephemeral
+      // key. If PaymentSheet logs an API-version warning, set this to the value
+      // it names.
+      apiVersion: "2024-06-20",
+      httpClient: Stripe.createFetchHttpClient(),
+    });
+  }
+  return stripeClient;
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -76,6 +86,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const stripe = getStripe();
+
     // Reuse an existing customer for this email so a repeat donor doesn't pile up
     // duplicate Stripe customers; otherwise create a fresh one.
     let customer: Stripe.Customer | undefined;
