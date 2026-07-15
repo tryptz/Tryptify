@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.settings
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.widget.Toast
 import androidx.core.net.toUri
 import tf.monochrome.android.BuildConfig
 import java.util.Locale
@@ -1998,23 +2000,20 @@ private fun AboutTab() {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Tryptify is built and maintained by trypt. If it's "
-                    + "earned a place in your day, a tip on Ko-fi keeps the "
-                    + "lights on and the next features shipping.",
+                    + "earned a place in your day, a tip keeps the lights on "
+                    + "and the next features shipping.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
             Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, "https://ko-fi.com/trypt".toUri())
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Support on Ko-fi")
-            }
+
+            // Recurring donations via Stripe's in-app PaymentSheet (card / Google Pay,
+            // the donor never leaves the app), with Ko-fi kept as a one-tap fallback.
+            tf.monochrome.android.ui.donate.DonateSupportCard(
+                onOpenKofi = { openDonationUrl(context, "https://ko-fi.com/trypt") }
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
             Text(
                 text = "Tryptify version ${BuildConfig.VERSION_NAME} · 2026",
@@ -2028,6 +2027,17 @@ private fun AboutTab() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+// Opens an external donation/support URL in the browser (or a Custom Tab, if the
+// user's default browser supports it). Wrapped so a device with no browser can't
+// crash the app — it surfaces a Toast instead.
+private fun openDonationUrl(context: android.content.Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+    } catch (e: ActivityNotFoundException) {
+        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
     }
 }
 
