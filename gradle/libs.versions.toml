@@ -25,6 +25,7 @@ haze = "1.7.1"
 nextlibMedia3ext = "0.8.4"
 profileinstaller = "1.4.1"
 jaudiotagger = "3.0.1"
+stripe = "21.21.0"
 junit = "4.13.2"
 
 [libraries]
@@ -144,6 +145,10 @@ haze-materials = { group = "dev.chrisbanes.haze", name = "haze-materials", versi
 # NowPlayingScreen / MixerScreen / FLChannelStrip the first time the user
 # opens those screens.
 profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+
+# Stripe — PaymentSheet (in-app subscription checkout for donations). Includes
+# payments-core (PaymentConfiguration) + the paymentsheet UI module.
+stripe-android = { group = "com.stripe", name = "stripe-android", version.ref = "stripe" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

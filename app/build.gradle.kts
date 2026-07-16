@@ -293,6 +293,9 @@ dependencies {
     implementation(libs.credentials.play.services)
     implementation(libs.googleid)
 
+    // Stripe (in-app PaymentSheet for recurring donations)
+    implementation(libs.stripe.android)
+
     // Accompanist
     implementation(libs.accompanist.permissions)
 

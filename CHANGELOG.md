@@ -1,8 +1,14 @@
 # Changelog
 
-## [Unreleased] — MonoTrypt DSP Engine
+## [1.7.0] — MonoTrypt DSP Engine
 
 ### Added
+
+#### In-app Donations (Stripe)
+- **Recurring donation subscriptions** — Settings › About gains a "Support the app" card with monthly tip tiers ($3 / $5 / $10) that open Stripe's **PaymentSheet in-app** (card by default; Google Pay is a one-config-line add-on) so the donor never leaves Tryptify. On success the card shows a thank-you; Ko-fi stays as a one-tap one-time fallback. The tier picker disables while a subscription is being prepared/presented, and backend failures surface inline instead of crashing.
+- **Secret-free client** — the app embeds no Stripe key. A new `DonationBackend` calls the `create-donation-subscription` Supabase Edge Function (reusing the existing project URL + public anon key) which holds the Stripe **secret** key, creates/reuses the customer, mints an ephemeral key, and returns an incomplete subscription's PaymentIntent client secret + publishable key. `DonateViewModel` keeps all Stripe UI types out of the ViewModel; `DonateSupportCard` owns the PaymentSheet and maps its result back in.
+- **Cancel from inside the app** — once subscribed, the Support card remembers it (device-local `DonationStore`, survives restarts) and swaps the tier picker for a "You're a monthly supporter" note with a **Cancel subscription** button + confirm dialog. Cancelling calls a second Edge Function (`cancel-donation-subscription`) that stops future charges; it's idempotent, so a subscription already cancelled from the Stripe receipt still clears the local record cleanly.
+- **Edge Function + docs** — `supabase/functions/create-donation-subscription/` ships the Deno/Stripe function (customer reuse by email, inline recurring `price_data`, `payment_behavior=default_incomplete`, amount range guard, CORS) plus a README covering secret setup, deploy, the test card, and the Google Play donation-policy caveat (donations unlock no app features). Adds the `com.stripe:stripe-android` dependency.
 
 #### Radio Queue Maker
 - **Radio (queue maker)** — new `RadioQueueManager` seeds a station from the playing track, asks the optional Tryptify-Playlist planner (`POST /api/radio/plan`, `catalog: "qobuz"`) for query/candidate hints, and resolves everything against the configured Qobuz (trypt-hifi) instance: hints and queries via `searchQobuz` (ids auto-register in `QobuzIdRegistry`, so appended tracks play through the QobuzCached path), the on-device backbone from the seed artist's top tracks plus similar-artist expansion (`getQobuzArtist`), with the seed's Qobuz artist id recovered directly or via the TIDAL→Qobuz alias map. Dedupes against the queue/history/session by id and normalized artist|title and appends batches through `QueueManager` with automatic refill near the queue tail. The planner is strictly advisory — radio keeps running on Qobuz similar-artist expansion without it, TIDAL is used only when no Qobuz instance is configured, and a queue reset stops radio so it can't instantly refill the tail the user just rejected.
