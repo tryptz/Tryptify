@@ -87,6 +87,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var settingsSyncCoordinator: tf.monochrome.android.data.sync.SettingsSyncCoordinator
 
+    @Inject
+    lateinit var artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -174,6 +177,13 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // Auto-save app settings to the user's Supabase row: pull on sign-in,
         // then push (debounced) whenever an allow-listed setting changes.
         settingsSyncCoordinator.start(appScope)
+        // Local-file album art self-heal. Covers extracted at scan time live
+        // in cacheDir/artwork, which Android reaps under storage pressure —
+        // without this check the library shows placeholders after a cache
+        // wipe until the user manually hits refresh.
+        appScope.launch {
+            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
+        }
     }
 
     private fun registerPlaybackNotificationChannel() {

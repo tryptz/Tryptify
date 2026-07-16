@@ -46,6 +46,7 @@ class SettingsViewModel @Inject constructor(
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
+    private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -549,6 +550,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             appContext.cacheDir.deleteRecursively()
             calculateCacheSize()
+            // The wipe just deleted cacheDir/artwork, which local tracks'
+            // Room rows point at. Rescan now so covers come back without
+            // waiting for the next app start (or a manual refresh).
+            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
         }
     }
 
@@ -557,6 +562,7 @@ class SettingsViewModel @Inject constructor(
             preferences.clearAllData()
             appContext.cacheDir.deleteRecursively()
             calculateCacheSize()
+            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
         }
     }
 

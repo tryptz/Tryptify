@@ -416,6 +416,11 @@ class TagReader @Inject constructor(
 
         if (!cacheFile.exists()) {
             try {
+                // The lazy mkdirs above runs once per process, but the cache
+                // dir can vanish mid-process (Settings "Clear cache", OS
+                // eviction) — recreate it or this write fails silently and
+                // every track falls back to its raw file path.
+                artworkCacheDir.mkdirs()
                 FileOutputStream(cacheFile).use { it.write(artworkBytes) }
             } catch (_: Exception) {
                 return filePath // fallback
