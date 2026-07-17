@@ -900,6 +900,7 @@ private fun PlayerGlassTab(
                     PlayerActionDock(
                         accent = accent,
                         lyricsActive = false,
+                        timerActive = false,
                         onLyrics = {},
                         onTimer = {},
                         onMixer = {},

@@ -11,6 +11,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +94,47 @@ class PlayerViewModel @Inject constructor(
     // --- Player state (observed from MediaController) ---
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    // --- Sleep timer ---
+    // Owned here (this ViewModel is created at the nav-host level and shared,
+    // so it outlives the player destination) rather than in a LaunchedEffect
+    // on the player screen: the effect died with the composable, silently
+    // discarding the timer whenever the user collapsed the player or opened
+    // another screen — playback then never paused.
+    private val _sleepTimerMinutes = MutableStateFlow(0)
+    val sleepTimerMinutes: StateFlow<Int> = _sleepTimerMinutes.asStateFlow()
+
+    private val _sleepTimerRemainingMs = MutableStateFlow(0L)
+    val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs.asStateFlow()
+
+    private var sleepTimerJob: Job? = null
+
+    /**
+     * Arm the sleep timer for [minutes] (restarting if already armed, so
+     * re-selecting the same duration begins a fresh countdown), or cancel
+     * with 0. Pauses playback when the countdown reaches zero.
+     */
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        val m = minutes.coerceAtLeast(0)
+        _sleepTimerMinutes.value = m
+        _sleepTimerRemainingMs.value = m * 60_000L
+        if (m == 0) return
+        sleepTimerJob = viewModelScope.launch {
+            val endAt = System.currentTimeMillis() + m * 60_000L
+            while (true) {
+                val left = endAt - System.currentTimeMillis()
+                if (left <= 0) break
+                _sleepTimerRemainingMs.value = left
+                delay(minOf(1_000L, left))
+            }
+            if (_isPlaying.value) togglePlayPause()
+            _sleepTimerMinutes.value = 0
+            _sleepTimerRemainingMs.value = 0L
+            sleepTimerJob = null
+        }
+    }
 
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()

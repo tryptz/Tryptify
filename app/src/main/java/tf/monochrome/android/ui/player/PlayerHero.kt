@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
@@ -298,6 +299,10 @@ private fun VisualizerHero(
             showOverlay = false
         }
     }
+    // In fullscreen the system bars are hidden and the exit button lives in
+    // the auto-hiding overlay — without this, Back pops the whole player and
+    // (fullscreen being a persisted pref) reopening lands right back here.
+    BackHandler(enabled = isFullscreen) { onToggleFullscreen() }
     Surface(
         // Outside fullscreen the visualizer is locked to the album-art aspect
         // ratio so its dimensions match the cover artwork exactly.

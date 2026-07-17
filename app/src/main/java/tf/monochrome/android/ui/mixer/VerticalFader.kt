@@ -1,12 +1,13 @@
 package tf.monochrome.android.ui.mixer
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -55,21 +56,45 @@ fun VerticalFader(
     val haptic      = LocalHapticFeedback.current
     val prevInDetent = remember { mutableSetOf<Boolean>() }
 
+    // The gesture coroutine is keyed on Unit, so read the live gain/callback
+    // through updated-state holders instead of capturing first-composition
+    // values (same pattern as FLKnob).
+    val latestGainDb by rememberUpdatedState(gainDb)
+    val latestOnGainChange by rememberUpdatedState(onGainChange)
+
     Canvas(
         modifier = modifier
             .fillMaxHeight()
             .pointerInput(Unit) {
-                detectDragGestures { change, _ ->
-                    change.consume()
-                    val db = yToDb(change.position.y, size.height.toFloat())
-                    onGainChange(db)
-                    hapticAtUnity(db, prevInDetent, haptic)
-                }
-            }
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    onGainChange(yToDb(offset.y, size.height.toFloat()))
-                }
+                // Vertical-only, delta-based dragging. The fader is the
+                // largest touch area of each strip inside the mixer's
+                // horizontally scrolling channel row: an omnidirectional
+                // detectDragGestures stole horizontal swipes (the row never
+                // scrolled) and the old absolute-Y mapping slammed the live
+                // bus gain to wherever the finger landed (up to +24 dB).
+                // detectVerticalDragGestures only claims vertical motion, so
+                // sideways swipes scroll the row; moving from the cap's
+                // current position keeps grabs jump-free. Tap-to-set is gone
+                // for the same reason — a stray tap was an instant gain jump.
+                var dragStartDb = 0f
+                var dragAccumPx = 0f
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        dragStartDb = latestGainDb
+                        dragAccumPx = 0f
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        dragAccumPx += dragAmount
+                        val h = size.height.toFloat()
+                        if (h > 0f) {
+                            val startY = dbToY(dragStartDb, h)
+                            val db = yToDb((startY + dragAccumPx).coerceIn(0f, h), h)
+                            latestOnGainChange(db)
+                            hapticAtUnity(db, prevInDetent, haptic)
+                        }
+                    }
+                )
             }
     ) {
         val w = size.width

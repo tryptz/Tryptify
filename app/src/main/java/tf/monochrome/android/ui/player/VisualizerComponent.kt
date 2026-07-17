@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -424,7 +425,16 @@ private fun TouchWaveformOverlay(
                             if (change.pressed) {
                                 active[change.id.value] = change.position
                             }
-                            change.consume()
+                            // Consume only movement while drawing. Consuming
+                            // down/up too made every tap invisible to the
+                            // hero's tap-to-show-controls clickable, so once
+                            // the overlay auto-hid the user could never bring
+                            // the visualizer controls (incl. exit-fullscreen)
+                            // back. Moves stay consumed so drawing waveforms
+                            // doesn't scroll/drag any ancestor.
+                            if (change.pressed && change.positionChanged()) {
+                                change.consume()
+                            }
                         }
                         touchPoints.clear()
                         touchPoints.putAll(active)

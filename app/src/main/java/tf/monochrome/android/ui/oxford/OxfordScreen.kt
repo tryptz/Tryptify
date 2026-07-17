@@ -81,6 +81,13 @@ private fun OxfordFader(
     var dragOriginValue by remember { mutableStateOf(value) }
     var dragAccumPx by remember { mutableStateOf(0f) }
 
+    // The gesture coroutine is keyed on valueRange only, so its lambdas would
+    // otherwise capture the first-composition `value`/`onValueChange` — every
+    // drag after the first would seed from that stale origin and snap the
+    // fader back. Same updated-state fix as FLKnob.
+    val latestValue by rememberUpdatedState(value)
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(
             modifier = Modifier
@@ -88,7 +95,7 @@ private fun OxfordFader(
                 .pointerInput(valueRange) {
                     detectDragGestures(
                         onDragStart = {
-                            dragOriginValue = value
+                            dragOriginValue = latestValue
                             dragAccumPx = 0f
                         },
                         onDrag = { change, drag ->
@@ -100,7 +107,7 @@ private fun OxfordFader(
                                 val delta = -(dragAccumPx / h) * span
                                 val next = (dragOriginValue + delta)
                                     .coerceIn(valueRange.start, valueRange.endInclusive)
-                                onValueChange(next)
+                                latestOnValueChange(next)
                             }
                         }
                     )

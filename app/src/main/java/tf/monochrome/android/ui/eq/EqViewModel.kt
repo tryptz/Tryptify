@@ -974,10 +974,12 @@ class EqViewModel @Inject constructor(
         try {
             val jsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
-            // Load existing stored data to preserve raw strings
-            val existingJson = preferences.eqCustomTargetsJson.stateIn(
-                viewModelScope, SharingStarted.Eagerly, "[]"
-            ).value
+            // Load existing stored data to preserve raw strings. Must await
+            // the actual DataStore emission: the previous stateIn(...).value
+            // read raced and returned the "[]" initial value, so every save
+            // wiped the rawData of all targets not passed in `rawData` —
+            // importing or deleting one custom target erased the others.
+            val existingJson = preferences.eqCustomTargetsJson.first()
             val existingStored = try {
                 jsonParser.decodeFromString<List<StoredCustomTarget>>(existingJson)
             } catch (_: Exception) { emptyList() }

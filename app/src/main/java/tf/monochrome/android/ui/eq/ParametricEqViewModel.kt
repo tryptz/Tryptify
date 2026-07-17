@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -66,19 +67,19 @@ class ParametricEqViewModel @Inject constructor(
             repository.getAllPresets().collect { _allPresets.value = it }
         }
         viewModelScope.launch {
-            // Restore bands from persistent storage
-            val bandsJson = preferences.paramEqBandsJson.stateIn(
-                viewModelScope, SharingStarted.Eagerly, null
-            ).value
+            // Restore bands from persistent storage. Await the first real
+            // DataStore emission with first(): the previous stateIn(...).value
+            // pattern raced and almost always read the null initial value, so
+            // saved bands never restored and the next saveBands() overwrote
+            // them with the defaults.
+            val bandsJson = preferences.paramEqBandsJson.first()
             if (!bandsJson.isNullOrBlank()) {
                 try {
                     val bands = json.decodeFromString<List<EqBand>>(bandsJson)
                     if (bands.isNotEmpty()) _currentBands.value = bands
                 } catch (_: Exception) { }
             }
-            val activeId = preferences.paramEqActivePresetId.stateIn(
-                viewModelScope, SharingStarted.Eagerly, null
-            ).value
+            val activeId = preferences.paramEqActivePresetId.first()
             if (activeId != null) {
                 _activePreset.value = repository.getPresetById(activeId)
             }

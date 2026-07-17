@@ -190,7 +190,7 @@ fun FrequencyResponseGraph(
                                 val freq = xToFreq(change.position.x, size.width.toFloat())
                                 val gain = yToGain(
                                     change.position.y, size.height.toFloat(),
-                                    minGain, maxGain, maxAbsDragGain
+                                    minGain, maxGain, zeroOffset, maxAbsDragGain
                                 )
                                 onBandDragged(selectedBandId, freq, gain)
                             }
@@ -497,10 +497,17 @@ private fun yToGain(
     height: Float,
     minGain: Float,
     maxGain: Float,
+    zeroOffset: Float,
     maxAbsDragGain: Float = EqLimits.AUTOEQ_MAX_BAND_DB,
 ): Float {
     val ratio = ((height - GRAPH_PADDING_BOTTOM) - y) / (height - GRAPH_PADDING_TOP - GRAPH_PADDING_BOTTOM)
-    return (minGain + ratio.coerceIn(0f, 1f) * (maxGain - minGain))
+    // The graph's gain axis is centered on zeroOffset (the SPL normalization
+    // level on the AutoEQ screen, ~75 dB), but band gains are stored relative
+    // to zero and drawn at band.gain + zeroOffset (see findNearestBand). The
+    // inverse mapping must subtract the offset before clamping — without it,
+    // the absolute SPL value (always >> maxAbsDragGain) pegged every drag at
+    // +maxAbsDragGain.
+    return (minGain + ratio.coerceIn(0f, 1f) * (maxGain - minGain) - zeroOffset)
         .coerceIn(-maxAbsDragGain, maxAbsDragGain)
 }
 

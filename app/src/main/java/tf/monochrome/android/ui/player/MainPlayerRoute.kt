@@ -38,7 +38,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,7 +54,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
-import kotlinx.coroutines.delay
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.navigation.Screen
@@ -128,7 +126,10 @@ fun MainPlayerRoute(
     var showPresetSheet by rememberSaveable { mutableStateOf(false) }
     var showSpeedSheet by rememberSaveable { mutableStateOf(false) }
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
-    var sleepMinutes by rememberSaveable { mutableIntStateOf(0) }
+    // Sleep timer lives in PlayerViewModel (shared, nav-host-scoped) so the
+    // countdown keeps running when this destination leaves composition.
+    val sleepMinutes by playerViewModel.sleepTimerMinutes.collectAsState()
+    val sleepRemainingMs by playerViewModel.sleepTimerRemainingMs.collectAsState()
 
     // Expanded lyrics: the SAME hero lyric surface grows to full-bleed while
     // MainPlayerScreen collapses the player chrome — no separate overlay.
@@ -140,16 +141,6 @@ fun MainPlayerRoute(
         if (viewMode != NowPlayingViewMode.LYRICS || !lyricsSynced) lyricsExpanded = false
     }
     BackHandler(enabled = lyricsExpanded) { lyricsExpanded = false }
-
-    // Self-contained sleep timer: pause playback once the chosen interval
-    // elapses, then reset. Re-keys (and restarts) whenever the user changes it.
-    LaunchedEffect(sleepMinutes) {
-        if (sleepMinutes > 0) {
-            delay(sleepMinutes * 60_000L)
-            if (playerViewModel.isPlaying.value) playerViewModel.togglePlayPause()
-            sleepMinutes = 0
-        }
-    }
 
     LaunchedEffect(isPlaying) { playerViewModel.setVisualizerPlaybackPaused(!isPlaying) }
 
@@ -213,10 +204,12 @@ fun MainPlayerRoute(
             onDismiss = { showSpeedSheet = false },
         )
     }
+    val sleepRemainingMinutes = ((sleepRemainingMs + 59_999) / 60_000).toInt()
     if (showSleepSheet) {
         SleepTimerSheet(
             activeMinutes = sleepMinutes,
-            onSelect = { sleepMinutes = it },
+            remainingMinutes = sleepRemainingMinutes,
+            onSelect = { playerViewModel.setSleepTimer(it) },
             onDismiss = { showSleepSheet = false },
         )
     }
@@ -245,7 +238,8 @@ fun MainPlayerRoute(
         outputLabel = "Default",
         soundLabel = "AutoEQ",
         speedLabel = String.format(Locale.US, "%.2fx", playbackSpeed),
-        sleepTimerLabel = if (sleepMinutes > 0) "$sleepMinutes min" else "Off",
+        sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
+        sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
         albumColors = AlbumColors(animatedDominant, albumColors.vibrant),
         visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER,
@@ -628,6 +622,7 @@ private fun SpeedSheet(
 @Composable
 private fun SleepTimerSheet(
     activeMinutes: Int,
+    remainingMinutes: Int,
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -652,7 +647,7 @@ private fun SleepTimerSheet(
             }
             Text(
                 text = if (activeMinutes > 0) {
-                    "Playback will pause in $activeMinutes minutes."
+                    "Playback will pause in $remainingMinutes minute${if (remainingMinutes == 1) "" else "s"}."
                 } else {
                     "Sleep timer is off."
                 },
