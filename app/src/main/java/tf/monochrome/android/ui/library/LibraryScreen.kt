@@ -135,6 +135,28 @@ fun LibraryScreen(
         )
     }
 
+    // Surface CSV import outcome — previously importProgress was never
+    // collected, so a malformed CSV produced no error and no playlist.
+    val importProgress by viewModel.importProgress.collectAsState()
+    val importMsgContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(importProgress) {
+        when (val p = importProgress) {
+            is tf.monochrome.android.data.import_.ImportProgress.Done -> {
+                android.widget.Toast.makeText(
+                    importMsgContext,
+                    "Imported ${p.matched}/${p.total} tracks into \"${p.playlistName}\"",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                viewModel.resetImportProgress()
+            }
+            is tf.monochrome.android.data.import_.ImportProgress.Failed -> {
+                android.widget.Toast.makeText(importMsgContext, "Import failed: ${p.message}", android.widget.Toast.LENGTH_LONG).show()
+                viewModel.resetImportProgress()
+            }
+            else -> {}
+        }
+    }
+
     showAddToPlaylistForTrack?.let { track ->
         AddToPlaylistSheet(
             playlists = playlists,

@@ -34,6 +34,12 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /** Live CSV/Spotify import progress so the screen can show status. */
+    val importProgress: StateFlow<tf.monochrome.android.data.import_.ImportProgress> =
+        playlistImportService.progress
+
+    fun resetImportProgress() { playlistImportService.resetProgress() }
+
     fun importCsvPlaylist(uri: Uri, strictAlbumMatch: Boolean, name: String, description: String?) {
         viewModelScope.launch {
             playlistImportService.reportFetching("CSV")
