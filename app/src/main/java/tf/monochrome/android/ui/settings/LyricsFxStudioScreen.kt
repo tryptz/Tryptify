@@ -1392,7 +1392,6 @@ private fun StudioPreview(
                         .fxaa()
                         .liquidGlass(tint = accent)
                         .bassBeat(pulse, { 1f }, fx, anchors),
-                    anchors = anchors,
                     fontSizeSp = fx.fontSizeSp,
                 )
             }
