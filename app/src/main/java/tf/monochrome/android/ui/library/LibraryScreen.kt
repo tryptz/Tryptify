@@ -137,10 +137,10 @@ fun LibraryScreen(
 
     // Surface CSV import outcome — previously importProgress was never
     // collected, so a malformed CSV produced no error and no playlist.
-    val importProgress by viewModel.importProgress.collectAsState()
+    val importProgressState = viewModel.importProgress.collectAsState()
     val importMsgContext = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(importProgress) {
-        when (val p = importProgress) {
+    LaunchedEffect(importProgressState.value) {
+        when (val p = importProgressState.value) {
             is tf.monochrome.android.data.import_.ImportProgress.Done -> {
                 android.widget.Toast.makeText(
                     importMsgContext,
