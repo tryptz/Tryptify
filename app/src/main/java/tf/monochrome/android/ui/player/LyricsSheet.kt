@@ -122,7 +122,10 @@ private fun SyncedLyrics(
     // Find current line based on the Bluetooth-adjusted playback position.
     LaunchedEffect(position, syncDelayMs) {
         val newIndex = lines.indexOfLast { it.timeMs <= position - syncDelayMs }
-        if (newIndex != currentLineIndex && newIndex >= 0) {
+        // Allow -1 through: seeking back before the first lyric must clear the
+        // highlight, not leave the previous line lit. The auto-scroll effect
+        // already ignores negative indices.
+        if (newIndex != currentLineIndex) {
             currentLineIndex = newIndex
         }
     }

@@ -74,6 +74,11 @@ class SupabaseAuthManager @Inject constructor(
     private val _isSigningIn = MutableStateFlow(false)
     val isSigningIn: StateFlow<Boolean> = _isSigningIn.asStateFlow()
 
+    // The Google OAuth Custom Tab has no "cancelled" callback, so track whether
+    // a deep-link callback ever arrived. If the user returns to the app without
+    // one, cancelPendingSignInIfNoCallback clears the stuck spinner.
+    @Volatile private var oauthCallbackReceived = false
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
@@ -98,6 +103,7 @@ class SupabaseAuthManager @Inject constructor(
      *   tf.monotrypt.android://login-callback?code=...
      */
     suspend fun signInWithGoogle(context: Context) {
+        oauthCallbackReceived = false
         _isSigningIn.value = true
         _errorMessage.value = null
         _successMessage.value = null
@@ -119,7 +125,19 @@ class SupabaseAuthManager @Inject constructor(
      * Implicit flow: tokens arrive in the URL fragment (#access_token=...&refresh_token=...)
      * PKCE fallback: code arrives as query param (?code=...)
      */
+    /**
+     * Clear a stuck "Signing in…" state when the user came back from the OAuth
+     * Custom Tab without completing it (there is no cancel callback, so the
+     * screen calls this on resume). No-op once a deep-link callback has arrived.
+     */
+    fun cancelPendingSignInIfNoCallback() {
+        if (_isSigningIn.value && !oauthCallbackReceived) {
+            _isSigningIn.value = false
+        }
+    }
+
     suspend fun handleDeepLink(uri: Uri) {
+        oauthCallbackReceived = true
         Log.d("SupabaseAuth", "Deep-link received: $uri")
         Log.d("SupabaseAuth", "Fragment: ${uri.fragment}")
         try {

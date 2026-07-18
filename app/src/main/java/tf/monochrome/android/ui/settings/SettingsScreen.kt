@@ -1522,13 +1522,17 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Download Folder")
 
-        val folderDisplay = downloadFolder?.let { folder ->
-            try {
-                val uri = folder.toUri()
-                val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
-                docFile?.name ?: "Custom folder"
-            } catch (_: Exception) { "Custom folder" }
-        } ?: "Internal app storage (default)"
+        // remember so the DocumentFile ContentResolver lookup runs only when the
+        // folder actually changes, not on every recomposition of this screen.
+        val folderDisplay = remember(downloadFolder, context) {
+            downloadFolder?.let { folder ->
+                try {
+                    val uri = folder.toUri()
+                    val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
+                    docFile?.name ?: "Custom folder"
+                } catch (_: Exception) { "Custom folder" }
+            } ?: "Internal app storage (default)"
+        }
 
         SettingItem(
             title = "Save location",

@@ -48,11 +48,15 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val tracks = libraryRepository.getHistory().first()
-                _recentTracks.value = tracks.take(20)
+                // Collect the history flow (not first()) so "Recently Played"
+                // stays live — new plays appear and "Remove from history"
+                // actually removes the row instead of doing nothing.
+                libraryRepository.getHistory().collect { tracks ->
+                    _recentTracks.value = tracks.take(20)
+                    _isLoading.value = false
+                }
             } catch (_: Exception) {
                 // Empty state shown by HomeScreen when recentTracks stays empty.
-            } finally {
                 _isLoading.value = false
             }
         }

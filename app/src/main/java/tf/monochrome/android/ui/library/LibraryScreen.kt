@@ -259,6 +259,11 @@ fun LibraryScreen(
             )
         }
 
+        val sectionStateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+        // Preserve each tab's scroll position (and the Local tab's own sub-tab
+        // state) across tab switches, instead of remounting a fresh list that
+        // snaps back to the top every time the user changes tabs.
+        sectionStateHolder.SaveableStateProvider(currentSectionId) {
         when (currentSectionId) {
             "overview" ->
                 LazyColumn(
@@ -495,6 +500,7 @@ fun LibraryScreen(
 
             "downloads" ->
                 DownloadsScreen(navController = navController)
+        }
         }
     }
 }
