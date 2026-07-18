@@ -54,7 +54,6 @@ import tf.monochrome.android.performance.PerformanceProfile
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var devEditController: tf.monochrome.android.devedit.DevEditController
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
     @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
@@ -208,9 +207,7 @@ class MainActivity : ComponentActivity() {
                             false -> OnboardingScreen(
                                 onFinished = { pendingPostRoute = it }
                             )
-                            true -> tf.monochrome.android.devedit.DevEditRoot(devEditController) {
-                                MonochromeNavHost(initialRoute = pendingPostRoute)
-                            }
+                            true -> MonochromeNavHost(initialRoute = pendingPostRoute)
                         }
                     }
                 }

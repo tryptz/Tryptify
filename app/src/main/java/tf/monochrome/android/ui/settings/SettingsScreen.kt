@@ -2077,17 +2077,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             subtitle = "Live logcat stream for this process — copy or export as a file for bug reports",
             onClick = { navController.navigate(Screen.DebugLog.route) },
         )
-
-        val devEdit = tf.monochrome.android.devedit.LocalDevEditController.current
-        if (devEdit != null) {
-            val devEnabled = devEdit.masterEnabled.collectAsState().value
-            SettingSwitchItem(
-                title = "DevEdit layout mode",
-                subtitle = "Unlocks a per-screen Edit button. Drag, hide & add UI elements; the toolbar's Save writes the layout to internal storage",
-                checked = devEnabled,
-                onCheckedChange = { devEdit.setMasterEnabled(it) },
-            )
-        }
     }
 }
 
