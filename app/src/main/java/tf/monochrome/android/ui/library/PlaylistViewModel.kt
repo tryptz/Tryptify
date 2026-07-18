@@ -8,9 +8,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.domain.model.Track
@@ -58,7 +60,13 @@ class PlaylistViewModel @Inject constructor(
     
     fun deletePlaylist() {
         viewModelScope.launch {
-            libraryRepository.deletePlaylist(playlistId)
+            // The screen pops the back stack right after calling this, which
+            // clears the ViewModel and cancels viewModelScope. Run the delete in
+            // a NonCancellable block so the DB write isn't aborted mid-flight
+            // and the playlist can't come back on the next launch.
+            withContext(NonCancellable) {
+                libraryRepository.deletePlaylist(playlistId)
+            }
         }
     }
     

@@ -946,9 +946,17 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun createPlaylist(name: String, description: String? = null) {
+    fun createPlaylist(
+        name: String,
+        description: String? = null,
+        initialTracks: List<Track> = emptyList(),
+    ) {
         viewModelScope.launch {
-            libraryRepository.createPlaylist(name, description)
+            // Use the id the repository returns so tracks stashed from an
+            // "Add to playlist → New Playlist" flow actually land in the new
+            // playlist instead of being silently dropped.
+            val id = libraryRepository.createPlaylist(name, description)
+            initialTracks.forEach { libraryRepository.addTrackToPlaylist(id, it) }
         }
     }
 

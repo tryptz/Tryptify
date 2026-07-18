@@ -147,6 +147,11 @@ fun HomeScreen(
     var showCreatePlaylistDialog by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
+    // Tracks handed over from an "Add to playlist → New Playlist" tap, added to
+    // the playlist once it's created so they aren't dropped on the way.
+    var pendingTracksForNewPlaylist by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<List<Track>>(emptyList())
+    }
     var showAddToPlaylistForSelection by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
@@ -177,9 +182,13 @@ fun HomeScreen(
 
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
-            onDismiss = { showCreatePlaylistDialog = false },
+            onDismiss = {
+                showCreatePlaylistDialog = false
+                pendingTracksForNewPlaylist = emptyList()
+            },
             onSubmit = { name, description ->
-                playerViewModel.createPlaylist(name, description)
+                playerViewModel.createPlaylist(name, description, pendingTracksForNewPlaylist)
+                pendingTracksForNewPlaylist = emptyList()
                 showCreatePlaylistDialog = false
             }
         )
@@ -194,6 +203,7 @@ fun HomeScreen(
                 showAddToPlaylistForTrack = null
             },
             onCreateNew = {
+                pendingTracksForNewPlaylist = listOf(track)
                 showAddToPlaylistForTrack = null
                 showCreatePlaylistDialog = true
             }
@@ -214,6 +224,7 @@ fun HomeScreen(
                 selection.clear()
             },
             onCreateNew = {
+                pendingTracksForNewPlaylist = recentTracks.filter { it.id in selection.selectedIds }
                 showAddToPlaylistForSelection = false
                 showCreatePlaylistDialog = true
             }

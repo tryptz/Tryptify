@@ -349,7 +349,7 @@ fun PlaylistScreen(
                     )
                 }
             } else {
-                items(tracks) { track ->
+                items(tracks, key = { it.id }) { track ->
                     TrackItem(
                         track = track,
                         isLiked = favoriteTrackIds.contains(track.id),
