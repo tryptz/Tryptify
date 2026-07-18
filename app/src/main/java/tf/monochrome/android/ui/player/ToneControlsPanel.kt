@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,19 +12,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.AutoEqEngine
 import tf.monochrome.android.domain.model.ToneControls
@@ -31,8 +41,14 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
+// The two gain "O" knobs are ~20% larger than the "o" cutoff/Q knobs, and sit on
+// the outer edges — bass far left, treble far right — mirroring each other:
+// "Ooo   ooO".
+private val KNOB_BIG = 56.dp
+private val KNOB_SMALL = 40.dp
+
 /**
- * Compact bass/treble tone panel for the Audio tools sheet: a live frequency-
+ * Collapsible bass/treble tone panel for the Audio tools sheet: a live frequency-
  * response curve of the two shelves plus their knobs (gain / cutoff / Q). These
  * shelves are layered AFTER the AutoEQ correction in the system-wide effect.
  */
@@ -43,44 +59,68 @@ internal fun ToneControlsPanel(
     onChange: (ToneControls) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Tone",
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White.copy(alpha = 0.85f),
-        )
-        ToneCurve(
-            tone = tone,
-            accent = accent,
-            modifier = Modifier.fillMaxWidth().height(76.dp),
-        )
+        // Collapsible header.
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Knob("Bass", "%+.0f dB".format(tone.bassGainDb), tone.bassGainDb,
-                ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent) {
-                onChange(tone.copy(bassGainDb = snap(it, 0.5f)))
-            }
-            Knob("B-Freq", "${tone.bassFreq.roundToInt()} Hz", tone.bassFreq,
-                ToneControls.BASS_FREQ_MIN..ToneControls.BASS_FREQ_MAX, accent) {
-                onChange(tone.copy(bassFreq = it))
-            }
-            Knob("B-Q", "%.2f".format(tone.bassQ), tone.bassQ,
-                ToneControls.Q_MIN..ToneControls.Q_MAX, accent) {
-                onChange(tone.copy(bassQ = it))
-            }
-            Knob("Treble", "%+.0f dB".format(tone.trebleGainDb), tone.trebleGainDb,
-                ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent) {
-                onChange(tone.copy(trebleGainDb = snap(it, 0.5f)))
-            }
-            Knob("T-Freq", "${(tone.trebleFreq / 1000f).format1()} kHz", tone.trebleFreq,
-                ToneControls.TREBLE_FREQ_MIN..ToneControls.TREBLE_FREQ_MAX, accent) {
-                onChange(tone.copy(trebleFreq = it))
-            }
-            Knob("T-Q", "%.2f".format(tone.trebleQ), tone.trebleQ,
-                ToneControls.Q_MIN..ToneControls.Q_MAX, accent) {
-                onChange(tone.copy(trebleQ = it))
+            Text(
+                "Tone",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse tone" else "Expand tone",
+                tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.rotate(if (expanded) 180f else 0f),
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToneCurve(
+                    tone = tone,
+                    accent = accent,
+                    modifier = Modifier.fillMaxWidth().height(76.dp),
+                )
+                // Mirrored layout: bass big knob hard left, treble big knob hard
+                // right, the small cutoff/Q knobs facing each other in the middle.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Knob("Bass", "%+.0f dB".format(tone.bassGainDb), tone.bassGainDb,
+                        ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, KNOB_BIG) {
+                        onChange(tone.copy(bassGainDb = snap(it, 0.5f)))
+                    }
+                    Knob("Freq", "${tone.bassFreq.roundToInt()} Hz", tone.bassFreq,
+                        ToneControls.BASS_FREQ_MIN..ToneControls.BASS_FREQ_MAX, accent, KNOB_SMALL) {
+                        onChange(tone.copy(bassFreq = it))
+                    }
+                    Knob("Q", "%.2f".format(tone.bassQ), tone.bassQ,
+                        ToneControls.Q_MIN..ToneControls.Q_MAX, accent, KNOB_SMALL) {
+                        onChange(tone.copy(bassQ = it))
+                    }
+                    Knob("Q", "%.2f".format(tone.trebleQ), tone.trebleQ,
+                        ToneControls.Q_MIN..ToneControls.Q_MAX, accent, KNOB_SMALL) {
+                        onChange(tone.copy(trebleQ = it))
+                    }
+                    Knob("Freq", "${(tone.trebleFreq / 1000f).format1()} kHz", tone.trebleFreq,
+                        ToneControls.TREBLE_FREQ_MIN..ToneControls.TREBLE_FREQ_MAX, accent, KNOB_SMALL) {
+                        onChange(tone.copy(trebleFreq = it))
+                    }
+                    Knob("Treble", "%+.0f dB".format(tone.trebleGainDb), tone.trebleGainDb,
+                        ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, KNOB_BIG) {
+                        onChange(tone.copy(trebleGainDb = snap(it, 0.5f)))
+                    }
+                }
             }
         }
     }
@@ -92,7 +132,6 @@ private fun ToneCurve(tone: ToneControls, accent: Color, modifier: Modifier) {
     val bands = tone.toBands()
     Canvas(modifier = modifier) {
         val midY = size.height / 2f
-        // 0 dB baseline.
         drawLine(
             color = Color.White.copy(alpha = 0.14f),
             start = Offset(0f, midY),
@@ -114,7 +153,7 @@ private fun ToneCurve(tone: ToneControls, accent: Color, modifier: Modifier) {
     }
 }
 
-/** A rotary knob: 270° sweep, vertical drag to change. */
+/** A rotary knob: 270° sweep, vertical drag to change. [knobSize] sets its diameter. */
 @Composable
 private fun Knob(
     label: String,
@@ -122,6 +161,7 @@ private fun Knob(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     accent: Color,
+    knobSize: Dp,
     onChange: (Float) -> Unit,
 ) {
     val span = range.endInclusive - range.start
@@ -130,11 +170,11 @@ private fun Knob(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
-        modifier = Modifier.padding(horizontal = 2.dp),
+        modifier = Modifier.padding(horizontal = 1.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(knobSize)
                 .pointerInput(Unit) {
                     detectDragGestures { change, drag ->
                         change.consume()
@@ -146,7 +186,7 @@ private fun Knob(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(modifier = Modifier.size(46.dp)) {
+            Canvas(modifier = Modifier.size(knobSize)) {
                 val stroke = 4.dp.toPx()
                 val radius = size.minDimension / 2f - stroke
                 val center = Offset(size.width / 2f, size.height / 2f)
@@ -171,7 +211,6 @@ private fun Knob(
                     size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
                     style = Stroke(width = stroke, cap = StrokeCap.Round),
                 )
-                // Pointer dot at the current position.
                 val ang = Math.toRadians((startAngle + sweep * frac).toDouble())
                 val px = center.x + (radius * cos(ang)).toFloat()
                 val py = center.y + (radius * sin(ang)).toFloat()
