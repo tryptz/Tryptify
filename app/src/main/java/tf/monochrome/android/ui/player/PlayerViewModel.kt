@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
@@ -309,27 +310,36 @@ class PlayerViewModel @Inject constructor(
                         // Start fetching lyrics
                         _isLyricsLoading.value = true
                         _currentLyrics.value = null
-                        
-                        launch {
-                            // Qobuz tracks must skip the TIDAL /lyrics lookup —
-                            // a Qobuz id on TIDAL resolves to a different song,
-                            // so its (synced) lyrics would never match. The
-                            // resolved source is the authoritative signal;
-                            // qobuzIdRegistry is a backstop.
-                            val skipTidal = unifiedTrackRegistry[track.id]?.sourceType ==
-                                tf.monochrome.android.domain.model.SourceType.QOBUZ ||
-                                qobuzIdRegistry.isQobuzTrack(track.id)
-                            // Pass the full Track so the repository can fall
-                            // back to LRCLib (track + artist + album +
-                            // duration) when TIDAL returns no lyrics.
-                            _currentLyrics.value =
-                                repository.getLyrics(track.id, track, skipTidal = skipTidal).getOrNull()
-                            _isLyricsLoading.value = false
-                        }
 
-                        // Observe liked status
-                        libraryRepository.isFavoriteTrack(track.id).collectLatest { isLiked ->
-                            _isCurrentTrackLiked.value = isLiked
+                        // coroutineScope so BOTH children are children of this
+                        // collectLatest emission — a track change cancels the
+                        // in-flight lyrics fetch too. Previously the lyrics
+                        // `launch` bound to the outer viewModelScope coroutine
+                        // and survived, so a slow fetch for a skipped track
+                        // could overwrite the current track's lyrics.
+                        coroutineScope {
+                            launch {
+                                // Qobuz tracks must skip the TIDAL /lyrics lookup —
+                                // a Qobuz id on TIDAL resolves to a different song,
+                                // so its (synced) lyrics would never match. The
+                                // resolved source is the authoritative signal;
+                                // qobuzIdRegistry is a backstop.
+                                val skipTidal = unifiedTrackRegistry[track.id]?.sourceType ==
+                                    tf.monochrome.android.domain.model.SourceType.QOBUZ ||
+                                    qobuzIdRegistry.isQobuzTrack(track.id)
+                                // Pass the full Track so the repository can fall
+                                // back to LRCLib (track + artist + album +
+                                // duration) when TIDAL returns no lyrics.
+                                _currentLyrics.value =
+                                    repository.getLyrics(track.id, track, skipTidal = skipTidal).getOrNull()
+                                _isLyricsLoading.value = false
+                            }
+                            // Observe liked status
+                            launch {
+                                libraryRepository.isFavoriteTrack(track.id).collectLatest { isLiked ->
+                                    _isCurrentTrackLiked.value = isLiked
+                                }
+                            }
                         }
                     } else {
                         _currentLyrics.value = null

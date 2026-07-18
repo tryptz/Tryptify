@@ -111,11 +111,13 @@ fun DebugLogScreen(
 
     val listState = rememberLazyListState()
 
-    // Auto-scroll to the newest entry whenever the visible list grows. Cheap
-    // because `entries.size` is the only state read; it doesn't flap when the
-    // same list is re-emitted.
+    // Auto-scroll to the newest entry only when the user is already at (or
+    // near) the bottom — otherwise a new log line every ~250ms yanked them
+    // back down and made scrolling up to read an earlier entry impossible.
     LaunchedEffect(entries.size) {
-        if (entries.isNotEmpty()) {
+        if (entries.isEmpty()) return@LaunchedEffect
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        if (lastVisible >= entries.lastIndex - 1) {
             listState.scrollToItem(entries.lastIndex)
         }
     }

@@ -340,7 +340,23 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
     val customFontUri by viewModel.customFontUri.collectAsState()
     val availableFonts by viewModel.availableFonts.collectAsState()
     var showThemeDropdown by remember { mutableStateOf(false) }
-    var fontScaleText by remember(fontScale) { mutableStateOf(String.format(Locale.US, "%.2f", fontScale)) }
+    // Plain local state + commit-on-Done/focus-loss (see the speed field for
+    // the same rationale): typing a precise scale no longer resets mid-entry
+    // and the whole app's type no longer jumps at each intermediate keystroke.
+    var fontScaleText by remember { mutableStateOf(String.format(Locale.US, "%.2f", fontScale)) }
+    var fontScaleFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fontScale) {
+        if (!fontScaleFocused) fontScaleText = String.format(Locale.US, "%.2f", fontScale)
+    }
+    val commitFontScale = {
+        val parsed = fontScaleText.toFloatOrNull()?.coerceIn(0.5f, 2.0f)
+        if (parsed != null) {
+            viewModel.setFontScale(parsed)
+            fontScaleText = String.format(Locale.US, "%.2f", parsed)
+        } else {
+            fontScaleText = String.format(Locale.US, "%.2f", fontScale)
+        }
+    }
 
     // File picker for .ttf font import
     val context = LocalContext.current
@@ -382,17 +398,17 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
                 )
                 OutlinedTextField(
                     value = fontScaleText,
-                    onValueChange = { newText ->
-                        fontScaleText = newText
-                        newText.toFloatOrNull()?.let { value ->
-                            if (value in 0.5f..2.0f) {
-                                viewModel.setFontScale(value)
-                            }
-                        }
-                    },
-                    modifier = Modifier.width(80.dp),
+                    onValueChange = { fontScaleText = it },
+                    modifier = Modifier
+                        .width(80.dp)
+                        .onFocusChanged {
+                            if (!it.isFocused && fontScaleFocused) commitFontScale()
+                            fontScaleFocused = it.isFocused
+                        },
                     textStyle = MaterialTheme.typography.bodyMedium,
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { commitFontScale() })
                 )
             }
             Text(
@@ -1008,7 +1024,25 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val preservePitch by viewModel.preservePitch.collectAsState()
     var showWifiDropdown by remember { mutableStateOf(false) }
     var showCellularDropdown by remember { mutableStateOf(false) }
-    var speedText by remember(playbackSpeed) { mutableStateOf(String.format(Locale.US, "%.2f", playbackSpeed)) }
+    // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
+    // the value round-tripping back from the ViewModel; sync from external
+    // changes (slider/reset) only while the field is unfocused, and commit on
+    // Done / focus-loss instead of on every keystroke (which dropped playback
+    // to 0.01x mid-entry).
+    var speedText by remember { mutableStateOf(String.format(Locale.US, "%.2f", playbackSpeed)) }
+    var speedFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(playbackSpeed) {
+        if (!speedFocused) speedText = String.format(Locale.US, "%.2f", playbackSpeed)
+    }
+    val commitSpeed = {
+        val parsed = speedText.toFloatOrNull()?.coerceIn(0.01f, 100f)
+        if (parsed != null) {
+            viewModel.setPlaybackSpeed(parsed)
+            speedText = String.format(Locale.US, "%.2f", parsed)
+        } else {
+            speedText = String.format(Locale.US, "%.2f", playbackSpeed)
+        }
+    }
 
     SettingsTabContent {
         SettingsGroupHeader("Streaming Quality")
@@ -1085,15 +1119,16 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             )
             OutlinedTextField(
                 value = speedText,
-                onValueChange = { input ->
-                    speedText = input
-                    input.toFloatOrNull()?.let { parsed ->
-                        val clamped = parsed.coerceIn(0.01f, 100f)
-                        viewModel.setPlaybackSpeed(clamped)
-                    }
-                },
-                modifier = Modifier.width(80.dp),
+                onValueChange = { speedText = it },
+                modifier = Modifier
+                    .width(80.dp)
+                    .onFocusChanged {
+                        if (!it.isFocused && speedFocused) commitSpeed()
+                        speedFocused = it.isFocused
+                    },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { commitSpeed() }),
                 textStyle = MaterialTheme.typography.bodyMedium
             )
             Text("x", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)

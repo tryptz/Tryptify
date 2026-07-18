@@ -59,9 +59,18 @@ class RadioSettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setRadioPlannerApiKey(key) }
     }
 
+    private var testJob: kotlinx.coroutines.Job? = null
+    private val _isTesting = MutableStateFlow(false)
+    val isTesting: StateFlow<Boolean> = _isTesting.asStateFlow()
+
     fun testConnection() {
+        // Cancel any in-flight test so a stale earlier result can't overwrite
+        // the current one, and expose isTesting so the button disables.
+        testJob?.cancel()
         _connectionStatus.value = "Testing…"
-        viewModelScope.launch {
+        testJob = viewModelScope.launch {
+            _isTesting.value = true
+            try {
             _connectionStatus.value = plannerClient.health().fold(
                 onSuccess = { health ->
                     buildString {
@@ -77,6 +86,9 @@ class RadioSettingsViewModel @Inject constructor(
                 },
                 onFailure = { "Connection failed: ${it.message}" }
             )
+            } finally {
+                _isTesting.value = false
+            }
         }
     }
 }
