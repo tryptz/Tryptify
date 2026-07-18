@@ -488,15 +488,21 @@ internal fun SyncedLyricsView(
             }
             val info = listState.layoutInfo
             val target = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
-            val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            // Anchor the active line above the geometric centre so the upcoming
+            // lines flow down and fill the surface all the way to the song title,
+            // instead of resting dead-centre with an empty band below it. The
+            // fraction is measured from the viewport top.
+            val viewportStart = info.viewportStartOffset
+            val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
+            val viewportAnchor = viewportStart + viewportHeight * ACTIVE_LINE_ANCHOR
             val itemCentre = target.offset + target.size / 2f
             // Snap when re-centring the same line (first composition, or the
             // morph resizing the viewport every frame); animate only when the
             // song has actually advanced to a new line.
             if (lastCentredLine.intValue == index) {
-                listState.scrollBy(itemCentre - viewportCentre)
+                listState.scrollBy(itemCentre - viewportAnchor)
             } else {
-                listState.animateScrollBy(itemCentre - viewportCentre)
+                listState.animateScrollBy(itemCentre - viewportAnchor)
             }
             lastCentredLine.intValue = index
         }
@@ -718,6 +724,14 @@ internal fun TextStyle.withLyricFont(family: FontFamily?): TextStyle =
 
 /** Smallest lyric font we'll shrink to before a line is simply allowed to run wide. */
 private const val MIN_LYRIC_SP = 11f
+
+/**
+ * Where the active line sits in the lyric surface, as a fraction of the viewport
+ * height measured from the top. Biased above centre (0.5) so the upcoming lines
+ * flow down and fill the surface all the way to the song title, rather than the
+ * active line resting dead-centre with an empty band beneath it.
+ */
+private const val ACTIVE_LINE_ANCHOR = 0.38f
 
 /**
  * Fixed side inset that keeps the outermost glyphs (and their puffy 3D glass
