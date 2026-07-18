@@ -118,7 +118,7 @@ fun CreatePlaylistDialog(
                     value = description,
                     onValueChange = { description = it },
                     placeholder = { Text("Description (optional)") },
-                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f),

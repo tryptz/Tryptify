@@ -70,6 +70,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -507,7 +508,9 @@ private fun DayLineChart(data: List<DayAggregate>) {
     val ghost = color.copy(alpha = 0.0f)
     val maxV = (data.maxOfOrNull { it.playCount } ?: 1).coerceAtLeast(1)
     val minDay = data.first().dayEpoch
-    val maxDay = data.last().dayEpoch.coerceAtLeast(minDay + 1)
+    // No coerceAtLeast: a single day keeps span == 0 so the point centers at
+    // w/2 (the old +1 fudge drew a stray gradient wedge with no line).
+    val maxDay = data.last().dayEpoch
     val span = (maxDay - minDay).toFloat()
 
     val grow by animateFloatAsState(
@@ -523,6 +526,14 @@ private fun DayLineChart(data: List<DayAggregate>) {
     ) {
         val w = size.width
         val h = size.height
+        // A single data point can't stroke a line (moveTo with no lineTo) — draw
+        // a dot instead of the empty stroke + stray gradient wedge.
+        if (data.size < 2) {
+            val only = data.firstOrNull() ?: return@Canvas
+            val y = h - (only.playCount / maxV.toFloat()) * h * grow
+            drawCircle(color = color, radius = 6f, center = Offset(w / 2, y))
+            return@Canvas
+        }
         val path = Path()
         val fill = Path()
         data.forEachIndexed { i, d ->
@@ -774,12 +785,14 @@ private fun TopListRow(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 secondary,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(6.dp))

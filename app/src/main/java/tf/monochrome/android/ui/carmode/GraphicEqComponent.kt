@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -104,7 +105,7 @@ fun EqSlider(
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(20.dp)
+                .heightIn(min = 20.dp)
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -118,7 +119,7 @@ fun EqSlider(
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(16.dp)
+                .heightIn(min = 16.dp)
         )
 
         Spacer(modifier = Modifier.height(8.dp))

@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,7 +66,13 @@ fun TrackContextMenu(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = MonoDimens.cardAlpha)
     ) {
-        Column(modifier = Modifier.padding(bottom = 24.dp)) {
+        Column(
+            modifier = Modifier
+                // Scrollable so the bottom actions (Go to album/artist) stay
+                // reachable when the sheet is taller than a landscape window.
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 24.dp)
+        ) {
             // Track header
             Row(
                 modifier = Modifier

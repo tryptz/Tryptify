@@ -2,7 +2,10 @@ package tf.monochrome.android.ui.downloads
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -166,6 +169,14 @@ fun DownloadsMonitorSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
+                // Bounded, scrollable list so a big batch doesn't clip its
+                // trailing entries (the whole sheet was a fixed Column before).
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                 downloads.forEach { d ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CoverImage(
@@ -209,6 +220,7 @@ fun DownloadsMonitorSheet(
                             Icon(Icons.Default.Close, contentDescription = "Cancel")
                         }
                     }
+                }
                 }
             }
         }

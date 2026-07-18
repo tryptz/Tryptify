@@ -47,7 +47,9 @@ fun ClickableArtists(
         return
     }
 
-    FlowRow(modifier = modifier) {
+    // Cap at one line so many credited artists don't wrap to unbounded rows
+    // (uneven list-row heights, stretched cards).
+    FlowRow(modifier = modifier, maxLines = 1) {
         artists.forEachIndexed { index, artist ->
             val isLink = artist.id != null && artist.id > 0L
             val separator = if (index < artists.lastIndex) ", " else ""
