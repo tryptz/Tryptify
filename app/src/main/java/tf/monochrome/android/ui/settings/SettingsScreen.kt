@@ -1787,13 +1787,29 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         val isLoggedIn by viewModel.isLoggedIn.collectAsState()
         val userEmail by viewModel.userEmail.collectAsState()
 
+        var showSignOutDialog by remember { mutableStateOf(false) }
+        if (showSignOutDialog) {
+            AlertDialog(
+                onDismissRequest = { showSignOutDialog = false },
+                title = { Text("Sign out?") },
+                text = { Text("You'll stop syncing favorites and playlists across devices until you sign back in.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showSignOutDialog = false
+                        viewModel.logout()
+                    }) { Text("Sign Out", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSignOutDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
         if (isLoggedIn) {
             SettingItem(
                 title = "Signed in as",
                 subtitle = userEmail ?: "Unknown",
-                onClick = {}
             )
-            OutlinedButton(onClick = { viewModel.logout() }) {
+            OutlinedButton(onClick = { showSignOutDialog = true }) {
                 Text("Sign Out")
             }
         } else {

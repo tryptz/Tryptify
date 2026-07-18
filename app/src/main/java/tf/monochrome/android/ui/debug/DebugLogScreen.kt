@@ -41,7 +41,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -67,6 +72,25 @@ fun DebugLogScreen(
     val levelFilter by viewModel.levelFilter.collectAsState()
     val totalSize by viewModel.totalSize.collectAsState()
     val context = LocalContext.current
+
+    var showClearConfirm by remember { mutableStateOf(false) }
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Clear log buffer?") },
+            text = { Text("This discards the current diagnostic log. Copy or export it first if you need it.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearConfirm = false
+                    viewModel.clear()
+                    Toast.makeText(context, "Log cleared", Toast.LENGTH_SHORT).show()
+                }) { Text("Clear", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     // Create a text file picker, seeded with a timestamped filename so successive
     // exports don't overwrite each other. SAF handles the actual write.
@@ -126,7 +150,7 @@ fun DebugLogScreen(
                 }) {
                     Icon(Icons.Default.Download, contentDescription = "Export to file")
                 }
-                IconButton(onClick = { viewModel.clear() }) {
+                IconButton(onClick = { showClearConfirm = true }) {
                     Icon(Icons.Default.Delete, contentDescription = "Clear buffer")
                 }
             },
