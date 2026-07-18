@@ -121,6 +121,15 @@ fun SettingsScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(initialTab) }
 
+    // Toast one-shot ViewModel messages (font import, backup import, …) from
+    // one always-composed collector, regardless of which tab is showing.
+    val messageContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { msg ->
+            android.widget.Toast.makeText(messageContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Settings") },
@@ -197,13 +206,11 @@ private fun EqualizerTab(navController: NavController, eqViewModel: EqViewModel 
         SettingItem(
             title = "Target Curve",
             subtitle = selectedTarget.label,
-            onClick = {}
         )
 
         SettingItem(
             title = "Headphone",
             subtitle = selectedHeadphone?.name ?: "None selected",
-            onClick = {}
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -923,12 +930,15 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    if (sessionInput.isNotBlank() && usernameInput.isNotBlank()) {
+                TextButton(
+                    onClick = {
                         viewModel.setLastFmSession(sessionInput, usernameInput)
-                    }
-                    showLastFmDialog = false
-                }) { Text("Connect") }
+                        showLastFmDialog = false
+                    },
+                    // Disabled until both fields are filled, so Connect can't
+                    // silently close without connecting.
+                    enabled = sessionInput.isNotBlank() && usernameInput.isNotBlank()
+                ) { Text("Connect") }
             },
             dismissButton = {
                 TextButton(onClick = { showLastFmDialog = false }) { Text("Cancel") }
@@ -1425,8 +1435,7 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
             text = { Text("This will delete all downloaded tracks from your device. This action cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    val downloadDir = java.io.File(context.getExternalFilesDir(null), "downloads")
-                    downloadDir.deleteRecursively()
+                    viewModel.clearAllDownloads()
                     showClearDialog = false
                 }) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
             },
@@ -1677,8 +1686,10 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                     }
                     if (!content.isNullOrBlank()) {
                         withContext(Dispatchers.Main) {
+                            // Success/failure is reported by viewModel.messages
+                            // once the import actually finishes — not here,
+                            // where it fired even for a corrupt backup.
                             viewModel.importLibrary(content)
-                            android.widget.Toast.makeText(context, "Library imported", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     } else {
                         withContext(Dispatchers.Main) {
@@ -1745,7 +1756,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 
     SettingsTabContent {
         SettingsGroupHeader("Storage")
-        SettingItem(title = "Cache Size", subtitle = cacheSize, onClick = {})
+        SettingItem(title = "Cache Size", subtitle = cacheSize)
         OutlinedButton(onClick = { viewModel.clearCache() }) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -2118,12 +2129,14 @@ private fun SettingsGroupHeader(title: String) {
 }
 
 @Composable
-fun SettingItem(title: String, subtitle: String, onClick: () -> Unit) {
+fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) {
     tf.monochrome.android.devedit.DevEditable("item_${devSlug(title)}", Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                // Only clickable (with ripple) when there's an action — an
+                // empty onClick used to ripple like a picker but do nothing.
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(vertical = 12.dp)
         ) {
             Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)

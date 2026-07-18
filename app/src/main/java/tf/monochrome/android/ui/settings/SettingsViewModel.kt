@@ -8,10 +8,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -48,12 +52,18 @@ class SettingsViewModel @Inject constructor(
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
     private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
+    private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     /** True while any library scan is running — lets Settings disable the
      *  "Rescan Library Now" button and show progress. */
     val isScanning: StateFlow<Boolean> = scanCoordinator.isScanning
+
+    /** One-shot user-facing messages (import success/failure, etc.) that the
+     *  Settings screen shows as a toast. */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     /** Honest live status of the libusb exclusive-output path. */
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
@@ -309,8 +319,9 @@ class SettingsViewModel @Inject constructor(
                 }
                 loadFonts()
                 preferences.setCustomFontUri(destFile.absolutePath)
+                _messages.tryEmit("Font imported")
             } catch (_: Exception) {
-                // Font import failed silently
+                _messages.tryEmit("Couldn't import that font file")
             }
         }
     }
@@ -472,11 +483,51 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Delete every downloaded track — the actual files (SAF content:// or
+     * plain paths) AND the Room rows — off the main thread. The old dialog
+     * did a main-thread deleteRecursively() of only the default folder and
+     * never cleared the DB, so tracks stayed listed and failed to play.
+     */
+    fun clearAllDownloads() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val tracks = downloadDao.getDownloadedTracks().first()
+            var deleted = 0
+            for (t in tracks) {
+                try {
+                    if (t.filePath.startsWith("content://")) {
+                        androidx.documentfile.provider.DocumentFile
+                            .fromSingleUri(appContext, android.net.Uri.parse(t.filePath))?.delete()
+                    } else {
+                        val f = File(t.filePath)
+                        if (f.exists()) f.delete()
+                    }
+                } catch (_: Exception) { }
+                downloadDao.deleteDownloadedTrack(t.id)
+                deleted++
+            }
+            // Sweep any leftover files in the default downloads directory.
+            try {
+                File(appContext.getExternalFilesDir(null), "downloads").deleteRecursively()
+            } catch (_: Exception) { }
+            _messages.tryEmit(
+                if (deleted > 0) "Deleted $deleted download${if (deleted == 1) "" else "s"}"
+                else "No downloads to delete"
+            )
+        }
+    }
+
     fun importLibrary(jsonStr: String) {
         viewModelScope.launch {
             Log.d("ImportSync", "Starting library import...")
             val result = backupManager.importLibrary(jsonStr)
             Log.d("ImportSync", "Import result: $result")
+            if (result.isFailure) {
+                // Report the real outcome instead of the old unconditional
+                // "Library imported" success toast fired on a corrupt file.
+                _messages.tryEmit("Import failed: invalid backup file")
+                return@launch
+            }
             // Auto-sync to Supabase if signed in
             val profile = supabaseAuthManager.userProfile.value
             Log.d("ImportSync", "Current Supabase user: ${profile?.id} (${profile?.email})")
@@ -487,6 +538,7 @@ class SettingsViewModel @Inject constructor(
             } else {
                 Log.w("ImportSync", "Not signed in - skipping Supabase sync")
             }
+            _messages.tryEmit("Library imported")
         }
     }
 
