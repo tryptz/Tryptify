@@ -415,8 +415,13 @@ fun MainPlayerScreen(
             // Free, fully-interactive space below the dock. The audio-tools
             // pull gesture lives in a thin strip at the very bottom edge (added
             // as an overlay below), so anything placed in this area still works
-            // when the panel isn't pulled up.
-            if (!lyricsExpanded) Spacer(Modifier.weight(1f))
+            // when the panel isn't pulled up. In lyrics mode the surface should
+            // fill the whole screen, so reserve only a small strip for the pull
+            // handle and let the lyric hero (weight 1) take everything else,
+            // instead of splitting the free space 50/50 with dead bottom space.
+            if (!lyricsExpanded) {
+                if (lyricsMode) Spacer(Modifier.height(56.dp)) else Spacer(Modifier.weight(1f))
+            }
         }
 
         // Thin bottom-edge pull strip — captures the open gesture and fades out
