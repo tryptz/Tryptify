@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class ToneControls(
+    val enabled: Boolean = true,
     val bassGainDb: Float = 0f,
     val bassFreq: Float = 110f,
     val bassQ: Float = 0.7f,
@@ -18,6 +19,7 @@ data class ToneControls(
     val trebleQ: Float = 0.7f,
 ) {
     fun clamped(): ToneControls = ToneControls(
+        enabled = enabled,
         bassGainDb = bassGainDb.finiteOr(0f).coerceIn(GAIN_MIN, GAIN_MAX),
         bassFreq = bassFreq.finiteOr(110f).coerceIn(BASS_FREQ_MIN, BASS_FREQ_MAX),
         bassQ = bassQ.finiteOr(0.7f).coerceIn(Q_MIN, Q_MAX),
@@ -26,8 +28,13 @@ data class ToneControls(
         trebleQ = trebleQ.finiteOr(0.7f).coerceIn(Q_MIN, Q_MAX),
     )
 
-    /** The two shelves as [EqBand]s so the same biquad math drives audio and curve. */
-    fun toBands(): List<EqBand> = listOf(
+    /**
+     * The two shelves as [EqBand]s so the same biquad math drives audio and curve.
+     * Empty when the whole tone stage is toggled off — a true bypass.
+     */
+    fun toBands(): List<EqBand> {
+        if (!enabled) return emptyList()
+        return listOf(
         EqBand(
             id = BASS_BAND_ID, type = FilterType.LOWSHELF,
             freq = bassFreq, gain = bassGainDb, q = bassQ, enabled = bassGainDb != 0f,
@@ -36,9 +43,10 @@ data class ToneControls(
             id = TREBLE_BAND_ID, type = FilterType.HIGHSHELF,
             freq = trebleFreq, gain = trebleGainDb, q = trebleQ, enabled = trebleGainDb != 0f,
         ),
-    )
+        )
+    }
 
-    val isFlat: Boolean get() = bassGainDb == 0f && trebleGainDb == 0f
+    val isFlat: Boolean get() = !enabled || (bassGainDb == 0f && trebleGainDb == 0f)
 
     companion object {
         val DEFAULT = ToneControls()

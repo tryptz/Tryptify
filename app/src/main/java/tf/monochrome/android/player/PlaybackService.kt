@@ -630,22 +630,27 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * Apply EQ + tone settings to the standalone AutoEQ processor (independent of
-     * mixer DSP). The bass/treble tone shelves are folded in here — but only when
-     * the system-wide global effect ISN'T already handling this app's audio, so
-     * tone works whether or not system-wide is on and never gets applied twice.
+     * mixer DSP). When system-wide is ON, the global output-mix effect already
+     * corrects THIS app's audio too, so the in-app AutoEQ and tone are fully
+     * bypassed here to avoid a double correction. When it's OFF, the AutoEQ (when
+     * enabled) and the bass/treble tone shelves are applied in-app — so tone works
+     * whether or not system-wide is on, and neither is ever applied twice.
      */
     private fun applyEqSettings(cfg: EqApply) {
         try {
+            if (cfg.systemWide) {
+                autoEqProcessor.applyBands(emptyList(), 0f, false)
+                return
+            }
             val json = Json { ignoreUnknownKeys = true }
             val autoBands = if (cfg.enabled && !cfg.bandsJson.isNullOrEmpty()) {
                 json.decodeFromString<List<EqBand>>(cfg.bandsJson)
             } else {
                 emptyList()
             }
-            val toneBands = if (!cfg.systemWide) cfg.tone.toBands() else emptyList()
-            val bands = autoBands + toneBands
+            val bands = autoBands + cfg.tone.toBands()
             val preamp = if (cfg.enabled) cfg.preamp else 0.0
-            val active = cfg.enabled || toneBands.any { it.enabled }
+            val active = bands.any { it.enabled }
             autoEqProcessor.applyBands(bands, preamp.toFloat(), active)
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
