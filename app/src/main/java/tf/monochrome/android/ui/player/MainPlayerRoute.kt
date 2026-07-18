@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -114,9 +115,13 @@ fun MainPlayerRoute(
     val showNpSpectrum = spectrumAnalyzerEnabled && spectrumShowOnNowPlaying
 
     if (showNpSpectrum) {
-        DisposableEffect(Unit) {
+        // Tie the FFT tap to the STARTED lifecycle, not just composition, so it
+        // releases when the app is backgrounded (the Visualizer/Audio effect
+        // otherwise kept sampling and draining battery while off-screen) and
+        // re-acquires on return.
+        LifecycleStartEffect(Unit) {
             playerViewModel.acquireSpectrum()
-            onDispose { playerViewModel.releaseSpectrum() }
+            onStopOrDispose { playerViewModel.releaseSpectrum() }
         }
     }
 

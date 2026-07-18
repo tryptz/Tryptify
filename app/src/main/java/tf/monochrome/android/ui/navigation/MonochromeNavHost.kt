@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -213,6 +214,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 }
             }
         }
+    }
+
+    // Back on a non-first main tab returns the pager to Home instead of popping
+    // the nav out from under it. Previously back on the Library tab popped the
+    // NavController to Home while the pager stayed on Library — visually nothing
+    // happened, and the next back exited the app with Library still on screen.
+    BackHandler(enabled = isOnMainTab && pagerState.currentPage != 0) {
+        scope.launch { pagerState.animateScrollToPage(0) }
     }
 
     val themeBackground = MaterialTheme.colorScheme.background

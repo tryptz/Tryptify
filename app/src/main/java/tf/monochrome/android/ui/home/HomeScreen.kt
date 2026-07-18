@@ -159,6 +159,12 @@ fun HomeScreen(
 
     val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<Long>()
     androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
+    // Back closes an open search (and clears the query so the feed returns)
+    // instead of falling through and exiting the app.
+    androidx.activity.compose.BackHandler(enabled = searchOpen) {
+        searchViewModel.onQueryChange("")
+        searchOpen = false
+    }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(

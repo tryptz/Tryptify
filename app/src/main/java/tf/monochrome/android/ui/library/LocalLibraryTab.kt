@@ -184,9 +184,14 @@ fun LocalLibraryTab(
         }
         // If we have audio but not images yet, prompt once silently — but
         // don't gate the UI; the user has already opted into local library
-        // and the absence of cover images shouldn't block playback.
-        LaunchedEffect(permissionState.allPermissionsGranted) {
-            if (!permissionState.allPermissionsGranted) {
+        // and the absence of cover images shouldn't block playback. Keyed on
+        // Unit + a saveable one-shot flag so the system dialog fires once,
+        // instead of re-firing every time the Library tab re-enters
+        // composition (the effect was keyed on the still-false grant state).
+        var imagePermissionRequested by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            if (!permissionState.allPermissionsGranted && !imagePermissionRequested) {
+                imagePermissionRequested = true
                 permissionState.launchMultiplePermissionRequest()
             }
         }
