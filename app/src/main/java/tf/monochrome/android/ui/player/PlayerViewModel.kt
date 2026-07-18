@@ -262,6 +262,27 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(on) }
     }
 
+    // Bass/treble tone shelves for the system-wide effect (after AutoEQ). Local
+    // state updates instantly so the knobs + curve are smooth; persistence (which
+    // the SystemAudioEqController reacts to) is debounced so a drag doesn't hammer
+    // DataStore or re-attach the global effect on every frame.
+    private val _toneControls = MutableStateFlow(tf.monochrome.android.domain.model.ToneControls.DEFAULT)
+    val toneControls: StateFlow<tf.monochrome.android.domain.model.ToneControls> = _toneControls.asStateFlow()
+    private var tonePersistJob: kotlinx.coroutines.Job? = null
+
+    init {
+        viewModelScope.launch { preferences.systemToneControls.collect { _toneControls.value = it } }
+    }
+
+    fun setToneControls(controls: tf.monochrome.android.domain.model.ToneControls) {
+        _toneControls.value = controls
+        tonePersistJob?.cancel()
+        tonePersistJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(120)
+            preferences.setSystemToneControls(controls)
+        }
+    }
+
     // --- Volume ---
     val volume: StateFlow<Float> = preferences.volume
         .map { it.toFloat() }

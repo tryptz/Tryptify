@@ -111,6 +111,8 @@ data class MainPlayerUiState(
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
     val systemWideAutoEqEnabled: Boolean = false,
+    val toneControls: tf.monochrome.android.domain.model.ToneControls =
+        tf.monochrome.android.domain.model.ToneControls.DEFAULT,
 )
 
 /**
@@ -143,6 +145,7 @@ fun MainPlayerScreen(
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
+    onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
     // Full-screen, unclipped layer between the background/stain and the player
@@ -495,6 +498,7 @@ fun MainPlayerScreen(
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
                 systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
+                toneControls = state.toneControls,
                 onOutput = onOutput,
                 onSound = onSound,
                 onSpeed = onSpeed,
@@ -504,6 +508,7 @@ fun MainPlayerScreen(
                 onCompressorToggle = onCompressorToggle,
                 onInflatorToggle = onInflatorToggle,
                 onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
+                onToneControlsChange = onToneControlsChange,
                 onDismiss = { animateRevealTo(0f, 0f) },
             )
         }
@@ -556,6 +561,7 @@ private fun StatusOverlayPanel(
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
     systemWideAutoEqEnabled: Boolean,
+    toneControls: tf.monochrome.android.domain.model.ToneControls,
     onOutput: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
@@ -565,6 +571,7 @@ private fun StatusOverlayPanel(
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
+    onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -609,6 +616,16 @@ private fun StatusOverlayPanel(
                 accent,
                 onSystemWideAutoEqToggle,
             )
+            // Bass/treble tone shelves layered after the AutoEQ, with a live curve.
+            // Only meaningful while the system-wide effect is engaged, so it rides
+            // with that toggle.
+            if (systemWideAutoEqEnabled) {
+                ToneControlsPanel(
+                    tone = toneControls,
+                    accent = accent,
+                    onChange = onToneControlsChange,
+                )
+            }
             PlayerStatusGrid(
                 accent = accent,
                 outputLabel = outputLabel,

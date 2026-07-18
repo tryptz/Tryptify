@@ -23,6 +23,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ReplayGainMode
+import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
@@ -209,6 +210,8 @@ class PreferencesManager @Inject constructor(
         // System-wide AutoEQ: apply the correction to ALL device audio via a
         // global output-mix effect (Wavelet-style), not just this app's playback.
         private val SYSTEM_WIDE_AUTOEQ_ENABLED = booleanPreferencesKey("system_wide_autoeq_enabled")
+        // Bass/treble tone shelves layered after the AutoEQ in that same effect.
+        private val SYSTEM_TONE_CONTROLS_JSON = stringPreferencesKey("system_tone_controls_json")
 
         // Parametric EQ (independent of AutoEQ)
         private val PARAM_EQ_ENABLED = booleanPreferencesKey("param_eq_enabled")
@@ -921,6 +924,20 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setSystemWideAutoEqEnabled(enabled: Boolean) {
         dataStore.edit { it[SYSTEM_WIDE_AUTOEQ_ENABLED] = enabled }
+    }
+
+    /** Bass/treble tone shelves for the system-wide effect (after AutoEQ). */
+    val systemToneControls: Flow<ToneControls> = dataStore.data.map { prefs ->
+        prefs[SYSTEM_TONE_CONTROLS_JSON]?.let { jsonStr ->
+            runCatching { json.decodeFromString<ToneControls>(jsonStr).clamped() }
+                .getOrDefault(ToneControls.DEFAULT)
+        } ?: ToneControls.DEFAULT
+    }
+
+    suspend fun setSystemToneControls(controls: ToneControls) {
+        dataStore.edit {
+            it[SYSTEM_TONE_CONTROLS_JSON] = json.encodeToString(controls.clamped())
+        }
     }
 
     suspend fun setEqEnabled(enabled: Boolean) {

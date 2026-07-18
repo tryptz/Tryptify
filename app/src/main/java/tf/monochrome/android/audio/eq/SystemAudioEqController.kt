@@ -10,13 +10,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.EqBand
+import tf.monochrome.android.domain.model.ToneControls
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,7 +62,8 @@ class SystemAudioEqController @Inject constructor(
     private val _active = MutableStateFlow(false)
     val active: StateFlow<Boolean> = _active.asStateFlow()
 
-    /** Begin observing the enable flag + AutoEQ profile. Idempotent. */
+    /** Begin observing the enable flag + AutoEQ profile + tone shelves. Idempotent. */
+    @OptIn(FlowPreview::class)
     fun start() {
         synchronized(lock) {
             if (started) return
@@ -70,17 +74,27 @@ class SystemAudioEqController @Inject constructor(
                 preferences.systemWideAutoEqEnabled,
                 preferences.eqBandsJson,
                 preferences.eqPreamp,
-            ) { enabled, bandsJson, preamp -> Cfg(enabled, bandsJson, preamp) }
+                preferences.systemToneControls,
+            ) { enabled, bandsJson, preamp, tone -> Cfg(enabled, bandsJson, preamp, tone) }
+                // Coalesce rapid tone-knob drags so the global effect isn't
+                // re-attached dozens of times a second (which would pop audio).
+                .debounce(70L)
                 .collectLatest { cfg ->
-                    if (cfg.enabled) applyGlobal(cfg.bandsJson, cfg.preamp) else release()
+                    if (cfg.enabled) applyGlobal(cfg.bandsJson, cfg.preamp, cfg.tone) else release()
                 }
         }
     }
 
-    private data class Cfg(val enabled: Boolean, val bandsJson: String?, val preamp: Double)
+    private data class Cfg(
+        val enabled: Boolean,
+        val bandsJson: String?,
+        val preamp: Double,
+        val tone: ToneControls,
+    )
 
-    private fun applyGlobal(bandsJson: String?, preamp: Double) {
-        val bands = decodeBands(bandsJson)
+    private fun applyGlobal(bandsJson: String?, preamp: Double, tone: ToneControls) {
+        // AutoEQ correction bands + the bass/treble tone shelves, layered after it.
+        val bands = decodeBands(bandsJson) + tone.toBands()
         synchronized(lock) {
             val primary = runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

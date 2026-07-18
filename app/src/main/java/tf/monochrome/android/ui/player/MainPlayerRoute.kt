@@ -100,6 +100,7 @@ fun MainPlayerRoute(
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsState()
     val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsState()
+    val toneControls by playerViewModel.toneControls.collectAsState()
 
     val visualizerSensitivity by playerViewModel.visualizerSensitivity.collectAsState()
     val visualizerBrightness by playerViewModel.visualizerBrightness.collectAsState()
@@ -269,6 +270,7 @@ fun MainPlayerRoute(
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
         systemWideAutoEqEnabled = systemWideAutoEqEnabled,
+        toneControls = toneControls,
     )
 
     // Bass-reactive lyrics: one shared pulse (single analyzer stake) drives
@@ -361,6 +363,7 @@ fun MainPlayerRoute(
             onCompressorToggle = playerViewModel::setCompressorEnabled,
             onInflatorToggle = playerViewModel::setInflatorEnabled,
             onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
+            onToneControlsChange = playerViewModel::setToneControls,
             topBar = {
                 PlayerTopBar(
                     speedLabel = state.speedLabel,
