@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -83,16 +84,22 @@ internal fun ToneControlsPanel(
                 color = contentColor.copy(alpha = 0.85f),
                 modifier = Modifier.weight(1f),
             )
-            Switch(
-                checked = tone.enabled,
-                onCheckedChange = { onChange(tone.copy(enabled = it)) },
-            )
-            Spacer(Modifier.width(8.dp))
+            // Chevron on the LEFT so the switch sits flush right, in line with the
+            // System-wide AutoEQ toggle above it.
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = if (expanded) "Collapse tone" else "Expand tone",
                 tint = contentColor.copy(alpha = 0.7f),
                 modifier = Modifier.rotate(if (expanded) 180f else 0f),
+            )
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = tone.enabled,
+                onCheckedChange = { onChange(tone.copy(enabled = it)) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.Black,
+                    checkedTrackColor = accent,
+                ),
             )
         }
         AnimatedVisibility(visible = expanded) {
