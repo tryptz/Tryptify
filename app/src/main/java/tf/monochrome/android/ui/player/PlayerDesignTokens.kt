@@ -116,13 +116,19 @@ fun rememberAlbumColors(imageUrl: String?): AlbumColors {
 fun rememberDominantColor(imageUrl: String?): Color = rememberAlbumColors(imageUrl).dominant
 
 /** Vertical gradient wash derived from the album art, fading into pure black. */
-fun dynamicPlayerBackground(color: Color): Brush = Brush.verticalGradient(
-    colors = listOf(
-        color.copy(alpha = 0.5f),
-        color.copy(alpha = 0.2f),
-        PlayerDesignTokens.BackgroundBlack
+fun dynamicPlayerBackground(color: Color): Brush {
+    // Darken the album color before the top stop so the hardcoded-white player
+    // chrome (chevron, output/speed chips) keeps adequate contrast even on a
+    // bright cover, instead of washing out to ~3:1 white-on-light.
+    val wash = androidx.compose.ui.graphics.lerp(color, Color.Black, 0.5f)
+    return Brush.verticalGradient(
+        colors = listOf(
+            wash.copy(alpha = 0.5f),
+            wash.copy(alpha = 0.2f),
+            PlayerDesignTokens.BackgroundBlack
+        )
     )
-)
+}
 
 /** Soft radial glow behind the hero, tinted by the current album color. */
 @Composable

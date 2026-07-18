@@ -600,7 +600,9 @@ private fun SpeedSheet(
                     FilterChip(
                         selected = kotlin.math.abs(speed - preset) < 0.01f,
                         onClick = { onSpeedChange(preset) },
-                        label = { Text(String.format(Locale.US, "%.2gx", preset)) },
+                        // %.2g rendered 1.25 as "1.2"; use a trimmed decimal so
+                        // the chip label matches the value it actually sets.
+                        label = { Text(String.format(Locale.US, if (preset == preset.toInt().toFloat()) "%.1fx" else "%.2fx", preset)) },
                     )
                 }
             }
@@ -618,7 +620,7 @@ private fun SpeedSheet(
                             "Pitch shifts with speed (vinyl-style)"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Switch(
@@ -665,7 +667,7 @@ private fun SleepTimerSheet(
                     "Sleep timer is off."
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

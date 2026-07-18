@@ -1251,14 +1251,16 @@ private fun ColorSwatch(label: String, color: Color, isCustom: Boolean, onClick:
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(color)
-                .border(2.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                // Theme colors so the swatch labels/border stay visible on the
+                // White (light) theme (were hardcoded white → white-on-white).
+                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
                 .clickable(onClick = onClick),
         )
-        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.85f))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onBackground)
         Text(
             if (isCustom) "Custom" else "Current",
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.45f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

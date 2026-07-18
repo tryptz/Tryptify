@@ -149,6 +149,9 @@ fun FrequencyResponseGraph(
     val graphBackground = MaterialTheme.colorScheme.surface
     val legendBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
     val legendLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // Theme-aware curve colors (were hardcoded white → invisible on the light
+    // theme). The target uses `primary` to match its "Target (Primary)" legend.
+    val curveNeutral = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -233,7 +236,7 @@ fun FrequencyResponseGraph(
 
             // Target curve (bright white dashed) — normalized to measurement
             if (normalizedTarget.size > 1) {
-                drawDashedCurve(normalizedTarget, Color.White, w, h, minGain, maxGain, 2.5f)
+                drawDashedCurve(normalizedTarget, primary, w, h, minGain, maxGain, 2.5f)
             }
 
             // Corrected curve (bright red solid) with fabfilter pro-q 3 style fill
@@ -263,7 +266,7 @@ fun FrequencyResponseGraph(
                         val biquad = AutoEqEngine.calculateBiquadResponse(p.freq, band, sampleRate)
                         FrequencyPoint(p.freq, zeroOffset + biquad)
                     }
-                    drawCurve(contributionPoints, Color.White.copy(alpha = 0.2f), w, h, minGain, maxGain, 1.5f)
+                    drawCurve(contributionPoints, curveNeutral.copy(alpha = 0.2f), w, h, minGain, maxGain, 1.5f)
 
                     // Floating Tooltip
                     val infoText = "${band.freq.toInt()}Hz  ${"%.1f".format(band.gain)}dB"
@@ -314,7 +317,7 @@ fun FrequencyResponseGraph(
                 )
                 // White border
                 drawCircle(
-                    color = Color.White,
+                    color = curveNeutral,
                     radius = if (isSelected) 15f else 13f,
                     center = Offset(dotX, dotY),
                     style = Stroke(width = if (isSelected) 3f else 2.5f)
@@ -333,7 +336,7 @@ fun FrequencyResponseGraph(
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
             ) {
                 LegendDot("Original", Color(0xFF4A9EFF), legendLabelColor)
-                LegendDot("Target (Primary)", Color.White, legendLabelColor)
+                LegendDot("Target (Primary)", primary, legendLabelColor)
                 LegendDot("Corrected", Color(0xFFFF4444), legendLabelColor)
             }
         }

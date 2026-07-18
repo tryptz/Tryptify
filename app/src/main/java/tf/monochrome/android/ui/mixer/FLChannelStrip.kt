@@ -120,7 +120,7 @@ fun FLChannelStrip(
                 text = if (isMaster) "M" else "${bus.index + 1}",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isSelected) onAccent else Color.White
+                color = if (isSelected) onAccent else colors.onSurfaceVariant
             )
         }
 
@@ -129,7 +129,8 @@ fun FLChannelStrip(
             text = bus.name,
             fontSize = 10.sp,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-            color = Color.White.copy(alpha = if (isSelected) 1f else 0.82f),
+            // Theme color (was hardcoded white → invisible on the light theme).
+            color = colors.onSurface.copy(alpha = if (isSelected) 1f else 0.82f),
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
