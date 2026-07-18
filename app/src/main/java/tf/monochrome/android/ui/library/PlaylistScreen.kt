@@ -162,7 +162,7 @@ fun PlaylistScreen(
                 showEditDialog = false
             },
             initialName = editInfo.name,
-            initialDescription = editInfo.description,
+            initialDescription = editInfo.description.orEmpty(),
             title = "Edit Playlist",
             confirmLabel = "Save",
         )
