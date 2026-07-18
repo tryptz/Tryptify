@@ -105,16 +105,24 @@ class QueueManager @Inject constructor() {
         if (fromIndex !in queue.indices || toIndex !in queue.indices) return
         if (fromIndex == toIndex) return
 
-        val currentTrack = queue.getOrNull(_currentIndex.value)
+        val cur = _currentIndex.value
 
         val item = queue.removeAt(fromIndex)
         queue.add(toIndex, item)
-
         _queue.value = queue
-        _currentIndex.value = currentTrack
-            ?.let { track -> queue.indexOfFirst { it.id == track.id } }
-            ?.takeIf { it >= 0 }
-            ?: _currentIndex.value.coerceIn(0, queue.lastIndex)
+
+        // Track the current position through the move POSITIONALLY, not by an
+        // id search: indexOfFirst{ it.id == current.id } jumped the now-playing
+        // marker onto the wrong copy whenever the queue held duplicate tracks.
+        _currentIndex.value = when {
+            cur == fromIndex -> toIndex // the moved item itself was playing
+            else -> {
+                var c = cur
+                if (fromIndex < c) c-- // an earlier item was pulled out
+                if (toIndex <= c) c++ // an item was inserted at/before it
+                c.coerceIn(0, queue.lastIndex)
+            }
+        }
         updateCurrentTrack()
     }
 

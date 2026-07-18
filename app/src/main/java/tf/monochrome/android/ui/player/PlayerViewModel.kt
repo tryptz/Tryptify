@@ -553,11 +553,27 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun removeFromQueue(index: Int) {
+        val wasCurrent = index == queueManager.currentQueueIndex
         queueManager.removeFromQueue(index)
+        // Deleting the playing track slid the next one into its slot, but the
+        // player is still on the old audio — resolve & play the new current so
+        // the UI and audio don't desync (or stop if the queue drained).
+        if (wasCurrent) {
+            if (queueManager.currentTrack.value != null) resolveAndPlay()
+            else mediaController?.stop()
+        }
     }
 
     fun removeSelectedFromQueue(indices: Set<Int>) {
+        val playingId = queueManager.currentTrack.value?.id
         queueManager.removeMany(indices)
+        // If the track that was playing got removed, re-sync the player to the
+        // new current track (removeMany keeps the current track when it survives,
+        // so this only fires when it was actually deleted).
+        if (queueManager.currentTrack.value?.id != playingId) {
+            if (queueManager.currentTrack.value != null) resolveAndPlay()
+            else mediaController?.stop()
+        }
     }
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
