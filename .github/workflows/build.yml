@@ -53,6 +53,34 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest --stacktrace 2>&1 | tee gradle-test.log
+
+      - name: Summarize test failure
+        if: failure()
+        run: |
+          echo "::group::Gradle test failure tail"
+          tail -n 200 gradle-test.log | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::endgroup::"
+          first=$(grep -E -m 1 "^e: |FAILURE:|error:|Unresolved reference|Execution failed|> There were failing tests" gradle-test.log || true)
+          if [ -n "$first" ]; then
+            echo "::error::$first"
+          fi
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            gradle-test.log
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Build debug APK
         shell: bash
         run: |
