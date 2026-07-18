@@ -122,8 +122,9 @@ class LyricsFxSettingsTest {
             glassSampleRings = 1,
             fxaa = true,
             fxaaStrength = 0.9f,
+            glowBehindArt = true,
         )
-        val theme = LyricsFxSettings.PRESETS.first { it.first == "Neon" }.second
+        val theme = LyricsFxSettings.PRESETS.first { it.first == "Voltage" }.second
         val applied = theme.withPersonalFrom(personal)
         assertTrue(applied.customFont)
         assertEquals("/fonts/Mine.ttf", applied.customFontPath)
@@ -131,6 +132,8 @@ class LyricsFxSettingsTest {
         assertEquals(1, applied.glassSampleRings)
         assertTrue(applied.fxaa)
         assertEquals(0.9f, applied.fxaaStrength, 0f)
+        // The album-glow toggle is a personal setting — a theme never clobbers it.
+        assertTrue(applied.glowBehindArt)
         // Aesthetic fields still come from the theme.
         assertEquals(theme.rotationDegrees, applied.rotationDegrees, 0f)
         // …and the chip-selection helper recognises the match despite the carry-over.

@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import kotlin.math.exp
+import kotlin.math.hypot
 import kotlin.math.sqrt
 
 /**
@@ -176,6 +177,10 @@ internal fun Modifier.bassBeat(
  * Full-screen glow layer: one soft album-accent bloom behind the whole active
  * line, breathing with the bass. Lives on a layer with no clipping ancestor, so
  * the light can never be cut by a canvas. Draw-phase only.
+ *
+ * With [edgeHug] on (the album-cover glow), the bloom instead hugs the anchored
+ * rectangle's edges and pumps outward — so it reads as a halo around the opaque
+ * album art rather than a faint wash lost behind it.
  */
 @Composable
 internal fun LyricsFxLayer(
@@ -184,6 +189,7 @@ internal fun LyricsFxLayer(
     accent: Color,
     fx: LyricsFxSettings,
     modifier: Modifier = Modifier,
+    edgeHug: Boolean = false,
 ) {
     if (fx.bassReact <= 0.01f) return
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -195,11 +201,21 @@ internal fun LyricsFxLayer(
                 val p = (pulse.value * fx.bassReact).coerceIn(0f, 1.6f)
                 if (p <= 0.03f) return@drawBehind
 
-                // One soft album-accent bloom behind the whole active line.
                 anchors.lineCenter?.let { lc ->
                     val c = lc - origin
-                    val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
-                    drawGlow(c, glowR, p, accent, fx)
+                    if (edgeHug) {
+                        // Album cover: envelop the whole square (half-diagonal) and
+                        // bloom brightest right at its edge, pumping outward.
+                        val half = hypot(
+                            anchors.lineHalf.width.toDouble(),
+                            anchors.lineHalf.height.toDouble(),
+                        ).toFloat()
+                        drawArtGlow(c, half, p, accent, fx)
+                    } else {
+                        // One soft album-accent bloom behind the whole active line.
+                        val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
+                        drawGlow(c, glowR, p, accent, fx)
+                    }
                 }
             },
     )
@@ -220,6 +236,38 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlow(
                 accent.copy(alpha = fx.glowBrightness * 0.32f * p),
                 Color.Transparent,
             ),
+            center = center,
+            radius = radius,
+        ),
+        radius = radius,
+        center = center,
+    )
+}
+
+/**
+ * Album-cover bloom: a radial glow centred on the art whose brightest ring sits
+ * at the cover's edge ([halfSize] = half the square's diagonal) and fades out
+ * over an extra [LyricsFxSettings.glowRadiusDp] that grows with the pulse [p].
+ * Because the peak is at the edge (not the — hidden — centre), the halo stays
+ * visible around the opaque album art and visibly pumps on the kick.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArtGlow(
+    center: Offset,
+    halfSize: Float,
+    p: Float,
+    accent: Color,
+    fx: LyricsFxSettings,
+) {
+    if (fx.glowBrightness <= 0.001f || halfSize <= 1f) return
+    val radius = halfSize + fx.glowRadiusDp.dp.toPx() * (1f + p)
+    if (radius <= 1f) return
+    val edge = (halfSize / radius).coerceIn(0.05f, 0.95f)
+    val peak = fx.glowBrightness * p
+    drawCircle(
+        brush = Brush.radialGradient(
+            0f to accent.copy(alpha = peak * 0.45f),
+            edge to accent.copy(alpha = peak),
+            1f to Color.Transparent,
             center = center,
             radius = radius,
         ),
