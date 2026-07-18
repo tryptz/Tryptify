@@ -64,12 +64,28 @@ private const val BASS_BIN_END = 62
 
 private const val SPRING_STIFFNESS = 300f
 
+// Adaptive kick detection. The tap emits per-bin levels in dB (pink-compensated
+// and re-centered so the midband sits at 0 dB), and in real music the bass band
+// sits WELL above that reference — often +12 dB or more on anything bass-heavy.
+// An absolute threshold therefore pins at max on every frame, so the pump swells
+// once and just stays swollen. Instead we track a slow "bass floor" and drive the
+// pulse from how far the instantaneous level pokes ABOVE that floor — i.e. the
+// kick transient — which rests near 0 between kicks whatever the mix level is.
+//
+// FLOOR_FALL_SEC: time constant when the floor follows the level down (toward the
+// quiet gaps between kicks). FLOOR_RISE_SEC: much slower, so the floor creeps up
+// through sustained-loud sections without ever chasing a kick's own transient.
+// KICK_RANGE_DB: dB above the floor that counts as a full-strength kick.
+private const val FLOOR_FALL_SEC = 0.4f
+private const val FLOOR_RISE_SEC = 2.5f
+private const val KICK_RANGE_DB = 8f
+
 /**
- * Per-frame bass pulse in 0..~1.3 (>1 on overshoot). FFT bass bins → dB →
- * normalized level → attack/release envelope → underdamped spring (attack,
- * release, bounce are Studio settings). Read from draw/layer lambdas only, so
- * the pulse never causes recomposition. Ref-counts a stake on the analyzer
- * for exactly as long as it is composed.
+ * Per-frame bass pulse in 0..~1.6 (>1 on overshoot). FFT bass bins → dB →
+ * kick transient above an adaptive bass floor → attack/release envelope →
+ * underdamped spring (attack, release, bounce are Studio settings). Read from
+ * draw/layer lambdas only, so the pulse never causes recomposition. Ref-counts
+ * a stake on the analyzer for exactly as long as it is composed.
  */
 @Composable
 internal fun rememberBassPulse(): State<Float> =
@@ -95,6 +111,8 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
         var env = 0f
         var pos = 0f
         var vel = 0f
+        var floor = 0f
+        var floorInit = false
         var lastNanos = -1L
         while (true) {
             withFrameNanos { now ->
@@ -105,7 +123,16 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
                 var sum = 0f
                 for (b in BASS_BIN_START..BASS_BIN_END) sum += bins[b]
                 val db = sum / (BASS_BIN_END - BASS_BIN_START + 1)
-                val raw = (db / 12f).coerceIn(0f, 1f)
+
+                // Adaptive bass floor: falls quickly toward the quiet gaps between
+                // kicks, rises slowly so it never chases a kick's own transient.
+                if (!floorInit) { floor = db; floorInit = true }
+                val floorTau = if (db < floor) FLOOR_FALL_SEC else FLOOR_RISE_SEC
+                floor += (db - floor) * (1f - exp(-dt / floorTau))
+
+                // Kick = how far the level pokes above the floor, in kick-range dB.
+                // Rests near 0 between kicks regardless of the mix's bass level.
+                val raw = ((db - floor) / KICK_RANGE_DB).coerceIn(0f, 1f)
                 val coef = if (raw > env) 1f - exp(-dt / attackSec) else 1f - exp(-dt / releaseSec)
                 env += (raw - env) * coef
                 vel += ((env - pos) * SPRING_STIFFNESS - vel * springDamping) * dt
