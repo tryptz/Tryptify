@@ -28,6 +28,9 @@ class ScanCoordinator @Inject constructor(
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
+    /** Clears the last terminal progress so the UI can dismiss the bar. */
+    fun clearProgress() { _scanProgress.value = null }
+
     /** Runs a full scan, or returns immediately if any scan is in flight. */
     suspend fun runFullScan() = runGuarded { mediaScanner.fullScan() }
 

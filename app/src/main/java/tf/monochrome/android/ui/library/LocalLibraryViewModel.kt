@@ -146,6 +146,9 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch { scanCoordinator.runIncrementalScan() }
     }
 
+    /** Dismiss the terminal scan-progress bar (Complete/Error). */
+    fun clearScanProgress() { scanCoordinator.clearProgress() }
+
     // ── Collection import ───────────────────────────────────────────
 
     private val _importResult = MutableStateFlow<Result<String>?>(null)

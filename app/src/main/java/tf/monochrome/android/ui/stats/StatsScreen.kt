@@ -96,6 +96,13 @@ fun StatsScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val lastSyncedAt by viewModel.lastSyncedAt.collectAsState()
 
+    val statsMsgContext = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.messages.collect { msg ->
+            android.widget.Toast.makeText(statsMsgContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Listening Stats") },

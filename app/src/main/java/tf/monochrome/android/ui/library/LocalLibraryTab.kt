@@ -178,9 +178,18 @@ fun LocalLibraryTab(
             }
         }
 
-        // Scan progress bar
-        if (isScanning) {
+        // Scan progress bar — also shown on the terminal Complete/Error states
+        // (previously dead UI) so the user sees the summary or the error, then
+        // auto-dismissed a few seconds later.
+        val scanTerminal = scanProgress is ScanProgress.Complete || scanProgress is ScanProgress.Error
+        if (isScanning || scanTerminal) {
             ScanProgressBar(scanProgress)
+        }
+        LaunchedEffect(scanProgress) {
+            if (scanProgress is ScanProgress.Complete || scanProgress is ScanProgress.Error) {
+                kotlinx.coroutines.delay(4000)
+                viewModel.clearScanProgress()
+            }
         }
 
         // Search bar

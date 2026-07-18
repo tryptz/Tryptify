@@ -223,8 +223,13 @@ fun MixerScreen(
                 val text = context.contentResolver.openInputStream(uri)
                     ?.bufferedReader()?.use { it.readText() }
                 if (text.isNullOrBlank()) error("Empty file")
-                viewModel.importPreset(text)
-                Toast.makeText(context, "Preset imported", Toast.LENGTH_SHORT).show()
+                viewModel.importPreset(text) { ok ->
+                    Toast.makeText(
+                        context,
+                        if (ok) "Preset imported" else "Import failed: not a valid preset file",
+                        if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
+                    ).show()
+                }
             }.onFailure {
                 Toast.makeText(context, "Import failed: ${it.message}", Toast.LENGTH_LONG).show()
             }

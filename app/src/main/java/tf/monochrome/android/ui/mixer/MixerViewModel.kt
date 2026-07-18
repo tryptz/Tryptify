@@ -215,21 +215,35 @@ class MixerViewModel @Inject constructor(
      * back to treating the text as raw engine state JSON), persist it as a
      * custom preset, and apply it live.
      */
-    fun importPreset(text: String) {
+    fun importPreset(text: String, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val trimmed = text.trim()
             val file = runCatching {
                 json.decodeFromString(MixPresetFile.serializer(), trimmed)
             }.getOrNull()
 
-            val name = file?.name?.takeIf { it.isNotBlank() } ?: "Imported Preset"
-            val stateJson = file?.stateJson?.takeIf { it.isNotBlank() } ?: trimmed
+            // Only accept a valid MixPresetFile envelope or a bare engine-state
+            // JSON *object*. Rejecting anything else stops the old behavior of
+            // saving arbitrary files as a junk preset and resetting the mixer,
+            // then falsely toasting success.
+            val stateJson = when {
+                file?.stateJson?.takeIf { it.isNotBlank() } != null -> file.stateJson
+                runCatching { json.parseToJsonElement(trimmed) }.getOrNull()
+                    is kotlinx.serialization.json.JsonObject -> trimmed
+                else -> null
+            }
+            if (stateJson == null) {
+                onResult(false)
+                return@launch
+            }
 
+            val name = file?.name?.takeIf { it.isNotBlank() } ?: "Imported Preset"
             presetRepository.savePreset(
                 MixPreset(name = name, stateJson = stateJson, isCustom = true)
             )
             dspManager.loadStateJson(stateJson)
             _currentPresetName.value = name
+            onResult(true)
         }
     }
 }
