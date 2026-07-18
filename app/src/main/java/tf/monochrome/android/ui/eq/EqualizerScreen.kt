@@ -130,9 +130,12 @@ fun EqualizerScreen(
             val rawData = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (!rawData.isNullOrEmpty()) {
                 viewModel.importMeasurementData(rawData)
+            } else {
+                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             viewModel.clearError()
+            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -147,8 +150,35 @@ fun EqualizerScreen(
                 pendingTargetData = rawData
                 targetName = ""
                 showTargetNameDialog = true
+            } else {
+                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
             }
-        } catch (_: Exception) { }
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Export EQ: serialize the current bands to an EqualizerAPO-style
+    // ParametricEQ.txt (widely importable) and save via SAF.
+    var pendingEqExport by remember { mutableStateOf<String?>(null) }
+    val eqExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        val text = pendingEqExport
+        pendingEqExport = null
+        if (uri != null && text != null) {
+            val ok = try {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                true
+            } catch (_: Exception) {
+                false
+            }
+            android.widget.Toast.makeText(
+                context,
+                if (ok) "EQ exported" else "Couldn't export EQ",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     // AutoEQ tutorial dialog (first visit)
@@ -371,7 +401,14 @@ fun EqualizerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { /* export EQ preset */ },
+                        onClick = {
+                            if (currentBands.isEmpty()) {
+                                android.widget.Toast.makeText(context, "No EQ bands to export", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                pendingEqExport = buildParametricEqText(currentBands, currentPreamp)
+                                eqExportLauncher.launch("MonochromeEQ.txt")
+                            }
+                        },
                         modifier = Modifier
                             .size(52.dp)
                             .liquidGlass(
@@ -987,4 +1024,29 @@ private fun parseSampleRate(label: String): Float = when (label) {
     "96k" -> 96000f
     "192k" -> 192000f
     else -> 48000f
+}
+
+/**
+ * Serialize the current EQ to EqualizerAPO-style ParametricEQ text, which
+ * Wavelet, Poweramp, RootlessJamesDSP and most parametric EQs can import.
+ */
+private fun buildParametricEqText(
+    bands: List<tf.monochrome.android.domain.model.EqBand>,
+    preamp: Float,
+): String {
+    val us = java.util.Locale.US
+    val sb = StringBuilder()
+    sb.append("Preamp: ").append(String.format(us, "%.1f", preamp)).append(" dB\n")
+    var n = 1
+    for (b in bands) {
+        if (!b.enabled) continue
+        val code = when (b.type) {
+            tf.monochrome.android.domain.model.FilterType.LOWSHELF -> "LSC"
+            tf.monochrome.android.domain.model.FilterType.HIGHSHELF -> "HSC"
+            else -> "PK"
+        }
+        sb.append(String.format(us, "Filter %d: ON %s Fc %.0f Hz Gain %.1f dB Q %.2f\n", n, code, b.freq, b.gain, b.q))
+        n++
+    }
+    return sb.toString()
 }

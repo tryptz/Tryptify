@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,17 @@ fun ParametricEqScreen(
         DisposableEffect(Unit) {
             viewModel.spectrumAnalyzer.acquire()
             onDispose { viewModel.spectrumAnalyzer.release() }
+        }
+    }
+
+    // Surface preset save/load/persist errors that the ViewModel reports but
+    // no screen was collecting (silent failures / silent corrupted-load).
+    val eqError by viewModel.error.collectAsState()
+    val eqErrorContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(eqError) {
+        eqError?.let {
+            android.widget.Toast.makeText(eqErrorContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
         }
     }
 
