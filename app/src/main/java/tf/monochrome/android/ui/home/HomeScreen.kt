@@ -80,6 +80,7 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.search.SearchQueryField
+import tf.monochrome.android.ui.search.SearchHistoryContent
 import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -118,6 +119,7 @@ fun HomeScreen(
     val isLoadingMore by searchViewModel.isLoadingMore.collectAsState()
     val endReached by searchViewModel.endReached.collectAsState()
     val searchError by searchViewModel.searchError.collectAsState()
+    val searchHistory by searchViewModel.searchHistory.collectAsState()
     val recommendations by searchViewModel.recommendations.collectAsState()
     val hasSearchResults = searchQuery.isNotBlank()
 
@@ -359,6 +361,16 @@ fun HomeScreen(
                 endReached = endReached,
                 searchError = searchError,
                 onRetry = searchViewModel::submitSearch,
+                // Recent-search history — previously only reachable from the
+                // orphaned standalone SearchScreen; now shown when the Home
+                // search is open with an empty query.
+                emptyContent = {
+                    SearchHistoryContent(
+                        history = searchHistory,
+                        onSelect = searchViewModel::selectHistoryQuery,
+                        onClearHistory = searchViewModel::clearSearchHistory,
+                    )
+                },
             )
         } else if (isLoading) {
             LoadingScreen()

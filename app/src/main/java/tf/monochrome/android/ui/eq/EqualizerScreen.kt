@@ -282,6 +282,18 @@ fun EqualizerScreen(
                             }
                         }
                     )
+                    // Entry point for the guided measurement-calibration flow,
+                    // which was fully built but previously unreachable.
+                    TextButton(onClick = { showMeasurementUpload = true }) {
+                        Icon(
+                            Icons.Default.UploadFile,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Upload & calibrate a measurement")
+                    }
                 }
               }
             }
