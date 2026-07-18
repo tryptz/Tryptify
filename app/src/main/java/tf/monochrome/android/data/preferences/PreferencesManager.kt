@@ -206,6 +206,9 @@ class PreferencesManager @Inject constructor(
         private val EQ_SELECTED_HEADPHONE_NAME = stringPreferencesKey("eq_selected_headphone_name")
         private val EQ_MEASUREMENT_JSON = stringPreferencesKey("eq_measurement_json")
         private val EQ_UPLOADED_HEADPHONES_JSON = stringPreferencesKey("eq_uploaded_headphones_json")
+        // System-wide AutoEQ: apply the correction to ALL device audio via a
+        // global output-mix effect (Wavelet-style), not just this app's playback.
+        private val SYSTEM_WIDE_AUTOEQ_ENABLED = booleanPreferencesKey("system_wide_autoeq_enabled")
 
         // Parametric EQ (independent of AutoEQ)
         private val PARAM_EQ_ENABLED = booleanPreferencesKey("param_eq_enabled")
@@ -911,6 +914,14 @@ class PreferencesManager @Inject constructor(
     val eqTargetId: Flow<String> = dataStore.data.map { it[EQ_TARGET_ID] ?: "harman_oe_2018" }
     val eqPreamp: Flow<Double> = dataStore.data.map { it[EQ_PREAMP] ?: 0.0 }
     val eqBandsJson: Flow<String?> = dataStore.data.map { it[EQ_BANDS_JSON] }
+
+    /** System-wide AutoEQ master toggle (global output-mix effect). Off by default. */
+    val systemWideAutoEqEnabled: Flow<Boolean> =
+        dataStore.data.map { it[SYSTEM_WIDE_AUTOEQ_ENABLED] ?: false }
+
+    suspend fun setSystemWideAutoEqEnabled(enabled: Boolean) {
+        dataStore.edit { it[SYSTEM_WIDE_AUTOEQ_ENABLED] = enabled }
+    }
 
     suspend fun setEqEnabled(enabled: Boolean) {
         dataStore.edit { it[EQ_ENABLED] = enabled }

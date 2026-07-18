@@ -99,6 +99,7 @@ fun MainPlayerRoute(
     val preservePitch by playerViewModel.preservePitch.collectAsState()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsState()
+    val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsState()
 
     val visualizerSensitivity by playerViewModel.visualizerSensitivity.collectAsState()
     val visualizerBrightness by playerViewModel.visualizerBrightness.collectAsState()
@@ -267,6 +268,7 @@ fun MainPlayerRoute(
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
+        systemWideAutoEqEnabled = systemWideAutoEqEnabled,
     )
 
     // Bass-reactive lyrics: one shared pulse (single analyzer stake) drives
@@ -358,6 +360,7 @@ fun MainPlayerRoute(
             onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
             onCompressorToggle = playerViewModel::setCompressorEnabled,
             onInflatorToggle = playerViewModel::setInflatorEnabled,
+            onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
             topBar = {
                 PlayerTopBar(
                     speedLabel = state.speedLabel,

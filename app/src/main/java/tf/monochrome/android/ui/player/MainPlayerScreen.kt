@@ -110,6 +110,7 @@ data class MainPlayerUiState(
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
+    val systemWideAutoEqEnabled: Boolean = false,
 )
 
 /**
@@ -141,6 +142,7 @@ fun MainPlayerScreen(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onSystemWideAutoEqToggle: (Boolean) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
     // Full-screen, unclipped layer between the background/stain and the player
@@ -492,6 +494,7 @@ fun MainPlayerScreen(
                 waveformActive = state.waveformActive,
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
+                systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
                 onOutput = onOutput,
                 onSound = onSound,
                 onSpeed = onSpeed,
@@ -500,6 +503,7 @@ fun MainPlayerScreen(
                 onWaveform = onWaveform,
                 onCompressorToggle = onCompressorToggle,
                 onInflatorToggle = onInflatorToggle,
+                onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
                 onDismiss = { animateRevealTo(0f, 0f) },
             )
         }
@@ -551,6 +555,7 @@ private fun StatusOverlayPanel(
     waveformActive: Boolean,
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
+    systemWideAutoEqEnabled: Boolean,
     onOutput: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
@@ -559,6 +564,7 @@ private fun StatusOverlayPanel(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -594,6 +600,15 @@ private fun StatusOverlayPanel(
                         .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
                 )
             }
+            // Top of the audio options: apply the AutoEQ headphone correction to
+            // ALL device audio (Wavelet-style global effect), not just this app.
+            ToggleRow(
+                "System-wide AutoEQ",
+                "Apply your headphone EQ to all device audio",
+                systemWideAutoEqEnabled,
+                accent,
+                onSystemWideAutoEqToggle,
+            )
             PlayerStatusGrid(
                 accent = accent,
                 outputLabel = outputLabel,

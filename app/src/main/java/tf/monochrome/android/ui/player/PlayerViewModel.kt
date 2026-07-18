@@ -252,6 +252,16 @@ class PlayerViewModel @Inject constructor(
 
     fun setInflatorEnabled(on: Boolean) = inflatorEffect.setEffectIn(on)
 
+    // --- System-wide AutoEQ (global output-mix effect) ---
+    // The SystemAudioEqController (app singleton) observes this preference and
+    // attaches/detaches the global effect; the ViewModel only flips the flag.
+    val systemWideAutoEqEnabled: StateFlow<Boolean> = preferences.systemWideAutoEqEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setSystemWideAutoEq(on: Boolean) {
+        viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(on) }
+    }
+
     // --- Volume ---
     val volume: StateFlow<Float> = preferences.volume
         .map { it.toFloat() }
