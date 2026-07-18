@@ -72,6 +72,11 @@ class PlaybackService : MediaSessionService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var currentReplayGain: ReplayGainValues? = null
 
+    // Last track the ProjectM preset was advanced for — so a real track change
+    // (skip, previous, pick a new song) rolls the visualizer to a fresh preset
+    // immediately instead of waiting on the rotation timer.
+    private var lastPresetTrackId: String? = null
+
     private fun createSessionActivity(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
             action = Intent.ACTION_MAIN
@@ -169,6 +174,20 @@ class PlaybackService : MediaSessionService() {
                                 scrobblingService.updateNowPlaying(track)
                             }
                         }
+                    }
+                }
+
+                // Whenever the playing track actually changes and auto-shuffle is
+                // on, jump the ProjectM visualizer to a new preset right away — so
+                // skipping/selecting a song rolls the preset instead of leaving the
+                // old one up until the rotation timer fires. (No-op when the engine
+                // isn't running, e.g. the visualizer view is closed.) Fires for any
+                // transition reason so replacing the queue with a new song counts.
+                val newTrackId = mediaItem?.mediaId
+                if (newTrackId != null && newTrackId != lastPresetTrackId) {
+                    lastPresetTrackId = newTrackId
+                    if (projectMEngineRepository.autoShuffle.value) {
+                        projectMEngineRepository.nextPreset()
                     }
                 }
             }
