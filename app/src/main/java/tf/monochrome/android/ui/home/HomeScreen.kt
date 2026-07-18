@@ -117,6 +117,7 @@ fun HomeScreen(
     val showSourceFilter by searchViewModel.showSourceFilter.collectAsState()
     val isLoadingMore by searchViewModel.isLoadingMore.collectAsState()
     val endReached by searchViewModel.endReached.collectAsState()
+    val searchError by searchViewModel.searchError.collectAsState()
     val recommendations by searchViewModel.recommendations.collectAsState()
     val hasSearchResults = searchQuery.isNotBlank()
 
@@ -350,6 +351,8 @@ fun HomeScreen(
                 onLoadMore = searchViewModel::loadMore,
                 isLoadingMore = isLoadingMore,
                 endReached = endReached,
+                searchError = searchError,
+                onRetry = searchViewModel::submitSearch,
             )
         } else if (isLoading) {
             LoadingScreen()

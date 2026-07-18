@@ -226,6 +226,8 @@ fun SearchResultsContent(
     onLoadMore: (SearchViewModel.SearchPageType) -> Unit = {},
     isLoadingMore: Boolean = false,
     endReached: Boolean = false,
+    searchError: Boolean = false,
+    onRetry: () -> Unit = {},
 ) {
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
@@ -340,8 +342,18 @@ fun SearchResultsContent(
             // LaunchedEffect re-runs once per page boundary, not once per
             // scroll pixel. PREFETCH thresholds picked to keep the list
             // looking continuous while not over-fetching.
+            //
+            // The vertical column carries tracks — except on the Playlists-only
+            // tab, where playlists ARE the vertical list. Paging TRACKS there
+            // loaded more (hidden) tracks and never advanced the playlists, so
+            // pick the page type that matches what the column is actually showing.
+            val columnPageType = if (selectedType == SearchViewModel.SearchTypeFilter.PLAYLISTS) {
+                SearchViewModel.SearchPageType.PLAYLISTS
+            } else {
+                SearchViewModel.SearchPageType.TRACKS
+            }
             PrefetchTrigger(columnState, threshold = TRACK_COL_PREFETCH) {
-                onLoadMore(SearchViewModel.SearchPageType.TRACKS)
+                onLoadMore(columnPageType)
             }
             PrefetchTrigger(artistsRowState, threshold = ROW_PREFETCH) {
                 onLoadMore(SearchViewModel.SearchPageType.ARTISTS)
@@ -482,12 +494,32 @@ fun SearchResultsContent(
 
                 if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlistResults.isEmpty()) {
                     item {
-                        Text(
-                            text = "No results found",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(24.dp)
-                        )
+                        if (searchError) {
+                            // Every backend failed (offline / all instances
+                            // down) — offer a retry instead of implying the
+                            // query genuinely has no matches.
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(
+                                    text = "Couldn't reach search. Check your connection and try again.",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TextButton(onClick = onRetry) { Text("Retry") }
+                            }
+                        } else {
+                            Text(
+                                text = "No results found",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(24.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -520,7 +552,15 @@ private fun PrefetchTrigger(
             total > 0 && last >= total - threshold
         }
     }
-    LaunchedEffect(shouldLoad) {
+    // Also key on the item count: when a page adds fewer items than the
+    // threshold, `shouldLoad` stays true and a plain LaunchedEffect(shouldLoad)
+    // would never re-run — paging stalled. Re-firing whenever the count grows
+    // keeps pulling pages until the tail moves out of range (loadMore itself
+    // no-ops once the type is exhausted or a page is already in flight).
+    val itemCount by remember(state) {
+        derivedStateOf { state.layoutInfo.totalItemsCount }
+    }
+    LaunchedEffect(shouldLoad, itemCount) {
         if (shouldLoad) onTrigger()
     }
 }

@@ -122,11 +122,29 @@ class SearchViewModel @Inject constructor(
     private val _endReached = MutableStateFlow(false)
     val endReached: StateFlow<Boolean> = _endReached.asStateFlow()
 
+    // True when every backend for the current query failed — the UI shows an
+    // error state instead of the misleading "No results found".
+    private val _searchError = MutableStateFlow(false)
+    val searchError: StateFlow<Boolean> = _searchError.asStateFlow()
+
+    // Bumped on every new/reset query. A loadMore job captures the generation it
+    // was launched under and refuses to touch paging state or results once the
+    // generation has moved on — so a page in flight from the previous query
+    // can't append its results into (or falsely end) the new query's paging.
+    private var searchGeneration = 0
+
+    // One loadMore job per page type, so cancelling stale paging doesn't leave
+    // the other types' jobs running (the old single-job var only tracked the
+    // last one, letting survivors bleed results across queries).
+    private val loadMoreJobs = mutableMapOf<SearchPageType, Job>()
+
     private fun resetPaging() {
+        searchGeneration++
         tracksPage.reset(); albumsPage.reset(); artistsPage.reset(); playlistsPage.reset()
         _isLoadingMore.value = false
         _endReached.value = false
-        loadMoreJob?.cancel()
+        loadMoreJobs.values.forEach { it.cancel() }
+        loadMoreJobs.clear()
     }
 
     private val _query = MutableStateFlow("")
@@ -223,7 +241,6 @@ class SearchViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private var searchJob: Job? = null
-    private var loadMoreJob: Job? = null
 
     fun onQueryChange(newQuery: String) {
         _query.value = newQuery
@@ -233,6 +250,15 @@ class SearchViewModel @Inject constructor(
             clearResults()
             return
         }
+        // If there's nothing on screen yet, enter the searching state during the
+        // debounce window so it shows a spinner instead of flashing "No results
+        // found" before the request even starts. When results from the previous
+        // query are still showing, leave them up while the user refines — they
+        // aren't empty, so no flash — until performSearch swaps them.
+        val hasResults = _allTracks.value.isNotEmpty() || _allAlbums.value.isNotEmpty() ||
+            _allArtists.value.isNotEmpty() || _allPlaylists.value.isNotEmpty()
+        if (!hasResults) _isSearching.value = true
+        _searchError.value = false
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(SEARCH_DEBOUNCE_MS)
             performSearch(newQuery.trim())
@@ -277,6 +303,7 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun performSearch(query: String) {
         _isSearching.value = true
+        _searchError.value = false
         val trimmedQuery = query.trim()
         // TIDAL, Qobuz, and the local/collection library all run in parallel.
         // Qobuz failures (instance unset, network error, schema mismatch) are
@@ -313,7 +340,11 @@ class SearchViewModel @Inject constructor(
 
         val qobuzAvailable = qobuzResult?.isSuccess == true
         if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable) {
+            // Every backend failed (offline / all instances down). Distinguish
+            // this from a successful-but-empty search so the UI can offer a
+            // retry instead of a flat "No results found".
             clearResults()
+            _searchError.value = true
             _isSearching.value = false
             return
         }
@@ -405,9 +436,14 @@ class SearchViewModel @Inject constructor(
         if (q.isBlank()) return
         val state = pageFor(type)
         if (state.inFlight || state.done()) return
+        // Snapshot the query generation: if it changes while this page is in
+        // flight (the user edited the query), every write below is skipped so
+        // the stale page can neither append into nor prematurely end the new
+        // query's paging.
+        val gen = searchGeneration
         state.inFlight = true
         _isLoadingMore.value = true
-        loadMoreJob = viewModelScope.launch {
+        val job = viewModelScope.launch {
             try {
                 // --- TIDAL page (incremental offset paging) ---
                 if (!state.tidalEnd) {
@@ -422,6 +458,7 @@ class SearchViewModel @Inject constructor(
                         SearchPageType.PLAYLISTS ->
                             repository.searchPlaylists(q, offset, PAGE_SIZE).getOrDefault(emptyList())
                     }
+                    if (gen != searchGeneration) return@launch
                     if (tidalItems.size < PAGE_SIZE) state.tidalEnd = true
                     state.nextOffset = offset + PAGE_SIZE
                     appendPage(type, tidalItems, isQobuz = false, q = q)
@@ -435,6 +472,7 @@ class SearchViewModel @Inject constructor(
                     val qobuz = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
                         runCatching { repository.searchQobuz(q, state.qobuzOffset) }.getOrNull()?.getOrNull()
                     }
+                    if (gen != searchGeneration) return@launch
                     val qItems: List<Any> = when (type) {
                         SearchPageType.TRACKS -> qobuz?.tracks ?: emptyList()
                         SearchPageType.ALBUMS -> qobuz?.albums ?: emptyList()
@@ -447,18 +485,30 @@ class SearchViewModel @Inject constructor(
                 } else if (type == SearchPageType.PLAYLISTS) {
                     state.qobuzEnd = true
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // A cancelled page (query changed) must NOT mark paging ended —
+                // that used to kill the new query's infinite scroll after page 1.
+                throw e
             } catch (_: Exception) {
-                // Swallow — a failed page just stops paging for this type.
-                state.tidalEnd = true
-                state.qobuzEnd = true
+                // A genuinely failed page just stops paging for this type.
+                if (gen == searchGeneration) {
+                    state.tidalEnd = true
+                    state.qobuzEnd = true
+                }
             } finally {
-                state.inFlight = false
-                _endReached.value = tracksPage.done() && albumsPage.done() &&
-                    artistsPage.done() && playlistsPage.done()
-                _isLoadingMore.value = tracksPage.inFlight || albumsPage.inFlight ||
-                    artistsPage.inFlight || playlistsPage.inFlight
+                // Only touch shared paging flags / the job map if we're still the
+                // current query — otherwise resetPaging already owns this state.
+                if (gen == searchGeneration) {
+                    state.inFlight = false
+                    _endReached.value = tracksPage.done() && albumsPage.done() &&
+                        artistsPage.done() && playlistsPage.done()
+                    _isLoadingMore.value = tracksPage.inFlight || albumsPage.inFlight ||
+                        artistsPage.inFlight || playlistsPage.inFlight
+                    loadMoreJobs.remove(type)
+                }
             }
         }
+        loadMoreJobs[type] = job
     }
 
     private fun currentCountFor(type: SearchPageType): Int = when (type) {
@@ -468,6 +518,10 @@ class SearchViewModel @Inject constructor(
         SearchPageType.PLAYLISTS -> _allPlaylists.value.size
     }
 
+    // Appends a fetched page, scoring only the NEW items and dropping ones
+    // already shown. The whole list used to be re-scored on every page, which
+    // reshuffled items the user had already scrolled past; keeping existing
+    // order and only ranking the fresh tail fixes that.
     private fun appendPage(type: SearchPageType, items: List<Any>, isQobuz: Boolean, q: String) {
         if (items.isEmpty()) return
         when (type) {
@@ -476,25 +530,37 @@ class SearchViewModel @Inject constructor(
                 val mapped = (items as List<Track>).map {
                     if (isQobuz) it.toQobuzUnifiedTrack() else it.toUnifiedTrack()
                 }
-                _allTracks.value = scoreTracks(q, _allTracks.value + mapped)
+                val existing = _allTracks.value
+                val seen = existing.mapTo(HashSet()) { it.id }
+                val fresh = scoreTracks(q, mapped).filterNot { it.id in seen }
+                _allTracks.value = existing + fresh
             }
             SearchPageType.ALBUMS -> {
                 @Suppress("UNCHECKED_CAST")
-                _allAlbums.value = scoreItems(q, (_allAlbums.value + (items as List<Album>)).distinctBy { it.id }) {
+                val existing = _allAlbums.value
+                val seen = existing.mapTo(HashSet()) { it.id }
+                val fresh = scoreItems(q, (items as List<Album>).distinctBy { it.id }) {
                     listOf(it.title, it.displayArtist)
-                }
+                }.filterNot { it.id in seen }
+                _allAlbums.value = existing + fresh
             }
             SearchPageType.ARTISTS -> {
                 @Suppress("UNCHECKED_CAST")
-                _allArtists.value = scoreItems(q, (_allArtists.value + (items as List<Artist>)).distinctBy { it.id }) {
+                val existing = _allArtists.value
+                val seen = existing.mapTo(HashSet()) { it.id }
+                val fresh = scoreItems(q, (items as List<Artist>).distinctBy { it.id }) {
                     listOf(it.name)
-                }
+                }.filterNot { it.id in seen }
+                _allArtists.value = existing + fresh
             }
             SearchPageType.PLAYLISTS -> {
                 @Suppress("UNCHECKED_CAST")
-                _allPlaylists.value = scoreItems(q, (_allPlaylists.value + (items as List<Playlist>)).distinctBy { it.uuid }) {
+                val existing = _allPlaylists.value
+                val seen = existing.mapTo(HashSet()) { it.uuid }
+                val fresh = scoreItems(q, (items as List<Playlist>).distinctBy { it.uuid }) {
                     listOfNotNull(it.title, it.creator?.name, it.description)
-                }
+                }.filterNot { it.uuid in seen }
+                _allPlaylists.value = existing + fresh
             }
         }
     }
@@ -505,6 +571,7 @@ class SearchViewModel @Inject constructor(
         _allArtists.value = emptyList()
         _allPlaylists.value = emptyList()
         _isSearching.value = false
+        _searchError.value = false
     }
 
     private fun scoreTracks(
