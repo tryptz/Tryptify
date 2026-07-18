@@ -169,7 +169,7 @@ fun MainPlayerRoute(
     val extractedColors = rememberAlbumColors(currentTrack?.coverUrl)
     // Player tint follows album art only when BOTH the master "Dynamic Colors"
     // switch and the player-specific toggle are on — so turning off Dynamic
-    // Colors makes the whole player static (background, glow, accents, rays,
+    // Colors makes the whole player static (background, glow, accents,
     // glass), not just the app-wide theme. Otherwise the theme primary drives
     // the same pipeline.
     val themeAccent = MaterialTheme.colorScheme.primary
@@ -267,9 +267,9 @@ fun MainPlayerRoute(
     )
 
     // Bass-reactive lyrics: one shared pulse (single analyzer stake) drives
-    // both the active line's pump and the full-screen ray layer; the glyph
-    // registry carries each active letter's screen position to that layer, so
-    // the rays draw with NO clipping ancestor and can never be cut by a canvas.
+    // both the active line's pump and the full-screen glow layer; the line
+    // registry carries the active line's screen bounds to that layer, so the
+    // glow draws with NO clipping ancestor and can never be cut by a canvas.
     val glyphAnchors = remember { LyricGlyphAnchors() }
     val lyricsBeatOn = viewMode == NowPlayingViewMode.LYRICS && lyricsFx.bassReact > 0.01f
     val beatPulse: androidx.compose.runtime.State<Float>? =

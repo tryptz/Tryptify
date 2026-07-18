@@ -110,12 +110,20 @@ fun QueueSheet(
     // and don't scramble per-row state. A queue can hold the same track twice,
     // and LazyColumn keys must be unique, so duplicate ids get an occurrence
     // suffix; the common (no-duplicate) case keys straight by track id.
-    val itemKeys = remember(queue) {
+    //
+    // The key is bundled WITH the track (not kept in a parallel list indexed by
+    // position): LazyColumn rebuilds its key→index map off the interval's item
+    // count via snapshot observation, and a parallel list could be momentarily
+    // shorter than that count while the queue mutated — which crashed with an
+    // IndexOutOfBounds from the key lambda. Reading the key off the same element
+    // the item provides makes that impossible.
+    val keyedQueue = remember(queue) {
         val counts = HashMap<Long, Int>()
         queue.map { track ->
             val n = counts[track.id] ?: 0
             counts[track.id] = n + 1
-            if (n == 0) track.id.toString() else "${track.id}#$n"
+            val key = if (n == 0) track.id.toString() else "${track.id}#$n"
+            key to track
         }
     }
 
@@ -240,7 +248,8 @@ fun QueueSheet(
                 )
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(queue, key = { index, _ -> itemKeys[index] }) { index, track ->
+                    itemsIndexed(keyedQueue, key = { _, entry -> entry.first }) { index, entry ->
+                        val track = entry.second
                         val isCurrent = index == currentIndex
                         val isDragging = index == draggingIndex
 

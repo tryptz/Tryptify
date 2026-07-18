@@ -353,10 +353,11 @@ class LyricsFxStudioViewModel @Inject constructor(
 }
 
 /**
- * Lyrics FX Studio — every parameter of the lyric renderer (typography, 3D
- * wave, beat engine, god rays) as live sliders over a self-animating preview.
- * The preview runs a synthetic 120 BPM kick through the same visual pipeline
- * the player uses, so tuning works without any music playing.
+ * Player Visuals Studio — live sliders for the lyric renderer (typography, 3D
+ * wave, beat engine, glow) plus the player and mini-player glass, over a
+ * self-animating preview. The preview drives the same visual pipeline the player
+ * uses from a synthetic beat, so tuning works without any music playing; the
+ * readout reports the current beat reactivity rather than a fixed tempo.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -388,7 +389,7 @@ fun LyricsFxStudioScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Lyrics FX Studio") },
+            title = { Text("Player Visuals Studio") },
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -1367,7 +1368,7 @@ private fun StudioPreview(
             // (there's no live audio analyzer on this screen).
             LocalBeatPulse provides pulse,
         ) {
-            // The ray/glow FX layer draws at each active glyph's reported position.
+            // The glow FX layer blooms behind the active line's reported bounds.
             LyricsFxLayer(anchors = anchors, pulse = pulse, accent = accent, fx = fx)
             if (playing != null) {
                 // Exactly the production renderer, on the real lyric lines.
@@ -1391,13 +1392,17 @@ private fun StudioPreview(
                         .fxaa()
                         .liquidGlass(tint = accent)
                         .bassBeat(pulse, { 1f }, fx, anchors),
-                    anchors = anchors,
                     fontSizeSp = fx.fontSizeSp,
                 )
             }
         }
         Text(
-            text = if (playing != null) "PREVIEW · now playing" else "PREVIEW · 120 BPM",
+            // Report the current beat reactivity (Bass reaction) rather than a
+            // fixed tempo — the synthetic beat only exists to drive the FX, and
+            // what the preview is actually demonstrating is how reactive the
+            // current settings are.
+            text = "PREVIEW · reactivity ${(fx.bassReact * 100).toInt()}%" +
+                if (playing != null) " · now playing" else "",
             style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = 0.35f),
             modifier = Modifier
@@ -1408,10 +1413,11 @@ private fun StudioPreview(
 }
 
 /**
- * Synthetic kick: an instant-on, exponential-decay envelope at 120 BPM pushed
- * through the SAME attack/release + underdamped-spring math as the live bass
- * pulse, so bounce/attack/release sliders behave in the preview exactly as
- * they will with real music.
+ * Synthetic beat: an instant-on, exponential-decay envelope pushed through the
+ * SAME attack/release + underdamped-spring math as the live bass pulse, so
+ * bounce/attack/release sliders behave in the preview exactly as they will with
+ * real music. The Bass-reaction (reactivity) setting scales this downstream in
+ * [bassBeat] / [LyricsFxLayer], so the preview's intensity tracks reactivity.
  */
 @Composable
 private fun rememberSyntheticKickPulse(fx: LyricsFxSettings): State<Float> {
@@ -1432,7 +1438,8 @@ private fun rememberSyntheticKickPulse(fx: LyricsFxSettings): State<Float> {
                 else ((now - lastNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
                 lastNanos = now
                 t += dt
-                // 120 BPM kick train: full level at each beat, fast decay.
+                // Steady demo beat: full level at each kick, fast decay. Tempo
+                // is just a vehicle for the FX — reactivity is applied later.
                 val beatPhase = (t * 2f) % 1f
                 val raw = exp(-6f * beatPhase)
                 val coef = if (raw > env) 1f - exp(-dt / attackSec) else 1f - exp(-dt / releaseSec)

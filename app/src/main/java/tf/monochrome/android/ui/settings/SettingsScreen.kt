@@ -697,10 +697,10 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Lyrics Appearance")
+        SettingsGroupHeader("Now Playing Appearance")
         SettingItem(
-            title = "Lyrics FX Studio",
-            subtitle = "Live editor for type, the 3D letter wave, the beat engine, and god-ray FX",
+            title = "Player Visuals Studio",
+            subtitle = "Live editor for the lyric type / 3D wave / beat FX, plus the player and mini-player glass",
             onClick = { navController.navigate(Screen.LyricsFxStudio.route) },
         )
 

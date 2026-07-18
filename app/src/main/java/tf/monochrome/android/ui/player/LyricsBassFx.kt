@@ -9,7 +9,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,28 +36,17 @@ import kotlin.math.sqrt
  */
 val LocalLyricsSpectrum = compositionLocalOf<SpectrumAnalyzerTap?> { null }
 
-/** One glyph's screen position (root coordinates) + its wave phase. */
-data class GlyphAnchor(
-    val center: Offset,
-    val halfW: Float,
-    val halfH: Float,
-    val phase: Float,
-)
-
 /**
- * Screen-position registry for the active line's glyphs. Each active
- * [Letter3DText] reports its root-coordinate bounds here; [LyricsFxLayer] — a
- * full-screen, UNCLIPPED layer — draws each glyph's god rays at that
- * position. Because the FX draws on a layer with no clipping ancestor, the
- * light is impossible to cut by any canvas/container: rays only ever run off
- * the physical screen edge, never against a surface rectangle.
+ * Screen-position registry for the active lyric line. [bassBeat] reports the
+ * line's root-coordinate bounds here; the full-screen, UNCLIPPED [LyricsFxLayer]
+ * reads them to bloom a soft album-accent glow behind the line. Because the FX
+ * draws on a layer with no clipping ancestor, the glow can never be cut by any
+ * canvas/container — it only ever runs off the physical screen edge.
  */
 class LyricGlyphAnchors {
-    val glyphs = mutableStateMapOf<Int, GlyphAnchor>()
     var lineCenter by mutableStateOf<Offset?>(null)
     var lineHalf by mutableStateOf(Size.Zero)
     fun reset() {
-        glyphs.clear()
         lineCenter = null
         lineHalf = Size.Zero
     }
@@ -66,7 +54,7 @@ class LyricGlyphAnchors {
 
 val LocalLyricGlyphAnchors = compositionLocalOf<LyricGlyphAnchors?> { null }
 
-/** Shared bass pulse so the line pump and the full-screen rays use one analyzer stake and breathe together. */
+/** Shared bass pulse so the line pump and the full-screen glow use one analyzer stake and breathe together. */
 val LocalBeatPulse = compositionLocalOf<State<Float>?> { null }
 
 // 40–110 Hz — the kick/bass fundamentals — mapped into the tap's 256
@@ -133,8 +121,7 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
  * Line-level part of the beat FX: the element pumps with the bass (scale) and
  * pops in on activation. It also reports the line's root-coordinate bounds
  * into [anchors] so [LyricsFxLayer] can bloom a glow behind the whole line.
- * The RAYS are per-glyph (see [reportGlyphAnchor] + [LyricsFxLayer]); nothing
- * is drawn inside this element, so nothing here can be clipped.
+ * Nothing is drawn inside this element, so nothing here can be clipped.
  */
 internal fun Modifier.bassBeat(
     pulse: State<Float>,
@@ -156,32 +143,6 @@ internal fun Modifier.bassBeat(
         }
     }
     return mod
-}
-
-/**
- * Publishes a single glyph's screen position into [anchors] under [key] while
- * composed, removing it on dispose. Applied to each active-line glyph so the
- * full-screen [LyricsFxLayer] can draw that glyph's rays at its real screen
- * location — per-letter, and impossible to clip.
- */
-@Composable
-internal fun Modifier.reportGlyphAnchor(
-    anchors: LyricGlyphAnchors?,
-    key: Int,
-    phase: Float,
-): Modifier {
-    if (anchors == null) return this
-    DisposableEffect(anchors, key) {
-        onDispose { anchors.glyphs.remove(key) }
-    }
-    return this.onGloballyPositioned { coords ->
-        anchors.glyphs[key] = GlyphAnchor(
-            center = coords.boundsInRoot().center,
-            halfW = coords.size.width / 2f,
-            halfH = coords.size.height / 2f,
-            phase = phase,
-        )
-    }
 }
 
 /**
