@@ -94,7 +94,8 @@ fun PluginEditorSheet(
                                 color = knobColor(paramIndex),
                                 onValueChange = { onParameterChange(busIndex, slotIndex, paramIndex, it) },
                                 modifier = Modifier.weight(1f),
-                                steps = def.steps
+                                steps = def.steps,
+                                default = def.default
                             )
                         } else {
                             Spacer(modifier = Modifier.weight(1f))

@@ -2,7 +2,8 @@ package tf.monochrome.android.ui.eq
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -146,6 +148,20 @@ fun FrequencyResponseGraph(
     var selectedBandId by remember { mutableIntStateOf(-1) }
     var isDragging by remember { mutableStateOf(false) }
 
+    // The pointer gestures below are keyed on Unit so they are NOT torn down and
+    // restarted every time a band drag mutates `eqBands` (which froze the drag
+    // mid-gesture). All the values they need are read through updated-state
+    // holders so the once-created gesture coroutines still see live data.
+    val latestEqBands by rememberUpdatedState(eqBands)
+    val latestCorrected by rememberUpdatedState(correctedCurve)
+    val latestPreamp by rememberUpdatedState(preamp)
+    val latestSampleRate by rememberUpdatedState(sampleRate)
+    val latestMinGain by rememberUpdatedState(minGain)
+    val latestMaxGain by rememberUpdatedState(maxGain)
+    val latestZeroOffset by rememberUpdatedState(zeroOffset)
+    val latestMaxAbsDragGain by rememberUpdatedState(maxAbsDragGain)
+    val latestOnBandDragged by rememberUpdatedState(onBandDragged)
+
     val graphBackground = MaterialTheme.colorScheme.surface
     val legendBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
     val legendLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -163,44 +179,59 @@ fun FrequencyResponseGraph(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
-                .pointerInput(eqBands, minGain, maxGain) {
+                .pointerInput(Unit) {
                     if (onBandDragged == null) return@pointerInput
                     detectTapGestures { offset ->
                         val tapped = findNearestBand(
-                            offset, eqBands, size.width.toFloat(), size.height.toFloat(),
-                            minGain, maxGain, zeroOffset
+                            offset, latestEqBands, latestCorrected, latestPreamp, latestSampleRate,
+                            size.width.toFloat(), size.height.toFloat(),
+                            latestMinGain, latestMaxGain, latestZeroOffset
                         )
                         selectedBandId = if (tapped == selectedBandId) -1 else tapped
                     }
                 }
-                .pointerInput(eqBands, minGain, maxGain, selectedBandId) {
+                .pointerInput(Unit) {
                     if (onBandDragged == null) return@pointerInput
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            // If a band is already selected, drag that one
-                            // Otherwise try to grab nearest band directly
-                            if (selectedBandId < 0) {
-                                selectedBandId = findNearestBand(
-                                    offset, eqBands, size.width.toFloat(), size.height.toFloat(),
-                                    minGain, maxGain, zeroOffset
-                                )
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        // Grab the band nearest the finger's landing point. If none
+                        // is under it, bail without consuming so the enclosing
+                        // pager / scroll gets the drag instead of the graph
+                        // swallowing it.
+                        val bandId = findNearestBand(
+                            down.position, latestEqBands, latestCorrected,
+                            latestPreamp, latestSampleRate,
+                            size.width.toFloat(), size.height.toFloat(),
+                            latestMinGain, latestMaxGain, latestZeroOffset
+                        )
+                        if (bandId < 0) return@awaitEachGesture
+
+                        val touchSlop = viewConfiguration.touchSlop
+                        var started = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) break
+                            val pos = change.position
+                            if (!started) {
+                                // Wait for real movement before claiming the band,
+                                // so a stationary press still reaches the tap
+                                // detector (which toggles selection).
+                                if ((pos - down.position).getDistance() < touchSlop) continue
+                                started = true
+                                selectedBandId = bandId
+                                isDragging = true
                             }
-                            isDragging = selectedBandId >= 0
-                        },
-                        onDrag = { change, _ ->
-                            if (selectedBandId >= 0 && isDragging) {
-                                change.consume()
-                                val freq = xToFreq(change.position.x, size.width.toFloat())
-                                val gain = yToGain(
-                                    change.position.y, size.height.toFloat(),
-                                    minGain, maxGain, zeroOffset, maxAbsDragGain
-                                )
-                                onBandDragged(selectedBandId, freq, gain)
-                            }
-                        },
-                        onDragEnd = { isDragging = false },
-                        onDragCancel = { isDragging = false }
-                    )
+                            change.consume()
+                            val freq = xToFreq(pos.x, size.width.toFloat())
+                            val gain = yToGain(
+                                pos.y, size.height.toFloat(),
+                                latestMinGain, latestMaxGain, latestZeroOffset, latestMaxAbsDragGain
+                            )
+                            latestOnBandDragged?.invoke(bandId, freq, gain)
+                        }
+                        isDragging = false
+                    }
                 }
         ) {
             val w = size.width
@@ -249,13 +280,7 @@ fun FrequencyResponseGraph(
                 if (!band.enabled) return@forEach
                 // Find normalized positions
                 val dotX = freqToX(band.freq, w)
-                val bandGain = if (correctedCurve.isNotEmpty()) {
-                    interpolateGain(band.freq, correctedCurve)
-                } else {
-                    var gainAtFreq = preamp + zeroOffset
-                    eqBands.forEach { b -> if (b.enabled) gainAtFreq += AutoEqEngine.calculateBiquadResponse(band.freq, b, sampleRate) }
-                    gainAtFreq
-                }
+                val bandGain = bandDotGain(band, correctedCurve, eqBands, preamp, zeroOffset, sampleRate)
                 val dotY = gainToY(bandGain, h, minGain, maxGain)
 
                 val isSelected = selectedBandId == band.id
@@ -514,9 +539,34 @@ private fun yToGain(
         .coerceIn(-maxAbsDragGain, maxAbsDragGain)
 }
 
+/**
+ * The Y-gain a band's dot is actually DRAWN at: the corrected curve's value at
+ * the band frequency (or, with no measurement, the summed biquad response around
+ * the zero baseline). Hit-testing must use this same value — the dots sit on the
+ * corrected curve, not at the raw `band.gain + zeroOffset`, so tapping the dot
+ * where it's shown previously missed the band on peaky/overlapping filters.
+ */
+private fun bandDotGain(
+    band: EqBand,
+    correctedCurve: List<FrequencyPoint>,
+    bands: List<EqBand>,
+    preamp: Float,
+    zeroOffset: Float,
+    sampleRate: Float
+): Float = if (correctedCurve.isNotEmpty()) {
+    interpolateGain(band.freq, correctedCurve)
+} else {
+    var gainAtFreq = preamp + zeroOffset
+    bands.forEach { b -> if (b.enabled) gainAtFreq += AutoEqEngine.calculateBiquadResponse(band.freq, b, sampleRate) }
+    gainAtFreq
+}
+
 private fun findNearestBand(
     position: Offset,
     bands: List<EqBand>,
+    correctedCurve: List<FrequencyPoint>,
+    preamp: Float,
+    sampleRate: Float,
     width: Float,
     height: Float,
     minGain: Float,
@@ -529,7 +579,10 @@ private fun findNearestBand(
     bands.forEach { band ->
         if (!band.enabled) return@forEach
         val dotX = freqToX(band.freq, width)
-        val dotY = gainToY(band.gain + zeroOffset, height, minGain, maxGain)
+        val dotY = gainToY(
+            bandDotGain(band, correctedCurve, bands, preamp, zeroOffset, sampleRate),
+            height, minGain, maxGain
+        )
         val dist = sqrt((position.x - dotX).pow(2) + (position.y - dotY).pow(2))
         if (dist < threshold && dist < nearestDist) {
             nearest = band.id

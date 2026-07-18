@@ -76,6 +76,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -809,35 +810,25 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Mesh X: $meshX", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Slider(
-            value = meshX.toFloat(),
-            onValueChange = { viewModel.setVisualizerMeshX(it.toInt()) },
+        IntSettingSlider(
+            value = meshX,
             valueRange = 8f..128f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerMeshX(it) },
+            label = { "Mesh X: $it" },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Mesh Y: $meshY", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Slider(
-            value = meshY.toFloat(),
-            onValueChange = { viewModel.setVisualizerMeshY(it.toInt()) },
+        IntSettingSlider(
+            value = meshY,
             valueRange = 8f..128f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerMeshY(it) },
+            label = { "Mesh Y: $it" },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = if (vsyncEnabled) "Target FPS: $targetFps" else "Target FPS: $targetFps (vsync off)",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Slider(
-            value = targetFps.toFloat(),
-            onValueChange = { viewModel.setVisualizerTargetFps(it.toInt()) },
+        IntSettingSlider(
+            value = targetFps,
             valueRange = 30f..144f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerTargetFps(it) },
+            label = { if (vsyncEnabled) "Target FPS: $it" else "Target FPS: $it (vsync off)" },
         )
 
         SettingSwitchItem(
@@ -872,36 +863,26 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             onClick = {}
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Preset Rotation: ${rotationSeconds}s",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Slider(
-            value = rotationSeconds.toFloat(),
-            onValueChange = { viewModel.setVisualizerRotationSeconds(it.toInt()) },
+        IntSettingSlider(
+            value = rotationSeconds,
             valueRange = 5f..120f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerRotationSeconds(it) },
+            label = { "Preset Rotation: ${it}s" },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Sensitivity: $sensitivity%", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text("Controls intensity (High = Epilepsy Warning)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(
-            value = sensitivity.toFloat(),
-            onValueChange = { viewModel.setVisualizerSensitivity(it.toInt()) },
+        IntSettingSlider(
+            value = sensitivity,
             valueRange = 0f..100f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerSensitivity(it) },
+            label = { "Sensitivity: $it%" },
+            subtitle = "Controls intensity (High = Epilepsy Warning)",
         )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Brightness: $brightness%", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Slider(
-            value = brightness.toFloat(),
-            onValueChange = { viewModel.setVisualizerBrightness(it.toInt()) },
+
+        IntSettingSlider(
+            value = brightness,
             valueRange = 0f..100f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerBrightness(it) },
+            label = { "Brightness: $it%" },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -913,6 +894,44 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             onCheckedChange = { viewModel.setConfirmClearQueue(it) }
         )
     }
+}
+
+/**
+ * Integer settings slider that writes its value once, on release, instead of on
+ * every drag frame. A local float drives the label and thumb live; [onCommit]
+ * (a DataStore write) fires only from onValueChangeFinished. The local state is
+ * re-seeded whenever [value] changes externally so it stays in sync.
+ */
+@Composable
+private fun IntSettingSlider(
+    value: Int,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onCommit: (Int) -> Unit,
+    label: (Int) -> String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+) {
+    var local by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        label(local.toInt()),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    if (subtitle != null) {
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Slider(
+        value = local,
+        onValueChange = { local = it },
+        onValueChangeFinished = { onCommit(local.toInt()) },
+        valueRange = valueRange,
+        modifier = modifier.fillMaxWidth(),
+    )
 }
 
 // ─── Tab 3: Scrobbling ─────────────────────────────────────────────────

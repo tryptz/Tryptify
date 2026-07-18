@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.mixer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -93,7 +94,8 @@ internal fun FLKnobControl(
     color: Color,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    steps: Int? = null
+    steps: Int? = null,
+    default: Float? = null
 ) {
     val fraction = ((value - min) / (max - min)).coerceIn(0f, 1f)
     var isTouching by remember { mutableStateOf(false) }
@@ -105,6 +107,7 @@ internal fun FLKnobControl(
     // which would make the knob snap back and appear frozen while dragging.
     val latestValue by rememberUpdatedState(value)
     val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val latestDefault by rememberUpdatedState(default)
 
     Column(
         modifier = modifier.padding(horizontal = 4.dp, vertical = 6.dp),
@@ -128,14 +131,28 @@ internal fun FLKnobControl(
         Canvas(
             modifier = Modifier
                 .size(64.dp)
+                // Double-tap resets to the parameter default. Kept in its own
+                // detector so it composes with — and yields to — the drag
+                // gesture below: a real drag consumes movement, which cancels
+                // this tap detector before it can fire.
+                .pointerInput(min, max, steps) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            val d = latestDefault ?: return@detectTapGestures
+                            latestOnValueChange(snapValue(d, min, max, steps))
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    )
+                }
                 .pointerInput(min, max) {
                     val cx = size.width / 2f
                     val cy = size.height / 2f
+                    val touchSlop = viewConfiguration.touchSlop
 
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        isTouching = true
-                        var lastPos = down.position
+                        val downPos = down.position
+                        var lastPos = downPos
                         var lastAngle: Float? = null
                         val range = max - min
                         // Seed a running accumulator from the live value at the
@@ -143,48 +160,78 @@ internal fun FLKnobControl(
                         // keeps each move relative to the actual current value
                         // instead of a stale closure-captured one.
                         var current = latestValue
+                        // Don't grab the pointer until the finger has travelled
+                        // past touch slop: below it we leave events unconsumed so
+                        // a parent scroll (the FX-chain list) can claim the drag
+                        // instead of the knob swallowing every touch.
+                        var dragging = false
+                        // Mode is locked ONCE the moment slop is crossed, from the
+                        // finger's initial landing point — so a single gesture no
+                        // longer flips between rotary / vertical / fine mid-drag.
+                        var mode = -1 // 0 = fine-tune, 1 = rotary, 2 = vertical
 
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull() ?: break
-                            if (!change.pressed) {
-                                isTouching = false
-                                break
-                            }
+                            if (!change.pressed) break
 
                             val pos = change.position
+
+                            if (!dragging) {
+                                val distFromDown = kotlin.math.sqrt(
+                                    (pos.x - downPos.x) * (pos.x - downPos.x) +
+                                        (pos.y - downPos.y) * (pos.y - downPos.y)
+                                )
+                                if (distFromDown < touchSlop) continue
+                                dragging = true
+                                isTouching = true
+                                val distFromCenter = kotlin.math.sqrt(
+                                    (downPos.x - cx) * (downPos.x - cx) +
+                                        (downPos.y - cy) * (downPos.y - cy)
+                                )
+                                mode = when {
+                                    distFromCenter > cx * 1.5f -> 0
+                                    distFromCenter > cx * 0.3f -> 1
+                                    else -> 2
+                                }
+                                lastAngle = if (mode == 1) {
+                                    kotlin.math.atan2(pos.y - cy, pos.x - cx)
+                                } else null
+                                lastPos = pos
+                                change.consume()
+                                continue
+                            }
+
                             val dx = pos.x - lastPos.x
                             val dy = pos.y - lastPos.y
-
-                            // Distance from knob center determines mode
-                            val distFromCenter = kotlin.math.sqrt(
-                                (pos.x - cx) * (pos.x - cx) + (pos.y - cy) * (pos.y - cy)
-                            )
-
                             val oldFrac = ((current - min) / range).coerceIn(0f, 1f)
 
-                            if (distFromCenter > cx * 1.5f) {
-                                // ── Fine-tune mode: far from knob, horizontal drag ──
-                                val sensitivity = range / 800f
-                                current = (current + dx * sensitivity).coerceIn(min, max)
-                            } else if (distFromCenter > cx * 0.3f) {
-                                // ── Rotary mode: circular drag around knob ──
-                                val angle = kotlin.math.atan2(pos.y - cy, pos.x - cx)
-                                if (lastAngle != null) {
-                                    var delta = angle - lastAngle!!
-                                    // Wrap around -PI/PI boundary
-                                    if (delta > Math.PI.toFloat()) delta -= 2f * Math.PI.toFloat()
-                                    if (delta < -Math.PI.toFloat()) delta += 2f * Math.PI.toFloat()
-                                    // Map rotation to value change (full circle = full range)
-                                    current = (current + delta / (1.5f * Math.PI.toFloat()) * range)
-                                        .coerceIn(min, max)
+                            when (mode) {
+                                0 -> {
+                                    // ── Fine-tune: far from knob, horizontal drag ──
+                                    val sensitivity = range / 800f
+                                    current = (current + dx * sensitivity).coerceIn(min, max)
                                 }
-                                lastAngle = angle
-                            } else {
-                                // ── Vertical drag mode: standard coarse control ──
-                                val sensitivity = range / 250f
-                                current = (current - dy * sensitivity).coerceIn(min, max)
-                                lastAngle = null
+                                1 -> {
+                                    // ── Rotary: circular drag around knob ──
+                                    val angle = kotlin.math.atan2(pos.y - cy, pos.x - cx)
+                                    val prev = lastAngle
+                                    if (prev != null) {
+                                        var delta = angle - prev
+                                        // Wrap around -PI/PI boundary
+                                        if (delta > Math.PI.toFloat()) delta -= 2f * Math.PI.toFloat()
+                                        if (delta < -Math.PI.toFloat()) delta += 2f * Math.PI.toFloat()
+                                        // Map rotation to value change (full circle = full range)
+                                        current = (current + delta / (1.5f * Math.PI.toFloat()) * range)
+                                            .coerceIn(min, max)
+                                    }
+                                    lastAngle = angle
+                                }
+                                else -> {
+                                    // ── Vertical: standard coarse control ──
+                                    val sensitivity = range / 250f
+                                    current = (current - dy * sensitivity).coerceIn(min, max)
+                                }
                             }
 
                             latestOnValueChange(snapValue(current, min, max, steps))
@@ -202,6 +249,7 @@ internal fun FLKnobControl(
                             lastPos = pos
                             change.consume()
                         }
+                        isTouching = false
                     }
                 }
         ) {
