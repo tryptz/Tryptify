@@ -246,17 +246,20 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
-        // Listen to EQ changes and apply them
+        // Listen to EQ + tone changes and apply them. Tone shelves are folded into
+        // the in-app AutoEQ processor whenever the system-wide effect isn't the one
+        // handling this app's audio, so tone works independent of the system-wide
+        // toggle (and without double-processing when it IS on).
         serviceScope.launch {
             kotlinx.coroutines.flow.combine(
                 preferences.eqEnabled,
                 preferences.eqBandsJson,
-                preferences.eqPreamp
-            ) { enabled, bandsJson, preamp ->
-                Triple(enabled, bandsJson, preamp)
-            }.collect { (enabled, bandsJson, preamp) ->
-                applyEqSettings(enabled, bandsJson, preamp)
-            }
+                preferences.eqPreamp,
+                preferences.systemToneControls,
+                preferences.systemWideAutoEqEnabled,
+            ) { enabled, bandsJson, preamp, tone, systemWide ->
+                EqApply(enabled, bandsJson, preamp, tone, systemWide)
+            }.collect { applyEqSettings(it) }
         }
 
         // Listen to Parametric EQ changes and apply them
@@ -596,16 +599,29 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private data class EqApply(
+        val enabled: Boolean,
+        val bandsJson: String?,
+        val preamp: Double,
+        val tone: tf.monochrome.android.domain.model.ToneControls,
+        val systemWide: Boolean,
+    )
+
     /**
      * Apply current EQ settings from preferences
      */
     private fun applyEq() {
         serviceScope.launch {
             try {
-                val enabled = preferences.eqEnabled.first()
-                val bandsJson = preferences.eqBandsJson.first()
-                val preamp = preferences.eqPreamp.first()
-                applyEqSettings(enabled, bandsJson, preamp)
+                applyEqSettings(
+                    EqApply(
+                        enabled = preferences.eqEnabled.first(),
+                        bandsJson = preferences.eqBandsJson.first(),
+                        preamp = preferences.eqPreamp.first(),
+                        tone = preferences.systemToneControls.first(),
+                        systemWide = preferences.systemWideAutoEqEnabled.first(),
+                    ),
+                )
             } catch (e: Exception) {
                 // EQ application non-critical
             }
@@ -613,17 +629,24 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * Apply EQ settings to the standalone AutoEQ processor (independent of mixer DSP)
+     * Apply EQ + tone settings to the standalone AutoEQ processor (independent of
+     * mixer DSP). The bass/treble tone shelves are folded in here — but only when
+     * the system-wide global effect ISN'T already handling this app's audio, so
+     * tone works whether or not system-wide is on and never gets applied twice.
      */
-    private fun applyEqSettings(enabled: Boolean, bandsJson: String?, preamp: Double) {
+    private fun applyEqSettings(cfg: EqApply) {
         try {
-            val bands = if (!bandsJson.isNullOrEmpty()) {
-                val json = Json { ignoreUnknownKeys = true }
-                json.decodeFromString<List<EqBand>>(bandsJson)
+            val json = Json { ignoreUnknownKeys = true }
+            val autoBands = if (cfg.enabled && !cfg.bandsJson.isNullOrEmpty()) {
+                json.decodeFromString<List<EqBand>>(cfg.bandsJson)
             } else {
                 emptyList()
             }
-            autoEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
+            val toneBands = if (!cfg.systemWide) cfg.tone.toBands() else emptyList()
+            val bands = autoBands + toneBands
+            val preamp = if (cfg.enabled) cfg.preamp else 0.0
+            val active = cfg.enabled || toneBands.any { it.enabled }
+            autoEqProcessor.applyBands(bands, preamp.toFloat(), active)
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }

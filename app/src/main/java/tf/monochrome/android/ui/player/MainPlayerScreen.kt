@@ -616,16 +616,13 @@ private fun StatusOverlayPanel(
                 accent,
                 onSystemWideAutoEqToggle,
             )
-            // Bass/treble tone shelves layered after the AutoEQ, with a live curve.
-            // Only meaningful while the system-wide effect is engaged, so it rides
-            // with that toggle.
-            if (systemWideAutoEqEnabled) {
-                ToneControlsPanel(
-                    tone = toneControls,
-                    accent = accent,
-                    onChange = onToneControlsChange,
-                )
-            }
+            // Bass/treble tone shelves (independent of the system-wide toggle —
+            // applied in-app, or via the global effect when system-wide is on).
+            ToneControlsPanel(
+                tone = toneControls,
+                accent = accent,
+                onChange = onToneControlsChange,
+            )
             PlayerStatusGrid(
                 accent = accent,
                 outputLabel = outputLabel,

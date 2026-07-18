@@ -1044,6 +1044,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val crossfade by viewModel.crossfadeDuration.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val preservePitch by viewModel.preservePitch.collectAsState()
+    val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsState()
     var showWifiDropdown by remember { mutableStateOf(false) }
     var showCellularDropdown by remember { mutableStateOf(false) }
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
@@ -1067,6 +1068,15 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     }
 
     SettingsTabContent {
+        SettingsGroupHeader("System-wide EQ")
+        SettingSwitchItem(
+            title = "System-wide AutoEQ",
+            subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
+            checked = systemWideAutoEq,
+            onCheckedChange = viewModel::setSystemWideAutoEq,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Streaming Quality")
         SettingItem(title = "Wi-Fi Streaming", subtitle = wifiQuality.displayName, onClick = { showWifiDropdown = true })
         DropdownMenu(expanded = showWifiDropdown, onDismissRequest = { showWifiDropdown = false }) {

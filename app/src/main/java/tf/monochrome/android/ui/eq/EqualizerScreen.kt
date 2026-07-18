@@ -79,6 +79,7 @@ fun EqualizerScreen(
     viewModel: EqViewModel = hiltViewModel()
 ) {
     val eqEnabled by viewModel.eqEnabled.collectAsState()
+    val toneControls by viewModel.toneControls.collectAsState()
     val currentBands by viewModel.currentBands.collectAsState()
     val currentPreamp by viewModel.currentPreamp.collectAsState()
     val availableTargets by viewModel.availableTargets.collectAsState()
@@ -255,6 +256,17 @@ fun EqualizerScreen(
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
               }
+            }
+
+            // ─── Bass / treble tone shelves (shares the player's tone setting) ───
+            item {
+                tf.monochrome.android.ui.player.ToneControlsPanel(
+                    tone = toneControls,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onChange = viewModel::setToneControls,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
             }
 
             // ─── Headphone Model Selector ───

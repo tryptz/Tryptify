@@ -58,6 +58,8 @@ internal fun ToneControlsPanel(
     accent: Color,
     onChange: (ToneControls) -> Unit,
     modifier: Modifier = Modifier,
+    // White suits the dark audio-tools sheet; pass onSurface on themed screens.
+    contentColor: Color = Color.White,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -72,13 +74,13 @@ internal fun ToneControlsPanel(
             Text(
                 "Tone",
                 style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.85f),
+                color = contentColor.copy(alpha = 0.85f),
                 modifier = Modifier.weight(1f),
             )
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = if (expanded) "Collapse tone" else "Expand tone",
-                tint = Color.White.copy(alpha = 0.7f),
+                tint = contentColor.copy(alpha = 0.7f),
                 modifier = Modifier.rotate(if (expanded) 180f else 0f),
             )
         }
@@ -87,6 +89,7 @@ internal fun ToneControlsPanel(
                 ToneCurve(
                     tone = tone,
                     accent = accent,
+                    baseline = contentColor,
                     modifier = Modifier.fillMaxWidth().height(76.dp),
                 )
                 // Mirrored layout: bass big knob hard left, treble big knob hard
@@ -97,27 +100,27 @@ internal fun ToneControlsPanel(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Knob("Bass", "%+.0f dB".format(tone.bassGainDb), tone.bassGainDb,
-                        ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, KNOB_BIG) {
+                        ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, contentColor, KNOB_BIG) {
                         onChange(tone.copy(bassGainDb = snap(it, 0.5f)))
                     }
                     Knob("Freq", "${tone.bassFreq.roundToInt()} Hz", tone.bassFreq,
-                        ToneControls.BASS_FREQ_MIN..ToneControls.BASS_FREQ_MAX, accent, KNOB_SMALL) {
+                        ToneControls.BASS_FREQ_MIN..ToneControls.BASS_FREQ_MAX, accent, contentColor, KNOB_SMALL) {
                         onChange(tone.copy(bassFreq = it))
                     }
                     Knob("Q", "%.2f".format(tone.bassQ), tone.bassQ,
-                        ToneControls.Q_MIN..ToneControls.Q_MAX, accent, KNOB_SMALL) {
+                        ToneControls.Q_MIN..ToneControls.Q_MAX, accent, contentColor, KNOB_SMALL) {
                         onChange(tone.copy(bassQ = it))
                     }
                     Knob("Q", "%.2f".format(tone.trebleQ), tone.trebleQ,
-                        ToneControls.Q_MIN..ToneControls.Q_MAX, accent, KNOB_SMALL) {
+                        ToneControls.Q_MIN..ToneControls.Q_MAX, accent, contentColor, KNOB_SMALL) {
                         onChange(tone.copy(trebleQ = it))
                     }
                     Knob("Freq", "${(tone.trebleFreq / 1000f).format1()} kHz", tone.trebleFreq,
-                        ToneControls.TREBLE_FREQ_MIN..ToneControls.TREBLE_FREQ_MAX, accent, KNOB_SMALL) {
+                        ToneControls.TREBLE_FREQ_MIN..ToneControls.TREBLE_FREQ_MAX, accent, contentColor, KNOB_SMALL) {
                         onChange(tone.copy(trebleFreq = it))
                     }
                     Knob("Treble", "%+.0f dB".format(tone.trebleGainDb), tone.trebleGainDb,
-                        ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, KNOB_BIG) {
+                        ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, contentColor, KNOB_BIG) {
                         onChange(tone.copy(trebleGainDb = snap(it, 0.5f)))
                     }
                 }
@@ -128,12 +131,12 @@ internal fun ToneControlsPanel(
 
 /** A live curve of the two shelves across 20 Hz–20 kHz (log x, ±12 dB y). */
 @Composable
-private fun ToneCurve(tone: ToneControls, accent: Color, modifier: Modifier) {
+private fun ToneCurve(tone: ToneControls, accent: Color, baseline: Color, modifier: Modifier) {
     val bands = tone.toBands()
     Canvas(modifier = modifier) {
         val midY = size.height / 2f
         drawLine(
-            color = Color.White.copy(alpha = 0.14f),
+            color = baseline.copy(alpha = 0.14f),
             start = Offset(0f, midY),
             end = Offset(size.width, midY),
             strokeWidth = 1f,
@@ -161,6 +164,7 @@ private fun Knob(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     accent: Color,
+    contentColor: Color,
     knobSize: Dp,
     onChange: (Float) -> Unit,
 ) {
@@ -193,7 +197,7 @@ private fun Knob(
                 val startAngle = 135f
                 val sweep = 270f
                 drawArc(
-                    color = Color.White.copy(alpha = 0.15f),
+                    color = contentColor.copy(alpha = 0.15f),
                     startAngle = startAngle,
                     sweepAngle = sweep,
                     useCenter = false,
@@ -214,10 +218,10 @@ private fun Knob(
                 val ang = Math.toRadians((startAngle + sweep * frac).toDouble())
                 val px = center.x + (radius * cos(ang)).toFloat()
                 val py = center.y + (radius * sin(ang)).toFloat()
-                drawCircle(color = Color.White, radius = stroke * 0.7f, center = Offset(px, py))
+                drawCircle(color = contentColor, radius = stroke * 0.7f, center = Offset(px, py))
             }
         }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.7f))
         Text(valueText, style = MaterialTheme.typography.labelSmall, color = accent)
     }
 }
