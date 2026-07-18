@@ -59,10 +59,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -70,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,6 +98,13 @@ fun StatsScreen(
     val state by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val lastSyncedAt by viewModel.lastSyncedAt.collectAsState()
+
+    val statsMsgContext = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.messages.collect { msg ->
+            android.widget.Toast.makeText(statsMsgContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -234,10 +244,16 @@ private fun StatsContent(
 
 @Composable
 private fun StaggerEntry(index: Int, content: @Composable () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
+    // rememberSaveable + a guard so the entrance plays ONCE. LazyColumn retains
+    // saveable item state across scroll, so a section scrolling off and back no
+    // longer resets to invisible, replaying the animation and flashing a blank
+    // gap during the stagger delay.
+    var visible by rememberSaveable { mutableStateOf(false) }
     LaunchedEffectOnce {
-        kotlinx.coroutines.delay(60L * index + 40L)
-        visible = true
+        if (!visible) {
+            kotlinx.coroutines.delay(60L * index + 40L)
+            visible = true
+        }
     }
     AnimatedVisibility(
         visible = visible,
@@ -282,7 +298,10 @@ private fun HeroMinutesCard(state: StatsUiState) {
     val primary = MaterialTheme.colorScheme.primary
     val tertiary = MaterialTheme.colorScheme.tertiary
     val pulse = rememberInfiniteTransition(label = "hero-pulse")
-    val t by pulse.animateFloat(
+    // Keep the animated value as State (no `by`) and read it inside drawBehind,
+    // so the pulse animates in the draw phase instead of recomposing the whole
+    // hero card 60×/second.
+    val t = pulse.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -290,12 +309,6 @@ private fun HeroMinutesCard(state: StatsUiState) {
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse-t"
-    )
-    val bg = Brush.linearGradient(
-        colors = listOf(
-            primary.copy(alpha = 0.22f + 0.10f * t),
-            tertiary.copy(alpha = 0.18f + 0.10f * (1f - t)),
-        )
     )
 
     Card(
@@ -306,7 +319,17 @@ private fun HeroMinutesCard(state: StatsUiState) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(bg)
+                .drawBehind {
+                    val tv = t.value
+                    drawRect(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                primary.copy(alpha = 0.22f + 0.10f * tv),
+                                tertiary.copy(alpha = 0.18f + 0.10f * (1f - tv)),
+                            )
+                        )
+                    )
+                }
                 .padding(20.dp),
         ) {
             Column {
@@ -500,7 +523,9 @@ private fun DayLineChart(data: List<DayAggregate>) {
     val ghost = color.copy(alpha = 0.0f)
     val maxV = (data.maxOfOrNull { it.playCount } ?: 1).coerceAtLeast(1)
     val minDay = data.first().dayEpoch
-    val maxDay = data.last().dayEpoch.coerceAtLeast(minDay + 1)
+    // No coerceAtLeast: a single day keeps span == 0 so the point centers at
+    // w/2 (the old +1 fudge drew a stray gradient wedge with no line).
+    val maxDay = data.last().dayEpoch
     val span = (maxDay - minDay).toFloat()
 
     val grow by animateFloatAsState(
@@ -516,6 +541,14 @@ private fun DayLineChart(data: List<DayAggregate>) {
     ) {
         val w = size.width
         val h = size.height
+        // A single data point can't stroke a line (moveTo with no lineTo) — draw
+        // a dot instead of the empty stroke + stray gradient wedge.
+        if (data.size < 2) {
+            val only = data.firstOrNull() ?: return@Canvas
+            val y = h - (only.playCount / maxV.toFloat()) * h * grow
+            drawCircle(color = color, radius = 6f, center = Offset(w / 2, y))
+            return@Canvas
+        }
         val path = Path()
         val fill = Path()
         data.forEachIndexed { i, d ->
@@ -767,12 +800,14 @@ private fun TopListRow(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 secondary,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(6.dp))

@@ -25,16 +25,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,10 +66,46 @@ fun DownloadsScreen(
     val albumGroups by viewModel.albumGroups.collectAsState()
     val playlists by playerViewModel.playlists.collectAsState()
 
+    // Surface delete failures (e.g. a sideloaded file the provider won't remove)
+    // instead of silently leaving the row behind.
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val selection = rememberTrackSelectionState<Long>()
     BackHandler(enabled = selection.active) { selection.clear() }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Deleting removes the actual audio files from disk with no undo, and the
+    // trash icon sits right next to add-to-playlist in the selection bar — a
+    // mis-tap must not silently destroy the user's downloads.
+    if (showDeleteConfirm) {
+        val count = selection.count
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete $count download${if (count == 1) "" else "s"}?") },
+            text = { Text("The audio file${if (count == 1) "" else "s"} will be permanently removed from this device.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteDownloads(
+                        downloadedTracks.filter { it.id in selection.selectedIds }
+                    )
+                    showDeleteConfirm = false
+                    selection.clear()
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
@@ -132,10 +172,7 @@ fun DownloadsScreen(
                 selection.clear()
             },
             onAddToPlaylist = { showAddToPlaylistForSelection = true },
-            onDelete = {
-                viewModel.deleteDownloads(downloadedTracks.filter { it.id in selection.selectedIds })
-                selection.clear()
-            },
+            onDelete = { showDeleteConfirm = true },
             deleteContentDescription = "Delete downloads"
         )
     }

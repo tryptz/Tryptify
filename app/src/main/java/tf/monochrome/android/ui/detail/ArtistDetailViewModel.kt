@@ -4,11 +4,15 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.downloads.DownloadManager
@@ -34,6 +38,10 @@ class ArtistDetailViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    /** One-shot messages for the artist screen (download-all outcome). */
+    private val _downloadMessage = MutableSharedFlow<String>(extraBufferCapacity = 2)
+    val downloadMessage: SharedFlow<String> = _downloadMessage.asSharedFlow()
 
     init {
         loadArtist()
@@ -100,7 +108,7 @@ class ArtistDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isDownloadingAll.value = true
             try {
-                val tracks = coroutineScope {
+                val perRelease = coroutineScope {
                     releases.map { album ->
                         async {
                             val slug = qobuzIdRegistry.albumSlugFor(album.id)
@@ -109,11 +117,22 @@ class ArtistDetailViewModel @Inject constructor(
                             } else {
                                 repository.getAlbum(album.id)
                             }
-                            result.getOrNull()?.tracks.orEmpty()
+                            result.getOrNull()?.tracks
                         }
-                    }.flatMap { it.await() }
-                }.distinctBy { it.id }
-                if (tracks.isNotEmpty()) downloadManager.downloadTracks(tracks)
+                    }.awaitAll()
+                }
+                val failed = perRelease.count { it == null }
+                val tracks = perRelease.filterNotNull().flatten().distinctBy { it.id }
+                when {
+                    tracks.isNotEmpty() -> {
+                        downloadManager.downloadTracks(tracks)
+                        _downloadMessage.tryEmit(
+                            if (failed > 0) "Downloading ${tracks.size} tracks (couldn't fetch $failed release${if (failed == 1) "" else "s"})"
+                            else "Downloading ${tracks.size} tracks"
+                        )
+                    }
+                    else -> _downloadMessage.tryEmit("Couldn't fetch releases. Check your connection.")
+                }
             } finally {
                 _isDownloadingAll.value = false
             }

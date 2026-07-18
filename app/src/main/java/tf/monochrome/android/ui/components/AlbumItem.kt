@@ -39,7 +39,10 @@ fun AlbumItem(
         CoverImage(
             url = album.coverUrl,
             contentDescription = album.title,
-            size = MonoDimens.coverCard,
+            // Subtract the card's own padding so the cover stays square inside
+            // the padded column instead of being requested at the full card
+            // width and cropped to a portrait 136x160.
+            size = MonoDimens.coverCard - MonoDimens.spacingMd * 2,
             cornerRadius = MonoDimens.radiusSm
         )
         Spacer(modifier = Modifier.height(MonoDimens.spacingSm))

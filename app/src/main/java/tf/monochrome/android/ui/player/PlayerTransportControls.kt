@@ -42,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.buttonSemantics
 
 /**
  * Primary transport row: previous · play/pause · next. The icons are solid glyph
@@ -57,6 +58,7 @@ fun PlayerTransportControls(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    isBuffering: Boolean = false,
 ) {
     val glass = LocalPlayerGlass.current
     // Button glass tint: a custom colour chosen in the Studio, or the album
@@ -118,6 +120,10 @@ fun PlayerTransportControls(
                         interactionSource = interactionSource,
                         indication = null,
                         onClick = onPlayPause,
+                    )
+                    .buttonSemantics(
+                        label = if (isPlaying) "Pause" else "Play",
+                        state = if (isBuffering) "Buffering" else null,
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -132,6 +138,15 @@ fun PlayerTransportControls(
                 ) {
                     drawGlassPlayPauseDisc(isPlaying = isPlaying, fill = tint)
                 }
+            }
+            // Buffering ring: without this the play glyph stays static while a
+            // stream loads, so the tap looks dead in a streaming-first app.
+            if (isBuffering) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.fillMaxSize(),
+                    color = tint,
+                    strokeWidth = 2.dp,
+                )
             }
         }
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,7 @@ import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
+import tf.monochrome.android.ui.components.toggleSemantics
 import tf.monochrome.android.ui.player.PlayerDesignTokens
 
 /** Fixed fader travel so strips stay compact instead of stretching the whole
@@ -120,7 +122,7 @@ fun FLChannelStrip(
                 text = if (isMaster) "M" else "${bus.index + 1}",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isSelected) onAccent else Color.White
+                color = if (isSelected) onAccent else colors.onSurfaceVariant
             )
         }
 
@@ -129,7 +131,8 @@ fun FLChannelStrip(
             text = bus.name,
             fontSize = 10.sp,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-            color = Color.White.copy(alpha = if (isSelected) 1f else 0.82f),
+            // Theme color (was hardcoded white → invisible on the light theme).
+            color = colors.onSurface.copy(alpha = if (isSelected) 1f else 0.82f),
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -204,6 +207,7 @@ fun FLChannelStrip(
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(
                 modifier = Modifier
+                    .minimumInteractiveComponentSize()
                     .size(26.dp)
                     .clip(CircleShape)
                     .background(if (bus.muted) colors.error else inactiveButton)
@@ -212,7 +216,8 @@ fun FLChannelStrip(
                         color = if (bus.muted) colors.error.copy(alpha = 0.75f) else colors.outline.copy(alpha = 0.12f),
                         shape = CircleShape
                     )
-                    .bounceClick(onClick = onToggleMute),
+                    .bounceClick(onClick = onToggleMute)
+                    .toggleSemantics(label = "Mute", checked = bus.muted),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -226,6 +231,7 @@ fun FLChannelStrip(
             if (!isMaster) {
                 Box(
                     modifier = Modifier
+                        .minimumInteractiveComponentSize()
                         .size(26.dp)
                         .clip(CircleShape)
                         .background(if (bus.soloed) accent else inactiveButton)
@@ -234,7 +240,8 @@ fun FLChannelStrip(
                             color = if (bus.soloed) accent.copy(alpha = 0.78f) else colors.outline.copy(alpha = 0.12f),
                             shape = CircleShape
                         )
-                        .bounceClick(onClick = onToggleSolo),
+                        .bounceClick(onClick = onToggleSolo)
+                        .toggleSemantics(label = "Solo", checked = bus.soloed),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(

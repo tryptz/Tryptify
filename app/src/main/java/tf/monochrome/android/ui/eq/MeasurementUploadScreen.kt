@@ -82,7 +82,9 @@ fun MeasurementUploadScreen(
         uri ?: return@rememberLauncherForActivityResult
         try {
             val rawData = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            if (!rawData.isNullOrEmpty()) {
+            if (rawData.isNullOrEmpty()) {
+                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
                 measurementData = rawData
                 // Pull the file's display name off the SAF URI and use it as
                 // the headphone name (sans extension). This is what makes
@@ -103,7 +105,9 @@ fun MeasurementUploadScreen(
                         ?: headphoneName
                 }
             }
-        } catch (_: Exception) { }
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     Column(

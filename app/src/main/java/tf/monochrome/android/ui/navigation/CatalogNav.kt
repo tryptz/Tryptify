@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.SourceType
 
@@ -13,13 +14,25 @@ import tf.monochrome.android.domain.model.SourceType
  * no-ops — we never navigate to a dead route.
  */
 
+/**
+ * Navigate only while the current back-stack entry is still RESUMED. A rapid
+ * double-tap fires two navigate() calls before the first destination settles;
+ * the second used to push a duplicate screen. After the first navigation the
+ * current entry leaves RESUMED, so the second tap is ignored here.
+ */
+fun NavController.navigateSafe(route: String) {
+    if (currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true) {
+        navigate(route)
+    }
+}
+
 /** Open the artist page appropriate to [sourceType]. */
 fun NavController.openArtist(sourceType: SourceType, artistId: Long) {
     val route = when (sourceType) {
         SourceType.LOCAL -> Screen.LocalArtistDetail.createRoute(artistId)
         else -> Screen.ArtistDetail.createRoute(artistId)
     }
-    navigate(route)
+    navigateSafe(route)
 }
 
 /**
@@ -32,10 +45,10 @@ fun NavController.openAlbum(albumId: String?) {
     when {
         albumId.startsWith("local_album_") -> {
             albumId.removePrefix("local_album_").toLongOrNull()
-                ?.let { navigate(Screen.LocalAlbumDetail.createRoute(it)) }
+                ?.let { navigateSafe(Screen.LocalAlbumDetail.createRoute(it)) }
         }
         albumId.startsWith("col_album_") -> Unit // no collection detail screen
-        else -> albumId.toLongOrNull()?.let { navigate(Screen.AlbumDetail.createRoute(it)) }
+        else -> albumId.toLongOrNull()?.let { navigateSafe(Screen.AlbumDetail.createRoute(it)) }
     }
 }
 
@@ -56,10 +69,10 @@ fun isNavigableAlbumId(albumId: String?): Boolean {
 
 /** Catalog-only artist navigation (for domain `Track` rows, which are TIDAL/Qobuz). */
 fun NavController.openCatalogArtist(artistId: Long) {
-    navigate(Screen.ArtistDetail.createRoute(artistId))
+    navigateSafe(Screen.ArtistDetail.createRoute(artistId))
 }
 
 /** Catalog-only album navigation (for domain `Track` rows). */
 fun NavController.openCatalogAlbum(albumId: Long) {
-    navigate(Screen.AlbumDetail.createRoute(albumId))
+    navigateSafe(Screen.AlbumDetail.createRoute(albumId))
 }

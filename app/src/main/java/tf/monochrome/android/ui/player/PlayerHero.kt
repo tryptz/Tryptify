@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
@@ -42,10 +43,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -291,13 +294,19 @@ private fun VisualizerHero(
     onToggleShowSpectrum: () -> Unit,
     onExitVisualizer: () -> Unit,
 ) {
+    // Keyed on an interaction counter so each tap restarts the 2s countdown
+    // (a tap just before the deadline used to give a near-zero window).
     var showOverlay by remember { mutableStateOf(true) }
-    LaunchedEffect(showOverlay) {
-        if (showOverlay) {
-            delay(2000)
-            showOverlay = false
-        }
+    var overlayInteraction by remember { mutableIntStateOf(0) }
+    LaunchedEffect(overlayInteraction) {
+        showOverlay = true
+        delay(2000)
+        showOverlay = false
     }
+    // In fullscreen the system bars are hidden and the exit button lives in
+    // the auto-hiding overlay — without this, Back pops the whole player and
+    // (fullscreen being a persisted pref) reopening lands right back here.
+    BackHandler(enabled = isFullscreen) { onToggleFullscreen() }
     Surface(
         // Outside fullscreen the visualizer is locked to the album-art aspect
         // ratio so its dimensions match the cover artwork exactly.
@@ -313,7 +322,7 @@ private fun VisualizerHero(
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
-                    onClick = { showOverlay = true },
+                    onClick = { overlayInteraction++ },
                 )
         ) {
             if (visualizerCompact) {
@@ -545,12 +554,16 @@ private fun HeroCoverArt(
 
     // Controls show briefly on tap, then disappear quickly. When idle there are
     // no tags/labels on the art at all — the buttons are small and icon-only.
+    // Keyed on an interaction counter (bumped by showControls()) so every tap
+    // RESTARTS the 1.2s countdown — controls used to fade 1.2s after first
+    // appearing even while the user was actively cycling a button.
     var controlsVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(controlsVisible) {
-        if (controlsVisible) {
-            delay(1200)
-            controlsVisible = false
-        }
+    var controlsInteraction by remember { mutableIntStateOf(0) }
+    val showControls = { controlsInteraction++ }
+    LaunchedEffect(controlsInteraction) {
+        controlsVisible = true
+        delay(1200)
+        controlsVisible = false
     }
     val controlsAlpha by animateFloatAsState(
         targetValue = if (controlsVisible) 1f else 0f,
@@ -565,7 +578,7 @@ private fun HeroCoverArt(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { controlsVisible = true }
+            ) { showControls() }
     ) {
         CoverImage(
             url = track?.coverUrl,
@@ -611,14 +624,16 @@ private fun HeroCoverArt(
             ) {
                 HeroIconButton(
                     icon = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
+                    contentDescription = if (spectrumEnabled) "Show album art" else "Show spectrum",
                     enabled = interactive,
-                    onClick = { onToggleShowSpectrum(); controlsVisible = true },
+                    onClick = { onToggleShowSpectrum(); showControls() },
                 )
                 if (spectrumEnabled) {
                     HeroIconButton(
                         icon = Icons.Default.Speed,
+                        contentDescription = "Spectrum speed",
                         enabled = interactive,
-                        onClick = { spectrumSpeed = spectrumSpeed.next(); controlsVisible = true },
+                        onClick = { spectrumSpeed = spectrumSpeed.next(); showControls() },
                     )
                 }
             }
@@ -651,8 +666,9 @@ private fun HeroCoverArt(
                 HeroIconButton(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     icon = Icons.Default.GraphicEq,
+                    contentDescription = "Open visualizer",
                     enabled = interactive,
-                    onClick = { onEnterVisualizer(); controlsVisible = true },
+                    onClick = { onEnterVisualizer(); showControls() },
                 )
             }
         }
@@ -663,12 +679,16 @@ private fun HeroCoverArt(
 @Composable
 private fun HeroIconButton(
     icon: ImageVector,
+    contentDescription: String,
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier
+            // 32dp glass disc, but reserve the 48dp accessibility minimum so
+            // the icon-only overlay control is actually hittable.
+            .minimumInteractiveComponentSize()
             .size(32.dp)
             .clip(CircleShape)
             .clickable(enabled = enabled, onClick = onClick)
@@ -678,7 +698,7 @@ private fun HeroIconButton(
         contentColor = Color.White,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(imageVector = icon, contentDescription = contentDescription, modifier = Modifier.size(16.dp))
         }
     }
 }

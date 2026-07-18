@@ -238,6 +238,11 @@ class PreferencesManager @Inject constructor(
         // Library tab order
         private val LIBRARY_TAB_ORDER = stringPreferencesKey("library_tab_order")
 
+        // Library sort selections (serialized "<KEY>:asc" / "<KEY>:desc")
+        private val SONG_SORT = stringPreferencesKey("library_song_sort")
+        private val ALBUM_SORT = stringPreferencesKey("library_album_sort")
+        private val ARTIST_SORT = stringPreferencesKey("library_artist_sort")
+
         // Car mode
         private val CAR_MODE_BAND_COUNT = intPreferencesKey("car_mode_band_count")
 
@@ -1144,6 +1149,14 @@ class PreferencesManager @Inject constructor(
     suspend fun setLibraryTabOrder(order: List<String>) {
         dataStore.edit { it[LIBRARY_TAB_ORDER] = order.joinToString(",") }
     }
+
+    // --- Library sort selections (persist Songs/Albums/Artists sort order) ---
+    val songSort: Flow<String?> = dataStore.data.map { it[SONG_SORT] }
+    val albumSort: Flow<String?> = dataStore.data.map { it[ALBUM_SORT] }
+    val artistSort: Flow<String?> = dataStore.data.map { it[ARTIST_SORT] }
+    suspend fun setSongSort(value: String) { dataStore.edit { it[SONG_SORT] = value } }
+    suspend fun setAlbumSort(value: String) { dataStore.edit { it[ALBUM_SORT] = value } }
+    suspend fun setArtistSort(value: String) { dataStore.edit { it[ARTIST_SORT] = value } }
 
     // --- Car mode ---
     val carModeBandCount: Flow<Int> = dataStore.data.map { it[CAR_MODE_BAND_COUNT] ?: 10 }

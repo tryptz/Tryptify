@@ -1,11 +1,14 @@
 package tf.monochrome.android.ui.mixer
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -16,9 +19,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
-import kotlin.math.PI
-import kotlin.math.atan2
+import tf.monochrome.android.ui.components.adjustableSemantics
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -48,32 +51,63 @@ fun PanKnob(
     // Remember whether we already fired a haptic for the centre detent
     val firedDetent = remember { mutableSetOf<Boolean>() }
 
+    // Gesture coroutine is keyed on Unit — read the live value through an
+    // updated-state holder so a drag starts from the actual current pan.
+    val latestValue by rememberUpdatedState(value)
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+
     Canvas(
         modifier = modifier
+            // Keep the 28dp visual but expand the touch target to the 48dp
+            // accessibility minimum so it isn't a near-impossible hit.
+            .minimumInteractiveComponentSize()
             .size(28.dp)
-            .pointerInput(Unit) {
-                val cx = size.width / 2f
-                val cy = size.height / 2f
-                detectDragGestures { change, _ ->
-                    change.consume()
-                    val pos = change.position
-                    // atan2 with 0 = up (12 o'clock)
-                    val angle = atan2(pos.x - cx, -(pos.y - cy)).toFloat()
-                    val maxAngle = (135f * PI / 180f).toFloat()
-                    val clamped = angle.coerceIn(-maxAngle, maxAngle)
-                    val newVal = (clamped / maxAngle).coerceIn(-1f, 1f)
-                    onValueChange(newVal)
-
-                    // Haptic tick at centre detent
-                    if (newVal in -0.05f..0.05f) {
-                        if (firedDetent.isEmpty()) {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            firedDetent.add(true)
-                        }
-                    } else {
-                        firedDetent.clear()
+            .adjustableSemantics(
+                label = "Pan",
+                value = value,
+                range = -1f..1f,
+                stateText = { v ->
+                    when {
+                        v < -0.02f -> "${(-v * 100).roundToInt()}% left"
+                        v > 0.02f -> "${(v * 100).roundToInt()}% right"
+                        else -> "Center"
                     }
-                }
+                },
+                onValueChange = onValueChange,
+            )
+            .pointerInput(Unit) {
+                // Delta-based vertical drag (up = right, down = left). The knob
+                // sits inside the horizontally-scrolling channel row; an
+                // omnidirectional detectDragGestures with absolute-angle mapping
+                // both stole the row's horizontal scroll and snapped the pan to
+                // wherever the finger first landed. Vertical-only relative drag
+                // fixes both — sideways swipes scroll the row, and the grab
+                // starts from the current value.
+                var startVal = 0f
+                var accumPx = 0f
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        startVal = latestValue
+                        accumPx = 0f
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        accumPx += dragAmount
+                        // ~150px of travel spans the full -1..+1 range.
+                        val newVal = (startVal - accumPx / 150f).coerceIn(-1f, 1f)
+                        latestOnValueChange(newVal)
+
+                        // Haptic tick at centre detent
+                        if (newVal in -0.05f..0.05f) {
+                            if (firedDetent.isEmpty()) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                firedDetent.add(true)
+                            }
+                        } else {
+                            firedDetent.clear()
+                        }
+                    }
+                )
             }
     ) {
         val cx = size.width / 2f

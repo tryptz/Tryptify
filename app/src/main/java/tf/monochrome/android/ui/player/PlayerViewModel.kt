@@ -11,12 +11,14 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
@@ -94,6 +96,47 @@ class PlayerViewModel @Inject constructor(
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
+    // --- Sleep timer ---
+    // Owned here (this ViewModel is created at the nav-host level and shared,
+    // so it outlives the player destination) rather than in a LaunchedEffect
+    // on the player screen: the effect died with the composable, silently
+    // discarding the timer whenever the user collapsed the player or opened
+    // another screen — playback then never paused.
+    private val _sleepTimerMinutes = MutableStateFlow(0)
+    val sleepTimerMinutes: StateFlow<Int> = _sleepTimerMinutes.asStateFlow()
+
+    private val _sleepTimerRemainingMs = MutableStateFlow(0L)
+    val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs.asStateFlow()
+
+    private var sleepTimerJob: Job? = null
+
+    /**
+     * Arm the sleep timer for [minutes] (restarting if already armed, so
+     * re-selecting the same duration begins a fresh countdown), or cancel
+     * with 0. Pauses playback when the countdown reaches zero.
+     */
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        val m = minutes.coerceAtLeast(0)
+        _sleepTimerMinutes.value = m
+        _sleepTimerRemainingMs.value = m * 60_000L
+        if (m == 0) return
+        sleepTimerJob = viewModelScope.launch {
+            val endAt = System.currentTimeMillis() + m * 60_000L
+            while (true) {
+                val left = endAt - System.currentTimeMillis()
+                if (left <= 0) break
+                _sleepTimerRemainingMs.value = left
+                delay(minOf(1_000L, left))
+            }
+            if (_isPlaying.value) togglePlayPause()
+            _sleepTimerMinutes.value = 0
+            _sleepTimerRemainingMs.value = 0L
+            sleepTimerJob = null
+        }
+    }
+
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
@@ -108,6 +151,14 @@ class PlayerViewModel @Inject constructor(
 
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
+
+    // Surfaced to the player UI when a track can't be resolved/streamed. Also
+    // used to break the resolve→fail→skip→resolve loop that otherwise ran
+    // forever under repeat modes (offline / dead instance).
+    private val _playbackError = MutableStateFlow<String?>(null)
+    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+    private var consecutiveResolveFailures = 0
+    fun clearPlaybackError() { _playbackError.value = null }
 
     // --- Active Track Meta (Lyrics / Liked) ---
     private val _isCurrentTrackLiked = MutableStateFlow(false)
@@ -259,27 +310,36 @@ class PlayerViewModel @Inject constructor(
                         // Start fetching lyrics
                         _isLyricsLoading.value = true
                         _currentLyrics.value = null
-                        
-                        launch {
-                            // Qobuz tracks must skip the TIDAL /lyrics lookup —
-                            // a Qobuz id on TIDAL resolves to a different song,
-                            // so its (synced) lyrics would never match. The
-                            // resolved source is the authoritative signal;
-                            // qobuzIdRegistry is a backstop.
-                            val skipTidal = unifiedTrackRegistry[track.id]?.sourceType ==
-                                tf.monochrome.android.domain.model.SourceType.QOBUZ ||
-                                qobuzIdRegistry.isQobuzTrack(track.id)
-                            // Pass the full Track so the repository can fall
-                            // back to LRCLib (track + artist + album +
-                            // duration) when TIDAL returns no lyrics.
-                            _currentLyrics.value =
-                                repository.getLyrics(track.id, track, skipTidal = skipTidal).getOrNull()
-                            _isLyricsLoading.value = false
-                        }
 
-                        // Observe liked status
-                        libraryRepository.isFavoriteTrack(track.id).collectLatest { isLiked ->
-                            _isCurrentTrackLiked.value = isLiked
+                        // coroutineScope so BOTH children are children of this
+                        // collectLatest emission — a track change cancels the
+                        // in-flight lyrics fetch too. Previously the lyrics
+                        // `launch` bound to the outer viewModelScope coroutine
+                        // and survived, so a slow fetch for a skipped track
+                        // could overwrite the current track's lyrics.
+                        coroutineScope {
+                            launch {
+                                // Qobuz tracks must skip the TIDAL /lyrics lookup —
+                                // a Qobuz id on TIDAL resolves to a different song,
+                                // so its (synced) lyrics would never match. The
+                                // resolved source is the authoritative signal;
+                                // qobuzIdRegistry is a backstop.
+                                val skipTidal = unifiedTrackRegistry[track.id]?.sourceType ==
+                                    tf.monochrome.android.domain.model.SourceType.QOBUZ ||
+                                    qobuzIdRegistry.isQobuzTrack(track.id)
+                                // Pass the full Track so the repository can fall
+                                // back to LRCLib (track + artist + album +
+                                // duration) when TIDAL returns no lyrics.
+                                _currentLyrics.value =
+                                    repository.getLyrics(track.id, track, skipTidal = skipTidal).getOrNull()
+                                _isLyricsLoading.value = false
+                            }
+                            // Observe liked status
+                            launch {
+                                libraryRepository.isFavoriteTrack(track.id).collectLatest { isLiked ->
+                                    _isCurrentTrackLiked.value = isLiked
+                                }
+                            }
                         }
                     } else {
                         _currentLyrics.value = null
@@ -493,11 +553,27 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun removeFromQueue(index: Int) {
+        val wasCurrent = index == queueManager.currentQueueIndex
         queueManager.removeFromQueue(index)
+        // Deleting the playing track slid the next one into its slot, but the
+        // player is still on the old audio — resolve & play the new current so
+        // the UI and audio don't desync (or stop if the queue drained).
+        if (wasCurrent) {
+            if (queueManager.currentTrack.value != null) resolveAndPlay()
+            else mediaController?.stop()
+        }
     }
 
     fun removeSelectedFromQueue(indices: Set<Int>) {
+        val playingId = queueManager.currentTrack.value?.id
         queueManager.removeMany(indices)
+        // If the track that was playing got removed, re-sync the player to the
+        // new current track (removeMany keeps the current track when it survives,
+        // so this only fires when it was actually deleted).
+        if (queueManager.currentTrack.value?.id != playingId) {
+            if (queueManager.currentTrack.value != null) resolveAndPlay()
+            else mediaController?.stop()
+        }
     }
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
@@ -712,7 +788,7 @@ class PlayerViewModel @Inject constructor(
                     unifiedTrackRegistry.put(track.id, unifiedTrack)
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
                     if (!resolved.isPlayable) {
-                        skipToNext()
+                        handleResolveFailure()
                         return@launch
                     }
                     mediaController?.let { mc ->
@@ -720,11 +796,12 @@ class PlayerViewModel @Inject constructor(
                         mc.prepare()
                         mc.play()
                     }
+                    onResolveSucceeded()
                 } else {
                     // Legacy API path
                     val (mediaItem, _) = streamResolver.resolveMediaItem(track)
                     if (mediaItem == null) {
-                        skipToNext()
+                        handleResolveFailure()
                         return@launch
                     }
                     mediaController?.let { mc ->
@@ -732,12 +809,39 @@ class PlayerViewModel @Inject constructor(
                         mc.prepare()
                         mc.play()
                     }
+                    onResolveSucceeded()
                 }
             } catch (_: Exception) {
-                // On error skip to next
-                skipToNext()
+                handleResolveFailure()
             }
         }
+    }
+
+    private fun onResolveSucceeded() {
+        consecutiveResolveFailures = 0
+        _playbackError.value = null
+    }
+
+    /**
+     * A track failed to resolve/stream. Advance to the next track, but stop —
+     * and surface an error — rather than looping forever: never auto-skip
+     * under RepeatMode.ONE, and bail once a full queue's worth of tracks have
+     * failed in a row (offline / dead streaming instance).
+     */
+    private fun handleResolveFailure() {
+        consecutiveResolveFailures++
+        val queueSize = queueManager.queue.value.size.coerceAtLeast(1)
+        if (repeatMode.value == RepeatMode.ONE) {
+            _playbackError.value = "Couldn't play this track."
+            consecutiveResolveFailures = 0
+            return
+        }
+        if (consecutiveResolveFailures >= queueSize) {
+            _playbackError.value = "Couldn't play these tracks. Check your connection."
+            consecutiveResolveFailures = 0
+            return
+        }
+        skipToNext()
     }
 
     /**
@@ -858,9 +962,17 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun createPlaylist(name: String, description: String? = null) {
+    fun createPlaylist(
+        name: String,
+        description: String? = null,
+        initialTracks: List<Track> = emptyList(),
+    ) {
         viewModelScope.launch {
-            libraryRepository.createPlaylist(name, description)
+            // Use the id the repository returns so tracks stashed from an
+            // "Add to playlist → New Playlist" flow actually land in the new
+            // playlist instead of being silently dropped.
+            val id = libraryRepository.createPlaylist(name, description)
+            initialTracks.forEach { libraryRepository.addTrackToPlaylist(id, it) }
         }
     }
 

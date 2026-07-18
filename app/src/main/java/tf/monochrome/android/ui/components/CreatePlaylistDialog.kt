@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,20 +26,32 @@ import androidx.compose.ui.window.DialogProperties
 fun CreatePlaylistDialog(
     onDismiss: () -> Unit,
     onSubmit: (name: String, description: String) -> Unit,
-    onImportCsv: ((uri: Uri, strictMatch: Boolean, name: String, description: String) -> Unit)? = null
+    onImportCsv: ((uri: Uri, strictMatch: Boolean, name: String, description: String) -> Unit)? = null,
+    initialName: String = "",
+    initialDescription: String = "",
+    title: String = "Create Playlist",
+    confirmLabel: String = "Create",
 ) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var isUploadMode by remember { mutableStateOf(true) }
-    var selectedFormat by remember { mutableStateOf("CSV") }
-    var selectedSource by remember { mutableStateOf("Spotify") }
-    var selectedUri by remember { mutableStateOf<Uri?>(null) }
-    var strictAlbumMatch by remember { mutableStateOf(false) }
+    // Seed from the initial values so the "Edit playlist" reuse of this dialog
+    // shows the existing name/description instead of blanks (submitting blank
+    // used to wipe them).
+    // rememberSaveable so typed input and the picked file survive the process
+    // death that the SAF file picker can trigger (the picker launches another
+    // activity, and low-memory devices reclaim this one behind it).
+    var name by rememberSaveable { mutableStateOf(initialName) }
+    var description by rememberSaveable { mutableStateOf(initialDescription) }
+    var isUploadMode by rememberSaveable { mutableStateOf(true) }
+    var selectedFormat by rememberSaveable { mutableStateOf("CSV") }
+    var selectedSource by rememberSaveable { mutableStateOf("Spotify") }
+    var selectedUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var strictAlbumMatch by rememberSaveable { mutableStateOf(false) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
-            selectedUri = uri
+            // Cancelling the picker delivers a null uri; keep the previously
+            // selected file instead of clearing it.
+            if (uri != null) selectedUri = uri
         }
     )
 
@@ -62,7 +75,7 @@ fun CreatePlaylistDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Create Playlist",
+                    text = title,
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -111,7 +124,7 @@ fun CreatePlaylistDialog(
                     value = description,
                     onValueChange = { description = it },
                     placeholder = { Text("Description (optional)") },
-                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f),
@@ -187,7 +200,7 @@ fun CreatePlaylistDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text(if (selectedUri != null) "File selected" else "Choisir un fichier")
+                            Text(if (selectedUri != null) "File selected" else "Choose a file")
                         }
 
                         Text(
@@ -227,18 +240,27 @@ fun CreatePlaylistDialog(
                         Text("Cancel")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
+                    // Only the CSV format actually imports; a file picked while
+                    // an unsupported format is selected must not silently run
+                    // the CSV importer (it created garbage playlists).
+                    val canImport = onImportCsv != null && isUploadMode &&
+                        selectedUri != null && selectedFormat == "CSV"
                     Button(
                         onClick = {
-                            if (onImportCsv != null && isUploadMode && selectedUri != null) {
-                                onImportCsv(selectedUri!!, strictAlbumMatch, name, description)
+                            if (canImport) {
+                                onImportCsv!!(selectedUri!!, strictAlbumMatch, name, description)
                             } else {
                                 onSubmit(name, description)
                             }
                             onDismiss()
                         },
-                        enabled = name.isNotBlank() && (selectedUri != null || !isUploadMode || onImportCsv == null)
+                        // A non-blank name is enough: onClick imports when a CSV
+                        // file is picked, otherwise creates a plain playlist. The
+                        // old extra conditions left the button disabled for a
+                        // plainly-named playlist in the default (upload) mode.
+                        enabled = name.isNotBlank()
                     ) {
-                        Text(if (onImportCsv != null && isUploadMode && selectedUri != null) "Import" else "Create")
+                        Text(if (canImport) "Import" else confirmLabel)
                     }
                 }
             }

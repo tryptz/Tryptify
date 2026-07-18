@@ -35,10 +35,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,7 +55,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
-import kotlinx.coroutines.delay
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.navigation.Screen
@@ -77,6 +76,7 @@ fun MainPlayerRoute(
     val queue by playerViewModel.queue.collectAsState()
     val currentIndex by playerViewModel.currentIndex.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
+    val isBuffering by playerViewModel.isBuffering.collectAsState()
     val positionMs by playerViewModel.positionMs.collectAsState()
     val durationMs by playerViewModel.durationMs.collectAsState()
     val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsState()
@@ -115,9 +115,13 @@ fun MainPlayerRoute(
     val showNpSpectrum = spectrumAnalyzerEnabled && spectrumShowOnNowPlaying
 
     if (showNpSpectrum) {
-        DisposableEffect(Unit) {
+        // Tie the FFT tap to the STARTED lifecycle, not just composition, so it
+        // releases when the app is backgrounded (the Visualizer/Audio effect
+        // otherwise kept sampling and draining battery while off-screen) and
+        // re-acquires on return.
+        LifecycleStartEffect(Unit) {
             playerViewModel.acquireSpectrum()
-            onDispose { playerViewModel.releaseSpectrum() }
+            onStopOrDispose { playerViewModel.releaseSpectrum() }
         }
     }
 
@@ -128,7 +132,10 @@ fun MainPlayerRoute(
     var showPresetSheet by rememberSaveable { mutableStateOf(false) }
     var showSpeedSheet by rememberSaveable { mutableStateOf(false) }
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
-    var sleepMinutes by rememberSaveable { mutableIntStateOf(0) }
+    // Sleep timer lives in PlayerViewModel (shared, nav-host-scoped) so the
+    // countdown keeps running when this destination leaves composition.
+    val sleepMinutes by playerViewModel.sleepTimerMinutes.collectAsState()
+    val sleepRemainingMs by playerViewModel.sleepTimerRemainingMs.collectAsState()
 
     // Expanded lyrics: the SAME hero lyric surface grows to full-bleed while
     // MainPlayerScreen collapses the player chrome — no separate overlay.
@@ -141,17 +148,18 @@ fun MainPlayerRoute(
     }
     BackHandler(enabled = lyricsExpanded) { lyricsExpanded = false }
 
-    // Self-contained sleep timer: pause playback once the chosen interval
-    // elapses, then reset. Re-keys (and restarts) whenever the user changes it.
-    LaunchedEffect(sleepMinutes) {
-        if (sleepMinutes > 0) {
-            delay(sleepMinutes * 60_000L)
-            if (playerViewModel.isPlaying.value) playerViewModel.togglePlayPause()
-            sleepMinutes = 0
+    LaunchedEffect(isPlaying) { playerViewModel.setVisualizerPlaybackPaused(!isPlaying) }
+
+    // Surface stream-resolution failures (offline / dead instance) that the
+    // ViewModel now reports instead of silently looping.
+    val playbackError by playerViewModel.playbackError.collectAsState()
+    val playbackErrorContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(playbackError) {
+        playbackError?.let {
+            android.widget.Toast.makeText(playbackErrorContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            playerViewModel.clearPlaybackError()
         }
     }
-
-    LaunchedEffect(isPlaying) { playerViewModel.setVisualizerPlaybackPaused(!isPlaying) }
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsState()
     val playerGlass by playerViewModel.playerGlass.collectAsState()
@@ -213,10 +221,12 @@ fun MainPlayerRoute(
             onDismiss = { showSpeedSheet = false },
         )
     }
+    val sleepRemainingMinutes = ((sleepRemainingMs + 59_999) / 60_000).toInt()
     if (showSleepSheet) {
         SleepTimerSheet(
             activeMinutes = sleepMinutes,
-            onSelect = { sleepMinutes = it },
+            remainingMinutes = sleepRemainingMinutes,
+            onSelect = { playerViewModel.setSleepTimer(it) },
             onDismiss = { showSleepSheet = false },
         )
     }
@@ -233,6 +243,7 @@ fun MainPlayerRoute(
         channelBadge = currentUnified?.channelBadge ?: currentTrack?.channelBadge,
         isThxSpatialAudio = currentUnified?.isThxSpatialAudio ?: currentTrack?.isThxSpatialAudio ?: false,
         isPlaying = isPlaying,
+        isBuffering = isBuffering,
         positionMs = positionMs,
         durationMs = durationMs,
         progress = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
@@ -245,7 +256,8 @@ fun MainPlayerRoute(
         outputLabel = "Default",
         soundLabel = "AutoEQ",
         speedLabel = String.format(Locale.US, "%.2fx", playbackSpeed),
-        sleepTimerLabel = if (sleepMinutes > 0) "$sleepMinutes min" else "Off",
+        sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
+        sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
         albumColors = AlbumColors(animatedDominant, albumColors.vibrant),
         visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER,
@@ -593,7 +605,9 @@ private fun SpeedSheet(
                     FilterChip(
                         selected = kotlin.math.abs(speed - preset) < 0.01f,
                         onClick = { onSpeedChange(preset) },
-                        label = { Text(String.format(Locale.US, "%.2gx", preset)) },
+                        // %.2g rendered 1.25 as "1.2"; use a trimmed decimal so
+                        // the chip label matches the value it actually sets.
+                        label = { Text(String.format(Locale.US, if (preset == preset.toInt().toFloat()) "%.1fx" else "%.2fx", preset)) },
                     )
                 }
             }
@@ -611,7 +625,7 @@ private fun SpeedSheet(
                             "Pitch shifts with speed (vinyl-style)"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Switch(
@@ -628,6 +642,7 @@ private fun SpeedSheet(
 @Composable
 private fun SleepTimerSheet(
     activeMinutes: Int,
+    remainingMinutes: Int,
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -652,12 +667,12 @@ private fun SleepTimerSheet(
             }
             Text(
                 text = if (activeMinutes > 0) {
-                    "Playback will pause in $activeMinutes minutes."
+                    "Playback will pause in $remainingMinutes minute${if (remainingMinutes == 1) "" else "s"}."
                 } else {
                     "Sleep timer is off."
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

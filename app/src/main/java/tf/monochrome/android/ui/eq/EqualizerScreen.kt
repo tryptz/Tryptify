@@ -51,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import android.widget.Toast
 import androidx.compose.ui.Alignment
@@ -94,18 +95,21 @@ fun EqualizerScreen(
     val availableHeadphones by viewModel.availableHeadphones.collectAsState()
     val showTutorial by viewModel.showTutorial.collectAsState()
 
-    var showSaveDialog by remember { mutableStateOf(false) }
+    // rememberSaveable for dialog visibility + typed input so a background
+    // process death (e.g. while a SAF picker is up) doesn't drop a half-filled
+    // save/target dialog or reset the expanded sections.
+    var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var showTargetMenu by remember { mutableStateOf(false) }
     var showHeadphoneSelect by remember { mutableStateOf(false) }
     var showMeasurementUpload by remember { mutableStateOf(false) }
     var showPresetMenu by remember { mutableStateOf(false) }
-    var showBandsExpanded by remember { mutableStateOf(true) }
-    var showProfilesExpanded by remember { mutableStateOf(true) }
-    var saveName by remember { mutableStateOf("") }
-    var saveDescription by remember { mutableStateOf("") }
-    var showTargetNameDialog by remember { mutableStateOf(false) }
-    var pendingTargetData by remember { mutableStateOf("") }
-    var targetName by remember { mutableStateOf("") }
+    var showBandsExpanded by rememberSaveable { mutableStateOf(true) }
+    var showProfilesExpanded by rememberSaveable { mutableStateOf(true) }
+    var saveName by rememberSaveable { mutableStateOf("") }
+    var saveDescription by rememberSaveable { mutableStateOf("") }
+    var showTargetNameDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingTargetData by rememberSaveable { mutableStateOf("") }
+    var targetName by rememberSaveable { mutableStateOf("") }
     var presetToDelete by remember { mutableStateOf<tf.monochrome.android.domain.model.EqPreset?>(null) }
 
     val context = LocalContext.current
@@ -130,9 +134,12 @@ fun EqualizerScreen(
             val rawData = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (!rawData.isNullOrEmpty()) {
                 viewModel.importMeasurementData(rawData)
+            } else {
+                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             viewModel.clearError()
+            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -147,8 +154,35 @@ fun EqualizerScreen(
                 pendingTargetData = rawData
                 targetName = ""
                 showTargetNameDialog = true
+            } else {
+                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
             }
-        } catch (_: Exception) { }
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Export EQ: serialize the current bands to an EqualizerAPO-style
+    // ParametricEQ.txt (widely importable) and save via SAF.
+    var pendingEqExport by remember { mutableStateOf<String?>(null) }
+    val eqExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        val text = pendingEqExport
+        pendingEqExport = null
+        if (uri != null && text != null) {
+            val ok = try {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                true
+            } catch (_: Exception) {
+                false
+            }
+            android.widget.Toast.makeText(
+                context,
+                if (ok) "EQ exported" else "Couldn't export EQ",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     // AutoEQ tutorial dialog (first visit)
@@ -248,6 +282,18 @@ fun EqualizerScreen(
                             }
                         }
                     )
+                    // Entry point for the guided measurement-calibration flow,
+                    // which was fully built but previously unreachable.
+                    TextButton(onClick = { showMeasurementUpload = true }) {
+                        Icon(
+                            Icons.Default.UploadFile,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Upload & calibrate a measurement")
+                    }
                 }
               }
             }
@@ -371,7 +417,14 @@ fun EqualizerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { /* export EQ preset */ },
+                        onClick = {
+                            if (currentBands.isEmpty()) {
+                                android.widget.Toast.makeText(context, "No EQ bands to export", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                pendingEqExport = buildParametricEqText(currentBands, currentPreamp)
+                                eqExportLauncher.launch("MonochromeEQ.txt")
+                            }
+                        },
                         modifier = Modifier
                             .size(52.dp)
                             .liquidGlass(
@@ -987,4 +1040,29 @@ private fun parseSampleRate(label: String): Float = when (label) {
     "96k" -> 96000f
     "192k" -> 192000f
     else -> 48000f
+}
+
+/**
+ * Serialize the current EQ to EqualizerAPO-style ParametricEQ text, which
+ * Wavelet, Poweramp, RootlessJamesDSP and most parametric EQs can import.
+ */
+private fun buildParametricEqText(
+    bands: List<tf.monochrome.android.domain.model.EqBand>,
+    preamp: Float,
+): String {
+    val us = java.util.Locale.US
+    val sb = StringBuilder()
+    sb.append("Preamp: ").append(String.format(us, "%.1f", preamp)).append(" dB\n")
+    var n = 1
+    for (b in bands) {
+        if (!b.enabled) continue
+        val code = when (b.type) {
+            tf.monochrome.android.domain.model.FilterType.LOWSHELF -> "LSC"
+            tf.monochrome.android.domain.model.FilterType.HIGHSHELF -> "HSC"
+            else -> "PK"
+        }
+        sb.append(String.format(us, "Filter %d: ON %s Fc %.0f Hz Gain %.1f dB Q %.2f\n", n, code, b.freq, b.gain, b.q))
+        n++
+    }
+    return sb.toString()
 }

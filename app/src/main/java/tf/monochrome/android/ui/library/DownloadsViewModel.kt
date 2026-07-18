@@ -6,13 +6,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.data.preferences.PreferencesManager
@@ -184,29 +188,51 @@ class DownloadsViewModel @Inject constructor(
         )
     }
 
+    // One-shot user messages (e.g. a delete that couldn't remove the file).
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+
     fun deleteDownload(track: DownloadedTrackEntity) {
-        viewModelScope.launch { deleteOne(track) }
+        viewModelScope.launch {
+            if (!deleteOne(track)) {
+                _messages.tryEmit("Couldn't delete “${track.title}”")
+            }
+        }
     }
 
     fun deleteDownloads(tracks: List<DownloadedTrackEntity>) {
-        viewModelScope.launch { tracks.forEach { deleteOne(it) } }
+        viewModelScope.launch {
+            val failed = tracks.count { !deleteOne(it) }
+            if (failed > 0) {
+                _messages.tryEmit("Couldn't delete $failed file${if (failed == 1) "" else "s"}")
+            }
+        }
     }
 
-    private suspend fun deleteOne(track: DownloadedTrackEntity) {
-        if (track.filePath.startsWith("content://")) {
-            try {
-                val uri = track.filePath.toUri()
-                val docFile = DocumentFile.fromSingleUri(appCtx, uri)
-                docFile?.delete()
-            } catch (e: Exception) {
-                // Ignore exceptions during content deletion
+    /**
+     * Removes the file and its Room record. Returns whether the file itself was
+     * actually removed — a sideloaded (SAF content://) file that the provider
+     * refuses to delete would otherwise silently reappear on the next folder
+     * scan, so the caller surfaces a message on false. Runs off the main thread.
+     */
+    private suspend fun deleteOne(track: DownloadedTrackEntity): Boolean =
+        withContext(Dispatchers.IO) {
+            val fileRemoved = if (track.filePath.startsWith("content://")) {
+                try {
+                    val uri = track.filePath.toUri()
+                    DocumentFile.fromSingleUri(appCtx, uri)?.delete() ?: false
+                } catch (e: Exception) {
+                    false
+                }
+            } else {
+                val file = File(track.filePath)
+                !file.exists() || file.delete()
             }
-        } else {
-            val file = File(track.filePath)
-            if (file.exists()) file.delete()
+            // App-written downloads live in Room; sideloaded rows don't, so this
+            // is a harmless no-op for them (they leave once the file is gone).
+            downloadDao.deleteDownloadedTrack(track.id)
+            fileRemoved
         }
-        downloadDao.deleteDownloadedTrack(track.id)
-    }
 
     companion object {
         const val SINGLES_LABEL = "Singles"

@@ -57,7 +57,9 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -121,6 +123,17 @@ fun LocalLibraryTab(
     var selectedSubTab by rememberSaveable { mutableIntStateOf(0) }
     val subTabs = listOf("Albums", "Artists", "Songs", "Genres", "Folders")
     var showSearch by remember { mutableStateOf(false) }
+    val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    // Focus the field (and pop the IME) the moment search opens, so it doesn't
+    // take a second tap.
+    LaunchedEffect(showSearch) {
+        if (showSearch) runCatching { searchFocus.requestFocus() }
+    }
+    // Clear the query when leaving the library, so a stale search doesn't
+    // resurface (and instantly replace the tab with old results) next time.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.setSearchQuery("") }
+    }
 
     val context = LocalContext.current
 
@@ -171,16 +184,30 @@ fun LocalLibraryTab(
         }
         // If we have audio but not images yet, prompt once silently — but
         // don't gate the UI; the user has already opted into local library
-        // and the absence of cover images shouldn't block playback.
-        LaunchedEffect(permissionState.allPermissionsGranted) {
-            if (!permissionState.allPermissionsGranted) {
+        // and the absence of cover images shouldn't block playback. Keyed on
+        // Unit + a saveable one-shot flag so the system dialog fires once,
+        // instead of re-firing every time the Library tab re-enters
+        // composition (the effect was keyed on the still-false grant state).
+        var imagePermissionRequested by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            if (!permissionState.allPermissionsGranted && !imagePermissionRequested) {
+                imagePermissionRequested = true
                 permissionState.launchMultiplePermissionRequest()
             }
         }
 
-        // Scan progress bar
-        if (isScanning) {
+        // Scan progress bar — also shown on the terminal Complete/Error states
+        // (previously dead UI) so the user sees the summary or the error, then
+        // auto-dismissed a few seconds later.
+        val scanTerminal = scanProgress is ScanProgress.Complete || scanProgress is ScanProgress.Error
+        if (isScanning || scanTerminal) {
             ScanProgressBar(scanProgress)
+        }
+        LaunchedEffect(scanProgress) {
+            if (scanProgress is ScanProgress.Complete || scanProgress is ScanProgress.Error) {
+                kotlinx.coroutines.delay(4000)
+                viewModel.clearScanProgress()
+            }
         }
 
         // Search bar
@@ -190,6 +217,7 @@ fun LocalLibraryTab(
                 onValueChange = { viewModel.setSearchQuery(it) },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusRequester(searchFocus)
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 placeholder = { Text("Search local library...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },

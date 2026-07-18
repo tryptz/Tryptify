@@ -59,6 +59,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -101,6 +102,7 @@ import tf.monochrome.android.domain.model.PlayerGlassPreset
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.MiniPlayer
+import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerActionDock
 import tf.monochrome.android.ui.player.GlassDropShadow
@@ -371,11 +373,13 @@ fun LyricsFxStudioScreen(
     val context = LocalContext.current
 
     // Which studio tab: 0 = Lyrics, 1 = Player Glass, 2 = Mini Player.
-    var selectedTab by remember { mutableStateOf(0) }
+    // rememberSaveable so it doesn't snap back to Lyrics after background
+    // process death.
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
 
     // Preset save / import / share dialog state.
-    var showSaveDialog by remember { mutableStateOf(false) }
-    var showImportDialog by remember { mutableStateOf(false) }
+    var showSaveDialog by rememberSaveable { mutableStateOf(false) }
+    var showImportDialog by rememberSaveable { mutableStateOf(false) }
     var presetAction by remember { mutableStateOf<LyricsFxPreset?>(null) }
 
     // Re-list imported fonts whenever the custom-font toggle turns on, so a font
@@ -491,10 +495,16 @@ fun LyricsFxStudioScreen(
                         trailingIcon = {
                             Icon(
                                 Icons.Default.Share,
-                                contentDescription = "Manage ${saved.name}",
+                                contentDescription = null,
+                                // Chip height caps the target, but padding
+                                // before the click enlarges it past the bare
+                                // 16dp glyph, and the label/role make it a
+                                // findable button for TalkBack.
                                 modifier = Modifier
-                                    .size(16.dp)
-                                    .clickable { presetAction = saved },
+                                    .buttonSemantics(label = "Manage ${saved.name}")
+                                    .clickable { presetAction = saved }
+                                    .padding(4.dp)
+                                    .size(16.dp),
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
@@ -900,6 +910,7 @@ private fun PlayerGlassTab(
                     PlayerActionDock(
                         accent = accent,
                         lyricsActive = false,
+                        timerActive = false,
                         onLyrics = {},
                         onTimer = {},
                         onMixer = {},
@@ -1250,14 +1261,16 @@ private fun ColorSwatch(label: String, color: Color, isCustom: Boolean, onClick:
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(color)
-                .border(2.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                // Theme colors so the swatch labels/border stay visible on the
+                // White (light) theme (were hardcoded white → white-on-white).
+                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
                 .clickable(onClick = onClick),
         )
-        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.85f))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onBackground)
         Text(
             if (isCustom) "Custom" else "Current",
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.45f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

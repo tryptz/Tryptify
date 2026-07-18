@@ -34,6 +34,8 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    fun resetImportProgress() { playlistImportService.resetProgress() }
+
     fun importCsvPlaylist(uri: Uri, strictAlbumMatch: Boolean, name: String, description: String?) {
         viewModelScope.launch {
             playlistImportService.reportFetching("CSV")

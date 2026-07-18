@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.ui.components.adjustableSemantics
+import kotlin.math.roundToInt
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -135,6 +137,13 @@ internal fun GlassProgressTube(
         modifier = modifier
             .fillMaxWidth()
             .height(34.dp)
+            .adjustableSemantics(
+                label = "Seek",
+                value = frac,
+                range = 0f..1f,
+                stateText = { "${(it * 100).roundToInt()}%" },
+                onValueChange = { onSeek(it); onSeekFinished(it) },
+            )
             .pointerInput(Unit) {
                 detectTapGestures { pos ->
                     val f = (pos.x / size.width).coerceIn(0f, 1f)
@@ -151,7 +160,10 @@ internal fun GlassProgressTube(
                         onSeek(f)
                     },
                     onDragEnd = { dragging = false; onSeekFinished(seekTarget) },
-                    onDragCancel = { dragging = false },
+                    // Commit on cancel too — otherwise the parent stayed in
+                    // seek mode and the bar/time froze at the last finger
+                    // position until the next seek.
+                    onDragCancel = { dragging = false; onSeekFinished(seekTarget) },
                     onHorizontalDrag = { change, _ ->
                         val f = (change.position.x / size.width).coerceIn(0f, 1f)
                         seekTarget = f
@@ -211,6 +223,9 @@ private fun PlainSlider(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val dragged by interaction.collectIsDraggedAsState()
+    // Hold the live drag value: onValueChangeFinished(fraction) committed the
+    // composition-captured (stale) fraction, so a tap-to-seek snapped back.
+    var latestSeek by remember { mutableFloatStateOf(fraction) }
     val thumbSize by animateDpAsState(
         targetValue = if (dragged) 18.dp else PlayerDesignTokens.ProgressThumbSize,
         label = "progressThumb",
@@ -222,8 +237,8 @@ private fun PlainSlider(
     )
     Slider(
         value = fraction.coerceIn(0f, 1f),
-        onValueChange = onSeek,
-        onValueChangeFinished = { onSeekFinished(fraction) },
+        onValueChange = { latestSeek = it; onSeek(it) },
+        onValueChangeFinished = { onSeekFinished(latestSeek) },
         modifier = Modifier.fillMaxWidth(),
         interactionSource = interaction,
         colors = colors,

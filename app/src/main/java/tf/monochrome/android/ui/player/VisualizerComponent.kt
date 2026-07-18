@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -75,7 +77,11 @@ fun VisualizerComponent(
     repository: ProjectMEngineRepository? = null
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "projectm-shell")
-    val travel by infiniteTransition.animateFloat(
+    // Kept as State (no `by`) and passed down as State so the per-frame value is
+    // read inside the child Canvas draw scopes. Reading it here in composition
+    // recomposed the whole visualizer — including the ProjectM AndroidView —
+    // every single frame.
+    val travel = infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -87,7 +93,7 @@ fun VisualizerComponent(
         ),
         label = "travel"
     )
-    val pulse by infiniteTransition.animateFloat(
+    val pulse = infiniteTransition.animateFloat(
         initialValue = 0.88f,
         targetValue = 1.12f,
         animationSpec = infiniteRepeatable(
@@ -193,13 +199,15 @@ fun VisualizerComponent(
 
 @Composable
 private fun AmbientGlowLayer(
-    travel: Float,
-    pulse: Float,
+    travel: State<Float>,
+    pulse: State<Float>,
     alpha: Float
 ) {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
+        val travel = travel.value
+        val pulse = pulse.value
 
         drawCircle(
             brush = Brush.radialGradient(
@@ -250,10 +258,12 @@ private fun SpectrumWaveLayer(
     isPlaying: Boolean,
     intensity: Float,
     alpha: Float,
-    travel: Float
+    travel: State<Float>
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "spectrum-lines")
-    val phase by infiniteTransition.animateFloat(
+    // State (no `by`), read in the draw scope below so the per-frame phase +
+    // travel animate via redraw instead of recomposing this layer each frame.
+    val phase = infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = (2f * PI).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -267,6 +277,8 @@ private fun SpectrumWaveLayer(
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
+        val phase = phase.value
+        val travel = travel.value
         val width = size.width
         val height = size.height
         val centerY = height * 0.56f
@@ -402,7 +414,7 @@ private fun ProjectMStatusOverlay(
 private fun TouchWaveformOverlay(
     audioBus: ProjectMAudioBus,
     alpha: Float,
-    travel: Float,
+    travel: State<Float>,
     modifier: Modifier = Modifier
 ) {
     val touchPoints = remember { mutableStateMapOf<Long, Offset>() }
@@ -424,7 +436,16 @@ private fun TouchWaveformOverlay(
                             if (change.pressed) {
                                 active[change.id.value] = change.position
                             }
-                            change.consume()
+                            // Consume only movement while drawing. Consuming
+                            // down/up too made every tap invisible to the
+                            // hero's tap-to-show-controls clickable, so once
+                            // the overlay auto-hid the user could never bring
+                            // the visualizer controls (incl. exit-fullscreen)
+                            // back. Moves stay consumed so drawing waveforms
+                            // doesn't scroll/drag any ancestor.
+                            if (change.pressed && change.positionChanged()) {
+                                change.consume()
+                            }
                         }
                         touchPoints.clear()
                         touchPoints.putAll(active)
@@ -432,9 +453,10 @@ private fun TouchWaveformOverlay(
                 }
             }
     ) {
-        // Read travel to force continuous redraws while fingers are down
+        // Read travel (in the draw scope) to force continuous redraws while
+        // fingers are down, without recomposing the overlay each frame.
         @Suppress("UNUSED_EXPRESSION")
-        travel
+        travel.value
 
         if (touchPoints.isEmpty()) return@Canvas
         val samples = audioBus.peekSamples() ?: return@Canvas

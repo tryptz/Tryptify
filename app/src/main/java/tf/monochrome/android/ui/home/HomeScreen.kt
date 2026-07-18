@@ -80,6 +80,7 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.search.SearchQueryField
+import tf.monochrome.android.ui.search.SearchHistoryContent
 import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -117,6 +118,8 @@ fun HomeScreen(
     val showSourceFilter by searchViewModel.showSourceFilter.collectAsState()
     val isLoadingMore by searchViewModel.isLoadingMore.collectAsState()
     val endReached by searchViewModel.endReached.collectAsState()
+    val searchError by searchViewModel.searchError.collectAsState()
+    val searchHistory by searchViewModel.searchHistory.collectAsState()
     val recommendations by searchViewModel.recommendations.collectAsState()
     val hasSearchResults = searchQuery.isNotBlank()
 
@@ -125,8 +128,15 @@ fun HomeScreen(
         androidx.compose.runtime.mutableStateOf(false)
     }
     val searchFocus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
-    androidx.compose.runtime.LaunchedEffect(searchOpen) {
-        if (searchOpen) searchFocus.requestFocus()
+    // Only grab focus on a genuine user open (pendingFocus is non-saveable, so
+    // returning from a detail screen with searchOpen restored true does NOT
+    // re-pop the keyboard over the results).
+    var pendingSearchFocus by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(pendingSearchFocus) {
+        if (pendingSearchFocus) {
+            pendingSearchFocus = false
+            runCatching { searchFocus.requestFocus() }
+        }
     }
     val isRadioActive by playerViewModel.isRadioActive.collectAsState()
     val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsState()
@@ -140,12 +150,23 @@ fun HomeScreen(
     var showCreatePlaylistDialog by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
+    // Tracks handed over from an "Add to playlist → New Playlist" tap, added to
+    // the playlist once it's created so they aren't dropped on the way.
+    var pendingTracksForNewPlaylist by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<List<Track>>(emptyList())
+    }
     var showAddToPlaylistForSelection by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
 
     val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<Long>()
     androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
+    // Back closes an open search (and clears the query so the feed returns)
+    // instead of falling through and exiting the app.
+    androidx.activity.compose.BackHandler(enabled = searchOpen) {
+        searchViewModel.onQueryChange("")
+        searchOpen = false
+    }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -170,9 +191,13 @@ fun HomeScreen(
 
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
-            onDismiss = { showCreatePlaylistDialog = false },
+            onDismiss = {
+                showCreatePlaylistDialog = false
+                pendingTracksForNewPlaylist = emptyList()
+            },
             onSubmit = { name, description ->
-                playerViewModel.createPlaylist(name, description)
+                playerViewModel.createPlaylist(name, description, pendingTracksForNewPlaylist)
+                pendingTracksForNewPlaylist = emptyList()
                 showCreatePlaylistDialog = false
             }
         )
@@ -187,6 +212,7 @@ fun HomeScreen(
                 showAddToPlaylistForTrack = null
             },
             onCreateNew = {
+                pendingTracksForNewPlaylist = listOf(track)
                 showAddToPlaylistForTrack = null
                 showCreatePlaylistDialog = true
             }
@@ -207,6 +233,7 @@ fun HomeScreen(
                 selection.clear()
             },
             onCreateNew = {
+                pendingTracksForNewPlaylist = recentTracks.filter { it.id in selection.selectedIds }
                 showAddToPlaylistForSelection = false
                 showCreatePlaylistDialog = true
             }
@@ -219,6 +246,7 @@ fun HomeScreen(
             onCancel = downloadCenter::cancel,
             onCancelAll = downloadCenter::cancelAll,
             onDismiss = { showDownloadsMonitor = false },
+            onRetry = downloadCenter::retry,
         )
     }
 
@@ -239,7 +267,9 @@ fun HomeScreen(
                             // home feed comes back.
                             searchViewModel.onQueryChange("")
                         }
-                        searchOpen = !searchOpen
+                        val opening = !searchOpen
+                        searchOpen = opening
+                        if (opening) pendingSearchFocus = true
                     }) {
                         Icon(
                             if (searchOpen) Icons.Default.Clear else Icons.Default.Search,
@@ -329,6 +359,18 @@ fun HomeScreen(
                 onLoadMore = searchViewModel::loadMore,
                 isLoadingMore = isLoadingMore,
                 endReached = endReached,
+                searchError = searchError,
+                onRetry = searchViewModel::submitSearch,
+                // Recent-search history — previously only reachable from the
+                // orphaned standalone SearchScreen; now shown when the Home
+                // search is open with an empty query.
+                emptyContent = {
+                    SearchHistoryContent(
+                        history = searchHistory,
+                        onSelect = searchViewModel::selectHistoryQuery,
+                        onClearHistory = searchViewModel::clearSearchHistory,
+                    )
+                },
             )
         } else if (isLoading) {
             LoadingScreen()

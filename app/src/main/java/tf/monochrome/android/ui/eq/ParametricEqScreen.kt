@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,17 @@ fun ParametricEqScreen(
         DisposableEffect(Unit) {
             viewModel.spectrumAnalyzer.acquire()
             onDispose { viewModel.spectrumAnalyzer.release() }
+        }
+    }
+
+    // Surface preset save/load/persist errors that the ViewModel reports but
+    // no screen was collecting (silent failures / silent corrupted-load).
+    val eqError by viewModel.error.collectAsState()
+    val eqErrorContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(eqError) {
+        eqError?.let {
+            android.widget.Toast.makeText(eqErrorContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
         }
     }
 
@@ -129,14 +141,10 @@ fun ParametricEqScreen(
             item {
               tf.monochrome.android.devedit.DevEditable("peq_preview_graph", Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    if (spectrumEnabled && spectrumBins.isNotEmpty()) {
-                        SpectrumOverlay(
-                            bins = spectrumBins,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                            modifier = Modifier.fillMaxWidth(),
-                            height = 160.dp
-                        )
-                    }
+                    // Feed the spectrum INTO the graph — it draws it over its own
+                    // (opaque) background and under the EQ curve. A separate
+                    // overlay behind the graph was hidden by that background on
+                    // every theme except the transparent 'Clear' one.
                     FrequencyResponseGraph(
                         originalCurve = emptyList(),
                         targetCurve = emptyList(),
@@ -145,6 +153,8 @@ fun ParametricEqScreen(
                         centerOnZero = true,
                         showLegend = false,
                         maxAbsDragGain = EqLimits.PARAMETRIC_MAX_BAND_DB,
+                        spectrumBins = if (spectrumEnabled) spectrumBins else FloatArray(0),
+                        spectrumColor = MaterialTheme.colorScheme.primary,
                     )
                 }
               }

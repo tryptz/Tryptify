@@ -59,6 +59,7 @@ private val DockItemVerticalPadding = 10.dp
 fun PlayerActionDock(
     accent: Color,
     lyricsActive: Boolean,
+    timerActive: Boolean,
     onLyrics: () -> Unit,
     onTimer: () -> Unit,
     onMixer: () -> Unit,
@@ -134,7 +135,7 @@ fun PlayerActionDock(
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
             DockLabel(Modifier.weight(1f), "Lyrics", icons[0], glassTint, lyricsActive, sources[0], onLyrics)
-            DockLabel(Modifier.weight(1f), "Timer", icons[1], glassTint, false, sources[1], onTimer)
+            DockLabel(Modifier.weight(1f), "Timer", icons[1], glassTint, timerActive, sources[1], onTimer)
             DockLabel(Modifier.weight(1f), "Mixer/FX", icons[2], glassTint, false, sources[2], onMixer)
             DockLabel(Modifier.weight(1f), "Playlist", icons[3], glassTint, false, sources[3], onPlaylist)
         }

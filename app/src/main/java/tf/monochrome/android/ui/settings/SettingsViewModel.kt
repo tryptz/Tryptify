@@ -8,10 +8,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -46,8 +51,20 @@ class SettingsViewModel @Inject constructor(
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
+    private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
+    private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
+    private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    /** True while any library scan is running — lets Settings disable the
+     *  "Rescan Library Now" button and show progress. */
+    val isScanning: StateFlow<Boolean> = scanCoordinator.isScanning
+
+    /** One-shot user-facing messages (import success/failure, etc.) that the
+     *  Settings screen shows as a toast. */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     /** Honest live status of the libusb exclusive-output path. */
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
@@ -303,8 +320,9 @@ class SettingsViewModel @Inject constructor(
                 }
                 loadFonts()
                 preferences.setCustomFontUri(destFile.absolutePath)
+                _messages.tryEmit("Font imported")
             } catch (_: Exception) {
-                // Font import failed silently
+                _messages.tryEmit("Couldn't import that font file")
             }
         }
     }
@@ -431,18 +449,35 @@ class SettingsViewModel @Inject constructor(
     fun setMinTrackDuration(durationMs: Long) { viewModelScope.launch { preferences.setMinTrackDurationMs(durationMs) } }
     fun setBackgroundScanInterval(interval: String) { viewModelScope.launch { preferences.setBackgroundScanInterval(interval) } }
     fun rescanLibrary() {
-        // This triggers a scan via broadcast or direct call
-        // The actual scanning happens in LocalLibraryViewModel
+        // Route through the shared ScanCoordinator (the same guard the Library
+        // tab uses), so the button actually scans instead of no-op'ing.
+        viewModelScope.launch { scanCoordinator.runFullScan() }
     }
 
     // --- Library tab order ---
-    val libraryTabOrder: StateFlow<List<String>> = preferences.libraryTabOrder
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("overview", "local", "playlists", "favorites", "downloads"))
+    // Backed by an in-memory MutableStateFlow (mirrored from prefs) rather than
+    // stateIn: moveLibraryTab used to read the prefs-backed StateFlow's .value,
+    // which lags the DataStore write, so rapid up/down taps all read the same
+    // stale order and lost or scrambled moves. The local flow updates
+    // synchronously so successive moves compound correctly.
+    private val _libraryTabOrder = MutableStateFlow(
+        listOf("overview", "local", "playlists", "favorites", "downloads")
+    )
+    val libraryTabOrder: StateFlow<List<String>> = _libraryTabOrder.asStateFlow()
 
-    fun setLibraryTabOrder(order: List<String>) { viewModelScope.launch { preferences.setLibraryTabOrder(order) } }
+    init {
+        viewModelScope.launch {
+            preferences.libraryTabOrder.collect { _libraryTabOrder.value = it }
+        }
+    }
+
+    fun setLibraryTabOrder(order: List<String>) {
+        _libraryTabOrder.value = order
+        viewModelScope.launch { preferences.setLibraryTabOrder(order) }
+    }
 
     fun moveLibraryTab(fromIndex: Int, toIndex: Int) {
-        val current = libraryTabOrder.value.toMutableList()
+        val current = _libraryTabOrder.value.toMutableList()
         if (fromIndex in current.indices && toIndex in current.indices) {
             val item = current.removeAt(fromIndex)
             current.add(toIndex, item)
@@ -465,11 +500,51 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Delete every downloaded track — the actual files (SAF content:// or
+     * plain paths) AND the Room rows — off the main thread. The old dialog
+     * did a main-thread deleteRecursively() of only the default folder and
+     * never cleared the DB, so tracks stayed listed and failed to play.
+     */
+    fun clearAllDownloads() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val tracks = downloadDao.getDownloadedTracks().first()
+            var deleted = 0
+            for (t in tracks) {
+                try {
+                    if (t.filePath.startsWith("content://")) {
+                        androidx.documentfile.provider.DocumentFile
+                            .fromSingleUri(appContext, android.net.Uri.parse(t.filePath))?.delete()
+                    } else {
+                        val f = File(t.filePath)
+                        if (f.exists()) f.delete()
+                    }
+                } catch (_: Exception) { }
+                downloadDao.deleteDownloadedTrack(t.id)
+                deleted++
+            }
+            // Sweep any leftover files in the default downloads directory.
+            try {
+                File(appContext.getExternalFilesDir(null), "downloads").deleteRecursively()
+            } catch (_: Exception) { }
+            _messages.tryEmit(
+                if (deleted > 0) "Deleted $deleted download${if (deleted == 1) "" else "s"}"
+                else "No downloads to delete"
+            )
+        }
+    }
+
     fun importLibrary(jsonStr: String) {
         viewModelScope.launch {
             Log.d("ImportSync", "Starting library import...")
             val result = backupManager.importLibrary(jsonStr)
             Log.d("ImportSync", "Import result: $result")
+            if (result.isFailure) {
+                // Report the real outcome instead of the old unconditional
+                // "Library imported" success toast fired on a corrupt file.
+                _messages.tryEmit("Import failed: invalid backup file")
+                return@launch
+            }
             // Auto-sync to Supabase if signed in
             val profile = supabaseAuthManager.userProfile.value
             Log.d("ImportSync", "Current Supabase user: ${profile?.id} (${profile?.email})")
@@ -480,6 +555,7 @@ class SettingsViewModel @Inject constructor(
             } else {
                 Log.w("ImportSync", "Not signed in - skipping Supabase sync")
             }
+            _messages.tryEmit("Library imported")
         }
     }
 
@@ -539,24 +615,32 @@ class SettingsViewModel @Inject constructor(
     // --- System actions ---
     private fun calculateCacheSize() {
         viewModelScope.launch {
-            val cacheDir = appContext.cacheDir
-            val size = getDirSize(cacheDir)
+            // Recursive directory walk off the main thread — a large artwork
+            // cache otherwise froze the UI / triggered an ANR.
+            val size = withContext(Dispatchers.IO) { getDirSize(appContext.cacheDir) }
             _cacheSize.value = formatSize(size)
         }
     }
 
     fun clearCache() {
         viewModelScope.launch {
-            appContext.cacheDir.deleteRecursively()
+            withContext(Dispatchers.IO) { appContext.cacheDir.deleteRecursively() }
             calculateCacheSize()
+            // The wipe just deleted cacheDir/artwork, which local tracks'
+            // Room rows point at. Rescan now so covers come back without
+            // waiting for the next app start (or a manual refresh).
+            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
         }
     }
 
     fun clearAllData() {
         viewModelScope.launch {
-            preferences.clearAllData()
-            appContext.cacheDir.deleteRecursively()
+            withContext(Dispatchers.IO) {
+                preferences.clearAllData()
+                appContext.cacheDir.deleteRecursively()
+            }
             calculateCacheSize()
+            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
         }
     }
 

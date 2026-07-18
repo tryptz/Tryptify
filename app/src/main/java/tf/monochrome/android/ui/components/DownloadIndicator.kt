@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.components
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -13,7 +14,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -34,10 +37,46 @@ fun DownloadIndicator(
     accentColor: Color = MaterialTheme.colorScheme.primary
 ) {
     when (state.status) {
-        DownloadStatus.IDLE, DownloadStatus.FAILED -> return
+        DownloadStatus.IDLE -> return
+        DownloadStatus.FAILED -> FailedIndicator(modifier, size)
         DownloadStatus.QUEUED -> QueuedIndicator(modifier, size, accentColor)
         DownloadStatus.DOWNLOADING -> DownloadingIndicator(state.progress, modifier, size, accentColor)
         DownloadStatus.COMPLETED -> CompletedIndicator(modifier, size, accentColor)
+    }
+}
+
+@Composable
+private fun FailedIndicator(
+    modifier: Modifier,
+    size: Float,
+) {
+    // A FAILED download used to render nothing — indistinguishable from a track
+    // that was never downloaded. Draw a red ring + cross so failure is visible.
+    val errorColor = MaterialTheme.colorScheme.error
+    Canvas(modifier = modifier.size(size.dp)) {
+        val strokeWidth = size * 0.1f
+        val padding = strokeWidth
+        drawArc(
+            color = errorColor,
+            startAngle = -90f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = Offset(padding, padding),
+            size = Size(this.size.width - padding * 2, this.size.height - padding * 2),
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        )
+        val cx = this.size.width / 2f
+        val cy = this.size.height / 2f
+        val arm = this.size.width * 0.18f
+        val cross = size * 0.1f
+        drawLine(
+            errorColor, Offset(cx - arm, cy - arm), Offset(cx + arm, cy + arm),
+            strokeWidth = cross, cap = StrokeCap.Round
+        )
+        drawLine(
+            errorColor, Offset(cx + arm, cy - arm), Offset(cx - arm, cy + arm),
+            strokeWidth = cross, cap = StrokeCap.Round
+        )
     }
 }
 
@@ -147,15 +186,20 @@ private fun CompletedIndicator(
     size: Float,
     accentColor: Color
 ) {
-    // Pop-in scale animation
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "completedScale"
-    )
+    // Pop-in scale animation. animateFloatAsState(targetValue = 1f) started
+    // already AT 1f (its initial value defaults to the target), so the pop
+    // never played. Drive it from 0 with an Animatable instead.
+    val scaleAnim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        scaleAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        )
+    }
+    val scale = scaleAnim.value
 
     Canvas(modifier = modifier.size(size.dp)) {
         val scaledSize = this.size

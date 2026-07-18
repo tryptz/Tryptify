@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -84,12 +85,21 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // Sign-in form state hoisted here (survives the isSigningIn spinner swap)
+    // so a failed attempt doesn't wipe what the user typed.
+    var authEmail by rememberSaveable { mutableStateOf("") }
+    var authPassword by rememberSaveable { mutableStateOf("") }
+    var authIsSignUp by rememberSaveable { mutableStateOf(false) }
+
     // Refresh user when screen resumes (handles OAuth callback from browser)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshUser()
+                // Clear a stuck "Signing in…" spinner if the user returned from
+                // the OAuth Custom Tab without completing it.
+                viewModel.onScreenResumed()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -157,6 +167,12 @@ fun ProfileScreen(
                         isLoading = false,
                         errorMessage = errorMessage,
                         successMessage = successMessage,
+                        email = authEmail,
+                        onEmailChange = { authEmail = it },
+                        password = authPassword,
+                        onPasswordChange = { authPassword = it },
+                        isSignUp = authIsSignUp,
+                        onIsSignUpChange = { authIsSignUp = it },
                         onSignInWithGoogle = {
                             viewModel.signInWithGoogle(context)
                         },
@@ -277,14 +293,21 @@ private fun SignedOutView(
     isLoading: Boolean,
     errorMessage: String?,
     successMessage: String?,
+    email: String,
+    onEmailChange: (String) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    isSignUp: Boolean,
+    onIsSignUpChange: (Boolean) -> Unit,
     onSignInWithGoogle: () -> Unit,
     onSignInWithEmail: (String, String) -> Unit,
     onSignUpWithEmail: (String, String) -> Unit,
     onClearError: () -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isSignUp by remember { mutableStateOf(false) }
+    // email / password / isSignUp are hoisted to ProfileScreen so a failed
+    // sign-in (which flips isSigningIn true then false, remounting this view)
+    // no longer wipes the form the user just typed. passwordVisible is local —
+    // resetting the reveal toggle on remount is harmless.
     var passwordVisible by remember { mutableStateOf(false) }
 
     tf.monochrome.android.devedit.DevEditable("signin_header", Modifier.fillMaxWidth()) {
@@ -362,7 +385,7 @@ private fun SignedOutView(
     // Email field
     OutlinedTextField(
         value = email,
-        onValueChange = { email = it; onClearError() },
+        onValueChange = { onEmailChange(it); onClearError() },
         label = { Text("Email") },
         leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
         singleLine = true,
@@ -376,7 +399,7 @@ private fun SignedOutView(
     // Password field
     OutlinedTextField(
         value = password,
-        onValueChange = { password = it; onClearError() },
+        onValueChange = { onPasswordChange(it); onClearError() },
         label = { Text("Password") },
         leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
         trailingIcon = {
@@ -428,7 +451,7 @@ private fun SignedOutView(
     // Switch back to sign-in mode after successful account creation
     LaunchedEffect(successMessage) {
         if (successMessage != null && isSignUp) {
-            isSignUp = false
+            onIsSignUpChange(false)
         }
     }
 
@@ -454,7 +477,7 @@ private fun SignedOutView(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    TextButton(onClick = { isSignUp = !isSignUp; onClearError() }) {
+    TextButton(onClick = { onIsSignUpChange(!isSignUp); onClearError() }) {
         Text(
             if (isSignUp) "Already have an account? Sign In" else "Don't have an account? Sign Up",
             style = MaterialTheme.typography.bodySmall

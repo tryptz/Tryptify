@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -74,6 +77,10 @@ class StatsViewModel @Inject constructor(
     private val _lastSyncedAt = MutableStateFlow<Long?>(null)
     val lastSyncedAt: StateFlow<Long?> = _lastSyncedAt.asStateFlow()
 
+    /** One-shot messages for the Stats screen (e.g. "sign in to sync"). */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 2)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+
     init {
         // Kick an initial refresh so the newly-redesigned Stats screen picks
         // up plays made on other devices. No-op if the user isn't signed in.
@@ -135,6 +142,11 @@ class StatsViewModel @Inject constructor(
 
     /** User-triggered refresh (pull-to-refresh gesture). */
     fun refresh() {
+        if (authManager.userProfile.value == null) {
+            // Explain the no-op instead of letting the spinner vanish silently.
+            _messages.tryEmit("Sign in to sync stats across devices")
+            return
+        }
         viewModelScope.launch { refreshFromCloudInternal(_range.value) }
     }
 
@@ -145,8 +157,13 @@ class StatsViewModel @Inject constructor(
             // Pad the range by 1 day so near-cutoff plays on other devices
             // aren't missed due to clock skew.
             val since = sinceFor(r).let { if (it > 0) it - 86_400_000L else 0L }
-            supabaseSync.pullPlayEventsSince(since)
-            _lastSyncedAt.value = System.currentTimeMillis()
+            // Only claim "Synced just now" when the pull actually succeeded —
+            // an offline/errored pull used to still stamp the sync time,
+            // falsely telling the user their cross-device history was current.
+            val pulled = supabaseSync.pullPlayEventsSince(since)
+            if (pulled != null) {
+                _lastSyncedAt.value = System.currentTimeMillis()
+            }
         } finally {
             _isRefreshing.value = false
         }

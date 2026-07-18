@@ -71,6 +71,15 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Called when the Profile screen returns to the foreground. If a Google
+     * OAuth flow was launched but the user came back without completing it (no
+     * deep-link callback), clear the otherwise-permanent "Signing in…" spinner.
+     */
+    fun onScreenResumed() {
+        authManager.cancelPendingSignInIfNoCallback()
+    }
+
     fun signInWithEmail(email: String, password: String) {
         viewModelScope.launch {
             authManager.signInWithEmail(email, password)

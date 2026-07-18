@@ -2,6 +2,7 @@ package tf.monochrome.android.ui.player
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -122,14 +124,30 @@ private fun SyncedLyrics(
     // Find current line based on the Bluetooth-adjusted playback position.
     LaunchedEffect(position, syncDelayMs) {
         val newIndex = lines.indexOfLast { it.timeMs <= position - syncDelayMs }
-        if (newIndex != currentLineIndex && newIndex >= 0) {
+        // Allow -1 through: seeking back before the first lyric must clear the
+        // highlight, not leave the previous line lit. The auto-scroll effect
+        // already ignores negative indices.
+        if (newIndex != currentLineIndex) {
             currentLineIndex = newIndex
         }
     }
 
-    // Auto-scroll to current line
+    // Track the last time the user dragged the list, so auto-scroll backs off
+    // while they're reading ahead instead of yanking the list to the current
+    // line on every timestamp change.
+    var lastUserScrollMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(listState.interactionSource) {
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                lastUserScrollMs = System.currentTimeMillis()
+            }
+        }
+    }
+
+    // Auto-scroll to current line, unless the user scrolled in the last few
+    // seconds.
     LaunchedEffect(currentLineIndex) {
-        if (currentLineIndex >= 0) {
+        if (currentLineIndex >= 0 && System.currentTimeMillis() - lastUserScrollMs > 4_000L) {
             listState.animateScrollToItem(
                 index = currentLineIndex,
                 scrollOffset = -200 // Offset to center the line

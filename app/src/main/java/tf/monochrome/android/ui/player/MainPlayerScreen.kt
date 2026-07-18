@@ -91,6 +91,7 @@ data class MainPlayerUiState(
     val channelBadge: String? = null,
     val isThxSpatialAudio: Boolean = false,
     val isPlaying: Boolean,
+    val isBuffering: Boolean = false,
     val positionMs: Long,
     val durationMs: Long,
     val progress: Float,
@@ -104,6 +105,7 @@ data class MainPlayerUiState(
     val soundLabel: String,
     val speedLabel: String,
     val sleepTimerLabel: String,
+    val sleepTimerActive: Boolean = false,
     val queueLabel: String,
     val albumColors: AlbumColors,
     val visualizerActive: Boolean,
@@ -403,6 +405,7 @@ fun MainPlayerScreen(
                         onPrevious = onPrevious,
                         onPlayPause = onPlayPause,
                         onNext = onNext,
+                        isBuffering = state.isBuffering,
                     )
                 }
 
@@ -411,6 +414,7 @@ fun MainPlayerScreen(
                     PlayerActionDock(
                         accent = accent,
                         lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
+                        timerActive = state.sleepTimerActive,
                         onLyrics = onLyrics,
                         onTimer = onTimer,
                         onMixer = onMixer,

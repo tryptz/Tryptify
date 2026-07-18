@@ -113,7 +113,10 @@ fun SpotifyPlaylistPickerDialog(
                         )
                     }
                     else -> {
-                        LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                        // weight(fill=false) so the list yields space to the
+                        // trailing Cancel row on short/landscape windows
+                        // instead of pushing it off-screen.
+                        LazyColumn(modifier = Modifier.weight(1f, fill = false).heightIn(max = 420.dp)) {
                             item {
                                 PickerRow(
                                     title = "Liked Songs",

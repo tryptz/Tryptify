@@ -176,7 +176,9 @@ fun TrackItem(
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable(onClick = effectiveOnAlbumClick)
+                        // weight(fill=false) so a long album title ellipsizes and
+                        // shares the row instead of squeezing the artist to zero.
+                        modifier = Modifier.weight(1f, fill = false).clickable(onClick = effectiveOnAlbumClick)
                     )
                 } else if (track.album != null) {
                     Text(
@@ -184,7 +186,8 @@ fun TrackItem(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
             }

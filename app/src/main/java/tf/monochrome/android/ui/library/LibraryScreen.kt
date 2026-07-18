@@ -90,7 +90,9 @@ fun LibraryScreen(
 
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
-    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    // Saveable so the dialog reopens after a process death triggered by its own
+    // SAF CSV picker; the dialog's typed fields + picked uri are saveable too.
+    var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
@@ -133,6 +135,28 @@ fun LibraryScreen(
                 showCreatePlaylistDialog = false
             }
         )
+    }
+
+    // Surface CSV import outcome — previously importProgress was never
+    // collected, so a malformed CSV produced no error and no playlist.
+    val importProgressState = viewModel.importProgress.collectAsState()
+    val importMsgContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(importProgressState.value) {
+        when (val p = importProgressState.value) {
+            is tf.monochrome.android.data.import_.ImportProgress.Done -> {
+                android.widget.Toast.makeText(
+                    importMsgContext,
+                    "Imported ${p.matched}/${p.total} tracks into \"${p.playlistName}\"",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                viewModel.resetImportProgress()
+            }
+            is tf.monochrome.android.data.import_.ImportProgress.Failed -> {
+                android.widget.Toast.makeText(importMsgContext, "Import failed: ${p.message}", android.widget.Toast.LENGTH_LONG).show()
+                viewModel.resetImportProgress()
+            }
+            else -> {}
+        }
     }
 
     showAddToPlaylistForTrack?.let { track ->
@@ -235,6 +259,11 @@ fun LibraryScreen(
             )
         }
 
+        val sectionStateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+        // Preserve each tab's scroll position (and the Local tab's own sub-tab
+        // state) across tab switches, instead of remounting a fresh list that
+        // snaps back to the top every time the user changes tabs.
+        sectionStateHolder.SaveableStateProvider(currentSectionId) {
         when (currentSectionId) {
             "overview" ->
                 LazyColumn(
@@ -471,6 +500,7 @@ fun LibraryScreen(
 
             "downloads" ->
                 DownloadsScreen(navController = navController)
+        }
         }
     }
 }

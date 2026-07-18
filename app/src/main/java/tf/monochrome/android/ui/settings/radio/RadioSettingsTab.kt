@@ -49,6 +49,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
     val plannerUrl by viewModel.plannerUrl.collectAsState()
     val plannerApiKey by viewModel.plannerApiKey.collectAsState()
     val connectionStatus by viewModel.connectionStatus.collectAsState()
+    val isTesting by viewModel.isTesting.collectAsState()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -86,9 +87,10 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
 
             OutlinedButton(
                 onClick = viewModel::testConnection,
+                enabled = !isTesting,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Test connection")
+                Text(if (isTesting) "Testing…" else "Test connection")
             }
             connectionStatus?.let { status ->
                 Text(

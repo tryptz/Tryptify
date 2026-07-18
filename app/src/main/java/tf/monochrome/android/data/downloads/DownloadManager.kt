@@ -3,8 +3,10 @@ package tf.monochrome.android.data.downloads
 import android.content.Context
 import androidx.lifecycle.asFlow
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -51,6 +53,9 @@ class DownloadManager @Inject constructor(
         val artistName: String,
         val artworkUri: String?,
         val isThxSpatialAudio: Boolean,
+        // The exact worker input used to enqueue this download, kept so a failed
+        // download can be re-run without needing the original Track back.
+        val inputData: Data,
     )
     private val meta = ConcurrentHashMap<Long, DownloadMeta>()
 
@@ -72,13 +77,35 @@ class DownloadManager @Inject constructor(
         workManager.cancelAllWorkByTag("download")
     }
 
-    private fun enqueueDownload(track: Track) {
-        meta[track.id] = DownloadMeta(
-            title = track.title,
-            artistName = track.artist?.name ?: track.displayArtist.ifBlank { "Unknown Artist" },
-            artworkUri = track.coverUrl,
-            isThxSpatialAudio = track.isThxSpatialAudio,
+    /**
+     * Re-run a previously enqueued download (typically after a FAILED state).
+     * REPLACE clears the terminal work record and starts fresh, so the failed
+     * row turns back into a queued/downloading one.
+     */
+    fun retry(trackId: Long) {
+        val data = meta[trackId]?.inputData ?: return
+        workManager.enqueueUniqueWork(
+            "download_$trackId",
+            ExistingWorkPolicy.REPLACE,
+            buildRequest(trackId, data),
         )
+    }
+
+    private fun buildRequest(trackId: Long, inputData: Data): OneTimeWorkRequest {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        return OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setInputData(inputData)
+            .setConstraints(constraints)
+            .addTag("download")
+            // Per-track tag so the aggregate observer can recover the track id
+            // from WorkInfo (which doesn't expose the unique work name).
+            .addTag("download_$trackId")
+            .build()
+    }
+
+    private fun enqueueDownload(track: Track) {
         val inputData = workDataOf(
             DownloadWorker.KEY_TRACK_ID to track.id,
             DownloadWorker.KEY_TRACK_TITLE to track.title,
@@ -89,24 +116,18 @@ class DownloadManager @Inject constructor(
             DownloadWorker.KEY_VERSION to track.version,
             DownloadWorker.KEY_IS_THX to track.isThxSpatialAudio,
         )
-
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val downloadRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-            .setInputData(inputData)
-            .setConstraints(constraints)
-            .addTag("download")
-            // Per-track tag so the aggregate observer can recover the track id
-            // from WorkInfo (which doesn't expose the unique work name).
-            .addTag("download_${track.id}")
-            .build()
+        meta[track.id] = DownloadMeta(
+            title = track.title,
+            artistName = track.artist?.name ?: track.displayArtist.ifBlank { "Unknown Artist" },
+            artworkUri = track.coverUrl,
+            isThxSpatialAudio = track.isThxSpatialAudio,
+            inputData = inputData,
+        )
 
         workManager.enqueueUniqueWork(
             "download_${track.id}",
             ExistingWorkPolicy.KEEP,
-            downloadRequest
+            buildRequest(track.id, inputData),
         )
     }
 
@@ -141,7 +162,15 @@ class DownloadManager @Inject constructor(
             .asFlow()
             .map { workInfos ->
                 workInfos
-                    .filter { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.BLOCKED }
+                    // Keep FAILED alongside the in-flight states — otherwise a
+                    // failed download silently disappeared from the pill and the
+                    // monitor with no way to see or retry it.
+                    .filter {
+                        it.state == WorkInfo.State.ENQUEUED ||
+                            it.state == WorkInfo.State.RUNNING ||
+                            it.state == WorkInfo.State.BLOCKED ||
+                            it.state == WorkInfo.State.FAILED
+                    }
                     .mapNotNull { info ->
                         val trackId = info.tags
                             .firstOrNull { it.startsWith("download_") }
@@ -152,6 +181,7 @@ class DownloadManager @Inject constructor(
                         val progress = info.progress.getFloat(DownloadWorker.KEY_PROGRESS, 0f)
                         val status = when (info.state) {
                             WorkInfo.State.RUNNING -> DownloadStatus.DOWNLOADING
+                            WorkInfo.State.FAILED -> DownloadStatus.FAILED
                             else -> DownloadStatus.QUEUED
                         }
                         id to TrackDownloadState(status, progress)

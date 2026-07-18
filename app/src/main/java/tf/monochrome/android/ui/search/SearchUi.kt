@@ -50,10 +50,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
@@ -221,6 +226,8 @@ fun SearchResultsContent(
     onLoadMore: (SearchViewModel.SearchPageType) -> Unit = {},
     isLoadingMore: Boolean = false,
     endReached: Boolean = false,
+    searchError: Boolean = false,
+    onRetry: () -> Unit = {},
 ) {
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
@@ -309,12 +316,44 @@ fun SearchResultsContent(
             val artistsRowState = rememberLazyListState()
             val albumsRowState = rememberLazyListState()
 
+            // These horizontal result rows live inside the Home/Library
+            // HorizontalPager. Left as-is, a horizontal swipe on a row (or any
+            // swipe once the row is at its edge / too short to scroll) leaks up
+            // and flips the pager to the other tab. Swallow the leftover
+            // horizontal scroll + fling here so the pager never sees it; the
+            // vertical component is left untouched so the outer list still
+            // scrolls.
+            val swallowHorizontal = remember {
+                object : NestedScrollConnection {
+                    override fun onPostScroll(
+                        consumed: Offset,
+                        available: Offset,
+                        source: NestedScrollSource,
+                    ): Offset = available.copy(y = 0f)
+
+                    override suspend fun onPostFling(
+                        consumed: Velocity,
+                        available: Velocity,
+                    ): Velocity = available.copy(y = 0f)
+                }
+            }
+
             // derivedStateOf only emits when the boolean flips, so the
             // LaunchedEffect re-runs once per page boundary, not once per
             // scroll pixel. PREFETCH thresholds picked to keep the list
             // looking continuous while not over-fetching.
+            //
+            // The vertical column carries tracks — except on the Playlists-only
+            // tab, where playlists ARE the vertical list. Paging TRACKS there
+            // loaded more (hidden) tracks and never advanced the playlists, so
+            // pick the page type that matches what the column is actually showing.
+            val columnPageType = if (selectedType == SearchViewModel.SearchTypeFilter.PLAYLISTS) {
+                SearchViewModel.SearchPageType.PLAYLISTS
+            } else {
+                SearchViewModel.SearchPageType.TRACKS
+            }
             PrefetchTrigger(columnState, threshold = TRACK_COL_PREFETCH) {
-                onLoadMore(SearchViewModel.SearchPageType.TRACKS)
+                onLoadMore(columnPageType)
             }
             PrefetchTrigger(artistsRowState, threshold = ROW_PREFETCH) {
                 onLoadMore(SearchViewModel.SearchPageType.ARTISTS)
@@ -355,6 +394,7 @@ fun SearchResultsContent(
                     item {
                         LazyRow(
                             state = artistsRowState,
+                            modifier = Modifier.nestedScroll(swallowHorizontal),
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
@@ -377,6 +417,7 @@ fun SearchResultsContent(
                     item {
                         LazyRow(
                             state = albumsRowState,
+                            modifier = Modifier.nestedScroll(swallowHorizontal),
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
@@ -453,12 +494,32 @@ fun SearchResultsContent(
 
                 if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlistResults.isEmpty()) {
                     item {
-                        Text(
-                            text = "No results found",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(24.dp)
-                        )
+                        if (searchError) {
+                            // Every backend failed (offline / all instances
+                            // down) — offer a retry instead of implying the
+                            // query genuinely has no matches.
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(
+                                    text = "Couldn't reach search. Check your connection and try again.",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TextButton(onClick = onRetry) { Text("Retry") }
+                            }
+                        } else {
+                            Text(
+                                text = "No results found",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(24.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -491,7 +552,15 @@ private fun PrefetchTrigger(
             total > 0 && last >= total - threshold
         }
     }
-    LaunchedEffect(shouldLoad) {
+    // Also key on the item count: when a page adds fewer items than the
+    // threshold, `shouldLoad` stays true and a plain LaunchedEffect(shouldLoad)
+    // would never re-run — paging stalled. Re-firing whenever the count grows
+    // keeps pulling pages until the tail moves out of range (loadMore itself
+    // no-ops once the type is exhausted or a page is already in flight).
+    val itemCount by remember(state) {
+        derivedStateOf { state.layoutInfo.totalItemsCount }
+    }
+    LaunchedEffect(shouldLoad, itemCount) {
         if (shouldLoad) onTrigger()
     }
 }

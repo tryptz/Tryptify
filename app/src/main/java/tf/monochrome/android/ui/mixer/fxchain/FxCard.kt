@@ -215,7 +215,8 @@ private fun KnobGrid(
                         color = accent,
                         onValueChange = { onParam(paramIndex, it) },
                         modifier = Modifier.weight(1f),
-                        steps = def.steps
+                        steps = def.steps,
+                        default = def.default
                     )
                 } else {
                     Spacer(modifier = Modifier.weight(1f))
@@ -247,7 +248,8 @@ private fun Eq10BandKnobs(
                 color = accent,
                 onValueChange = { onParam(0, it) },
                 modifier = Modifier.weight(1f),
-                steps = def.steps
+                steps = def.steps,
+                default = def.default
             )
             Spacer(modifier = Modifier.weight(3f))
         }
@@ -274,7 +276,8 @@ private fun Eq10BandKnobs(
                     color = accent,
                     onValueChange = { onParam(paramIndex, it) },
                     modifier = Modifier.weight(1f),
-                    steps = def.steps
+                    steps = def.steps,
+                    default = def.default
                 )
             }
         }

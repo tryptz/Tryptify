@@ -27,28 +27,28 @@ fun CoverImage(
     size: Dp = MonoDimens.coverList,
     cornerRadius: Dp = MonoDimens.radiusSm
 ) {
-    if (url != null) {
-        AsyncImage(
-            model = url,
+    // The music-note fallback sits behind the image, so it shows through both
+    // when the url is null AND when a non-null url fails to load (previously a
+    // failed load rendered a blank box). A successfully loaded image covers it.
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.MusicNote,
             contentDescription = contentDescription,
-            contentScale = ContentScale.Crop,
-            modifier = modifier
-                .size(size)
-                .clip(RoundedCornerShape(cornerRadius))
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(size / 2)
         )
-    } else {
-        Box(
-            modifier = modifier
-                .size(size)
-                .clip(RoundedCornerShape(cornerRadius))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = contentDescription,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(size / 2)
+        if (url != null) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }

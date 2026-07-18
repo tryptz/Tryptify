@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
 import tf.monochrome.android.domain.model.UnifiedTrack
-import java.net.URLDecoder
 import javax.inject.Inject
 
 @HiltViewModel
@@ -19,9 +18,9 @@ class LocalGenreDetailViewModel @Inject constructor(
     localMediaRepository: LocalMediaRepository
 ) : ViewModel() {
 
-    val genreName: String = savedStateHandle.get<String>("genre")
-        ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
-        .orEmpty()
+    // Navigation already decoded this once; the previous manual URLDecoder
+    // call was a second decode that mangled genres containing '+' or '%'.
+    val genreName: String = savedStateHandle.get<String>("genre").orEmpty()
 
     val tracks: StateFlow<List<UnifiedTrack>> =
         if (genreName.isBlank()) MutableStateFlow(emptyList())

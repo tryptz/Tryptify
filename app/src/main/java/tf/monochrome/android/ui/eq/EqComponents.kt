@@ -213,13 +213,18 @@ fun AlphabeticalIndexSidebar(
                     .padding(vertical = 1.dp)
             )
         }
-        // Add # for numbers/special
+        // '#' bucket (numeric-named models) — render like the letters so it's
+        // actually clickable when present, not a permanently-disabled label.
+        val hashAvailable = '#' in availableLetters
         Text(
             "#",
             fontSize = 10.sp,
-            fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
-            modifier = Modifier.padding(vertical = 1.dp)
+            fontWeight = if (hashAvailable) FontWeight.Bold else FontWeight.Normal,
+            color = if (hashAvailable) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
+            modifier = Modifier
+                .clickable(enabled = hashAvailable) { onLetterClicked('#') }
+                .padding(vertical = 1.dp)
         )
     }
 }

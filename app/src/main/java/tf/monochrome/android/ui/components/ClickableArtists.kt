@@ -47,7 +47,9 @@ fun ClickableArtists(
         return
     }
 
-    FlowRow(modifier = modifier) {
+    // Cap at one line so many credited artists don't wrap to unbounded rows
+    // (uneven list-row heights, stretched cards).
+    FlowRow(modifier = modifier, maxLines = 1) {
         artists.forEachIndexed { index, artist ->
             val isLink = artist.id != null && artist.id > 0L
             val separator = if (index < artists.lastIndex) ", " else ""
@@ -57,7 +59,14 @@ fun ClickableArtists(
                 color = if (isLink) linkColor else color,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = if (isLink) Modifier.clickable { onArtistClick(artist) } else Modifier,
+                // Inline link: a hard 48dp min-size would blow up the one-line
+                // subtitle row across every track list, so give it a Button role
+                // instead — TalkBack then announces it as an activatable link.
+                modifier = if (isLink) {
+                    Modifier
+                        .clickable { onArtistClick(artist) }
+                        .buttonSemantics(label = artist.name)
+                } else Modifier,
             )
             if (separator.isNotEmpty()) {
                 Text(text = separator, style = style, color = color, maxLines = 1)
@@ -102,7 +111,11 @@ fun TrackArtistAlbumLine(
                 color = if (albumLinkable) linkColor else color,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = if (albumLinkable) Modifier.clickable { onAlbumClick() } else Modifier,
+                modifier = if (albumLinkable) {
+                    Modifier
+                        .clickable { onAlbumClick() }
+                        .buttonSemantics(label = albumTitle)
+                } else Modifier,
             )
         }
     }

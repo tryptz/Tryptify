@@ -64,9 +64,42 @@ class LocalLibraryViewModel @Inject constructor(
     private val _artistSort = MutableStateFlow(LibrarySort(LibrarySortKey.NAME))
     val artistSort: StateFlow<LibrarySort> = _artistSort.asStateFlow()
 
-    fun setSongSort(sort: LibrarySort) { _songSort.value = sort }
-    fun setAlbumSort(sort: LibrarySort) { _albumSort.value = sort }
-    fun setArtistSort(sort: LibrarySort) { _artistSort.value = sort }
+    init {
+        // Restore persisted sort selections so they survive process death and
+        // app restarts instead of snapping back to Name / A→Z.
+        viewModelScope.launch {
+            preferencesManager.songSort.collect { _songSort.value = parseSort(it) }
+        }
+        viewModelScope.launch {
+            preferencesManager.albumSort.collect { _albumSort.value = parseSort(it) }
+        }
+        viewModelScope.launch {
+            preferencesManager.artistSort.collect { _artistSort.value = parseSort(it) }
+        }
+    }
+
+    fun setSongSort(sort: LibrarySort) {
+        _songSort.value = sort
+        viewModelScope.launch { preferencesManager.setSongSort(sort.serialize()) }
+    }
+    fun setAlbumSort(sort: LibrarySort) {
+        _albumSort.value = sort
+        viewModelScope.launch { preferencesManager.setAlbumSort(sort.serialize()) }
+    }
+    fun setArtistSort(sort: LibrarySort) {
+        _artistSort.value = sort
+        viewModelScope.launch { preferencesManager.setArtistSort(sort.serialize()) }
+    }
+
+    private fun LibrarySort.serialize(): String = "${key.name}:${if (ascending) "asc" else "desc"}"
+
+    private fun parseSort(raw: String?): LibrarySort {
+        val default = LibrarySort(LibrarySortKey.NAME)
+        if (raw.isNullOrBlank()) return default
+        val parts = raw.split(":")
+        val key = LibrarySortKey.entries.firstOrNull { it.name == parts.getOrNull(0) } ?: return default
+        return LibrarySort(key, ascending = parts.getOrNull(1) != "desc")
+    }
 
     val sortedTracks: StateFlow<List<UnifiedTrack>> = combine(localTracks, _songSort) { tracks, sort ->
         tracks.applySort(sort)
@@ -145,6 +178,9 @@ class LocalLibraryViewModel @Inject constructor(
     fun startIncrementalScan() {
         viewModelScope.launch { scanCoordinator.runIncrementalScan() }
     }
+
+    /** Dismiss the terminal scan-progress bar (Complete/Error). */
+    fun clearScanProgress() { scanCoordinator.clearProgress() }
 
     // ── Collection import ───────────────────────────────────────────
 

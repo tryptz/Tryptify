@@ -69,6 +69,13 @@ fun ArtistDetailScreen(
     val artistDetail by viewModel.artistDetail.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+
+    val dlMsgContext = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.downloadMessage.collect { msg ->
+            android.widget.Toast.makeText(dlMsgContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val playlists by playerViewModel.playlists.collectAsState()
 

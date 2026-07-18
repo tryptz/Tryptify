@@ -76,10 +76,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -119,7 +121,18 @@ fun SettingsScreen(
     initialTab: Int = 0,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    var selectedTab by remember { mutableIntStateOf(initialTab) }
+    // rememberSaveable so the selected settings tab survives background process
+    // death instead of snapping back to the first tab.
+    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+
+    // Toast one-shot ViewModel messages (font import, backup import, …) from
+    // one always-composed collector, regardless of which tab is showing.
+    val messageContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { msg ->
+            android.widget.Toast.makeText(messageContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -197,13 +210,11 @@ private fun EqualizerTab(navController: NavController, eqViewModel: EqViewModel 
         SettingItem(
             title = "Target Curve",
             subtitle = selectedTarget.label,
-            onClick = {}
         )
 
         SettingItem(
             title = "Headphone",
             subtitle = selectedHeadphone?.name ?: "None selected",
-            onClick = {}
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -333,7 +344,23 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
     val customFontUri by viewModel.customFontUri.collectAsState()
     val availableFonts by viewModel.availableFonts.collectAsState()
     var showThemeDropdown by remember { mutableStateOf(false) }
-    var fontScaleText by remember(fontScale) { mutableStateOf(String.format(Locale.US, "%.2f", fontScale)) }
+    // Plain local state + commit-on-Done/focus-loss (see the speed field for
+    // the same rationale): typing a precise scale no longer resets mid-entry
+    // and the whole app's type no longer jumps at each intermediate keystroke.
+    var fontScaleText by remember { mutableStateOf(String.format(Locale.US, "%.2f", fontScale)) }
+    var fontScaleFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fontScale) {
+        if (!fontScaleFocused) fontScaleText = String.format(Locale.US, "%.2f", fontScale)
+    }
+    val commitFontScale = {
+        val parsed = fontScaleText.toFloatOrNull()?.coerceIn(0.5f, 2.0f)
+        if (parsed != null) {
+            viewModel.setFontScale(parsed)
+            fontScaleText = String.format(Locale.US, "%.2f", parsed)
+        } else {
+            fontScaleText = String.format(Locale.US, "%.2f", fontScale)
+        }
+    }
 
     // File picker for .ttf font import
     val context = LocalContext.current
@@ -375,17 +402,17 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
                 )
                 OutlinedTextField(
                     value = fontScaleText,
-                    onValueChange = { newText ->
-                        fontScaleText = newText
-                        newText.toFloatOrNull()?.let { value ->
-                            if (value in 0.5f..2.0f) {
-                                viewModel.setFontScale(value)
-                            }
-                        }
-                    },
-                    modifier = Modifier.width(80.dp),
+                    onValueChange = { fontScaleText = it },
+                    modifier = Modifier
+                        .width(80.dp)
+                        .onFocusChanged {
+                            if (!it.isFocused && fontScaleFocused) commitFontScale()
+                            fontScaleFocused = it.isFocused
+                        },
                     textStyle = MaterialTheme.typography.bodyMedium,
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { commitFontScale() })
                 )
             }
             Text(
@@ -460,7 +487,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) },
+                        onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Add Font")
@@ -477,10 +504,10 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
                 }
             } else {
                 OutlinedButton(
-                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) },
+                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Import Custom Font (.ttf)")
+                    Text("Import Custom Font (.ttf / .otf)")
                 }
             }
         }
@@ -786,35 +813,25 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Mesh X: $meshX", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Slider(
-            value = meshX.toFloat(),
-            onValueChange = { viewModel.setVisualizerMeshX(it.toInt()) },
+        IntSettingSlider(
+            value = meshX,
             valueRange = 8f..128f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerMeshX(it) },
+            label = { "Mesh X: $it" },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Mesh Y: $meshY", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Slider(
-            value = meshY.toFloat(),
-            onValueChange = { viewModel.setVisualizerMeshY(it.toInt()) },
+        IntSettingSlider(
+            value = meshY,
             valueRange = 8f..128f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerMeshY(it) },
+            label = { "Mesh Y: $it" },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = if (vsyncEnabled) "Target FPS: $targetFps" else "Target FPS: $targetFps (vsync off)",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Slider(
-            value = targetFps.toFloat(),
-            onValueChange = { viewModel.setVisualizerTargetFps(it.toInt()) },
+        IntSettingSlider(
+            value = targetFps,
             valueRange = 30f..144f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerTargetFps(it) },
+            label = { if (vsyncEnabled) "Target FPS: $it" else "Target FPS: $it (vsync off)" },
         )
 
         SettingSwitchItem(
@@ -849,36 +866,26 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             onClick = {}
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Preset Rotation: ${rotationSeconds}s",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Slider(
-            value = rotationSeconds.toFloat(),
-            onValueChange = { viewModel.setVisualizerRotationSeconds(it.toInt()) },
+        IntSettingSlider(
+            value = rotationSeconds,
             valueRange = 5f..120f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerRotationSeconds(it) },
+            label = { "Preset Rotation: ${it}s" },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Sensitivity: $sensitivity%", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text("Controls intensity (High = Epilepsy Warning)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(
-            value = sensitivity.toFloat(),
-            onValueChange = { viewModel.setVisualizerSensitivity(it.toInt()) },
+        IntSettingSlider(
+            value = sensitivity,
             valueRange = 0f..100f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerSensitivity(it) },
+            label = { "Sensitivity: $it%" },
+            subtitle = "Controls intensity (High = Epilepsy Warning)",
         )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Brightness: $brightness%", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Slider(
-            value = brightness.toFloat(),
-            onValueChange = { viewModel.setVisualizerBrightness(it.toInt()) },
+
+        IntSettingSlider(
+            value = brightness,
             valueRange = 0f..100f,
-            modifier = Modifier.fillMaxWidth()
+            onCommit = { viewModel.setVisualizerBrightness(it) },
+            label = { "Brightness: $it%" },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -892,6 +899,44 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
     }
 }
 
+/**
+ * Integer settings slider that writes its value once, on release, instead of on
+ * every drag frame. A local float drives the label and thumb live; [onCommit]
+ * (a DataStore write) fires only from onValueChangeFinished. The local state is
+ * re-seeded whenever [value] changes externally so it stays in sync.
+ */
+@Composable
+private fun IntSettingSlider(
+    value: Int,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onCommit: (Int) -> Unit,
+    label: (Int) -> String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+) {
+    var local by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        label(local.toInt()),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    if (subtitle != null) {
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Slider(
+        value = local,
+        onValueChange = { local = it },
+        onValueChangeFinished = { onCommit(local.toInt()) },
+        valueRange = valueRange,
+        modifier = modifier.fillMaxWidth(),
+    )
+}
+
 // ─── Tab 3: Scrobbling ─────────────────────────────────────────────────
 @Composable
 private fun ScrobblingTab(viewModel: SettingsViewModel) {
@@ -900,12 +945,12 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
     val lbEnabled by viewModel.listenBrainzEnabled.collectAsState()
     val lbToken by viewModel.listenBrainzToken.collectAsState()
 
-    var showLastFmDialog by remember { mutableStateOf(false) }
-    var showLbDialog by remember { mutableStateOf(false) }
+    var showLastFmDialog by rememberSaveable { mutableStateOf(false) }
+    var showLbDialog by rememberSaveable { mutableStateOf(false) }
 
     if (showLastFmDialog) {
-        var sessionInput by remember { mutableStateOf("") }
-        var usernameInput by remember { mutableStateOf("") }
+        var sessionInput by rememberSaveable { mutableStateOf("") }
+        var usernameInput by rememberSaveable { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showLastFmDialog = false },
             title = { Text("Last.fm") },
@@ -923,12 +968,15 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    if (sessionInput.isNotBlank() && usernameInput.isNotBlank()) {
+                TextButton(
+                    onClick = {
                         viewModel.setLastFmSession(sessionInput, usernameInput)
-                    }
-                    showLastFmDialog = false
-                }) { Text("Connect") }
+                        showLastFmDialog = false
+                    },
+                    // Disabled until both fields are filled, so Connect can't
+                    // silently close without connecting.
+                    enabled = sessionInput.isNotBlank() && usernameInput.isNotBlank()
+                ) { Text("Connect") }
             },
             dismissButton = {
                 TextButton(onClick = { showLastFmDialog = false }) { Text("Cancel") }
@@ -937,7 +985,7 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
     }
 
     if (showLbDialog) {
-        var tokenInput by remember { mutableStateOf(lbToken ?: "") }
+        var tokenInput by rememberSaveable { mutableStateOf(lbToken ?: "") }
         AlertDialog(
             onDismissRequest = { showLbDialog = false },
             title = { Text("ListenBrainz Token") },
@@ -998,7 +1046,25 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val preservePitch by viewModel.preservePitch.collectAsState()
     var showWifiDropdown by remember { mutableStateOf(false) }
     var showCellularDropdown by remember { mutableStateOf(false) }
-    var speedText by remember(playbackSpeed) { mutableStateOf(String.format(Locale.US, "%.2f", playbackSpeed)) }
+    // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
+    // the value round-tripping back from the ViewModel; sync from external
+    // changes (slider/reset) only while the field is unfocused, and commit on
+    // Done / focus-loss instead of on every keystroke (which dropped playback
+    // to 0.01x mid-entry).
+    var speedText by remember { mutableStateOf(String.format(Locale.US, "%.2f", playbackSpeed)) }
+    var speedFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(playbackSpeed) {
+        if (!speedFocused) speedText = String.format(Locale.US, "%.2f", playbackSpeed)
+    }
+    val commitSpeed = {
+        val parsed = speedText.toFloatOrNull()?.coerceIn(0.01f, 100f)
+        if (parsed != null) {
+            viewModel.setPlaybackSpeed(parsed)
+            speedText = String.format(Locale.US, "%.2f", parsed)
+        } else {
+            speedText = String.format(Locale.US, "%.2f", playbackSpeed)
+        }
+    }
 
     SettingsTabContent {
         SettingsGroupHeader("Streaming Quality")
@@ -1075,15 +1141,16 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             )
             OutlinedTextField(
                 value = speedText,
-                onValueChange = { input ->
-                    speedText = input
-                    input.toFloatOrNull()?.let { parsed ->
-                        val clamped = parsed.coerceIn(0.01f, 100f)
-                        viewModel.setPlaybackSpeed(clamped)
-                    }
-                },
-                modifier = Modifier.width(80.dp),
+                onValueChange = { speedText = it },
+                modifier = Modifier
+                    .width(80.dp)
+                    .onFocusChanged {
+                        if (!it.isFocused && speedFocused) commitSpeed()
+                        speedFocused = it.isFocused
+                    },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { commitSpeed() }),
                 textStyle = MaterialTheme.typography.bodyMedium
             )
             Text("x", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
@@ -1425,8 +1492,7 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
             text = { Text("This will delete all downloaded tracks from your device. This action cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    val downloadDir = java.io.File(context.getExternalFilesDir(null), "downloads")
-                    downloadDir.deleteRecursively()
+                    viewModel.clearAllDownloads()
                     showClearDialog = false
                 }) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
             },
@@ -1456,13 +1522,17 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Download Folder")
 
-        val folderDisplay = downloadFolder?.let { folder ->
-            try {
-                val uri = folder.toUri()
-                val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
-                docFile?.name ?: "Custom folder"
-            } catch (_: Exception) { "Custom folder" }
-        } ?: "Internal app storage (default)"
+        // remember so the DocumentFile ContentResolver lookup runs only when the
+        // folder actually changes, not on every recomposition of this screen.
+        val folderDisplay = remember(downloadFolder, context) {
+            downloadFolder?.let { folder ->
+                try {
+                    val uri = folder.toUri()
+                    val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
+                    docFile?.name ?: "Custom folder"
+                } catch (_: Exception) { "Custom folder" }
+            } ?: "Internal app storage (default)"
+        }
 
         SettingItem(
             title = "Save location",
@@ -1677,8 +1747,10 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                     }
                     if (!content.isNullOrBlank()) {
                         withContext(Dispatchers.Main) {
+                            // Success/failure is reported by viewModel.messages
+                            // once the import actually finishes — not here,
+                            // where it fired even for a corrupt backup.
                             viewModel.importLibrary(content)
-                            android.widget.Toast.makeText(context, "Library imported", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     } else {
                         withContext(Dispatchers.Main) {
@@ -1694,16 +1766,48 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
     }
 
+    // Export writes to a SAF-chosen file, not the clipboard: a large library's
+    // backup JSON exceeds the binder transaction limit and setPrimaryClip()
+    // hard-crashed exactly the users with the most data to protect.
+    var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    val exportSaveLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val json = pendingExportJson
+        pendingExportJson = null
+        if (uri != null && json != null) {
+            coroutineScope.launch(Dispatchers.IO) {
+                val ok = try {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        context,
+                        if (ok) "Backup saved" else "Failed to save backup",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
     if (showClearAllDialog) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
-            title = { Text("Reset All Data") },
-            text = { Text("This will clear all settings, cache, and local data. The app will restart in a clean state.") },
+            title = { Text("Reset Settings & Cache") },
+            // Reworded to match what clearAllData() actually does: it resets
+            // preferences and wipes the cache but leaves the Room library
+            // untouched, and the app does not restart. The old copy promised
+            // to clear "all local data" and restart, neither of which happened.
+            text = { Text("This resets all app settings and clears cached data. Your saved library, playlists, favorites, and downloads are kept.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAllData()
                     showClearAllDialog = false
-                }) { Text("Reset Everything", color = MaterialTheme.colorScheme.error) }
+                }) { Text("Reset", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showClearAllDialog = false }) { Text("Cancel") }
@@ -1713,7 +1817,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 
     SettingsTabContent {
         SettingsGroupHeader("Storage")
-        SettingItem(title = "Cache Size", subtitle = cacheSize, onClick = {})
+        SettingItem(title = "Cache Size", subtitle = cacheSize)
         OutlinedButton(onClick = { viewModel.clearCache() }) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -1733,7 +1837,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Reset All Data")
+            Text("Reset Settings & Cache")
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -1744,13 +1848,29 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         val isLoggedIn by viewModel.isLoggedIn.collectAsState()
         val userEmail by viewModel.userEmail.collectAsState()
 
+        var showSignOutDialog by remember { mutableStateOf(false) }
+        if (showSignOutDialog) {
+            AlertDialog(
+                onDismissRequest = { showSignOutDialog = false },
+                title = { Text("Sign out?") },
+                text = { Text("You'll stop syncing favorites and playlists across devices until you sign back in.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showSignOutDialog = false
+                        viewModel.logout()
+                    }) { Text("Sign Out", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSignOutDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
         if (isLoggedIn) {
             SettingItem(
                 title = "Signed in as",
                 subtitle = userEmail ?: "Unknown",
-                onClick = {}
             )
-            OutlinedButton(onClick = { viewModel.logout() }) {
+            OutlinedButton(onClick = { showSignOutDialog = true }) {
                 Text("Sign Out")
             }
         } else {
@@ -1935,11 +2055,10 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
                 viewModel.exportLibrary { json ->
-                    // Copy to clipboard or share
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    val clip = android.content.ClipData.newPlainText("Monochrome Backup", json)
-                    clipboard.setPrimaryClip(clip)
-                    android.widget.Toast.makeText(context, "Backup copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                    // Stash the JSON, then let the user pick a destination file
+                    // (safe for any size, unlike the old clipboard copy).
+                    pendingExportJson = json
+                    exportSaveLauncher.launch("monochrome-backup.json")
                 }
             }) {
                 Text("Export JSON")
@@ -2048,7 +2167,10 @@ private fun LinkItem(label: String, url: String, context: android.content.Contex
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
-            .clickable { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+            // Route through the guarded helper so a device with no browser
+            // (or a locked-down work profile) shows a toast instead of crashing
+            // with ActivityNotFoundException.
+            .clickable { openDonationUrl(context, url) }
             .padding(vertical = 10.dp)
     )
 }
@@ -2084,12 +2206,14 @@ private fun SettingsGroupHeader(title: String) {
 }
 
 @Composable
-fun SettingItem(title: String, subtitle: String, onClick: () -> Unit) {
+fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) {
     tf.monochrome.android.devedit.DevEditable("item_${devSlug(title)}", Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                // Only clickable (with ripple) when there's an action — an
+                // empty onClick used to ripple like a picker but do nothing.
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(vertical = 12.dp)
         ) {
             Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
@@ -2204,13 +2328,19 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         }
 
         item {
+            val isScanning by viewModel.isScanning.collectAsState()
+            val scanContext = LocalContext.current
             OutlinedButton(
-                onClick = { viewModel.rescanLibrary() },
+                onClick = {
+                    viewModel.rescanLibrary()
+                    android.widget.Toast.makeText(scanContext, "Scanning library…", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                enabled = !isScanning,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Rescan Library Now")
+                Text(if (isScanning) "Scanning…" else "Rescan Library Now")
             }
         }
 

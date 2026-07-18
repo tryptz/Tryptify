@@ -71,6 +71,12 @@ interface LocalMediaDao {
     @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title FROM local_tracks")
     suspend fun getAllTrackScanInfo(): List<TrackScanInfo>
 
+    // Distinct because album-cover propagation gives every track in an album
+    // the same key — a 500-track album is one row here, so the startup
+    // artwork eviction probe stays cheap.
+    @Query("SELECT DISTINCT artworkCacheKey FROM local_tracks WHERE artworkCacheKey IS NOT NULL")
+    suspend fun getDistinctArtworkCacheKeys(): List<String>
+
     // ── Albums ──────────────────────────────────────────────────────
 
     @Query("SELECT * FROM local_albums ORDER BY artist, title")
