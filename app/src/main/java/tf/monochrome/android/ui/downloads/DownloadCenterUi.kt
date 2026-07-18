@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ fun DownloadProgressPill(
     modifier: Modifier = Modifier,
 ) {
     val current = downloads.firstOrNull { it.status == DownloadStatus.DOWNLOADING }
+        ?: downloads.firstOrNull { it.status != DownloadStatus.FAILED }
         ?: downloads.firstOrNull() ?: return
     val remaining = downloads.size
 
@@ -139,6 +141,7 @@ fun DownloadsMonitorSheet(
     onCancel: (Long) -> Unit,
     onCancelAll: () -> Unit,
     onDismiss: () -> Unit,
+    onRetry: (Long) -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -200,24 +203,49 @@ fun DownloadsMonitorSheet(
                                 )
                             }
                             Text(
-                                text = if (d.status == DownloadStatus.DOWNLOADING) d.artistName else "Queued",
+                                text = when (d.status) {
+                                    DownloadStatus.DOWNLOADING -> d.artistName
+                                    DownloadStatus.FAILED -> "Failed — tap retry"
+                                    else -> "Queued"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (d.status == DownloadStatus.FAILED) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Spacer(Modifier.height(6.dp))
-                            if (d.status == DownloadStatus.DOWNLOADING && d.progress > 0f) {
-                                LinearProgressIndicator(
-                                    progress = { d.progress },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            } else {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            // No progress bar for a failed row; queued shows an
+                            // indeterminate bar, downloading shows real progress.
+                            when (d.status) {
+                                DownloadStatus.FAILED -> Unit
+                                DownloadStatus.DOWNLOADING -> {
+                                    Spacer(Modifier.height(6.dp))
+                                    if (d.progress > 0f) {
+                                        LinearProgressIndicator(
+                                            progress = { d.progress },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    } else {
+                                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                    }
+                                }
+                                else -> {
+                                    Spacer(Modifier.height(6.dp))
+                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                }
                             }
                         }
-                        IconButton(onClick = { onCancel(d.trackId) }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel")
+                        if (d.status == DownloadStatus.FAILED) {
+                            IconButton(onClick = { onRetry(d.trackId) }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Retry")
+                            }
+                        } else {
+                            IconButton(onClick = { onCancel(d.trackId) }) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancel")
+                            }
                         }
                     }
                 }

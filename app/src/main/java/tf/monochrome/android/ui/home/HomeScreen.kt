@@ -237,6 +237,7 @@ fun HomeScreen(
             onCancel = downloadCenter::cancel,
             onCancelAll = downloadCenter::cancelAll,
             onDismiss = { showDownloadsMonitor = false },
+            onRetry = downloadCenter::retry,
         )
     }
 

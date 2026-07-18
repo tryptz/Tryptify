@@ -577,6 +577,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 onCancel = downloadCenter::cancel,
                 onCancelAll = downloadCenter::cancelAll,
                 onDismiss = { showDownloadsMonitor = false },
+                onRetry = downloadCenter::retry,
             )
         }
     }
