@@ -75,6 +75,7 @@ fun MainPlayerRoute(
     val queue by playerViewModel.queue.collectAsState()
     val currentIndex by playerViewModel.currentIndex.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
+    val isBuffering by playerViewModel.isBuffering.collectAsState()
     val positionMs by playerViewModel.positionMs.collectAsState()
     val durationMs by playerViewModel.durationMs.collectAsState()
     val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsState()
@@ -143,6 +144,17 @@ fun MainPlayerRoute(
     BackHandler(enabled = lyricsExpanded) { lyricsExpanded = false }
 
     LaunchedEffect(isPlaying) { playerViewModel.setVisualizerPlaybackPaused(!isPlaying) }
+
+    // Surface stream-resolution failures (offline / dead instance) that the
+    // ViewModel now reports instead of silently looping.
+    val playbackError by playerViewModel.playbackError.collectAsState()
+    val playbackErrorContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(playbackError) {
+        playbackError?.let {
+            android.widget.Toast.makeText(playbackErrorContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            playerViewModel.clearPlaybackError()
+        }
+    }
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsState()
     val playerGlass by playerViewModel.playerGlass.collectAsState()
@@ -226,6 +238,7 @@ fun MainPlayerRoute(
         channelBadge = currentUnified?.channelBadge ?: currentTrack?.channelBadge,
         isThxSpatialAudio = currentUnified?.isThxSpatialAudio ?: currentTrack?.isThxSpatialAudio ?: false,
         isPlaying = isPlaying,
+        isBuffering = isBuffering,
         positionMs = positionMs,
         durationMs = durationMs,
         progress = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,

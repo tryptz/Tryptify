@@ -460,7 +460,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) },
+                        onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Add Font")
@@ -477,10 +477,10 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
                 }
             } else {
                 OutlinedButton(
-                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "application/x-font-ttf", "application/octet-stream")) },
+                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Import Custom Font (.ttf)")
+                    Text("Import Custom Font (.ttf / .otf)")
                 }
             }
         }
@@ -2238,13 +2238,19 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         }
 
         item {
+            val isScanning by viewModel.isScanning.collectAsState()
+            val scanContext = LocalContext.current
             OutlinedButton(
-                onClick = { viewModel.rescanLibrary() },
+                onClick = {
+                    viewModel.rescanLibrary()
+                    android.widget.Toast.makeText(scanContext, "Scanning library…", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                enabled = !isScanning,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Rescan Library Now")
+                Text(if (isScanning) "Scanning…" else "Rescan Library Now")
             }
         }
 

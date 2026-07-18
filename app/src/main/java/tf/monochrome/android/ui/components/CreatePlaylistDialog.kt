@@ -194,7 +194,7 @@ fun CreatePlaylistDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text(if (selectedUri != null) "File selected" else "Choisir un fichier")
+                            Text(if (selectedUri != null) "File selected" else "Choose a file")
                         }
 
                         Text(
@@ -234,18 +234,24 @@ fun CreatePlaylistDialog(
                         Text("Cancel")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
+                    // Only the CSV format actually imports; a file picked while
+                    // an unsupported format is selected must not silently run
+                    // the CSV importer (it created garbage playlists).
+                    val canImport = onImportCsv != null && isUploadMode &&
+                        selectedUri != null && selectedFormat == "CSV"
                     Button(
                         onClick = {
-                            if (onImportCsv != null && isUploadMode && selectedUri != null) {
-                                onImportCsv(selectedUri!!, strictAlbumMatch, name, description)
+                            if (canImport) {
+                                onImportCsv!!(selectedUri!!, strictAlbumMatch, name, description)
                             } else {
                                 onSubmit(name, description)
                             }
                             onDismiss()
                         },
-                        enabled = name.isNotBlank() && (selectedUri != null || !isUploadMode || onImportCsv == null)
+                        enabled = name.isNotBlank() &&
+                            (canImport || !isUploadMode || onImportCsv == null)
                     ) {
-                        Text(if (onImportCsv != null && isUploadMode && selectedUri != null) "Import" else confirmLabel)
+                        Text(if (canImport) "Import" else confirmLabel)
                     }
                 }
             }

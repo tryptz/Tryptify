@@ -91,6 +91,7 @@ data class MainPlayerUiState(
     val channelBadge: String? = null,
     val isThxSpatialAudio: Boolean = false,
     val isPlaying: Boolean,
+    val isBuffering: Boolean = false,
     val positionMs: Long,
     val durationMs: Long,
     val progress: Float,
@@ -404,6 +405,7 @@ fun MainPlayerScreen(
                         onPrevious = onPrevious,
                         onPlayPause = onPlayPause,
                         onNext = onNext,
+                        isBuffering = state.isBuffering,
                     )
                 }
 

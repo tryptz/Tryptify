@@ -47,8 +47,13 @@ class SettingsViewModel @Inject constructor(
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
     private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
+    private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    /** True while any library scan is running — lets Settings disable the
+     *  "Rescan Library Now" button and show progress. */
+    val isScanning: StateFlow<Boolean> = scanCoordinator.isScanning
 
     /** Honest live status of the libusb exclusive-output path. */
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
@@ -432,8 +437,9 @@ class SettingsViewModel @Inject constructor(
     fun setMinTrackDuration(durationMs: Long) { viewModelScope.launch { preferences.setMinTrackDurationMs(durationMs) } }
     fun setBackgroundScanInterval(interval: String) { viewModelScope.launch { preferences.setBackgroundScanInterval(interval) } }
     fun rescanLibrary() {
-        // This triggers a scan via broadcast or direct call
-        // The actual scanning happens in LocalLibraryViewModel
+        // Route through the shared ScanCoordinator (the same guard the Library
+        // tab uses), so the button actually scans instead of no-op'ing.
+        viewModelScope.launch { scanCoordinator.runFullScan() }
     }
 
     // --- Library tab order ---

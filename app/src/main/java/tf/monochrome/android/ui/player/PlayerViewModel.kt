@@ -151,6 +151,14 @@ class PlayerViewModel @Inject constructor(
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
 
+    // Surfaced to the player UI when a track can't be resolved/streamed. Also
+    // used to break the resolve→fail→skip→resolve loop that otherwise ran
+    // forever under repeat modes (offline / dead instance).
+    private val _playbackError = MutableStateFlow<String?>(null)
+    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+    private var consecutiveResolveFailures = 0
+    fun clearPlaybackError() { _playbackError.value = null }
+
     // --- Active Track Meta (Lyrics / Liked) ---
     private val _isCurrentTrackLiked = MutableStateFlow(false)
     val isCurrentTrackLiked: StateFlow<Boolean> = _isCurrentTrackLiked.asStateFlow()
@@ -754,7 +762,7 @@ class PlayerViewModel @Inject constructor(
                     unifiedTrackRegistry.put(track.id, unifiedTrack)
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
                     if (!resolved.isPlayable) {
-                        skipToNext()
+                        handleResolveFailure()
                         return@launch
                     }
                     mediaController?.let { mc ->
@@ -762,11 +770,12 @@ class PlayerViewModel @Inject constructor(
                         mc.prepare()
                         mc.play()
                     }
+                    onResolveSucceeded()
                 } else {
                     // Legacy API path
                     val (mediaItem, _) = streamResolver.resolveMediaItem(track)
                     if (mediaItem == null) {
-                        skipToNext()
+                        handleResolveFailure()
                         return@launch
                     }
                     mediaController?.let { mc ->
@@ -774,12 +783,39 @@ class PlayerViewModel @Inject constructor(
                         mc.prepare()
                         mc.play()
                     }
+                    onResolveSucceeded()
                 }
             } catch (_: Exception) {
-                // On error skip to next
-                skipToNext()
+                handleResolveFailure()
             }
         }
+    }
+
+    private fun onResolveSucceeded() {
+        consecutiveResolveFailures = 0
+        _playbackError.value = null
+    }
+
+    /**
+     * A track failed to resolve/stream. Advance to the next track, but stop —
+     * and surface an error — rather than looping forever: never auto-skip
+     * under RepeatMode.ONE, and bail once a full queue's worth of tracks have
+     * failed in a row (offline / dead streaming instance).
+     */
+    private fun handleResolveFailure() {
+        consecutiveResolveFailures++
+        val queueSize = queueManager.queue.value.size.coerceAtLeast(1)
+        if (repeatMode.value == RepeatMode.ONE) {
+            _playbackError.value = "Couldn't play this track."
+            consecutiveResolveFailures = 0
+            return
+        }
+        if (consecutiveResolveFailures >= queueSize) {
+            _playbackError.value = "Couldn't play these tracks. Check your connection."
+            consecutiveResolveFailures = 0
+            return
+        }
+        skipToNext()
     }
 
     /**

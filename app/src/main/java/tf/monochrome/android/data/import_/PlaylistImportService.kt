@@ -87,8 +87,13 @@ class PlaylistImportService @Inject constructor(
                 ?: musicRepository.searchTracks(query).getOrNull().orEmpty()
 
             val bestMatch = if (strictAlbumMatch && csvTrack.album.isNotBlank()) {
-                results.find { it.album?.title?.equals(csvTrack.album, ignoreCase = true) == true }
-                    ?: results.firstOrNull()
+                // Truly strict: if no result's album matches, leave the row
+                // unmatched rather than substituting an arbitrary same-named
+                // track from a different album. Titles are normalized (edition
+                // suffixes, punctuation) so "(Remastered)" etc. don't cause
+                // false misses.
+                val wanted = normalizeAlbum(csvTrack.album)
+                results.find { normalizeAlbum(it.album?.title.orEmpty()) == wanted }
             } else {
                 results.firstOrNull()
             }
@@ -111,4 +116,20 @@ class PlaylistImportService @Inject constructor(
         _progress.value = done
         return done
     }
+
+    /**
+     * Normalize an album title for strict comparison: drop parenthetical/
+     * bracketed qualifiers and common edition/remaster wording, strip
+     * punctuation, and collapse whitespace so "Album (Remastered 2011)" and
+     * "Album - Deluxe Edition" compare equal to "Album".
+     */
+    private fun normalizeAlbum(raw: String): String =
+        raw.lowercase()
+            .replace(Regex("\\(.*?\\)|\\[.*?]"), " ")
+            .replace(
+                Regex("\\b(remaster(ed)?|deluxe|expanded|anniversary|edition|version|mono|stereo|bonus|track)\\b(\\s+\\d{2,4})?"),
+                " "
+            )
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
 }
