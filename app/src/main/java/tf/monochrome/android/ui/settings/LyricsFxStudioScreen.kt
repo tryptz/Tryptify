@@ -59,6 +59,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -372,11 +373,13 @@ fun LyricsFxStudioScreen(
     val context = LocalContext.current
 
     // Which studio tab: 0 = Lyrics, 1 = Player Glass, 2 = Mini Player.
-    var selectedTab by remember { mutableStateOf(0) }
+    // rememberSaveable so it doesn't snap back to Lyrics after background
+    // process death.
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
 
     // Preset save / import / share dialog state.
-    var showSaveDialog by remember { mutableStateOf(false) }
-    var showImportDialog by remember { mutableStateOf(false) }
+    var showSaveDialog by rememberSaveable { mutableStateOf(false) }
+    var showImportDialog by rememberSaveable { mutableStateOf(false) }
     var presetAction by remember { mutableStateOf<LyricsFxPreset?>(null) }
 
     // Re-list imported fonts whenever the custom-font toggle turns on, so a font

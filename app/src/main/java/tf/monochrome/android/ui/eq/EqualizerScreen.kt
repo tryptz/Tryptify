@@ -51,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import android.widget.Toast
 import androidx.compose.ui.Alignment
@@ -94,18 +95,21 @@ fun EqualizerScreen(
     val availableHeadphones by viewModel.availableHeadphones.collectAsState()
     val showTutorial by viewModel.showTutorial.collectAsState()
 
-    var showSaveDialog by remember { mutableStateOf(false) }
+    // rememberSaveable for dialog visibility + typed input so a background
+    // process death (e.g. while a SAF picker is up) doesn't drop a half-filled
+    // save/target dialog or reset the expanded sections.
+    var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var showTargetMenu by remember { mutableStateOf(false) }
     var showHeadphoneSelect by remember { mutableStateOf(false) }
     var showMeasurementUpload by remember { mutableStateOf(false) }
     var showPresetMenu by remember { mutableStateOf(false) }
-    var showBandsExpanded by remember { mutableStateOf(true) }
-    var showProfilesExpanded by remember { mutableStateOf(true) }
-    var saveName by remember { mutableStateOf("") }
-    var saveDescription by remember { mutableStateOf("") }
-    var showTargetNameDialog by remember { mutableStateOf(false) }
-    var pendingTargetData by remember { mutableStateOf("") }
-    var targetName by remember { mutableStateOf("") }
+    var showBandsExpanded by rememberSaveable { mutableStateOf(true) }
+    var showProfilesExpanded by rememberSaveable { mutableStateOf(true) }
+    var saveName by rememberSaveable { mutableStateOf("") }
+    var saveDescription by rememberSaveable { mutableStateOf("") }
+    var showTargetNameDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingTargetData by rememberSaveable { mutableStateOf("") }
+    var targetName by rememberSaveable { mutableStateOf("") }
     var presetToDelete by remember { mutableStateOf<tf.monochrome.android.domain.model.EqPreset?>(null) }
 
     val context = LocalContext.current

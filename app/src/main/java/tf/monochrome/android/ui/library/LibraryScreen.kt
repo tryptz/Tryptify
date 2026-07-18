@@ -90,7 +90,9 @@ fun LibraryScreen(
 
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
-    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    // Saveable so the dialog reopens after a process death triggered by its own
+    // SAF CSV picker; the dialog's typed fields + picked uri are saveable too.
+    var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }

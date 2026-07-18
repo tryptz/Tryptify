@@ -81,6 +81,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -120,7 +121,9 @@ fun SettingsScreen(
     initialTab: Int = 0,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    var selectedTab by remember { mutableIntStateOf(initialTab) }
+    // rememberSaveable so the selected settings tab survives background process
+    // death instead of snapping back to the first tab.
+    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
 
     // Toast one-shot ViewModel messages (font import, backup import, …) from
     // one always-composed collector, regardless of which tab is showing.
@@ -942,12 +945,12 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
     val lbEnabled by viewModel.listenBrainzEnabled.collectAsState()
     val lbToken by viewModel.listenBrainzToken.collectAsState()
 
-    var showLastFmDialog by remember { mutableStateOf(false) }
-    var showLbDialog by remember { mutableStateOf(false) }
+    var showLastFmDialog by rememberSaveable { mutableStateOf(false) }
+    var showLbDialog by rememberSaveable { mutableStateOf(false) }
 
     if (showLastFmDialog) {
-        var sessionInput by remember { mutableStateOf("") }
-        var usernameInput by remember { mutableStateOf("") }
+        var sessionInput by rememberSaveable { mutableStateOf("") }
+        var usernameInput by rememberSaveable { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showLastFmDialog = false },
             title = { Text("Last.fm") },
@@ -982,7 +985,7 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
     }
 
     if (showLbDialog) {
-        var tokenInput by remember { mutableStateOf(lbToken ?: "") }
+        var tokenInput by rememberSaveable { mutableStateOf(lbToken ?: "") }
         AlertDialog(
             onDismissRequest = { showLbDialog = false },
             title = { Text("ListenBrainz Token") },

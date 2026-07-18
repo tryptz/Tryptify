@@ -34,18 +34,23 @@ fun CreatePlaylistDialog(
     // Seed from the initial values so the "Edit playlist" reuse of this dialog
     // shows the existing name/description instead of blanks (submitting blank
     // used to wipe them).
-    var name by remember { mutableStateOf(initialName) }
-    var description by remember { mutableStateOf(initialDescription) }
-    var isUploadMode by remember { mutableStateOf(true) }
-    var selectedFormat by remember { mutableStateOf("CSV") }
-    var selectedSource by remember { mutableStateOf("Spotify") }
-    var selectedUri by remember { mutableStateOf<Uri?>(null) }
-    var strictAlbumMatch by remember { mutableStateOf(false) }
+    // rememberSaveable so typed input and the picked file survive the process
+    // death that the SAF file picker can trigger (the picker launches another
+    // activity, and low-memory devices reclaim this one behind it).
+    var name by rememberSaveable { mutableStateOf(initialName) }
+    var description by rememberSaveable { mutableStateOf(initialDescription) }
+    var isUploadMode by rememberSaveable { mutableStateOf(true) }
+    var selectedFormat by rememberSaveable { mutableStateOf("CSV") }
+    var selectedSource by rememberSaveable { mutableStateOf("Spotify") }
+    var selectedUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var strictAlbumMatch by rememberSaveable { mutableStateOf(false) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
-            selectedUri = uri
+            // Cancelling the picker delivers a null uri; keep the previously
+            // selected file instead of clearing it.
+            if (uri != null) selectedUri = uri
         }
     )
 
