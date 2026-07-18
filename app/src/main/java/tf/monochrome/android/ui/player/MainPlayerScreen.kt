@@ -74,6 +74,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.RepeatMode
+import tf.monochrome.android.devedit.DevEditable
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedArtistRef
@@ -286,7 +287,7 @@ fun MainPlayerScreen(
                 .padding(horizontal = screenPad),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            topBar()
+            DevEditable("topBar", Modifier.fillMaxWidth()) { topBar() }
 
             Spacer(Modifier.height(12.dp))
             // Bound the hero to the smaller of the available width/height so a
@@ -324,7 +325,18 @@ fun MainPlayerScreen(
                 } else {
                     Modifier.size(heroW, heroH)
                 }
-                hero(heroMod)
+                // Wrap only the square art (not the full-width slot) so the DevEdit
+                // highlight hugs the album-art ratio instead of a tall rectangle.
+                // The saved DevEdit offset/scale are tuned for the compact square;
+                // applied to the expanded/full-width lyric surface they push text
+                // past the screen borders — so those render 1:1, bypassing it.
+                if (lyricsExpanded || lyricsMode) {
+                    hero(heroMod)
+                } else {
+                    DevEditable("hero", Modifier) {
+                        hero(heroMod)
+                    }
+                }
             }
 
             // Everything between the hero and the bottom free space is the
@@ -342,20 +354,24 @@ fun MainPlayerScreen(
                 Spacer(Modifier.height(14.dp))
                 // Source + format tag directly under the album art: which service the
                 // audio streams from (colour-coded) and the codec/bitrate it's playing.
-                PlayerSourceFormatTag(
-                    sourceType = state.sourceType,
-                    qualityBadge = state.qualityBadge,
-                )
+                DevEditable("sourceTag", Modifier.fillMaxWidth()) {
+                    PlayerSourceFormatTag(
+                        sourceType = state.sourceType,
+                        qualityBadge = state.qualityBadge,
+                    )
+                }
 
                 Spacer(Modifier.height(14.dp))
-                PlayerTrackInfo(
-                    track = state.track,
-                    artists = state.artists,
-                    isLiked = state.isLiked,
-                    accent = accent,
-                    onToggleLike = onToggleLike,
-                    onArtistClick = onArtistClick,
-                )
+                DevEditable("trackInfo", Modifier.fillMaxWidth()) {
+                    PlayerTrackInfo(
+                        track = state.track,
+                        artists = state.artists,
+                        isLiked = state.isLiked,
+                        accent = accent,
+                        onToggleLike = onToggleLike,
+                        onArtistClick = onArtistClick,
+                    )
+                }
 
                 Spacer(Modifier.height(16.dp))
                 var isSeeking by remember { mutableStateOf(false) }
@@ -363,42 +379,48 @@ fun MainPlayerScreen(
                 val displayFraction = if (isSeeking) seekPosition else state.progress
                 val displayPositionMs =
                     if (isSeeking) (seekPosition * state.durationMs).toLong() else state.positionMs
-                PlayerProgress(
-                    fraction = displayFraction,
-                    elapsedLabel = formatTime(displayPositionMs),
-                    totalLabel = formatTime(state.durationMs),
-                    centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
-                    accent = accent,
-                    onSeek = { value ->
-                        isSeeking = true
-                        seekPosition = value
-                    },
-                    onSeekFinished = { value ->
-                        onSeekCommit(value)
-                        isSeeking = false
-                    },
-                )
+                DevEditable("progress", Modifier.fillMaxWidth()) {
+                    PlayerProgress(
+                        fraction = displayFraction,
+                        elapsedLabel = formatTime(displayPositionMs),
+                        totalLabel = formatTime(state.durationMs),
+                        centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
+                        accent = accent,
+                        onSeek = { value ->
+                            isSeeking = true
+                            seekPosition = value
+                        },
+                        onSeekFinished = { value ->
+                            onSeekCommit(value)
+                            isSeeking = false
+                        },
+                    )
+                }
 
                 Spacer(Modifier.height(20.dp))
-                PlayerTransportControls(
-                    isPlaying = state.isPlaying,
-                    accent = accent,
-                    onPrevious = onPrevious,
-                    onPlayPause = onPlayPause,
-                    onNext = onNext,
-                    isBuffering = state.isBuffering,
-                )
+                DevEditable("transport", Modifier.fillMaxWidth()) {
+                    PlayerTransportControls(
+                        isPlaying = state.isPlaying,
+                        accent = accent,
+                        onPrevious = onPrevious,
+                        onPlayPause = onPlayPause,
+                        onNext = onNext,
+                        isBuffering = state.isBuffering,
+                    )
+                }
 
                 Spacer(Modifier.height(20.dp))
-                PlayerActionDock(
-                    accent = accent,
-                    lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
-                    timerActive = state.sleepTimerActive,
-                    onLyrics = onLyrics,
-                    onTimer = onTimer,
-                    onMixer = onMixer,
-                    onPlaylist = onPlaylist,
-                )
+                DevEditable("actionDock", Modifier.fillMaxWidth()) {
+                    PlayerActionDock(
+                        accent = accent,
+                        lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
+                        timerActive = state.sleepTimerActive,
+                        onLyrics = onLyrics,
+                        onTimer = onTimer,
+                        onMixer = onMixer,
+                        onPlaylist = onPlaylist,
+                    )
+                }
                 }
             }
 
