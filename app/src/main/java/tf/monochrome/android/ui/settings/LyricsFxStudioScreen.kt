@@ -354,7 +354,7 @@ class LyricsFxStudioViewModel @Inject constructor(
 
 /**
  * Player Visuals Studio — live sliders for the lyric renderer (typography, 3D
- * wave, beat engine, god rays) plus the player and mini-player glass, over a
+ * wave, beat engine, glow) plus the player and mini-player glass, over a
  * self-animating preview. The preview drives the same visual pipeline the player
  * uses from a synthetic beat, so tuning works without any music playing; the
  * readout reports the current beat reactivity rather than a fixed tempo.
@@ -1368,7 +1368,7 @@ private fun StudioPreview(
             // (there's no live audio analyzer on this screen).
             LocalBeatPulse provides pulse,
         ) {
-            // The ray/glow FX layer draws at each active glyph's reported position.
+            // The glow FX layer blooms behind the active line's reported bounds.
             LyricsFxLayer(anchors = anchors, pulse = pulse, accent = accent, fx = fx)
             if (playing != null) {
                 // Exactly the production renderer, on the real lyric lines.

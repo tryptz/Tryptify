@@ -7,7 +7,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * Full parameter set for the lyric renderer — typography, the 3D letter wave,
- * the bass beat engine, and the god-ray light. Every field is user-tunable
+ * the bass beat engine, and the reactive glow. Every field is user-tunable
  * from the Player Visuals Studio (Settings › Interface) and persisted as one JSON
  * blob; defaults reproduce the shipped look exactly.
  */
@@ -89,39 +89,11 @@ data class LyricsFxSettings(
     /** Pop-in size swing when a new line activates (fraction of its size). */
     val popAmount: Float = 0.08f,
 
-    // ── God rays / glow ────────────────────────────────────────────────
-    /** Light shafts emitted PER LETTER (split up/down). 0 turns rays off. */
-    val rayCount: Int = 6,
-    /** Shaft reach as a multiple of each glyph's size (grows with the pulse). */
-    val rayLength: Float = 0.5f,
-    /** Shaft width in dp (shafts widen toward the tip; grows a little with the pulse). */
-    val rayWidthDp: Float = 8f,
-    /** Peak shaft alpha (shafts blend additively, so overlaps bloom). */
-    val rayBrightness: Float = 0.3f,
-    /** Slow sway of each letter's shaft fan, degrees per second (negative = reverse). */
-    val raySpinDegPerSec: Float = 4f,
+    // ── Glow (bass-reactive bloom behind the active line) ──────────────
     /** Extra glow radius beyond the line's own height, in dp. */
     val glowRadiusDp: Float = 44f,
     /** Peak glow alpha. */
     val glowBrightness: Float = 0.22f,
-    /** Legacy: parallel-shaft mode (no longer changes the per-letter renderer). */
-    val rayFixedDirection: Boolean = false,
-    /** Emission-axis tilt in degrees, 0 = shafts pour straight up/down from each letter. */
-    val rayAngleDeg: Float = 0f,
-    /** Fan spread of each letter's shafts around the axis (tight = near-vertical column). */
-    val raySpreadDeg: Float = 30f,
-    /** Falloff position along each shaft where it fades out (0 = short, 1 = reaches the tip). */
-    val rayDecay: Float = 0.6f,
-    /** Width taper from base to tip. 0 = even shaft, 1 = sharp spear. */
-    val rayTaper: Float = 0f,
-    /** Recolour the rays off the album accent, in degrees of hue rotation. */
-    val rayHueShift: Float = 0f,
-    /** Time-based shimmer/twinkle of each beam's alpha. 0 = steady. */
-    val rayFlicker: Float = 0f,
-    /** Per-beam random length variance for an organic burst. 0 = uniform. */
-    val rayLengthJitter: Float = 0f,
-    /** How much beam reach/width react to the bass pulse. 0 = steady, 1 = fully bass-driven. */
-    val rayPulseAmount: Float = 0.5f,
 ) {
     /** Spring damping ratio for the pulse/pop springs, derived from [bounce]. */
     val springDampingRatio: Float
@@ -158,22 +130,8 @@ data class LyricsFxSettings(
             releaseMs = releaseMs.c(40f, 500f, d.releaseMs),
             bounce = bounce.c(0f, 1f, d.bounce),
             popAmount = popAmount.c(0f, 0.2f, d.popAmount),
-            rayCount = rayCount.coerceIn(0, 24),
-            rayLength = rayLength.c(0.1f, 1f, d.rayLength),
-            rayWidthDp = rayWidthDp.c(1f, 16f, d.rayWidthDp),
-            rayBrightness = rayBrightness.c(0f, 0.6f, d.rayBrightness),
-            raySpinDegPerSec = raySpinDegPerSec.c(-60f, 60f, d.raySpinDegPerSec),
             glowRadiusDp = glowRadiusDp.c(0f, 160f, d.glowRadiusDp),
             glowBrightness = glowBrightness.c(0f, 0.6f, d.glowBrightness),
-            rayFixedDirection = rayFixedDirection,
-            rayAngleDeg = rayAngleDeg.c(0f, 360f, d.rayAngleDeg),
-            raySpreadDeg = raySpreadDeg.c(0f, 360f, d.raySpreadDeg),
-            rayDecay = rayDecay.c(0f, 1f, d.rayDecay),
-            rayTaper = rayTaper.c(0f, 1f, d.rayTaper),
-            rayHueShift = rayHueShift.c(-180f, 180f, d.rayHueShift),
-            rayFlicker = rayFlicker.c(0f, 1f, d.rayFlicker),
-            rayLengthJitter = rayLengthJitter.c(0f, 1f, d.rayLengthJitter),
-            rayPulseAmount = rayPulseAmount.c(0f, 1f, d.rayPulseAmount),
         )
     }
 
@@ -211,11 +169,6 @@ data class LyricsFxSettings(
                 pumpAmount = 0.14f,
                 bounce = 0.85f,
                 popAmount = 0.12f,
-                rayCount = 12,
-                rayLength = 0.85f,
-                rayWidthDp = 11f,
-                rayBrightness = 0.34f,
-                raySpinDegPerSec = 16f,
                 glowRadiusDp = 70f,
                 glowBrightness = 0.3f,
             ),
@@ -227,16 +180,12 @@ data class LyricsFxSettings(
                 pumpAmount = 0.04f,
                 bounce = 0.4f,
                 popAmount = 0.04f,
-                rayCount = 4,
-                rayLength = 0.35f,
-                rayBrightness = 0.14f,
                 glowRadiusDp = 30f,
                 glowBrightness = 0.12f,
             ),
             "Still" to LyricsFxSettings(
                 rotationDegrees = 0f,
                 bassReact = 0f,
-                rayCount = 0,
                 popAmount = 0f,
             ),
             "Aurora" to LyricsFxSettings(
@@ -244,26 +193,20 @@ data class LyricsFxSettings(
                 glassBodyOpacity = 0.5f, glassRefraction = 0.2f, glassRimBrightness = 1.2f, glassDispersion = 1.4f,
                 rotationDegrees = 8f, waveSpeed = 0.8f, waveTravelDp = 4f,
                 bassReact = 0.6f, pumpAmount = 0.06f,
-                rayCount = 10, rayLength = 0.7f, rayWidthDp = 7f, rayBrightness = 0.2f, raySpinDegPerSec = 6f,
                 glowRadiusDp = 80f, glowBrightness = 0.28f,
-                rayFixedDirection = true, rayAngleDeg = 0f, rayDecay = 0.7f, rayTaper = 0.4f,
-                rayHueShift = 120f, rayFlicker = 0.2f, rayPulseAmount = 0.4f,
             ),
             "Neon" to LyricsFxSettings(
                 fontSizeSp = 25f, letterSpacingSp = 0f,
                 glassBodyOpacity = 0.45f, glassRefraction = 0.28f, glassRimBrightness = 1.8f, glassDispersion = 2f,
                 rotationDegrees = 14f, waveSpeed = 1.6f, wavePhaseStep = 0.3f,
                 bassReact = 1f, pumpAmount = 0.14f, bounce = 0.8f, popAmount = 0.12f,
-                rayCount = 16, rayLength = 0.9f, rayWidthDp = 6f, rayBrightness = 0.4f, raySpinDegPerSec = 30f,
                 glowRadiusDp = 60f, glowBrightness = 0.34f,
-                rayDecay = 0.6f, rayHueShift = -60f, rayFlicker = 0.4f, rayPulseAmount = 0.9f,
             ),
             "Frost" to LyricsFxSettings(
                 fontSizeSp = 23f,
                 glassBodyOpacity = 0.3f, glassRefraction = 0.08f, glassRimBrightness = 1.4f, glassDispersion = 0.6f,
                 rotationDegrees = 4f, waveSpeed = 0.6f, shadowDepth = 0.4f,
                 bassReact = 0.3f, pumpAmount = 0.03f,
-                rayCount = 0,
                 glowRadiusDp = 24f, glowBrightness = 0.1f,
             ),
             "Ember" to LyricsFxSettings(
@@ -271,35 +214,28 @@ data class LyricsFxSettings(
                 glassBodyOpacity = 0.55f, glassRefraction = 0.16f, glassRimBrightness = 1.1f, glassDispersion = 0.8f,
                 rotationDegrees = 10f, waveSpeed = 0.9f, waveTravelDp = 3f,
                 bassReact = 0.7f, pumpAmount = 0.1f, releaseMs = 220f,
-                rayCount = 8, rayLength = 0.75f, rayWidthDp = 9f, rayBrightness = 0.3f,
                 glowRadiusDp = 70f, glowBrightness = 0.3f,
-                rayFixedDirection = true, rayAngleDeg = 180f, rayDecay = 0.6f, rayTaper = 0.3f,
-                rayHueShift = -20f, rayFlicker = 0.3f, rayLengthJitter = 0.3f, rayPulseAmount = 0.6f,
             ),
             "Cinematic" to LyricsFxSettings(
                 fontSizeSp = 30f, letterSpacingSp = 0.2f,
                 glassBodyOpacity = 0.6f, glassRefraction = 0.12f, glassRimBrightness = 0.9f, glassDispersion = 0.5f,
                 rotationDegrees = 5f, waveSpeed = 0.5f, waveTravelDp = 2f, shadowDepth = 0.6f,
                 bassReact = 0.4f, pumpAmount = 0.05f,
-                rayCount = 6, rayLength = 0.6f, rayWidthDp = 10f, rayBrightness = 0.18f,
                 glowRadiusDp = 50f, glowBrightness = 0.18f,
-                rayFixedDirection = true, rayAngleDeg = 90f, rayDecay = 0.5f, rayTaper = 0.5f, rayPulseAmount = 0.3f,
             ),
             "Vaporwave" to LyricsFxSettings(
                 fontSizeSp = 26f, letterSpacingSp = 0.3f,
                 glassBodyOpacity = 0.5f, glassRefraction = 0.24f, glassRimBrightness = 1.5f, glassDispersion = 2f,
                 rotationDegrees = 12f, waveSpeed = 1.1f,
                 bassReact = 0.8f, pumpAmount = 0.12f, bounce = 0.7f,
-                rayCount = 12, rayLength = 0.8f, rayWidthDp = 8f, rayBrightness = 0.32f, raySpinDegPerSec = -12f,
                 glowRadiusDp = 100f, glowBrightness = 0.4f,
-                rayDecay = 0.7f, rayHueShift = 150f, rayFlicker = 0.25f, rayPulseAmount = 0.7f,
             ),
             "Minimal Glass" to LyricsFxSettings(
                 fontSizeSp = 23f,
                 glassBodyOpacity = 0.55f, glassRefraction = 0.14f, glassRimBrightness = 1.2f, glassDispersion = 1f,
                 rotationDegrees = 0f,
                 bassReact = 0f,
-                rayCount = 0, popAmount = 0f,
+                popAmount = 0f,
                 glowRadiusDp = 0f, glowBrightness = 0f,
             ),
             "Karaoke Pop" to LyricsFxSettings(
@@ -307,28 +243,21 @@ data class LyricsFxSettings(
                 glassBodyOpacity = 0.6f, glassRefraction = 0.16f, glassRimBrightness = 1.3f, glassDispersion = 1.2f,
                 rotationDegrees = 12f, waveSpeed = 1.2f,
                 bassReact = 1f, pumpAmount = 0.18f, attackMs = 8f, releaseMs = 120f, bounce = 0.9f, popAmount = 0.16f,
-                rayCount = 14, rayLength = 0.85f, rayWidthDp = 10f, rayBrightness = 0.38f, raySpinDegPerSec = 20f,
                 glowRadiusDp = 80f, glowBrightness = 0.34f,
-                rayDecay = 0.6f, rayFlicker = 0.3f, rayLengthJitter = 0.4f, rayPulseAmount = 1f,
             ),
             "Sunbeam" to LyricsFxSettings(
                 fontSizeSp = 24f,
                 glassBodyOpacity = 0.5f, glassRefraction = 0.18f, glassRimBrightness = 1.2f, glassDispersion = 0.9f,
                 rotationDegrees = 8f, waveSpeed = 0.8f,
                 bassReact = 0.6f, pumpAmount = 0.08f,
-                rayCount = 10, rayLength = 0.95f, rayWidthDp = 8f, rayBrightness = 0.3f,
                 glowRadiusDp = 70f, glowBrightness = 0.3f,
-                rayFixedDirection = true, rayAngleDeg = 45f, raySpreadDeg = 40f, rayDecay = 0.8f, rayTaper = 0.6f,
-                rayHueShift = 30f, rayFlicker = 0.15f, rayLengthJitter = 0.5f, rayPulseAmount = 0.5f,
             ),
             "Nightdrive" to LyricsFxSettings(
                 fontSizeSp = 24f,
                 glassBodyOpacity = 0.4f, glassRefraction = 0.12f, glassRimBrightness = 1f, glassDispersion = 1.3f,
                 rotationDegrees = 6f, waveSpeed = 0.5f, waveTravelDp = 3f,
                 bassReact = 0.4f, pumpAmount = 0.05f, releaseMs = 300f,
-                rayCount = 8, rayLength = 0.6f, rayWidthDp = 6f, rayBrightness = 0.16f, raySpinDegPerSec = 4f,
                 glowRadiusDp = 60f, glowBrightness = 0.2f,
-                rayDecay = 0.5f, rayHueShift = -120f, rayFlicker = 0.15f, rayPulseAmount = 0.4f,
             ),
         )
     }

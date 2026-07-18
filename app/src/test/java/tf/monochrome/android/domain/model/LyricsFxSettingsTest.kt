@@ -17,9 +17,9 @@ class LyricsFxSettingsTest {
         assertEquals(12f, d.rotationDegrees, 0f)
         assertEquals(0.22f, d.wavePhaseStep, 0f)
         assertEquals(0.8f, d.bassReact, 0f)
-        // Per-letter god-ray default: a few soft near-vertical shafts per glyph.
-        assertEquals(6, d.rayCount)
-        assertEquals(30f, d.raySpreadDeg, 0f)
+        // Reactive glow default: a soft bloom behind the active line.
+        assertEquals(44f, d.glowRadiusDp, 0f)
+        assertEquals(0.22f, d.glowBrightness, 0f)
     }
 
     @Test
@@ -35,14 +35,14 @@ class LyricsFxSettingsTest {
     fun `clamped coerces out-of-range values`() {
         val c = LyricsFxSettings(
             fontSizeSp = 999f,
-            rayCount = 100,
+            glowRadiusDp = 999f,
             bassReact = -2f,
-            raySpinDegPerSec = 500f,
+            glowBrightness = 5f,
         ).clamped()
         assertEquals(34f, c.fontSizeSp, 0f)
-        assertEquals(24, c.rayCount)
+        assertEquals(160f, c.glowRadiusDp, 0f)
         assertEquals(0f, c.bassReact, 0f)
-        assertEquals(60f, c.raySpinDegPerSec, 0f)
+        assertEquals(0.6f, c.glowBrightness, 0f)
     }
 
     @Test
@@ -61,8 +61,7 @@ class LyricsFxSettingsTest {
             fontSizeSp = 27f,
             rotationDegrees = 5f,
             bassReact = 0.5f,
-            rayCount = 8,
-            raySpinDegPerSec = -20f,
+            glowRadiusDp = 88f,
             glowBrightness = 0.4f,
         )
         val decoded = json.decodeFromString<LyricsFxSettings>(json.encodeToString(original))
@@ -75,7 +74,7 @@ class LyricsFxSettingsTest {
         val decoded = json.decodeFromString<LyricsFxSettings>(body)
         assertEquals(25f, decoded.fontSizeSp, 0f)
         // Missing fields fall back to their defaults.
-        assertEquals(LyricsFxSettings.DEFAULT.rayCount, decoded.rayCount)
+        assertEquals(LyricsFxSettings.DEFAULT.glowRadiusDp, decoded.glowRadiusDp, 0f)
     }
 
     @Test
@@ -86,19 +85,15 @@ class LyricsFxSettingsTest {
     }
 
     @Test
-    fun `clamped coerces the new ray and glass fields`() {
+    fun `clamped coerces the glass and anti-aliasing fields`() {
         val c = LyricsFxSettings(
-            rayAngleDeg = 500f,
-            raySpreadDeg = -30f,
-            rayHueShift = 400f,
-            rayPulseAmount = 5f,
+            glassRefraction = 5f,
+            glassDispersion = -1f,
             glassSampleRings = 9,
             fxaaStrength = 3f,
         ).clamped()
-        assertEquals(360f, c.rayAngleDeg, 0f)
-        assertEquals(0f, c.raySpreadDeg, 0f)
-        assertEquals(180f, c.rayHueShift, 0f)
-        assertEquals(1f, c.rayPulseAmount, 0f)
+        assertEquals(0.4f, c.glassRefraction, 0f)
+        assertEquals(0f, c.glassDispersion, 0f)
         assertEquals(3, c.glassSampleRings)
         assertEquals(1f, c.fxaaStrength, 0f)
     }
@@ -108,10 +103,8 @@ class LyricsFxSettingsTest {
         val original = LyricsFxSettings(
             customFont = true,
             customFontPath = "/data/user/0/app/files/custom_fonts/MyFont.ttf",
-            rayFixedDirection = true,
-            rayAngleDeg = 135f,
-            raySpreadDeg = 90f,
-            rayHueShift = -45f,
+            glassBodyOpacity = 0.5f,
+            glassRefraction = 0.2f,
             glassSampleRings = 3,
             fxaa = true,
             fxaaStrength = 0.4f,
@@ -139,14 +132,14 @@ class LyricsFxSettingsTest {
         assertTrue(applied.fxaa)
         assertEquals(0.9f, applied.fxaaStrength, 0f)
         // Aesthetic fields still come from the theme.
-        assertEquals(theme.rayCount, applied.rayCount)
+        assertEquals(theme.rotationDegrees, applied.rotationDegrees, 0f)
         // …and the chip-selection helper recognises the match despite the carry-over.
         assertTrue(applied.matchesPreset(theme))
     }
 
     @Test
     fun `preset code round-trips through encode and decode`() {
-        val preset = LyricsFxPreset("My Look", LyricsFxSettings(fontSizeSp = 30f, rayCount = 20))
+        val preset = LyricsFxPreset("My Look", LyricsFxSettings(fontSizeSp = 30f, rotationDegrees = 20f))
         val code = LyricsFxPreset.encode(preset)
         assertTrue("code carries the marker prefix", code.startsWith(LyricsFxPreset.CODE_PREFIX))
         val back = LyricsFxPreset.decode(code)
@@ -165,9 +158,9 @@ class LyricsFxSettingsTest {
     @Test
     fun `decode re-clamps hostile out-of-range values`() {
         val evil = LyricsFxPreset.CODE_PREFIX +
-            """{"name":"Evil","settings":{"fontSizeSp":9999.0,"rayCount":500}}"""
+            """{"name":"Evil","settings":{"fontSizeSp":9999.0,"glowRadiusDp":9999.0}}"""
         val decoded = LyricsFxPreset.decode(evil)!!
         assertEquals(34f, decoded.settings.fontSizeSp, 0f)
-        assertEquals(24, decoded.settings.rayCount)
+        assertEquals(160f, decoded.settings.glowRadiusDp, 0f)
     }
 }

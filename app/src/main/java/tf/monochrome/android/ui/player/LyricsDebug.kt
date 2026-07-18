@@ -50,14 +50,8 @@ internal object LyricsDebug {
             if (fx.bassReact > 0.01f) "ON[react=${(fx.bassReact * 100).toInt()}% pump=${fx.pumpAmount}]" else "off",
         )
 
-        val raysOn = fx.rayCount > 0 && fx.bassReact > 0.01f
-        append(" | rays=").append(
-            if (raysOn) {
-                val dir = if (fx.rayFixedDirection) "fixed@${fx.rayAngleDeg.toInt()}°"
-                else "burst/spread=${fx.raySpreadDeg.toInt()}°"
-                "ON[n=${fx.rayCount} $dir bright=${fx.rayBrightness}]"
-            } else "off",
+        append(" | glow=").append(
+            if (fx.bassReact > 0.01f && fx.glowBrightness > 0.001f) "ON[radius=${fx.glowRadiusDp.toInt()}dp]" else "off",
         )
-        append(" glow=").append(if (fx.bassReact > 0.01f && fx.glowBrightness > 0.001f) "ON" else "off")
     }
 }

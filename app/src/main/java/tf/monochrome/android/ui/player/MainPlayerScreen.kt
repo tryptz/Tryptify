@@ -146,8 +146,8 @@ fun MainPlayerScreen(
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
     // Full-screen, unclipped layer between the background/stain and the player
-    // content — the bass-reactive god rays draw here at each glyph's screen
-    // position, so the light can never be clipped by a canvas/container.
+    // content — the bass-reactive glow blooms here behind the active line's
+    // screen bounds, so the light can never be clipped by a canvas/container.
     fxUnderlay: @Composable () -> Unit = {},
     // Expanded lyrics are NOT a separate element: the same hero slot grows to
     // full-bleed while the player controls collapse away and the blurred
@@ -262,7 +262,7 @@ fun MainPlayerScreen(
             )
         }
 
-        // God rays / glow — full-screen, above the stain, behind the
+        // Reactive glow — full-screen, above the stain, behind the
         // (transparent) lyric text, so the light shows through uncut.
         fxUnderlay()
 
@@ -308,8 +308,8 @@ fun MainPlayerScreen(
                     label = "heroW",
                 )
                 // Lyrics get the FULL hero region height (decoupled from the album
-                // square), so the 3D letters, their glass bevels and the per-letter
-                // god rays have vertical room instead of being corner-cut in a short
+                // square), so the 3D letters, their glass bevels and the reactive
+                // glow have vertical room instead of being corner-cut in a short
                 // album-height band. Album art alone stays the compact square.
                 val heroH by animateDpAsState(
                     targetValue = if (lyricsExpanded || lyricsMode) maxHeight else side,
