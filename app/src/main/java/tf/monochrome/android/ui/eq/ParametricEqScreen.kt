@@ -141,14 +141,10 @@ fun ParametricEqScreen(
             item {
               tf.monochrome.android.devedit.DevEditable("peq_preview_graph", Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    if (spectrumEnabled && spectrumBins.isNotEmpty()) {
-                        SpectrumOverlay(
-                            bins = spectrumBins,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                            modifier = Modifier.fillMaxWidth(),
-                            height = 160.dp
-                        )
-                    }
+                    // Feed the spectrum INTO the graph — it draws it over its own
+                    // (opaque) background and under the EQ curve. A separate
+                    // overlay behind the graph was hidden by that background on
+                    // every theme except the transparent 'Clear' one.
                     FrequencyResponseGraph(
                         originalCurve = emptyList(),
                         targetCurve = emptyList(),
@@ -157,6 +153,8 @@ fun ParametricEqScreen(
                         centerOnZero = true,
                         showLegend = false,
                         maxAbsDragGain = EqLimits.PARAMETRIC_MAX_BAND_DB,
+                        spectrumBins = if (spectrumEnabled) spectrumBins else FloatArray(0),
+                        spectrumColor = MaterialTheme.colorScheme.primary,
                     )
                 }
               }

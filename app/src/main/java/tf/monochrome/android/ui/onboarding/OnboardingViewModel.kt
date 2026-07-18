@@ -92,6 +92,19 @@ class OnboardingViewModel @Inject constructor(
                 roots.forEach { countTracks(it) }
             }
         }
+        // This ViewModel is Activity-scoped, so after the user finishes once its
+        // _step stays at DONE. "Restart onboarding" flips onboarding_complete
+        // back to false — reset to WELCOME on that transition so the wizard
+        // actually reopens at the start instead of the final "all set" step.
+        viewModelScope.launch {
+            var wasComplete: Boolean? = null
+            preferences.onboardingComplete.collect { complete ->
+                if (wasComplete == true && !complete) {
+                    _step.value = OnboardingStep.WELCOME
+                }
+                wasComplete = complete
+            }
+        }
     }
 
     // ── Step navigation ─────────────────────────────────────────────

@@ -112,6 +112,11 @@ class MainActivity : ComponentActivity() {
             supabaseAuthManager.initialize()
         }
 
+        // A cold start triggered by the OAuth redirect delivers the callback as
+        // the launch intent (onNewIntent never fires) — handle it here too so
+        // login completes instead of silently failing.
+        handleDeepLinkIntent(intent)
+
         FrequencyTargets.init(applicationContext)
 
         // Apply the user's app-wide frame-rate / resolution preference by
@@ -325,9 +330,18 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Route OAuth callback deep-links: Spotify (tryptify://spotify-callback)
-        // vs Supabase (tf.monotrypt.android://login-callback)
-        val uri = intent.data ?: return
+        handleDeepLinkIntent(intent)
+    }
+
+    /**
+     * Route OAuth callback deep-links: Spotify (tryptify://spotify-callback) vs
+     * Supabase (tf.monotrypt.android://login-callback). Handled from BOTH
+     * onNewIntent (app already running) and onCreate (cold start after process
+     * death, where the redirect delivers the callback as the launch intent —
+     * previously dropped, so login silently failed).
+     */
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
         lifecycleScope.launch {
             if (uri.scheme == "tryptify" && uri.host == "spotify-callback") {
                 spotifyAuthManager.handleCallback(uri)

@@ -254,8 +254,11 @@ fun CreatePlaylistDialog(
                             }
                             onDismiss()
                         },
-                        enabled = name.isNotBlank() &&
-                            (canImport || !isUploadMode || onImportCsv == null)
+                        // A non-blank name is enough: onClick imports when a CSV
+                        // file is picked, otherwise creates a plain playlist. The
+                        // old extra conditions left the button disabled for a
+                        // plainly-named playlist in the default (upload) mode.
+                        enabled = name.isNotBlank()
                     ) {
                         Text(if (canImport) "Import" else confirmLabel)
                     }

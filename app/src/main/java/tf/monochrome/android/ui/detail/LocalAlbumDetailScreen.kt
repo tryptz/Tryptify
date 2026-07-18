@@ -266,7 +266,9 @@ private fun LocalTrackRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
+            // Default IconButton size keeps the touch target at the 48dp
+            // minimum (was forced to 32dp); the glyph stays 20dp.
+            IconButton(onClick = onAddToQueue) {
                 Icon(
                     Icons.AutoMirrored.Filled.PlaylistAdd,
                     contentDescription = "Add to queue",
