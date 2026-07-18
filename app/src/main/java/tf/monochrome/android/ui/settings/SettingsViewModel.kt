@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -614,15 +615,16 @@ class SettingsViewModel @Inject constructor(
     // --- System actions ---
     private fun calculateCacheSize() {
         viewModelScope.launch {
-            val cacheDir = appContext.cacheDir
-            val size = getDirSize(cacheDir)
+            // Recursive directory walk off the main thread — a large artwork
+            // cache otherwise froze the UI / triggered an ANR.
+            val size = withContext(Dispatchers.IO) { getDirSize(appContext.cacheDir) }
             _cacheSize.value = formatSize(size)
         }
     }
 
     fun clearCache() {
         viewModelScope.launch {
-            appContext.cacheDir.deleteRecursively()
+            withContext(Dispatchers.IO) { appContext.cacheDir.deleteRecursively() }
             calculateCacheSize()
             // The wipe just deleted cacheDir/artwork, which local tracks'
             // Room rows point at. Rescan now so covers come back without
@@ -633,8 +635,10 @@ class SettingsViewModel @Inject constructor(
 
     fun clearAllData() {
         viewModelScope.launch {
-            preferences.clearAllData()
-            appContext.cacheDir.deleteRecursively()
+            withContext(Dispatchers.IO) {
+                preferences.clearAllData()
+                appContext.cacheDir.deleteRecursively()
+            }
             calculateCacheSize()
             runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
         }

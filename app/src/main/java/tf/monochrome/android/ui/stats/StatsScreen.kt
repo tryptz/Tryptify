@@ -59,10 +59,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -242,10 +244,16 @@ private fun StatsContent(
 
 @Composable
 private fun StaggerEntry(index: Int, content: @Composable () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
+    // rememberSaveable + a guard so the entrance plays ONCE. LazyColumn retains
+    // saveable item state across scroll, so a section scrolling off and back no
+    // longer resets to invisible, replaying the animation and flashing a blank
+    // gap during the stagger delay.
+    var visible by rememberSaveable { mutableStateOf(false) }
     LaunchedEffectOnce {
-        kotlinx.coroutines.delay(60L * index + 40L)
-        visible = true
+        if (!visible) {
+            kotlinx.coroutines.delay(60L * index + 40L)
+            visible = true
+        }
     }
     AnimatedVisibility(
         visible = visible,
@@ -290,7 +298,10 @@ private fun HeroMinutesCard(state: StatsUiState) {
     val primary = MaterialTheme.colorScheme.primary
     val tertiary = MaterialTheme.colorScheme.tertiary
     val pulse = rememberInfiniteTransition(label = "hero-pulse")
-    val t by pulse.animateFloat(
+    // Keep the animated value as State (no `by`) and read it inside drawBehind,
+    // so the pulse animates in the draw phase instead of recomposing the whole
+    // hero card 60×/second.
+    val t = pulse.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -298,12 +309,6 @@ private fun HeroMinutesCard(state: StatsUiState) {
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse-t"
-    )
-    val bg = Brush.linearGradient(
-        colors = listOf(
-            primary.copy(alpha = 0.22f + 0.10f * t),
-            tertiary.copy(alpha = 0.18f + 0.10f * (1f - t)),
-        )
     )
 
     Card(
@@ -314,7 +319,17 @@ private fun HeroMinutesCard(state: StatsUiState) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(bg)
+                .drawBehind {
+                    val tv = t.value
+                    drawRect(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                primary.copy(alpha = 0.22f + 0.10f * tv),
+                                tertiary.copy(alpha = 0.18f + 0.10f * (1f - tv)),
+                            )
+                        )
+                    )
+                }
                 .padding(20.dp),
         ) {
             Column {

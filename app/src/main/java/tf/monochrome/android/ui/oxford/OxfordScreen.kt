@@ -179,18 +179,27 @@ private fun LedMeter(
 
     var heldL by remember { mutableStateOf(minDb) }
     var heldR by remember { mutableStateOf(minDb) }
-    var lastTick by remember { mutableStateOf(0L) }
 
     val dbL = if (peakL > 1e-6f) 20f * log10(peakL) else minDb
     val dbR = if (peakR > 1e-6f) 20f * log10(peakR) else minDb
+    // Read the latest levels inside the frame loop below without restarting it.
+    val latestDbL by rememberUpdatedState(dbL)
+    val latestDbR by rememberUpdatedState(dbR)
 
-    LaunchedEffect(dbL, dbR) {
-        val now = System.nanoTime()
-        val dtSec = if (lastTick == 0L) 0f else (now - lastTick) / 1_000_000_000f
-        lastTick = now
-        val decayDb = DECAY_DB_PER_SEC * dtSec
-        heldL = max(dbL, heldL - decayDb).coerceIn(minDb, maxDb + 3f)
-        heldR = max(dbR, heldR - decayDb).coerceIn(minDb, maxDb + 3f)
+    // Decay on every frame, not only when the level changes. Keying the old
+    // effect on (dbL, dbR) meant that once playback stopped and the levels went
+    // flat, the effect never ran again and the held peak stayed lit forever.
+    LaunchedEffect(Unit) {
+        var lastTick = 0L
+        while (true) {
+            withFrameNanos { now ->
+                val dtSec = if (lastTick == 0L) 0f else (now - lastTick) / 1_000_000_000f
+                lastTick = now
+                val decayDb = DECAY_DB_PER_SEC * dtSec
+                heldL = max(latestDbL, heldL - decayDb).coerceIn(minDb, maxDb + 3f)
+                heldR = max(latestDbR, heldR - decayDb).coerceIn(minDb, maxDb + 3f)
+            }
+        }
     }
 
     Canvas(modifier = modifier) {
