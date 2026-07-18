@@ -34,6 +34,13 @@ import javax.inject.Singleton
  * selected headphone profile. Because a global effect can only be a graphic EQ,
  * this is a many-band approximation of the exact parametric curve.
  *
+ * Quality: uses DynamicsProcessing's float pre-EQ only (no MBC, no limiter, no
+ * makeup/output gain) with VARIANT_FAVOR_FREQUENCY_RESOLUTION for the most
+ * accurate EQ shape. When the combined curve is completely flat (no active AutoEQ
+ * band and a 0 preamp), the effect is fully released so audio passes through
+ * BIT-PERFECT — untouched, no filter bank in the path — and re-attaches the
+ * instant any correction or tone knob is non-zero.
+ *
  * Whether a session-0 effect actually reaches every stream is up to the device's
  * audio HAL; on some OEM ROMs it silently does nothing. Every native call is
  * guarded — DynamicsProcessing (API 28+) is tried first, the legacy Equalizer is
@@ -95,7 +102,18 @@ class SystemAudioEqController @Inject constructor(
     private fun applyGlobal(bandsJson: String?, preamp: Double, tone: ToneControls) {
         // AutoEQ correction bands + the bass/treble tone shelves, layered after it.
         val bands = decodeBands(bandsJson) + tone.toBands()
+        // Bit-perfect passthrough when there is genuinely nothing to apply: if no
+        // band actually changes the signal and the preamp is 0, DON'T attach the
+        // effect at all, so the audio is left completely untouched (no filter bank,
+        // no float round-trip). The effect re-attaches the instant any AutoEQ band
+        // or tone knob becomes non-zero.
+        val hasEffect = preamp != 0.0 || bands.any { it.enabled && it.gain != 0f }
         synchronized(lock) {
+            if (!hasEffect) {
+                releaseLocked()
+                _active.value = false
+                return
+            }
             val primary = runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     applyDynamicsLocked(bands, preamp.toFloat())
