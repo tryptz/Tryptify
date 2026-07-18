@@ -440,9 +440,14 @@ internal fun SyncedLyricsView(
     val popScale: () -> Float = { (1f - fx.popAmount) + fx.popAmount * popIn.value }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // Half-height padding top and bottom lets any line — including the
-        // first and last — settle at the exact vertical centre.
+        // Half-height TOP padding lets an early line still settle at the active-
+        // line anchor with room above it. The BOTTOM padding is deliberately
+        // small (not another half-viewport) so that as the song reaches its final
+        // lines the lyric tail fills DOWN toward the song title, instead of the
+        // last line floating at centre over a big empty band. Mid-song, where
+        // there are plenty of upcoming lines, the anchor scroll is unaffected.
         val halfViewport = maxHeight / 2
+        val tailPadding = (maxHeight * 0.12f).coerceAtLeast(24.dp)
         // The line width is the same for every item, so read it once here.
         // A fixed bevel-safe inset (on top of the user's edge margin) keeps the
         // outermost glyphs — and their puffy 3D glass bevels — off the layer's
@@ -516,7 +521,7 @@ internal fun SyncedLyricsView(
                 .padding(horizontal = sideInset)
                 .fxaa()
                 .liquidGlass(tint = accent),
-            contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
+            contentPadding = PaddingValues(top = halfViewport, bottom = tailPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             itemsIndexed(lines) { index, line ->
