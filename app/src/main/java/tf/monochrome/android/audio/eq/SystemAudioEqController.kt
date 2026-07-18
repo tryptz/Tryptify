@@ -221,10 +221,18 @@ class SystemAudioEqController @Inject constructor(
         const val GLOBAL_PRIORITY = 0
         const val MIN_GAIN_DB = -24f
         const val MAX_GAIN_DB = 24f
-        // Log-spaced correction bands across the audible range.
+        // 31-band ⅓-octave grid (ISO R40 centres) across the audible range. Finer
+        // resolution than a 10/15-band graphic EQ so the sampled curve tracks the
+        // parametric AutoEQ's sharper peaking/shelf filters much more closely — the
+        // coarser the grid, the more a narrow AutoEQ band gets smeared or missed
+        // between sample points. A graphic EQ still can't reproduce a parametric
+        // curve exactly (fixed centres + the HAL's own crossover shaping), so the
+        // in-app AutoEQ path stays the reference; this just narrows the gap.
         val BAND_FREQS = floatArrayOf(
-            30f, 45f, 65f, 95f, 140f, 210f, 320f, 480f, 720f, 1100f,
-            1650f, 2500f, 3800f, 5700f, 8500f, 12500f, 18000f,
+            20f, 25f, 31.5f, 40f, 50f, 63f, 80f, 100f, 125f, 160f,
+            200f, 250f, 315f, 400f, 500f, 630f, 800f, 1000f, 1250f, 1600f,
+            2000f, 2500f, 3150f, 4000f, 5000f, 6300f, 8000f, 10000f, 12500f, 16000f,
+            20000f,
         )
     }
 }
