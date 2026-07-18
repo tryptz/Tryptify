@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
@@ -61,7 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -351,16 +349,6 @@ fun MainPlayerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                Spacer(Modifier.height(14.dp))
-                // Source + format tag directly under the album art: which service the
-                // audio streams from (colour-coded) and the codec/bitrate it's playing.
-                DevEditable("sourceTag", Modifier.fillMaxWidth()) {
-                    PlayerSourceFormatTag(
-                        sourceType = state.sourceType,
-                        qualityBadge = state.qualityBadge,
-                    )
-                }
-
                 Spacer(Modifier.height(14.dp))
                 DevEditable("trackInfo", Modifier.fillMaxWidth()) {
                     PlayerTrackInfo(
@@ -700,112 +688,6 @@ private fun ToggleRow(
             ),
         )
     }
-}
-
-/**
- * Tag shown directly under the album art: a colour-coded chip for the streaming
- * service (Local = green, Qobuz = blue, TIDAL = pink, Collection = purple) plus the
- * codec/bitrate currently playing. Renders nothing when neither is known.
- */
-@Composable
-private fun PlayerSourceFormatTag(
-    sourceType: SourceType?,
-    qualityBadge: String?,
-    channelBadge: String? = null,
-    isThxSpatialAudio: Boolean = false,
-) {
-    if (sourceType == null && qualityBadge.isNullOrBlank() && channelBadge.isNullOrBlank() && !isThxSpatialAudio) return
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (sourceType != null) {
-            val color = sourceTagColor(sourceType)
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = color.copy(alpha = 0.18f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(color),
-                    )
-                    Text(
-                        text = sourceTagLabel(sourceType),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.92f),
-                    )
-                }
-            }
-        }
-        // Highlighted THX Spatial Audio chip — solid fill so it reads stronger
-        // than the translucent source/quality/channel chips on this screen.
-        if (isThxSpatialAudio) {
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = Color.White,
-                modifier = Modifier.semantics { contentDescription = "THX Spatial Audio" },
-            ) {
-                Text(
-                    text = "THX",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black.copy(alpha = 0.85f),
-                )
-            }
-        }
-        if (!qualityBadge.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = Color.White.copy(alpha = 0.12f),
-            ) {
-                Text(
-                    text = qualityBadge,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                )
-            }
-        }
-        // Multichannel layout chip ("5.1"/"7.1") — separate from the codec
-        // chip so it stays visible whichever quality string is playing.
-        if (!channelBadge.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = Color.White.copy(alpha = 0.12f),
-            ) {
-                Text(
-                    text = channelBadge,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                )
-            }
-        }
-    }
-}
-
-private fun sourceTagColor(sourceType: SourceType): Color = when (sourceType) {
-    SourceType.LOCAL -> Color(0xFF34C759)      // green
-    SourceType.QOBUZ -> Color(0xFF2F80ED)      // blue
-    SourceType.API -> Color(0xFFEC4899)        // pink (TIDAL)
-    SourceType.COLLECTION -> Color(0xFFA855F7)  // purple
-}
-
-private fun sourceTagLabel(sourceType: SourceType): String = when (sourceType) {
-    SourceType.LOCAL -> "Local"
-    SourceType.QOBUZ -> "Qobuz"
-    SourceType.API -> "TIDAL"
-    SourceType.COLLECTION -> "Collection"
 }
 
 @Composable
