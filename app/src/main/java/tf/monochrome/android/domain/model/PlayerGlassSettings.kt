@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
 /**
  * Liquid-glass parameters for the PLAYER chrome (the transport buttons) — the
  * same refractive-glass controls the lyrics have, but for the player. Tuned in
- * the Lyrics FX Studio's "Player Glass" tab and persisted as one JSON blob.
+ * the Player Visuals Studio's "Player Glass" tab and persisted as one JSON blob.
  * Defaults reproduce a chrome, lyric-like glass on the buttons.
  */
 @Serializable

@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
 /**
  * Full parameter set for the lyric renderer — typography, the 3D letter wave,
  * the bass beat engine, and the god-ray light. Every field is user-tunable
- * from the Lyrics FX Studio (Settings › Interface) and persisted as one JSON
+ * from the Player Visuals Studio (Settings › Interface) and persisted as one JSON
  * blob; defaults reproduce the shipped look exactly.
  */
 @Serializable

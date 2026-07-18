@@ -92,7 +92,7 @@ class PreferencesManager @Inject constructor(
         private val LYRICS_3D_WAVE_SPEED = floatPreferencesKey("lyrics_3d_wave_speed")
         private val LYRICS_3D_SHADOW_DEPTH = floatPreferencesKey("lyrics_3d_shadow_depth")
         private val LYRICS_BASS_REACT = floatPreferencesKey("lyrics_bass_react")
-        // Full Lyrics FX Studio settings as one JSON blob (takes precedence).
+        // Full Player Visuals Studio settings as one JSON blob (takes precedence).
         private val LYRICS_FX_JSON = stringPreferencesKey("lyrics_fx_json")
         // User-saved Lyrics FX presets (a JSON array of {name, settings}).
         private val LYRICS_FX_CUSTOM_PRESETS_JSON = stringPreferencesKey("lyrics_fx_custom_presets_json")
@@ -101,7 +101,7 @@ class PreferencesManager @Inject constructor(
         // User-saved Player Glass themes (a JSON array of {name, settings}).
         private val PLAYER_GLASS_CUSTOM_PRESETS_JSON = stringPreferencesKey("player_glass_custom_presets_json")
         // Mini-player liquid-glass settings — same shape as PLAYER_GLASS_JSON but
-        // tuned independently (Lyrics FX Studio › "Mini Player" tab).
+        // tuned independently (Player Visuals Studio › "Mini Player" tab).
         private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
 
         // Player / display
@@ -1225,7 +1225,7 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
-     * Full Lyrics FX Studio settings. The JSON blob wins; installs that only
+     * Full Player Visuals Studio settings. The JSON blob wins; installs that only
      * ever used the old four sliders fall back to those legacy keys so their
      * tuned look carries over the first time the Studio opens.
      */

@@ -286,7 +286,7 @@ class PlayerViewModel @Inject constructor(
         startPositionPolling()
         observeCurrentTrackMeta()
         // Mirror the now-playing lyrics + position into the app-scoped holder so
-        // other screens (the Lyrics FX Studio preview) can show the real lyrics.
+        // other screens (the Player Visuals Studio preview) can show the real lyrics.
         viewModelScope.launch { _currentLyrics.collect { nowPlayingLyrics.setLyrics(it) } }
         viewModelScope.launch { _positionMs.collect { nowPlayingLyrics.setPosition(it) } }
         viewModelScope.launch {

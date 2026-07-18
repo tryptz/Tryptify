@@ -214,7 +214,7 @@ fun PlayerTopBar(
                         leadingIcon = { Icon(Icons.Default.Equalizer, contentDescription = null) },
                     )
                     DropdownMenuItem(
-                        text = { Text("Lyrics FX Studio") },
+                        text = { Text("Player Visuals Studio") },
                         onClick = { onOpenLyricsStudio(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
                     )

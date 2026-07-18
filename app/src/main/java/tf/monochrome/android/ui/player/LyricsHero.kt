@@ -373,7 +373,7 @@ internal fun SyncedLyricsView(
     // Bluetooth sync delay: the audio reaches the ears later than the reported
     // playback position, so lyrics run ahead. Rewinding the position we match
     // against by the delay pushes the whole lyric timeline back into step with
-    // what's actually being heard. (Tunable in the Lyrics FX Studio.)
+    // what's actually being heard. (Tunable in the Player Visuals Studio.)
     val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
     // Start composed at the current line so a freshly created instance (the
     // expand morph spawns one) never flashes the top of the song before the

@@ -10,7 +10,7 @@ import javax.inject.Singleton
 /**
  * App-scoped mirror of the currently-playing lyrics and playback position.
  * [tf.monochrome.android.ui.player.PlayerViewModel] (screen-scoped) publishes into
- * it, so other screens — e.g. the Lyrics FX Studio preview — can show the real
+ * it, so other screens — e.g. the Player Visuals Studio preview — can show the real
  * lyrics without holding a reference to the player screen's ViewModel.
  */
 @Singleton

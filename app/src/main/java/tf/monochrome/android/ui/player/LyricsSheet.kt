@@ -113,7 +113,7 @@ private fun SyncedLyrics(
     onSeekTo: (Long) -> Unit
 ) {
     val position by positionMs.collectAsState()
-    // Bluetooth sync delay (tunable in the Lyrics FX Studio): audio lands later
+    // Bluetooth sync delay (tunable in the Player Visuals Studio): audio lands later
     // than the reported position over Bluetooth, so rewind the clock we match
     // lyrics against to keep them in step with what's heard.
     val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
