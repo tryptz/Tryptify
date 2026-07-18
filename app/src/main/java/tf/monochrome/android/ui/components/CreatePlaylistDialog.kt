@@ -25,10 +25,17 @@ import androidx.compose.ui.window.DialogProperties
 fun CreatePlaylistDialog(
     onDismiss: () -> Unit,
     onSubmit: (name: String, description: String) -> Unit,
-    onImportCsv: ((uri: Uri, strictMatch: Boolean, name: String, description: String) -> Unit)? = null
+    onImportCsv: ((uri: Uri, strictMatch: Boolean, name: String, description: String) -> Unit)? = null,
+    initialName: String = "",
+    initialDescription: String = "",
+    title: String = "Create Playlist",
+    confirmLabel: String = "Create",
 ) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
+    // Seed from the initial values so the "Edit playlist" reuse of this dialog
+    // shows the existing name/description instead of blanks (submitting blank
+    // used to wipe them).
+    var name by remember { mutableStateOf(initialName) }
+    var description by remember { mutableStateOf(initialDescription) }
     var isUploadMode by remember { mutableStateOf(true) }
     var selectedFormat by remember { mutableStateOf("CSV") }
     var selectedSource by remember { mutableStateOf("Spotify") }
@@ -62,7 +69,7 @@ fun CreatePlaylistDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Create Playlist",
+                    text = title,
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -238,7 +245,7 @@ fun CreatePlaylistDialog(
                         },
                         enabled = name.isNotBlank() && (selectedUri != null || !isUploadMode || onImportCsv == null)
                     ) {
-                        Text(if (onImportCsv != null && isUploadMode && selectedUri != null) "Import" else "Create")
+                        Text(if (onImportCsv != null && isUploadMode && selectedUri != null) "Import" else confirmLabel)
                     }
                 }
             }

@@ -68,6 +68,7 @@ fun InsertRack(
     allBuses: List<BusConfig> = emptyList(),
     onSlotTap: (slotIndex: Int) -> Unit,
     onAddPlugin: () -> Unit,
+    onPluginReplace: (busIndex: Int, slotIndex: Int) -> Unit = { _, _ -> },
     onPluginBypass: (busIndex: Int, slotIndex: Int) -> Unit,
     onPluginRemove: (busIndex: Int, slotIndex: Int) -> Unit,
     onParameterChange: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
@@ -150,7 +151,7 @@ fun InsertRack(
                     onDryWetChange = { dw ->
                         if (plugin != null) onPluginDryWet(busIndex, slotIndex, dw)
                     },
-                    onReplace = { onAddPlugin() },
+                    onReplace = { onPluginReplace(busIndex, slotIndex) },
                     onRemove  = { onPluginRemove(busIndex, slotIndex) }
                 )
 
@@ -339,7 +340,8 @@ private fun InsertSlot(
                     text = { Text("Replace") },
                     onClick = {
                         showContextMenu = false
-                        onRemove()
+                        // Defer removal to the picker's confirm — cancelling
+                        // must not destroy the current plugin.
                         onReplace()
                     }
                 )

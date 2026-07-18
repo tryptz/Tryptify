@@ -67,6 +67,12 @@ class MixerViewModel @Inject constructor(
     private val _editingPlugin = MutableStateFlow<Pair<Int, Int>?>(null) // busIndex, slotIndex
     val editingPlugin: StateFlow<Pair<Int, Int>?> = _editingPlugin.asStateFlow()
 
+    // When set, the next picker selection replaces the plugin at this
+    // (busIndex, slotIndex) instead of appending. Nothing is removed until the
+    // user actually picks a replacement — cancelling the picker leaves the
+    // original plugin (and its settings) intact.
+    private val _pendingReplaceSlot = MutableStateFlow<Pair<Int, Int>?>(null)
+
     fun setEnabled(enabled: Boolean) = dspManager.setEnabled(enabled)
 
     fun selectBus(index: Int) { _selectedBusIndex.value = index }
@@ -89,9 +95,31 @@ class MixerViewModel @Inject constructor(
     // ── Plugin chain ────────────────────────────────────────────────────
 
     fun showAddPlugin() { _showPluginPicker.value = true }
-    fun dismissPluginPicker() { _showPluginPicker.value = false }
+
+    /** Open the picker in "replace this slot" mode (no removal happens yet). */
+    fun showReplacePlugin(busIndex: Int, slotIndex: Int) {
+        _pendingReplaceSlot.value = busIndex to slotIndex
+        _showPluginPicker.value = true
+    }
+
+    fun dismissPluginPicker() {
+        _showPluginPicker.value = false
+        _pendingReplaceSlot.value = null
+    }
 
     fun addPlugin(type: SnapinType) {
+        val pending = _pendingReplaceSlot.value
+        if (pending != null) {
+            val (busIndex, slotIndex) = pending
+            _pendingReplaceSlot.value = null
+            _showPluginPicker.value = false
+            val bus = buses.value.getOrNull(busIndex) ?: return
+            // Remove the old plugin and insert the replacement at the same slot
+            // so the chain's processing order is preserved.
+            if (slotIndex in bus.plugins.indices) dspManager.removePlugin(busIndex, slotIndex)
+            dspManager.addPlugin(busIndex, slotIndex, type)
+            return
+        }
         val busIndex = _selectedBusIndex.value
         val bus = buses.value.getOrNull(busIndex) ?: return
         if (bus.plugins.size >= DspEngineManager.MAX_PLUGINS_PER_BUS) {

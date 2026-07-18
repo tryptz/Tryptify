@@ -153,13 +153,18 @@ fun PlaylistScreen(
         )
     }
 
-    if (showEditDialog && playlistInfo != null) {
+    val editInfo = playlistInfo
+    if (showEditDialog && editInfo != null) {
         CreatePlaylistDialog(
             onDismiss = { showEditDialog = false },
             onSubmit = { name, desc ->
                 viewModel.updatePlaylist(name, desc)
                 showEditDialog = false
-            }
+            },
+            initialName = editInfo.name,
+            initialDescription = editInfo.description,
+            title = "Edit Playlist",
+            confirmLabel = "Save",
         )
     }
 

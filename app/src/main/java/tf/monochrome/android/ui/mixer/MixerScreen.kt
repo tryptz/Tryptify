@@ -455,6 +455,7 @@ fun MixerScreen(
                                 allBuses = buses,
                                 onSlotTap = { slotIdx -> viewModel.editPlugin(selectedBusIndex, slotIdx) },
                                 onAddPlugin = { viewModel.showAddPlugin() },
+                                onPluginReplace = { busIdx, slotIdx -> viewModel.showReplacePlugin(busIdx, slotIdx) },
                                 onPluginBypass = { busIdx, slotIdx -> viewModel.togglePluginBypass(busIdx, slotIdx) },
                                 onPluginRemove = { busIdx, slotIdx -> viewModel.removePlugin(busIdx, slotIdx) },
                                 onParameterChange = { busIdx, slotIdx, paramIdx, value ->

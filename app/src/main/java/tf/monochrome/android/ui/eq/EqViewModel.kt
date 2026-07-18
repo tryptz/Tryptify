@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -251,36 +252,38 @@ class EqViewModel @Inject constructor(
             }
         }
 
+        // Resolve the custom-targets list AND the selected target together so
+        // the selection restores against freshly-parsed customs. The previous
+        // two independent collectors raced: the target id usually emitted
+        // before the customs JSON, so a saved custom target resolved to null
+        // and the selection silently reverted to the default on every restart.
         viewModelScope.launch {
-            preferences.eqTargetId.collect { targetId ->
-                val target = FrequencyTargets.getTargetById(targetId)
-                    ?: _customTargets.value.find { it.id == targetId }
-                if (target != null) {
-                    _selectedTarget.value = target
-                }
-            }
-        }
-
-        viewModelScope.launch {
-            preferences.eqCustomTargetsJson.collect { json ->
-                try {
-                    val jsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                    val stored = jsonParser.decodeFromString<List<StoredCustomTarget>>(json)
-                    val customs = stored.map { st ->
-                        EqTarget(
-                            id = st.id,
-                            label = st.label,
-                            data = EqDataParser.parseRawData(st.rawData),
-                            filename = ""
-                        )
+            combine(
+                preferences.eqTargetId,
+                preferences.eqCustomTargetsJson
+            ) { targetId, customsJson -> targetId to customsJson }
+                .collect { (targetId, customsJson) ->
+                    val customs = try {
+                        val jsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                        jsonParser.decodeFromString<List<StoredCustomTarget>>(customsJson).map { st ->
+                            EqTarget(
+                                id = st.id,
+                                label = st.label,
+                                data = EqDataParser.parseRawData(st.rawData),
+                                filename = ""
+                            )
+                        }
+                    } catch (_: Exception) {
+                        emptyList()
                     }
                     _customTargets.value = customs
                     _availableTargets.value = FrequencyTargets.getAllTargets() + customs
-                } catch (_: Exception) {
-                    _customTargets.value = emptyList()
-                    _availableTargets.value = FrequencyTargets.getAllTargets()
+                    val target = FrequencyTargets.getTargetById(targetId)
+                        ?: customs.find { it.id == targetId }
+                    if (target != null) {
+                        _selectedTarget.value = target
+                    }
                 }
-            }
         }
     }
 

@@ -64,7 +64,15 @@ class PlaylistViewModel @Inject constructor(
     
     fun updatePlaylist(name: String, description: String) {
         viewModelScope.launch {
-            libraryRepository.updatePlaylist(playlistId, name, description)
+            // Preserve the current visibility — updatePlaylist's isPublic
+            // param defaults to false, so omitting it silently made public
+            // playlists private on every edit.
+            libraryRepository.updatePlaylist(
+                playlistId,
+                name,
+                description,
+                isPublic = _playlistInfo.value?.isPublic ?: false
+            )
         }
     }
 

@@ -112,7 +112,11 @@ sealed class Screen(val route: String) {
     data object Stats : Screen("stats")
     data object ListeningStats : Screen("listening_stats")
     data object FolderBrowser : Screen("folder/{folderPath}") {
-        fun createRoute(folderPath: String) = "folder/${java.net.URLEncoder.encode(folderPath, "UTF-8")}"
+        // Uri.encode (not URLEncoder) so spaces become %20 not '+', and every
+        // reserved char (incl. '/' and '%') is percent-encoded. Navigation
+        // decodes the argument exactly once when it reaches the destination,
+        // so the read site must NOT decode again.
+        fun createRoute(folderPath: String) = "folder/${android.net.Uri.encode(folderPath)}"
     }
     data object LocalAlbumDetail : Screen("local_album/{albumId}") {
         fun createRoute(albumId: Long) = "local_album/$albumId"
@@ -121,7 +125,7 @@ sealed class Screen(val route: String) {
         fun createRoute(artistId: Long) = "local_artist/$artistId"
     }
     data object LocalGenreDetail : Screen("local_genre/{genre}") {
-        fun createRoute(genre: String) = "local_genre/${java.net.URLEncoder.encode(genre, "UTF-8")}"
+        fun createRoute(genre: String) = "local_genre/${android.net.Uri.encode(genre)}"
     }
     data object Mixer : Screen("mixer")
     data object CarMode : Screen("car_mode")
@@ -403,9 +407,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     route = Screen.FolderBrowser.route,
                     arguments = listOf(navArgument("folderPath") { type = NavType.StringType })
                 ) { backStackEntry ->
-                    val folderPath = java.net.URLDecoder.decode(
-                        backStackEntry.arguments?.getString("folderPath") ?: "", "UTF-8"
-                    )
+                    // Navigation already URL-decoded this once; decoding again
+                    // (the old URLDecoder call) crashed on folders containing
+                    // '%' and turned '+' into a space, opening the wrong folder.
+                    val folderPath = backStackEntry.arguments?.getString("folderPath") ?: ""
                     tf.monochrome.android.devedit.DevEditScreen("folder_browser") {
                         FolderBrowserScreen(
                             folderPath = folderPath,

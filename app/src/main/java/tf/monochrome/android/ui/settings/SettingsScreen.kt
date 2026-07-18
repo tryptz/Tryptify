@@ -1694,16 +1694,48 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
     }
 
+    // Export writes to a SAF-chosen file, not the clipboard: a large library's
+    // backup JSON exceeds the binder transaction limit and setPrimaryClip()
+    // hard-crashed exactly the users with the most data to protect.
+    var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    val exportSaveLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val json = pendingExportJson
+        pendingExportJson = null
+        if (uri != null && json != null) {
+            coroutineScope.launch(Dispatchers.IO) {
+                val ok = try {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        context,
+                        if (ok) "Backup saved" else "Failed to save backup",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
     if (showClearAllDialog) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
-            title = { Text("Reset All Data") },
-            text = { Text("This will clear all settings, cache, and local data. The app will restart in a clean state.") },
+            title = { Text("Reset Settings & Cache") },
+            // Reworded to match what clearAllData() actually does: it resets
+            // preferences and wipes the cache but leaves the Room library
+            // untouched, and the app does not restart. The old copy promised
+            // to clear "all local data" and restart, neither of which happened.
+            text = { Text("This resets all app settings and clears cached data. Your saved library, playlists, favorites, and downloads are kept.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAllData()
                     showClearAllDialog = false
-                }) { Text("Reset Everything", color = MaterialTheme.colorScheme.error) }
+                }) { Text("Reset", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showClearAllDialog = false }) { Text("Cancel") }
@@ -1733,7 +1765,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Reset All Data")
+            Text("Reset Settings & Cache")
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -1935,11 +1967,10 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
                 viewModel.exportLibrary { json ->
-                    // Copy to clipboard or share
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    val clip = android.content.ClipData.newPlainText("Monochrome Backup", json)
-                    clipboard.setPrimaryClip(clip)
-                    android.widget.Toast.makeText(context, "Backup copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                    // Stash the JSON, then let the user pick a destination file
+                    // (safe for any size, unlike the old clipboard copy).
+                    pendingExportJson = json
+                    exportSaveLauncher.launch("monochrome-backup.json")
                 }
             }) {
                 Text("Export JSON")
@@ -2048,7 +2079,10 @@ private fun LinkItem(label: String, url: String, context: android.content.Contex
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
-            .clickable { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+            // Route through the guarded helper so a device with no browser
+            // (or a locked-down work profile) shows a toast instead of crashing
+            // with ActivityNotFoundException.
+            .clickable { openDonationUrl(context, url) }
             .padding(vertical = 10.dp)
     )
 }
