@@ -145,8 +145,13 @@ class StatsViewModel @Inject constructor(
             // Pad the range by 1 day so near-cutoff plays on other devices
             // aren't missed due to clock skew.
             val since = sinceFor(r).let { if (it > 0) it - 86_400_000L else 0L }
-            supabaseSync.pullPlayEventsSince(since)
-            _lastSyncedAt.value = System.currentTimeMillis()
+            // Only claim "Synced just now" when the pull actually succeeded —
+            // an offline/errored pull used to still stamp the sync time,
+            // falsely telling the user their cross-device history was current.
+            val pulled = supabaseSync.pullPlayEventsSince(since)
+            if (pulled != null) {
+                _lastSyncedAt.value = System.currentTimeMillis()
+            }
         } finally {
             _isRefreshing.value = false
         }
