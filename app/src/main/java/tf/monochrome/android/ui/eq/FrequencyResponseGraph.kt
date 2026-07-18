@@ -297,7 +297,9 @@ fun FrequencyResponseGraph(
                     val infoText = "${band.freq.toInt()}Hz  ${"%.1f".format(band.gain)}dB"
                     val paint = android.graphics.Paint().apply {
                         color = android.graphics.Color.WHITE
-                        textSize = 28f
+                        // sp (not raw px) so the label scales with display
+                        // density and the user's font-size setting.
+                        textSize = 12.sp.toPx()
                         textAlign = android.graphics.Paint.Align.CENTER
                         isFakeBoldText = true
                     }
@@ -652,7 +654,7 @@ private fun DrawScope.drawDbLabels(width: Float, height: Float, minGain: Float, 
     }
     val paint = android.graphics.Paint().apply {
         color = android.graphics.Color.argb(120, 180, 180, 180)
-        textSize = 22f
+        textSize = 10.sp.toPx()
         textAlign = android.graphics.Paint.Align.LEFT
         isAntiAlias = true
     }
@@ -674,7 +676,7 @@ private fun DrawScope.drawDbLabels(width: Float, height: Float, minGain: Float, 
 private fun DrawScope.drawFreqLabels(width: Float, height: Float) {
     val paint = android.graphics.Paint().apply {
         color = android.graphics.Color.argb(120, 180, 180, 180)
-        textSize = 20f
+        textSize = 9.sp.toPx()
         textAlign = android.graphics.Paint.Align.CENTER
         isAntiAlias = true
     }

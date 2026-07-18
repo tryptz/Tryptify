@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.ui.components.adjustableSemantics
+import kotlin.math.roundToInt
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -135,6 +137,13 @@ internal fun GlassProgressTube(
         modifier = modifier
             .fillMaxWidth()
             .height(34.dp)
+            .adjustableSemantics(
+                label = "Seek",
+                value = frac,
+                range = 0f..1f,
+                stateText = { "${(it * 100).roundToInt()}%" },
+                onValueChange = { onSeek(it); onSeekFinished(it) },
+            )
             .pointerInput(Unit) {
                 detectTapGestures { pos ->
                     val f = (pos.x / size.width).coerceIn(0f, 1f)

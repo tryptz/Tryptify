@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
+import tf.monochrome.android.ui.components.adjustableSemantics
 import kotlin.math.cos
 import kotlin.math.round
 import kotlin.math.sin
@@ -131,6 +132,13 @@ internal fun FLKnobControl(
         Canvas(
             modifier = Modifier
                 .size(64.dp)
+                .adjustableSemantics(
+                    label = label,
+                    value = value,
+                    range = min..max,
+                    stateText = { formatParamValue(it, ParamDef(label, min, max, it, unit, steps)) },
+                    onValueChange = { onValueChange(snapValue(it, min, max, steps)) },
+                )
                 // Double-tap resets to the parameter default. Kept in its own
                 // detector so it composes with — and yields to — the drag
                 // gesture below: a real drag consumes movement, which cancels

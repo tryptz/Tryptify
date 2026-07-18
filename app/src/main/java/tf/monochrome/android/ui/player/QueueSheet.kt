@@ -31,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -456,7 +457,10 @@ private fun QueueTrackItem(
             imageVector = Icons.Default.DragHandle,
             contentDescription = "Reorder",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            // 24dp glyph, but the drag pointer node wraps the 48dp minimum
+            // touch target — this is the sheet's only reorder affordance.
             modifier = dragHandleModifier
+                .minimumInteractiveComponentSize()
                 .padding(start = 12.dp)
                 .size(24.dp)
         )

@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -623,12 +624,14 @@ private fun HeroCoverArt(
             ) {
                 HeroIconButton(
                     icon = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
+                    contentDescription = if (spectrumEnabled) "Show album art" else "Show spectrum",
                     enabled = interactive,
                     onClick = { onToggleShowSpectrum(); showControls() },
                 )
                 if (spectrumEnabled) {
                     HeroIconButton(
                         icon = Icons.Default.Speed,
+                        contentDescription = "Spectrum speed",
                         enabled = interactive,
                         onClick = { spectrumSpeed = spectrumSpeed.next(); showControls() },
                     )
@@ -663,6 +666,7 @@ private fun HeroCoverArt(
                 HeroIconButton(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     icon = Icons.Default.GraphicEq,
+                    contentDescription = "Open visualizer",
                     enabled = interactive,
                     onClick = { onEnterVisualizer(); showControls() },
                 )
@@ -675,12 +679,16 @@ private fun HeroCoverArt(
 @Composable
 private fun HeroIconButton(
     icon: ImageVector,
+    contentDescription: String,
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier
+            // 32dp glass disc, but reserve the 48dp accessibility minimum so
+            // the icon-only overlay control is actually hittable.
+            .minimumInteractiveComponentSize()
             .size(32.dp)
             .clip(CircleShape)
             .clickable(enabled = enabled, onClick = onClick)
@@ -690,7 +698,7 @@ private fun HeroIconButton(
         contentColor = Color.White,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(imageVector = icon, contentDescription = contentDescription, modifier = Modifier.size(16.dp))
         }
     }
 }

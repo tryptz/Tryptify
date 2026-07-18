@@ -42,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.buttonSemantics
 
 /**
  * Primary transport row: previous · play/pause · next. The icons are solid glyph
@@ -119,6 +120,10 @@ fun PlayerTransportControls(
                         interactionSource = interactionSource,
                         indication = null,
                         onClick = onPlayPause,
+                    )
+                    .buttonSemantics(
+                        label = if (isPlaying) "Pause" else "Play",
+                        state = if (isBuffering) "Buffering" else null,
                     ),
                 contentAlignment = Alignment.Center,
             ) {

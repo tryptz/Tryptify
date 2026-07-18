@@ -101,6 +101,7 @@ import tf.monochrome.android.domain.model.PlayerGlassPreset
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.MiniPlayer
+import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerActionDock
 import tf.monochrome.android.ui.player.GlassDropShadow
@@ -491,10 +492,16 @@ fun LyricsFxStudioScreen(
                         trailingIcon = {
                             Icon(
                                 Icons.Default.Share,
-                                contentDescription = "Manage ${saved.name}",
+                                contentDescription = null,
+                                // Chip height caps the target, but padding
+                                // before the click enlarges it past the bare
+                                // 16dp glyph, and the label/role make it a
+                                // findable button for TalkBack.
                                 modifier = Modifier
-                                    .size(16.dp)
-                                    .clickable { presetAction = saved },
+                                    .buttonSemantics(label = "Manage ${saved.name}")
+                                    .clickable { presetAction = saved }
+                                    .padding(4.dp)
+                                    .size(16.dp),
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(

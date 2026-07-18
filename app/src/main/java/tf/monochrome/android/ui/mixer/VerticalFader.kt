@@ -21,6 +21,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.ui.components.adjustableSemantics
 import kotlin.math.absoluteValue
 
 /**
@@ -65,6 +66,13 @@ fun VerticalFader(
     Canvas(
         modifier = modifier
             .fillMaxHeight()
+            .adjustableSemantics(
+                label = "Gain fader",
+                value = gainDb,
+                range = -60f..24f,
+                stateText = { "%.1f dB".format(it) },
+                onValueChange = onGainChange,
+            )
             .pointerInput(Unit) {
                 // Vertical-only, delta-based dragging. The fader is the
                 // largest touch area of each strip inside the mixer's
