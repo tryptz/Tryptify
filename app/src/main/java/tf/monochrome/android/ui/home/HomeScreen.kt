@@ -125,8 +125,15 @@ fun HomeScreen(
         androidx.compose.runtime.mutableStateOf(false)
     }
     val searchFocus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
-    androidx.compose.runtime.LaunchedEffect(searchOpen) {
-        if (searchOpen) searchFocus.requestFocus()
+    // Only grab focus on a genuine user open (pendingFocus is non-saveable, so
+    // returning from a detail screen with searchOpen restored true does NOT
+    // re-pop the keyboard over the results).
+    var pendingSearchFocus by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(pendingSearchFocus) {
+        if (pendingSearchFocus) {
+            pendingSearchFocus = false
+            runCatching { searchFocus.requestFocus() }
+        }
     }
     val isRadioActive by playerViewModel.isRadioActive.collectAsState()
     val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsState()
@@ -239,7 +246,9 @@ fun HomeScreen(
                             // home feed comes back.
                             searchViewModel.onQueryChange("")
                         }
-                        searchOpen = !searchOpen
+                        val opening = !searchOpen
+                        searchOpen = opening
+                        if (opening) pendingSearchFocus = true
                     }) {
                         Icon(
                             if (searchOpen) Icons.Default.Clear else Icons.Default.Search,
