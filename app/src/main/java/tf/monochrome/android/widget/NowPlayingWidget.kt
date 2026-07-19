@@ -56,11 +56,6 @@ class NowPlayingWidget : GlanceAppWidget() {
         val accent = art?.let { accentFrom(it) } ?: WidgetColors.AccentFallback
         provideContent { WidgetContent(snapshot, art, accent) }
     }
-
-    /** Sample render for the widget picker (no live session yet). */
-    override suspend fun providePreview(context: Context, widgetCategory: Int) {
-        provideContent { WidgetContent(NowPlayingSnapshot.PREVIEW, null, WidgetColors.AccentFallback) }
-    }
 }
 
 @Composable

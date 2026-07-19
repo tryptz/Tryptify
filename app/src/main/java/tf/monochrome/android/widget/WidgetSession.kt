@@ -49,12 +49,6 @@ data class NowPlayingSnapshot(
             hasSession = false, isPlaying = false, title = "", artist = "",
             artworkUri = null, positionMs = 0L, durationMs = 0L,
         )
-
-        /** Sample state used only for the widget-picker preview. */
-        val PREVIEW = NowPlayingSnapshot(
-            hasSession = true, isPlaying = true, title = "Song title", artist = "Artist",
-            artworkUri = null, positionMs = 84_000L, durationMs = 210_000L,
-        )
     }
 }
 
