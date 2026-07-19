@@ -62,7 +62,7 @@ suspend fun <T> withSessionController(context: Context, block: (MediaController)
     withContext(Dispatchers.Main) {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
-        val controller = suspendCancellableCoroutine { cont ->
+        val controller = suspendCancellableCoroutine<MediaController?> { cont ->
             future.addListener(
                 { cont.resume(runCatching { future.get() }.getOrNull()) },
                 MoreExecutors.directExecutor(),

@@ -46,6 +46,7 @@ import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import tf.monochrome.android.widget.NowPlayingWidget
+import androidx.glance.appwidget.updateAll
 import javax.inject.Inject
 
 @AndroidEntryPoint
