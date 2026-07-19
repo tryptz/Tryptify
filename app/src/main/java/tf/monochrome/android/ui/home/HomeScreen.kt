@@ -30,6 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -62,7 +63,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -475,14 +479,58 @@ private fun PlayRadioButton(
     isGenerating: Boolean,
     onClick: () -> Unit,
 ) {
+    val accent = if (isActive) MaterialTheme.colorScheme.primaryContainer
+    else MaterialTheme.colorScheme.primary
+    val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
+    // Specular highlight is white glass on dark themes; a touch of black keeps the
+    // "wet glass" read on light ones without washing the accent out.
+    val specular = if (isDark) Color.White else Color.White.copy(alpha = 0.6f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            // Under shadow: a soft, accent-tinted drop shadow so the pill floats
+            // above the list. clip=false lets the shadow spill past the shape.
+            .shadow(
+                elevation = 12.dp,
+                shape = MonoDimens.shapePill,
+                clip = false,
+                ambientColor = accent,
+                spotColor = accent,
+            )
             .clip(MonoDimens.shapePill)
+            // Liquid glass: translucent accent fill with a top-lit vertical sheen
+            // (brighter at the top edge, deeper toward the bottom) — the base
+            // "body" of the glass.
             .background(
-                if (isActive) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.primary
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        accent.copy(alpha = 0.94f),
+                        accent.copy(alpha = 0.70f),
+                    )
+                )
+            )
+            // Specular sweep: a bright highlight across the top third that fades
+            // out, giving the pill its glossy, refractive wet-glass surface.
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        specular.copy(alpha = 0.30f),
+                        Color.Transparent,
+                    )
+                )
+            )
+            // Specular rim: a luminous edge, brightest along the top, that reads
+            // as light catching the glass border.
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        specular.copy(alpha = 0.55f),
+                        specular.copy(alpha = 0.08f),
+                    )
+                ),
+                shape = MonoDimens.shapePill,
             )
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp),
