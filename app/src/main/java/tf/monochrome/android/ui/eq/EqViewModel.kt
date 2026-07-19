@@ -65,6 +65,14 @@ class EqViewModel @Inject constructor(
     private val _currentPreamp = MutableStateFlow(0f)
     val currentPreamp: StateFlow<Float> = _currentPreamp.asStateFlow()
 
+    // Bass/treble tone shelves — the SAME shared preference the player's Audio
+    // tools panel edits. Instant local state for smooth knobs, debounced persist.
+    private val _toneControls =
+        MutableStateFlow(tf.monochrome.android.domain.model.ToneControls.DEFAULT)
+    val toneControls: StateFlow<tf.monochrome.android.domain.model.ToneControls> =
+        _toneControls.asStateFlow()
+    private var tonePersistJob: kotlinx.coroutines.Job? = null
+
     private val _availableTargets = MutableStateFlow<List<EqTarget>>(FrequencyTargets.getAllTargets())
     val availableTargets: StateFlow<List<EqTarget>> = _availableTargets.asStateFlow()
 
@@ -148,11 +156,24 @@ class EqViewModel @Inject constructor(
         loadInitialState()
     }
 
+    fun setToneControls(controls: tf.monochrome.android.domain.model.ToneControls) {
+        _toneControls.value = controls
+        tonePersistJob?.cancel()
+        tonePersistJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(120)
+            preferences.setSystemToneControls(controls)
+        }
+    }
+
     private fun loadInitialState() {
         viewModelScope.launch {
             preferences.eqTutorialSeen.collect { seen ->
                 _showTutorial.value = !seen
             }
+        }
+
+        viewModelScope.launch {
+            preferences.systemToneControls.collect { _toneControls.value = it }
         }
 
         viewModelScope.launch {

@@ -62,6 +62,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.components.MiniPlayer
+import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.detail.AlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
 import tf.monochrome.android.ui.detail.LocalAlbumDetailScreen
@@ -510,6 +511,38 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                 // Mini player — sits below nav bar with its own space
                 if (showMiniPlayer) {
+                    // Mini player follows the album art (dynamic colours), while
+                    // the menus around it stay on the base theme.
+                    DynamicColorScope {
+                        CompositionLocalProvider(
+                            tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
+                        ) {
+                            MiniPlayer(
+                                track = currentTrack,
+                                isPlaying = isPlaying,
+                                progressProvider = progressProvider,
+                                onPlayPauseClick = { playerViewModel.togglePlayPause() },
+                                onSkipNextClick = { playerViewModel.skipToNext() },
+                                onSkipPreviousClick = { playerViewModel.skipToPrevious() },
+                                onClick = { navController.navigate(Screen.NowPlaying.route) },
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                hazeState = hazeState
+                            )
+                        }
+                    }
+                }
+
+                // Fill the system nav bar area
+                Spacer(modifier = Modifier.height(navBarHeight))
+            }
+        } else if (showMiniPlayer) {
+            // Mini player on non-tab screens — pad above system nav bar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = navBarHeight)
+            ) {
+                DynamicColorScope {
                     CompositionLocalProvider(
                         tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
                     ) {
@@ -525,32 +558,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             hazeState = hazeState
                         )
                     }
-                }
-
-                // Fill the system nav bar area
-                Spacer(modifier = Modifier.height(navBarHeight))
-            }
-        } else if (showMiniPlayer) {
-            // Mini player on non-tab screens — pad above system nav bar
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = navBarHeight)
-            ) {
-                CompositionLocalProvider(
-                    tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
-                ) {
-                    MiniPlayer(
-                        track = currentTrack,
-                        isPlaying = isPlaying,
-                        progressProvider = progressProvider,
-                        onPlayPauseClick = { playerViewModel.togglePlayPause() },
-                        onSkipNextClick = { playerViewModel.skipToNext() },
-                        onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                        onClick = { navController.navigate(Screen.NowPlaying.route) },
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        hazeState = hazeState
-                    )
                 }
             }
         }

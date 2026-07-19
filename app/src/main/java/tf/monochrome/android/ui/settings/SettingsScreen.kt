@@ -380,7 +380,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
         }
         SettingSwitchItem(
             title = "Dynamic Colors",
-            subtitle = "Master switch: tint the app AND the player from album art. Off = everything uses the theme color",
+            subtitle = "Tint the player, mini player and lyrics from album art — the menus keep the theme color. Off = everything uses the theme color",
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
@@ -1044,6 +1044,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val crossfade by viewModel.crossfadeDuration.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val preservePitch by viewModel.preservePitch.collectAsState()
+    val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsState()
     var showWifiDropdown by remember { mutableStateOf(false) }
     var showCellularDropdown by remember { mutableStateOf(false) }
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
@@ -1067,6 +1068,15 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     }
 
     SettingsTabContent {
+        SettingsGroupHeader("System-wide EQ")
+        SettingSwitchItem(
+            title = "System-wide AutoEQ",
+            subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
+            checked = systemWideAutoEq,
+            onCheckedChange = viewModel::setSystemWideAutoEq,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Streaming Quality")
         SettingItem(title = "Wi-Fi Streaming", subtitle = wifiQuality.displayName, onClick = { showWifiDropdown = true })
         DropdownMenu(expanded = showWifiDropdown, onDismissRequest = { showWifiDropdown = false }) {
@@ -2077,17 +2087,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             subtitle = "Live logcat stream for this process — copy or export as a file for bug reports",
             onClick = { navController.navigate(Screen.DebugLog.route) },
         )
-
-        val devEdit = tf.monochrome.android.devedit.LocalDevEditController.current
-        if (devEdit != null) {
-            val devEnabled = devEdit.masterEnabled.collectAsState().value
-            SettingSwitchItem(
-                title = "DevEdit layout mode",
-                subtitle = "Unlocks a per-screen Edit button. Drag, hide & add UI elements; the toolbar's Save writes the layout to internal storage",
-                checked = devEnabled,
-                onCheckedChange = { devEdit.setMasterEnabled(it) },
-            )
-        }
     }
 }
 

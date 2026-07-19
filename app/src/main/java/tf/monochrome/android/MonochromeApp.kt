@@ -85,6 +85,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     lateinit var usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController
 
     @Inject
+    lateinit var systemAudioEqController: tf.monochrome.android.audio.eq.SystemAudioEqController
+
+    @Inject
     lateinit var settingsSyncCoordinator: tf.monochrome.android.data.sync.SettingsSyncCoordinator
 
     @Inject
@@ -163,6 +166,10 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // and start publishing real status to Settings UI. Without this,
         // the toggle is a persisted boolean with no observable effect.
         usbExclusiveController.start()
+        // System-wide AutoEQ: when the toggle is on, attach a global output-mix
+        // effect that applies the AutoEQ correction to all device audio. No-op
+        // (and self-releasing) while the toggle is off or the device rejects it.
+        systemAudioEqController.start()
         // Restore auth on app start, then register this device against whichever
         // user is signed in. The collector re-fires on sign-in / sign-out.
         appScope.launch {

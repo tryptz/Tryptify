@@ -8,6 +8,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -44,6 +45,8 @@ import tf.monochrome.android.domain.model.ReplayGainValues
 import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
+import tf.monochrome.android.widget.NowPlayingWidget
+import androidx.glance.appwidget.updateAll
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -71,6 +74,11 @@ class PlaybackService : MediaSessionService() {
     private lateinit var player: ExoPlayer
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var currentReplayGain: ReplayGainValues? = null
+
+    // Last track the ProjectM preset was advanced for — so a real track change
+    // (skip, previous, pick a new song) rolls the visualizer to a fresh preset
+    // immediately instead of waiting on the rotation timer.
+    private var lastPresetTrackId: String? = null
 
     private fun createSessionActivity(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -134,6 +142,17 @@ class PlaybackService : MediaSessionService() {
             }
 
         player.addListener(object : Player.Listener {
+            // Keep the home-screen now-playing widget live: the widget uses
+            // updatePeriodMillis=0 (no polling), so it only refreshes when the
+            // service pushes an update on a real playback change.
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                refreshNowPlayingWidget()
+            }
+
+            override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                refreshNowPlayingWidget()
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_ENDED -> {
@@ -169,6 +188,20 @@ class PlaybackService : MediaSessionService() {
                                 scrobblingService.updateNowPlaying(track)
                             }
                         }
+                    }
+                }
+
+                // Whenever the playing track actually changes and auto-shuffle is
+                // on, jump the ProjectM visualizer to a new preset right away — so
+                // skipping/selecting a song rolls the preset instead of leaving the
+                // old one up until the rotation timer fires. (No-op when the engine
+                // isn't running, e.g. the visualizer view is closed.) Fires for any
+                // transition reason so replacing the queue with a new song counts.
+                val newTrackId = mediaItem?.mediaId
+                if (newTrackId != null && newTrackId != lastPresetTrackId) {
+                    lastPresetTrackId = newTrackId
+                    if (projectMEngineRepository.autoShuffle.value) {
+                        projectMEngineRepository.nextPreset()
                     }
                 }
             }
@@ -227,17 +260,20 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
-        // Listen to EQ changes and apply them
+        // Listen to EQ + tone changes and apply them. Tone shelves are folded into
+        // the in-app AutoEQ processor whenever the system-wide effect isn't the one
+        // handling this app's audio, so tone works independent of the system-wide
+        // toggle (and without double-processing when it IS on).
         serviceScope.launch {
             kotlinx.coroutines.flow.combine(
                 preferences.eqEnabled,
                 preferences.eqBandsJson,
-                preferences.eqPreamp
-            ) { enabled, bandsJson, preamp ->
-                Triple(enabled, bandsJson, preamp)
-            }.collect { (enabled, bandsJson, preamp) ->
-                applyEqSettings(enabled, bandsJson, preamp)
-            }
+                preferences.eqPreamp,
+                preferences.systemToneControls,
+                preferences.systemWideAutoEqEnabled,
+            ) { enabled, bandsJson, preamp, tone, systemWide ->
+                EqApply(enabled, bandsJson, preamp, tone, systemWide)
+            }.collect { applyEqSettings(it) }
         }
 
         // Listen to Parametric EQ changes and apply them
@@ -577,16 +613,40 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private data class EqApply(
+        val enabled: Boolean,
+        val bandsJson: String?,
+        val preamp: Double,
+        val tone: tf.monochrome.android.domain.model.ToneControls,
+        val systemWide: Boolean,
+    )
+
+    /**
+     * Push a fresh render to every now-playing widget instance. [serviceScope] runs
+     * on the main dispatcher, so the suspend updateAll is safe to launch here; the
+     * whole thing is wrapped so a widget/Glance hiccup can never crash playback.
+     */
+    private fun refreshNowPlayingWidget() {
+        serviceScope.launch {
+            runCatching { NowPlayingWidget().updateAll(this@PlaybackService) }
+        }
+    }
+
     /**
      * Apply current EQ settings from preferences
      */
     private fun applyEq() {
         serviceScope.launch {
             try {
-                val enabled = preferences.eqEnabled.first()
-                val bandsJson = preferences.eqBandsJson.first()
-                val preamp = preferences.eqPreamp.first()
-                applyEqSettings(enabled, bandsJson, preamp)
+                applyEqSettings(
+                    EqApply(
+                        enabled = preferences.eqEnabled.first(),
+                        bandsJson = preferences.eqBandsJson.first(),
+                        preamp = preferences.eqPreamp.first(),
+                        tone = preferences.systemToneControls.first(),
+                        systemWide = preferences.systemWideAutoEqEnabled.first(),
+                    ),
+                )
             } catch (e: Exception) {
                 // EQ application non-critical
             }
@@ -594,17 +654,29 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * Apply EQ settings to the standalone AutoEQ processor (independent of mixer DSP)
+     * Apply EQ + tone settings to the standalone AutoEQ processor (independent of
+     * mixer DSP). When system-wide is ON, the global output-mix effect already
+     * corrects THIS app's audio too, so the in-app AutoEQ and tone are fully
+     * bypassed here to avoid a double correction. When it's OFF, the AutoEQ (when
+     * enabled) and the bass/treble tone shelves are applied in-app — so tone works
+     * whether or not system-wide is on, and neither is ever applied twice.
      */
-    private fun applyEqSettings(enabled: Boolean, bandsJson: String?, preamp: Double) {
+    private fun applyEqSettings(cfg: EqApply) {
         try {
-            val bands = if (!bandsJson.isNullOrEmpty()) {
-                val json = Json { ignoreUnknownKeys = true }
-                json.decodeFromString<List<EqBand>>(bandsJson)
+            if (cfg.systemWide) {
+                autoEqProcessor.applyBands(emptyList(), 0f, false)
+                return
+            }
+            val json = Json { ignoreUnknownKeys = true }
+            val autoBands = if (cfg.enabled && !cfg.bandsJson.isNullOrEmpty()) {
+                json.decodeFromString<List<EqBand>>(cfg.bandsJson)
             } else {
                 emptyList()
             }
-            autoEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
+            val bands = autoBands + cfg.tone.toBands()
+            val preamp = if (cfg.enabled) cfg.preamp else 0.0
+            val active = bands.any { it.enabled }
+            autoEqProcessor.applyBands(bands, preamp.toFloat(), active)
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }

@@ -46,8 +46,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -96,6 +99,8 @@ fun MainPlayerRoute(
     val preservePitch by playerViewModel.preservePitch.collectAsState()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsState()
+    val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsState()
+    val toneControls by playerViewModel.toneControls.collectAsState()
 
     val visualizerSensitivity by playerViewModel.visualizerSensitivity.collectAsState()
     val visualizerBrightness by playerViewModel.visualizerBrightness.collectAsState()
@@ -264,6 +269,8 @@ fun MainPlayerRoute(
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
+        systemWideAutoEqEnabled = systemWideAutoEqEnabled,
+        toneControls = toneControls,
     )
 
     // Bass-reactive lyrics: one shared pulse (single analyzer stake) drives
@@ -271,12 +278,19 @@ fun MainPlayerRoute(
     // registry carries the active line's screen bounds to that layer, so the
     // glow draws with NO clipping ancestor and can never be cut by a canvas.
     val glyphAnchors = remember { LyricGlyphAnchors() }
+    val albumArtAnchor = remember { LyricGlyphAnchors() }
     val lyricsBeatOn = viewMode == NowPlayingViewMode.LYRICS && lyricsFx.bassReact > 0.01f
+    // The same reactive glow can bloom behind the album cover in cover-art view
+    // when the Studio toggle is on. Cover-art and lyrics views are mutually
+    // exclusive, so both share ONE pulse / analyzer stake — never two FFT taps.
+    val albumGlowOn = lyricsFx.glowBehindArt && lyricsFx.bassReact > 0.01f &&
+        viewMode == NowPlayingViewMode.COVER_ART
+    val beatOn = lyricsBeatOn || albumGlowOn
     val beatPulse: androidx.compose.runtime.State<Float>? =
-        if (lyricsBeatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
-    androidx.compose.runtime.LaunchedEffect(lyricsBeatOn) {
-        LyricsDebug.log("beat engine ${if (lyricsBeatOn) "acquired (FFT analyzer staked)" else "released"}")
-        if (!lyricsBeatOn) glyphAnchors.reset()
+        if (beatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
+    androidx.compose.runtime.LaunchedEffect(beatOn) {
+        LyricsDebug.log("beat engine ${if (beatOn) "acquired (FFT analyzer staked)" else "released"}")
+        if (!beatOn) { glyphAnchors.reset(); albumArtAnchor.reset() }
     }
     // Log the active lyrics-FX configuration whenever it changes, and when the
     // lyrics view is entered/left — so the Debug Log shows exactly what the
@@ -348,6 +362,8 @@ fun MainPlayerRoute(
             onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
             onCompressorToggle = playerViewModel::setCompressorEnabled,
             onInflatorToggle = playerViewModel::setInflatorEnabled,
+            onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
+            onToneControlsChange = playerViewModel::setToneControls,
             topBar = {
                 PlayerTopBar(
                     speedLabel = state.speedLabel,
@@ -404,10 +420,18 @@ fun MainPlayerRoute(
                         // screen, including the fade-out). Bound it by WIDTH so the
                         // now-taller lyric slot doesn't stretch the (dissolving) art
                         // vertically; otherwise it fills the slot.
-                        val artMod = if (lyricsSlotWide) {
+                        val artMod = (if (lyricsSlotWide) {
                             Modifier.fillMaxWidth().aspectRatio(1f)
                         } else {
                             Modifier.fillMaxSize()
+                        }).let { base ->
+                            // Report the cover's screen bounds so the reactive glow
+                            // can bloom behind it (only while that toggle is active).
+                            if (albumGlowOn) base.onGloballyPositioned { coords ->
+                                albumArtAnchor.lineCenter = coords.boundsInRoot().center
+                                albumArtAnchor.lineHalf =
+                                    Size(coords.size.width / 2f, coords.size.height / 2f)
+                            } else base
                         }
                         PlayerHero(
                             modifier = artMod.graphicsLayer { alpha = 1f - lyricsProgress },
@@ -476,11 +500,15 @@ fun MainPlayerRoute(
             },
             fxUnderlay = {
                 if (beatPulse != null) {
+                    // Cover-art view uses the album anchor with an edge-hugging
+                    // bloom; lyrics view keeps the line-anchored glow. Only one is
+                    // ever active (the views are mutually exclusive).
                     LyricsFxLayer(
-                        anchors = glyphAnchors,
+                        anchors = if (albumGlowOn) albumArtAnchor else glyphAnchors,
                         pulse = beatPulse,
                         accent = albumColors.vibrant,
                         fx = lyricsFx,
+                        edgeHug = albumGlowOn,
                     )
                 }
             },

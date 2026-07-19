@@ -23,6 +23,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ReplayGainMode
+import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
@@ -206,6 +207,11 @@ class PreferencesManager @Inject constructor(
         private val EQ_SELECTED_HEADPHONE_NAME = stringPreferencesKey("eq_selected_headphone_name")
         private val EQ_MEASUREMENT_JSON = stringPreferencesKey("eq_measurement_json")
         private val EQ_UPLOADED_HEADPHONES_JSON = stringPreferencesKey("eq_uploaded_headphones_json")
+        // System-wide AutoEQ: apply the correction to ALL device audio via a
+        // global output-mix effect (Wavelet-style), not just this app's playback.
+        private val SYSTEM_WIDE_AUTOEQ_ENABLED = booleanPreferencesKey("system_wide_autoeq_enabled")
+        // Bass/treble tone shelves layered after the AutoEQ in that same effect.
+        private val SYSTEM_TONE_CONTROLS_JSON = stringPreferencesKey("system_tone_controls_json")
 
         // Parametric EQ (independent of AutoEQ)
         private val PARAM_EQ_ENABLED = booleanPreferencesKey("param_eq_enabled")
@@ -911,6 +917,28 @@ class PreferencesManager @Inject constructor(
     val eqTargetId: Flow<String> = dataStore.data.map { it[EQ_TARGET_ID] ?: "harman_oe_2018" }
     val eqPreamp: Flow<Double> = dataStore.data.map { it[EQ_PREAMP] ?: 0.0 }
     val eqBandsJson: Flow<String?> = dataStore.data.map { it[EQ_BANDS_JSON] }
+
+    /** System-wide AutoEQ master toggle (global output-mix effect). Off by default. */
+    val systemWideAutoEqEnabled: Flow<Boolean> =
+        dataStore.data.map { it[SYSTEM_WIDE_AUTOEQ_ENABLED] ?: false }
+
+    suspend fun setSystemWideAutoEqEnabled(enabled: Boolean) {
+        dataStore.edit { it[SYSTEM_WIDE_AUTOEQ_ENABLED] = enabled }
+    }
+
+    /** Bass/treble tone shelves for the system-wide effect (after AutoEQ). */
+    val systemToneControls: Flow<ToneControls> = dataStore.data.map { prefs ->
+        prefs[SYSTEM_TONE_CONTROLS_JSON]?.let { jsonStr ->
+            runCatching { json.decodeFromString<ToneControls>(jsonStr).clamped() }
+                .getOrDefault(ToneControls.DEFAULT)
+        } ?: ToneControls.DEFAULT
+    }
+
+    suspend fun setSystemToneControls(controls: ToneControls) {
+        dataStore.edit {
+            it[SYSTEM_TONE_CONTROLS_JSON] = json.encodeToString(controls.clamped())
+        }
+    }
 
     suspend fun setEqEnabled(enabled: Boolean) {
         dataStore.edit { it[EQ_ENABLED] = enabled }

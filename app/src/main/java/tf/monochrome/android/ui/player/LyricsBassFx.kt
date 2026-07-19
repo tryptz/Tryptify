@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import kotlin.math.exp
+import kotlin.math.hypot
 import kotlin.math.sqrt
 
 /**
@@ -64,12 +65,28 @@ private const val BASS_BIN_END = 62
 
 private const val SPRING_STIFFNESS = 300f
 
+// Adaptive kick detection. The tap emits per-bin levels in dB (pink-compensated
+// and re-centered so the midband sits at 0 dB), and in real music the bass band
+// sits WELL above that reference — often +12 dB or more on anything bass-heavy.
+// An absolute threshold therefore pins at max on every frame, so the pump swells
+// once and just stays swollen. Instead we track a slow "bass floor" and drive the
+// pulse from how far the instantaneous level pokes ABOVE that floor — i.e. the
+// kick transient — which rests near 0 between kicks whatever the mix level is.
+//
+// FLOOR_FALL_SEC: time constant when the floor follows the level down (toward the
+// quiet gaps between kicks). FLOOR_RISE_SEC: much slower, so the floor creeps up
+// through sustained-loud sections without ever chasing a kick's own transient.
+// KICK_RANGE_DB: dB above the floor that counts as a full-strength kick.
+private const val FLOOR_FALL_SEC = 0.4f
+private const val FLOOR_RISE_SEC = 2.5f
+private const val KICK_RANGE_DB = 8f
+
 /**
- * Per-frame bass pulse in 0..~1.3 (>1 on overshoot). FFT bass bins → dB →
- * normalized level → attack/release envelope → underdamped spring (attack,
- * release, bounce are Studio settings). Read from draw/layer lambdas only, so
- * the pulse never causes recomposition. Ref-counts a stake on the analyzer
- * for exactly as long as it is composed.
+ * Per-frame bass pulse in 0..~1.6 (>1 on overshoot). FFT bass bins → dB →
+ * kick transient above an adaptive bass floor → attack/release envelope →
+ * underdamped spring (attack, release, bounce are Studio settings). Read from
+ * draw/layer lambdas only, so the pulse never causes recomposition. Ref-counts
+ * a stake on the analyzer for exactly as long as it is composed.
  */
 @Composable
 internal fun rememberBassPulse(): State<Float> =
@@ -95,6 +112,8 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
         var env = 0f
         var pos = 0f
         var vel = 0f
+        var floor = 0f
+        var floorInit = false
         var lastNanos = -1L
         while (true) {
             withFrameNanos { now ->
@@ -105,7 +124,16 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
                 var sum = 0f
                 for (b in BASS_BIN_START..BASS_BIN_END) sum += bins[b]
                 val db = sum / (BASS_BIN_END - BASS_BIN_START + 1)
-                val raw = (db / 12f).coerceIn(0f, 1f)
+
+                // Adaptive bass floor: falls quickly toward the quiet gaps between
+                // kicks, rises slowly so it never chases a kick's own transient.
+                if (!floorInit) { floor = db; floorInit = true }
+                val floorTau = if (db < floor) FLOOR_FALL_SEC else FLOOR_RISE_SEC
+                floor += (db - floor) * (1f - exp(-dt / floorTau))
+
+                // Kick = how far the level pokes above the floor, in kick-range dB.
+                // Rests near 0 between kicks regardless of the mix's bass level.
+                val raw = ((db - floor) / KICK_RANGE_DB).coerceIn(0f, 1f)
                 val coef = if (raw > env) 1f - exp(-dt / attackSec) else 1f - exp(-dt / releaseSec)
                 env += (raw - env) * coef
                 vel += ((env - pos) * SPRING_STIFFNESS - vel * springDamping) * dt
@@ -149,6 +177,10 @@ internal fun Modifier.bassBeat(
  * Full-screen glow layer: one soft album-accent bloom behind the whole active
  * line, breathing with the bass. Lives on a layer with no clipping ancestor, so
  * the light can never be cut by a canvas. Draw-phase only.
+ *
+ * With [edgeHug] on (the album-cover glow), the bloom instead hugs the anchored
+ * rectangle's edges and pumps outward — so it reads as a halo around the opaque
+ * album art rather than a faint wash lost behind it.
  */
 @Composable
 internal fun LyricsFxLayer(
@@ -157,6 +189,7 @@ internal fun LyricsFxLayer(
     accent: Color,
     fx: LyricsFxSettings,
     modifier: Modifier = Modifier,
+    edgeHug: Boolean = false,
 ) {
     if (fx.bassReact <= 0.01f) return
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -168,11 +201,21 @@ internal fun LyricsFxLayer(
                 val p = (pulse.value * fx.bassReact).coerceIn(0f, 1.6f)
                 if (p <= 0.03f) return@drawBehind
 
-                // One soft album-accent bloom behind the whole active line.
                 anchors.lineCenter?.let { lc ->
                     val c = lc - origin
-                    val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
-                    drawGlow(c, glowR, p, accent, fx)
+                    if (edgeHug) {
+                        // Album cover: envelop the whole square (half-diagonal) and
+                        // bloom brightest right at its edge, pumping outward.
+                        val half = hypot(
+                            anchors.lineHalf.width.toDouble(),
+                            anchors.lineHalf.height.toDouble(),
+                        ).toFloat()
+                        drawArtGlow(c, half, p, accent, fx)
+                    } else {
+                        // One soft album-accent bloom behind the whole active line.
+                        val glowR = anchors.lineHalf.height + fx.glowRadiusDp.dp.toPx() * (1f + p)
+                        drawGlow(c, glowR, p, accent, fx)
+                    }
                 }
             },
     )
@@ -193,6 +236,38 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlow(
                 accent.copy(alpha = fx.glowBrightness * 0.32f * p),
                 Color.Transparent,
             ),
+            center = center,
+            radius = radius,
+        ),
+        radius = radius,
+        center = center,
+    )
+}
+
+/**
+ * Album-cover bloom: a radial glow centred on the art whose brightest ring sits
+ * at the cover's edge ([halfSize] = half the square's diagonal) and fades out
+ * over an extra [LyricsFxSettings.glowRadiusDp] that grows with the pulse [p].
+ * Because the peak is at the edge (not the — hidden — centre), the halo stays
+ * visible around the opaque album art and visibly pumps on the kick.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArtGlow(
+    center: Offset,
+    halfSize: Float,
+    p: Float,
+    accent: Color,
+    fx: LyricsFxSettings,
+) {
+    if (fx.glowBrightness <= 0.001f || halfSize <= 1f) return
+    val radius = halfSize + fx.glowRadiusDp.dp.toPx() * (1f + p)
+    if (radius <= 1f) return
+    val edge = (halfSize / radius).coerceIn(0.05f, 0.95f)
+    val peak = fx.glowBrightness * p
+    drawCircle(
+        brush = Brush.radialGradient(
+            0f to accent.copy(alpha = peak * 0.45f),
+            edge to accent.copy(alpha = peak),
+            1f to Color.Transparent,
             center = center,
             radius = radius,
         ),

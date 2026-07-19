@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
@@ -61,7 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -112,6 +110,9 @@ data class MainPlayerUiState(
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
+    val systemWideAutoEqEnabled: Boolean = false,
+    val toneControls: tf.monochrome.android.domain.model.ToneControls =
+        tf.monochrome.android.domain.model.ToneControls.DEFAULT,
 )
 
 /**
@@ -143,6 +144,8 @@ fun MainPlayerScreen(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onSystemWideAutoEqToggle: (Boolean) -> Unit,
+    onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
     // Full-screen, unclipped layer between the background/stain and the player
@@ -352,16 +355,6 @@ fun MainPlayerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                 Spacer(Modifier.height(14.dp))
-                // Source + format tag directly under the album art: which service the
-                // audio streams from (colour-coded) and the codec/bitrate it's playing.
-                DevEditable("sourceTag", Modifier.fillMaxWidth()) {
-                    PlayerSourceFormatTag(
-                        sourceType = state.sourceType,
-                        qualityBadge = state.qualityBadge,
-                    )
-                }
-
-                Spacer(Modifier.height(14.dp))
                 DevEditable("trackInfo", Modifier.fillMaxWidth()) {
                     PlayerTrackInfo(
                         track = state.track,
@@ -424,11 +417,14 @@ fun MainPlayerScreen(
                 }
             }
 
-            // Free, fully-interactive space below the dock. The audio-tools
-            // pull gesture lives in a thin strip at the very bottom edge (added
-            // as an overlay below), so anything placed in this area still works
-            // when the panel isn't pulled up.
-            if (!lyricsExpanded) Spacer(Modifier.weight(1f))
+            // Reserve only a thin strip below the dock for the audio-tools pull
+            // handle (a bottom-edge overlay), and let the hero (weight 1) take all
+            // the remaining height. This keeps the controls pinned to the bottom
+            // and the hero filling the screen in BOTH modes — the lyric surface
+            // when lyrics are on, and a big centred album square when they're off
+            // — instead of splitting the free space 50/50 with dead bottom space
+            // (which shrank the album and floated the controls up the screen).
+            if (!lyricsExpanded) Spacer(Modifier.height(56.dp))
         }
 
         // Thin bottom-edge pull strip — captures the open gesture and fades out
@@ -501,6 +497,8 @@ fun MainPlayerScreen(
                 waveformActive = state.waveformActive,
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
+                systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
+                toneControls = state.toneControls,
                 onOutput = onOutput,
                 onSound = onSound,
                 onSpeed = onSpeed,
@@ -509,6 +507,8 @@ fun MainPlayerScreen(
                 onWaveform = onWaveform,
                 onCompressorToggle = onCompressorToggle,
                 onInflatorToggle = onInflatorToggle,
+                onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
+                onToneControlsChange = onToneControlsChange,
                 onDismiss = { animateRevealTo(0f, 0f) },
             )
         }
@@ -560,6 +560,8 @@ private fun StatusOverlayPanel(
     waveformActive: Boolean,
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
+    systemWideAutoEqEnabled: Boolean,
+    toneControls: tf.monochrome.android.domain.model.ToneControls,
     onOutput: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
@@ -568,6 +570,8 @@ private fun StatusOverlayPanel(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onSystemWideAutoEqToggle: (Boolean) -> Unit,
+    onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -603,6 +607,22 @@ private fun StatusOverlayPanel(
                         .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
                 )
             }
+            // Top of the audio options: apply the AutoEQ headphone correction to
+            // ALL device audio (Wavelet-style global effect), not just this app.
+            ToggleRow(
+                "System-wide AutoEQ",
+                "Apply your headphone EQ to all device audio",
+                systemWideAutoEqEnabled,
+                accent,
+                onSystemWideAutoEqToggle,
+            )
+            // Bass/treble tone shelves (independent of the system-wide toggle —
+            // applied in-app, or via the global effect when system-wide is on).
+            ToneControlsPanel(
+                tone = toneControls,
+                accent = accent,
+                onChange = onToneControlsChange,
+            )
             PlayerStatusGrid(
                 accent = accent,
                 outputLabel = outputLabel,
@@ -700,112 +720,6 @@ private fun ToggleRow(
             ),
         )
     }
-}
-
-/**
- * Tag shown directly under the album art: a colour-coded chip for the streaming
- * service (Local = green, Qobuz = blue, TIDAL = pink, Collection = purple) plus the
- * codec/bitrate currently playing. Renders nothing when neither is known.
- */
-@Composable
-private fun PlayerSourceFormatTag(
-    sourceType: SourceType?,
-    qualityBadge: String?,
-    channelBadge: String? = null,
-    isThxSpatialAudio: Boolean = false,
-) {
-    if (sourceType == null && qualityBadge.isNullOrBlank() && channelBadge.isNullOrBlank() && !isThxSpatialAudio) return
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (sourceType != null) {
-            val color = sourceTagColor(sourceType)
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = color.copy(alpha = 0.18f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(color),
-                    )
-                    Text(
-                        text = sourceTagLabel(sourceType),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.92f),
-                    )
-                }
-            }
-        }
-        // Highlighted THX Spatial Audio chip — solid fill so it reads stronger
-        // than the translucent source/quality/channel chips on this screen.
-        if (isThxSpatialAudio) {
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = Color.White,
-                modifier = Modifier.semantics { contentDescription = "THX Spatial Audio" },
-            ) {
-                Text(
-                    text = "THX",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black.copy(alpha = 0.85f),
-                )
-            }
-        }
-        if (!qualityBadge.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = Color.White.copy(alpha = 0.12f),
-            ) {
-                Text(
-                    text = qualityBadge,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                )
-            }
-        }
-        // Multichannel layout chip ("5.1"/"7.1") — separate from the codec
-        // chip so it stays visible whichever quality string is playing.
-        if (!channelBadge.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = Color.White.copy(alpha = 0.12f),
-            ) {
-                Text(
-                    text = channelBadge,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                )
-            }
-        }
-    }
-}
-
-private fun sourceTagColor(sourceType: SourceType): Color = when (sourceType) {
-    SourceType.LOCAL -> Color(0xFF34C759)      // green
-    SourceType.QOBUZ -> Color(0xFF2F80ED)      // blue
-    SourceType.API -> Color(0xFFEC4899)        // pink (TIDAL)
-    SourceType.COLLECTION -> Color(0xFFA855F7)  // purple
-}
-
-private fun sourceTagLabel(sourceType: SourceType): String = when (sourceType) {
-    SourceType.LOCAL -> "Local"
-    SourceType.QOBUZ -> "Qobuz"
-    SourceType.API -> "TIDAL"
-    SourceType.COLLECTION -> "Collection"
 }
 
 @Composable

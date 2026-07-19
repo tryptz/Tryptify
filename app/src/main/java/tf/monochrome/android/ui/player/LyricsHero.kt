@@ -440,9 +440,14 @@ internal fun SyncedLyricsView(
     val popScale: () -> Float = { (1f - fx.popAmount) + fx.popAmount * popIn.value }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // Half-height padding top and bottom lets any line — including the
-        // first and last — settle at the exact vertical centre.
+        // Half-height TOP padding lets an early line still settle at the active-
+        // line anchor with room above it. The BOTTOM padding is deliberately
+        // small (not another half-viewport) so that as the song reaches its final
+        // lines the lyric tail fills DOWN toward the song title, instead of the
+        // last line floating at centre over a big empty band. Mid-song, where
+        // there are plenty of upcoming lines, the anchor scroll is unaffected.
         val halfViewport = maxHeight / 2
+        val tailPadding = (maxHeight * 0.12f).coerceAtLeast(24.dp)
         // The line width is the same for every item, so read it once here.
         // A fixed bevel-safe inset (on top of the user's edge margin) keeps the
         // outermost glyphs — and their puffy 3D glass bevels — off the layer's
@@ -453,14 +458,17 @@ internal fun SyncedLyricsView(
         // graphicsLayer scale (bassBeat), but it lives inside the lyric surface's
         // glass render-layer, which only captures `lineWidth` — so a long line
         // swelling past that would be clipped. Fit width-constrained lines to a
-        // slightly narrower box that reserves the PEAK bounce scale, so at full
-        // pump they just reach the edge and can never be cut. (The bass pulse
-        // caps at ~1.6 in rememberBassPulse; pop-in adds a small overshoot.)
-        // Short lines aren't width-constrained, so the fitter leaves them as-is.
+        // slightly narrower box that reserves the PEAK bounce scale plus a small
+        // edge-safety margin, so at full pump the glyphs stay INSIDE the glass
+        // clip edge — leaving room for the glass bevel/refraction, which lenses a
+        // few px beyond the glyph geometry and would otherwise get corner-cut on a
+        // hard kick. (The bass pulse caps at ~1.6 in rememberBassPulse; pop-in
+        // adds a small overshoot.) Short lines aren't width-constrained, so the
+        // fitter leaves them as-is.
         val bounceHeadroom = if (fx.bassReact > 0.01f) {
             val pumpPeak = 1f + fx.pumpAmount * fx.bassReact * 1.6f
             val popPeak = 1f + fx.popAmount * 0.25f
-            (pumpPeak * popPeak).coerceIn(1f, 2f)
+            (pumpPeak * popPeak * BOUNCE_EDGE_SAFETY).coerceIn(1f, 2.2f)
         } else {
             1f
         }
@@ -485,15 +493,21 @@ internal fun SyncedLyricsView(
             }
             val info = listState.layoutInfo
             val target = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
-            val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            // Anchor the active line above the geometric centre so the upcoming
+            // lines flow down and fill the surface all the way to the song title,
+            // instead of resting dead-centre with an empty band below it. The
+            // fraction is measured from the viewport top.
+            val viewportStart = info.viewportStartOffset
+            val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
+            val viewportAnchor = viewportStart + viewportHeight * ACTIVE_LINE_ANCHOR
             val itemCentre = target.offset + target.size / 2f
             // Snap when re-centring the same line (first composition, or the
             // morph resizing the viewport every frame); animate only when the
             // song has actually advanced to a new line.
             if (lastCentredLine.intValue == index) {
-                listState.scrollBy(itemCentre - viewportCentre)
+                listState.scrollBy(itemCentre - viewportAnchor)
             } else {
-                listState.animateScrollBy(itemCentre - viewportCentre)
+                listState.animateScrollBy(itemCentre - viewportAnchor)
             }
             lastCentredLine.intValue = index
         }
@@ -507,7 +521,7 @@ internal fun SyncedLyricsView(
                 .padding(horizontal = sideInset)
                 .fxaa()
                 .liquidGlass(tint = accent),
-            contentPadding = PaddingValues(top = halfViewport, bottom = halfViewport),
+            contentPadding = PaddingValues(top = halfViewport, bottom = tailPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             itemsIndexed(lines) { index, line ->
@@ -717,11 +731,27 @@ internal fun TextStyle.withLyricFont(family: FontFamily?): TextStyle =
 private const val MIN_LYRIC_SP = 11f
 
 /**
+ * Where the active line sits in the lyric surface, as a fraction of the viewport
+ * height measured from the top. Biased above centre (0.5) so the upcoming lines
+ * flow down and fill the surface all the way to the song title, rather than the
+ * active line resting dead-centre with an empty band beneath it.
+ */
+private const val ACTIVE_LINE_ANCHOR = 0.38f
+
+/**
  * Fixed side inset that keeps the outermost glyphs (and their puffy 3D glass
  * bevels) clear of the lyric layer's clip edge, so edge letters are never
  * corner-cut against the screen border. Added on top of the user's edge margin.
  */
 private val LYRIC_BEVEL_SAFE_DP = 14.dp
+
+/**
+ * Extra width reserved beyond the raw peak bounce scale when fitting a
+ * width-constrained active line. Keeps the glyphs a few percent inside the
+ * glass render-layer's clip edge at full pump, so the glass bevel/refraction
+ * (which lenses slightly past the glyph geometry) never gets cut on a hard kick.
+ */
+private const val BOUNCE_EDGE_SAFETY = 1.06f
 
 /**
  * The largest font size (≤ [baseSp], down to [MIN_LYRIC_SP]) at which [text]

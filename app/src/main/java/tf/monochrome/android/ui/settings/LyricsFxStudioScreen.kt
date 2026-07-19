@@ -736,6 +736,10 @@ fun LyricsFxStudioScreen(
                 FxSlider("Glow brightness", "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f) {
                     viewModel.update { s -> s.copy(glowBrightness = it) }
                 }
+                FxToggle(
+                    "Glow behind album art", fx.glowBehindArt,
+                    description = "Bloom the bass-reactive glow around the album cover too, pumping with the kick.",
+                ) { viewModel.update { s -> s.copy(glowBehindArt = it) } }
             }
 
             item {
