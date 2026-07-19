@@ -8,6 +8,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -44,6 +45,7 @@ import tf.monochrome.android.domain.model.ReplayGainValues
 import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
+import tf.monochrome.android.widget.NowPlayingWidget
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -139,6 +141,17 @@ class PlaybackService : MediaSessionService() {
             }
 
         player.addListener(object : Player.Listener {
+            // Keep the home-screen now-playing widget live: the widget uses
+            // updatePeriodMillis=0 (no polling), so it only refreshes when the
+            // service pushes an update on a real playback change.
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                refreshNowPlayingWidget()
+            }
+
+            override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                refreshNowPlayingWidget()
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_ENDED -> {
@@ -606,6 +619,17 @@ class PlaybackService : MediaSessionService() {
         val tone: tf.monochrome.android.domain.model.ToneControls,
         val systemWide: Boolean,
     )
+
+    /**
+     * Push a fresh render to every now-playing widget instance. [serviceScope] runs
+     * on the main dispatcher, so the suspend updateAll is safe to launch here; the
+     * whole thing is wrapped so a widget/Glance hiccup can never crash playback.
+     */
+    private fun refreshNowPlayingWidget() {
+        serviceScope.launch {
+            runCatching { NowPlayingWidget().updateAll(this@PlaybackService) }
+        }
+    }
 
     /**
      * Apply current EQ settings from preferences
