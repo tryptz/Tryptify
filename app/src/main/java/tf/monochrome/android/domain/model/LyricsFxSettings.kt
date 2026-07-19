@@ -282,6 +282,85 @@ data class LyricsFxSettings(
                 bassReact = 0f, popAmount = 0f,
                 glowRadiusDp = 0f, glowBrightness = 0f,
             ),
+
+            // ── Studio Pack ────────────────────────────────────────────────
+            // A coordinated second wave, each paired with a Player Glass theme of
+            // the SAME NAME (PlayerGlassSettings.PRESETS) so the lyrics and the
+            // transport chrome read as one look. Between them they reach the
+            // corners the originals left untouched: glass fully off, single-line
+            // tickers, wide/condensed tracking, choppy & ultra-smooth waves,
+            // maximal bloom, ghost text, and deep 3D tilt.
+
+            // Aurora — sculptural slow-turning ribbon: deep 3D tilt, an almost
+            // seamless per-letter phase, and a soft wide supernova bloom. Airy.
+            "Aurora" to LyricsFxSettings(
+                maxWrapLines = 3,
+                fontSizeSp = 26f, letterSpacingSp = 0.4f,
+                glassBodyOpacity = 0.5f, glassRefraction = 0.3f, glassRimBrightness = 1.4f, glassDispersion = 1.7f,
+                rotationDegrees = 22f, waveSpeed = 0.55f, wavePhaseStep = 0.08f, waveTravelDp = 5f, shadowDepth = 0.5f,
+                bassReact = 0.6f, pumpAmount = 0.08f, attackMs = 22f, releaseMs = 320f, bounce = 0.6f, popAmount = 0.07f,
+                glowRadiusDp = 150f, glowBrightness = 0.55f,
+            ),
+            // Ember — warm near-opaque glass over heavy edge-lensing, a chunky
+            // block extrusion (max shadow depth) and a tight percussive crackle.
+            "Ember" to LyricsFxSettings(
+                maxWrapLines = 3,
+                fontSizeSp = 27f, letterSpacingSp = 0f,
+                glassBodyOpacity = 0.72f, glassRefraction = 0.36f, glassRimBrightness = 1.1f, glassDispersion = 0.7f,
+                rotationDegrees = 10f, waveSpeed = 0.8f, shadowDepth = 1f,
+                bassReact = 0.8f, pumpAmount = 0.14f, attackMs = 10f, releaseMs = 90f, bounce = 0.4f, popAmount = 0.12f,
+                glowRadiusDp = 70f, glowBrightness = 0.34f,
+            ),
+            // Onyx — matte brutalist: liquid glass OFF (flat solid text),
+            // condensed tight tracking, and a stiff no-overshoot mechanical pump.
+            "Onyx" to LyricsFxSettings(
+                maxWrapLines = 3,
+                fontSizeSp = 22f, letterSpacingSp = -0.4f,
+                liquidGlass = false,
+                rotationDegrees = 4f, waveSpeed = 0.7f, waveTravelDp = 1f, shadowDepth = 0.9f,
+                bassReact = 0.5f, pumpAmount = 0.06f, attackMs = 14f, releaseMs = 120f, bounce = 0.15f, popAmount = 0.04f,
+                glowRadiusDp = 20f, glowBrightness = 0.1f,
+            ),
+            // Prism — maximal cut-glass: full refraction + full chromatic
+            // dispersion, with a glitchy choppy per-letter wave that bobs hard.
+            "Prism" to LyricsFxSettings(
+                maxWrapLines = 3,
+                fontSizeSp = 25f, letterSpacingSp = 0.1f,
+                glassBodyOpacity = 0.45f, glassRefraction = 0.4f, glassRimBrightness = 1.7f, glassDispersion = 2f,
+                rotationDegrees = 15f, waveSpeed = 1.4f, wavePhaseStep = 0.7f, waveTravelDp = 6f, shadowDepth = 0.6f,
+                bassReact = 1f, pumpAmount = 0.16f, attackMs = 8f, releaseMs = 110f, bounce = 0.85f, popAmount = 0.14f,
+                glowRadiusDp = 66f, glowBrightness = 0.4f,
+            ),
+            // Mirage — vaporwave heat-haze billboard: big, very airy tracking,
+            // flat (no extrusion) letters and a slow breathing swell.
+            "Mirage" to LyricsFxSettings(
+                maxWrapLines = 3,
+                fontSizeSp = 28f, letterSpacingSp = 0.6f,
+                glassBodyOpacity = 0.55f, glassRefraction = 0.26f, glassRimBrightness = 1.3f, glassDispersion = 1.8f,
+                rotationDegrees = 8f, waveSpeed = 0.5f, wavePhaseStep = 0.12f, waveTravelDp = 4f, shadowDepth = 0f,
+                bassReact = 0.7f, pumpAmount = 0.1f, attackMs = 24f, releaseMs = 260f, bounce = 0.65f, popAmount = 0.08f,
+                glowRadiusDp = 120f, glowBrightness = 0.45f,
+            ),
+            // Ticker — a single-line cinema strip: strict one row, wide side
+            // inset, small spaced text, no wave, a tight staccato pulse.
+            "Ticker" to LyricsFxSettings(
+                maxWrapLines = 1,
+                fontSizeSp = 20f, letterSpacingSp = 0.5f, edgeMarginDp = 40f,
+                glassBodyOpacity = 0.85f, glassRefraction = 0.08f, glassRimBrightness = 1.2f, glassDispersion = 0.6f,
+                rotationDegrees = 0f, waveTravelDp = 0f, shadowDepth = 0.4f,
+                bassReact = 0.4f, pumpAmount = 0.05f, attackMs = 12f, releaseMs = 70f, bounce = 0.2f, popAmount = 0.03f,
+                glowRadiusDp = 24f, glowBrightness = 0.12f,
+            ),
+            // Halo — ethereal ghost text: minimum body opacity (letters read as a
+            // lensed edge), the brightest rim, and the biggest fullest bloom.
+            "Halo" to LyricsFxSettings(
+                maxWrapLines = 3,
+                fontSizeSp = 24f, letterSpacingSp = 0.2f,
+                glassBodyOpacity = 0.2f, glassRefraction = 0.2f, glassRimBrightness = 2f, glassDispersion = 1.4f,
+                rotationDegrees = 12f, waveSpeed = 0.9f, wavePhaseStep = 0.18f, waveTravelDp = 4f, shadowDepth = 0.5f,
+                bassReact = 0.6f, pumpAmount = 0.09f, attackMs = 18f, releaseMs = 240f, bounce = 0.7f, popAmount = 0.09f,
+                glowRadiusDp = 160f, glowBrightness = 0.6f,
+            ),
         )
     }
 }

@@ -167,6 +167,72 @@ data class PlayerGlassSettings(
                 surfaceMotion = 0.1f, edgeWidth = 0.15f, frost = 0f, shadowDepth = 0.5f,
                 shadowSoftness = 0.3f,
             ),
+
+            // ── Studio Pack ────────────────────────────────────────────────
+            // Coordinated with the Lyrics FX themes of the SAME NAME. These drive
+            // the directional-light, tilt, frost, surface-motion and tinted-shadow
+            // axes the originals left at their defaults. tintColor / previewBg /
+            // sampleRings stay at their defaults so a theme never touches the
+            // user's colour or quality.
+
+            // Aurora — alive holo glass: reactive tilt, an unusual back-left key
+            // light and an accent-tinted bloom under the disc.
+            "Aurora" to PlayerGlassSettings(
+                bodyOpacity = 0.44f, refraction = 0.3f, rimBrightness = 1.4f, dispersion = 1.6f,
+                roundness = 1.4f, depth = 1.4f, reflection = 1.2f, gloss = 0.5f,
+                surfaceMotion = 0.6f, tiltReactivity = 1.2f, lightAngleDeg = 300f, edgeWidth = 0.55f,
+                frost = 0.1f, shadowDepth = 0.55f, shadowSoftness = 0.7f, shadowTint = 0.6f,
+            ),
+            // Ember — warm raking sunset key light (low side angle) with a soft
+            // accent-tinted shadow glow; steep, deep relief.
+            "Ember" to PlayerGlassSettings(
+                bodyOpacity = 0.5f, refraction = 0.14f, rimBrightness = 1.4f, dispersion = 0.9f,
+                roundness = 1.1f, depth = 1.6f, reflection = 0.9f, gloss = 0.55f,
+                surfaceMotion = 0.3f, lightAngleDeg = 25f, edgeWidth = 0.45f,
+                frost = 0f, shadowDepth = 0.7f, shadowSoftness = 0.6f, shadowTint = 0.5f,
+            ),
+            // Onyx — locked studio glass (zero tilt drift) lit from BELOW for an
+            // uncanny read, cut like a faceted gem (steep depth, crisp crease).
+            "Onyx" to PlayerGlassSettings(
+                bodyOpacity = 0.42f, refraction = 0.14f, rimBrightness = 0.8f, dispersion = 0.5f,
+                roundness = 0.8f, depth = 1.7f, reflection = 0.4f, gloss = 0.28f,
+                surfaceMotion = 0.1f, tiltReactivity = 0f, lightAngleDeg = 270f, edgeWidth = 0.5f,
+                frost = 0.12f, shadowDepth = 0.6f, shadowSoftness = 0.55f, shadowTint = 0f,
+            ),
+            // Prism — cut diamond: maxed refraction + dispersion, top-lit and
+            // symmetric, faceted (steep depth, low roundness), thin crisp edge.
+            "Prism" to PlayerGlassSettings(
+                bodyOpacity = 0.5f, refraction = 0.4f, rimBrightness = 1.7f, dispersion = 2f,
+                roundness = 0.6f, depth = 1.8f, reflection = 1.4f, gloss = 0.85f,
+                surfaceMotion = 0.15f, tiltReactivity = 1f, lightAngleDeg = 90f, edgeWidth = 0.2f,
+                frost = 0f, shadowDepth = 0.5f, shadowSoftness = 0.35f, shadowTint = 0f,
+            ),
+            // Mirage — molten sea-glass: full living-surface churn UNDER heavy
+            // frost, a broad soft shoulder and a dull, low-contrast highlight.
+            "Mirage" to PlayerGlassSettings(
+                bodyOpacity = 0.5f, refraction = 0.24f, rimBrightness = 0.9f, dispersion = 1f,
+                roundness = 1.5f, depth = 1.3f, reflection = 0.6f, gloss = 0.2f,
+                surfaceMotion = 1f, tiltReactivity = 0.9f, lightAngleDeg = 200f, edgeWidth = 0.7f,
+                frost = 0.7f, shadowDepth = 0.5f, shadowSoftness = 0.8f, shadowTint = 0.3f,
+            ),
+            // Ticker — deliberately flat: button glass OFF and a plain (non-glass)
+            // progress bar, to match the stripped-back single-line lyric ticker.
+            "Ticker" to PlayerGlassSettings(
+                enabled = false, progressGlass = false,
+                bodyOpacity = 0.85f, refraction = 0.05f, rimBrightness = 0.7f, dispersion = 0.3f,
+                roundness = 0.9f, depth = 0.7f, reflection = 0.35f, gloss = 0.3f,
+                surfaceMotion = 0.08f, tiltReactivity = 0f, edgeWidth = 0.35f,
+                frost = 0f, shadowDepth = 0.25f, shadowSoftness = 0.3f, shadowTint = 0f,
+            ),
+            // Halo — ghost holo levitate: near-invisible body over a lensed
+            // backdrop, maximum gyro tilt, and a maximally floated soft accent
+            // shadow so the disc reads as hovering.
+            "Halo" to PlayerGlassSettings(
+                bodyOpacity = 0.28f, refraction = 0.34f, rimBrightness = 1.6f, dispersion = 1.5f,
+                roundness = 1.3f, depth = 1.4f, reflection = 1.5f, gloss = 0.6f,
+                surfaceMotion = 0.4f, tiltReactivity = 1.5f, lightAngleDeg = 315f, edgeWidth = 0.5f,
+                frost = 0f, shadowDepth = 1f, shadowSoftness = 0.9f, shadowTint = 0.6f,
+            ),
         )
     }
 }
