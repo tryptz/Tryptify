@@ -7,6 +7,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -511,27 +513,62 @@ fun MonochromeTheme(
     val materialYou = if (resolvedTheme == "material_you") {
         rememberMaterialYouScheme(dark = systemDark)
     } else null
-    val baseScheme = materialYou ?: getColorScheme(resolvedTheme)
-    // Overlay album-art-derived colors on the selected theme. We only swap
-    // primary/secondary slots so backgrounds, text-on-surface, and outlines
-    // remain coherent with the user's chosen theme.
-    val colorScheme = if (dynamicPalette != null) {
-        baseScheme.copy(
-            primary = dynamicPalette.primary,
-            onPrimary = dynamicPalette.onPrimary,
-            primaryContainer = dynamicPalette.primaryContainer,
-            secondary = dynamicPalette.secondary,
-            onSecondary = dynamicPalette.onSecondary
-        )
-    } else baseScheme
+    val colorScheme = materialYou ?: getColorScheme(resolvedTheme)
     val family = customFontFamily ?: InterFontFamily
     val typography = remember(fontScale, family) {
         buildTypography(family, fontScale)
     }
 
+    // Album-art dynamic colours are deliberately NOT overlaid on the global
+    // scheme — doing so bleeds the album accent into the menus. Instead the
+    // palette is published via [LocalDynamicColorPalette], and only the player,
+    // mini player and lyrics opt in through [DynamicColorScope]; every other
+    // surface keeps the user's chosen theme.
+    CompositionLocalProvider(LocalDynamicColorPalette provides dynamicPalette) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+            content = content
+        )
+    }
+}
+
+/**
+ * The album-art-derived palette for the currently playing track, or null when
+ * Dynamic Colours is off / nothing is playing / extraction failed. Published by
+ * [MonochromeTheme] and consumed by [DynamicColorScope]. Kept out of the global
+ * MaterialTheme on purpose so the menus never pick up the album accent.
+ */
+val LocalDynamicColorPalette = compositionLocalOf<DynamicPalette?> { null }
+
+/**
+ * Overlays the album-art dynamic palette ([LocalDynamicColorPalette]) onto the
+ * current colour scheme for [content] only — swapping the same primary/secondary
+ * slots the app-wide theme used to. Wrap the player, mini player and lyrics in
+ * this so they follow the album art while the rest of the UI (the menus) stays
+ * on the user's chosen theme. A transparent passthrough when no palette is set.
+ */
+@Composable
+fun DynamicColorScope(content: @Composable () -> Unit) {
+    val palette = LocalDynamicColorPalette.current
+    if (palette == null) {
+        content()
+        return
+    }
+    val base = MaterialTheme.colorScheme
+    val scheme = remember(base, palette) {
+        base.copy(
+            primary = palette.primary,
+            onPrimary = palette.onPrimary,
+            primaryContainer = palette.primaryContainer,
+            secondary = palette.secondary,
+            onSecondary = palette.onSecondary,
+        )
+    }
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = typography,
-        content = content
+        colorScheme = scheme,
+        typography = MaterialTheme.typography,
+        shapes = MaterialTheme.shapes,
+        content = content,
     )
 }

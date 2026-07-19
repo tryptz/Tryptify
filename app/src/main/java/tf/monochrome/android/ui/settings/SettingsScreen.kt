@@ -380,7 +380,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
         }
         SettingSwitchItem(
             title = "Dynamic Colors",
-            subtitle = "Master switch: tint the app AND the player from album art. Off = everything uses the theme color",
+            subtitle = "Tint the player, mini player and lyrics from album art — the menus keep the theme color. Off = everything uses the theme color",
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
