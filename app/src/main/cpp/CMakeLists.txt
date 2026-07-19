@@ -122,3 +122,23 @@ target_link_libraries(monochrome_usb
     log
     usb1.0
 )
+
+# ── Atmos renderer foundation (clean-room) ───────────────────────────────
+# Header-only building blocks (bit reader, EMDF walker, OAMD coordinate math,
+# VBAP bed panner) for the Dolby Atmos / E-AC-3 JOC object renderer. Built as a
+# static library so the NDK type-checks the headers for every shipped ABI on
+# each CI run; it carries no runtime dependency yet and is host-unit-tested via
+# atmos/tests/atmos_tests.cpp. See atmos/README.md for scope and next steps.
+add_library(monochrome_atmos STATIC
+    atmos/atmos.cpp
+)
+target_include_directories(monochrome_atmos PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/atmos
+)
+target_compile_features(monochrome_atmos PRIVATE cxx_std_17)
+target_compile_options(monochrome_atmos PRIVATE
+    -O3 -fno-exceptions -fno-rtti
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-march=armv8-a+simd>
+)
+set_target_properties(monochrome_atmos PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(monochrome_atmos log)
