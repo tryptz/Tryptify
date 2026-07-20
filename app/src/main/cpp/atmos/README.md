@@ -42,18 +42,29 @@ not stubbed to look finished:
 - **OAMD frame parsing** (object count, bed vs dynamic split, per-block info
   ramps) — the coordinate math in `oamd.h` is the reusable core; the bitstream
   framing that feeds it is TODO.
-- **JOC decoder / upmix applier** (plan A6) — must be validated A/B against a
-  reference decoder on real content.
-
 ### Ported from Cavern (see `cavern/` — NOT clean-room)
 
-- **QMF analysis/synthesis filterbank** (plan A5) — `cavern/quadrature_mirror_filterbank.h`
-  is a faithful C++ port of Cavern's 64-band complex QMF. Host-verified: analysis
-  → synthesis reconstructs a broadband signal at correlation 1.00000 (577-sample
-  delay). **This introduces a license obligation** — Cavern's licence is
-  non-commercial, no-ads, attribution + source-link, and requires the creator's
-  permission for public/commercial use. See `cavern/NOTICE.md`. The rest of this
-  directory stays clean-room; the `cavern/` subtree does not.
+- **QMF analysis/synthesis filterbank** (plan A5) — `cavern/quadrature_mirror_filterbank.h`.
+  Host-verified: analysis → synthesis reconstructs a broadband signal at
+  correlation 1.00000 (577-sample delay).
+- **JOC decoder + upmix applier** (plan A6) — `cavern/joint_object_coding.h`
+  (frame decode, Huffman, dequant, per-timeslot matrix interpolation) and
+  `cavern/joint_object_coding_applier.h` (QMF-domain channel→object mix +
+  inverse QMF). `cavern/joc_tables.h` holds the Huffman/band tables. Cavern's
+  ThreadPool fan-out is sequential here; exceptions become a `valid()` flag.
+  Host-tested for Huffman round-trip, dequant recurrence, band mapping and an
+  end-to-end decode→matrices→apply run. **Numeric bit-exactness still needs A/B
+  against reference Atmos content** — the host tests prove self-consistency, not
+  equivalence to a real Dolby stream.
+
+**License obligation:** Cavern's licence is non-commercial, no-ads, attribution
++ source-link, and requires the creator's permission for public/commercial use.
+See `cavern/NOTICE.md`. The rest of this directory stays clean-room; the
+`cavern/` subtree does not.
+
+Still to port from Cavern (or clean-room): the E-AC-3 core audio decode (the bed
+PCM), OAMD/EMDF framing that feeds the object positions, and the JNI/Media3
+wiring.
 - **HRTF binauralizer** back-end (plan A7) — will reuse libmysofa + a NEON
   convolver and the app's existing AutoEQ/HRTF infra.
 - **JNI surface + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.

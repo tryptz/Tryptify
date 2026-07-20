@@ -55,3 +55,6 @@ still apply.
 |---|---|
 | `qmath.h` | `Cavern.Utilities.QMath` (multiply/accumulate primitives) |
 | `quadrature_mirror_filterbank.h` | `QuadratureMirrorFilterBank.cs`, `.Process.cs`, `.Amp.cs` |
+| `joc_tables.h` | `JointObjectCodingTables.cs` (+ `SetupStaticCache` from `…Cache.cs`) |
+| `joint_object_coding.h` | `JointObjectCoding.cs`, `…Cache.cs`, `…Decoder.cs` |
+| `joint_object_coding_applier.h` | `JointObjectCodingApplier.cs` |

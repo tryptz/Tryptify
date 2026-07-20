@@ -8,6 +8,8 @@
 // device. As the JNI surface and playback wiring land (see atmos/README.md),
 // the renderer control code moves here.
 #include "bit_reader.h"
+#include "cavern/joint_object_coding.h"
+#include "cavern/joint_object_coding_applier.h"
 #include "cavern/quadrature_mirror_filterbank.h"
 #include "emdf.h"
 #include "oamd.h"
@@ -23,8 +25,12 @@ namespace {
 bool atmos_foundation_self_check() {
   LoudspeakerLayout l = LoudspeakerLayout::atmos_7_1_4();
   cavern::QuadratureMirrorFilterBank qmf;  // header type-checks on every ABI
+  cavern::JointObjectCoding joc;           // JOC decoder + applier type-check
+  cavern::JointObjectCodingApplier applier(joc);
+  (void)applier;
   return l.size() == 12 && l.has_height() && l.at(3).is_lfe &&
-         cavern::QuadratureMirrorFilterBank::kSubbands == 64;
+         cavern::QuadratureMirrorFilterBank::kSubbands == 64 &&
+         cavern::JointObjectCoding::kMaxObjects == 64;
 }
 
 }  // namespace
