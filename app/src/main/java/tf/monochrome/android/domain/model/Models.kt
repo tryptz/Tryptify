@@ -286,6 +286,9 @@ enum class AudioCodec(val displayName: String) {
     AIFF("AIFF"),
     APE("APE"),
     WMA("WMA"),
+    AC3("AC-3"),
+    // Dolby Digital Plus — the carrier for Dolby Atmos (E-AC-3 + JOC).
+    EAC3("E-AC-3"),
     UNKNOWN("Unknown")
 }
 
