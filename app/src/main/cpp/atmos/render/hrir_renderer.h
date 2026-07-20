@@ -24,6 +24,7 @@
 #ifndef TF_ATMOS_RENDER_HRIR_RENDERER_H
 #define TF_ATMOS_RENDER_HRIR_RENDERER_H
 
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <vector>
@@ -72,10 +73,40 @@ class BinauralRenderer {
   // Renders `num_objects` object signals (objects[o], `n` samples each) at
   // (obj_az[o], obj_el[o]) plus `bed_channels` bed signals at (bed_az[b],
   // bed_el[b]) into interleaved stereo `out` (2*n floats). `out` is overwritten.
+  // Replaces the HRIR set with a runtime-loaded one (e.g. a user SOFA file),
+  // laid out the SAME as the baked table: `data` is
+  // kHrirElCount*kHrirAzCount*2*kHrirTaps floats, `delay` is
+  // kHrirElCount*kHrirAzCount*2 floats. Double-buffered: the inactive slot is
+  // filled, then published atomically, so the audio thread (which only reads the
+  // active slot) never races the load. Call from ONE loader thread at a time.
+  void set_runtime_hrir(const std::vector<float>& data, const std::vector<float>& delay) {
+    const int cur = active_rt_.load(std::memory_order_acquire);
+    const int slot = (cur == 0) ? 1 : 0;
+    rt_data_[slot] = data;
+    rt_delay_[slot] = delay;
+    active_rt_.store(slot, std::memory_order_release);
+  }
+
+  // Reverts to the baked default HRTF.
+  void clear_runtime_hrir() { active_rt_.store(-1, std::memory_order_release); }
+
+  bool has_runtime_hrir() const { return active_rt_.load(std::memory_order_acquire) >= 0; }
+
   void render(const float* const* objects, const float* obj_az, const float* obj_el,
               int num_objects, const float* const* bed, const float* bed_az,
               const float* bed_el, int bed_channels, int n, float* out) {
     for (int i = 0; i < 2 * n; ++i) out[i] = 0.0f;
+    // Select the HRIR source once per frame (not per source). The baked table is
+    // contiguous, so &kHrirData[0][0][0][0] and the flat index below address it
+    // identically to a runtime vector.
+    const int rt = active_rt_.load(std::memory_order_acquire);
+    if (rt >= 0) {
+      cur_data_ = rt_data_[rt].data();
+      cur_delay_ = rt_delay_[rt].data();
+    } else {
+      cur_data_ = &kHrirData[0][0][0][0];
+      cur_delay_ = &kHrirDelay[0][0][0];
+    }
     // ext holds (kHrirTaps-1) history samples followed by this frame's n input
     // samples, so the convolution can read across the block boundary. Reused
     // across sources (they are processed sequentially on the audio thread).
@@ -149,10 +180,10 @@ class BinauralRenderer {
 
     const float w00 = (1.0f - fa) * (1.0f - fe), w10 = fa * (1.0f - fe);
     const float w01 = (1.0f - fa) * fe, w11 = fa * fe;
-    const float* l00 = kHrirData[e0][a0][0]; const float* r00 = kHrirData[e0][a0][1];
-    const float* l10 = kHrirData[e0][a1][0]; const float* r10 = kHrirData[e0][a1][1];
-    const float* l01 = kHrirData[e1][a0][0]; const float* r01 = kHrirData[e1][a0][1];
-    const float* l11 = kHrirData[e1][a1][0]; const float* r11 = kHrirData[e1][a1][1];
+    const float* l00 = ir(e0, a0, 0); const float* r00 = ir(e0, a0, 1);
+    const float* l10 = ir(e0, a1, 0); const float* r10 = ir(e0, a1, 1);
+    const float* l01 = ir(e1, a0, 0); const float* r01 = ir(e1, a0, 1);
+    const float* l11 = ir(e1, a1, 0); const float* r11 = ir(e1, a1, 1);
     for (int k = 0; k < kHrirTaps; ++k) {
       hl_[k] = w00 * l00[k] + w10 * l10[k] + w01 * l01[k] + w11 * l11[k];
       hr_[k] = w00 * r00[k] + w10 * r10[k] + w01 * r01[k] + w11 * r11[k];
@@ -160,10 +191,19 @@ class BinauralRenderer {
     // Interpolate the ITD delay the same way. Aligning the responses to tap 0
     // (baked) is what lets the IR interpolation above avoid comb filtering; the
     // ITD it removed is restored here as a smooth per-ear delay.
-    dl_ = w00 * kHrirDelay[e0][a0][0] + w10 * kHrirDelay[e0][a1][0] +
-          w01 * kHrirDelay[e1][a0][0] + w11 * kHrirDelay[e1][a1][0];
-    dr_ = w00 * kHrirDelay[e0][a0][1] + w10 * kHrirDelay[e0][a1][1] +
-          w01 * kHrirDelay[e1][a0][1] + w11 * kHrirDelay[e1][a1][1];
+    dl_ = w00 * dly(e0, a0, 0) + w10 * dly(e0, a1, 0) +
+          w01 * dly(e1, a0, 0) + w11 * dly(e1, a1, 0);
+    dr_ = w00 * dly(e0, a0, 1) + w10 * dly(e0, a1, 1) +
+          w01 * dly(e1, a0, 1) + w11 * dly(e1, a1, 1);
+  }
+
+  // Flat accessors over the active HRIR source (baked constexpr or a runtime
+  // vector — both are [el][az][ear][tap] row-major, so the index is identical).
+  const float* ir(int e, int a, int ear) const {
+    return cur_data_ + ((static_cast<size_t>(e) * kHrirAzCount + a) * 2 + ear) * kHrirTaps;
+  }
+  float dly(int e, int a, int ear) const {
+    return cur_delay_[(static_cast<size_t>(e) * kHrirAzCount + a) * 2 + ear];
   }
 
   void mix_source(Source& s, const float* in, float az, float el, int n, float* out) {
@@ -219,6 +259,14 @@ class BinauralRenderer {
   std::vector<float> ext_;       // reusable [hist + n] convolution input
   std::vector<float> hl_, hr_;   // interpolated HRIR pair for the current source
   float dl_ = 0.0f, dr_ = 0.0f;  // interpolated ITD delay (samples) per ear
+
+  // Active HRIR source for the current render() call (set once per frame).
+  const float* cur_data_ = &kHrirData[0][0][0][0];
+  const float* cur_delay_ = &kHrirDelay[0][0][0];
+  // Double-buffered runtime HRIR sets (from a loaded SOFA). -1 = use the baked
+  // default; 0/1 selects a runtime slot. Only the inactive slot is ever written.
+  std::vector<float> rt_data_[2], rt_delay_[2];
+  std::atomic<int> active_rt_{-1};
 };
 
 }  // namespace render

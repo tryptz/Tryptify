@@ -16,6 +16,7 @@
 #include "cavern/enhanced_ac3.h"  // dialnorm from the syncframe header
 #include "object_engine.h"
 #include "render/hrir_renderer.h"
+#include "render/sofa_loader.h"  // runtime SOFA HRTF (defined only in the JNI lib)
 #include "vbap.h"  // Vec3
 
 namespace tf {
@@ -56,6 +57,13 @@ class AtmosPipeline {
     renderer_.set_params(binaural_strength, height_virtualization);
     renderer_.set_bass_management(bass_management, crossover_hz);
   }
+
+  // Installs a runtime HRTF from a SOFA buffer (off the audio thread), or
+  // reverts to the baked default. The load itself is defined in the JNI lib.
+  bool load_sofa(const char* data, long size) {
+    return load_sofa_into_renderer(renderer_, data, size);
+  }
+  void clear_sofa() { renderer_.clear_runtime_hrir(); }
 
   // ── Audio-thread-safe marshaling scratch ─────────────────────────────────
   // The JNI layer runs on the audio thread, so it must not allocate per call.

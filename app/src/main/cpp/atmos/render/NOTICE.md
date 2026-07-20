@@ -33,9 +33,13 @@ dummy-head microphone,"* MIT Media Lab Perceptual Computing Technical Report
 5. emit `hrir_table.h` (`kHrirData` + `kHrirDelay`) in this repo's azimuth
    convention (0 = front, +right).
 
-libmysofa is a **build-time tool only** — it is not linked into the app. The
-Android build embeds the baked table and depends on no HRTF library, no SOFA
-file and no zlib at runtime, so the renderer stays header-only.
+The baked table is the **default** HRTF and is embedded with no runtime
+dependency. libmysofa (BSD-3-Clause) is **also vendored at
+`third_party/libmysofa`** and linked into the Atmos JNI lib so the user can load
+their own `.sofa` HRTF at runtime (`sofa_loader.cpp` → `nativeLoadSofa`), which
+reproduces the same onset-aligned grid in memory. A device that never loads a
+SOFA pulls in that code but never runs it, and the header-only renderer keeps no
+libmysofa dependency of its own.
 
 ## Renderer
 `hrir_renderer.h` interpolates the HRIR pair bilinearly across the grid for each

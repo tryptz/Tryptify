@@ -44,13 +44,45 @@ class AtmosAudioProcessor @Inject constructor(
     @Volatile private var profile: RendererProfile = RendererProfile.DEFAULT
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // Custom HRTF (a user .sofa copied into app storage; its path is the
+    // profile's hrtfProfileId). The bytes are read here on the Default
+    // dispatcher — never on the audio thread — and applied to the native
+    // pipeline via nativeLoadSofa. null path = the baked default HRTF.
+    @Volatile private var sofaBytes: ByteArray? = null
+    private var loadedSofaPath: String? = null
+    // False when the live pipeline does not yet reflect [sofaBytes] — set on a
+    // SOFA change or a fresh pipeline, cleared once (re)applied.
+    @Volatile private var sofaApplied = false
+
     init {
         preferences.rendererProfile
             .onEach { updated ->
                 profile = updated
+                refreshSofa(updated.hrtfProfileId)
                 pushParams()
             }
             .launchIn(scope)
+    }
+
+    /** Reads the selected .sofa off the audio thread; caches its bytes. */
+    private fun refreshSofa(path: String?) {
+        if (path == loadedSofaPath) return
+        loadedSofaPath = path
+        sofaBytes = path?.let { runCatching { java.io.File(it).readBytes() }.getOrNull() }
+        sofaApplied = false
+    }
+
+    /** Loads the cached SOFA into [p] (or reverts to baked); once per change. */
+    private fun applySofa(p: Long) {
+        if (p == 0L || sofaApplied) return
+        val bytes = sofaBytes
+        if (bytes != null) {
+            val ok = AtmosNative.nativeLoadSofa(p, bytes) == 1
+            android.util.Log.i(TAG, "custom HRTF ${if (ok) "loaded" else "REJECTED"} (${bytes.size}B)")
+        } else {
+            AtmosNative.nativeClearSofa(p)
+        }
+        sofaApplied = true
     }
 
     /** Sends the current profile to the native renderer (no-op without a pipeline). */
@@ -75,12 +107,14 @@ class AtmosAudioProcessor @Inject constructor(
             cur.drc.ordinal,
             cur.dialogNormalization,
         )
+        applySofa(p)
         android.util.Log.i(
             TAG,
             "params -> mode=${cur.mode} downmix=${cur.stereoDownmix} " +
                 "strength=${cur.binauralStrength} height=${cur.heightVirtualization} " +
                 "lfe=${cur.lfeGainDb}dB bass=${cur.bassManagement}@${cur.crossoverHz}Hz " +
-                "drc=${cur.drc} dialnorm=${cur.dialogNormalization}",
+                "drc=${cur.drc} dialnorm=${cur.dialogNormalization} " +
+                "hrtf=${if (sofaBytes != null) "custom" else "built-in"}",
         )
     }
 
@@ -214,7 +248,9 @@ class AtmosAudioProcessor @Inject constructor(
         if (formatChanged) {
             if (pipeline != 0L) AtmosNative.nativePipelineDestroy(pipeline)
             pipeline = AtmosNative.nativePipelineCreate(inputFormat.sampleRate, MAX_OBJECTS)
+            sofaApplied = false  // a fresh pipeline has the baked HRTF; re-apply any custom one
             pushParams()  // a fresh pipeline starts at defaults — apply the profile
+
         }
         pendingFormat = AudioFormat.NOT_SET
     }

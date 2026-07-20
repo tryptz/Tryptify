@@ -1,5 +1,9 @@
 package tf.monochrome.android.ui.settings
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +57,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,6 +82,7 @@ import kotlin.math.sin
 @HiltViewModel
 class AtmosRendererViewModel @Inject constructor(
     private val preferences: PreferencesManager,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     // In-memory working copy so slider drags update the UI instantly; the
@@ -100,6 +107,48 @@ class AtmosRendererViewModel @Inject constructor(
     }
 
     fun reset() = update(RendererProfile.DEFAULT)
+
+    /**
+     * Copies a user-picked .sofa (a SAF content URI) into app storage and points
+     * the profile's hrtfProfileId at it, so [AtmosAudioProcessor] can load it as
+     * the binaural HRTF. The copy is kept because the content URI grant is not
+     * durable across restarts; the file's own name is preserved for the UI.
+     */
+    fun importSofa(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dir = java.io.File(context.filesDir, "hrtf").apply { mkdirs() }
+            val name = sofaDisplayName(uri)
+            val dest = java.io.File(dir, name)
+            val ok = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    dest.outputStream().use { input.copyTo(it) }
+                } ?: error("cannot open $uri")
+            }.isSuccess
+            if (ok) {
+                // Only one custom HRTF at a time — drop any previous copy.
+                dir.listFiles()?.forEach { if (it != dest) it.delete() }
+                update(_profile.value.copy(hrtfProfileId = dest.absolutePath))
+            }
+        }
+    }
+
+    /** Reverts to the baked HRTF and removes the stored copy. */
+    fun useBuiltInHrtf() {
+        viewModelScope.launch(Dispatchers.IO) {
+            java.io.File(context.filesDir, "hrtf").listFiles()?.forEach { it.delete() }
+        }
+        update(_profile.value.copy(hrtfProfileId = null))
+    }
+
+    private fun sofaDisplayName(uri: Uri): String {
+        val raw = context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (i >= 0 && c.moveToFirst()) c.getString(i) else null
+        } ?: uri.lastPathSegment ?: "custom.sofa"
+        // Sanitize to a safe filename, and guarantee a .sofa suffix.
+        val safe = raw.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
+        return if (safe.endsWith(".sofa", ignoreCase = true)) safe else "$safe.sofa"
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -193,13 +242,34 @@ fun AtmosRendererScreen(
 
             // ── Binaural / headphones ──────────────────────────────────────
             SectionHeader("Binaural (Headphones)")
+            val sofaPicker = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocument()
+            ) { uri: Uri? -> if (uri != null) viewModel.importSofa(uri) }
+            // .sofa has no registered MIME type, so accept any file and let the
+            // native loader reject non-SOFA input.
+            val sofaMimes = arrayOf("*/*")
             ChoiceChips(
                 options = listOf(false, true),
                 selected = profile.hrtfProfileId != null,
-                label = { if (it) "My AutoEQ measurement" else "Built-in HRTF" },
+                label = { if (it) "Custom HRTF (SOFA)" else "Built-in HRTF" },
                 onSelect = { useOwn ->
-                    viewModel.update(profile.copy(hrtfProfileId = if (useOwn) "autoeq" else null))
+                    if (useOwn) sofaPicker.launch(sofaMimes) else viewModel.useBuiltInHrtf()
                 },
+            )
+            profile.hrtfProfileId?.let { path ->
+                Text(
+                    "Loaded: ${java.io.File(path).name}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { sofaPicker.launch(sofaMimes) }) {
+                    Text("Choose a different .sofa")
+                }
+            } ?: Text(
+                "Built-in is MIT KEMAR. Load a SOFA HRTF (your own or a set like " +
+                    "SADIE / CIPIC) to change the binaural voicing.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             LabeledSlider(
                 title = "Binaural strength",

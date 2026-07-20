@@ -121,6 +121,28 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRenderParams(
                    dialogNormalization == JNI_TRUE);
 }
 
+// Installs a runtime HRTF from raw .sofa file bytes (off the audio thread).
+// Returns 1 on success, 0 on parse failure. The renderer keeps using the baked
+// default until this succeeds, and reverts on nativeClearSofa.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeLoadSofa(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray sofa) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr || sofa == nullptr) return 0;
+  const jsize len = env->GetArrayLength(sofa);
+  if (len <= 0) return 0;
+  std::vector<int8_t> buf(static_cast<size_t>(len));
+  env->GetByteArrayRegion(sofa, 0, len, reinterpret_cast<jbyte*>(buf.data()));
+  return pipe->load_sofa(reinterpret_cast<const char*>(buf.data()), len) ? 1 : 0;
+}
+
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeClearSofa(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe != nullptr) pipe->clear_sofa();
+}
+
 // Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
 // `bedInterleaved` is channels*samples floats; `stereoOut` receives 2*samples
 // floats when Atmos is rendered. Returns 1 (rendered) or -1 (no objects — the
