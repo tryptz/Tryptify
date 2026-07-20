@@ -58,3 +58,4 @@ still apply.
 | `joc_tables.h` | `JointObjectCodingTables.cs` (+ `SetupStaticCache` from `…Cache.cs`) |
 | `joint_object_coding.h` | `JointObjectCoding.cs`, `…Cache.cs`, `…Decoder.cs` |
 | `joint_object_coding_applier.h` | `JointObjectCodingApplier.cs` |
+| `object_info_block.h` | `ObjectInfoBlock.cs`, `ObjectAudioMetadataEnums.cs` |

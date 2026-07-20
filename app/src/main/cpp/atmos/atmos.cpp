@@ -10,6 +10,7 @@
 #include "bit_reader.h"
 #include "cavern/joint_object_coding.h"
 #include "cavern/joint_object_coding_applier.h"
+#include "cavern/object_info_block.h"
 #include "cavern/quadrature_mirror_filterbank.h"
 #include "emdf.h"
 #include "oamd.h"
@@ -27,10 +28,13 @@ bool atmos_foundation_self_check() {
   cavern::QuadratureMirrorFilterBank qmf;  // header type-checks on every ABI
   cavern::JointObjectCoding joc;           // JOC decoder + applier type-check
   cavern::JointObjectCodingApplier applier(joc);
+  cavern::ObjectInfoBlock oib;             // OAMD object-info-block type-check
   (void)applier;
+  (void)oib;
   return l.size() == 12 && l.has_height() && l.at(3).is_lfe &&
          cavern::QuadratureMirrorFilterBank::kSubbands == 64 &&
-         cavern::JointObjectCoding::kMaxObjects == 64;
+         cavern::JointObjectCoding::kMaxObjects == 64 &&
+         static_cast<int>(cavern::NonStandardBedChannel::kMax) == 17;
 }
 
 }  // namespace

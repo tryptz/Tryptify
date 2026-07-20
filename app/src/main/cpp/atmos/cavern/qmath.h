@@ -10,10 +10,15 @@
 #ifndef TF_ATMOS_CAVERN_QMATH_H
 #define TF_ATMOS_CAVERN_QMATH_H
 
+#include <cmath>
+
 namespace tf {
 namespace atmos {
 namespace cavern {
 namespace qmath {
+
+// QMath.DbToGain — decibels to a linear amplitude multiplier.
+inline float db_to_gain(float db) { return std::pow(10.0f, db * 0.05f); }
 
 // out[i] = a[i] * b[i]
 inline void multiply_and_set(const float* a, const float* b, float* out, int n) {
