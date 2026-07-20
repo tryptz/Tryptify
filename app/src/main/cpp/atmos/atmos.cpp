@@ -17,6 +17,7 @@
 #include "cavern/quadrature_mirror_filterbank.h"
 #include "emdf.h"
 #include "oamd.h"
+#include "render/structural_hrtf.h"
 #include "vbap.h"
 
 namespace tf {
@@ -35,8 +36,11 @@ bool atmos_foundation_self_check() {
   cavern::ObjectAudioMetadata oam;         // OAMD frame layer type-check
   cavern::ExtensibleMetadataDecoder emdf;   // EMDF container walker type-check
   cavern::EnhancedAC3Header eac3;           // E-AC-3 syncframe header type-check
+  render::BinauralRenderer binaural;        // HRTF render engine type-check
+  binaural.configure(48000, 16);
   (void)applier;
   (void)oib;
+  (void)binaural;
   return l.size() == 12 && l.has_height() && l.at(3).is_lfe &&
          cavern::QuadratureMirrorFilterBank::kSubbands == 64 &&
          cavern::JointObjectCoding::kMaxObjects == 64 &&
