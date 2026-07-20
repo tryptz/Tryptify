@@ -8,6 +8,7 @@
 // device. As the JNI surface and playback wiring land (see atmos/README.md),
 // the renderer control code moves here.
 #include "bit_reader.h"
+#include "cavern/quadrature_mirror_filterbank.h"
 #include "emdf.h"
 #include "oamd.h"
 #include "vbap.h"
@@ -21,7 +22,9 @@ namespace {
 
 bool atmos_foundation_self_check() {
   LoudspeakerLayout l = LoudspeakerLayout::atmos_7_1_4();
-  return l.size() == 12 && l.has_height() && l.at(3).is_lfe;
+  cavern::QuadratureMirrorFilterBank qmf;  // header type-checks on every ABI
+  return l.size() == 12 && l.has_height() && l.at(3).is_lfe &&
+         cavern::QuadratureMirrorFilterBank::kSubbands == 64;
 }
 
 }  // namespace

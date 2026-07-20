@@ -42,9 +42,18 @@ not stubbed to look finished:
 - **OAMD frame parsing** (object count, bed vs dynamic split, per-block info
   ramps) — the coordinate math in `oamd.h` is the reusable core; the bitstream
   framing that feeds it is TODO.
-- **QMF analysis/synthesis filterbank** and the **JOC decoder / upmix applier**
-  (plan A5–A6) — the heaviest DSP, and the part that must be bit-aligned to the
-  spec's subband count and validated A/B against a reference decoder.
+- **JOC decoder / upmix applier** (plan A6) — must be validated A/B against a
+  reference decoder on real content.
+
+### Ported from Cavern (see `cavern/` — NOT clean-room)
+
+- **QMF analysis/synthesis filterbank** (plan A5) — `cavern/quadrature_mirror_filterbank.h`
+  is a faithful C++ port of Cavern's 64-band complex QMF. Host-verified: analysis
+  → synthesis reconstructs a broadband signal at correlation 1.00000 (577-sample
+  delay). **This introduces a license obligation** — Cavern's licence is
+  non-commercial, no-ads, attribution + source-link, and requires the creator's
+  permission for public/commercial use. See `cavern/NOTICE.md`. The rest of this
+  directory stays clean-room; the `cavern/` subtree does not.
 - **HRTF binauralizer** back-end (plan A7) — will reuse libmysofa + a NEON
   convolver and the app's existing AutoEQ/HRTF infra.
 - **JNI surface + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.
