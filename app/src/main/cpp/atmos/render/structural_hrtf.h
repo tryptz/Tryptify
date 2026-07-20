@@ -104,6 +104,15 @@ class BinauralRenderer {
     for (Source& s : sources_) s.reset();
   }
 
+  // User-facing render controls (from the Atmos configurator's RendererProfile).
+  //  strength: 0 = no spatialization (dry source to both ears) .. 1 = full HRTF.
+  //  height_virtualization: when false, elevation is ignored (sources collapse
+  //  to the ear-level plane), which is what the profile's toggle means.
+  void set_params(float strength, bool height_virtualization) {
+    strength_ = strength < 0.0f ? 0.0f : (strength > 1.0f ? 1.0f : strength);
+    height_ = height_virtualization;
+  }
+
   // Renders `num_objects` object signals (objects[o], `n` samples each) at
   // (obj_az[o], obj_el[o]) plus `bed_channels` bed signals at (bed_az[b],
   // bed_el[b]) into interleaved stereo `out` (2*n floats). `out` is overwritten.
@@ -147,7 +156,9 @@ class BinauralRenderer {
   }
 
   void mix_source(Source& s, const float* in, float az, float el, int n, float* out) {
-    const SourceCoeffs c = compute_coeffs(az, el, sample_rate_);
+    const SourceCoeffs c = compute_coeffs(az, height_ ? el : 0.0f, sample_rate_);
+    const float wet = strength_;
+    const float dry = 1.0f - strength_;
     for (int i = 0; i < n; ++i) {
       s.ring[s.write] = in[i];
       s.write = (s.write + 1) % kDelayLen;
@@ -155,12 +166,16 @@ class BinauralRenderer {
       const float sr = c.gain_r * read_delayed(s, c.delay_r);
       s.lp_state_l = (1.0f - c.lp_l) * sl + c.lp_l * s.lp_state_l;
       s.lp_state_r = (1.0f - c.lp_r) * sr + c.lp_r * s.lp_state_r;
-      out[2 * i] += s.lp_state_l;
-      out[2 * i + 1] += s.lp_state_r;
+      // Blend the spatialized signal against the unprocessed source so
+      // binauralStrength scales the effect continuously.
+      out[2 * i] += wet * s.lp_state_l + dry * in[i];
+      out[2 * i + 1] += wet * s.lp_state_r + dry * in[i];
     }
   }
 
   int sample_rate_ = 48000;
+  float strength_ = 1.0f;
+  bool height_ = true;
   std::vector<Source> sources_;
 };
 

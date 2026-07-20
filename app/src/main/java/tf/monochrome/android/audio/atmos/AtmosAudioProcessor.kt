@@ -5,6 +5,14 @@ import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.util.UnstableApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.domain.model.RendererMode
+import tf.monochrome.android.domain.model.RendererProfile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
@@ -27,7 +35,38 @@ import javax.inject.Singleton
 @OptIn(UnstableApi::class)
 class AtmosAudioProcessor @Inject constructor(
     private val frameBuffer: AtmosFrameBuffer,
+    preferences: PreferencesManager,
 ) : AudioProcessor {
+
+    // The user's settings from the Atmos Renderer Configuration screen. Kept in a
+    // volatile snapshot so the audio thread never touches DataStore, and pushed
+    // into the native pipeline whenever it changes.
+    @Volatile private var profile: RendererProfile = RendererProfile.DEFAULT
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        preferences.rendererProfile
+            .onEach { updated ->
+                profile = updated
+                pushParams()
+            }
+            .launchIn(scope)
+    }
+
+    /** Sends the current profile to the native renderer (no-op without a pipeline). */
+    private fun pushParams() {
+        val p = pipeline
+        if (p == 0L) return
+        val cur = profile
+        AtmosNative.nativeSetRenderParams(
+            p,
+            cur.mode.ordinal,
+            cur.stereoDownmix.ordinal,
+            cur.binauralStrength,
+            cur.heightVirtualization,
+            cur.lfeGainDb,
+        )
+    }
 
     private var pipeline: Long = 0L
     private var pendingFormat = AudioFormat.NOT_SET
@@ -48,8 +87,13 @@ class AtmosAudioProcessor @Inject constructor(
         ) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        // Only multichannel (an Atmos bed) is handled; ≤2ch is not Atmos.
-        if (inputAudioFormat.channelCount <= 2 || !AtmosNative.isAvailable) {
+        // Only multichannel (an Atmos bed) is handled; ≤2ch is not Atmos. The
+        // profile's PASSTHROUGH mode ("Direct") also drops us out of the
+        // pipeline entirely, so the user's choice is honoured bit-perfectly.
+        if (inputAudioFormat.channelCount <= 2 ||
+            !AtmosNative.isAvailable ||
+            profile.mode == RendererMode.PASSTHROUGH
+        ) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
@@ -145,6 +189,7 @@ class AtmosAudioProcessor @Inject constructor(
         if (formatChanged) {
             if (pipeline != 0L) AtmosNative.nativePipelineDestroy(pipeline)
             pipeline = AtmosNative.nativePipelineCreate(inputFormat.sampleRate, MAX_OBJECTS)
+            pushParams()  // a fresh pipeline starts at defaults — apply the profile
         }
         pendingFormat = AudioFormat.NOT_SET
     }

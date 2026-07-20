@@ -67,6 +67,24 @@ object AtmosNative {
     external fun nativePipelineDestroy(pipeline: Long)
 
     /**
+     * Pushes the user's renderer profile into the native pipeline.
+     *
+     * @param mode RendererMode ordinal (0 passthrough, 1 object render, 2 bed+HRTF)
+     * @param downmix StereoDownmixMode ordinal (0 binaural, 1 Lo/Ro, 2 Lt/Rt)
+     * @param binauralStrength 0 (dry) .. 1 (full HRTF)
+     * @param heightVirtualization false collapses sources to the ear-level plane
+     * @param lfeGainDb LFE trim in dB (applied in bed+HRTF mode)
+     */
+    external fun nativeSetRenderParams(
+        pipeline: Long,
+        mode: Int,
+        downmix: Int,
+        binauralStrength: Float,
+        heightVirtualization: Boolean,
+        lfeGainDb: Float,
+    )
+
+    /**
      * Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
      *
      * @param frame the raw E-AC-3 access unit (carries JOC/OAMD side-data)

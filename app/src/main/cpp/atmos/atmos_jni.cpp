@@ -105,6 +105,18 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineDestroy(
   delete pipeline_of(pipeline);
 }
 
+// Pushes the user's RendererProfile into the pipeline. `mode` and `downmix` are
+// the Kotlin RendererMode / StereoDownmixMode ordinals.
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRenderParams(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jint mode, jint downmix,
+    jfloat binauralStrength, jboolean heightVirtualization, jfloat lfeGainDb) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr) return;
+  pipe->set_params(mode, downmix, binauralStrength,
+                   heightVirtualization == JNI_TRUE, lfeGainDb);
+}
+
 // Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
 // `bedInterleaved` is channels*samples floats; `stereoOut` receives 2*samples
 // floats when Atmos is rendered. Returns 1 (rendered) or -1 (no objects — the
