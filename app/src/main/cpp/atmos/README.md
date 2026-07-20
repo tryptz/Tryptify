@@ -78,10 +78,21 @@ See `cavern/NOTICE.md`. The rest of this directory stays clean-room; the
   VariableBits helpers, ReadBits, and program assignment.
 
 With this, the full **EMDF → OAMD + JOC → QMF upmix → object PCM + positions**
-chain is ported (host-verified, CI-green on NDK). Still to port/build: the
-**E-AC-3 core audio decode** (the bed PCM that feeds the applier), the container
-demux (`MediaExtractor` → raw EC-3 stream), the **HRTF binauralizer** back-end,
-and the **JNI + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.
+chain is ported (host-verified, CI-green on NDK).
+
+### JNI surface
+
+`atmos_jni.cpp` exposes the decode path to Kotlin (`AtmosEngine.kt`) via
+`libmonochrome_atmos.so` — `nativeSelfCheck()` and `nativeDecodeEmdfObjectCount()`
+(walk an EMDF buffer, return the JOC object count). It is **off the player's
+critical path**: nothing loads the library at runtime yet, so it cannot affect
+playback. It is the boundary the render/output wiring grows into.
+
+Still to build: the **E-AC-3 core audio decode** (the bed PCM that feeds the
+applier — a large multi-file Cavern codec **or** an FFmpeg `eac3` binding, plan
+Option 1), the container demux (`MediaExtractor` → raw EC-3 stream), the **HRTF
+binauralizer** back-end, and the **Media3 `AtmosAudioProcessor`** integration
+into `monochrome_dsp`.
 - **HRTF binauralizer** back-end (plan A7) — will reuse libmysofa + a NEON
   convolver and the app's existing AutoEQ/HRTF infra.
 - **JNI surface + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.
