@@ -95,7 +95,20 @@ class AtmosAudioProcessor @Inject constructor(
             val rc = if (pipeline != 0L) {
                 AtmosNative.nativeProcessFrame(pipeline, raw, frameScratch, channels, FRAME_SAMPLES, stereo)
             } else -1
-            if (rc != 1) downmixToStereo(frameScratch, channels)  // non-Atmos / no pipeline
+            if (rc == 1) {
+                if (renderedFrames == 0L) {
+                    android.util.Log.i(TAG, "Atmos render ACTIVE — objects binauralized (${channels}ch bed)")
+                }
+                renderedFrames++
+            } else {
+                downmixToStereo(frameScratch, channels)  // non-Atmos / no pipeline / no raw frame
+                fallbackFrames++
+            }
+            if ((renderedFrames + fallbackFrames) % STATS_EVERY == 0L) {
+                android.util.Log.d(
+                    TAG,
+                    "frames rendered=$renderedFrames fallback=$fallbackFrames tapQueue=${frameBuffer.size()}")
+            }
             writeStereoFrame(out, isFloat)
         }
         // Absolute puts don't move position; set the window explicitly.
@@ -143,6 +156,8 @@ class AtmosAudioProcessor @Inject constructor(
         inputFormat = AudioFormat.NOT_SET
         bed = FloatArray(0)
         bedSamples = 0
+        renderedFrames = 0L
+        fallbackFrames = 0L
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
@@ -196,8 +211,17 @@ class AtmosAudioProcessor @Inject constructor(
         }
     }
 
+    // Diagnostics: how many frames actually rendered as Atmos vs fell back to a
+    // downmix. The first successful render logs once; totals log periodically, so
+    // a logcat during playback shows immediately whether the tap + pipeline are
+    // working end to end.
+    private var renderedFrames = 0L
+    private var fallbackFrames = 0L
+
     private companion object {
         const val FRAME_SAMPLES = 1536   // 6 blocks * 256 samples per E-AC-3 frame
         const val MAX_OBJECTS = 16
+        const val TAG = "AtmosProcessor"
+        const val STATS_EVERY = 300L     // ~9.6 s of frames
     }
 }

@@ -58,6 +58,13 @@ class AtmosTapMediaSourceFactory(
 
     override fun createMediaSource(mediaItem: MediaItem): MediaSource =
         TapMediaSource(delegate.createMediaSource(mediaItem), frameBuffer)
+
+    /**
+     * Wraps an already-built [MediaSource] with the same tap. Used for the
+     * playback paths that construct a source directly (DASH / progressive) and
+     * therefore never go through [createMediaSource].
+     */
+    fun wrap(source: MediaSource): MediaSource = TapMediaSource(source, frameBuffer)
 }
 
 @UnstableApi
@@ -171,9 +178,19 @@ private class TapSampleStream(
                 val dup = data.duplicate()
                 val bytes = ByteArray(dup.remaining())
                 dup.get(bytes)
-                if (bytes.isNotEmpty()) frameBuffer.put(buffer.timeUs, bytes)
+                if (bytes.isNotEmpty()) {
+                    frameBuffer.put(buffer.timeUs, bytes)
+                    if (!logged) {
+                        logged = true
+                        android.util.Log.i(
+                            "AtmosTap",
+                            "capturing E-AC-3 frames (first ${bytes.size} bytes @ ${buffer.timeUs}us)")
+                    }
+                }
             }
         }
         return result
     }
+
+    private var logged = false
 }

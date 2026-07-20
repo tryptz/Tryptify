@@ -75,6 +75,13 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var atmosAudioProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor
     @Inject lateinit var atmosFrameBuffer: tf.monochrome.android.audio.atmos.AtmosFrameBuffer
 
+    /** Shared Atmos tap — used both as the player's factory and to wrap the
+     *  directly-built DASH/progressive sources. */
+    private val atmosTapFactory by lazy {
+        tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
+            DefaultMediaSourceFactory(this), atmosFrameBuffer)
+    }
+
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -128,12 +135,7 @@ class PlaybackService : MediaSessionService() {
             // Covers the setMediaItem paths (local files included); the direct
             // setMediaSource paths below build their own sources and are not
             // tapped yet.
-            .setMediaSourceFactory(
-                tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
-                    DefaultMediaSourceFactory(this),
-                    atmosFrameBuffer,
-                )
-            )
+            .setMediaSourceFactory(atmosTapFactory)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -532,7 +534,10 @@ class PlaybackService : MediaSessionService() {
                             .createMediaSource(mediaItem)
                     }
 
-                    player.setMediaSource(source)
+                    // These sources are built directly and so bypass the player's
+                    // MediaSource.Factory — wrap them with the Atmos tap too, or
+                    // streamed E-AC-3 would lose its JOC/OAMD side-data.
+                    player.setMediaSource(atmosTapFactory.wrap(source))
                 } else {
                     player.setMediaItem(mediaItem)
                 }
