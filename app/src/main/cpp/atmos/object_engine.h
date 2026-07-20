@@ -87,6 +87,20 @@ class ObjectEngine {
   // The decoded OAMD frame (object positions), for the HRTF render (P2).
   const cavern::ObjectAudioMetadata& oamd() const { return emdf_.oamd(); }
 
+  // Render-space position of object `obj` from the last-parsed OAMD (x = left..
+  // right, y = down..up, z = back..front). Returns the origin (center) if the
+  // frame carried no object element for it. Consumed by the HRTF render (P2).
+  Vec3 object_position(int obj) {
+    cavern::ObjectAudioMetadata& o = emdf_.oamd();
+    for (int e = 0; e < o.element_count(); ++e) {
+      cavern::OAElementMD& el = o.element(e);
+      if (el.is_object_element() && obj >= 0 && obj < el.object_count()) {
+        return el.info_block(obj, 0).resolved_position();
+      }
+    }
+    return Vec3{};
+  }
+
  private:
   void ensure_capacity(const cavern::JointObjectCoding& joc, int channels,
                        int objects, int frame_samples) {

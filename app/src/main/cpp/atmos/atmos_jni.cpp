@@ -12,12 +12,16 @@
 #include <cstdint>
 #include <vector>
 
+#include "atmos_pipeline.h"
 #include "cavern/extensible_metadata_decoder.h"
 #include "object_engine.h"
 
 namespace {
 inline tf::atmos::ObjectEngine* engine_of(jlong ptr) {
   return reinterpret_cast<tf::atmos::ObjectEngine*>(ptr);
+}
+inline tf::atmos::AtmosPipeline* pipeline_of(jlong ptr) {
+  return reinterpret_cast<tf::atmos::AtmosPipeline*>(ptr);
 }
 }  // namespace
 
@@ -84,6 +88,57 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeUpmixFrame(
   for (int c = 0; c < channels; ++c) ptrs[c] = planar[c].data();
 
   return eng->upmix_frame(fbuf.data(), fbuf.size(), ptrs.data(), channels, samples);
+}
+
+// ── Full render pipeline (P1 upmix -> P2 binaural render) ─────────────────
+JNIEXPORT jlong JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineCreate(
+    JNIEnv* /*env*/, jclass /*clazz*/, jint sampleRate, jint maxObjects) {
+  tf::atmos::AtmosPipeline* pipe = new tf::atmos::AtmosPipeline();
+  pipe->configure(sampleRate, maxObjects);
+  return reinterpret_cast<jlong>(pipe);
+}
+
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineDestroy(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline) {
+  delete pipeline_of(pipeline);
+}
+
+// Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
+// `bedInterleaved` is channels*samples floats; `stereoOut` receives 2*samples
+// floats when Atmos is rendered. Returns 1 (rendered) or -1 (no objects — the
+// caller passes the bed through unchanged). First-cut marshaling; P4 optimizes.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrame(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray frame,
+    jfloatArray bedInterleaved, jint channels, jint samples, jfloatArray stereoOut) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr || channels <= 0 || samples <= 0) return -1;
+
+  const jsize flen = env->GetArrayLength(frame);
+  std::vector<uint8_t> fbuf(static_cast<size_t>(flen));
+  env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
+
+  const jsize blen = env->GetArrayLength(bedInterleaved);
+  if (blen < static_cast<jsize>(channels) * samples) return -1;
+  std::vector<float> interleaved(static_cast<size_t>(blen));
+  env->GetFloatArrayRegion(bedInterleaved, 0, blen, interleaved.data());
+  std::vector<std::vector<float>> planar(channels, std::vector<float>(samples));
+  for (int i = 0; i < samples; ++i)
+    for (int c = 0; c < channels; ++c)
+      planar[c][i] = interleaved[static_cast<size_t>(i) * channels + c];
+  std::vector<const float*> ptrs(channels);
+  for (int c = 0; c < channels; ++c) ptrs[c] = planar[c].data();
+
+  std::vector<float> stereo(static_cast<size_t>(2) * samples, 0.0f);
+  const int rc = pipe->process_frame(fbuf.data(), fbuf.size(), ptrs.data(),
+                                     channels, samples, stereo.data());
+  if (rc == 1) {
+    if (env->GetArrayLength(stereoOut) < 2 * samples) return -1;
+    env->SetFloatArrayRegion(stereoOut, 0, 2 * samples, stereo.data());
+  }
+  return rc;
 }
 
 }  // extern "C"

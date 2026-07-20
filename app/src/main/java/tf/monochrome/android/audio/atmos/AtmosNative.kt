@@ -58,4 +58,29 @@ object AtmosNative {
         channels: Int,
         samples: Int,
     ): Int
+
+    // ── Full render pipeline (P1 upmix -> P2 binaural render) ─────────────
+    /** Creates the end-to-end render pipeline; returns a handle (0 on failure). */
+    external fun nativePipelineCreate(sampleRate: Int, maxObjects: Int): Long
+
+    /** Destroys a pipeline handle from [nativePipelineCreate]. */
+    external fun nativePipelineDestroy(pipeline: Long)
+
+    /**
+     * Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
+     *
+     * @param frame the raw E-AC-3 access unit (carries JOC/OAMD side-data)
+     * @param bedInterleaved channels*samples floats, interleaved, decoder order
+     * @param stereoOut receives 2*samples floats when Atmos is rendered
+     * @return 1 if rendered into [stereoOut], or -1 if the frame has no objects
+     *   (the caller then passes the bed through unchanged)
+     */
+    external fun nativeProcessFrame(
+        pipeline: Long,
+        frame: ByteArray,
+        bedInterleaved: FloatArray,
+        channels: Int,
+        samples: Int,
+        stereoOut: FloatArray,
+    ): Int
 }

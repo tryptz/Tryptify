@@ -7,6 +7,7 @@
 // x86_64) on every CI run, catching portability regressions before they reach a
 // device. As the JNI surface and playback wiring land (see atmos/README.md),
 // the renderer control code moves here.
+#include "atmos_pipeline.h"
 #include "bit_reader.h"
 #include "cavern/enhanced_ac3.h"
 #include "cavern/extensible_metadata_decoder.h"
@@ -38,9 +39,12 @@ bool atmos_foundation_self_check() {
   cavern::EnhancedAC3Header eac3;           // E-AC-3 syncframe header type-check
   render::BinauralRenderer binaural;        // HRTF render engine type-check
   binaural.configure(48000, 16);
+  AtmosPipeline pipeline;                    // end-to-end pipeline type-check
+  pipeline.configure(48000, 16);
   (void)applier;
   (void)oib;
   (void)binaural;
+  (void)pipeline;
   return l.size() == 12 && l.has_height() && l.at(3).is_lfe &&
          cavern::QuadratureMirrorFilterBank::kSubbands == 64 &&
          cavern::JointObjectCoding::kMaxObjects == 64 &&
