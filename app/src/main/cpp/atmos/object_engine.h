@@ -108,6 +108,12 @@ class ObjectEngine {
   // The decoded OAMD frame (object positions), for the HRTF render (P2).
   const cavern::ObjectAudioMetadata& oamd() const { return emdf_.oamd(); }
 
+  // Object index of the LFE, or -1 if none. Bed objects occupy the first bed
+  // slots in object order, and the LFE's bed-order index is therefore its object
+  // index. The LFE is non-directional bass and must NOT be HRIR-spatialized —
+  // the renderer sums it to both ears instead of placing it at a point.
+  int lfe_object_index() const { return emdf_.oamd().get_lfe_position(); }
+
   // Render-space position of object `obj` from the last-parsed OAMD (x = left..
   // right, y = down..up, z = back..front). Returns the origin (center) if the
   // frame carried no object element for it. Consumed by the HRTF render (P2).

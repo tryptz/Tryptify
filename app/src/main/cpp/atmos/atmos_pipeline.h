@@ -116,15 +116,41 @@ class AtmosPipeline {
     if (n <= 0) return -1;
     const int objects = n < max_objects_ ? n : max_objects_;
 
-    obj_ptrs_.resize(objects);
-    az_.resize(objects);
-    el_.resize(objects);
+    // The LFE is non-directional bass. Spatializing it through the HRIR places
+    // it at a point (and, with no OAMD position, at the front-left origin corner
+    // — where it was the loudest, most obviously mislocalized object). Pull it
+    // out of the HRIR set and sum it to both ears below instead.
+    const int lfe = engine_.lfe_object_index();
+
+    obj_ptrs_.clear();
+    az_.clear();
+    el_.clear();
     for (int o = 0; o < objects; ++o) {
-      obj_ptrs_[o] = engine_.object_channel(o);
-      position_to_azel(engine_.object_position(o), az_[o], el_[o]);
+      if (o == lfe) continue;
+      float az, el;
+      position_to_azel(engine_.object_position(o), az, el);
+      obj_ptrs_.push_back(engine_.object_channel(o));
+      az_.push_back(az);
+      el_.push_back(el);
     }
-    renderer_.render(obj_ptrs_.data(), az_.data(), el_.data(), objects,
+    const int rendered_objects = static_cast<int>(obj_ptrs_.size());
+    renderer_.render(obj_ptrs_.data(), az_.data(), el_.data(), rendered_objects,
                      nullptr, nullptr, nullptr, 0, samples, out);
+
+    // Sum the non-directional LFE equally to both ears (with the profile's LFE
+    // trim), after the HRIR render and before post. Bass management in the
+    // renderer already folds low frequencies of the spatialized objects to both
+    // ears; the LFE is bass by definition, so it just goes straight through.
+    if (lfe >= 0) {
+      const float* lp = engine_.object_channel(lfe);
+      if (lp) {
+        for (int i = 0; i < samples; ++i) {
+          const float v = lp[i] * lfe_gain_;
+          out[2 * i] += v;
+          out[2 * i + 1] += v;
+        }
+      }
+    }
     apply_post(out, samples);
     return 1;
   }
