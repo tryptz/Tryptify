@@ -92,13 +92,16 @@ See `cavern/NOTICE.md`. The rest of this directory stays clean-room; the
   Host-tested (20 checks): E-AC-3 independent 5.1 header, dependent-substream id
   offset, bad-syncword rejection.
 
-Still to port from Cavern: the rest of the E-AC-3 core decode — the BSI /
-mixing / addbsi metadata parse (the `addbsi` field is where the EMDF Atmos
-payload rides), then the audio-block decode (bit allocation, exponents,
-mantissas, coupling, spectral extension, inverse transform) that yields the bed
-PCM JOC upmixes — and the JNI/Media3 wiring. The audio-block numeric decode is
-self-consistency-testable here but needs reference Atmos content for the
-bit-exactness A/B the plan's phase 2 calls for.
+Still to port from Cavern: the rest of the E-AC-3 core decode. Note the Atmos
+EMDF payload does NOT ride in the header `addbsi` — Cavern's decoder runs the
+EMDF walker over the audio frame's **auxiliary data** (`body.GetAuxData()`, the
+frame-end skip field), matching `emdf.h`. So reaching the Atmos metadata on a
+real frame needs the body framing, and producing the bed PCM JOC upmixes needs
+the full audio-block decode (BSI alignment, bit allocation, exponents,
+mantissas, coupling, spectral extension, inverse transform). That audio-block
+numeric decode is self-consistency-testable here but needs reference Atmos
+content for the bit-exactness A/B the plan's phase 2 calls for. Then the
+JNI/Media3 wiring.
 - **HRTF binauralizer** back-end (plan A7) — will reuse libmysofa + a NEON
   convolver and the app's existing AutoEQ/HRTF infra.
 - **JNI surface + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.
