@@ -172,10 +172,17 @@ private class TapSampleStream(
         ) {
             val data = buffer.data
             if (data != null) {
-                // Read via a duplicate so the renderer's view is untouched. The
-                // buffer is flipped for the consumer after readData, so the
-                // duplicate spans the whole access unit.
+                // Read via a duplicate so the renderer's view is untouched.
+                //
+                // The buffer is still in WRITE state here — readData has filled
+                // it but the renderer flips it only after we return. So position
+                // is the sample size and limit is the capacity; reading
+                // remaining() would yield the uninitialized tail (measured: a
+                // constant 94 bytes of slack on CBR E-AC-3), not the frame.
+                // Flip the duplicate to span [0, bytesWritten). Guard the
+                // already-flipped case so we never produce an empty capture.
                 val dup = data.duplicate()
+                if (dup.position() > 0) dup.flip()
                 val bytes = ByteArray(dup.remaining())
                 dup.get(bytes)
                 if (bytes.isNotEmpty()) {
@@ -184,7 +191,8 @@ private class TapSampleStream(
                         logged = true
                         android.util.Log.i(
                             "AtmosTap",
-                            "capturing E-AC-3 frames (first ${bytes.size} bytes @ ${buffer.timeUs}us)")
+                            "capturing E-AC-3 frames (first ${bytes.size} bytes @ ${buffer.timeUs}us)" +
+                                " buffer@${System.identityHashCode(frameBuffer)}")
                     }
                 }
             }

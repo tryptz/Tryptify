@@ -152,6 +152,12 @@ class AtmosAudioProcessor @Inject constructor(
         for (f in 0 until outFrames) {
             System.arraycopy(bed, f * FRAME_SAMPLES * channels, frameScratch, 0, FRAME_SAMPLES * channels)
             val raw = frameBuffer.poll() ?: emptyFrame
+            if (raw.isEmpty()) {
+                noFrameCount++
+            } else {
+                gotFrameCount++
+                lastFrameBytes = raw.size
+            }
             val rc = if (pipeline != 0L) {
                 AtmosNative.nativeProcessFrame(pipeline, raw, frameScratch, channels, FRAME_SAMPLES, stereo)
             } else -1
@@ -167,7 +173,10 @@ class AtmosAudioProcessor @Inject constructor(
             if ((renderedFrames + fallbackFrames) % STATS_EVERY == 0L) {
                 android.util.Log.d(
                     TAG,
-                    "frames rendered=$renderedFrames fallback=$fallbackFrames tapQueue=${frameBuffer.size()}")
+                    "frames rendered=$renderedFrames fallback=$fallbackFrames " +
+                        "tapQueue=${frameBuffer.size()} gotFrame=$gotFrameCount " +
+                        "noFrame=$noFrameCount lastFrameBytes=$lastFrameBytes " +
+                        "buffer@${System.identityHashCode(frameBuffer)}")
             }
             writeStereoFrame(out, isFloat)
         }
@@ -278,6 +287,11 @@ class AtmosAudioProcessor @Inject constructor(
     // working end to end.
     private var renderedFrames = 0L
     private var fallbackFrames = 0L
+    // Split the fallback cause: no raw frame available (tap/consumer mismatch)
+    // vs. a frame that simply carries no JOC.
+    private var gotFrameCount = 0L
+    private var noFrameCount = 0L
+    private var lastFrameBytes = 0
 
     private companion object {
         const val FRAME_SAMPLES = 1536   // 6 blocks * 256 samples per E-AC-3 frame
