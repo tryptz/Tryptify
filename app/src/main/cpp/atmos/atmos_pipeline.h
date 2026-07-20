@@ -15,7 +15,7 @@
 
 #include "cavern/enhanced_ac3.h"  // dialnorm from the syncframe header
 #include "object_engine.h"
-#include "render/structural_hrtf.h"
+#include "render/hrir_renderer.h"
 #include "vbap.h"  // Vec3
 
 namespace tf {

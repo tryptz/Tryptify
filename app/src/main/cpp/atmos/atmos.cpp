@@ -18,7 +18,7 @@
 #include "cavern/quadrature_mirror_filterbank.h"
 #include "emdf.h"
 #include "oamd.h"
-#include "render/structural_hrtf.h"
+#include "render/hrir_renderer.h"
 #include "vbap.h"
 
 namespace tf {

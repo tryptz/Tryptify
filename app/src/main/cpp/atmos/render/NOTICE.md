@@ -1,26 +1,40 @@
 # Atmos HRTF render — attribution & licensing
 
-The binaural renderer in this directory uses a **procedural (synthetic)
-spherical-head HRTF model**, not a measured HRIR dataset. It contains **no
-third-party measurement data**, so it carries no dataset attribution or
-redistribution obligation — it is clean-room, unlike the `cavern/` subtree.
+The binaural renderer in this directory convolves each positioned source with a
+**measured head-related impulse response (HRIR)**, giving the pinna spectral
+cues (front/back and elevation disambiguation) that the previous procedural
+spherical-head model could not reproduce.
 
-## Model
-`structural_hrtf.h` models the two dominant interaural localization cues from
-first principles:
+## HRIR dataset — MIT KEMAR
+`hrir_table.h` is **generated**, not hand-written. It is baked from the
+**MIT KEMAR** HRTF measurements (Bill Gardner & Keith Martin, MIT Media Lab),
+a long-standing publicly available dataset distributed for research and
+application use. The SOFA-format copy shipped with libmysofa
+(`MIT_KEMAR_normal_pinna.sofa`) is the source.
 
-- **ITD (interaural time difference)** — the Woodworth spherical-head formula
-  `ITD(θ) = (a/c)·(sin θ + θ)`, applied as a fractional delay on the far ear
-  (`a` = head radius ≈ 8.75 cm, `c` = 343 m/s).
-- **ILD / head shadow** — a per-ear level term plus a one-pole low-pass whose
-  strength grows as the ear turns away from the source (a Brown-Duda-style
-  structural head shadow).
+Cite: W. G. Gardner and K. D. Martin, *"HRTF measurements of a KEMAR
+dummy-head microphone,"* MIT Media Lab Perceptual Computing Technical Report
+#280, 1994.
 
-These are standard textbook acoustics models, implemented directly (no code or
-data copied from any HRTF toolkit or dataset).
+## How the table is produced
+`tools/bake_hrir.c` links **libmysofa** (Christian Hoene et al., BSD-3-Clause,
+<https://github.com/hoene/libmysofa>) to:
 
-## Not modeled (future fidelity upgrades)
-Pinna spectral notches (elevation cues) and torso reflections are not modeled;
-those would require measured HRIRs (e.g. a SOFA dataset) + convolution, which is
-a deliberate later upgrade path. The current model gives stable azimuth
-placement and front/overhead level cues with real-time cost.
+1. load the SOFA file and resample the HRIRs to 48 kHz (the native DD+/Atmos
+   bed rate), with libmysofa's loudness normalization;
+2. sample a uniform grid — azimuth every 10° (36 points, wrapping), elevation
+   every 20° from −40°..+60° (6 points, clamping);
+3. truncate each ear's FIR to 128 taps (measured to retain ≥97% of the HRIR
+   energy in every direction; the peak is always within the first 74 samples);
+4. emit `hrir_table.h` in this repo's azimuth convention (0 = front, +right).
+
+libmysofa is a **build-time tool only** — it is not linked into the app. The
+Android build embeds the baked table and depends on no HRTF library, no SOFA
+file and no zlib at runtime, so the renderer stays header-only.
+
+## Renderer
+`hrir_renderer.h` interpolates the HRIR pair bilinearly across the grid for each
+source's azimuth/elevation, then convolves the frame per ear with persistent
+cross-frame input history. The interaural time difference is carried inside the
+HRIR itself (as the inter-ear onset difference of the measured response), so no
+separate delay model is used.
