@@ -50,6 +50,19 @@ class AtmosFrameBuffer @Inject constructor() {
         }
     }
 
+    /**
+     * Removes and returns the oldest buffered frame, or null if empty. The
+     * decoder emits eac3 frames 1:1 and in order, so the processor pulling the
+     * oldest frame per decoded frame keeps the raw side-data aligned with the
+     * bed PCM without needing an absolute-time key. Both sides [clear] on flush.
+     */
+    fun poll(): ByteArray? {
+        synchronized(lock) { return if (frames.isEmpty()) null else frames.removeFirst().bytes }
+    }
+
+    /** Number of buffered frames (for lookahead diagnostics). */
+    fun size(): Int = synchronized(lock) { frames.size }
+
     /** Drops all buffered frames — call on seek / track transition / flush. */
     fun clear() {
         synchronized(lock) { frames.clear() }
