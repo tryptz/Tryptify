@@ -27,6 +27,12 @@ class BitReader {
   size_t remaining() const { return pos_ <= size_bits_ ? size_bits_ - pos_ : 0; }
   bool exhausted() const { return pos_ >= size_bits_; }
 
+  // Absolute bit cursor control — the EMDF container walk seeks past payloads by
+  // setting the position directly (Cavern's BitExtractor.Position). back_position
+  // is the end-of-data bit index (BitExtractor.BackPosition).
+  void set_position(size_t bit_pos) { pos_ = bit_pos; }
+  size_t back_position() const { return size_bits_; }
+
   // Reads a single bit; returns 0 once the buffer is exhausted (callers that
   // care about truncation should check remaining() first).
   uint32_t read_bit() {

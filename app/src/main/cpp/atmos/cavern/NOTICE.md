@@ -59,3 +59,5 @@ still apply.
 | `joint_object_coding.h` | `JointObjectCoding.cs`, `…Cache.cs`, `…Decoder.cs` |
 | `joint_object_coding_applier.h` | `JointObjectCodingApplier.cs` |
 | `object_info_block.h` | `ObjectInfoBlock.cs`, `ObjectAudioMetadataEnums.cs` |
+| `object_metadata.h` | `ObjectAudioElementMetadata.cs`, `ObjectAudioMetadata.cs`, `ExtensibleMetadataExtensions.cs` |
+| `extensible_metadata_decoder.h` | `ExtensibleMetadataDecoder.cs` |

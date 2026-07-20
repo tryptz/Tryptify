@@ -8,9 +8,11 @@
 // device. As the JNI surface and playback wiring land (see atmos/README.md),
 // the renderer control code moves here.
 #include "bit_reader.h"
+#include "cavern/extensible_metadata_decoder.h"
 #include "cavern/joint_object_coding.h"
 #include "cavern/joint_object_coding_applier.h"
 #include "cavern/object_info_block.h"
+#include "cavern/object_metadata.h"
 #include "cavern/quadrature_mirror_filterbank.h"
 #include "emdf.h"
 #include "oamd.h"
@@ -29,12 +31,14 @@ bool atmos_foundation_self_check() {
   cavern::JointObjectCoding joc;           // JOC decoder + applier type-check
   cavern::JointObjectCodingApplier applier(joc);
   cavern::ObjectInfoBlock oib;             // OAMD object-info-block type-check
+  cavern::ExtensibleMetadataDecoder emdf;  // EMDF (ties OAMD + JOC) type-check
   (void)applier;
   (void)oib;
   return l.size() == 12 && l.has_height() && l.at(3).is_lfe &&
          cavern::QuadratureMirrorFilterBank::kSubbands == 64 &&
          cavern::JointObjectCoding::kMaxObjects == 64 &&
-         static_cast<int>(cavern::NonStandardBedChannel::kMax) == 17;
+         static_cast<int>(cavern::NonStandardBedChannel::kMax) == 17 &&
+         !emdf.has_objects();
 }
 
 }  // namespace

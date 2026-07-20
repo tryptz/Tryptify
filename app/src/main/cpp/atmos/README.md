@@ -69,11 +69,19 @@ See `cavern/NOTICE.md`. The rest of this directory stays clean-room; the
   `resolved_position()` applies the differential + normalized-cube→render-space
   map instead. Host-tested (16 checks): absolute position, gain, bed anchor.
 
-Still to port from Cavern (or clean-room): the OAMD framing that drives the
-info blocks (`ObjectAudioElementMetadata`, `ObjectAudioMetadata` program
-assignment) and the EMDF container (`ExtensibleMetadataDecoder`) that locates
-OAMD/JOC in the E-AC-3 skip field, the E-AC-3 core audio decode (bed PCM), and
-the JNI/Media3 wiring.
+- **OAMD framing + EMDF container** (plan A3) — `cavern/object_metadata.h`
+  (`OAElementMD` + `ObjectAudioMetadata` program/bed assignment, element/ramp
+  timing) and `cavern/extensible_metadata_decoder.h` (`ExtensibleMetadataDecoder`:
+  scans the EMDF syncword and dispatches OAMD id 11 / JOC id 14). Decode is
+  reproduced exactly; the `UpdateSources()` render integration is not ported —
+  decoded state is exposed via accessors. Host-tested (49 checks): the EMDF
+  VariableBits helpers, ReadBits, and program assignment.
+
+With this, the full **EMDF → OAMD + JOC → QMF upmix → object PCM + positions**
+chain is ported (host-verified, CI-green on NDK). Still to port/build: the
+**E-AC-3 core audio decode** (the bed PCM that feeds the applier), the container
+demux (`MediaExtractor` → raw EC-3 stream), the **HRTF binauralizer** back-end,
+and the **JNI + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.
 - **HRTF binauralizer** back-end (plan A7) — will reuse libmysofa + a NEON
   convolver and the app's existing AutoEQ/HRTF infra.
 - **JNI surface + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.
