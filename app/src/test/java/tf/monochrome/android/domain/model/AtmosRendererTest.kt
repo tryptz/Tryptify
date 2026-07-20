@@ -77,6 +77,20 @@ class AtmosRendererTest {
     }
 
     @Test
+    fun `speaker map has one speaker per channel with exactly one LFE above stereo`() {
+        for (layout in ChannelLayout.entries) {
+            val speakers = layout.speakers()
+            assertEquals(layout.channelCount, speakers.size)
+            val lfeCount = speakers.count { it.isLfe }
+            assertEquals(if (layout == ChannelLayout.STEREO) 0 else 1, lfeCount)
+        }
+        // Only 7.1.4 carries height speakers.
+        assertTrue(ChannelLayout.ATMOS_7_1_4.speakers().any { it.isHeight })
+        assertFalse(ChannelLayout.SURROUND_7_1.speakers().any { it.isHeight })
+        assertEquals(4, ChannelLayout.ATMOS_7_1_4.speakers().count { it.isHeight })
+    }
+
+    @Test
     fun `layout channel counts match the native VBAP bed layouts`() {
         assertEquals(2, ChannelLayout.STEREO.channelCount)
         assertEquals(6, ChannelLayout.SURROUND_5_1.channelCount)
@@ -97,5 +111,48 @@ class AtmosRendererTest {
     @Test
     fun `renderer mode default is passthrough`() {
         assertEquals(RendererMode.PASSTHROUGH, RendererMode.DEFAULT)
+    }
+
+    @Test
+    fun `default profile uses typical safe renderer settings`() {
+        val p = RendererProfile.DEFAULT
+        assertTrue(p.autoDetectLayout)
+        assertEquals(StereoDownmixMode.BINAURAL, p.stereoDownmix)
+        assertEquals(1.0f, p.binauralStrength, 1e-6f)
+        assertTrue(p.heightVirtualization)
+        assertTrue(p.bassManagement)
+        assertEquals(80, p.crossoverHz)
+        assertEquals(0f, p.lfeGainDb, 1e-6f)
+        assertEquals(DrcMode.OFF, p.drc)
+        assertFalse(p.dialogNormalization)
+    }
+
+    @Test
+    fun `clamped coerces continuous fields into range`() {
+        val wild = RendererProfile(
+            binauralStrength = 5f,
+            crossoverHz = 5000,
+            lfeGainDb = -99f,
+        ).clamped()
+        assertEquals(1f, wild.binauralStrength, 1e-6f)
+        assertEquals(200, wild.crossoverHz)
+        assertEquals(-10f, wild.lfeGainDb, 1e-6f)
+
+        val nan = RendererProfile(binauralStrength = Float.NaN, lfeGainDb = Float.NaN).clamped()
+        assertEquals(1f, nan.binauralStrength, 1e-6f) // NaN falls back to default
+        assertEquals(0f, nan.lfeGainDb, 1e-6f)
+    }
+
+    @Test
+    fun `effective layout honors the auto-detect flag`() {
+        val auto = RendererProfile(autoDetectLayout = true, layout = ChannelLayout.ATMOS_7_1_4)
+        // Auto-detect ignores the stored layout and follows the DAC channel count.
+        assertEquals(ChannelLayout.SURROUND_5_1, auto.effectiveLayout(6))
+        assertEquals(ChannelLayout.STEREO, auto.effectiveLayout(null))
+
+        val manual = RendererProfile(autoDetectLayout = false, layout = ChannelLayout.SURROUND_7_1)
+        // Manual keeps the chosen layout regardless of the DAC.
+        assertEquals(ChannelLayout.SURROUND_7_1, manual.effectiveLayout(2))
+        assertEquals(ChannelLayout.SURROUND_7_1, manual.effectiveLayout(12))
     }
 }

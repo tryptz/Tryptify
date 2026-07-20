@@ -137,6 +137,7 @@ sealed class Screen(val route: String) {
     }
     data object DebugLog : Screen("debug_log")
     data object LyricsFxStudio : Screen("lyrics_fx_studio")
+    data object AtmosRenderer : Screen("atmos_renderer")
 }
 
 data class BottomNavItem(
@@ -372,6 +373,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.LyricsFxStudio.route) {
                     tf.monochrome.android.devedit.DevEditScreen("lyrics_fx_studio") {
                         tf.monochrome.android.ui.settings.LyricsFxStudioScreen(navController = navController)
+                    }
+                }
+                composable(Screen.AtmosRenderer.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("atmos_renderer") {
+                        tf.monochrome.android.ui.settings.AtmosRendererScreen(navController = navController)
                     }
                 }
                 composable(

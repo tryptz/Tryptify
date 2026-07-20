@@ -1112,6 +1112,14 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Spatial Audio")
+        SettingItem(
+            title = "Atmos Renderer Configuration",
+            subtitle = "Renderer mode, output layout, downmix, bass management & channel map",
+            onClick = { navController.navigate(Screen.AtmosRenderer.route) },
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
         DspBlockSizeSelector(viewModel)
 

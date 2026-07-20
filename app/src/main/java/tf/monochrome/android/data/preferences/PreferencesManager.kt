@@ -1324,11 +1324,12 @@ class PreferencesManager @Inject constructor(
     val rendererProfile: Flow<tf.monochrome.android.domain.model.RendererProfile> = dataStore.data.map { prefs ->
         prefs[RENDERER_PROFILE_JSON]
             ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(raw) }.getOrNull() }
+            ?.clamped()
             ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
     }
 
     suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
-        dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile) }
+        dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
     }
 
     /** User-saved Player Glass themes (empty until the user saves one). */

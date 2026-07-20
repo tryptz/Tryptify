@@ -71,19 +71,131 @@ enum class ChannelLayout(val channelCount: Int, val label: String) {
 }
 
 /**
- * A renderer configuration: mode, target layout, and an optional HRTF profile id
- * (a key into the AutoEQ/HRTF measurement store) used by the binaural back-end.
- * Serializable so it can be persisted with the rest of the settings.
+ * How the renderer folds a multichannel / object mix down to two channels when
+ * the output is stereo (headphones or a 2.0 DAC).
+ */
+enum class StereoDownmixMode(val displayName: String, val description: String) {
+    /** Spatialize objects to headphone stereo through the HRTF binauralizer. */
+    BINAURAL("Binaural", "Spatialize objects to headphone stereo via HRTF"),
+
+    /** Plain ITU stereo fold-down (Lo/Ro) — no surround matrix encoding. */
+    LO_RO("Stereo (Lo/Ro)", "Standard stereo fold-down, no surround encoding"),
+
+    /** Matrix-encoded (Lt/Rt) so a Pro Logic decoder can re-expand to surround. */
+    LT_RT("Surround (Lt/Rt)", "Matrix-encoded for Pro Logic re-expansion");
+
+    companion object {
+        val DEFAULT = BINAURAL
+    }
+}
+
+/**
+ * Dynamic Range Control profile applied to the rendered output — the DD+/Atmos
+ * `compr`/`dynrng` scale, from full range (Off) to the most compressed (Heavy).
+ */
+enum class DrcMode(val displayName: String) {
+    OFF("Off (full range)"),
+    LIGHT("Light"),
+    STANDARD("Standard"),
+    HEAVY("Heavy (night)");
+
+    companion object {
+        val DEFAULT = OFF
+    }
+}
+
+/**
+ * A renderer configuration — the settings surfaced on the Atmos Renderer
+ * Configuration page. Serializable so it persists as one JSON blob, and
+ * [clamped] keeps every continuous field inside its legal range on read/write.
  */
 @Serializable
 data class RendererProfile(
+    /** How spatial content becomes speaker feeds. */
     val mode: RendererMode = RendererMode.DEFAULT,
+    /** Take the channel count from the connected DAC instead of [layout]. */
+    val autoDetectLayout: Boolean = true,
+    /** Target loudspeaker layout when not auto-detecting. */
     val layout: ChannelLayout = ChannelLayout.STEREO,
+    /** Fold-down used when the effective output is stereo. */
+    val stereoDownmix: StereoDownmixMode = StereoDownmixMode.DEFAULT,
+    /** HRTF/AutoEQ measurement id for the binaural back-end; null = built-in set. */
     val hrtfProfileId: String? = null,
+    /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */
+    val binauralStrength: Float = 1.0f,
+    /** Virtualize height objects on layouts without physical top speakers. */
+    val heightVirtualization: Boolean = true,
+    /** Redirect the low frequencies of full-range objects to the LFE / sub. */
+    val bassManagement: Boolean = true,
+    /** Bass-management crossover frequency in Hz. */
+    val crossoverHz: Int = 80,
+    /** LFE channel trim in dB. */
+    val lfeGainDb: Float = 0f,
+    /** Dynamic range control profile. */
+    val drc: DrcMode = DrcMode.DEFAULT,
+    /** Apply dialogue-normalization (dialnorm) loudness alignment. */
+    val dialogNormalization: Boolean = false,
 ) {
+    /** Coerce every continuous field into its legal range; non-finite → default. */
+    fun clamped(): RendererProfile {
+        fun Float.c(min: Float, max: Float, fb: Float) = if (isFinite()) coerceIn(min, max) else fb
+        return copy(
+            binauralStrength = binauralStrength.c(0f, 1f, 1f),
+            crossoverHz = crossoverHz.coerceIn(40, 200),
+            lfeGainDb = lfeGainDb.c(-10f, 10f, 0f),
+        )
+    }
+
+    /** The layout the renderer will actually target given the auto-detect flag. */
+    fun effectiveLayout(dacChannelCount: Int?): ChannelLayout =
+        if (autoDetectLayout) ChannelLayout.fromChannelCount(dacChannelCount) else layout
+
     companion object {
         val DEFAULT = RendererProfile()
     }
+}
+
+/**
+ * One loudspeaker position in a bed layout, used to draw the channel map. Angles
+ * mirror the native VBAP layout in `cpp/atmos/vbap.h`: azimuth 0 = front, growing
+ * clockwise (+ = right); elevation up from the horizontal plane.
+ */
+data class SpeakerChannel(
+    val label: String,
+    val azimuthDeg: Float,
+    val elevationDeg: Float = 0f,
+    val isLfe: Boolean = false,
+) {
+    val isHeight: Boolean get() = elevationDeg > 1f
+}
+
+/**
+ * The speakers that make up a layout, in channel order. The count matches
+ * [ChannelLayout.channelCount], and the set matches the native bed layouts.
+ */
+fun ChannelLayout.speakers(): List<SpeakerChannel> = when (this) {
+    ChannelLayout.STEREO -> listOf(
+        SpeakerChannel("L", -30f), SpeakerChannel("R", 30f),
+    )
+    ChannelLayout.SURROUND_5_1 -> listOf(
+        SpeakerChannel("L", -30f), SpeakerChannel("R", 30f), SpeakerChannel("C", 0f),
+        SpeakerChannel("LFE", 0f, isLfe = true),
+        SpeakerChannel("Ls", -110f), SpeakerChannel("Rs", 110f),
+    )
+    ChannelLayout.SURROUND_7_1 -> listOf(
+        SpeakerChannel("L", -30f), SpeakerChannel("R", 30f), SpeakerChannel("C", 0f),
+        SpeakerChannel("LFE", 0f, isLfe = true),
+        SpeakerChannel("Lss", -90f), SpeakerChannel("Rss", 90f),
+        SpeakerChannel("Lrs", -150f), SpeakerChannel("Rrs", 150f),
+    )
+    ChannelLayout.ATMOS_7_1_4 -> listOf(
+        SpeakerChannel("L", -30f), SpeakerChannel("R", 30f), SpeakerChannel("C", 0f),
+        SpeakerChannel("LFE", 0f, isLfe = true),
+        SpeakerChannel("Lss", -90f), SpeakerChannel("Rss", 90f),
+        SpeakerChannel("Lrs", -150f), SpeakerChannel("Rrs", 150f),
+        SpeakerChannel("Ltf", -45f, 45f), SpeakerChannel("Rtf", 45f, 45f),
+        SpeakerChannel("Ltr", -135f, 45f), SpeakerChannel("Rtr", 135f, 45f),
+    )
 }
 
 private val DOLBY_ATMOS_REGEX = Regex("""dolby\s*atmos""", RegexOption.IGNORE_CASE)
