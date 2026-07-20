@@ -105,6 +105,11 @@ class PreferencesManager @Inject constructor(
         // tuned independently (Player Visuals Studio › "Mini Player" tab).
         private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
 
+        // Atmos renderer profile (mode / target layout / HRTF profile). Kept
+        // device-local — the layout tracks the connected DAC and the HRTF is a
+        // local measurement — so it is deliberately NOT in SETTINGS_SYNC_KEYS.
+        private val RENDERER_PROFILE_JSON = stringPreferencesKey("renderer_profile_json")
+
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
@@ -1313,6 +1318,17 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setMiniPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
         dataStore.edit { it[MINI_PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
+    /** Atmos renderer profile (mode / target layout / HRTF profile id). */
+    val rendererProfile: Flow<tf.monochrome.android.domain.model.RendererProfile> = dataStore.data.map { prefs ->
+        prefs[RENDERER_PROFILE_JSON]
+            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(raw) }.getOrNull() }
+            ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
+    }
+
+    suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
+        dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile) }
     }
 
     /** User-saved Player Glass themes (empty until the user saves one). */

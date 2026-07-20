@@ -51,6 +51,11 @@ data class AudioTags(
     // embedded VERSION/COMMENT Vorbis fields a download wrote.
     val isThxSpatialAudio: Boolean = false,
 
+    // Dolby Atmos — detected from the MIME type, file extension, or a "Dolby
+    // Atmos" phrase in title/album. Authoritative JOC detection arrives with
+    // the native demux (see cpp/atmos).
+    val isDolbyAtmos: Boolean = false,
+
     // File info
     val filePath: String = "",
     val fileSizeBytes: Long = 0,
@@ -155,6 +160,16 @@ class TagReader @Inject constructor(
         )
         val isThx = thxFromText || (codec == AudioCodec.FLAC && detectThxInFlacTags(filePath))
 
+        // Dolby Atmos: best-effort from the MIME (eac3-joc / atmos) or a "Dolby
+        // Atmos" phrase in the metadata. A bare .ec3/.eac3 is only Atmos-capable,
+        // not necessarily Atmos, so the extension alone does not set the flag;
+        // authoritative JOC detection arrives with the native demux.
+        val isAtmos = tf.monochrome.android.domain.model.isDolbyAtmos(
+            mimeType = mimeType,
+            title = title,
+            albumTitle = album,
+        )
+
         // Extract and cache artwork. For MP4/M4A this reads the `covr` atom;
         // for FLAC/Vorbis/Opus this reads the METADATA_BLOCK_PICTURE/coverart;
         // for ID3v2 this reads APIC. If nothing is embedded, fall back to a
@@ -208,6 +223,7 @@ class TagReader @Inject constructor(
             hasEmbeddedArt = hasArtOrSidecar,
             artworkCacheKey = artworkCacheKey,
             isThxSpatialAudio = isThx,
+            isDolbyAtmos = isAtmos,
             filePath = filePath,
             fileSizeBytes = fileSize,
             lastModified = lastModified
