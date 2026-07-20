@@ -60,3 +60,4 @@ still apply.
 | `joint_object_coding_applier.h` | `JointObjectCodingApplier.cs` |
 | `object_info_block.h` | `ObjectInfoBlock.cs`, `ObjectAudioMetadataEnums.cs` |
 | `object_audio_metadata.h` | `ObjectAudioMetadata.cs`, `ObjectAudioElementMetadata.cs` |
+| `extensible_metadata_decoder.h` | `ExtensibleMetadataDecoder.cs` |

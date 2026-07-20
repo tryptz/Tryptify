@@ -76,10 +76,16 @@ See `cavern/NOTICE.md`. The rest of this directory stays clean-room; the
   array fill and the element `Position` padding seek; Cavern's `UpdateSources()`
   render integration is not ported. Host-tested (25 checks): full frame → info
   blocks, standard bed assignment, LFE position, unsupported-version guard.
+- **EMDF container decode** — `cavern/extensible_metadata_decoder.h` scans the
+  E-AC-3 skip field for the EMDF syncword, walks the payload list (version/key
+  escape, per-payload config bits, VariableBits payload sizing) and routes OAMD
+  (id 11) and JOC (id 14) to the decoders above, skipping other payloads by
+  size. `emdf_protection` is not validated (a renderer only reads EMDF).
+  Host-tested (12 checks): syncword scan past a garbage prefix, payload sizing,
+  OAMD routing, and a no-syncword no-op.
 
-Still to port from Cavern (or clean-room): the EMDF container
-(`ExtensibleMetadataDecoder`) that locates OAMD/JOC in the E-AC-3 skip field,
-the E-AC-3 core audio decode (bed PCM), and the JNI/Media3 wiring.
+Still to port from Cavern (or clean-room): the E-AC-3 core audio decode (bed
+PCM) that JOC upmixes, and the JNI/Media3 wiring.
 - **HRTF binauralizer** back-end (plan A7) — will reuse libmysofa + a NEON
   convolver and the app's existing AutoEQ/HRTF infra.
 - **JNI surface + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.

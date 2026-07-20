@@ -8,6 +8,7 @@
 // device. As the JNI surface and playback wiring land (see atmos/README.md),
 // the renderer control code moves here.
 #include "bit_reader.h"
+#include "cavern/extensible_metadata_decoder.h"
 #include "cavern/joint_object_coding.h"
 #include "cavern/joint_object_coding_applier.h"
 #include "cavern/object_audio_metadata.h"
@@ -31,12 +32,14 @@ bool atmos_foundation_self_check() {
   cavern::JointObjectCodingApplier applier(joc);
   cavern::ObjectInfoBlock oib;             // OAMD object-info-block type-check
   cavern::ObjectAudioMetadata oam;         // OAMD frame layer type-check
+  cavern::ExtensibleMetadataDecoder emdf;   // EMDF container walker type-check
   (void)applier;
   (void)oib;
   return l.size() == 12 && l.has_height() && l.at(3).is_lfe &&
          cavern::QuadratureMirrorFilterBank::kSubbands == 64 &&
          cavern::JointObjectCoding::kMaxObjects == 64 &&
          oam.object_count() == 0 && oam.get_lfe_position() == -1 &&
+         !emdf.has_objects() &&
          static_cast<int>(cavern::NonStandardBedChannel::kMax) == 17;
 }
 

@@ -27,6 +27,10 @@ class BitReader {
   size_t remaining() const { return pos_ <= size_bits_ ? size_bits_ - pos_ : 0; }
   bool exhausted() const { return pos_ >= size_bits_; }
 
+  // Total bits in the buffer. Maps to Cavern's BitExtractor.BackPosition
+  // (source.Length * 8), used as the end-of-data bound by the EMDF walker.
+  size_t size_bits() const { return size_bits_; }
+
   // Reads a single bit; returns 0 once the buffer is exhausted (callers that
   // care about truncation should check remaining() first).
   uint32_t read_bit() {
