@@ -24,9 +24,14 @@ dummy-head microphone,"* MIT Media Lab Perceptual Computing Technical Report
    bed rate), with libmysofa's loudness normalization;
 2. sample a uniform grid — azimuth every 10° (36 points, wrapping), elevation
    every 20° from −40°..+60° (6 points, clamping);
-3. truncate each ear's FIR to 128 taps (measured to retain ≥97% of the HRIR
-   energy in every direction; the peak is always within the first 74 samples);
-4. emit `hrir_table.h` in this repo's azimuth convention (0 = front, +right).
+3. **onset-align** each ear's response (shift its onset to tap 0) and store the
+   onset delay separately as the ITD — interpolating raw HRIRs whose onsets
+   differ comb-filters the blend (measured −17.8 dB at 10 kHz between adjacent
+   nodes; onset alignment cuts that to −2.5 dB), which the renderer restores as
+   a fractional delay;
+4. keep 128 aligned taps of the response;
+5. emit `hrir_table.h` (`kHrirData` + `kHrirDelay`) in this repo's azimuth
+   convention (0 = front, +right).
 
 libmysofa is a **build-time tool only** — it is not linked into the app. The
 Android build embeds the baked table and depends on no HRTF library, no SOFA

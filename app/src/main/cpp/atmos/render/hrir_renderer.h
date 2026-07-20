@@ -9,10 +9,13 @@
 // fidelity the procedural model lacked.
 //
 // Per source, per ear: the frame is convolved with the direction's HRIR
-// (bilinearly interpolated across the grid). The ITD lives in the HRIR itself as
-// an inter-ear onset difference, so no separate delay line is needed — the
-// measured data already encodes it. Input history is carried across frames so
-// the convolution has no block-boundary gap.
+// (bilinearly interpolated across the grid), then delayed by the interpolated
+// ITD. The baked table stores each HRIR ONSET-ALIGNED (energy at tap 0) with the
+// ITD separated into a delay, because interpolating raw HRIRs whose onsets
+// differ comb-filters the result (measured -17.8 dB at 10 kHz between nodes 10
+// deg apart — audible as "lofi/thin"). Aligning before interpolation removes the
+// comb; the ITD is restored here as a fractional delay. Input history is carried
+// across frames so the convolution has no block-boundary gap.
 //
 // Same public interface as the old renderer (configure / set_params /
 // set_bass_management / render / capacity) so the pipeline and JNI are
@@ -89,16 +92,38 @@ class BinauralRenderer {
   int capacity() const { return static_cast<int>(sources_.size()); }
 
  private:
+  // The ITD is applied as a fractional delay on the convolved output. The baked
+  // delays reach ~32 samples; 64 leaves margin for interpolation.
+  static constexpr int kDelayRing = 64;
+
   struct Source {
     // The last (kHrirTaps-1) samples of the band that was convolved last frame,
     // so this frame's convolution is continuous at the boundary.
     float tail[kHrirTaps];
+    // Per-ear ring of convolved output, delayed by the interpolated ITD.
+    float dl[kDelayRing];
+    float dr[kDelayRing];
+    int dwrite = 0;
     float bass_state = 0.0f;
     void reset() {
       for (float& v : tail) v = 0.0f;
+      for (float& v : dl) v = 0.0f;
+      for (float& v : dr) v = 0.0f;
+      dwrite = 0;
       bass_state = 0.0f;
     }
   };
+
+  // Fractional read `delay` samples behind the write cursor of a delay ring.
+  static float read_delayed(const float* ring, int write, float delay) {
+    if (delay < 0.0f) delay = 0.0f;
+    if (delay > kDelayRing - 2) delay = kDelayRing - 2;
+    const int d = static_cast<int>(delay);
+    const float frac = delay - static_cast<float>(d);
+    const int i0 = (write - 1 - d + kDelayRing) % kDelayRing;
+    const int i1 = (i0 - 1 + kDelayRing) % kDelayRing;
+    return ring[i0] * (1.0f - frac) + ring[i1] * frac;
+  }
 
   // Bilinearly interpolates the HRIR pair for (azimuth, elevation) [radians]
   // into hl_/hr_. azimuth 0 = front, +right; elevation 0 = ear level, +up —
@@ -132,6 +157,13 @@ class BinauralRenderer {
       hl_[k] = w00 * l00[k] + w10 * l10[k] + w01 * l01[k] + w11 * l11[k];
       hr_[k] = w00 * r00[k] + w10 * r10[k] + w01 * r01[k] + w11 * r11[k];
     }
+    // Interpolate the ITD delay the same way. Aligning the responses to tap 0
+    // (baked) is what lets the IR interpolation above avoid comb filtering; the
+    // ITD it removed is restored here as a smooth per-ear delay.
+    dl_ = w00 * kHrirDelay[e0][a0][0] + w10 * kHrirDelay[e0][a1][0] +
+          w01 * kHrirDelay[e1][a0][0] + w11 * kHrirDelay[e1][a1][0];
+    dr_ = w00 * kHrirDelay[e0][a0][1] + w10 * kHrirDelay[e0][a1][1] +
+          w01 * kHrirDelay[e1][a0][1] + w11 * kHrirDelay[e1][a1][1];
   }
 
   void mix_source(Source& s, const float* in, float az, float el, int n, float* out) {
@@ -160,10 +192,18 @@ class BinauralRenderer {
         yl += hl_[k] * x;
         yr += hr_[k] * x;
       }
+      // Apply the ITD: push the convolved output into the per-ear ring and read
+      // it back the interpolated delay behind, so each ear's arrival time is
+      // correct without the onset delay ever being inside the interpolated IR.
+      s.dl[s.dwrite] = yl;
+      s.dr[s.dwrite] = yr;
+      const float dyl = read_delayed(s.dl, s.dwrite + 1, dl_);
+      const float dyr = read_delayed(s.dr, s.dwrite + 1, dr_);
+      s.dwrite = (s.dwrite + 1) % kDelayRing;
       // Wet HRIR image blended with the dry (mono) band; the managed bass is
       // re-added equally to both ears outside the blend.
-      out[2 * i]     += wet * yl + dry * hp + low;
-      out[2 * i + 1] += wet * yr + dry * hp + low;
+      out[2 * i]     += wet * dyl + dry * hp + low;
+      out[2 * i + 1] += wet * dyr + dry * hp + low;
     }
     // Carry the last (T-1) convolved-band samples into the next frame.
     for (int i = 0; i < hist; ++i) s.tail[i] = ext_[n + i];
@@ -178,6 +218,7 @@ class BinauralRenderer {
   std::vector<Source> sources_;
   std::vector<float> ext_;       // reusable [hist + n] convolution input
   std::vector<float> hl_, hr_;   // interpolated HRIR pair for the current source
+  float dl_ = 0.0f, dr_ = 0.0f;  // interpolated ITD delay (samples) per ear
 };
 
 }  // namespace render
