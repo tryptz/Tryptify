@@ -52,6 +52,11 @@ class BitReader {
   // Advances without materializing a value.
   void skip(size_t n) { pos_ += n; }
 
+  // Sets the absolute bit position (BitExtractor's settable `Position`). The
+  // OAMD element framing uses this to jump to a payload's padded end after
+  // decoding its body (ETSI TS 103 420 clause 5).
+  void seek(size_t bit_pos) { pos_ = bit_pos; }
+
   // Byte-aligns the cursor to the next byte boundary.
   void byte_align() {
     const size_t rem = pos_ & 7u;
@@ -69,6 +74,20 @@ class BitReader {
       value <<= n_bits;
       value += read(n_bits);
     }
+    return value;
+  }
+
+  // Length-limited variant (BitExtractor's `VariableBits(bits, limit)`): stops
+  // after at most `limit` continuations. Mirrors the C# do/while exactly,
+  // including that `limit` is only decremented when a continuation bit is seen.
+  uint32_t read_variable_bits(unsigned n_bits, int limit) {
+    uint32_t value = 0;
+    bool read_more;
+    do {
+      value += read(n_bits);
+      read_more = read_bit() == 1u;
+      if (read_more) value = (value + 1u) << n_bits;
+    } while (read_more && limit-- != 0);
     return value;
   }
 
