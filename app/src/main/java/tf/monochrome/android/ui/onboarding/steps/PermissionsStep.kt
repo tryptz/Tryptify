@@ -49,6 +49,7 @@ fun PermissionsStep(viewModel: OnboardingViewModel) {
         listOf(
             Manifest.permission.READ_MEDIA_AUDIO,
             Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
         )
     } else {
         listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
