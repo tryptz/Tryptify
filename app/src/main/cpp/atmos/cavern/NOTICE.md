@@ -61,3 +61,5 @@ still apply.
 | `object_info_block.h` | `ObjectInfoBlock.cs`, `ObjectAudioMetadataEnums.cs` |
 | `object_audio_metadata.h` | `ObjectAudioMetadata.cs`, `ObjectAudioElementMetadata.cs` |
 | `extensible_metadata_decoder.h` | `ExtensibleMetadataDecoder.cs` |
+| `reference_channel.h` | `Cavern.Channels.ReferenceChannel` (subset) |
+| `enhanced_ac3.h` | `EnhancedAC3Enums.cs`, `EnhancedAC3Consts.cs`, `EnhancedAC3Header.cs` (fixed fields) |

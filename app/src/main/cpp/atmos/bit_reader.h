@@ -31,6 +31,12 @@ class BitReader {
   // (source.Length * 8), used as the end-of-data bound by the EMDF walker.
   size_t size_bits() const { return size_bits_; }
 
+  // Byte at absolute index (BitExtractor's indexer, extractor[i]). The AC-3
+  // header re-reads a fixed byte position directly; returns 0 if out of range.
+  uint8_t byte_at(size_t byte_index) const {
+    return (byte_index < (size_bits_ >> 3)) ? data_[byte_index] : 0u;
+  }
+
   // Reads a single bit; returns 0 once the buffer is exhausted (callers that
   // care about truncation should check remaining() first).
   uint32_t read_bit() {

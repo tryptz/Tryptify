@@ -24,19 +24,11 @@
 
 #include "../bit_reader.h"
 #include "object_info_block.h"  // ObjectInfoBlock, NonStandardBedChannel
+#include "reference_channel.h"  // ReferenceChannel
 
 namespace tf {
 namespace atmos {
 namespace cavern {
-
-// Static loudspeaker positions a bed channel can map to. Only the members
-// referenced by the OAMD bed-channel table are enumerated (Cavern's full
-// ReferenceChannel enum is a rendering concern, not a decode one).
-enum class ReferenceChannel {
-  kFrontLeft, kFrontRight, kFrontCenter, kScreenLFE, kSideLeft, kSideRight,
-  kRearLeft, kRearRight, kTopFrontLeft, kTopFrontRight, kTopSideLeft,
-  kTopSideRight, kTopRearLeft, kTopRearRight, kWideLeft, kWideRight
-};
 
 // Faithful port of BitExtractor.ReadBits(int): the C# method fills the array
 // from the TOP index downward, so out[bits-1] is the FIRST bit read and out[0]

@@ -84,8 +84,21 @@ See `cavern/NOTICE.md`. The rest of this directory stays clean-room; the
   Host-tested (12 checks): syncword scan past a garbage prefix, payload sizing,
   OAMD routing, and a no-syncword no-op.
 
-Still to port from Cavern (or clean-room): the E-AC-3 core audio decode (bed
-PCM) that JOC upmixes, and the JNI/Media3 wiring.
+- **E-AC-3 syncframe header** — `cavern/enhanced_ac3.h` parses the fixed
+  syncframe fields (decoder version/bsid, strmtyp, sample rate, channel mode,
+  block count, LFE, frame size, plus the AC-3 "repackaged" frame-size recalc).
+  Cavern's streaming BlockBuffer/Expand is replaced by a flat BitReader over a
+  caller-supplied frame. `reference_channel.h` holds the shared channel enum.
+  Host-tested (20 checks): E-AC-3 independent 5.1 header, dependent-substream id
+  offset, bad-syncword rejection.
+
+Still to port from Cavern: the rest of the E-AC-3 core decode — the BSI /
+mixing / addbsi metadata parse (the `addbsi` field is where the EMDF Atmos
+payload rides), then the audio-block decode (bit allocation, exponents,
+mantissas, coupling, spectral extension, inverse transform) that yields the bed
+PCM JOC upmixes — and the JNI/Media3 wiring. The audio-block numeric decode is
+self-consistency-testable here but needs reference Atmos content for the
+bit-exactness A/B the plan's phase 2 calls for.
 - **HRTF binauralizer** back-end (plan A7) — will reuse libmysofa + a NEON
   convolver and the app's existing AutoEQ/HRTF infra.
 - **JNI surface + Media3 `AtmosAudioProcessor`** wiring into `monochrome_dsp`.
