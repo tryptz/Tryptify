@@ -34,4 +34,28 @@ object AtmosNative {
      *   or -1 for a plain non-Atmos frame / no decodable side-data
      */
     external fun nativeParseAtmos(frame: ByteArray): Int
+
+    // ── Object reconstruction engine (P1) ────────────────────────────────
+    /** Creates a native object-upmix engine; returns a handle (0 on failure). */
+    external fun nativeEngineCreate(): Long
+
+    /** Destroys a native engine handle from [nativeEngineCreate]. */
+    external fun nativeEngineDestroy(engine: Long)
+
+    /**
+     * Upmixes one E-AC-3 frame's bed PCM into objects.
+     *
+     * @param engine handle from [nativeEngineCreate]
+     * @param frame the raw E-AC-3 access unit (carries the JOC/OAMD side-data)
+     * @param bedInterleaved channels*samples floats, interleaved, decoder order
+     * @return object count (>= 1) or -1 if the frame has no JOC. Object PCM stays
+     *   native for the HRTF render stage.
+     */
+    external fun nativeUpmixFrame(
+        engine: Long,
+        frame: ByteArray,
+        bedInterleaved: FloatArray,
+        channels: Int,
+        samples: Int,
+    ): Int
 }
