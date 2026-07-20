@@ -138,6 +138,7 @@ sealed class Screen(val route: String) {
     data object DebugLog : Screen("debug_log")
     data object LyricsFxStudio : Screen("lyrics_fx_studio")
     data object AtmosRenderer : Screen("atmos_renderer")
+    data object HrtfDatabase : Screen("hrtf_database")
 }
 
 data class BottomNavItem(
@@ -379,6 +380,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     tf.monochrome.android.devedit.DevEditScreen("atmos_renderer") {
                         tf.monochrome.android.ui.settings.AtmosRendererScreen(navController = navController)
                     }
+                }
+                composable(Screen.HrtfDatabase.route) {
+                    tf.monochrome.android.ui.settings.HrtfDatabaseScreen(navController = navController)
                 }
                 composable(
                     route = Screen.Oxford.route,

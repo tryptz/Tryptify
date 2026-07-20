@@ -262,15 +262,20 @@ fun AtmosRendererScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = { sofaPicker.launch(sofaMimes) }) {
-                    Text("Choose a different .sofa")
-                }
             } ?: Text(
                 "Built-in is MIT KEMAR. Load a SOFA HRTF (your own or a set like " +
                     "SADIE / CIPIC) to change the binaural voicing.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Row {
+                TextButton(onClick = {
+                    navController.navigate(tf.monochrome.android.ui.navigation.Screen.HrtfDatabase.route)
+                }) { Text("Browse HRTF database") }
+                TextButton(onClick = { sofaPicker.launch(sofaMimes) }) {
+                    Text("Load .sofa file")
+                }
+            }
             LabeledSlider(
                 title = "Binaural strength",
                 valueText = "${(profile.binauralStrength * 100).toInt()}%",
