@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "cavern/enhanced_ac3.h"  // dialnorm from the syncframe header
 #include "object_engine.h"
 #include "render/structural_hrtf.h"
 #include "vbap.h"  // Vec3
@@ -44,11 +45,16 @@ class AtmosPipeline {
   // Applies the user's RendererProfile. `lfe_gain_db` currently affects the
   // bed-HRTF path (in object render the objects carry their own OAMD gains).
   void set_params(int mode, int downmix, float binaural_strength,
-                  bool height_virtualization, float lfe_gain_db) {
+                  bool height_virtualization, float lfe_gain_db,
+                  bool bass_management, int crossover_hz, int drc_mode,
+                  bool dialog_normalization) {
     mode_ = mode;
     downmix_ = downmix;
     lfe_gain_ = std::pow(10.0f, lfe_gain_db / 20.0f);
+    drc_mode_ = drc_mode;
+    dialog_norm_ = dialog_normalization;
     renderer_.set_params(binaural_strength, height_virtualization);
+    renderer_.set_bass_management(bass_management, crossover_hz);
   }
 
   // Renders one E-AC-3 frame's Atmos content to interleaved stereo (`out` holds
@@ -60,7 +66,14 @@ class AtmosPipeline {
     // Passthrough / non-binaural fold-downs are the caller's job (it already
     // has an ITU downmix); returning -1 selects that path.
     if (mode_ == kPassthrough || downmix_ != kBinaural) return -1;
-    if (mode_ == kBedHrtf) return render_bed(bed, bed_channels, samples, out);
+    // Dialogue normalization reads the stream's own dialnorm from the syncframe
+    // header, so the gain follows the content rather than a fixed guess.
+    dialnorm_gain_ = dialog_norm_ ? dialnorm_linear(frame, frame_size) : 1.0f;
+    if (mode_ == kBedHrtf) {
+      const int rc = render_bed(bed, bed_channels, samples, out);
+      if (rc == 1) apply_post(out, samples);
+      return rc;
+    }
 
     const int n = engine_.upmix_frame(frame, frame_size, bed, bed_channels, samples);
     if (n <= 0) return -1;
@@ -75,6 +88,7 @@ class AtmosPipeline {
     }
     renderer_.render(obj_ptrs_.data(), az_.data(), el_.data(), objects,
                      nullptr, nullptr, nullptr, 0, samples, out);
+    apply_post(out, samples);
     return 1;
   }
 
@@ -109,12 +123,52 @@ class AtmosPipeline {
     return 1;
   }
 
+  // Linear gain that aligns the stream's dialogue to the -31 dBFS reference.
+  float dialnorm_linear(const uint8_t* frame, size_t frame_size) {
+    BitReader br(frame, frame_size);
+    cavern::EnhancedAC3Header header;
+    if (!header.decode(br)) return 1.0f;
+    return std::pow(10.0f, header.dialnorm_gain_db() / 20.0f);
+  }
+
+  // Dialogue-normalization gain followed by the profile's DRC compression.
+  void apply_post(float* out, int samples) {
+    if (dialnorm_gain_ != 1.0f) {
+      for (int i = 0; i < 2 * samples; ++i) out[i] *= dialnorm_gain_;
+    }
+    if (drc_mode_ == 0) return;  // OFF (full range)
+    float thresh, ratio;
+    switch (drc_mode_) {
+      case 1: thresh = 0.50f; ratio = 2.0f; break;   // LIGHT
+      case 2: thresh = 0.35f; ratio = 4.0f; break;   // STANDARD
+      default: thresh = 0.20f; ratio = 8.0f; break;  // HEAVY (night)
+    }
+    for (int i = 0; i < samples; ++i) {
+      const float l = out[2 * i], r = out[2 * i + 1];
+      const float al = l < 0.0f ? -l : l, ar = r < 0.0f ? -r : r;
+      const float peak = al > ar ? al : ar;
+      const float c = peak > drc_env_ ? kDrcAttack : kDrcRelease;
+      drc_env_ = c * drc_env_ + (1.0f - c) * peak;
+      float gain = 1.0f;
+      if (drc_env_ > thresh) gain = (thresh + (drc_env_ - thresh) / ratio) / drc_env_;
+      out[2 * i] = l * gain;
+      out[2 * i + 1] = r * gain;
+    }
+  }
+
+  static constexpr float kDrcAttack = 0.30f;    // fast catch of transients
+  static constexpr float kDrcRelease = 0.9995f; // slow recovery (~40 ms @ 48k)
+
   ObjectEngine engine_;
   render::BinauralRenderer renderer_;
   int max_objects_ = 16;
   int mode_ = kObjectRender;
   int downmix_ = kBinaural;
   float lfe_gain_ = 1.0f;
+  int drc_mode_ = 0;
+  bool dialog_norm_ = false;
+  float dialnorm_gain_ = 1.0f;
+  float drc_env_ = 0.0f;
   std::vector<const float*> obj_ptrs_, bed_ptrs_;
   std::vector<float> az_, el_, lfe_scratch_;
 };

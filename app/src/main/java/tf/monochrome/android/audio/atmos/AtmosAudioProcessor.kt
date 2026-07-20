@@ -56,8 +56,13 @@ class AtmosAudioProcessor @Inject constructor(
     /** Sends the current profile to the native renderer (no-op without a pipeline). */
     private fun pushParams() {
         val p = pipeline
-        if (p == 0L) return
         val cur = profile
+        if (p == 0L) {
+            // Worth logging: a profile change while no pipeline exists (nothing
+            // playing, or PASSTHROUGH) silently does nothing until flush().
+            android.util.Log.d(TAG, "profile update ignored — no pipeline (mode=${cur.mode})")
+            return
+        }
         AtmosNative.nativeSetRenderParams(
             p,
             cur.mode.ordinal,
@@ -65,6 +70,17 @@ class AtmosAudioProcessor @Inject constructor(
             cur.binauralStrength,
             cur.heightVirtualization,
             cur.lfeGainDb,
+            cur.bassManagement,
+            cur.crossoverHz,
+            cur.drc.ordinal,
+            cur.dialogNormalization,
+        )
+        android.util.Log.i(
+            TAG,
+            "params -> mode=${cur.mode} downmix=${cur.stereoDownmix} " +
+                "strength=${cur.binauralStrength} height=${cur.heightVirtualization} " +
+                "lfe=${cur.lfeGainDb}dB bass=${cur.bassManagement}@${cur.crossoverHz}Hz " +
+                "drc=${cur.drc} dialnorm=${cur.dialogNormalization}",
         )
     }
 

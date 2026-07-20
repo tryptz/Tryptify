@@ -81,6 +81,15 @@ class EnhancedAC3Header {
   eac3::StreamTypes stream_type() const { return stream_type_; }
   bool valid() const { return valid_; }
 
+  /// Dialogue normalization as coded (1..31 == -1..-31 dBFS), 0 if absent.
+  int dialnorm() const { return dialnorm_; }
+
+  /// Gain (dB) that aligns this stream's dialogue to the -31 dBFS reference —
+  /// what the profile's "Dialogue normalization" toggle applies. 0 when absent.
+  float dialnorm_gain_db() const {
+    return dialnorm_ > 0 ? static_cast<float>(dialnorm_ - 31) : 0.0f;
+  }
+
   // Number of full-bandwidth + LFE channels in this frame.
   int channel_count() const {
     int base = (channel_mode_ < 8)
@@ -129,6 +138,10 @@ class EnhancedAC3Header {
       }
       bsmod_ = static_cast<int>(br.read(3));
       channel_mode_ = static_cast<int>(br.read(3));
+    } else {
+      // First E-AC-3 BSI field: dialogue normalization. Coded 1..31 meaning
+      // -1..-31 dBFS of the dialogue reference level (0 is reserved).
+      dialnorm_ = static_cast<int>(br.read(5));
     }
 
     if (stream_type_ == eac3::StreamTypes::kDependent) substream_id_ += 8;
@@ -163,6 +176,7 @@ class EnhancedAC3Header {
   int words_per_syncframe_ = 0;
   int frmsizecod_ = 0;
   int bsmod_ = 0;
+  int dialnorm_ = 0;
   eac3::Decoders decoder_ = eac3::Decoders::kUnsupported;
   eac3::StreamTypes stream_type_ = eac3::StreamTypes::kIndependent;
 };

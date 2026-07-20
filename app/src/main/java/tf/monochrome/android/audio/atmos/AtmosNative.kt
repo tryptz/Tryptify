@@ -82,6 +82,10 @@ object AtmosNative {
         binauralStrength: Float,
         heightVirtualization: Boolean,
         lfeGainDb: Float,
+        bassManagement: Boolean,
+        crossoverHz: Int,
+        drcMode: Int,
+        dialogNormalization: Boolean,
     )
 
     /**

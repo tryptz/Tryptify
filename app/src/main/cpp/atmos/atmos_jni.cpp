@@ -110,11 +110,15 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineDestroy(
 JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRenderParams(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jint mode, jint downmix,
-    jfloat binauralStrength, jboolean heightVirtualization, jfloat lfeGainDb) {
+    jfloat binauralStrength, jboolean heightVirtualization, jfloat lfeGainDb,
+    jboolean bassManagement, jint crossoverHz, jint drcMode,
+    jboolean dialogNormalization) {
   tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr) return;
   pipe->set_params(mode, downmix, binauralStrength,
-                   heightVirtualization == JNI_TRUE, lfeGainDb);
+                   heightVirtualization == JNI_TRUE, lfeGainDb,
+                   bassManagement == JNI_TRUE, crossoverHz, drcMode,
+                   dialogNormalization == JNI_TRUE);
 }
 
 // Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.

@@ -113,6 +113,16 @@ class BinauralRenderer {
     height_ = height_virtualization;
   }
 
+  // Bass management: below `crossover_hz` the signal is summed equally to both
+  // ears instead of being spatialized. Low frequencies carry almost no
+  // interaural cue, so this both matches the profile's control and avoids
+  // smearing bass through the ITD delay line.
+  void set_bass_management(bool enabled, int crossover_hz) {
+    bass_management_ = enabled;
+    crossover_hz_ = crossover_hz > 0 ? crossover_hz : 80;
+    update_bass_coeff();
+  }
+
   // Renders `num_objects` object signals (objects[o], `n` samples each) at
   // (obj_az[o], obj_el[o]) plus `bed_channels` bed signals at (bed_az[b],
   // bed_el[b]) into interleaved stereo `out` (2*n floats). `out` is overwritten.
@@ -136,11 +146,13 @@ class BinauralRenderer {
     float ring[kDelayLen];
     int write = 0;
     float lp_state_l = 0.0f, lp_state_r = 0.0f;
+    float bass_state = 0.0f;  // crossover low-band state (bass management)
     void reset() {
       for (float& v : ring) v = 0.0f;
       write = 0;
       lp_state_l = 0.0f;
       lp_state_r = 0.0f;
+      bass_state = 0.0f;
     }
   };
 
@@ -159,23 +171,39 @@ class BinauralRenderer {
     const SourceCoeffs c = compute_coeffs(az, height_ ? el : 0.0f, sample_rate_);
     const float wet = strength_;
     const float dry = 1.0f - strength_;
+    const float a = bass_coeff_;
     for (int i = 0; i < n; ++i) {
-      s.ring[s.write] = in[i];
+      float src = in[i];
+      float low = 0.0f;
+      if (bass_management_) {  // split: lows go straight to both ears
+        s.bass_state = (1.0f - a) * src + a * s.bass_state;
+        low = s.bass_state;
+        src -= low;  // only the high band gets spatialized
+      }
+      s.ring[s.write] = src;
       s.write = (s.write + 1) % kDelayLen;
       const float sl = c.gain_l * read_delayed(s, c.delay_l);
       const float sr = c.gain_r * read_delayed(s, c.delay_r);
       s.lp_state_l = (1.0f - c.lp_l) * sl + c.lp_l * s.lp_state_l;
       s.lp_state_r = (1.0f - c.lp_r) * sr + c.lp_r * s.lp_state_r;
       // Blend the spatialized signal against the unprocessed source so
-      // binauralStrength scales the effect continuously.
-      out[2 * i] += wet * s.lp_state_l + dry * in[i];
-      out[2 * i + 1] += wet * s.lp_state_r + dry * in[i];
+      // binauralStrength scales the effect continuously; re-add the bass.
+      out[2 * i] += wet * s.lp_state_l + dry * src + low;
+      out[2 * i + 1] += wet * s.lp_state_r + dry * src + low;
     }
+  }
+
+  void update_bass_coeff() {
+    bass_coeff_ = std::exp(-2.0f * kPi * static_cast<float>(crossover_hz_) /
+                           static_cast<float>(sample_rate_));
   }
 
   int sample_rate_ = 48000;
   float strength_ = 1.0f;
   bool height_ = true;
+  bool bass_management_ = false;
+  int crossover_hz_ = 80;
+  float bass_coeff_ = 0.0f;
   std::vector<Source> sources_;
 };
 
