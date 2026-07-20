@@ -132,27 +132,24 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrame(
   tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr || channels <= 0 || samples <= 0) return -1;
 
+  // Runs on the audio thread: use the pipeline's reusable scratch so there is no
+  // per-frame heap allocation (that alone was enough to cause micro-stutter).
   const jsize flen = env->GetArrayLength(frame);
-  std::vector<uint8_t> fbuf(static_cast<size_t>(flen));
+  std::vector<uint8_t>& fbuf = pipe->frame_scratch(static_cast<size_t>(flen));
   env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
 
   const jsize blen = env->GetArrayLength(bedInterleaved);
   if (blen < static_cast<jsize>(channels) * samples) return -1;
-  std::vector<float> interleaved(static_cast<size_t>(blen));
-  env->GetFloatArrayRegion(bedInterleaved, 0, blen, interleaved.data());
-  std::vector<std::vector<float>> planar(channels, std::vector<float>(samples));
-  for (int i = 0; i < samples; ++i)
-    for (int c = 0; c < channels; ++c)
-      planar[c][i] = interleaved[static_cast<size_t>(i) * channels + c];
-  std::vector<const float*> ptrs(channels);
-  for (int c = 0; c < channels; ++c) ptrs[c] = planar[c].data();
+  std::vector<float>& bbuf = pipe->bed_scratch(static_cast<size_t>(blen));
+  env->GetFloatArrayRegion(bedInterleaved, 0, blen, bbuf.data());
 
-  std::vector<float> stereo(static_cast<size_t>(2) * samples, 0.0f);
-  const int rc = pipe->process_frame(fbuf.data(), fbuf.size(), ptrs.data(),
-                                     channels, samples, stereo.data());
+  std::vector<float>& sbuf = pipe->stereo_scratch(static_cast<size_t>(2) * samples);
+  const int rc = pipe->process_frame_interleaved(
+      fbuf.data(), static_cast<size_t>(flen), bbuf.data(), channels, samples,
+      sbuf.data());
   if (rc == 1) {
     if (env->GetArrayLength(stereoOut) < 2 * samples) return -1;
-    env->SetFloatArrayRegion(stereoOut, 0, 2 * samples, stereo.data());
+    env->SetFloatArrayRegion(stereoOut, 0, 2 * samples, sbuf.data());
   }
   return rc;
 }

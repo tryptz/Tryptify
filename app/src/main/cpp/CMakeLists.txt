@@ -155,6 +155,14 @@ target_include_directories(monochrome_atmos_jni PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/atmos
 )
 target_compile_features(monochrome_atmos_jni PRIVATE cxx_std_17)
+# The renderer DSP (QMF filterbank, JOC upmix, HRTF) is header-only, so it is
+# compiled into THIS translation unit — not into monochrome_atmos. Without these
+# flags a debug build runs the whole signal path at -O0, which misses the audio
+# deadline and is audible as micro-stutter. Optimize regardless of build type.
+target_compile_options(monochrome_atmos_jni PRIVATE
+    -O3 -ffast-math
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-march=armv8-a+simd>
+)
 # Cancel projectM's global CMAKE_DEBUG_POSTFIX "d" so the lib ships as
 # libmonochrome_atmos_jni.so (loadable by that name), like the sibling libs.
 set_target_properties(monochrome_atmos_jni PROPERTIES DEBUG_POSTFIX "")

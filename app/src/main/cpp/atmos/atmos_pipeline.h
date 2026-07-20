@@ -57,6 +57,43 @@ class AtmosPipeline {
     renderer_.set_bass_management(bass_management, crossover_hz);
   }
 
+  // ── Audio-thread-safe marshaling scratch ─────────────────────────────────
+  // The JNI layer runs on the audio thread, so it must not allocate per call.
+  // These grow once and are reused; the interleaved entry point deinterleaves
+  // into reusable planar storage instead of building vectors every frame.
+  std::vector<uint8_t>& frame_scratch(size_t n) {
+    if (frame_scratch_.size() < n) frame_scratch_.resize(n);
+    return frame_scratch_;
+  }
+  std::vector<float>& bed_scratch(size_t n) {
+    if (bed_scratch_.size() < n) bed_scratch_.resize(n);
+    return bed_scratch_;
+  }
+  std::vector<float>& stereo_scratch(size_t n) {
+    if (stereo_scratch_.size() < n) stereo_scratch_.resize(n);
+    return stereo_scratch_;
+  }
+
+  // Interleaved bed in, interleaved stereo out. Same contract as process_frame.
+  int process_frame_interleaved(const uint8_t* frame, size_t frame_size,
+                                const float* bed_interleaved, int channels,
+                                int samples, float* out_stereo) {
+    if (static_cast<int>(planar_.size()) != channels) {
+      planar_.assign(static_cast<size_t>(channels), std::vector<float>());
+    }
+    planar_ptrs_.resize(static_cast<size_t>(channels));
+    for (int c = 0; c < channels; ++c) {
+      if (static_cast<int>(planar_[c].size()) < samples) planar_[c].resize(samples);
+      float* dst = planar_[c].data();
+      for (int i = 0; i < samples; ++i) {
+        dst[i] = bed_interleaved[static_cast<size_t>(i) * channels + c];
+      }
+      planar_ptrs_[c] = dst;
+    }
+    return process_frame(frame, frame_size, planar_ptrs_.data(), channels, samples,
+                         out_stereo);
+  }
+
   // Renders one E-AC-3 frame's Atmos content to interleaved stereo (`out` holds
   // 2*samples floats). Returns 1 if Atmos was rendered, or -1 if the frame has
   // no objects (the caller should then pass the bed through unchanged). `bed` is
@@ -171,6 +208,11 @@ class AtmosPipeline {
   float drc_env_ = 0.0f;
   std::vector<const float*> obj_ptrs_, bed_ptrs_;
   std::vector<float> az_, el_, lfe_scratch_;
+  // Reused marshaling / deinterleave storage (see frame_scratch etc.).
+  std::vector<uint8_t> frame_scratch_;
+  std::vector<float> bed_scratch_, stereo_scratch_;
+  std::vector<std::vector<float>> planar_;
+  std::vector<const float*> planar_ptrs_;
 };
 
 }  // namespace atmos
