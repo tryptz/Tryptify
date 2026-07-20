@@ -100,12 +100,65 @@ void test_no_joc_frame() {
   CHECK(engine.upmix_frame(frame.data(), frame.size(), bed, 1, 1536) == -1);
 }
 
+// Wrap a JOC body (payload id 14) in an EMDF block behind a garbage prefix.
+void write_emdf_joc_frame(BitWriter& bw) {
+  BitWriter probe; write_joc(probe);
+  const unsigned payload_bytes = (unsigned)((probe.count + 7) / 8);
+  bw.put(8, 0x00); bw.put(8, 0x11);      // garbage prefix
+  bw.put(8, 0x58); bw.put(8, 0x38);      // EMDF syncword
+  bw.put(16, 3 + payload_bytes);         // block length
+  bw.put(2, 0); bw.put(3, 0);            // version, key
+  bw.put(5, 14);                         // payload id = JOC
+  bw.put(1, 0);                          // has_sample_offset
+  bw.put(1, 0); bw.put(1, 0); bw.put(1, 0);
+  bw.put(1, 1);                          // skip alignment block
+  bw.put(8, payload_bytes); bw.put(1, 0);  // VariableBits(8) = payload size
+  const size_t body_start = bw.count;
+  write_joc(bw);
+  while (bw.count < body_start + payload_bytes * 8) bw.put(1, 0);
+}
+
+// JOC rides in only ~22% of E-AC-3 frames and is defined to hold until the next
+// update, so the frames in between must keep rendering with the retained
+// matrices rather than falling back — alternating the two is audible chopping.
+void test_metadata_hold() {
+  std::printf("ObjectEngine: JOC held across frames that carry none\n");
+  BitWriter fw; write_emdf_joc_frame(fw);
+  std::vector<uint8_t> bare(64, 0xAB);  // no EMDF syncword
+  const int samples = 1536;
+  std::vector<std::vector<float>> bed(5, std::vector<float>(samples));
+  for (int ch = 0; ch < 5; ++ch)
+    for (int i = 0; i < samples; ++i) bed[ch][i] = 0.25f * std::sin(i * 0.05f);
+  std::vector<const float*> ptrs(5);
+  for (int ch = 0; ch < 5; ++ch) ptrs[ch] = bed[ch].data();
+
+  ObjectEngine engine;
+  CHECK(engine.upmix_frame(fw.bytes.data(), fw.bytes.size(), ptrs.data(), 5, samples) == 1);
+  // The gap frames a real stream leaves between JOC payloads (~4-5) must render.
+  for (int i = 0; i < 5; ++i) {
+    CHECK(engine.upmix_frame(bare.data(), bare.size(), ptrs.data(), 5, samples) == 1);
+  }
+  const float* held = engine.object_channel(0);
+  CHECK(held != nullptr);
+  bool finite = true;
+  for (int i = 0; i < samples; ++i) if (!std::isfinite(held[i])) finite = false;
+  CHECK(finite);
+
+  // ...but the hold expires, so a stream that stops carrying JOC stops rendering
+  // instead of spatializing stale metadata forever.
+  for (int i = 0; i < 40; ++i) {
+    engine.upmix_frame(bare.data(), bare.size(), ptrs.data(), 5, samples);
+  }
+  CHECK(engine.upmix_frame(bare.data(), bare.size(), ptrs.data(), 5, samples) == -1);
+}
+
 }  // namespace
 
 int main() {
   std::printf("=== Atmos ObjectEngine tests ===\n");
   test_upmix_smoke();
   test_no_joc_frame();
+  test_metadata_hold();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;
 }

@@ -37,7 +37,28 @@ class ObjectEngine {
                   int bed_channels, int frame_samples) {
     BitReader reader(frame, frame_size);
     emdf_.decode(reader);
-    if (!emdf_.has_objects()) return -1;
+    // JOC/OAMD are transmitted sparsely — only ~22% of E-AC-3 frames carry a JOC
+    // payload — and are defined to hold until the next update. The EMDF decoder
+    // overwrites joc_/oamd_ only when a payload is actually present, so a frame
+    // without one still has the previous frame's matrices and positions, and
+    // re-running the interpolation below holds them steady (prev_matrix_ already
+    // equals the decoded endpoint, so the lerp collapses to a constant).
+    //
+    // Returning -1 for those frames instead — as this did — makes the caller
+    // fall back to its stereo downmix, so the output alternates between the
+    // binaural render and a plain fold-down every 32 ms. That is audible as
+    // chopping, and it is what "micro-stutter" turned out to be.
+    if (emdf_.has_objects()) {
+      held_frames_ = 0;
+    } else if (held_frames_ >= kMaxHeldFrames) {
+      // Never saw a JOC payload, or the stream stopped carrying one (a track
+      // change into non-Atmos content). Stop rendering rather than hold stale
+      // metadata forever — this expiry is what keeps the hold self-limiting
+      // without needing a reset call plumbed through the pipeline and JNI.
+      return -1;
+    } else {
+      ++held_frames_;
+    }
     return upmix(emdf_.joc(), bed, bed_channels, frame_samples);
   }
 
@@ -118,7 +139,16 @@ class ObjectEngine {
     }
   }
 
+  // How long the last JOC/OAMD update stays valid when later frames carry none.
+  // Real gaps are ~4-5 frames at the observed ~22% payload density; 32 frames
+  // (~1 s at 1536 samples / 48 kHz) covers those with a wide margin while still
+  // expiring promptly once a stream really stops carrying object metadata.
+  static constexpr int kMaxHeldFrames = 32;
+
   cavern::ExtensibleMetadataDecoder emdf_;
+  // Frames rendered since the last JOC payload; starts expired so a stream that
+  // never carries JOC is never rendered.
+  int held_frames_ = kMaxHeldFrames;
   std::unique_ptr<cavern::JointObjectCodingApplier> applier_;
   int applier_channels_ = -1;
   int applier_objects_ = -1;
