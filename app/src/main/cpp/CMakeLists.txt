@@ -142,3 +142,20 @@ target_compile_options(monochrome_atmos PRIVATE
 )
 set_target_properties(monochrome_atmos PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(monochrome_atmos log)
+
+# ── Atmos JNI surface (plan Option B) ────────────────────────────────────
+# Runtime .so exposing the clean-room metadata/object code to Kotlin. The E-AC-3
+# core is decoded by Media3's FfmpegAudioRenderer (NextLib); this lib parses the
+# Atmos side-data out of raw frames and (as the surface grows) runs the JOC QMF
+# upmix on the decoded bed PCM. No FFmpeg dependency here.
+add_library(monochrome_atmos_jni SHARED
+    atmos/atmos_jni.cpp
+)
+target_include_directories(monochrome_atmos_jni PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/atmos
+)
+target_compile_features(monochrome_atmos_jni PRIVATE cxx_std_17)
+# Cancel projectM's global CMAKE_DEBUG_POSTFIX "d" so the lib ships as
+# libmonochrome_atmos_jni.so (loadable by that name), like the sibling libs.
+set_target_properties(monochrome_atmos_jni PROPERTIES DEBUG_POSTFIX "")
+target_link_libraries(monochrome_atmos_jni monochrome_atmos log)
