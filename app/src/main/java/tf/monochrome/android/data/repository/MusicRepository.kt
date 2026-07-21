@@ -51,6 +51,10 @@ class MusicRepository @Inject constructor(
         apiClient.searchQobuz(query, offset)
     }
 
+    suspend fun searchApple(query: String, offset: Int = 0): Result<SearchResult> = runCatching {
+        apiClient.searchApple(query, offset)
+    }
+
     /** TIDAL track's ISRC (metadata pool) — used by the Qobuz playback fallback. */
     suspend fun getTidalIsrc(trackId: Long): String? = apiClient.getTidalIsrc(trackId)
 

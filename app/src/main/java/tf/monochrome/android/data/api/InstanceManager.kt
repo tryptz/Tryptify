@@ -45,4 +45,13 @@ class InstanceManager @Inject constructor(
             ?: return null
         return Instance(raw.trimEnd('/'))
     }
+
+    // Apple Music instance — the server hosting /api/apple/*. Falls back to the
+    // Qobuz instance URL, since it's usually the same TrypT HiFi server.
+    suspend fun appleInstanceOrNull(): Instance? {
+        val raw = (preferences.appleInstanceUrl.first()?.trim()?.takeIf { it.isNotBlank() }
+            ?: preferences.qobuzInstanceUrl.first()?.trim()?.takeIf { it.isNotBlank() })
+            ?: return null
+        return Instance(raw.trimEnd('/'))
+    }
 }
