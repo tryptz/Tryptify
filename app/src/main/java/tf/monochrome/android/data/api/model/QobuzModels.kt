@@ -332,3 +332,29 @@ data class QobuzDownloadData(
     val sampling_rate: Double? = null,
     val bit_depth: Int? = null,
 )
+
+// Response shape for /api/apple/download-music?track_id=...&quality=...
+// The instance returns a wrapper-resolved manifest; we only read the cloud
+// delivery URL (delivery.streamUrl serves the cached decrypted file, Range-capable).
+// ignoreUnknownKeys drops the rest of the manifest (m3u8, variants, license, ...).
+@Serializable
+data class AppleDownloadEnvelope(
+    val success: Boolean = false,
+    val data: AppleDownloadData? = null,
+)
+
+@Serializable
+data class AppleDownloadData(
+    val manifest: AppleManifest? = null,
+)
+
+@Serializable
+data class AppleManifest(
+    val delivery: AppleDelivery? = null,
+)
+
+@Serializable
+data class AppleDelivery(
+    val streamUrl: String? = null,
+    val fileTtlSeconds: Long? = null,
+)
