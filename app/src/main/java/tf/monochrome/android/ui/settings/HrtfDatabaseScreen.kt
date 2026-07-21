@@ -112,7 +112,7 @@ class HrtfDatabaseViewModel @Inject constructor(
             val result = api.download(path)
             val bytes = result.getOrNull()
             val status = if (bytes == null || bytes.isEmpty()) {
-                "Download failed"
+                result.exceptionOrNull()?.message ?: "Download failed"
             } else withContext(Dispatchers.IO) {
                 runCatching {
                     val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
@@ -202,7 +202,9 @@ fun HrtfDatabaseScreen(
                     val busy = state.busyFile == file.href
                     ListItem(
                         headlineContent = { Text(file.display) },
-                        supportingContent = { Text("Tap to download & use as HRTF") },
+                        supportingContent = {
+                            Text(listOfNotNull(file.size, "tap to use as HRTF").joinToString(" · "))
+                        },
                         leadingContent = { Icon(Icons.Filled.GraphicEq, contentDescription = null) },
                         trailingContent = {
                             if (busy) CircularProgressIndicator(Modifier.size(20.dp))
