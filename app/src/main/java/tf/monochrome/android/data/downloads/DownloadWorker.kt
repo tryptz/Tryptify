@@ -35,7 +35,8 @@ class DownloadWorker @AssistedInject constructor(
     private val lrcLibClient: tf.monochrome.android.data.api.LrcLibClient,
     private val httpClient: HttpClient,
     private val preferences: PreferencesManager,
-    private val downloadDao: DownloadDao
+    private val downloadDao: DownloadDao,
+    private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -62,15 +63,22 @@ class DownloadWorker @AssistedInject constructor(
         val duration = inputData.getInt(KEY_DURATION, 0)
         val version = inputData.getString(KEY_VERSION)
         val isThxSpatialAudio = inputData.getBoolean(KEY_IS_THX, false)
+        val isApple = qobuzIdRegistry.isAppleTrack(trackId)
 
         return try {
             // Get download quality preference
             val quality = preferences.downloadQuality.first()
 
-            // Get streaming URL from the dedicated TrypT HiFi (Qobuz) download instance
-            val streamResponse = apiClient.getTrackStream(trackId, quality, forDownload = true)
-            val streamUrl = streamResponse.streamUrl
-                ?: return Result.failure()
+            // Resolve the download URL. Apple tracks go through the wrapper-backed
+            // /api/apple/download-music (returns a cloud-cached decrypted file);
+            // everything else uses the Qobuz download instance.
+            val streamUrl = if (isApple) {
+                apiClient.getAppleStreamUrl(trackId, quality, atmos = isThxSpatialAudio)
+                    ?: return Result.failure()
+            } else {
+                apiClient.getTrackStream(trackId, quality, forDownload = true).streamUrl
+                    ?: return Result.failure()
+            }
 
             // Stream the audio into a temp FILE with progress. Never hold the
             // whole payload in memory: a plain httpClient.get() in Ktor 3
@@ -110,11 +118,20 @@ class DownloadWorker @AssistedInject constructor(
             // mislabelled .flac (breaks MediaStore + other players) and makes the
             // saved quality accurate. Only the 22-byte header is read.
             val customFolderUri = preferences.downloadFolderUri.first()
-            val header = ByteArray(22)
-            val headerRead = tempAudio.inputStream().use { it.read(header) }
-            val actualQuality =
-                detectActualQuality(if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0), quality)
-            val isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
+            // Apple delivers an MP4/M4A container (ALAC/AAC/EC-3 Atmos), never
+            // FLAC/MP3 — skip header sniffing + FLAC tagging for it.
+            val actualQuality: AudioQuality
+            val isFlac: Boolean
+            if (isApple) {
+                actualQuality = quality
+                isFlac = false
+            } else {
+                val header = ByteArray(22)
+                val headerRead = tempAudio.inputStream().use { it.read(header) }
+                actualQuality =
+                    detectActualQuality(if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0), quality)
+                isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
+            }
 
             // The Qobuz CDN FLACs arrive with no embedded metadata, so a THX
             // download would land on disk anonymous. Embed Vorbis comments now
@@ -139,8 +156,8 @@ class DownloadWorker @AssistedInject constructor(
             }
             val audioSizeBytes = tempAudio.length()
 
-            val fileExt = if (isFlac) "flac" else "mp3"
-            val audioMime = if (isFlac) "audio/flac" else "audio/mpeg"
+            val fileExt = if (isApple) "m4a" else if (isFlac) "flac" else "mp3"
+            val audioMime = if (isApple) "audio/mp4" else if (isFlac) "audio/flac" else "audio/mpeg"
             val sanitizedTitle = "${artistName} - ${trackTitle}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
             val fileName = "$sanitizedTitle.$fileExt"
             val filePath: String

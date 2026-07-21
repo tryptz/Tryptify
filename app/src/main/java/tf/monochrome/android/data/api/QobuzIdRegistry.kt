@@ -55,6 +55,9 @@ class QobuzIdRegistry @Inject constructor(
     private val albumSlugs = ConcurrentHashMap<Long, String>()
     private val qobuzArtistIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val qobuzTrackIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    // Track ids that came out of the Apple Music catalog (searchApple), so the
+    // download worker + playback route them to /api/apple/* instead of Qobuz.
+    private val appleTrackIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     // Foreign (TIDAL) artist id -> Qobuz artist id, from the playback fallback.
     // Session-scoped (cheap to rebuild) — not persisted.
     private val artistAliases = ConcurrentHashMap<Long, Long>()
@@ -93,6 +96,12 @@ class QobuzIdRegistry @Inject constructor(
 
     fun isQobuzTrack(id: Long): Boolean = id in qobuzTrackIds
 
+    fun registerAppleTrack(id: Long) {
+        if (appleTrackIds.add(id)) markDirty()
+    }
+
+    fun isAppleTrack(id: Long): Boolean = id in appleTrackIds
+
     /** Link a foreign (TIDAL) artist id to its Qobuz artist id. */
     fun registerArtistAlias(foreignId: Long, qobuzId: Long) {
         if (foreignId != qobuzId) artistAliases[foreignId] = qobuzId
@@ -110,10 +119,12 @@ class QobuzIdRegistry @Inject constructor(
             val albumsJson = json.encodeToString(albumSlugs.toMap())
             val artistsJson = json.encodeToString(qobuzArtistIds.toList())
             val tracksJson = json.encodeToString(qobuzTrackIds.toList())
+            val appleTracksJson = json.encodeToString(appleTrackIds.toList())
             dataStore.edit { prefs ->
                 prefs[KEY_ALBUM_SLUGS] = albumsJson
                 prefs[KEY_ARTIST_IDS] = artistsJson
                 prefs[KEY_TRACK_IDS] = tracksJson
+                prefs[KEY_APPLE_TRACK_IDS] = appleTracksJson
             }
         }
     }
@@ -133,6 +144,10 @@ class QobuzIdRegistry @Inject constructor(
                 runCatching { json.decodeFromString<List<Long>>(raw) }.getOrNull()
                     ?.let { qobuzTrackIds.addAll(it) }
             }
+            prefs[KEY_APPLE_TRACK_IDS]?.let { raw ->
+                runCatching { json.decodeFromString<List<Long>>(raw) }.getOrNull()
+                    ?.let { appleTrackIds.addAll(it) }
+            }
         }
     }
 
@@ -141,5 +156,6 @@ class QobuzIdRegistry @Inject constructor(
         val KEY_ALBUM_SLUGS = stringPreferencesKey("album_slugs")
         val KEY_ARTIST_IDS = stringPreferencesKey("artist_ids")
         val KEY_TRACK_IDS = stringPreferencesKey("track_ids")
+        val KEY_APPLE_TRACK_IDS = stringPreferencesKey("apple_track_ids")
     }
 }
