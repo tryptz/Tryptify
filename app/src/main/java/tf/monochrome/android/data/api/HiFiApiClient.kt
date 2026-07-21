@@ -306,12 +306,10 @@ class HiFiApiClient @Inject constructor(
         if (!envelope.success || envelope.data == null) return SearchResult()
         val data = envelope.data
 
-        data.albums?.items?.forEach { registerAlbumWithRegistry(it) }
-        data.tracks?.items?.forEach { item ->
-            item.id?.let { qobuzIdRegistry.registerTrack(it) }
-            item.album?.let { album -> registerAlbumWithRegistry(album) }
-        }
-        data.artists?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerArtist(it) } }
+        // Tag track ids as Apple so download + playback route to /api/apple/*.
+        // Album/artist ids are NOT registered as Qobuz (Apple album/artist detail
+        // isn't wired yet — registering them would mis-route navigation to Qobuz).
+        data.tracks?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerAppleTrack(it) } }
 
         return SearchResult(
             tracks = data.tracks?.items?.map { it.toDomainTrack() } ?: emptyList(),
