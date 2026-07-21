@@ -31,8 +31,9 @@ import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "monochrome_prefs")
 
-/** Which catalog(s) drive search and discovery surfaces. */
-enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
+/** Which catalog(s) drive search and discovery surfaces. BOTH runs TIDAL + Qobuz
+ *  + Apple Music; the *_ONLY modes restrict to a single catalog. */
+enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY, APPLE_ONLY }
 
 /**
  * Which word-level lyrics provider(s) to use when TIDAL has no synced lyrics.
@@ -85,6 +86,7 @@ class PreferencesManager @Inject constructor(
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
         private val QOBUZ_INSTANCE_URL = stringPreferencesKey("qobuz_instance_url")
+        private val APPLE_INSTANCE_URL = stringPreferencesKey("apple_instance_url")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
 
@@ -288,7 +290,7 @@ class PreferencesManager @Inject constructor(
             PLAYBACK_SPEED, PRESERVE_PITCH,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
-            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, SOURCE_MODE, DEV_MODE_ENABLED,
+            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, PLAYER_GLASS_JSON,
@@ -493,6 +495,23 @@ class PreferencesManager @Inject constructor(
                 it[QOBUZ_INSTANCE_URL] = endpoint
             } else {
                 it.remove(QOBUZ_INSTANCE_URL)
+            }
+        }
+    }
+
+    // Apple Music instance — the TrypT HiFi server that exposes /api/apple/*.
+    // Usually the same server as the Qobuz instance, so InstanceManager falls back
+    // to the Qobuz URL when this is unset (see appleInstanceOrNull).
+    val appleInstanceUrl: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[APPLE_INSTANCE_URL]
+    }
+
+    suspend fun setAppleInstanceUrl(endpoint: String?) {
+        dataStore.edit {
+            if (endpoint != null) {
+                it[APPLE_INSTANCE_URL] = endpoint
+            } else {
+                it.remove(APPLE_INSTANCE_URL)
             }
         }
     }

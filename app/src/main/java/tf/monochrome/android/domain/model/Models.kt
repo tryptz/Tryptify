@@ -272,7 +272,7 @@ fun buildCoverUrl(coverId: String, size: Int): String {
 // ========== Unified Three-Source Models ==========
 
 @Serializable
-enum class SourceType { API, COLLECTION, LOCAL, QOBUZ }
+enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE }
 
 @Serializable
 enum class AudioCodec(val displayName: String) {

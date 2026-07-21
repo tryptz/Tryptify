@@ -287,6 +287,40 @@ class HiFiApiClient @Inject constructor(
         )
     }
 
+    // Apple Music catalog search via the TrypT HiFi instance's /api/apple/* layer.
+    // The endpoint normalizes Apple responses into the same Qobuz-shaped envelope,
+    // so parsing + mapping are identical to searchQobuz. Fails soft (empty result)
+    // on any error so it never blocks the other catalogs.
+    suspend fun searchApple(query: String, offset: Int = 0): SearchResult {
+        val instance = instanceManager.appleInstanceOrNull() ?: return SearchResult()
+        val base = instance.url.trimEnd('/')
+
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/apple/get-music?q=${query.encodeUrl()}&offset=$offset")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return SearchResult()
+
+        if (!envelope.success || envelope.data == null) return SearchResult()
+        val data = envelope.data
+
+        data.albums?.items?.forEach { registerAlbumWithRegistry(it) }
+        data.tracks?.items?.forEach { item ->
+            item.id?.let { qobuzIdRegistry.registerTrack(it) }
+            item.album?.let { album -> registerAlbumWithRegistry(album) }
+        }
+        data.artists?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerArtist(it) } }
+
+        return SearchResult(
+            tracks = data.tracks?.items?.map { it.toDomainTrack() } ?: emptyList(),
+            albums = data.albums?.items?.map { it.toDomainAlbum() } ?: emptyList(),
+            artists = data.artists?.items?.map { it.toDomainArtist() } ?: emptyList(),
+            playlists = emptyList(),
+        )
+    }
+
     /**
      * Qobuz album detail — GET /api/get-album?album_id=<alphanumeric-slug>.
      * The response is the standard {success, data: …} envelope; data has all

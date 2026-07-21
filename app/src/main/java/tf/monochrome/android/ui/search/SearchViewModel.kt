@@ -25,6 +25,7 @@ import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
+import tf.monochrome.android.domain.usecase.toAppleUnifiedTrack
 import tf.monochrome.android.domain.usecase.toQobuzUnifiedTrack
 import tf.monochrome.android.domain.usecase.toUnifiedTrack
 
@@ -82,6 +83,7 @@ class SearchViewModel @Inject constructor(
         ALL("All", null),
         TIDAL("TIDAL", SourceType.API),
         QOBUZ("Qobuz", SourceType.QOBUZ),
+        APPLE("Apple Music", SourceType.APPLE),
         LOCAL("Local", SourceType.LOCAL),
         COLLECTION("Collection", SourceType.COLLECTION)
     }
@@ -308,13 +310,17 @@ class SearchViewModel @Inject constructor(
         // TIDAL, Qobuz, and the local/collection library all run in parallel.
         // Qobuz failures (instance unset, network error, schema mismatch) are
         // swallowed so the existing TIDAL flow keeps working unchanged.
+        // Apple Music runs as a third parallel catalog (BOTH or APPLE_ONLY),
+        // captured out-of-band since coroutineScope returns only a Triple.
+        var appleResultHolder: Result<Result<tf.monochrome.android.domain.model.SearchResult>>? = null
         val (searchResult, qobuzResult, unifiedResultsResult) = coroutineScope {
             // Source mode (Settings → Instances → Source) gates which
-            // catalogs we fan out to. TIDAL_ONLY / QOBUZ_ONLY skip the
-            // disabled side; BOTH (default) keeps the existing behavior.
+            // catalogs we fan out to. *_ONLY modes restrict to one catalog;
+            // BOTH (default) runs TIDAL + Qobuz + Apple Music.
             val sourceMode = preferences.sourceMode.first()
             val apiDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY) {
+                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY ||
+                    sourceMode == tf.monochrome.android.data.preferences.SourceMode.APPLE_ONLY) {
                     runCatching {
                         Result.failure<tf.monochrome.android.domain.model.SearchResult>(
                             IllegalStateException("TIDAL disabled by source mode")
@@ -325,7 +331,8 @@ class SearchViewModel @Inject constructor(
                 }
             }
             val qobuzDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY) {
+                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY ||
+                    sourceMode == tf.monochrome.android.data.preferences.SourceMode.APPLE_ONLY) {
                     null
                 } else {
                     withTimeoutOrNull(QOBUZ_BUDGET_MS) {
@@ -333,13 +340,26 @@ class SearchViewModel @Inject constructor(
                     }
                 }
             }
+            val appleDeferred = async {
+                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY ||
+                    sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY) {
+                    null
+                } else {
+                    withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                        runCatching { repository.searchApple(trimmedQuery) }
+                    }
+                }
+            }
             val libraryDeferred = async { runCatching { unifiedLibrarySearch.search(trimmedQuery).first() } }
+            appleResultHolder = appleDeferred.await()
             Triple(apiDeferred.await(), qobuzDeferred.await(), libraryDeferred.await())
         }
         val unifiedResults = unifiedResultsResult.getOrNull()
+        val appleResult = appleResultHolder
 
         val qobuzAvailable = qobuzResult?.isSuccess == true
-        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable) {
+        val appleAvailable = appleResult?.isSuccess == true
+        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable && !appleAvailable) {
             // Every backend failed (offline / all instances down). Distinguish
             // this from a successful-but-empty search so the UI can offer a
             // retry instead of a flat "No results found".
@@ -358,6 +378,10 @@ class SearchViewModel @Inject constructor(
         val qobuzTracks = qobuzSearch?.tracks?.map { it.toQobuzUnifiedTrack() } ?: emptyList()
         val qobuzAlbums = qobuzSearch?.albums ?: emptyList()
         val qobuzArtists = qobuzSearch?.artists ?: emptyList()
+        val appleSearch = appleResult?.getOrNull()?.getOrNull()
+        val appleTracks = appleSearch?.tracks?.map { it.toAppleUnifiedTrack() } ?: emptyList()
+        val appleAlbums = appleSearch?.albums ?: emptyList()
+        val appleArtists = appleSearch?.artists ?: emptyList()
         // Qobuz album clicks are now wired through QobuzIdRegistry +
         // AlbumDetailViewModel's Qobuz-first lookup. Artist clicks still fall
         // through to the TIDAL artist endpoint until /api/get-artist's
@@ -371,15 +395,15 @@ class SearchViewModel @Inject constructor(
                 query = trimmedQuery,
                 tracks = localAndCollectionTracks +
                     result.tracks.map { it.toUnifiedTrack() } +
-                    qobuzTracks
+                    qobuzTracks + appleTracks
             )
             _allAlbums.value = scoreItems(
                 trimmedQuery,
-                (result.albums + qobuzAlbums).distinctBy { it.id },
+                (result.albums + qobuzAlbums + appleAlbums).distinctBy { it.id },
             ) { listOf(it.title, it.displayArtist) }
             _allArtists.value = scoreItems(
                 trimmedQuery,
-                (result.artists + qobuzArtists).distinctBy { it.id },
+                (result.artists + qobuzArtists + appleArtists).distinctBy { it.id },
             ) { listOf(it.name) }
             _allPlaylists.value = scoreItems(trimmedQuery, result.playlists) {
                 listOfNotNull(it.title, it.creator?.name, it.description)
@@ -397,10 +421,10 @@ class SearchViewModel @Inject constructor(
             // doesn't feel broken when the public TIDAL pool is unreachable.
             _allTracks.value = scoreTracks(
                 query = trimmedQuery,
-                tracks = localAndCollectionTracks + qobuzTracks
+                tracks = localAndCollectionTracks + qobuzTracks + appleTracks
             )
-            _allAlbums.value = scoreItems(trimmedQuery, qobuzAlbums) { listOf(it.title, it.displayArtist) }
-            _allArtists.value = scoreItems(trimmedQuery, qobuzArtists) { listOf(it.name) }
+            _allAlbums.value = scoreItems(trimmedQuery, (qobuzAlbums + appleAlbums).distinctBy { it.id }) { listOf(it.title, it.displayArtist) }
+            _allArtists.value = scoreItems(trimmedQuery, (qobuzArtists + appleArtists).distinctBy { it.id }) { listOf(it.name) }
             _allPlaylists.value = emptyList()
             // TIDAL failed → mark its end on every type so loadMore won't retry.
             tracksPage.tidalEnd = true; albumsPage.tidalEnd = true
@@ -607,6 +631,8 @@ class SearchViewModel @Inject constructor(
         // Qobuz is download-only — keep below TIDAL streaming so taps default
         // to a playable result when both sources surface the same query.
         SourceType.QOBUZ -> SOURCE_BOOST_API - 5
+        // Apple Music (via the instance); rank just below Qobuz.
+        SourceType.APPLE -> SOURCE_BOOST_API - 6
     }
 
     private fun scoreField(query: String, rawValue: String?, baseScore: Int): Int {

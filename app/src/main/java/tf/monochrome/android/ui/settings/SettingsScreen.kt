@@ -1582,9 +1582,11 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 private fun InstancesTab(viewModel: SettingsViewModel) {
     val customEndpoint by viewModel.customEndpoint.collectAsState()
     val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsState()
+    val appleEndpoint by viewModel.appleEndpoint.collectAsState()
     val sourceMode by viewModel.sourceMode.collectAsState()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
+    var appleInput by remember(appleEndpoint) { mutableStateOf(appleEndpoint ?: "") }
 
     SettingsTabContent {
         // Source mode picker — controls which catalogs feed search/discovery.
@@ -1607,6 +1609,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 tf.monochrome.android.data.preferences.SourceMode.BOTH to "Both",
                 tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY to "TIDAL only",
                 tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY to "Qobuz only",
+                tf.monochrome.android.data.preferences.SourceMode.APPLE_ONLY to "Apple only",
             )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 sourceOptions.forEachIndexed { index, (mode, label) ->
@@ -1712,6 +1715,52 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                             val trimmed = latestQobuzInput.value.trim().ifBlank { null }
                             if (trimmed != latestQobuzSaved.value) {
                                 viewModel.setQobuzEndpoint(trimmed)
+                            }
+                        }
+                    }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Apple Music URL",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "TrypT HiFi server exposing /api/apple/* (Dolby Atmos + ALAC). Defaults to the Qobuz URL if left blank.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val latestAppleInput = rememberUpdatedState(appleInput)
+            val latestAppleSaved = rememberUpdatedState(appleEndpoint)
+            OutlinedTextField(
+                value = appleInput,
+                onValueChange = { appleInput = it },
+                placeholder = {
+                    Text(
+                        "https://your-apple-instance",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setAppleEndpoint(latestAppleInput.value.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = latestAppleInput.value.trim().ifBlank { null }
+                            if (trimmed != latestAppleSaved.value) {
+                                viewModel.setAppleEndpoint(trimmed)
                             }
                         }
                     }

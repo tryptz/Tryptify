@@ -87,5 +87,38 @@ fun Track.toQobuzUnifiedTrack(): UnifiedTrack = UnifiedTrack(
  * so hearted tracks of either origin play correctly through
  * PlayerViewModel.playUnifiedTrack.
  */
+/**
+ * An Apple Music catalog track. Same Track shape, tagged APPLE for labelling and
+ * dedup. Reuses the QobuzCached playback path — Apple downloads route through the
+ * same /api/download layer on the instance — so no new PlaybackSource/StreamResolver
+ * branch is needed. The id prefix keeps Apple hits distinct from Qobuz/TIDAL.
+ */
+fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
+    id = "apple_$id",
+    title = title,
+    durationSeconds = duration,
+    trackNumber = trackNumber,
+    discNumber = volumeNumber,
+    explicit = explicit,
+    artistName = displayArtist.ifBlank { DEFAULT_ARTIST_NAME },
+    artistNames = artists.map { it.name }.ifEmpty { listOfNotNull(artist?.name) },
+    albumArtistName = artist?.name,
+    artistId = artist?.id,
+    artists = uiArtistRefs(),
+    albumTitle = album?.title,
+    albumId = album?.id?.toString(),
+    artworkUri = coverUrl,
+    channelCount = channelCount,
+    version = version,
+    isThxSpatialAudio = isThxSpatialAudio,
+    source = PlaybackSource.QobuzCached(qobuzId = id),
+    sourceType = SourceType.APPLE,
+)
+
+/**
+ * Pick QobuzCached vs HiFiApi by what the registry knows about this track id,
+ * so hearted tracks of either origin play correctly through
+ * PlayerViewModel.playUnifiedTrack.
+ */
 fun Track.toUnifiedTrackAuto(registry: QobuzIdRegistry): UnifiedTrack =
     if (registry.isQobuzTrack(id)) toQobuzUnifiedTrack() else toUnifiedTrack()
