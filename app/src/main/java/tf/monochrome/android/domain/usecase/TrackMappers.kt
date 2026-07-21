@@ -89,9 +89,9 @@ fun Track.toQobuzUnifiedTrack(): UnifiedTrack = UnifiedTrack(
  */
 /**
  * An Apple Music catalog track. Same Track shape, tagged APPLE for labelling and
- * dedup. Reuses the QobuzCached playback path — Apple downloads route through the
- * same /api/download layer on the instance — so no new PlaybackSource/StreamResolver
- * branch is needed. The id prefix keeps Apple hits distinct from Qobuz/TIDAL.
+ * dedup. Uses PlaybackSource.AppleCached, which StreamResolver resolves via the
+ * instance's /api/apple/download-music (wrapper-resolved manifest + cloud-cached
+ * decrypted file). The id prefix keeps Apple hits distinct from Qobuz/TIDAL.
  */
 fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     id = "apple_$id",
@@ -111,7 +111,7 @@ fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     channelCount = channelCount,
     version = version,
     isThxSpatialAudio = isThxSpatialAudio,
-    source = PlaybackSource.QobuzCached(qobuzId = id),
+    source = PlaybackSource.AppleCached(appleId = id),
     sourceType = SourceType.APPLE,
 )
 

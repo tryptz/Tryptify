@@ -1012,6 +1012,31 @@ class HiFiApiClient @Inject constructor(
         }
     }
 
+    // Apple quality codes accepted by /api/apple/download-music.
+    private fun AudioQuality.appleCode(): String = when (this) {
+        AudioQuality.HI_RES -> "hires-lossless"
+        AudioQuality.LOSSLESS -> "alac"
+        AudioQuality.LOW, AudioQuality.HIGH -> "aac"
+    }
+
+    // Resolve the playable URL for an Apple track: hit /api/apple/download-music,
+    // which returns the wrapper-resolved manifest, and read delivery.streamUrl —
+    // the cloud-cached decrypted file (Range-capable). Atmos-flagged tracks request
+    // the atmos variant. Returns null when Apple isn't configured / not yet cached.
+    suspend fun getAppleStreamUrl(appleId: Long, quality: AudioQuality, atmos: Boolean): String? {
+        val instance = instanceManager.appleInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+        val q = if (atmos) "atmos" else quality.appleCode()
+        return withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/apple/download-music?track_id=$appleId&quality=$q")
+                if (!res.status.isSuccess()) return@runCatching null
+                val env = json.decodeFromString<tf.monochrome.android.data.api.model.AppleDownloadEnvelope>(res.bodyAsText())
+                env.data?.manifest?.delivery?.streamUrl?.takeIf { it.isNotBlank() }?.let { absoluteUrl(it, base) }
+            }.getOrNull()
+        }
+    }
+
 }
 
 // --- Qobuz item → domain mappers (file-private extensions) -----------------

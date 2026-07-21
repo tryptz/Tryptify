@@ -91,7 +91,43 @@ class StreamResolver @Inject constructor(
             is PlaybackSource.CollectionDirect -> resolveCollectionDirect(track, source)
             is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source)
             is PlaybackSource.QobuzCached -> resolveQobuzCached(track, source)
+            is PlaybackSource.AppleCached -> resolveAppleCached(track, source)
         }
+    }
+
+    // Apple resolution = "ask the instance's /api/apple/download-music for the
+    // wrapper-resolved manifest, then stream the cloud-cached decrypted file it
+    // points at (delivery.streamUrl, Range-capable)". Atmos-flagged tracks request
+    // the atmos variant. Not playable when unconfigured / not yet cached upstream.
+    private suspend fun resolveAppleCached(
+        track: UnifiedTrack,
+        source: PlaybackSource.AppleCached,
+    ): ResolvedMedia {
+        val streamUrl = repository.appleStreamUrl(
+            appleId = source.appleId,
+            quality = source.preferredQuality,
+            atmos = track.isThxSpatialAudio,
+        ).getOrNull()
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artistName)
+            .setAlbumTitle(track.albumTitle)
+            .setArtworkUri(normalizeArtworkUri(track.artworkUri))
+            .setTrackNumber(track.trackNumber)
+            .setDiscNumber(track.discNumber)
+            .build()
+
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(track.id)
+            .apply { if (!streamUrl.isNullOrBlank()) setUri(streamUrl.toUri()) }
+            .setMediaMetadata(metadata)
+            .build()
+
+        return ResolvedMedia(
+            mediaItem = mediaItem,
+            isPlayable = !streamUrl.isNullOrBlank(),
+        )
     }
 
     // Qobuz resolution = "fetch via /api/download-music, park in app cache,
