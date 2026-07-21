@@ -1,7 +1,9 @@
 package tf.monochrome.android.ui.settings
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -140,6 +142,51 @@ class AtmosRendererViewModel @Inject constructor(
         update(_profile.value.copy(hrtfProfileId = null))
     }
 
+    // Status of the "add built-in Atmos test track" action, shown in the UI.
+    private val _testTrackStatus = MutableStateFlow<String?>(null)
+    val testTrackStatus: StateFlow<String?> = _testTrackStatus.asStateFlow()
+
+    /**
+     * Installs the bundled Atmos test clip (a real E-AC-3 JOC channel check) into
+     * the Music library via MediaStore, so it plays through the normal, validated
+     * path. Idempotent — skips if a copy is already indexed. The user refreshes
+     * the Local library to see it (the scanner is MediaStore-backed).
+     */
+    fun installTestTrack() {
+        _testTrackStatus.value = "Adding…"
+        viewModelScope.launch(Dispatchers.IO) {
+            val name = "Tryptify Atmos Test.mp4"
+            val resolver = context.contentResolver
+            val audio = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+
+            val exists = runCatching {
+                resolver.query(audio, arrayOf(MediaStore.Audio.Media._ID),
+                    "${MediaStore.Audio.Media.DISPLAY_NAME}=?", arrayOf(name), null)
+                    ?.use { it.count > 0 } ?: false
+            }.getOrDefault(false)
+
+            _testTrackStatus.value = if (exists) {
+                "Already in your library — refresh the Local tab to find “Tryptify Atmos Test”."
+            } else runCatching {
+                val values = ContentValues().apply {
+                    put(MediaStore.Audio.Media.DISPLAY_NAME, name)
+                    put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
+                    put(MediaStore.Audio.Media.IS_MUSIC, 1)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/")
+                    }
+                }
+                val uri = resolver.insert(audio, values) ?: error("insert rejected")
+                resolver.openOutputStream(uri)?.use { out ->
+                    context.assets.open("atmos_test.mp4").use { it.copyTo(out) }
+                } ?: error("cannot open output")
+                "Added “Tryptify Atmos Test” — refresh the Local library to play it."
+            }.getOrElse { "Couldn't add the test track (${it.message})." }
+        }
+    }
+
     private fun sofaDisplayName(uri: Uri): String {
         val raw = context.contentResolver.query(uri, null, null, null, null)?.use { c ->
             val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
@@ -191,6 +238,27 @@ fun AtmosRendererScreen(
                     .fillMaxWidth()
                     .aspectRatio(1.15f),
             )
+            Spacer(Modifier.height(20.dp))
+
+            // ── Built-in test track ────────────────────────────────────────
+            SectionHeader("Test Track")
+            val testStatus by viewModel.testTrackStatus.collectAsState()
+            Text(
+                "A bundled E-AC-3 JOC channel check — a voice moving through the " +
+                    "Atmos positions. Add it to your library to hear the renderer work.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { viewModel.installTestTrack() }) {
+                Text("Add Atmos test track to library")
+            }
+            testStatus?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             Spacer(Modifier.height(20.dp))
 
             // ── Renderer mode ──────────────────────────────────────────────
