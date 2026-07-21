@@ -209,19 +209,26 @@ fun AtmosRendererScreen(
             Spacer(Modifier.height(20.dp))
 
             // ── Output layout ──────────────────────────────────────────────
+            // Multichannel speaker output would need a multichannel DAC and a
+            // VBAP output path (vbap.h exists, the render/sink wiring does not).
+            // This renderer targets headphones and only outputs binaural stereo,
+            // so these are shown disabled for reference rather than pretending to
+            // work — feeding 5.1/7.1 to a stereo output just folds back down.
             SectionHeader("Output Layout")
-            SettingSwitchItem(
-                title = "Auto-detect from DAC",
-                subtitle = "Follow the connected DAC's channel count",
-                checked = profile.autoDetectLayout,
-                onCheckedChange = { viewModel.update(profile.copy(autoDetectLayout = it)) },
+            Text(
+                "This renderer outputs binaural stereo for headphones. " +
+                    "Multichannel speaker output (5.1 / 7.1 / 7.1.4) needs a " +
+                    "multichannel DAC and isn't supported yet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(8.dp))
             ChoiceChips(
                 options = ChannelLayout.entries,
-                selected = profile.layout,
-                enabled = !profile.autoDetectLayout,
+                selected = ChannelLayout.STEREO,
+                enabled = false,
                 label = { it.label },
-                onSelect = { viewModel.update(profile.copy(layout = it)) },
+                onSelect = { },
             )
             Spacer(Modifier.height(20.dp))
 
