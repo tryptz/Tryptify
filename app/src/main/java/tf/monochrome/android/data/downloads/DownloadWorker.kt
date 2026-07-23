@@ -69,9 +69,10 @@ class DownloadWorker @AssistedInject constructor(
             // Get download quality preference
             val quality = preferences.downloadQuality.first()
 
-            // Resolve the download URL. Apple tracks go through the wrapper-backed
-            // /api/apple/download-music (returns a cloud-cached decrypted file);
-            // everything else uses the Qobuz download instance.
+            // Resolve the download URL. Apple tracks go through getAppleStreamUrl,
+            // which streams straight from the home wrapper/agent over Tailscale when
+            // an Apple Wrapper URL is configured, else falls back to the cloud
+            // /api/apple/download-music. Everything else uses the Qobuz instance.
             val streamUrl = if (isApple) {
                 apiClient.getAppleStreamUrl(trackId, quality, atmos = isThxSpatialAudio)
                     ?: return Result.failure()
