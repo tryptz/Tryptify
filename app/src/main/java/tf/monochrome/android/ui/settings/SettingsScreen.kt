@@ -1587,6 +1587,10 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
     var appleInput by remember(appleEndpoint) { mutableStateOf(appleEndpoint ?: "") }
+    val appleWrapperUrl by viewModel.appleWrapperUrl.collectAsState()
+    val appleWrapperSecret by viewModel.appleWrapperSecret.collectAsState()
+    var appleWrapperInput by remember(appleWrapperUrl) { mutableStateOf(appleWrapperUrl ?: "") }
+    var appleSecretInput by remember(appleWrapperSecret) { mutableStateOf(appleWrapperSecret ?: "") }
 
     SettingsTabContent {
         // Source mode picker — controls which catalogs feed search/discovery.
@@ -1761,6 +1765,88 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                             val trimmed = latestAppleInput.value.trim().ifBlank { null }
                             if (trimmed != latestAppleSaved.value) {
                                 viewModel.setAppleEndpoint(trimmed)
+                            }
+                        }
+                    }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Apple Wrapper (Tailscale)",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Tailnet address of the home decrypt agent (e.g. http://100.80.88.106:8790). When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val latestWrapperInput = rememberUpdatedState(appleWrapperInput)
+            val latestWrapperSaved = rememberUpdatedState(appleWrapperUrl)
+            OutlinedTextField(
+                value = appleWrapperInput,
+                onValueChange = { appleWrapperInput = it },
+                placeholder = { Text("http://100.80.88.106:8790", style = MaterialTheme.typography.bodyMedium) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setAppleWrapperUrl(latestWrapperInput.value.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = latestWrapperInput.value.trim().ifBlank { null }
+                            if (trimmed != latestWrapperSaved.value) {
+                                viewModel.setAppleWrapperUrl(trimmed)
+                            }
+                        }
+                    }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Apple Wrapper secret",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Matches the agent's AGENT_SECRET.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val latestSecretInput = rememberUpdatedState(appleSecretInput)
+            val latestSecretSaved = rememberUpdatedState(appleWrapperSecret)
+            OutlinedTextField(
+                value = appleSecretInput,
+                onValueChange = { appleSecretInput = it },
+                placeholder = { Text("agent secret", style = MaterialTheme.typography.bodyMedium) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setAppleWrapperSecret(latestSecretInput.value.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = latestSecretInput.value.trim().ifBlank { null }
+                            if (trimmed != latestSecretSaved.value) {
+                                viewModel.setAppleWrapperSecret(trimmed)
                             }
                         }
                     }

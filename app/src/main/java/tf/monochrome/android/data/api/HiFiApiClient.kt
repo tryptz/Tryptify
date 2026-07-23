@@ -6,7 +6,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -1022,9 +1026,39 @@ class HiFiApiClient @Inject constructor(
     // the cloud-cached decrypted file (Range-capable). Atmos-flagged tracks request
     // the atmos variant. Returns null when Apple isn't configured / not yet cached.
     suspend fun getAppleStreamUrl(appleId: Long, quality: AudioQuality, atmos: Boolean): String? {
+        val q = if (atmos) "atmos" else quality.appleCode()
+
+        // Tailnet-direct: when a home wrapper/agent URL is set, decrypt + stream
+        // straight from the PC over Tailscale — no cloud. Trigger the decrypt, then
+        // poll the agent's /files endpoint until it serves (short polls, so it's
+        // robust to HTTP client timeouts while the decrypt runs, up to ~3.5 min).
+        val agentUrl = preferences.appleWrapperUrl.first()?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
+        if (agentUrl != null) {
+            val secret = preferences.appleWrapperSecret.first().orEmpty()
+            val fileUrl = "$agentUrl/files/$appleId.m4a"
+            runCatching {
+                httpClient.post("$agentUrl/decrypt") {
+                    header("X-Agent-Secret", secret)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"adamId":"$appleId","quality":"$q"}""")
+                }
+            }
+            val deadline = System.currentTimeMillis() + 210_000L
+            while (System.currentTimeMillis() < deadline) {
+                val ready = runCatching {
+                    val code = httpClient.get(fileUrl) { header("Range", "bytes=0-0") }.status.value
+                    code == 200 || code == 206
+                }.getOrDefault(false)
+                if (ready) return fileUrl
+                delay(2500)
+            }
+            return null
+        }
+
+        // Cloud path: /api/apple/download-music returns the wrapper-resolved manifest;
+        // read delivery.streamUrl (the cloud-cached decrypted file, Range-capable).
         val instance = instanceManager.appleInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
-        val q = if (atmos) "atmos" else quality.appleCode()
         return withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
             runCatching {
                 val res = httpClient.get("$base/api/apple/download-music?track_id=$appleId&quality=$q")

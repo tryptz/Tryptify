@@ -87,6 +87,8 @@ class PreferencesManager @Inject constructor(
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
         private val QOBUZ_INSTANCE_URL = stringPreferencesKey("qobuz_instance_url")
         private val APPLE_INSTANCE_URL = stringPreferencesKey("apple_instance_url")
+        private val APPLE_WRAPPER_URL = stringPreferencesKey("apple_wrapper_url")
+        private val APPLE_WRAPPER_SECRET = stringPreferencesKey("apple_wrapper_secret")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
 
@@ -290,7 +292,7 @@ class PreferencesManager @Inject constructor(
             PLAYBACK_SPEED, PRESERVE_PITCH,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
-            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, SOURCE_MODE, DEV_MODE_ENABLED,
+            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, PLAYER_GLASS_JSON,
@@ -513,6 +515,25 @@ class PreferencesManager @Inject constructor(
             } else {
                 it.remove(APPLE_INSTANCE_URL)
             }
+        }
+    }
+
+    // Tailnet-direct wrapper/agent: when set, Apple tracks decrypt + stream
+    // straight from the home decrypt-agent over Tailscale (no cloud). Base URL
+    // like http://100.80.88.106:8790; the secret matches the agent's AGENT_SECRET.
+    val appleWrapperUrl: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_URL] }
+
+    suspend fun setAppleWrapperUrl(endpoint: String?) {
+        dataStore.edit {
+            if (endpoint != null) it[APPLE_WRAPPER_URL] = endpoint else it.remove(APPLE_WRAPPER_URL)
+        }
+    }
+
+    val appleWrapperSecret: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_SECRET] }
+
+    suspend fun setAppleWrapperSecret(secret: String?) {
+        dataStore.edit {
+            if (secret != null) it[APPLE_WRAPPER_SECRET] = secret else it.remove(APPLE_WRAPPER_SECRET)
         }
     }
 
