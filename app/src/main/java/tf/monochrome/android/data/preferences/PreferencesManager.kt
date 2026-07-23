@@ -31,8 +31,9 @@ import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "monochrome_prefs")
 
-/** Which catalog(s) drive search and discovery surfaces. */
-enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
+/** Which catalog(s) drive search and discovery surfaces. BOTH runs TIDAL + Qobuz
+ *  + Apple Music; the *_ONLY modes restrict to a single catalog. */
+enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY, APPLE_ONLY }
 
 /**
  * Which word-level lyrics provider(s) to use when TIDAL has no synced lyrics.
@@ -85,6 +86,9 @@ class PreferencesManager @Inject constructor(
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
         private val QOBUZ_INSTANCE_URL = stringPreferencesKey("qobuz_instance_url")
+        private val APPLE_INSTANCE_URL = stringPreferencesKey("apple_instance_url")
+        private val APPLE_WRAPPER_URL = stringPreferencesKey("apple_wrapper_url")
+        private val APPLE_WRAPPER_SECRET = stringPreferencesKey("apple_wrapper_secret")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
 
@@ -104,6 +108,11 @@ class PreferencesManager @Inject constructor(
         // Mini-player liquid-glass settings — same shape as PLAYER_GLASS_JSON but
         // tuned independently (Player Visuals Studio › "Mini Player" tab).
         private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
+
+        // Atmos renderer profile (mode / target layout / HRTF profile). Kept
+        // device-local — the layout tracks the connected DAC and the HRTF is a
+        // local measurement — so it is deliberately NOT in SETTINGS_SYNC_KEYS.
+        private val RENDERER_PROFILE_JSON = stringPreferencesKey("renderer_profile_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -283,7 +292,7 @@ class PreferencesManager @Inject constructor(
             PLAYBACK_SPEED, PRESERVE_PITCH,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
-            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, SOURCE_MODE, DEV_MODE_ENABLED,
+            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, PLAYER_GLASS_JSON,
@@ -489,6 +498,42 @@ class PreferencesManager @Inject constructor(
             } else {
                 it.remove(QOBUZ_INSTANCE_URL)
             }
+        }
+    }
+
+    // Apple Music instance — the TrypT HiFi server that exposes /api/apple/*.
+    // Usually the same server as the Qobuz instance, so InstanceManager falls back
+    // to the Qobuz URL when this is unset (see appleInstanceOrNull).
+    val appleInstanceUrl: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[APPLE_INSTANCE_URL]
+    }
+
+    suspend fun setAppleInstanceUrl(endpoint: String?) {
+        dataStore.edit {
+            if (endpoint != null) {
+                it[APPLE_INSTANCE_URL] = endpoint
+            } else {
+                it.remove(APPLE_INSTANCE_URL)
+            }
+        }
+    }
+
+    // Tailnet-direct wrapper/agent: when set, Apple tracks decrypt + stream
+    // straight from the home decrypt-agent over Tailscale (no cloud). Base URL
+    // like http://100.80.88.106:8790; the secret matches the agent's AGENT_SECRET.
+    val appleWrapperUrl: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_URL] }
+
+    suspend fun setAppleWrapperUrl(endpoint: String?) {
+        dataStore.edit {
+            if (endpoint != null) it[APPLE_WRAPPER_URL] = endpoint else it.remove(APPLE_WRAPPER_URL)
+        }
+    }
+
+    val appleWrapperSecret: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_SECRET] }
+
+    suspend fun setAppleWrapperSecret(secret: String?) {
+        dataStore.edit {
+            if (secret != null) it[APPLE_WRAPPER_SECRET] = secret else it.remove(APPLE_WRAPPER_SECRET)
         }
     }
 
@@ -1313,6 +1358,18 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setMiniPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
         dataStore.edit { it[MINI_PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
+    /** Atmos renderer profile (mode / target layout / HRTF profile id). */
+    val rendererProfile: Flow<tf.monochrome.android.domain.model.RendererProfile> = dataStore.data.map { prefs ->
+        prefs[RENDERER_PROFILE_JSON]
+            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(raw) }.getOrNull() }
+            ?.clamped()
+            ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
+    }
+
+    suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
+        dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
     }
 
     /** User-saved Player Glass themes (empty until the user saves one). */

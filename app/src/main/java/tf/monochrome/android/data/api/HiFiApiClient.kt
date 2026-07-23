@@ -6,7 +6,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -278,6 +282,38 @@ class HiFiApiClient @Inject constructor(
             item.album?.let { album -> registerAlbumWithRegistry(album) }
         }
         data.artists?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerArtist(it) } }
+
+        return SearchResult(
+            tracks = data.tracks?.items?.map { it.toDomainTrack() } ?: emptyList(),
+            albums = data.albums?.items?.map { it.toDomainAlbum() } ?: emptyList(),
+            artists = data.artists?.items?.map { it.toDomainArtist() } ?: emptyList(),
+            playlists = emptyList(),
+        )
+    }
+
+    // Apple Music catalog search via the TrypT HiFi instance's /api/apple/* layer.
+    // The endpoint normalizes Apple responses into the same Qobuz-shaped envelope,
+    // so parsing + mapping are identical to searchQobuz. Fails soft (empty result)
+    // on any error so it never blocks the other catalogs.
+    suspend fun searchApple(query: String, offset: Int = 0): SearchResult {
+        val instance = instanceManager.appleInstanceOrNull() ?: return SearchResult()
+        val base = instance.url.trimEnd('/')
+
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/apple/get-music?q=${query.encodeUrl()}&offset=$offset")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return SearchResult()
+
+        if (!envelope.success || envelope.data == null) return SearchResult()
+        val data = envelope.data
+
+        // Tag track ids as Apple so download + playback route to /api/apple/*.
+        // Album/artist ids are NOT registered as Qobuz (Apple album/artist detail
+        // isn't wired yet — registering them would mis-route navigation to Qobuz).
+        data.tracks?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerAppleTrack(it) } }
 
         return SearchResult(
             tracks = data.tracks?.items?.map { it.toDomainTrack() } ?: emptyList(),
@@ -975,6 +1011,61 @@ class HiFiApiClient @Inject constructor(
             value.startsWith("/api/") -> base + value
             value.startsWith("/") -> "$base/api${value}".replace("/api/api/", "/api/")
             else -> "$base/api/$value"
+        }
+    }
+
+    // Apple quality codes accepted by /api/apple/download-music.
+    private fun AudioQuality.appleCode(): String = when (this) {
+        AudioQuality.HI_RES -> "hires-lossless"
+        AudioQuality.LOSSLESS -> "alac"
+        AudioQuality.LOW, AudioQuality.HIGH -> "aac"
+    }
+
+    // Resolve the playable URL for an Apple track: hit /api/apple/download-music,
+    // which returns the wrapper-resolved manifest, and read delivery.streamUrl —
+    // the cloud-cached decrypted file (Range-capable). Atmos-flagged tracks request
+    // the atmos variant. Returns null when Apple isn't configured / not yet cached.
+    suspend fun getAppleStreamUrl(appleId: Long, quality: AudioQuality, atmos: Boolean): String? {
+        val q = if (atmos) "atmos" else quality.appleCode()
+
+        // Tailnet-direct: when a home wrapper/agent URL is set, decrypt + stream
+        // straight from the PC over Tailscale — no cloud. Trigger the decrypt, then
+        // poll the agent's /files endpoint until it serves (short polls, so it's
+        // robust to HTTP client timeouts while the decrypt runs, up to ~3.5 min).
+        val agentUrl = preferences.appleWrapperUrl.first()?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
+        if (agentUrl != null) {
+            val secret = preferences.appleWrapperSecret.first().orEmpty()
+            val fileUrl = "$agentUrl/files/$appleId.m4a"
+            runCatching {
+                httpClient.post("$agentUrl/decrypt") {
+                    header("X-Agent-Secret", secret)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"adamId":"$appleId","quality":"$q"}""")
+                }
+            }
+            val deadline = System.currentTimeMillis() + 210_000L
+            while (System.currentTimeMillis() < deadline) {
+                val ready = runCatching {
+                    val code = httpClient.get(fileUrl) { header("Range", "bytes=0-0") }.status.value
+                    code == 200 || code == 206
+                }.getOrDefault(false)
+                if (ready) return fileUrl
+                delay(2500)
+            }
+            return null
+        }
+
+        // Cloud path: /api/apple/download-music returns the wrapper-resolved manifest;
+        // read delivery.streamUrl (the cloud-cached decrypted file, Range-capable).
+        val instance = instanceManager.appleInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+        return withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/apple/download-music?track_id=$appleId&quality=$q")
+                if (!res.status.isSuccess()) return@runCatching null
+                val env = json.decodeFromString<tf.monochrome.android.data.api.model.AppleDownloadEnvelope>(res.bodyAsText())
+                env.data?.manifest?.delivery?.streamUrl?.takeIf { it.isNotBlank() }?.let { absoluteUrl(it, base) }
+            }.getOrNull()
         }
     }
 

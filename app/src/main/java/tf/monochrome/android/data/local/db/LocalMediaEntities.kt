@@ -67,6 +67,12 @@ data class LocalTrackEntity(
     // sideloaded/re-scanned THX files light up the badge without a DB history.
     val isThxSpatialAudio: Boolean = false,
 
+    // Dolby Atmos release — detected at scan time from the MIME/extension or a
+    // "Dolby Atmos" phrase in the metadata. The authoritative signal (the JOC
+    // extension in the E-AC-3 bitstream) is set once the native demux is wired;
+    // see isDolbyAtmos() and cpp/atmos/README.md.
+    val isDolbyAtmos: Boolean = false,
+
     // Grouping references (populated during scan)
     val albumId: Long? = null,
     val artistId: Long? = null,

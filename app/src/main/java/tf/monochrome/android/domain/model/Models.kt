@@ -272,7 +272,7 @@ fun buildCoverUrl(coverId: String, size: Int): String {
 // ========== Unified Three-Source Models ==========
 
 @Serializable
-enum class SourceType { API, COLLECTION, LOCAL, QOBUZ }
+enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE }
 
 @Serializable
 enum class AudioCodec(val displayName: String) {
@@ -332,6 +332,19 @@ sealed class PlaybackSource {
     @SerialName("QobuzCached")
     data class QobuzCached(
         val qobuzId: Long,
+        val preferredQuality: AudioQuality = AudioQuality.LOSSLESS,
+    ) : PlaybackSource()
+
+    /**
+     * Apple Music source — resolves /api/apple/download-music on the instance,
+     * which returns a wrapper-resolved manifest whose `delivery.streamUrl` points
+     * at the cloud-cached decrypted file (ALAC/Atmos). That URL is Range-capable,
+     * so it streams directly (no full pre-fetch needed).
+     */
+    @Serializable
+    @SerialName("AppleCached")
+    data class AppleCached(
+        val appleId: Long,
         val preferredQuality: AudioQuality = AudioQuality.LOSSLESS,
     ) : PlaybackSource()
 }

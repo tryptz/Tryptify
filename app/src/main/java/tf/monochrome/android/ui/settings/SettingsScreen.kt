@@ -1112,6 +1112,14 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Spatial Audio")
+        SettingItem(
+            title = "Atmos Renderer Configuration",
+            subtitle = "Renderer mode, output layout, downmix, bass management & channel map",
+            onClick = { navController.navigate(Screen.AtmosRenderer.route) },
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
         DspBlockSizeSelector(viewModel)
 
@@ -1574,9 +1582,15 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 private fun InstancesTab(viewModel: SettingsViewModel) {
     val customEndpoint by viewModel.customEndpoint.collectAsState()
     val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsState()
+    val appleEndpoint by viewModel.appleEndpoint.collectAsState()
     val sourceMode by viewModel.sourceMode.collectAsState()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
+    var appleInput by remember(appleEndpoint) { mutableStateOf(appleEndpoint ?: "") }
+    val appleWrapperUrl by viewModel.appleWrapperUrl.collectAsState()
+    val appleWrapperSecret by viewModel.appleWrapperSecret.collectAsState()
+    var appleWrapperInput by remember(appleWrapperUrl) { mutableStateOf(appleWrapperUrl ?: "") }
+    var appleSecretInput by remember(appleWrapperSecret) { mutableStateOf(appleWrapperSecret ?: "") }
 
     SettingsTabContent {
         // Source mode picker — controls which catalogs feed search/discovery.
@@ -1599,6 +1613,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 tf.monochrome.android.data.preferences.SourceMode.BOTH to "Both",
                 tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY to "TIDAL only",
                 tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY to "Qobuz only",
+                tf.monochrome.android.data.preferences.SourceMode.APPLE_ONLY to "Apple only",
             )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 sourceOptions.forEachIndexed { index, (mode, label) ->
@@ -1704,6 +1719,134 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                             val trimmed = latestQobuzInput.value.trim().ifBlank { null }
                             if (trimmed != latestQobuzSaved.value) {
                                 viewModel.setQobuzEndpoint(trimmed)
+                            }
+                        }
+                    }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Apple Music URL",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "TrypT HiFi server exposing /api/apple/* (Dolby Atmos + ALAC). Defaults to the Qobuz URL if left blank.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val latestAppleInput = rememberUpdatedState(appleInput)
+            val latestAppleSaved = rememberUpdatedState(appleEndpoint)
+            OutlinedTextField(
+                value = appleInput,
+                onValueChange = { appleInput = it },
+                placeholder = {
+                    Text(
+                        "https://your-apple-instance",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setAppleEndpoint(latestAppleInput.value.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = latestAppleInput.value.trim().ifBlank { null }
+                            if (trimmed != latestAppleSaved.value) {
+                                viewModel.setAppleEndpoint(trimmed)
+                            }
+                        }
+                    }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Apple Wrapper (Tailscale)",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Tailnet address of the home decrypt agent (e.g. http://100.80.88.106:8790). When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val latestWrapperInput = rememberUpdatedState(appleWrapperInput)
+            val latestWrapperSaved = rememberUpdatedState(appleWrapperUrl)
+            OutlinedTextField(
+                value = appleWrapperInput,
+                onValueChange = { appleWrapperInput = it },
+                placeholder = { Text("http://100.80.88.106:8790", style = MaterialTheme.typography.bodyMedium) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setAppleWrapperUrl(latestWrapperInput.value.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = latestWrapperInput.value.trim().ifBlank { null }
+                            if (trimmed != latestWrapperSaved.value) {
+                                viewModel.setAppleWrapperUrl(trimmed)
+                            }
+                        }
+                    }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Apple Wrapper secret",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Matches the agent's AGENT_SECRET.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val latestSecretInput = rememberUpdatedState(appleSecretInput)
+            val latestSecretSaved = rememberUpdatedState(appleWrapperSecret)
+            OutlinedTextField(
+                value = appleSecretInput,
+                onValueChange = { appleSecretInput = it },
+                placeholder = { Text("agent secret", style = MaterialTheme.typography.bodyMedium) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.setAppleWrapperSecret(latestSecretInput.value.trim().ifBlank { null })
+                }),
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            val trimmed = latestSecretInput.value.trim().ifBlank { null }
+                            if (trimmed != latestSecretSaved.value) {
+                                viewModel.setAppleWrapperSecret(trimmed)
                             }
                         }
                     }

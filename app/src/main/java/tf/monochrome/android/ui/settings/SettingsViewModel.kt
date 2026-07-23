@@ -253,6 +253,12 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val qobuzEndpoint: StateFlow<String?> = preferences.qobuzInstanceUrl
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val appleEndpoint: StateFlow<String?> = preferences.appleInstanceUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val appleWrapperUrl: StateFlow<String?> = preferences.appleWrapperUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val appleWrapperSecret: StateFlow<String?> = preferences.appleWrapperSecret
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val devModeEnabled: StateFlow<Boolean> = preferences.devModeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val sourceMode: StateFlow<tf.monochrome.android.data.preferences.SourceMode> =
@@ -598,6 +604,24 @@ class SettingsViewModel @Inject constructor(
     fun setQobuzEndpoint(endpoint: String?) {
         viewModelScope.launch {
             preferences.setQobuzInstanceUrl(endpoint)
+        }
+    }
+
+    fun setAppleEndpoint(endpoint: String?) {
+        viewModelScope.launch {
+            preferences.setAppleInstanceUrl(endpoint)
+        }
+    }
+
+    fun setAppleWrapperUrl(endpoint: String?) {
+        viewModelScope.launch {
+            preferences.setAppleWrapperUrl(endpoint)
+        }
+    }
+
+    fun setAppleWrapperSecret(secret: String?) {
+        viewModelScope.launch {
+            preferences.setAppleWrapperSecret(secret)
         }
     }
 

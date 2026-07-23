@@ -264,6 +264,7 @@ class MediaScanner @Inject constructor(
             hasEmbeddedArt = tags.hasEmbeddedArt,
             artworkCacheKey = tags.artworkCacheKey,
             isThxSpatialAudio = tags.isThxSpatialAudio,
+            isDolbyAtmos = tags.isDolbyAtmos,
             lastScannedAt = System.currentTimeMillis()
         )
     }
