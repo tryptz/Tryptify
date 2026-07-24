@@ -125,12 +125,22 @@ class ObjectEngine {
   // Render-space position of object `obj` from the last-parsed OAMD (x = left..
   // right, y = down..up, z = back..front). Returns the origin (center) if the
   // frame carried no object element for it. Consumed by the HRTF render (P2).
+  //
+  // A frame carries up to 8 info blocks of intra-frame motion; this returns
+  // the LAST block's endpoint — the frame's target position — which the
+  // renderer's motion crossfade then glides toward. Reading block 0 (as this
+  // originally did) lagged the mastered path by a whole frame. Every block is
+  // resolved in order because resolved_position() accumulates differential
+  // updates per block slot.
   Vec3 object_position(int obj) {
     cavern::ObjectAudioMetadata& o = emdf_.oamd();
     for (int e = 0; e < o.element_count(); ++e) {
       cavern::OAElementMD& el = o.element(e);
       if (el.is_object_element() && obj >= 0 && obj < el.object_count()) {
-        return el.info_block(obj, 0).resolved_position();
+        Vec3 pos{};
+        const int blocks = el.block_count();
+        for (int b = 0; b < blocks; ++b) pos = el.info_block(obj, b).resolved_position();
+        return pos;
       }
     }
     return Vec3{};

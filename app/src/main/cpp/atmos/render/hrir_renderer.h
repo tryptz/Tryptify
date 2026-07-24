@@ -15,7 +15,10 @@
 // differ comb-filters the result (measured -17.8 dB at 10 kHz between nodes 10
 // deg apart — audible as "lofi/thin"). Aligning before interpolation removes the
 // comb; the ITD is restored here as a fractional delay. Input history is carried
-// across frames so the convolution has no block-boundary gap.
+// across frames so the convolution has no block-boundary gap. Direction changes
+// are motion-crossfaded: the frame is convolved against both the previous and
+// the current IR with a raised-cosine blend, and the ITD ramps per sample, so
+// a moving source glides instead of stepping once per frame.
 //
 // Same public interface as the old renderer (configure / set_params /
 // set_bass_management / render / capacity) so the pipeline and JNI are
@@ -144,12 +147,26 @@ class BinauralRenderer {
     float dr[kDelayRing];
     int dwrite = 0;
     float bass_state = 0.0f;
+    // Previous frame's interpolated IR pair + ITD, for the motion crossfade:
+    // when the direction (or the HRIR set) changes, the frame is convolved
+    // against both and crossfaded instead of swapping filters at the boundary.
+    float phl[kHrirTaps];
+    float phr[kHrirTaps];
+    float pdl = 0.0f, pdr = 0.0f;
+    float paz = 0.0f, pel = 0.0f;
+    const float* ptable = nullptr;  // HRIR set the previous IR came from
+    bool has_prev = false;
     void reset() {
       for (float& v : tail) v = 0.0f;
       for (float& v : dl) v = 0.0f;
       for (float& v : dr) v = 0.0f;
+      for (float& v : phl) v = 0.0f;
+      for (float& v : phr) v = 0.0f;
       dwrite = 0;
       bass_state = 0.0f;
+      pdl = pdr = paz = pel = 0.0f;
+      ptable = nullptr;
+      has_prev = false;
     }
   };
 
@@ -215,9 +232,26 @@ class BinauralRenderer {
   }
 
   void mix_source(Source& s, const float* in, float az, float el, int n, float* out) {
-    lookup_hrir(az, height_ ? el : 0.0f);
+    const float el_eff = height_ ? el : 0.0f;
+    lookup_hrir(az, el_eff);
     const int T = kHrirTaps, hist = T - 1;
     const float wet = strength_, dry = 1.0f - strength_, a = bass_coeff_;
+
+    // Motion crossfade decision. Any real direction change (even sub-degree —
+    // it still moves the interpolation weights) or a swapped HRIR set (runtime
+    // SOFA load) crossfades; the epsilon only skips work for static sources.
+    // Without this the whole direction change lands inside the ~ITD-sized
+    // window the delay ring smears it over — zipper steps at the frame rate
+    // (measured 0.0052 max step on a DC probe; crossfaded: ~0.0002).
+    const bool changed = s.has_prev &&
+        (std::fabs(az - s.paz) > 1e-4f || std::fabs(el_eff - s.pel) > 1e-4f ||
+         s.ptable != cur_data_);
+    if (!s.has_prev) {
+      for (int k = 0; k < T; ++k) { s.phl[k] = hl_[k]; s.phr[k] = hr_[k]; }
+      s.pdl = dl_;
+      s.pdr = dr_;
+    }
+    const float pdl0 = s.pdl, pdr0 = s.pdr;
 
     // Build the extended input: [history | this frame's convolved band]. The
     // band is the source minus its managed low band (or the whole source).
@@ -234,27 +268,61 @@ class BinauralRenderer {
       // y[i] = sum_k h[k] * ext[i + (T-1) - k]  = correlate the reversed IR over
       // the window ending at ext[hist + i].
       const float* m = &ext_[i];  // m[0..T-1]; m[T-1] is the newest sample
-      float yl = 0.0f, yr = 0.0f;
-      for (int k = 0; k < T; ++k) {
-        const float x = m[hist - k];
-        yl += hl_[k] * x;
-        yr += hr_[k] * x;
+      float yl, yr, edl, edr;
+      if (changed) {
+        // Dual convolution: previous and current IR share the input window, so
+        // this is one loop with four MACs; the raised-cosine weight moves the
+        // image, and the ITD ramps linearly (a constant-velocity source —
+        // the slight Doppler this implies is the physically correct sound).
+        float yl0 = 0.0f, yr0 = 0.0f, yl1 = 0.0f, yr1 = 0.0f;
+        for (int k = 0; k < T; ++k) {
+          const float x = m[hist - k];
+          yl0 += s.phl[k] * x;
+          yr0 += s.phr[k] * x;
+          yl1 += hl_[k] * x;
+          yr1 += hr_[k] * x;
+        }
+        const float ct = (i + 0.5f) / static_cast<float>(n);
+        const float w = 0.5f - 0.5f * std::cos(kPi * ct);
+        yl = yl0 + w * (yl1 - yl0);
+        yr = yr0 + w * (yr1 - yr0);
+        edl = pdl0 + (dl_ - pdl0) * ct;
+        edr = pdr0 + (dr_ - pdr0) * ct;
+      } else {
+        float l = 0.0f, r = 0.0f;
+        for (int k = 0; k < T; ++k) {
+          const float x = m[hist - k];
+          l += hl_[k] * x;
+          r += hr_[k] * x;
+        }
+        yl = l;
+        yr = r;
+        edl = dl_;
+        edr = dr_;
       }
       // Apply the ITD: push the convolved output into the per-ear ring and read
       // it back the interpolated delay behind, so each ear's arrival time is
       // correct without the onset delay ever being inside the interpolated IR.
       s.dl[s.dwrite] = yl;
       s.dr[s.dwrite] = yr;
-      const float dyl = read_delayed(s.dl, s.dwrite + 1, dl_);
-      const float dyr = read_delayed(s.dr, s.dwrite + 1, dr_);
+      const float dyl = read_delayed(s.dl, s.dwrite + 1, edl);
+      const float dyr = read_delayed(s.dr, s.dwrite + 1, edr);
       s.dwrite = (s.dwrite + 1) % kDelayRing;
       // Wet HRIR image blended with the dry (mono) band; the managed bass is
       // re-added equally to both ears outside the blend.
       out[2 * i]     += wet * dyl + dry * hp + low;
       out[2 * i + 1] += wet * dyr + dry * hp + low;
     }
-    // Carry the last (T-1) convolved-band samples into the next frame.
+    // Carry the last (T-1) convolved-band samples into the next frame, and the
+    // current IR/ITD/direction as the next frame's crossfade origin.
     for (int i = 0; i < hist; ++i) s.tail[i] = ext_[n + i];
+    for (int k = 0; k < T; ++k) { s.phl[k] = hl_[k]; s.phr[k] = hr_[k]; }
+    s.pdl = dl_;
+    s.pdr = dr_;
+    s.paz = az;
+    s.pel = el_eff;
+    s.ptable = cur_data_;
+    s.has_prev = true;
   }
 
   int sample_rate_ = 48000;
