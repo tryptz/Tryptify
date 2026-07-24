@@ -238,7 +238,13 @@ class AtmosAudioProcessor @Inject constructor(
         anchorUs = Long.MIN_VALUE
         anchorSamples = 0L
         lastRaw = null
-        if (pendingFormat == AudioFormat.NOT_SET) return
+        if (pendingFormat == AudioFormat.NOT_SET) {
+            // A seek within the same format flushes without reconfiguring:
+            // clear the native time history so no pre-seek audio leaks out of
+            // the latency-matching delay or the convolution tails.
+            if (pipeline != 0L) AtmosNative.nativePipelineFlush(pipeline)
+            return
+        }
         val formatChanged = inputFormat == AudioFormat.NOT_SET ||
             inputFormat.sampleRate != pendingFormat.sampleRate
         inputFormat = pendingFormat
@@ -247,7 +253,8 @@ class AtmosAudioProcessor @Inject constructor(
             pipeline = AtmosNative.nativePipelineCreate(inputFormat.sampleRate, MAX_OBJECTS)
             sofaApplied = false  // a fresh pipeline has the baked HRTF; re-apply any custom one
             pushParams()  // a fresh pipeline starts at defaults — apply the profile
-
+        } else if (pipeline != 0L) {
+            AtmosNative.nativePipelineFlush(pipeline)
         }
         pendingFormat = AudioFormat.NOT_SET
     }

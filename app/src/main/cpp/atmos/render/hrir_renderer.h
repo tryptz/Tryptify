@@ -122,6 +122,14 @@ class BinauralRenderer {
 
   int capacity() const { return static_cast<int>(sources_.size()); }
 
+  // Zeroes every source's time history (convolution tails, ITD delay rings)
+  // without reallocating, so it is safe on the audio thread. Called on
+  // seek/flush — otherwise the first frames after a seek would convolve
+  // against pre-seek audio.
+  void reset_history() {
+    for (Source& s : sources_) s.reset();
+  }
+
  private:
   // The ITD is applied as a fractional delay on the convolved output. The baked
   // delays reach ~32 samples; 64 leaves margin for interpolation.

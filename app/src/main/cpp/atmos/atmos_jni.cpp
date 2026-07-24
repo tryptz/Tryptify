@@ -105,6 +105,15 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineDestroy(
   delete pipeline_of(pipeline);
 }
 
+// Clears the pipeline's time history (delay lines, convolution tails, DRC
+// envelope) on seek/flush. Allocation-free — safe from the audio thread.
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineFlush(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe != nullptr) pipe->flush_state();
+}
+
 // Pushes the user's RendererProfile into the pipeline. `mode` and `downmix` are
 // the Kotlin RendererMode / StereoDownmixMode ordinals.
 JNIEXPORT void JNICALL
@@ -145,8 +154,9 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeClearSofa(
 
 // Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
 // `bedInterleaved` is channels*samples floats; `stereoOut` receives 2*samples
-// floats when Atmos is rendered. Returns 1 (rendered) or -1 (no objects — the
-// caller passes the bed through unchanged). First-cut marshaling; P4 optimizes.
+// floats when the pipeline produced output (object render OR its latency-
+// matched fallback downmix — path switches crossfade inside the pipeline).
+// Returns 1 (output written) or -1 (inactive — the caller folds down itself).
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrame(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray frame,

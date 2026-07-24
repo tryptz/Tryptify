@@ -65,7 +65,10 @@ int main() {
   std::printf("finite output: %s\n", allFinite ? "yes" : "NO");
   std::printf("best lag: %d samples, correlation: %.5f\n", bestLag, bestCorr);
 
-  const bool pass = allFinite && std::fabs(bestCorr) > 0.99f;
+  // The lag is pinned: AtmosPipeline::kQmfLatency delays the fallback downmix
+  // by exactly this measured round-trip so both output paths stay aligned. If
+  // the filterbank ever changes, this failing says "update kQmfLatency too".
+  const bool pass = allFinite && std::fabs(bestCorr) > 0.99f && bestLag == 577;
   std::printf("=== %s ===\n", pass ? "PASS" : "FAIL");
   return pass ? 0 : 1;
 }

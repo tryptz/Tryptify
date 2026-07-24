@@ -8,6 +8,7 @@
 #ifndef TF_ATMOS_ATMOS_PIPELINE_H
 #define TF_ATMOS_ATMOS_PIPELINE_H
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -41,6 +42,23 @@ class AtmosPipeline {
     max_objects_ = max_objects < 1 ? 1 : max_objects;
     // +8 slots so the bed-HRTF path can also render bed channels as sources.
     renderer_.configure(sample_rate, max_objects_ + 8);
+    dm_delay_l_.assign(kQmfLatency, 0.0f);
+    dm_delay_r_.assign(kQmfLatency, 0.0f);
+    dm_idx_ = 0;
+    last_path_ = kPathNone;
+  }
+
+  // Clears all time history (downmix delay, renderer tails, DRC envelope, path
+  // memory) without reallocating — audio-thread-safe. Called on seek/flush;
+  // without it the first ~12 ms after a seek would replay pre-seek audio out
+  // of the latency-matching delay line.
+  void flush_state() {
+    std::fill(dm_delay_l_.begin(), dm_delay_l_.end(), 0.0f);
+    std::fill(dm_delay_r_.begin(), dm_delay_r_.end(), 0.0f);
+    dm_idx_ = 0;
+    last_path_ = kPathNone;
+    drc_env_ = 0.0f;
+    renderer_.reset_history();
   }
 
   // Applies the user's RendererProfile. `lfe_gain_db` currently affects the
@@ -102,10 +120,14 @@ class AtmosPipeline {
                          out_stereo);
   }
 
-  // Renders one E-AC-3 frame's Atmos content to interleaved stereo (`out` holds
-  // 2*samples floats). Returns 1 if Atmos was rendered, or -1 if the frame has
-  // no objects (the caller should then pass the bed through unchanged). `bed` is
-  // [bed_channels][samples] deinterleaved float (the decoder's channel order).
+  // Renders one E-AC-3 frame to interleaved stereo (`out` holds 2*samples
+  // floats). Returns 1 whenever the binaural render is active: the output is
+  // the object render or, for frames without usable JOC, an ITU downmix
+  // delayed by the QMF round-trip so both paths are sample-aligned — a path
+  // switch is then an equal-power crossfade instead of a cut that also jumps
+  // ~12 ms in time. Returns -1 only when the caller's own fold-down should be
+  // used (passthrough mode / LoRo / LtRt). `bed` is [bed_channels][samples]
+  // deinterleaved float (the decoder's channel order).
   int process_frame(const uint8_t* frame, size_t frame_size, const float* const* bed,
                     int bed_channels, int samples, float* out) {
     // Passthrough / non-binaural fold-downs are the caller's job (it already
@@ -119,10 +141,55 @@ class AtmosPipeline {
       if (rc == 1) apply_post(out, samples);
       return rc;
     }
+    if (bed_channels <= 0 || samples <= 0) return -1;
+
+    // The latency-matched downmix runs every frame, rendered or not: it is the
+    // fallback signal, and its delay line must stay primed with real audio so
+    // a render→downmix switch always has aligned history to fade into.
+    if (static_cast<int>(dm_.size()) < 2 * samples) dm_.assign(2 * samples, 0.0f);
+    render_downmix(bed, bed_channels, samples, dm_.data());
 
     const int n = engine_.upmix_frame(frame, frame_size, bed, bed_channels, samples);
-    if (n <= 0) return -1;
-    const int objects = n < max_objects_ ? n : max_objects_;
+    const int want = n > 0 ? kPathRender : kPathDownmix;
+    if (want == kPathRender) render_objects(n, samples, out);
+
+    if (last_path_ == kPathNone) last_path_ = want;
+    if (want != last_path_) {
+      if (want == kPathDownmix) {
+        // The engine still holds the last JOC/OAMD past its expiry; render one
+        // fade-out frame from it so the switch is a crossfade, not a cut.
+        const int m = engine_.upmix_held(bed, bed_channels, samples);
+        if (m > 0) {
+          render_objects(m, samples, out);
+          crossfade(out, dm_.data(), samples, out);
+        } else {
+          std::copy(dm_.data(), dm_.data() + 2 * samples, out);
+        }
+      } else {
+        crossfade(dm_.data(), out, samples, out);
+      }
+      last_path_ = want;
+    } else if (want == kPathDownmix) {
+      std::copy(dm_.data(), dm_.data() + 2 * samples, out);
+    }
+    apply_post(out, samples);
+    return 1;
+  }
+
+ private:
+  static constexpr int kMaxBedCh = 8;
+  // The object render's bed passes through QMF analysis+synthesis, which the
+  // fallback downmix does not. MEASURED round-trip: cavern_qmf_test's best-lag
+  // cross-correlation reports 577 samples (not the textbook 640-64=576) — the
+  // fallback is delayed by the same amount so the paths stay sample-aligned.
+  static constexpr int kQmfLatency = 577;
+  static constexpr float kHalfPi = 1.57079632679f;
+  enum { kPathNone = 0, kPathRender = 1, kPathDownmix = 2 };
+
+  // The object render (JOC objects -> HRIR binaural + diffuse LFE) for the
+  // engine's current upmix. `object_count` is the engine's return value.
+  void render_objects(int object_count, int samples, float* out) {
+    const int objects = object_count < max_objects_ ? object_count : max_objects_;
 
     // The LFE is non-directional bass. Spatializing it through the HRIR places
     // it at a point (and, with no OAMD position, at the front-left origin corner
@@ -159,12 +226,42 @@ class AtmosPipeline {
         }
       }
     }
-    apply_post(out, samples);
-    return 1;
   }
 
- private:
-  static constexpr int kMaxBedCh = 8;
+  // ITU-style fold-down (FL FR FC LFE SL SR; the LFE is omitted per BS.775),
+  // pushed through the kQmfLatency delay line. Matches the Kotlin fallback's
+  // coefficients so pipeline-off and pipeline-on fallbacks sound identical.
+  void render_downmix(const float* const* bed, int ch, int samples, float* out) {
+    for (int i = 0; i < samples; ++i) {
+      float l, r;
+      if (ch >= 6) {
+        const float fc = 0.707f * bed[2][i];
+        l = bed[0][i] + fc + 0.707f * bed[4][i];
+        r = bed[1][i] + fc + 0.707f * bed[5][i];
+      } else {
+        l = bed[0][i];
+        r = ch > 1 ? bed[1][i] : bed[0][i];
+      }
+      out[2 * i] = dm_delay_l_[dm_idx_];
+      out[2 * i + 1] = dm_delay_r_[dm_idx_];
+      dm_delay_l_[dm_idx_] = l;
+      dm_delay_r_[dm_idx_] = r;
+      if (++dm_idx_ == kQmfLatency) dm_idx_ = 0;
+    }
+  }
+
+  // Equal-power fade from `from` into `to` across the frame. `out` may alias
+  // either input — each index is read before it is written.
+  void crossfade(const float* from, const float* to, int samples, float* out) {
+    for (int i = 0; i < samples; ++i) {
+      const float t = (i + 0.5f) / static_cast<float>(samples);
+      const float wf = std::cos(t * kHalfPi);
+      const float wt = std::sin(t * kHalfPi);
+      out[2 * i] = wf * from[2 * i] + wt * to[2 * i];
+      out[2 * i + 1] = wf * from[2 * i + 1] + wt * to[2 * i + 1];
+    }
+  }
+
   // Canonical speaker azimuths (radians) for the decoder's channel order
   // FL FR FC LFE SL SR BL BR. Used by the bed-HRTF mode, which spatializes the
   // core bed directly instead of reconstructing objects.
@@ -242,6 +339,11 @@ class AtmosPipeline {
   float drc_env_ = 0.0f;
   std::vector<const float*> obj_ptrs_, bed_ptrs_;
   std::vector<float> az_, el_, lfe_scratch_;
+  // Latency-matched fallback downmix: per-ear delay lines (kQmfLatency long),
+  // the delayed stereo scratch, and which path produced the previous frame.
+  std::vector<float> dm_delay_l_, dm_delay_r_, dm_;
+  int dm_idx_ = 0;
+  int last_path_ = kPathNone;
   // Reused marshaling / deinterleave storage (see frame_scratch etc.).
   std::vector<uint8_t> frame_scratch_;
   std::vector<float> bed_scratch_, stereo_scratch_;

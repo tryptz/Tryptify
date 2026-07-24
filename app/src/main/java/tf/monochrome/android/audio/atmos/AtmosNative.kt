@@ -67,6 +67,13 @@ object AtmosNative {
     external fun nativePipelineDestroy(pipeline: Long)
 
     /**
+     * Clears the pipeline's time history (latency-matching delay lines,
+     * convolution tails, DRC envelope) after a seek/flush, so no pre-seek audio
+     * leaks into the first frames. Allocation-free; audio-thread-safe.
+     */
+    external fun nativePipelineFlush(pipeline: Long)
+
+    /**
      * Installs a runtime HRTF from raw .sofa file bytes, replacing the baked
      * MIT KEMAR default. Parses + onset-aligns off the audio thread and swaps it
      * in double-buffered, so it is safe to call while playing. Returns 1 on
@@ -104,9 +111,11 @@ object AtmosNative {
      *
      * @param frame the raw E-AC-3 access unit (carries JOC/OAMD side-data)
      * @param bedInterleaved channels*samples floats, interleaved, decoder order
-     * @param stereoOut receives 2*samples floats when Atmos is rendered
-     * @return 1 if rendered into [stereoOut], or -1 if the frame has no objects
-     *   (the caller then passes the bed through unchanged)
+     * @param stereoOut receives 2*samples floats when the pipeline produced
+     *   output — the object render or its latency-matched fallback downmix
+     *   (path switches are crossfaded inside the pipeline)
+     * @return 1 if [stereoOut] was written, or -1 if the pipeline is inactive
+     *   (passthrough / LoRo / LtRt — the caller folds down itself)
      */
     external fun nativeProcessFrame(
         pipeline: Long,

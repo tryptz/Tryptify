@@ -62,6 +62,14 @@ class ObjectEngine {
     return upmix(emdf_.joc(), bed, bed_channels, frame_samples);
   }
 
+  // One more upmix from the held JOC/OAMD, ignoring the hold expiry. The
+  // pipeline uses it to render the fade-out half of a render→downmix seam
+  // after upmix_frame() has already returned -1 for the same frame — without
+  // it the hold's expiry would end in a hard cut instead of a crossfade.
+  int upmix_held(const float* const* bed, int bed_channels, int frame_samples) {
+    return upmix(emdf_.joc(), bed, bed_channels, frame_samples);
+  }
+
   // Core upmix from an already-decoded JOC (kept separate so it is host-testable
   // without synthesizing a full EMDF frame). `frame_samples` must be a multiple
   // of kTimeslot (an E-AC-3 frame is 1536 = 24 * 64).
