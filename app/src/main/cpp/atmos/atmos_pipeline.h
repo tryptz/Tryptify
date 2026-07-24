@@ -191,6 +191,17 @@ class AtmosPipeline {
   void render_objects(int object_count, int samples, float* out) {
     const int objects = object_count < max_objects_ ? object_count : max_objects_;
 
+    // Apply each object's OAMD gain (dialog/ambience trims mastered into the
+    // stream) to the reconstructed PCM, ramped from the previously applied
+    // value. A negative gain is OAMD's "hold" sentinel — keep the last one.
+    if (static_cast<int>(obj_gain_.size()) < objects) obj_gain_.resize(objects, 1.0f);
+    for (int o = 0; o < objects; ++o) {
+      const float g = engine_.object_gain(o);
+      const float g1 = g >= 0.0f ? g : obj_gain_[o];
+      engine_.scale_object(o, obj_gain_[o], g1);
+      obj_gain_[o] = g1;
+    }
+
     // The LFE is non-directional bass. Spatializing it through the HRIR places
     // it at a point (and, with no OAMD position, at the front-left origin corner
     // — where it was the loudest, most obviously mislocalized object). Pull it
@@ -344,6 +355,8 @@ class AtmosPipeline {
   std::vector<float> dm_delay_l_, dm_delay_r_, dm_;
   int dm_idx_ = 0;
   int last_path_ = kPathNone;
+  // Last applied OAMD gain per object (survives seeks — it is stream metadata).
+  std::vector<float> obj_gain_;
   // Reused marshaling / deinterleave storage (see frame_scratch etc.).
   std::vector<uint8_t> frame_scratch_;
   std::vector<float> bed_scratch_, stereo_scratch_;

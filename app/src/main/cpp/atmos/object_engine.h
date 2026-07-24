@@ -116,6 +116,38 @@ class ObjectEngine {
   // The decoded OAMD frame (object positions), for the HRTF render (P2).
   const cavern::ObjectAudioMetadata& oamd() const { return emdf_.oamd(); }
 
+  // OAMD gain of object `obj` from the frame's last info block, or a negative
+  // value meaning "hold the previous gain" (OAMD's gain_helper==3 sentinel, or
+  // no object element). Decoded gains include Cavern's 3 dB anti-clip
+  // attenuation. The caller keeps the last applied gain per object and ramps.
+  float object_gain(int obj) {
+    cavern::ObjectAudioMetadata& o = emdf_.oamd();
+    for (int e = 0; e < o.element_count(); ++e) {
+      cavern::OAElementMD& el = o.element(e);
+      if (el.is_object_element() && obj >= 0 && obj < el.object_count()) {
+        const int last = el.block_count() - 1;
+        if (last < 0) return -1.0f;
+        return el.info_block(obj, last).gain();
+      }
+    }
+    return -1.0f;
+  }
+
+  // Applies a per-object gain to the reconstructed PCM in place, ramped
+  // linearly from `g0` to `g1` across the frame (no zipper on gain changes).
+  // Called by the pipeline between upmix and render.
+  void scale_object(int obj, float g0, float g1) {
+    if (obj < 0 || obj >= object_count_ || frame_samples_ <= 0) return;
+    if (g0 == 1.0f && g1 == 1.0f) return;
+    float* p = object_pcm_[obj].data();
+    const float step = (g1 - g0) / static_cast<float>(frame_samples_);
+    float g = g0;
+    for (int i = 0; i < frame_samples_; ++i) {
+      p[i] *= g;
+      g += step;
+    }
+  }
+
   // Object index of the LFE, or -1 if none. Bed objects occupy the first bed
   // slots in object order, and the LFE's bed-order index is therefore its object
   // index. The LFE is non-directional bass and must NOT be HRIR-spatialized —
