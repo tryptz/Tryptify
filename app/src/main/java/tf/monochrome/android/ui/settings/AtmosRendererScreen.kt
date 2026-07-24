@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -155,19 +156,33 @@ class AtmosRendererViewModel @Inject constructor(
     fun installTestTrack() {
         _testTrackStatus.value = "Adding…"
         viewModelScope.launch(Dispatchers.IO) {
-            val name = "Tryptify Atmos Test.mp4"
+            // MediaStore canonicalizes the extension for audio/mp4 to ".m4a" —
+            // inserting "….mp4" came back as "….mp4.m4a", so an equality check
+            // on the pre-rename name never matched and every tap added another
+            // copy. Use the canonical name and match existing copies by prefix.
+            val name = "Tryptify Atmos Test.m4a"
             val resolver = context.contentResolver
             val audio = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
                 MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
             else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
 
-            val exists = runCatching {
+            val existing = runCatching {
                 resolver.query(audio, arrayOf(MediaStore.Audio.Media._ID),
-                    "${MediaStore.Audio.Media.DISPLAY_NAME}=?", arrayOf(name), null)
-                    ?.use { it.count > 0 } ?: false
-            }.getOrDefault(false)
+                    "${MediaStore.Audio.Media.DISPLAY_NAME} LIKE ?",
+                    arrayOf("Tryptify Atmos Test%"), null)
+                    ?.use { c ->
+                        buildList { while (c.moveToNext()) add(c.getLong(0)) }
+                    } ?: emptyList()
+            }.getOrDefault(emptyList())
 
-            _testTrackStatus.value = if (exists) {
+            _testTrackStatus.value = if (existing.isNotEmpty()) {
+                // Heal earlier duplicate inserts: keep one copy, drop the rest
+                // (they are app-owned rows, deletable without user consent).
+                existing.drop(1).forEach { id ->
+                    runCatching {
+                        resolver.delete(ContentUris.withAppendedId(audio, id), null, null)
+                    }
+                }
                 "Already in your library — refresh the Local tab to find “Tryptify Atmos Test”."
             } else runCatching {
                 val values = ContentValues().apply {
