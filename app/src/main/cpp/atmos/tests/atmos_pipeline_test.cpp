@@ -153,6 +153,31 @@ void test_end_to_end() {
   CHECK(finite);
 }
 
+void test_bed_mode_lfe_diffuse() {
+  std::printf("AtmosPipeline: bed-HRTF mode sums the LFE diffusely, not placed\n");
+  const int samples = 1536;
+  std::vector<std::vector<float>> bed(6, std::vector<float>(samples, 0.0f));
+  for (int i = 0; i < samples; ++i)
+    bed[3][i] = 0.5f * std::sin(2.0f * 3.14159265f * 40.0f * i / 48000.0f);  // LFE only
+  std::vector<const float*> bed_ptrs(6);
+  for (int c = 0; c < 6; ++c) bed_ptrs[c] = bed[c].data();
+
+  AtmosPipeline pipe; pipe.configure(48000, 16);
+  pipe.set_params(/*mode=*/2, /*downmix=*/0, 1.0f, true, 0.0f, false, 80, 0, false);
+  std::vector<uint8_t> frame(64, 0xAB);
+  std::vector<float> out(2 * samples, 0.0f);
+  CHECK(pipe.process_frame(frame.data(), frame.size(), bed_ptrs.data(), 6, samples, out.data()) == 1);
+  // Only the LFE carries signal: both ears must be identical (diffuse, no
+  // HRIR placement) and match the source at unity trim.
+  bool equal = true, matches = true;
+  for (int i = 0; i < samples; ++i) {
+    if (std::fabs(out[2 * i] - out[2 * i + 1]) > 1e-6f) equal = false;
+    if (std::fabs(out[2 * i] - bed[3][i]) > 1e-4f) matches = false;
+  }
+  CHECK(equal);
+  CHECK(matches);
+}
+
 }  // namespace
 
 int main() {
@@ -161,6 +186,7 @@ int main() {
   test_passthrough_mode();
   test_downmix_latency();
   test_seam_continuity();
+  test_bed_mode_lfe_diffuse();
   test_end_to_end();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;

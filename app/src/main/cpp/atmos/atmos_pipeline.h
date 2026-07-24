@@ -282,25 +282,33 @@ class AtmosPipeline {
       -0.5236f, 0.5236f, 0.0f, 0.0f, -1.9199f, 1.9199f, -2.6180f, 2.6180f};
 
   // Spatializes the decoded bed channels at their speaker positions (no JOC).
+  // The LFE (channel 3 in a >=4ch bed) is non-directional bass and is summed
+  // diffusely to both ears instead of being HRIR-placed at front-center —
+  // mirroring the object path's LFE handling.
   int render_bed(const float* const* bed, int bed_channels, int samples, float* out) {
     const int ch = bed_channels > kMaxBedCh ? kMaxBedCh : bed_channels;
     if (ch <= 0) return -1;
-    bed_ptrs_.resize(ch);
-    az_.resize(ch);
-    el_.resize(ch);
+    const int lfe_ch = ch >= 4 ? 3 : -1;
+    bed_ptrs_.clear();
+    az_.clear();
+    el_.clear();
     for (int c = 0; c < ch; ++c) {
-      az_[c] = kBedAzimuth[c];
-      el_[c] = 0.0f;
-      if (c == 3 && lfe_gain_ != 1.0f) {  // LFE trim from the profile
-        lfe_scratch_.resize(samples);
-        for (int i = 0; i < samples; ++i) lfe_scratch_[i] = bed[c][i] * lfe_gain_;
-        bed_ptrs_[c] = lfe_scratch_.data();
-      } else {
-        bed_ptrs_[c] = bed[c];
+      if (c == lfe_ch) continue;
+      bed_ptrs_.push_back(bed[c]);
+      az_.push_back(kBedAzimuth[c]);
+      el_.push_back(0.0f);
+    }
+    renderer_.render(bed_ptrs_.data(), az_.data(), el_.data(),
+                     static_cast<int>(bed_ptrs_.size()),
+                     nullptr, nullptr, nullptr, 0, samples, out);
+    if (lfe_ch >= 0) {
+      const float* lp = bed[lfe_ch];
+      for (int i = 0; i < samples; ++i) {
+        const float v = lp[i] * lfe_gain_;
+        out[2 * i] += v;
+        out[2 * i + 1] += v;
       }
     }
-    renderer_.render(bed_ptrs_.data(), az_.data(), el_.data(), ch,
-                     nullptr, nullptr, nullptr, 0, samples, out);
     return 1;
   }
 
@@ -399,7 +407,7 @@ class AtmosPipeline {
   float rf_target_ = 1.0f;
   bool rf_seen_ = false;
   std::vector<const float*> obj_ptrs_, bed_ptrs_;
-  std::vector<float> az_, el_, lfe_scratch_;
+  std::vector<float> az_, el_;
   // Latency-matched fallback downmix: per-ear delay lines (kQmfLatency long),
   // the delayed stereo scratch, and which path produced the previous frame.
   std::vector<float> dm_delay_l_, dm_delay_r_, dm_;

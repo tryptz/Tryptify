@@ -53,9 +53,15 @@ class BinauralRenderer {
     for (Source& s : sources_) s.reset();
     hl_.assign(kHrirTaps, 0.0f);
     hr_.assign(kHrirTaps, 0.0f);
+    // Recompute the crossover for the (possibly new) sample rate.
+    set_bass_management(bass_management_, crossover_hz_);
   }
 
-  // strength: 0 = dry (mono source to both ears) .. 1 = full HRIR convolution.
+  // strength: 1 = full HRIR convolution; 0 = ITD-only (the dry band keeps the
+  // per-ear arrival-time cue but no spectral shaping). The dry path shares the
+  // wet path's fractional ITD delay so blending them is time-aligned — an
+  // undelayed dry signal against an ITD-delayed wet one comb-filtered every
+  // intermediate strength setting.
   // height_virtualization: when false, elevation is ignored (all sources are
   // looked up at the ear-level ring), matching the profile toggle.
   void set_params(float strength, bool height_virtualization) {
@@ -66,11 +72,25 @@ class BinauralRenderer {
   // Below `crossover_hz` the signal bypasses the HRIR and is summed equally to
   // both ears: low frequencies carry almost no interaural cue, and keeping them
   // out of the convolution avoids muddying the bass with the HRIR's colouration.
+  // The split is a Linkwitz-Riley 4th-order pair (two cascaded Butterworth
+  // biquads per band): LP4 + HP4 sums to an allpass, i.e. magnitude-flat, where
+  // the previous one-pole split leaked mids into the diffuse band at 6 dB/oct.
   void set_bass_management(bool enabled, int crossover_hz) {
     bass_management_ = enabled;
     crossover_hz_ = crossover_hz > 0 ? crossover_hz : 80;
-    bass_coeff_ = std::exp(-2.0f * kPi * static_cast<float>(crossover_hz_) /
-                           static_cast<float>(sample_rate_));
+    const float w0 = 2.0f * kPi * static_cast<float>(crossover_hz_) /
+                     static_cast<float>(sample_rate_);
+    const float cw = std::cos(w0);
+    const float alpha = std::sin(w0) * 0.70710678f;  // Q = 1/sqrt(2)
+    const float a0 = 1.0f + alpha;
+    lp_c_[0] = (0.5f * (1.0f - cw)) / a0;
+    lp_c_[1] = (1.0f - cw) / a0;
+    lp_c_[2] = lp_c_[0];
+    hp_c_[0] = (0.5f * (1.0f + cw)) / a0;
+    hp_c_[1] = -(1.0f + cw) / a0;
+    hp_c_[2] = hp_c_[0];
+    lp_c_[3] = hp_c_[3] = (-2.0f * cw) / a0;
+    lp_c_[4] = hp_c_[4] = (1.0f - alpha) / a0;
   }
 
   // Renders `num_objects` object signals (objects[o], `n` samples each) at
@@ -142,11 +162,14 @@ class BinauralRenderer {
     // The last (kHrirTaps-1) samples of the band that was convolved last frame,
     // so this frame's convolution is continuous at the boundary.
     float tail[kHrirTaps];
-    // Per-ear ring of convolved output, delayed by the interpolated ITD.
+    // Per-ear ring of convolved output, delayed by the interpolated ITD, and
+    // the dry band's input ring (read at the same delays so wet/dry align).
     float dl[kDelayRing];
     float dr[kDelayRing];
+    float din[kDelayRing];
     int dwrite = 0;
-    float bass_state = 0.0f;
+    // LR4 crossover state: LP biquad 1+2, HP biquad 1+2 (2 floats each).
+    float bm[8];
     // Previous frame's interpolated IR pair + ITD, for the motion crossfade:
     // when the direction (or the HRIR set) changes, the frame is convolved
     // against both and crossfaded instead of swapping filters at the boundary.
@@ -160,15 +183,25 @@ class BinauralRenderer {
       for (float& v : tail) v = 0.0f;
       for (float& v : dl) v = 0.0f;
       for (float& v : dr) v = 0.0f;
+      for (float& v : din) v = 0.0f;
       for (float& v : phl) v = 0.0f;
       for (float& v : phr) v = 0.0f;
+      for (float& v : bm) v = 0.0f;
       dwrite = 0;
-      bass_state = 0.0f;
       pdl = pdr = paz = pel = 0.0f;
       ptable = nullptr;
       has_prev = false;
     }
   };
+
+  // One biquad step, transposed direct form II. c = {b0,b1,b2,a1,a2}; z = 2
+  // floats of state.
+  static float biquad(const float* c, float* z, float x) {
+    const float y = c[0] * x + z[0];
+    z[0] = c[1] * x - c[3] * y + z[1];
+    z[1] = c[2] * x - c[4] * y;
+    return y;
+  }
 
   // Fractional read `delay` samples behind the write cursor of a delay ring.
   static float read_delayed(const float* ring, int write, float delay) {
@@ -235,7 +268,7 @@ class BinauralRenderer {
     const float el_eff = height_ ? el : 0.0f;
     lookup_hrir(az, el_eff);
     const int T = kHrirTaps, hist = T - 1;
-    const float wet = strength_, dry = 1.0f - strength_, a = bass_coeff_;
+    const float wet = strength_, dry = 1.0f - strength_;
 
     // Motion crossfade decision. Any real direction change (even sub-degree —
     // it still moves the interpolation weights) or a swapped HRIR set (runtime
@@ -259,9 +292,12 @@ class BinauralRenderer {
     for (int i = 0; i < n; ++i) {
       float src = in[i], low = 0.0f, hp = src;
       if (bass_management_) {
-        s.bass_state = (1.0f - a) * src + a * s.bass_state;
-        low = s.bass_state;
-        hp = src - low;
+        // LR4 split: both bands are filtered (no subtractive shortcut) so
+        // LP4 + HP4 sums allpass-flat.
+        float lp = biquad(lp_c_, s.bm + 0, src);
+        low = biquad(lp_c_, s.bm + 2, lp);
+        float hb = biquad(hp_c_, s.bm + 4, src);
+        hp = biquad(hp_c_, s.bm + 6, hb);
       }
       ext_[hist + i] = hp;
 
@@ -303,15 +339,21 @@ class BinauralRenderer {
       // Apply the ITD: push the convolved output into the per-ear ring and read
       // it back the interpolated delay behind, so each ear's arrival time is
       // correct without the onset delay ever being inside the interpolated IR.
+      // The dry band takes the SAME per-ear delays from its own input ring —
+      // time-aligned with the wet image, so any blend of the two is comb-free
+      // (and strength 0 degrades gracefully to an ITD-only render).
       s.dl[s.dwrite] = yl;
       s.dr[s.dwrite] = yr;
+      s.din[s.dwrite] = hp;
       const float dyl = read_delayed(s.dl, s.dwrite + 1, edl);
       const float dyr = read_delayed(s.dr, s.dwrite + 1, edr);
+      const float dryl = read_delayed(s.din, s.dwrite + 1, edl);
+      const float dryr = read_delayed(s.din, s.dwrite + 1, edr);
       s.dwrite = (s.dwrite + 1) % kDelayRing;
-      // Wet HRIR image blended with the dry (mono) band; the managed bass is
+      // Wet HRIR image blended with the aligned dry band; the managed bass is
       // re-added equally to both ears outside the blend.
-      out[2 * i]     += wet * dyl + dry * hp + low;
-      out[2 * i + 1] += wet * dyr + dry * hp + low;
+      out[2 * i]     += wet * dyl + dry * dryl + low;
+      out[2 * i + 1] += wet * dyr + dry * dryr + low;
     }
     // Carry the last (T-1) convolved-band samples into the next frame, and the
     // current IR/ITD/direction as the next frame's crossfade origin.
@@ -330,7 +372,9 @@ class BinauralRenderer {
   bool height_ = true;
   bool bass_management_ = false;
   int crossover_hz_ = 80;
-  float bass_coeff_ = 0.0f;
+  // LR4 crossover coefficients ({b0,b1,b2,a1,a2} per band); state is per-source.
+  float lp_c_[5] = {0, 0, 0, 0, 0};
+  float hp_c_[5] = {0, 0, 0, 0, 0};
   std::vector<Source> sources_;
   std::vector<float> ext_;       // reusable [hist + n] convolution input
   std::vector<float> hl_, hr_;   // interpolated HRIR pair for the current source
