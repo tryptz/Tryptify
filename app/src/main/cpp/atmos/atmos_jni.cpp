@@ -7,6 +7,7 @@
 // This first entry point lets the Kotlin sample-tap probe a frame: it walks the
 // EMDF container in the frame's aux data and reports the OAMD object count, which
 // is what the AtmosAudioProcessor keys its per-frame upmix on.
+#include <android/log.h>
 #include <jni.h>
 
 #include <cstdint>
@@ -179,6 +180,16 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrame(
   const int rc = pipe->process_frame_interleaved(
       fbuf.data(), static_cast<size_t>(flen), bbuf.data(), channels, samples,
       sbuf.data());
+  // Truncation should never happen (DD+ JOC practice is <=16 objects) but must
+  // never be silent if it does. One log per process lifetime.
+  static bool truncation_warned = false;
+  if (rc == 1 && !truncation_warned && pipe->last_truncated() > 0) {
+    truncation_warned = true;
+    __android_log_print(ANDROID_LOG_WARN, "AtmosPipeline",
+                        "JOC stream carries more objects than the renderer cap;"
+                        " dropping %d object(s) per frame",
+                        pipe->last_truncated());
+  }
   if (rc == 1) {
     if (env->GetArrayLength(stereoOut) < 2 * samples) return -1;
     env->SetFloatArrayRegion(stereoOut, 0, 2 * samples, sbuf.data());

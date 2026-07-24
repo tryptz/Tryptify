@@ -108,3 +108,40 @@ JNI/Media3 wiring.
 
 See the phased acceptance criteria in the renderer plan (§7). This commit lands
 Phase-0-adjacent foundations: the pieces that are provable in isolation.
+
+## Render pipeline — as shipped
+
+The above "still to port" notes predate plan Option B2, which is what actually
+shipped: NextLib's FfmpegAudioRenderer decodes the E-AC-3 core bed, a Kotlin
+sample tap preserves each raw access unit, and `AtmosPipeline`
+(`atmos_pipeline.h`) reconstructs and renders the objects per frame. Behaviors
+worth knowing when debugging:
+
+- **Metadata association is time-keyed.** The `AtmosAudioProcessor` matches
+  raw frames to decoded PCM by presentation time against an anchored clock
+  (re-anchoring on discontinuities), not by arrival order. JOC/OAMD hold
+  across payload-less frames (expiring after 32) per the DD+ hold-until-update
+  rule.
+- **Both output paths are latency-aligned.** The object render's bed passes
+  through QMF analysis+synthesis — a measured 577-sample delay (pinned by
+  `cavern_qmf_test`). The fallback ITU downmix runs every frame behind the
+  same delay, and render<->downmix switches are equal-power crossfades, so a
+  seam is neither a timbre cut nor a time jump.
+- **Motion is crossfaded.** The HRIR renderer dual-convolves against the
+  previous and current interpolated IR on any direction change (raised-cosine
+  blend, per-sample ITD ramp), and object positions use the OAMD frame's LAST
+  info block. Per-object OAMD gains are applied with per-frame ramps.
+- **DRC is honest.** The FFmpeg bed decode always applies Line-mode `dynrng`
+  (drc_scale=1.0, no NextLib option surface). OFF adds nothing on top;
+  LIGHT/STANDARD are the renderer's own leveling; HEAVY applies the stream's
+  `compr` RF gain word (parsed in `cavern/enhanced_ac3.h`) with the envelope
+  compressor kept only as overload protection.
+- **Bass and LFE.** Bass management is an LR4 (Linkwitz-Riley) split, flat to
+  <0.1 dB; the LFE is always summed diffusely to both ears, never HRIR-placed.
+- **Wet/dry blending is time-aligned.** The dry band shares the wet path's
+  per-ear fractional ITD delays, so binaural strength is continuous
+  (strength 0 = ITD-only render).
+
+Host tests live in `tests/` (each file states its compile line); the render
+suite is `hrtf_render_test`, `hrtf_motion_test`, `hrtf_polish_test`,
+`atmos_pipeline_test`, `object_engine_test`.

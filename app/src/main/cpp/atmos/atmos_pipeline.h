@@ -83,6 +83,9 @@ class AtmosPipeline {
   }
   void clear_sofa() { renderer_.clear_runtime_hrir(); }
 
+  // Objects beyond the configured cap in the last rendered frame (0 = none).
+  int last_truncated() const { return last_truncated_; }
+
   // ── Audio-thread-safe marshaling scratch ─────────────────────────────────
   // The JNI layer runs on the audio thread, so it must not allocate per call.
   // These grow once and are reused; the interleaved entry point deinterleaves
@@ -192,6 +195,9 @@ class AtmosPipeline {
   // engine's current upmix. `object_count` is the engine's return value.
   void render_objects(int object_count, int samples, float* out) {
     const int objects = object_count < max_objects_ ? object_count : max_objects_;
+    // Silent truncation would be a debugging trap; the JNI layer logs this
+    // once. DD+ JOC practice is <=16 objects, so it should never fire.
+    last_truncated_ = object_count > max_objects_ ? object_count - max_objects_ : 0;
 
     // Apply each object's OAMD gain (dialog/ambience trims mastered into the
     // stream) to the reconstructed PCM, ramped from the previously applied
@@ -413,6 +419,7 @@ class AtmosPipeline {
   std::vector<float> dm_delay_l_, dm_delay_r_, dm_;
   int dm_idx_ = 0;
   int last_path_ = kPathNone;
+  int last_truncated_ = 0;
   // Last applied OAMD gain per object (survives seeks — it is stream metadata).
   std::vector<float> obj_gain_;
   // Reused marshaling / deinterleave storage (see frame_scratch etc.).
