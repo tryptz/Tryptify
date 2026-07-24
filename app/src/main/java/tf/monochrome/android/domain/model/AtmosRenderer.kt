@@ -90,14 +90,20 @@ enum class StereoDownmixMode(val displayName: String, val description: String) {
 }
 
 /**
- * Dynamic Range Control profile applied to the rendered output — the DD+/Atmos
- * `compr`/`dynrng` scale, from full range (Off) to the most compressed (Heavy).
+ * Dynamic Range Control applied to the rendered output.
+ *
+ * The FFmpeg core decode always applies the stream's per-block `dynrng` words
+ * (Dolby Line mode) to the bed — that part is inherent and not switchable
+ * without forking the decoder. So: OFF adds nothing on top; LIGHT/STANDARD add
+ * the renderer's own gentle post-render leveling; HEAVY is true RF/night mode —
+ * the stream's own `compr` gain word plus overload protection, falling back to
+ * a fixed heavy curve for streams that never carry `compr`.
  */
 enum class DrcMode(val displayName: String) {
-    OFF("Off (full range)"),
+    OFF("Off (Line mode)"),
     LIGHT("Light"),
     STANDARD("Standard"),
-    HEAVY("Heavy (night)");
+    HEAVY("Heavy (RF night)");
 
     companion object {
         val DEFAULT = OFF

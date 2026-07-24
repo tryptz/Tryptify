@@ -18,6 +18,7 @@
 #ifndef TF_ATMOS_CAVERN_ENHANCED_AC3_H
 #define TF_ATMOS_CAVERN_ENHANCED_AC3_H
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -90,6 +91,19 @@ class EnhancedAC3Header {
     return dialnorm_ > 0 ? static_cast<float>(dialnorm_ - 31) : 0.0f;
   }
 
+  /// Whether this frame's BSI carried a compr (RF-mode compression) word.
+  bool has_compr() const { return compre_; }
+
+  /// The RF-mode ("heavy") compression gain as a linear factor, 1.0 when the
+  /// frame carries none. compr is a 4-bit signed exponent X + 4-bit mantissa
+  /// Y: gain = ((16+Y)/32) * 2^(X+1), spanning ~±48 dB (ATSC A/52 §7.7.2).
+  float compr_gain() const {
+    if (!compre_) return 1.0f;
+    const int x = (compr_ >> 4) - ((compr_ & 0x80) ? 16 : 0);  // signed -8..7
+    const int y = compr_ & 0x0F;
+    return std::ldexp(static_cast<float>(16 + y) / 32.0f, x + 1);
+  }
+
   // Number of full-bandwidth + LFE channels in this frame.
   int channel_count() const {
     int base = (channel_mode_ < 8)
@@ -111,6 +125,7 @@ class EnhancedAC3Header {
   // false on a missing syncword or a reserved/unsupported value.
   bool decode(BitReader& br) {
     valid_ = true;
+    compre_ = false;  // per-frame; must not leak from a previously decoded frame
     if (br.read(16) != eac3::kSyncWord) return fail();
 
     stream_type_ = static_cast<eac3::StreamTypes>(br.read(2));
@@ -142,6 +157,17 @@ class EnhancedAC3Header {
       // First E-AC-3 BSI field: dialogue normalization. Coded 1..31 meaning
       // -1..-31 dBFS of the dialogue reference level (0 is reserved).
       dialnorm_ = static_cast<int>(br.read(5));
+      // compre/compr — the RF-mode ("heavy") compression gain word, the very
+      // next BSI fields. The per-block dynrng (line-mode DRC) lives inside the
+      // audio blocks and is applied by the core decoder; compr is what a
+      // consumer decoder's RF/night mode applies on top, so the renderer needs
+      // it from here.
+      compre_ = br.read_bit() != 0;
+      if (compre_) compr_ = static_cast<int>(br.read(8));
+      if (channel_mode_ == 0) {  // dual mono: the second program's metadata
+        br.skip(5);                      // dialnorm2
+        if (br.read_bit()) br.skip(8);   // compr2e / compr2
+      }
     }
 
     if (stream_type_ == eac3::StreamTypes::kDependent) substream_id_ += 8;
@@ -177,6 +203,8 @@ class EnhancedAC3Header {
   int frmsizecod_ = 0;
   int bsmod_ = 0;
   int dialnorm_ = 0;
+  bool compre_ = false;
+  int compr_ = 0;
   eac3::Decoders decoder_ = eac3::Decoders::kUnsupported;
   eac3::StreamTypes stream_type_ = eac3::StreamTypes::kIndependent;
 };

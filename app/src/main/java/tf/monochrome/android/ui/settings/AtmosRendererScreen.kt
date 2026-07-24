@@ -405,6 +405,13 @@ fun AtmosRendererScreen(
                 label = { it.displayName },
                 onSelect = { viewModel.update(profile.copy(drc = it)) },
             )
+            Text(
+                "The decoder always applies the stream's Line-mode DRC. " +
+                    "Light/Standard add post-render leveling on top; Heavy uses " +
+                    "the stream's own RF compression gain (compr) when present.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             SettingSwitchItem(
                 title = "Dialogue normalization",
                 subtitle = "Align loudness to the stream's dialnorm reference",

@@ -5,6 +5,7 @@
 //
 // Crafts an E-AC-3 (bsid 16) syncframe header and checks the decoded format
 // fields, plus a not-a-syncword rejection.
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -93,6 +94,55 @@ void test_dependent_substream_offset() {
   CHECK(h.substream_id() == 10);  // 2 + 8
 }
 
+// One E-AC-3 header up to bsid, then dialnorm/compre/compr as given.
+void write_bsi_header(BitWriter& bw, int dialnorm, bool compre, uint8_t compr) {
+  bw.put(16, 0x0B77);
+  bw.put(2, 0);      // independent
+  bw.put(3, 0);
+  bw.put(11, 100);
+  bw.put(2, 0);      // 48 kHz
+  bw.put(2, 3);      // 6 blocks
+  bw.put(3, 7);      // 5.0
+  bw.bit(1);         // +LFE
+  bw.put(5, 16);     // E-AC-3
+  bw.put(5, static_cast<uint32_t>(dialnorm));
+  bw.bit(compre ? 1 : 0);
+  if (compre) bw.put(8, compr);
+  while (bw.bytes.size() < 12) bw.put(8, 0);
+}
+
+void test_compr_gain() {
+  std::printf("EnhancedAC3Header: BSI compr (RF-mode compression gain word)\n");
+  // 0x30: X=3, Y=0 -> (16/32)*2^4 = 8.0 (+18 dB boost floor for quiet scenes).
+  {
+    BitWriter bw; write_bsi_header(bw, 27, true, 0x30);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    EnhancedAC3Header h;
+    CHECK(h.decode(br));
+    CHECK(h.dialnorm() == 27);
+    CHECK(h.has_compr());
+    CHECK(std::fabs(h.compr_gain() - 8.0f) < 1e-6f);
+  }
+  // 0xF8: X=-1 (signed 4-bit), Y=8 -> (24/32)*2^0 = 0.75 (-2.5 dB cut).
+  {
+    BitWriter bw; write_bsi_header(bw, 31, true, 0xF8);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    EnhancedAC3Header h;
+    CHECK(h.decode(br));
+    CHECK(h.has_compr());
+    CHECK(std::fabs(h.compr_gain() - 0.75f) < 1e-6f);
+  }
+  // compre = 0 -> no word, unity gain.
+  {
+    BitWriter bw; write_bsi_header(bw, 31, false, 0);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    EnhancedAC3Header h;
+    CHECK(h.decode(br));
+    CHECK(!h.has_compr());
+    CHECK(std::fabs(h.compr_gain() - 1.0f) < 1e-6f);
+  }
+}
+
 void test_not_a_syncword() {
   std::printf("EnhancedAC3Header: bad syncword -> invalid\n");
   BitWriter bw;
@@ -110,6 +160,7 @@ int main() {
   std::printf("=== Cavern E-AC-3 header tests ===\n");
   test_eac3_independent_header();
   test_dependent_substream_offset();
+  test_compr_gain();
   test_not_a_syncword();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;

@@ -133,9 +133,11 @@ class AtmosPipeline {
     // Passthrough / non-binaural fold-downs are the caller's job (it already
     // has an ITU downmix); returning -1 selects that path.
     if (mode_ == kPassthrough || downmix_ != kBinaural) return -1;
-    // Dialogue normalization reads the stream's own dialnorm from the syncframe
-    // header, so the gain follows the content rather than a fixed guess.
-    dialnorm_gain_ = dialog_norm_ ? dialnorm_linear(frame, frame_size) : 1.0f;
+    // One BSI parse serves both dialogue normalization (the stream's own
+    // dialnorm) and RF-mode DRC (the stream's own compr gain word).
+    dialnorm_gain_ = 1.0f;
+    frame_has_compr_ = false;
+    if (dialog_norm_ || drc_mode_ == 3) parse_bsi(frame, frame_size);
     if (mode_ == kBedHrtf) {
       const int rc = render_bed(bed, bed_channels, samples, out);
       if (rc == 1) apply_post(out, samples);
@@ -302,25 +304,66 @@ class AtmosPipeline {
     return 1;
   }
 
-  // Linear gain that aligns the stream's dialogue to the -31 dBFS reference.
-  float dialnorm_linear(const uint8_t* frame, size_t frame_size) {
+  // Reads the frame's BSI for dialnorm (dialogue normalization) and compr
+  // (the encoder's RF-mode compression gain word).
+  void parse_bsi(const uint8_t* frame, size_t frame_size) {
     BitReader br(frame, frame_size);
     cavern::EnhancedAC3Header header;
-    if (!header.decode(br)) return 1.0f;
-    return std::pow(10.0f, header.dialnorm_gain_db() / 20.0f);
+    if (!header.decode(br)) return;
+    if (dialog_norm_) {
+      dialnorm_gain_ = std::pow(10.0f, header.dialnorm_gain_db() / 20.0f);
+    }
+    if (header.has_compr()) {
+      frame_compr_ = header.compr_gain();
+      frame_has_compr_ = true;
+    }
   }
 
-  // Dialogue-normalization gain followed by the profile's DRC compression.
+  // Dialogue normalization followed by DRC. The decoded bed already carries
+  // Line-mode DRC (FFmpeg applies the per-block dynrng words at its default
+  // drc_scale=1.0, and NextLib passes no codec options), so:
+  //   OFF      -> nothing added here (the Line mode inherent to the decode).
+  //   LIGHT /
+  //   STANDARD -> the generic peak compressor as additional leveling.
+  //   HEAVY    -> true RF/night mode: the stream's own compr gain word, ramped
+  //               across the frame, plus a limiter for overload protection —
+  //               falling back to the generic heavy curve for streams that
+  //               never carry compr.
   void apply_post(float* out, int samples) {
     if (dialnorm_gain_ != 1.0f) {
       for (int i = 0; i < 2 * samples; ++i) out[i] *= dialnorm_gain_;
     }
-    if (drc_mode_ == 0) return;  // OFF (full range)
+    if (drc_mode_ == 0) return;
+
     float thresh, ratio;
-    switch (drc_mode_) {
-      case 1: thresh = 0.50f; ratio = 2.0f; break;   // LIGHT
-      case 2: thresh = 0.35f; ratio = 4.0f; break;   // STANDARD
-      default: thresh = 0.20f; ratio = 8.0f; break;  // HEAVY (night)
+    bool rf = false;
+    if (drc_mode_ == 3) {
+      if (frame_has_compr_) {
+        rf_target_ = frame_compr_;
+        rf_seen_ = true;
+      }
+      rf = rf_seen_;
+    }
+    if (rf) {
+      // The mastered heavy-compression gain, ramped from the last applied
+      // value so per-frame word changes never step.
+      const float g0 = rf_gain_;
+      const float step = (rf_target_ - g0) / static_cast<float>(samples);
+      float g = g0;
+      for (int i = 0; i < samples; ++i) {
+        out[2 * i] *= g;
+        out[2 * i + 1] *= g;
+        g += step;
+      }
+      rf_gain_ = rf_target_;
+      thresh = 0.95f;   // overload protection only — compr did the real work
+      ratio = 20.0f;
+    } else {
+      switch (drc_mode_) {
+        case 1: thresh = 0.50f; ratio = 2.0f; break;   // LIGHT
+        case 2: thresh = 0.35f; ratio = 4.0f; break;   // STANDARD
+        default: thresh = 0.20f; ratio = 8.0f; break;  // HEAVY without compr
+      }
     }
     for (int i = 0; i < samples; ++i) {
       const float l = out[2 * i], r = out[2 * i + 1];
@@ -348,6 +391,13 @@ class AtmosPipeline {
   bool dialog_norm_ = false;
   float dialnorm_gain_ = 1.0f;
   float drc_env_ = 0.0f;
+  // RF-mode DRC state: this frame's compr word (if any), the ramp source, and
+  // whether the stream has ever carried compr (else HEAVY falls back).
+  bool frame_has_compr_ = false;
+  float frame_compr_ = 1.0f;
+  float rf_gain_ = 1.0f;
+  float rf_target_ = 1.0f;
+  bool rf_seen_ = false;
   std::vector<const float*> obj_ptrs_, bed_ptrs_;
   std::vector<float> az_, el_, lfe_scratch_;
   // Latency-matched fallback downmix: per-ear delay lines (kQmfLatency long),
