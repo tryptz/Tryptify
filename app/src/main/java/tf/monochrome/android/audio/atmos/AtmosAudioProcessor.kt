@@ -185,13 +185,7 @@ class AtmosAudioProcessor @Inject constructor(
 
         for (f in 0 until outFrames) {
             System.arraycopy(bed, f * FRAME_SAMPLES * channels, frameScratch, 0, FRAME_SAMPLES * channels)
-            val raw = frameBuffer.poll() ?: emptyFrame
-            if (raw.isEmpty()) {
-                noFrameCount++
-            } else {
-                gotFrameCount++
-                lastFrameBytes = raw.size
-            }
+            val raw = nextRawFrame()
             val rc = if (pipeline != 0L) {
                 AtmosNative.nativeProcessFrame(pipeline, raw, frameScratch, channels, FRAME_SAMPLES, stereo)
             } else -1
@@ -210,7 +204,7 @@ class AtmosAudioProcessor @Inject constructor(
                     "frames rendered=$renderedFrames fallback=$fallbackFrames " +
                         "tapQueue=${frameBuffer.size()} gotFrame=$gotFrameCount " +
                         "noFrame=$noFrameCount lastFrameBytes=$lastFrameBytes " +
-                        "buffer@${System.identityHashCode(frameBuffer)}")
+                        "anchorUs=$anchorUs")
             }
             writeStereoFrame(out, isFloat)
         }
@@ -241,6 +235,9 @@ class AtmosAudioProcessor @Inject constructor(
         inputEnded = false
         bedSamples = 0
         frameBuffer.clear()
+        anchorUs = Long.MIN_VALUE
+        anchorSamples = 0L
+        lastRaw = null
         if (pendingFormat == AudioFormat.NOT_SET) return
         val formatChanged = inputFormat == AudioFormat.NOT_SET ||
             inputFormat.sampleRate != pendingFormat.sampleRate
@@ -267,6 +264,59 @@ class AtmosAudioProcessor @Inject constructor(
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
+
+    // Time-keyed frame association state. The raw frames are matched to the
+    // decoded PCM by presentation time, not by arrival order: an anchor is taken
+    // from the first tapped frame after a flush, and each 1536-sample output
+    // chunk advances an anchored clock that keys frameForTime. Ordering-based
+    // poll() assumed a strict 1:1 tap↔decode correspondence, which silently
+    // misaligns metadata if the decoder ever drops or merges an access unit.
+    private var anchorUs = Long.MIN_VALUE  // presentation time of output sample 0
+    private var anchorSamples = 0L         // samples output since the anchor
+    private var lastRaw: ByteArray? = null
+
+    /**
+     * The raw E-AC-3 frame covering the next [FRAME_SAMPLES] output samples, or
+     * the empty frame when none applies — the native metadata hold then renders
+     * with the last-seen JOC/OAMD, which is the DD+ "hold until update" rule.
+     */
+    private fun nextRawFrame(): ByteArray {
+        val rate = inputFormat.sampleRate.toLong()
+        if (anchorUs == Long.MIN_VALUE) {
+            val t = frameBuffer.peekTimeUs()
+            if (t == Long.MIN_VALUE) { noFrameCount++; return emptyFrame }  // tap not started yet
+            anchorUs = t
+            anchorSamples = 0L
+        }
+        val expectedUs = anchorUs + anchorSamples * 1_000_000L / rate
+        anchorSamples += FRAME_SAMPLES
+        // Query at the chunk's midpoint so container timestamp jitter in either
+        // direction still resolves to the covering frame.
+        val slackUs = FRAME_SAMPLES * 1_000_000L / (2 * rate)
+        val entry = frameBuffer.frameForTime(expectedUs + slackUs)
+        if (entry == null) {
+            // Every buffered frame is newer than the anchored clock (the ring
+            // overflowed, or the stream jumped). Drop the anchor; the next chunk
+            // re-anchors on whatever the tap holds then.
+            anchorUs = Long.MIN_VALUE
+            noFrameCount++
+            return emptyFrame
+        }
+        // A gapless track change never flushes the sink, but restarts the tapped
+        // timestamps — re-anchor the clock on the entry instead of drifting.
+        if (entry.timeUs - expectedUs > RESYNC_US || expectedUs - entry.timeUs > RESYNC_US) {
+            anchorUs = entry.timeUs
+            anchorSamples = FRAME_SAMPLES.toLong()
+        }
+        gotFrameCount++
+        lastFrameBytes = entry.bytes.size
+        // The same frame can cover consecutive queries around a boundary; pass
+        // the empty frame for the repeat so the EMDF isn't re-parsed (the native
+        // hold keeps rendering with it).
+        if (entry.bytes === lastRaw) return emptyFrame
+        lastRaw = entry.bytes
+        return entry.bytes
+    }
 
     private var outputScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var outWritePos = 0
@@ -334,5 +384,8 @@ class AtmosAudioProcessor @Inject constructor(
         const val MAX_OBJECTS = 16
         const val TAG = "AtmosProcessor"
         const val STATS_EVERY = 300L     // ~9.6 s of frames
+        // Anchored-clock vs tapped-timestamp divergence that forces a re-anchor.
+        // Jitter is sub-millisecond; only a real discontinuity crosses this.
+        const val RESYNC_US = 250_000L
     }
 }

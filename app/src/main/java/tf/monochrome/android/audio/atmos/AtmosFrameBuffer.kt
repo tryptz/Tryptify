@@ -18,15 +18,16 @@ import javax.inject.Singleton
 @Singleton
 class AtmosFrameBuffer @Inject constructor() {
 
-    private class Entry(@JvmField val timeUs: Long, @JvmField val bytes: ByteArray)
+    /** A raw E-AC-3 access unit and the presentation time it was tapped at. */
+    class TappedFrame(@JvmField val timeUs: Long, @JvmField val bytes: ByteArray)
 
     private val lock = Any()
-    private val frames = ArrayDeque<Entry>()
+    private val frames = ArrayDeque<TappedFrame>()
 
     /** Records a raw E-AC-3 access unit at its presentation time. */
     fun put(timeUs: Long, bytes: ByteArray) {
         synchronized(lock) {
-            frames.addLast(Entry(timeUs, bytes))
+            frames.addLast(TappedFrame(timeUs, bytes))
             while (frames.size > MAX_FRAMES) frames.removeFirst()
         }
     }
@@ -35,30 +36,25 @@ class AtmosFrameBuffer @Inject constructor() {
      * The raw frame whose presentation window covers [timeUs] — the newest entry
      * with `entry.timeUs <= timeUs` — or null if none is buffered. Entries older
      * than the returned one are dropped (playback only moves forward within a
-     * track; seeks call [clear]).
+     * track; seeks call [clear]). The entry's own [TappedFrame.timeUs] lets the
+     * consumer detect timestamp discontinuities and re-anchor its clock.
      */
-    fun frameForTime(timeUs: Long): ByteArray? {
+    fun frameForTime(timeUs: Long): TappedFrame? {
         synchronized(lock) {
-            var chosen: Entry? = null
+            var chosen: TappedFrame? = null
             while (frames.isNotEmpty() && frames.first().timeUs <= timeUs) {
                 chosen = frames.removeFirst()
             }
             // Put the chosen frame back so a slightly-later query for the same
             // frame (buffers can span a frame boundary) still finds it.
             if (chosen != null) frames.addFirst(chosen)
-            return chosen?.bytes
+            return chosen
         }
     }
 
-    /**
-     * Removes and returns the oldest buffered frame, or null if empty. The
-     * decoder emits eac3 frames 1:1 and in order, so the processor pulling the
-     * oldest frame per decoded frame keeps the raw side-data aligned with the
-     * bed PCM without needing an absolute-time key. Both sides [clear] on flush.
-     */
-    fun poll(): ByteArray? {
-        synchronized(lock) { return if (frames.isEmpty()) null else frames.removeFirst().bytes }
-    }
+    /** Presentation time of the oldest buffered frame, or [Long.MIN_VALUE]. */
+    fun peekTimeUs(): Long =
+        synchronized(lock) { frames.firstOrNull()?.timeUs ?: Long.MIN_VALUE }
 
     /** Number of buffered frames (for lookahead diagnostics). */
     fun size(): Int = synchronized(lock) { frames.size }
