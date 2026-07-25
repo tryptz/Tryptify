@@ -1424,8 +1424,10 @@ class PreferencesManager @Inject constructor(
     }
 
     // Full-screen blurred, stretched album-art background behind the player
-    // (Apple-Music / Spotify style). Off by default (keeps the flat gradient).
-    val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: false }
+    // (Apple-Music / Spotify style). ON by default — this also feeds the glass
+    // shader's uBackdropMix, so the default liquid glass lenses real album
+    // tones instead of the flat wash.
+    val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: true }
     suspend fun setPlayerBlurredBackground(enabled: Boolean) {
         dataStore.edit { it[PLAYER_BLURRED_BACKGROUND] = enabled }
     }

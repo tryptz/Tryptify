@@ -183,7 +183,7 @@ class PlayerViewModel @Inject constructor(
     val dynamicColors: StateFlow<Boolean> = preferences.dynamicColors
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.playerGlass
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.miniPlayerGlass

@@ -194,7 +194,7 @@ class SettingsViewModel @Inject constructor(
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val appTargetFps: StateFlow<Int> = preferences.appTargetFps
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val appRenderResolution: StateFlow<Int> = preferences.appRenderResolution
