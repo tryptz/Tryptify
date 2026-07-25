@@ -125,6 +125,13 @@ data class RendererProfile(
     val layout: ChannelLayout = ChannelLayout.STEREO,
     /** Fold-down used when the effective output is stereo. */
     val stereoDownmix: StereoDownmixMode = StereoDownmixMode.DEFAULT,
+    /**
+     * Master switch for the HRTF binauralizer. Off = the binaural render runs
+     * fully dry (plain stereo fold-down, no head-related colouration), so the
+     * only headphone shaping left in the chain is the app's own built-in
+     * AutoEQ correction.
+     */
+    val hrtfEnabled: Boolean = true,
     /** HRTF/AutoEQ measurement id for the binaural back-end; null = built-in set. */
     val hrtfProfileId: String? = null,
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */

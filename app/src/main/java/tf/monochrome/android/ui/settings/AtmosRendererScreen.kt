@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,17 +31,20 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -53,6 +57,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -95,8 +100,30 @@ class AtmosRendererViewModel @Inject constructor(
     val profile: StateFlow<RendererProfile> = _profile.asStateFlow()
     private var persistJob: Job? = null
 
+    // Every .sofa kept in app storage is a selectable preset — imports and
+    // database downloads accumulate here instead of replacing each other.
+    private val _sofaPresets = MutableStateFlow<List<java.io.File>>(emptyList())
+    val sofaPresets: StateFlow<List<java.io.File>> = _sofaPresets.asStateFlow()
+
     init {
+        refreshFromStorage()
+    }
+
+    /**
+     * Re-syncs the working profile and the preset list from disk. Also called
+     * when the screen re-enters composition: the HRTF database screen writes
+     * the profile and adds preset files behind this ViewModel's back.
+     */
+    fun refreshFromStorage() {
         viewModelScope.launch { _profile.value = preferences.rendererProfile.first() }
+        viewModelScope.launch(Dispatchers.IO) { rescanSofaDir() }
+    }
+
+    private fun rescanSofaDir() {
+        _sofaPresets.value = java.io.File(context.filesDir, "hrtf")
+            .listFiles { f -> f.isFile && f.name.endsWith(".sofa", ignoreCase = true) }
+            ?.sortedBy { it.name.lowercase() }
+            .orEmpty()
     }
 
     fun update(profile: RendererProfile) {
@@ -128,19 +155,37 @@ class AtmosRendererViewModel @Inject constructor(
                 } ?: error("cannot open $uri")
             }.isSuccess
             if (ok) {
-                // Only one custom HRTF at a time — drop any previous copy.
-                dir.listFiles()?.forEach { if (it != dest) it.delete() }
-                update(_profile.value.copy(hrtfProfileId = dest.absolutePath))
+                // The import joins the preset list (same-name files overwrite)
+                // and becomes the active HRTF. Importing is an explicit request
+                // to use one, so it also re-enables the binauralizer.
+                rescanSofaDir()
+                update(_profile.value.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true))
             }
         }
     }
 
-    /** Reverts to the baked HRTF and removes the stored copy. */
+    /**
+     * Reverts to the baked HRTF (re-enabling it). Stored SOFA presets are
+     * kept — they stay selectable in the preset list.
+     */
     fun useBuiltInHrtf() {
-        viewModelScope.launch(Dispatchers.IO) {
-            java.io.File(context.filesDir, "hrtf").listFiles()?.forEach { it.delete() }
+        update(_profile.value.copy(hrtfProfileId = null, hrtfEnabled = true))
+    }
+
+    /** Selects a stored SOFA preset as the active HRTF. */
+    fun selectSofa(file: java.io.File) {
+        update(_profile.value.copy(hrtfProfileId = file.absolutePath, hrtfEnabled = true))
+    }
+
+    /** Deletes a stored SOFA preset; falls back to built-in if it was active. */
+    fun deleteSofa(file: java.io.File) {
+        if (_profile.value.hrtfProfileId == file.absolutePath) {
+            update(_profile.value.copy(hrtfProfileId = null))
         }
-        update(_profile.value.copy(hrtfProfileId = null))
+        viewModelScope.launch(Dispatchers.IO) {
+            file.delete()
+            rescanSofaDir()
+        }
     }
 
     // Status of the "add built-in Atmos test track" action, shown in the UI.
@@ -220,6 +265,12 @@ fun AtmosRendererScreen(
     viewModel: AtmosRendererViewModel = hiltViewModel(),
 ) {
     val profile by viewModel.profile.collectAsState()
+    val sofaPresets by viewModel.sofaPresets.collectAsState()
+
+    // Re-sync on every (re-)entry: the HRTF database screen writes the profile
+    // and adds preset files behind this ViewModel's back, and navigating back
+    // here recomposes the screen fresh.
+    LaunchedEffect(Unit) { viewModel.refreshFromStorage() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -338,26 +389,93 @@ fun AtmosRendererScreen(
             // .sofa has no registered MIME type, so accept any file and let the
             // native loader reject non-SOFA input.
             val sofaMimes = arrayOf("*/*")
+            // Three-way source: Off (dry fold-down, AutoEQ only) / the baked
+            // KEMAR set / a user SOFA. Picking either HRTF option re-enables
+            // the binauralizer if it was off.
+            val hrtfChoice = when {
+                !profile.hrtfEnabled -> HrtfChoice.OFF
+                profile.hrtfProfileId == null -> HrtfChoice.BUILT_IN
+                else -> HrtfChoice.CUSTOM
+            }
             ChoiceChips(
-                options = listOf(false, true),
-                selected = profile.hrtfProfileId != null,
-                label = { if (it) "Custom HRTF (SOFA)" else "Built-in HRTF" },
-                onSelect = { useOwn ->
-                    if (useOwn) sofaPicker.launch(sofaMimes) else viewModel.useBuiltInHrtf()
+                options = HrtfChoice.entries,
+                selected = hrtfChoice,
+                label = { it.label },
+                onSelect = { choice ->
+                    when (choice) {
+                        HrtfChoice.OFF -> viewModel.update(profile.copy(hrtfEnabled = false))
+                        HrtfChoice.BUILT_IN -> viewModel.useBuiltInHrtf()
+                        // Prefer what's already on hand: re-enable the stored
+                        // selection, else the first saved preset; only open the
+                        // file picker when no preset exists yet.
+                        HrtfChoice.CUSTOM -> when {
+                            profile.hrtfProfileId != null ->
+                                viewModel.update(profile.copy(hrtfEnabled = true))
+                            sofaPresets.isNotEmpty() -> viewModel.selectSofa(sofaPresets.first())
+                            else -> sofaPicker.launch(sofaMimes)
+                        }
+                    }
                 },
             )
-            profile.hrtfProfileId?.let { path ->
-                Text(
-                    "Loaded: ${java.io.File(path).name}",
+            when {
+                !profile.hrtfEnabled -> Text(
+                    "HRTF off — objects fold down to plain stereo and headphone " +
+                        "correction comes from the built-in AutoEQ alone.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } ?: Text(
-                "Built-in is MIT KEMAR. Load a SOFA HRTF (your own or a set like " +
-                    "SADIE / CIPIC) to change the binaural voicing.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                profile.hrtfProfileId != null -> Text(
+                    "Loaded: ${java.io.File(profile.hrtfProfileId!!).name}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> Text(
+                    "Built-in is MIT KEMAR. Load a SOFA HRTF (your own or a set like " +
+                        "SADIE / CIPIC) to change the binaural voicing.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // Every imported/downloaded .sofa stays on hand as a preset —
+            // tap to switch HRTFs without re-downloading or re-picking.
+            if (sofaPresets.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "SOFA presets",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                sofaPresets.forEach { file ->
+                    val isSelected =
+                        profile.hrtfEnabled && profile.hrtfProfileId == file.absolutePath
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.selectSofa(file) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { viewModel.selectSofa(file) },
+                        )
+                        Text(
+                            file.name.removeSuffix(".sofa"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { viewModel.deleteSofa(file) }) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Delete preset",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
             Row {
                 TextButton(onClick = {
                     navController.navigate(tf.monochrome.android.ui.navigation.Screen.HrtfDatabase.route)
@@ -371,6 +489,7 @@ fun AtmosRendererScreen(
                 valueText = "${(profile.binauralStrength * 100).toInt()}%",
                 value = profile.binauralStrength,
                 range = 0f..1f,
+                enabled = profile.hrtfEnabled,
                 onValueChange = { viewModel.update(profile.copy(binauralStrength = it)) },
             )
             SettingSwitchItem(
@@ -604,4 +723,15 @@ private fun DrawScope.drawSpeaker(
         measured,
         topLeft = Offset(pos.x - measured.size.width / 2f, pos.y + 9f * dotScale),
     )
+}
+
+/**
+ * The three binaural back-end sources on the renderer page. OFF bypasses the
+ * HRTF entirely (dry stereo fold-down — the built-in AutoEQ becomes the only
+ * headphone shaping); the other two pick which impulse-response set drives it.
+ */
+private enum class HrtfChoice(val label: String) {
+    OFF("Off (AutoEQ only)"),
+    BUILT_IN("Built-in HRTF"),
+    CUSTOM("Custom HRTF (SOFA)"),
 }

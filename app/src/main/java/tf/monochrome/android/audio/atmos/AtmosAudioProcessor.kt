@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.onEach
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.RendererMode
 import tf.monochrome.android.domain.model.RendererProfile
+import tf.monochrome.android.domain.model.StereoDownmixMode
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
@@ -95,11 +96,24 @@ class AtmosAudioProcessor @Inject constructor(
             android.util.Log.d(TAG, "profile update ignored — no pipeline (mode=${cur.mode})")
             return
         }
+        // HRTF off = a true plain fold-down. Strength 0 alone is NOT that —
+        // the native dry path is an ITD-only render that still places objects
+        // with per-ear arrival-time delays — so a BINAURAL downmix is also
+        // demoted to Lo/Ro, which makes the pipeline decline the frame
+        // (process() returns -1) and the plain ITU BS.775 fold-down runs
+        // instead. Headphone shaping is then left entirely to the built-in
+        // AutoEQ chain. An explicit Lt/Rt choice is honoured as-is.
+        val strength = if (cur.hrtfEnabled) cur.binauralStrength else 0f
+        val downmix = if (!cur.hrtfEnabled && cur.stereoDownmix == StereoDownmixMode.BINAURAL) {
+            StereoDownmixMode.LO_RO
+        } else {
+            cur.stereoDownmix
+        }
         AtmosNative.nativeSetRenderParams(
             p,
             cur.mode.ordinal,
-            cur.stereoDownmix.ordinal,
-            cur.binauralStrength,
+            downmix.ordinal,
+            strength,
             cur.heightVirtualization,
             cur.lfeGainDb,
             cur.bassManagement,
@@ -110,11 +124,15 @@ class AtmosAudioProcessor @Inject constructor(
         applySofa(p)
         android.util.Log.i(
             TAG,
-            "params -> mode=${cur.mode} downmix=${cur.stereoDownmix} " +
-                "strength=${cur.binauralStrength} height=${cur.heightVirtualization} " +
+            "params -> mode=${cur.mode} downmix=$downmix " +
+                "strength=$strength height=${cur.heightVirtualization} " +
                 "lfe=${cur.lfeGainDb}dB bass=${cur.bassManagement}@${cur.crossoverHz}Hz " +
                 "drc=${cur.drc} dialnorm=${cur.dialogNormalization} " +
-                "hrtf=${if (sofaBytes != null) "custom" else "built-in"}",
+                "hrtf=${when {
+                    !cur.hrtfEnabled -> "off (AutoEQ only)"
+                    sofaBytes != null -> "custom"
+                    else -> "built-in"
+                }}",
         )
     }
 

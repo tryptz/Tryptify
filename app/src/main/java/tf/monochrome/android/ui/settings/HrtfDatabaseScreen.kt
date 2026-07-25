@@ -118,9 +118,14 @@ class HrtfDatabaseViewModel @Inject constructor(
                     val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
                     val dest = File(dir, "${file.display}.sofa".replace(Regex("[^A-Za-z0-9._-]"), "_"))
                     dest.writeBytes(bytes)
-                    dir.listFiles()?.forEach { if (it != dest) it.delete() }
+                    // Keep previous downloads — every stored .sofa remains a
+                    // selectable preset on the renderer page.
                     val profile = preferences.rendererProfile.first()
-                    preferences.setRendererProfile(profile.copy(hrtfProfileId = dest.absolutePath))
+                    // Applying a downloaded HRTF is an explicit request to use
+                    // one — also re-enable the binauralizer if it was off.
+                    preferences.setRendererProfile(
+                        profile.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true)
+                    )
                     "Applied ${file.display} (${bytes.size / 1024} KB)"
                 }.getOrElse { "Couldn't save the HRTF" }
             }
