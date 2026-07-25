@@ -483,8 +483,12 @@ half4 main(float2 frag) {
 //  - interior slab parallax: tilt/drift offset of the backdrop across FLAT
 //    faces, scaling with uRefraction — the "thickness" a bevel-only model
 //    lacks;
-//  - liquid: fast edge shimmer (edge-gated) + a slow ~600px face swell
-//    (ungated, far too broad to lattice a button disc).
+//  - liquid: fast edge shimmer (edge-gated, three interfering octaves with a
+//    slow breath) + a slow ~600px face swell (ungated, far too broad to
+//    lattice a button disc);
+//  - shine: a light sheet sweeps the pane every ~7s and the glint twinkles in
+//    hash-staggered 4px cells with a slowly cycling chromatic spread — all
+//    scaled by uLiquid so surfaceMotion = 0 presets stay perfectly still.
 private const val LIQUID_GLASS_SRC = """
 uniform shader content;
 uniform float2 uSize;
@@ -612,7 +616,13 @@ half4 main(float2 p) {
     float edge = clamp(length(grad) * 1.5, 0.0, 1.0);
     float w1 = sin(p.x * 0.055 + uTime * 1.7) * cos(p.y * 0.081 - uTime * 1.3);
     float w2 = sin((p.x + p.y) * 0.035 - uTime * 0.9);
-    grad += 0.04 * uLiquid * float2(w1, w2) * a * edge;
+    // A third, counter-running octave breaks the two-wave moiré into organic
+    // caustic-like interference, and a slow breath swells the whole shimmer in
+    // and out so the motion never settles into a loop the eye can lock onto.
+    float w3 = sin(p.y * 0.047 - p.x * 0.021 + uTime * 2.3);
+    float breathe = 0.8 + 0.2 * sin(uTime * 0.7);
+    grad += (0.04 * float2(w1, w2) + 0.02 * float2(w3, -w3))
+            * uLiquid * a * edge * breathe;
     // 2) Face swell — a much longer wavelength (~600px vs ~100px) at a quarter
     //    of the amplitude, NOT edge-gated. This is what makes a flat pane read
     //    as liquid: one slow dome drifting across the face, far too broad to
@@ -708,9 +718,20 @@ half4 main(float2 p) {
     float3 H = normalize(L + float3(0.0, 0.0, 1.0));
     float ndh   = max(dot(N, H), 0.0);
     float spec  = pow(ndh, uGloss);
-    float dsp   = 0.015 * uDispersion;
+    // The rainbow spread of the glint slowly widens and narrows, so the
+    // chromatic fringe cycles instead of sitting frozen on the bevel.
+    float dsp   = 0.015 * uDispersion * (1.0 + 0.35 * sin(uTime * 0.9));
     float specR = pow(max(dot(normalize(N + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
     float specB = pow(max(dot(normalize(N - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
+
+    // Edge twinkle: 4px cells pulse the glint with hash-staggered phases and
+    // rates, so bevel highlights sparkle as points firing off one another
+    // instead of glowing statically. Zero-mean-ish (baseline -0.15 against a
+    // ~0.27 mean pulse) and scaled by uLiquid, so calm presets keep a steady
+    // glint and the average brightness barely moves.
+    float twHash = fract(sin(dot(floor(p * 0.25), float2(127.1, 311.7))) * 43758.5453);
+    float twinkle = pow(0.5 + 0.5 * sin(uTime * (1.5 + 3.0 * twHash) + twHash * 6.2831), 4.0);
+    float glintGain = 1.0 + (0.6 * twinkle - 0.15) * uLiquid;
 
     // Body: the glyph's own colour (kept legible) with a hint of the lensed
     // backdrop; leans more see-through over real blurred art.
@@ -725,12 +746,27 @@ half4 main(float2 p) {
     // washing the whole flat face white (a front-facing flat surface would
     // otherwise fire the specular uniformly).
     float3 col3 = mix(bodyCol, refl * uReflection, clamp(fres * 1.1, 0.0, 1.0));
-    col3 += float3(specR, spec, specB) * uRimGain * fres;
+    col3 += float3(specR, spec, specB) * uRimGain * fres * glintGain;
+
+    // Traveling light sheet: the classic "shine" pass — a soft diagonal band
+    // gliding across the surface every ~7s, then resting (the sweep occupies
+    // ~60% of the cycle before the band exits the pane; the gaussian tail is
+    // negligible while parked). Fresnel-weighted so it flares the bevel rim
+    // as it crosses, with a 0.3 face floor so flat panes catch it too; scaled
+    // by uLiquid and uRimGain so calm or dim presets stay calm and dim.
+    float sweepT = fract(uTime * 0.14);
+    float sweepPos = mix(-0.4, 1.4, smoothstep(0.0, 0.6, sweepT));
+    float track = uv.x * 0.72 + uv.y * 0.28;
+    float sd = (track - sweepPos) * 8.0;
+    float sheetI = exp(-sd * sd) * uLiquid * (0.30 + 0.70 * fres);
+    col3 += float3(1.0, 0.985, 0.95) * sheetI * 0.5 * uRimGain;
 
     // Transparent face, opaque bright rim: alpha is low across the body (backdrop
     // reads through) and climbs to full where Fresnel and the glint peak, so the
     // rim highlight reads as a crisp glass edge rather than being clamped away.
-    float rim = clamp(fres * 1.2 + spec, 0.0, 1.0);
+    // The light sheet lifts alpha too — without that, the shine pass would be
+    // clamped invisible on see-through faces (premultiplied rgb <= alpha).
+    float rim = clamp(fres * 1.2 + spec + sheetI * 0.6, 0.0, 1.0);
     float outA = clamp(a * (uBodyOpacity + (1.0 - uBodyOpacity) * rim), 0.0, a);
 
     float3 col = col3 * outA;              // premultiplied
