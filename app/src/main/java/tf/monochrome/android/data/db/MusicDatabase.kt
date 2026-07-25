@@ -68,7 +68,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -103,6 +103,24 @@ abstract class MusicDatabase : RoomDatabase() {
                 db.execSQL(
                     "UPDATE local_tracks SET isThxSpatialAudio = 1 " +
                         "WHERE title LIKE '%THX Spatial Audio%' OR album LIKE '%THX Spatial Audio%'"
+                )
+            }
+        }
+
+        /**
+         * v9 → v10: Dolby Atmos designation. Adds an `isDolbyAtmos` column to
+         * scanned local tracks and backfills the flag for rows whose title/album
+         * already names the release "Dolby Atmos". Local-only: sideloaded Atmos
+         * files land in the library scan, so (unlike THX) there is no
+         * `downloaded_tracks` column to add. A real migration so existing scans
+         * survive the upgrade.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE local_tracks ADD COLUMN isDolbyAtmos INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "UPDATE local_tracks SET isDolbyAtmos = 1 " +
+                        "WHERE title LIKE '%Dolby Atmos%' OR album LIKE '%Dolby Atmos%'"
                 )
             }
         }

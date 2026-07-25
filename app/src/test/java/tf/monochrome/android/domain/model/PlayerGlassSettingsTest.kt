@@ -12,12 +12,19 @@ class PlayerGlassSettingsTest {
 
     @Test
     fun `defaults reproduce the shipped glass`() {
+        // The shipped default is the "55" material: ghost body, maxed
+        // refraction/dispersion/relief, mirror gloss over a light mist,
+        // locked back-left key light.
         val d = PlayerGlassSettings.DEFAULT
         assertTrue(d.enabled)
-        assertEquals(0.5f, d.bodyOpacity, 0f)
-        assertEquals(0.16f, d.refraction, 0f)
-        assertEquals(1.3f, d.rimBrightness, 0f)
-        assertEquals(2, d.sampleRings)
+        assertEquals(0.2f, d.bodyOpacity, 0f)
+        assertEquals(0.4f, d.refraction, 0f)
+        assertEquals(2f, d.rimBrightness, 0f)
+        assertEquals(3, d.sampleRings)
+        assertEquals(1f, d.gloss, 0f)
+        assertEquals(0.17f, d.frost, 0f)
+        assertEquals(0f, d.tiltReactivity, 0f)
+        assertEquals(280f, d.lightAngleDeg, 0f)
         assertTrue(d.progressGlass)
         // Colour fields default to "use the current album colour".
         assertEquals(0, d.tintColor)

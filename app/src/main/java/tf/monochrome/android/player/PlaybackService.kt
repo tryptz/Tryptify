@@ -69,6 +69,22 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
+    // Atmos: the sample tap preserves raw E-AC-3 frames (which carry the JOC/OAMD
+    // the FFmpeg decoder discards) into atmosFrameBuffer; atmosAudioProcessor
+    // pairs each with the decoded bed PCM and renders objects to binaural stereo.
+    @Inject lateinit var atmosAudioProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor
+    @Inject lateinit var atmosFrameBuffer: tf.monochrome.android.audio.atmos.AtmosFrameBuffer
+
+    /** Shared Atmos tap — used both as the player's factory and to wrap the
+     *  directly-built DASH/progressive sources. Built via an annotated helper:
+     *  an @OptIn on the property itself does not reach the lazy {} lambda as
+     *  far as lint's UnsafeOptInUsageError detector is concerned. */
+    private val atmosTapFactory by lazy { buildAtmosTapFactory() }
+
+    @OptIn(UnstableApi::class)
+    private fun buildAtmosTapFactory() =
+        tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
+            DefaultMediaSourceFactory(this), atmosFrameBuffer)
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
@@ -118,6 +134,12 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         player = ExoPlayer.Builder(this, buildRenderersFactory())
+            // Tap raw E-AC-3 access units on their way to the FFmpeg decoder so
+            // the Atmos JOC/OAMD side-data survives for atmosAudioProcessor.
+            // Covers the setMediaItem paths (local files included); the direct
+            // setMediaSource paths below build their own sources and are not
+            // tapped yet.
+            .setMediaSourceFactory(atmosTapFactory)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -354,6 +376,7 @@ class PlaybackService : MediaSessionService() {
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         .setAudioProcessors(
                             arrayOf(
+                                atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
                                 mixBusProcessor,        // DSP engine (mixer/effects)
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
@@ -385,6 +408,7 @@ class PlaybackService : MediaSessionService() {
                         driver = libusbDriver,
                         volumeController = bypassVolumeController,
                         processors = listOf(
+                            atmosAudioProcessor,
                             downmixProcessor,
                             mixBusProcessor,
                             autoEqProcessor,
@@ -514,7 +538,10 @@ class PlaybackService : MediaSessionService() {
                             .createMediaSource(mediaItem)
                     }
 
-                    player.setMediaSource(source)
+                    // These sources are built directly and so bypass the player's
+                    // MediaSource.Factory — wrap them with the Atmos tap too, or
+                    // streamed E-AC-3 would lose its JOC/OAMD side-data.
+                    player.setMediaSource(atmosTapFactory.wrap(source))
                 } else {
                     player.setMediaItem(mediaItem)
                 }

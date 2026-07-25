@@ -1,11 +1,15 @@
-// Supabase Edge Function: create-donation-subscription
+// Supabase Edge Function: create-donation-payment
 //
-// Creates an *incomplete* Stripe subscription for a recurring donation and returns
-// everything the Android app's PaymentSheet needs to finish payment in-app. This
-// is the only place the Stripe SECRET key lives — it must never ship in the APK.
+// Creates a ONE-TIME Stripe PaymentIntent for a tip and returns everything the
+// Android app's PaymentSheet needs to finish payment in-app. This is the only
+// place the Stripe SECRET key lives — it must never ship in the APK.
+//
+// (Replaces create-donation-subscription: donations are single payments now,
+// no recurring billing, so there is no product/price/subscription to manage
+// and nothing to cancel.)
 //
 // Deploy:
-//   supabase functions deploy create-donation-subscription --no-verify-jwt
+//   supabase functions deploy create-donation-payment --no-verify-jwt
 //
 // Secrets (set once, never commit these):
 //   supabase secrets set STRIPE_SECRET_KEY=sk_live_xxx
@@ -35,25 +39,6 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-// Subscription line items need a real Product id — inline `price_data` on a
-// subscription does NOT accept `product_data` (Stripe rejects it). We keep one
-// reusable "Tryptify Supporter" product and let per-amount prices be created
-// inline against it. Cached in the warm worker; found by metadata on cold start.
-let productId: string | null = null;
-async function getProductId(stripe: Stripe): Promise<string> {
-  if (productId) return productId;
-  const found = await stripe.products.search({
-    query: "metadata['key']:'tryptify-donation'",
-    limit: 1,
-  });
-  const product = found.data[0] ?? await stripe.products.create({
-    name: "Tryptify Supporter",
-    metadata: { key: "tryptify-donation" },
-  });
-  productId = product.id;
-  return productId;
-}
-
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -63,7 +48,6 @@ const CORS = {
 
 const MIN_AMOUNT = 100; // $1.00 — Stripe's practical floor for card fees
 const MAX_AMOUNT = 100_000; // $1,000 — a sane ceiling to blunt abuse
-const ALLOWED_INTERVALS = new Set(["day", "week", "month", "year"]);
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -83,7 +67,6 @@ Deno.serve(async (req) => {
   let payload: {
     amount?: number;
     currency?: string;
-    interval?: string;
     email?: string | null;
   };
   try {
@@ -94,14 +77,10 @@ Deno.serve(async (req) => {
 
   const amount = Math.round(Number(payload.amount));
   const currency = (payload.currency ?? "usd").toLowerCase();
-  const interval = payload.interval ?? "month";
   const email = payload.email?.trim() || undefined;
 
   if (!Number.isFinite(amount) || amount < MIN_AMOUNT || amount > MAX_AMOUNT) {
     return json({ error: "Donation amount is out of range." }, 400);
-  }
-  if (!ALLOWED_INTERVALS.has(interval)) {
-    return json({ error: "Unsupported billing interval." }, 400);
   }
 
   try {
@@ -126,40 +105,28 @@ Deno.serve(async (req) => {
       { apiVersion: "2024-06-20" },
     );
 
-    const product = await getProductId(stripe);
-    const subscription = await stripe.subscriptions.create({
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency,
       customer: customer.id,
-      items: [{
-        price_data: {
-          currency,
-          product,
-          unit_amount: amount,
-          recurring: { interval: interval as Stripe.PriceCreateParams.Recurring.Interval },
-        },
-      }],
-      payment_behavior: "default_incomplete",
-      payment_settings: { save_default_payment_method: "on_subscription" },
-      expand: ["latest_invoice.payment_intent"],
+      receipt_email: email,
+      description: "Tryptify tip",
+      automatic_payment_methods: { enabled: true },
       metadata: { source: "tryptify-donation" },
     });
 
-    const invoice = subscription.latest_invoice as Stripe.Invoice;
-    const paymentIntent = invoice?.payment_intent as Stripe.PaymentIntent | null;
-    const clientSecret = paymentIntent?.client_secret;
-
-    if (!clientSecret) {
+    if (!paymentIntent.client_secret) {
       return json({ error: "Could not initialize payment." }, 500);
     }
 
     return json({
-      paymentIntentClientSecret: clientSecret,
+      paymentIntentClientSecret: paymentIntent.client_secret,
       ephemeralKey: ephemeralKey.secret,
       customerId: customer.id,
       publishableKey: PUBLISHABLE_KEY,
-      subscriptionId: subscription.id,
     });
   } catch (err) {
-    console.error("create-donation-subscription failed", err);
+    console.error("create-donation-payment failed", err);
     const message = err instanceof Error ? err.message : "Unexpected error.";
     return json({ error: message }, 500);
   }

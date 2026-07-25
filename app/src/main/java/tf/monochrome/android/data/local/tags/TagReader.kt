@@ -3,6 +3,8 @@ package tf.monochrome.android.data.local.tags
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.annotation.SuppressLint
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -50,6 +52,11 @@ data class AudioTags(
     // THX Spatial Audio — detected from title/album text or, for FLAC, the
     // embedded VERSION/COMMENT Vorbis fields a download wrote.
     val isThxSpatialAudio: Boolean = false,
+
+    // Dolby Atmos — detected from the MIME type, file extension, or a "Dolby
+    // Atmos" phrase in title/album. Authoritative JOC detection arrives with
+    // the native demux (see cpp/atmos).
+    val isDolbyAtmos: Boolean = false,
 
     // File info
     val filePath: String = "",
@@ -155,6 +162,20 @@ class TagReader @Inject constructor(
         )
         val isThx = thxFromText || (codec == AudioCodec.FLAC && detectThxInFlacTags(filePath))
 
+        // Dolby Atmos: best-effort from the MIME (eac3-joc / atmos) or a "Dolby
+        // Atmos" phrase in the metadata. A bare .ec3/.eac3 is only Atmos-capable,
+        // not necessarily Atmos, so the extension alone does not set the flag;
+        // authoritative JOC detection arrives with the native demux.
+        //
+        // The retriever's MIME is the *container* ("audio/mp4"), which never
+        // carries the joc marker, so pass the elementary-stream MIME instead —
+        // that is where "audio/eac3-joc" actually shows up.
+        val isAtmos = tf.monochrome.android.domain.model.isDolbyAtmos(
+            mimeType = audioTrackMime(filePath) ?: mimeType,
+            title = title,
+            albumTitle = album,
+        )
+
         // Extract and cache artwork. For MP4/M4A this reads the `covr` atom;
         // for FLAC/Vorbis/Opus this reads the METADATA_BLOCK_PICTURE/coverart;
         // for ID3v2 this reads APIC. If nothing is embedded, fall back to a
@@ -208,6 +229,7 @@ class TagReader @Inject constructor(
             hasEmbeddedArt = hasArtOrSidecar,
             artworkCacheKey = artworkCacheKey,
             isThxSpatialAudio = isThx,
+            isDolbyAtmos = isAtmos,
             filePath = filePath,
             fileSizeBytes = fileSize,
             lastModified = lastModified
@@ -284,25 +306,67 @@ class TagReader @Inject constructor(
         // reports both as "audio/ogg". ALAC and AAC share the MP4 container, so
         // both report as "audio/mp4" on some Android versions. Check explicit
         // codec MIMEs first, then fall back to the file extension.
+        //
+        // MP4/MKV/TS are containers: the retriever reports the container MIME
+        // ("audio/mp4", "video/mp4") and never the codec inside it, so an E-AC-3
+        // Atmos track was indistinguishable from AAC and got labelled "AAC 768".
+        // Resolve the real elementary-stream MIME for those first.
+        val mime = audioTrackMime(filePath) ?: mimeType
         return when {
-            mimeType?.contains("flac") == true -> AudioCodec.FLAC
-            mimeType?.contains("mpeg") == true -> AudioCodec.MP3
-            mimeType?.contains("alac") == true -> AudioCodec.ALAC
-            mimeType?.contains("mp4a") == true || mimeType?.contains("aac") == true ||
-                mimeType?.contains("mp4") == true -> {
+            mime?.contains("eac3") == true || mime?.contains("e-ac-3") == true ->
+                AudioCodec.EAC3
+            mime?.contains("ac3") == true || mime?.contains("ac-3") == true ->
+                AudioCodec.AC3
+            mime?.contains("flac") == true -> AudioCodec.FLAC
+            mime?.contains("mpeg") == true -> AudioCodec.MP3
+            mime?.contains("alac") == true -> AudioCodec.ALAC
+            mime?.contains("mp4a") == true || mime?.contains("aac") == true ||
+                mime?.contains("mp4") == true -> {
                 val fromExt = detectCodecFromExtension(filePath)
                 if (fromExt == AudioCodec.ALAC) AudioCodec.ALAC else AudioCodec.AAC
             }
-            mimeType?.contains("opus") == true -> AudioCodec.OPUS
-            mimeType?.contains("vorbis") == true -> AudioCodec.OGG_VORBIS
-            mimeType?.contains("ogg") == true -> {
+            mime?.contains("opus") == true -> AudioCodec.OPUS
+            mime?.contains("vorbis") == true -> AudioCodec.OGG_VORBIS
+            mime?.contains("ogg") == true -> {
                 val fromExt = detectCodecFromExtension(filePath)
                 if (fromExt == AudioCodec.OPUS) AudioCodec.OPUS else AudioCodec.OGG_VORBIS
             }
-            mimeType?.contains("wav") == true || mimeType?.contains("wave") == true -> AudioCodec.WAV
-            mimeType?.contains("aiff") == true -> AudioCodec.AIFF
-            mimeType?.contains("x-ms-wma") == true -> AudioCodec.WMA
+            mime?.contains("wav") == true || mime?.contains("wave") == true -> AudioCodec.WAV
+            mime?.contains("aiff") == true -> AudioCodec.AIFF
+            mime?.contains("x-ms-wma") == true -> AudioCodec.WMA
             else -> detectCodecFromExtension(filePath)
+        }
+    }
+
+    /**
+     * The MIME of the file's first audio track, read straight from the
+     * container, or null when the file is not a multi-codec container (or could
+     * not be opened). [MediaExtractor] parses only the header and index, not the
+     * media data, so this costs about the same on a 130 MB file as on a 3 MB one.
+     *
+     * Only containers that can hold more than one audio codec are probed —
+     * a .flac or .mp3 needs no disambiguation and must not pay for an extra open.
+     */
+    private fun audioTrackMime(filePath: String): String? {
+        val ext = filePath.substringAfterLast('.', "").lowercase()
+        val ambiguous = ext == "mp4" || ext == "m4a" || ext == "m4v" || ext == "mov" ||
+            ext == "mkv" || ext == "ts" || ext == "m2ts" || ext == "mts"
+        if (!ambiguous) return null
+
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(filePath)
+            (0 until extractor.trackCount)
+                .asSequence()
+                .mapNotNull { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME) }
+                .firstOrNull { it.startsWith("audio/") }
+        } catch (e: Exception) {
+            null
+        } catch (e: OutOfMemoryError) {
+            // A malformed container can make the platform extractor over-allocate.
+            null
+        } finally {
+            runCatching { extractor.release() }
         }
     }
 

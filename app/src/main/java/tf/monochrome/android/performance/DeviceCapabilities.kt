@@ -80,14 +80,23 @@ object DeviceCapabilities {
     }.getOrDefault(0)
 
     private fun classify(s: DeviceSnapshot): DeviceTier {
+        // cpufreq sysfs is unreadable on emulators and some OEM kernels — there
+        // maxFreqMhz probes 0 and bigCores is UNKNOWN, not "none". Missing data
+        // must stay neutral: frequency-based signals only count when a real
+        // reading exists, otherwise an 8-core/12GB emulator lands in LOW and
+        // every blur/glass feature silently vanishes from the test device.
+        val freqKnown = s.maxFreqMhz > 0
+
         // LOW: any single "too weak" signal wins, so we err toward smoothness on constrained hw.
         val ramLow = s.ramMb in 1..LOW_RAM_MB_MAX
-        val weakCpu = s.bigCores == 0 && s.maxFreqMhz in 1..LOW_FREQ_MHZ_MAX
+        val weakCpu = freqKnown && s.bigCores == 0 && s.maxFreqMhz <= LOW_FREQ_MHZ_MAX
         if (s.cores <= LOW_CORES_MAX || ramLow || weakCpu) return DeviceTier.LOW
 
-        // HIGH: must hit the high bar on all three axes. Otherwise fall through to MID.
+        // HIGH: many cores + plenty of RAM, and — when frequency data exists —
+        // a real big-core cluster. Without cpufreq the big-core requirement is
+        // waived rather than auto-failed.
         val manyCores = s.cores >= HIGH_CORES_MIN
-        val manyBig = s.bigCores >= HIGH_BIG_CORES_MIN
+        val manyBig = !freqKnown || s.bigCores >= HIGH_BIG_CORES_MIN
         val plentyRam = s.ramMb >= HIGH_RAM_MB_MIN
         if (manyCores && manyBig && plentyRam) return DeviceTier.HIGH
 

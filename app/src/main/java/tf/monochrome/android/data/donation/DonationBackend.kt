@@ -13,8 +13,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Calls the Supabase Edge Function that creates a Stripe subscription and returns
- * the [DonationSubscription] parameters the in-app PaymentSheet needs.
+ * Calls the Supabase Edge Function that creates a one-time Stripe PaymentIntent
+ * and returns the [DonationCheckout] parameters the in-app PaymentSheet needs.
  *
  * Why an Edge Function: the Stripe **secret** key must never ship inside an APK
  * (it can be extracted and used to move money), so all secret-key work happens
@@ -27,9 +27,9 @@ import javax.inject.Singleton
 class DonationBackend @Inject constructor(
     private val httpClient: HttpClient,
 ) {
-    suspend fun createSubscription(request: CreateDonationRequest): Result<DonationSubscription> {
+    suspend fun createPayment(request: CreateDonationRequest): Result<DonationCheckout> {
         return try {
-            val response = httpClient.post("$FUNCTIONS_BASE_URL/create-donation-subscription") {
+            val response = httpClient.post("$FUNCTIONS_BASE_URL/create-donation-payment") {
                 // The anon key is a public, publishable credential (it is already
                 // committed in SupabaseAuthManager). Edge Functions require it to
                 // pass the gateway; the function itself is what holds the Stripe key.
@@ -39,41 +39,16 @@ class DonationBackend @Inject constructor(
                 setBody(request)
             }
             if (response.status.isSuccess()) {
-                Result.success(response.body<DonationSubscription>())
+                Result.success(response.body<DonationCheckout>())
             } else {
                 val detail = runCatching { response.body<String>() }.getOrDefault("")
-                Log.w(TAG, "Subscription create failed: ${response.status} $detail")
+                Log.w(TAG, "Payment create failed: ${response.status} $detail")
                 Result.failure(
                     IllegalStateException("Couldn't start the donation (${response.status.value}).")
                 )
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Subscription create error", e)
-            Result.failure(e)
-        }
-    }
-
-    /** Cancels the given subscription. Idempotent server-side: an already-cancelled
-     *  or missing subscription is reported as success so the local record can clear. */
-    suspend fun cancelSubscription(subscriptionId: String): Result<Unit> {
-        return try {
-            val response = httpClient.post("$FUNCTIONS_BASE_URL/cancel-donation-subscription") {
-                header("Authorization", "Bearer $SUPABASE_ANON_KEY")
-                header("apikey", SUPABASE_ANON_KEY)
-                contentType(ContentType.Application.Json)
-                setBody(CancelDonationRequest(subscriptionId))
-            }
-            if (response.status.isSuccess()) {
-                Result.success(Unit)
-            } else {
-                val detail = runCatching { response.body<String>() }.getOrDefault("")
-                Log.w(TAG, "Subscription cancel failed: ${response.status} $detail")
-                Result.failure(
-                    IllegalStateException("Couldn't cancel the donation (${response.status.value}).")
-                )
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Subscription cancel error", e)
+            Log.w(TAG, "Payment create error", e)
             Result.failure(e)
         }
     }

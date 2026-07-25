@@ -122,3 +122,68 @@ target_link_libraries(monochrome_usb
     log
     usb1.0
 )
+
+# ── Atmos renderer foundation (clean-room) ───────────────────────────────
+# Header-only building blocks (bit reader, EMDF walker, OAMD coordinate math,
+# VBAP bed panner) for the Dolby Atmos / E-AC-3 JOC object renderer. Built as a
+# static library so the NDK type-checks the headers for every shipped ABI on
+# each CI run; it carries no runtime dependency yet and is host-unit-tested via
+# atmos/tests/atmos_tests.cpp. See atmos/README.md for scope and next steps.
+add_library(monochrome_atmos STATIC
+    atmos/atmos.cpp
+)
+target_include_directories(monochrome_atmos PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/atmos
+)
+target_compile_features(monochrome_atmos PRIVATE cxx_std_17)
+target_compile_options(monochrome_atmos PRIVATE
+    -O3 -fno-exceptions -fno-rtti
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-march=armv8-a+simd>
+)
+set_target_properties(monochrome_atmos PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(monochrome_atmos log)
+
+# ── libmysofa (runtime SOFA HRTF loading) ────────────────────────────────
+# Vendored at third_party/libmysofa (BSD-3-Clause). Used ONLY by the Atmos JNI
+# lib to load a user-supplied .sofa HRTF at runtime; the default HRTF is still
+# the baked hrir_table.h, so a device that never loads a SOFA pulls in this code
+# but never runs it. Parses the HDF5-based SOFA container (needs zlib) and the
+# embedded Speex resampler (OUTSIDE_SPEEX + RANDOM_PREFIX to avoid symbol clash).
+set(MYSOFA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/libmysofa)
+file(GLOB MYSOFA_SRC ${MYSOFA_DIR}/hrtf/*.c ${MYSOFA_DIR}/hdf/*.c
+    ${MYSOFA_DIR}/resampler/speex_resampler.c)
+add_library(mysofa STATIC ${MYSOFA_SRC})
+target_include_directories(mysofa PUBLIC
+    ${MYSOFA_DIR}/hrtf ${MYSOFA_DIR}/hdf ${MYSOFA_DIR}/resampler)
+target_compile_definitions(mysofa PRIVATE OUTSIDE_SPEEX RANDOM_PREFIX=mysofa)
+target_compile_options(mysofa PRIVATE
+    -O2 -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-function)
+set_target_properties(mysofa PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(mysofa z)
+
+# ── Atmos JNI surface (plan Option B) ────────────────────────────────────
+# Runtime .so exposing the clean-room metadata/object code to Kotlin. The E-AC-3
+# core is decoded by Media3's FfmpegAudioRenderer (NextLib); this lib parses the
+# Atmos side-data out of raw frames and (as the surface grows) runs the JOC QMF
+# upmix on the decoded bed PCM. No FFmpeg dependency here.
+add_library(monochrome_atmos_jni SHARED
+    atmos/atmos_jni.cpp
+    atmos/render/sofa_loader.cpp
+)
+target_include_directories(monochrome_atmos_jni PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/atmos
+    ${MYSOFA_DIR}/hrtf
+)
+target_compile_features(monochrome_atmos_jni PRIVATE cxx_std_17)
+# The renderer DSP (QMF filterbank, JOC upmix, HRTF) is header-only, so it is
+# compiled into THIS translation unit — not into monochrome_atmos. Without these
+# flags a debug build runs the whole signal path at -O0, which misses the audio
+# deadline and is audible as micro-stutter. Optimize regardless of build type.
+target_compile_options(monochrome_atmos_jni PRIVATE
+    -O3 -ffast-math
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-march=armv8-a+simd>
+)
+# Cancel projectM's global CMAKE_DEBUG_POSTFIX "d" so the lib ships as
+# libmonochrome_atmos_jni.so (loadable by that name), like the sibling libs.
+set_target_properties(monochrome_atmos_jni PROPERTIES DEBUG_POSTFIX "")
+target_link_libraries(monochrome_atmos_jni monochrome_atmos mysofa log)

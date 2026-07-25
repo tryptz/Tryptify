@@ -472,10 +472,23 @@ half4 main(float2 frag) {
 // alpha so its bright specular can read as a crisp glass edge.
 //
 // Smooth-backdrop note: the field the glass refracts is reconstructed in-shader
-// (a soft vertical wash + a top glow, album-tinted) to mirror the smooth
-// gradient that actually sits behind the lyrics. Because that real backdrop is
-// low-frequency, a reconstructed field lenses indistinguishably from sampling
-// the real pixels — and it needs no fragile per-frame backdrop capture.
+// (a soft vertical wash + top glow + two off-axis pools, album-tinted) to
+// mirror the smooth gradient that actually sits behind the lyrics. Because that
+// real backdrop is low-frequency, a reconstructed field lenses
+// indistinguishably from sampling the real pixels — and it needs no fragile
+// per-frame backdrop capture.
+//
+// Optics model (three layers, all riding the existing uniforms):
+//  - bevel refraction: Snell bend where the alpha-field normal turns (edges);
+//  - interior slab parallax: tilt/drift offset of the backdrop across FLAT
+//    faces, scaling with uRefraction — the "thickness" a bevel-only model
+//    lacks;
+//  - liquid: fast edge shimmer (edge-gated, three interfering octaves with a
+//    slow breath) + a slow ~600px face swell (ungated, far too broad to
+//    lattice a button disc);
+//  - shine: a light sheet sweeps the pane every ~7s and the glint twinkles in
+//    hash-staggered 4px cells with a slowly cycling chromatic spread — all
+//    scaled by uLiquid so surfaceMotion = 0 presets stay perfectly still.
 private const val LIQUID_GLASS_SRC = """
 uniform shader content;
 uniform float2 uSize;
@@ -503,19 +516,28 @@ uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
-// wash + soft top glow drawn behind the lyrics).
+// wash + soft top glow drawn behind the lyrics). Two soft off-axis pools give
+// the field low-frequency STRUCTURE: a featureless gradient displaces into
+// itself and refraction reads as nothing — these pools are what make the
+// lensing visible while staying smooth enough to pass for the real backdrop.
 float backdropField(float2 uv) {
     float wash = mix(0.45, 0.0, clamp(uv.y, 0.0, 1.0));
     float glow = smoothstep(1.0, 0.0, distance(uv, float2(0.5, 0.22)) * 1.5);
-    return clamp(wash + glow * 0.5, 0.0, 1.0);
+    float pool1 = smoothstep(0.85, 0.0, distance(uv, float2(0.22, 0.65))) * 0.16;
+    float pool2 = smoothstep(0.95, 0.0, distance(uv, float2(0.80, 0.38))) * 0.12;
+    return clamp(wash + glow * 0.5 + pool1 + pool2, 0.0, 1.0);
 }
 
 // Album tone the glass lenses at uv. With the blurred cover behind the lyrics
-// (uBackdropMix > 0) this is a two-tone vertical album blend, so the refraction
-// carries real colour variation like a photo behind glass. With no blurred art
-// (uBackdropMix = 0) it collapses to uTint — identical to the old single tone.
+// (uBackdropMix > 0) this is a two-tone album blend, so the refraction carries
+// real colour variation like a photo behind glass. The blend runs mostly down
+// the surface with a slight diagonal lean, so HORIZONTAL displacement also
+// crosses a colour boundary (a pure-vertical blend made sideways lensing
+// invisible). With no blurred art (uBackdropMix = 0) it collapses to uTint —
+// identical to the old single tone.
 float3 backdropTintAt(float2 uv) {
-    float3 two = mix(uTint, uTint2, smoothstep(0.0, 1.0, clamp(uv.y, 0.0, 1.0)));
+    float t = clamp(uv.y * 0.82 + uv.x * 0.18, 0.0, 1.0);
+    float3 two = mix(uTint, uTint2, smoothstep(0.0, 1.0, t));
     return mix(uTint, two, uBackdropMix);
 }
 
@@ -585,16 +607,29 @@ half4 main(float2 p) {
                              (aNW + aNE) - (aSW + aSE));
     }
 
-    // Liquid: subtle surface undulation so highlights swim over the glass.
-    // CRUCIAL: gate it by the real bevel strength (the geometric gradient BEFORE
-    // the ripple), so the undulation only lives where there already IS an edge.
-    // A big flat face — a button disc, the dock slab — has zero gradient inside,
-    // so it stays a clean, uniform surface instead of a lattice of ripple
-    // highlights. Thin glyphs are all edge, so lyrics keep their liquid life.
+    // Liquid, two scales:
+    // 1) Edge shimmer — the original fine ripple, gated by the real bevel
+    //    strength (the geometric gradient BEFORE the ripple) so the fast
+    //    undulation only lives where there already IS an edge. Ungated, a big
+    //    flat face — a button disc, the dock slab — became a lattice of ripple
+    //    highlights. Thin glyphs are all edge, so lyrics keep their liquid life.
     float edge = clamp(length(grad) * 1.5, 0.0, 1.0);
     float w1 = sin(p.x * 0.055 + uTime * 1.7) * cos(p.y * 0.081 - uTime * 1.3);
     float w2 = sin((p.x + p.y) * 0.035 - uTime * 0.9);
-    grad += 0.04 * uLiquid * float2(w1, w2) * a * edge;
+    // A third, counter-running octave breaks the two-wave moiré into organic
+    // caustic-like interference, and a slow breath swells the whole shimmer in
+    // and out so the motion never settles into a loop the eye can lock onto.
+    float w3 = sin(p.y * 0.047 - p.x * 0.021 + uTime * 2.3);
+    float breathe = 0.8 + 0.2 * sin(uTime * 0.7);
+    grad += (0.04 * float2(w1, w2) + 0.02 * float2(w3, -w3))
+            * uLiquid * a * edge * breathe;
+    // 2) Face swell — a much longer wavelength (~600px vs ~100px) at a quarter
+    //    of the amplitude, NOT edge-gated. This is what makes a flat pane read
+    //    as liquid: one slow dome drifting across the face, far too broad to
+    //    lattice, gently steering the interior lensing below.
+    float s1 = sin(p.x * 0.010 + uTime * 0.55) * sin(p.y * 0.012 - uTime * 0.42);
+    float s2 = sin((p.x - p.y) * 0.007 + uTime * 0.31);
+    grad += 0.011 * uLiquid * float2(s1, s2) * a;
 
     // Press bulge: a soft dome that swells the glass under a pressed button. The
     // radial slope peaks mid-radius (derivative of a dome) so the surface reads as
@@ -640,13 +675,32 @@ half4 main(float2 p) {
     float3 Tg = refract(I, N, 0.66);
     float3 Tb = refract(I, N, 0.66 + dispSpread);
     float power = uRefraction * 1.6;
-    float2 uvR = uv + Tr.xy * power;
-    float2 uvG = uv + Tg.xy * power;
-    float2 uvB = uv + Tb.xy * power;
+
+    // Interior slab parallax: a real glass pane offsets what's behind it even
+    // where the surface is dead flat (thickness x viewing angle), which the
+    // bevel-only refract() above can't produce — flat face ⇒ N = (0,0,1) ⇒ no
+    // bend. Device tilt supplies the viewing angle and a slow drift keeps the
+    // face alive when the phone is still; both scale with uRefraction so the
+    // existing presets keep their meaning (refraction 0 stays perfectly flat).
+    // The per-channel spread fringes the interior under high dispersion, so a
+    // "prism" preset fringes the whole pane, not just its rim.
+    float2 faceOfs = (uTilt * uTiltAmount * 0.35
+                    + 0.05 * float2(sin(uTime * 0.23), cos(uTime * 0.19)) * uLiquid)
+                    * uRefraction;
+    float chroma = 0.30 * uDispersion;
+    float2 uvR = uv + Tr.xy * power + faceOfs * (1.0 + chroma);
+    float2 uvG = uv + Tg.xy * power + faceOfs;
+    float2 uvB = uv + Tb.xy * power + faceOfs * (1.0 - chroma);
     float3 refr = float3(
         backdropTintAt(uvR).r * backdropField(uvR),
         backdropTintAt(uvG).g * backdropField(uvG),
         backdropTintAt(uvB).b * backdropField(uvB));
+
+    // Vibrancy: glass slightly saturates what shows through it (thin-slab
+    // absorption). A restrained boost — enough to make the transmitted colour
+    // read richer than the raw backdrop without posterizing dark tones.
+    float lum = dot(refr, float3(0.299, 0.587, 0.114));
+    refr = clamp(mix(float3(lum), refr, 1.22), 0.0, 1.0);
 
     // Reflected environment: the room the glass catches, turning with N so the
     // reflection streaks across the bevel as the surface curves. The key light
@@ -664,9 +718,20 @@ half4 main(float2 p) {
     float3 H = normalize(L + float3(0.0, 0.0, 1.0));
     float ndh   = max(dot(N, H), 0.0);
     float spec  = pow(ndh, uGloss);
-    float dsp   = 0.015 * uDispersion;
+    // The rainbow spread of the glint slowly widens and narrows, so the
+    // chromatic fringe cycles instead of sitting frozen on the bevel.
+    float dsp   = 0.015 * uDispersion * (1.0 + 0.35 * sin(uTime * 0.9));
     float specR = pow(max(dot(normalize(N + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
     float specB = pow(max(dot(normalize(N - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
+
+    // Edge twinkle: 4px cells pulse the glint with hash-staggered phases and
+    // rates, so bevel highlights sparkle as points firing off one another
+    // instead of glowing statically. Zero-mean-ish (baseline -0.15 against a
+    // ~0.27 mean pulse) and scaled by uLiquid, so calm presets keep a steady
+    // glint and the average brightness barely moves.
+    float twHash = fract(sin(dot(floor(p * 0.25), float2(127.1, 311.7))) * 43758.5453);
+    float twinkle = pow(0.5 + 0.5 * sin(uTime * (1.5 + 3.0 * twHash) + twHash * 6.2831), 4.0);
+    float glintGain = 1.0 + (0.6 * twinkle - 0.15) * uLiquid;
 
     // Body: the glyph's own colour (kept legible) with a hint of the lensed
     // backdrop; leans more see-through over real blurred art.
@@ -681,12 +746,27 @@ half4 main(float2 p) {
     // washing the whole flat face white (a front-facing flat surface would
     // otherwise fire the specular uniformly).
     float3 col3 = mix(bodyCol, refl * uReflection, clamp(fres * 1.1, 0.0, 1.0));
-    col3 += float3(specR, spec, specB) * uRimGain * fres;
+    col3 += float3(specR, spec, specB) * uRimGain * fres * glintGain;
+
+    // Traveling light sheet: the classic "shine" pass — a soft diagonal band
+    // gliding across the surface every ~7s, then resting (the sweep occupies
+    // ~60% of the cycle before the band exits the pane; the gaussian tail is
+    // negligible while parked). Fresnel-weighted so it flares the bevel rim
+    // as it crosses, with a 0.3 face floor so flat panes catch it too; scaled
+    // by uLiquid and uRimGain so calm or dim presets stay calm and dim.
+    float sweepT = fract(uTime * 0.14);
+    float sweepPos = mix(-0.4, 1.4, smoothstep(0.0, 0.6, sweepT));
+    float track = uv.x * 0.72 + uv.y * 0.28;
+    float sd = (track - sweepPos) * 8.0;
+    float sheetI = exp(-sd * sd) * uLiquid * (0.30 + 0.70 * fres);
+    col3 += float3(1.0, 0.985, 0.95) * sheetI * 0.5 * uRimGain;
 
     // Transparent face, opaque bright rim: alpha is low across the body (backdrop
     // reads through) and climbs to full where Fresnel and the glint peak, so the
     // rim highlight reads as a crisp glass edge rather than being clamped away.
-    float rim = clamp(fres * 1.2 + spec, 0.0, 1.0);
+    // The light sheet lifts alpha too — without that, the shine pass would be
+    // clamped invisible on see-through faces (premultiplied rgb <= alpha).
+    float rim = clamp(fres * 1.2 + spec + sheetI * 0.6, 0.0, 1.0);
     float outA = clamp(a * (uBodyOpacity + (1.0 - uBodyOpacity) * rim), 0.0, a);
 
     float3 col = col3 * outA;              // premultiplied

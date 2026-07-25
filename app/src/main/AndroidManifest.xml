@@ -23,6 +23,12 @@
          even stat() the cover image sitting next to it. With it granted
          File.exists()/read works on MediaStore-indexed images. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Atmos music videos. An .mp4 with a video stream is filed by MediaStore
+         in the *video* table, not audio, so without this the library scanner's
+         query on MediaStore.Video returns nothing and E-AC-3/Atmos videos stay
+         invisible. Only files with an E-AC-3 audio track are actually imported
+         (see MediaStoreSource.queryEac3Video). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 
     <!-- Bit-perfect / hi-res output. MODIFY_AUDIO_SETTINGS lets us route around
          the system mixer (request specific sample rates, disable effects on the

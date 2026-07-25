@@ -5,7 +5,7 @@ in-app donations and delivering the two keys into Supabase. Written for a browse
 agent (Claude for Chrome) driving a real Chrome window where the user is signed in.
 
 **End state:** `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY` are saved as
-Supabase Edge Function secrets, and Stripe is configured to charge recurring
+Supabase Edge Function secrets, and Stripe is configured to charge one-time
 donations that show up as "Tryptify" with an emailed receipt.
 
 ---
@@ -59,13 +59,11 @@ donations that show up as "Tryptify" with an emailed receipt.
 
 ---
 
-## Step 3 — Turn on donation receipt + subscription emails
+## Step 3 — Turn on donation receipt emails
 
 1. Open https://dashboard.stripe.com/settings/emails .
 2. Enable **"Successful payments"** (emails the donor a receipt).
-3. Enable subscription-related emails if listed (upcoming renewal / card expiring),
-   so recurring donors are never surprised.
-4. Save.
+3. Save.
 
 ---
 

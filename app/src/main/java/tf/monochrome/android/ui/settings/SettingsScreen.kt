@@ -114,6 +114,22 @@ import tf.monochrome.android.ui.theme.themeDisplayNames
 // ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
 private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About", "Radio")
 
+/** One selectable step in the Appearance › Font Size picker. */
+private data class FontScalePreset(val label: String, val scale: Float)
+
+// Five fixed steps replace the old 0.50-2.00 free slider. The range is
+// deliberately narrower than before: below ~0.85 the mini player and lyrics
+// clip, and above ~1.50 the settings rows and player controls start to
+// overlap. Anyone who genuinely needs larger type should turn on "Use system
+// font size", which honours the OS accessibility setting all the way up.
+private val FONT_SCALE_PRESETS = listOf(
+    FontScalePreset("Small", 0.85f),
+    FontScalePreset("Default", 1.00f),
+    FontScalePreset("Large", 1.15f),
+    FontScalePreset("Larger", 1.30f),
+    FontScalePreset("Largest", 1.50f),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -343,24 +359,9 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
     val fontScale by viewModel.fontScale.collectAsState()
     val customFontUri by viewModel.customFontUri.collectAsState()
     val availableFonts by viewModel.availableFonts.collectAsState()
+    val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsState()
+    val glowBehindArt by viewModel.glowBehindArt.collectAsState()
     var showThemeDropdown by remember { mutableStateOf(false) }
-    // Plain local state + commit-on-Done/focus-loss (see the speed field for
-    // the same rationale): typing a precise scale no longer resets mid-entry
-    // and the whole app's type no longer jumps at each intermediate keystroke.
-    var fontScaleText by remember { mutableStateOf(String.format(Locale.US, "%.2f", fontScale)) }
-    var fontScaleFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(fontScale) {
-        if (!fontScaleFocused) fontScaleText = String.format(Locale.US, "%.2f", fontScale)
-    }
-    val commitFontScale = {
-        val parsed = fontScaleText.toFloatOrNull()?.coerceIn(0.5f, 2.0f)
-        if (parsed != null) {
-            viewModel.setFontScale(parsed)
-            fontScaleText = String.format(Locale.US, "%.2f", parsed)
-        } else {
-            fontScaleText = String.format(Locale.US, "%.2f", fontScale)
-        }
-    }
 
     // File picker for .ttf font import
     val context = LocalContext.current
@@ -384,62 +385,62 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
+        SettingSwitchItem(
+            title = "Glow behind album art",
+            subtitle = "Bloom the bass-reactive glow around the album cover too, pumping with the kick.",
+            checked = glowBehindArt,
+            onCheckedChange = { viewModel.setGlowBehindArt(it) }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Typography")
 
-        // Font scale slider
+        // Font size: five fixed steps, or hand over to the OS setting.
+        SettingSwitchItem(
+            title = "Use system font size",
+            subtitle = "Follow the size set in Android Settings › Display › Font size",
+            checked = followSystemFontScale,
+            onCheckedChange = { viewModel.setFontScaleFollowSystem(it) }
+        )
+
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Font Scale",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                OutlinedTextField(
-                    value = fontScaleText,
-                    onValueChange = { fontScaleText = it },
-                    modifier = Modifier
-                        .width(80.dp)
-                        .onFocusChanged {
-                            if (!it.isFocused && fontScaleFocused) commitFontScale()
-                            fontScaleFocused = it.isFocused
-                        },
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { commitFontScale() })
-                )
+            Text(
+                "Font Size",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (followSystemFontScale) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurface
+            )
+
+            // A legacy value from the old free-form slider (e.g. 1.37) won't equal
+            // any step, so select the closest one instead of leaving nothing
+            // highlighted. Picking a chip then writes the exact step back.
+            val selectedPreset = remember(fontScale) {
+                FONT_SCALE_PRESETS.minByOrNull { kotlin.math.abs(it.scale - fontScale) }
             }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FONT_SCALE_PRESETS.forEach { preset ->
+                    FilterChip(
+                        selected = !followSystemFontScale && preset == selectedPreset,
+                        enabled = !followSystemFontScale,
+                        onClick = { viewModel.setFontScale(preset.scale) },
+                        label = { Text(preset.label) }
+                    )
+                }
+            }
+
             Text(
                 "Preview: The quick brown fox jumps over the lazy dog",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 12.dp)
             )
-            Slider(
-                value = fontScale,
-                onValueChange = { newScale ->
-                    val rounded = (Math.round(newScale * 100f) / 100f)
-                    viewModel.setFontScale(rounded)
-                    fontScaleText = String.format(Locale.US, "%.2f", rounded)
-                },
-                valueRange = 0.5f..2.0f,
-                steps = 29,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("0.50", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("1.00", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("2.00", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -1111,6 +1112,14 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
                 Text("Seap Inflator")
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Spatial Audio")
+        SettingItem(
+            title = "Atmos Renderer Configuration",
+            subtitle = "Renderer mode, output layout, downmix, bass management & channel map",
+            onClick = { navController.navigate(Screen.AtmosRenderer.route) },
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
         DspBlockSizeSelector(viewModel)
@@ -2126,7 +2135,7 @@ private fun AboutTab() {
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Recurring donations via Stripe's in-app PaymentSheet (card / Google Pay,
+            // One-time donations via Stripe's in-app PaymentSheet (card / Google Pay,
             // the donor never leaves the app), with Ko-fi kept as a one-tap fallback.
             tf.monochrome.android.ui.donate.DonateSupportCard(
                 onOpenKofi = { openDonationUrl(context, "https://ko-fi.com/trypt") }

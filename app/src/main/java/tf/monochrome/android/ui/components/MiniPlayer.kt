@@ -56,7 +56,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.luminance
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.R
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.player.LocalPlayerGlass
@@ -201,6 +206,40 @@ fun MiniPlayer(
             .clickable(interactionSource = null, indication = null, onClick = onClick)
             .then(swipeGestures)
     ) {
+        // Frosted backdrop UNDER the glass slab. The slab body can be nearly
+        // transparent (bodyOpacity goes down to 0.2), and without this layer
+        // whatever scrolls behind the bar — list rows, titles — reads through
+        // sharply and fights the mini player's own text. Haze gaussian-blurs
+        // the backdrop first; the AGSL glass then relights on top, and the
+        // punched play/skip holes reveal the frosted backdrop instead of raw
+        // rows. Same LOW-tier gate as the legacy path: budget SoCs skip it.
+        //
+        // Style note: backgroundColor and at least one tint must be REAL
+        // colours — a Transparent background with an empty tint list resolves
+        // to a no-op and the effect silently draws nothing. The neutral
+        // black/white tint (picked by theme luminance) lightens the frost on
+        // light themes and deepens it on dark ones, and Haze's default noise
+        // adds the fine frosted grain.
+        val profile = LocalPerformanceProfile.current
+        if (hazeState != null && profile.allowHazeBlur) {
+            val frostBg = MaterialTheme.colorScheme.background
+            val isDark = frostBg.luminance() <= 0.5f
+            val frostTint = if (isDark) Color.Black.copy(alpha = 0.32f)
+                            else Color.White.copy(alpha = 0.45f)
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle(
+                            backgroundColor = frostBg,
+                            blurRadius = 40.dp,
+                            tints = listOf(HazeTint(frostTint)),
+                        ),
+                    )
+            )
+        }
+
         // The glass slab with the two controls carved out of it. One offscreen
         // layer so the DstOut punch clears only the glyph shapes (revealing the
         // app behind the bar), not the whole rectangle.

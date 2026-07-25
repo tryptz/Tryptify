@@ -105,6 +105,11 @@ class PreferencesManager @Inject constructor(
         // tuned independently (Player Visuals Studio › "Mini Player" tab).
         private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
 
+        // Atmos renderer profile (mode / target layout / HRTF profile). Kept
+        // device-local — the layout tracks the connected DAC and the HRTF is a
+        // local measurement — so it is deliberately NOT in SETTINGS_SYNC_KEYS.
+        private val RENDERER_PROFILE_JSON = stringPreferencesKey("renderer_profile_json")
+
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
@@ -130,6 +135,9 @@ class PreferencesManager @Inject constructor(
 
         // Appearance extras
         private val FONT_SCALE = floatPreferencesKey("font_scale")
+        // When true, FONT_SCALE is ignored and the OS accessibility font size is
+        // used instead (Configuration.fontScale).
+        private val FONT_SCALE_FOLLOW_SYSTEM = booleanPreferencesKey("font_scale_follow_system")
         private val CUSTOM_FONT_URI = stringPreferencesKey("custom_font_uri")
 
         // Google Auth
@@ -207,6 +215,10 @@ class PreferencesManager @Inject constructor(
         private val EQ_SELECTED_HEADPHONE_NAME = stringPreferencesKey("eq_selected_headphone_name")
         private val EQ_MEASUREMENT_JSON = stringPreferencesKey("eq_measurement_json")
         private val EQ_UPLOADED_HEADPHONES_JSON = stringPreferencesKey("eq_uploaded_headphones_json")
+        // Automatic preamp: preamp tracks -(largest band boost) so the filter
+        // sum can never push the signal above 0 dBFS. Manual slider disabled
+        // while on.
+        private val EQ_AUTO_PREAMP = booleanPreferencesKey("eq_auto_preamp")
         // System-wide AutoEQ: apply the correction to ALL device audio via a
         // global output-mix effect (Wavelet-style), not just this app's playback.
         private val SYSTEM_WIDE_AUTOEQ_ENABLED = booleanPreferencesKey("system_wide_autoeq_enabled")
@@ -277,7 +289,7 @@ class PreferencesManager @Inject constructor(
         // deliberately added here.
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY, REPLAY_GAIN_MODE, REPLAY_GAIN_PREAMP,
-            THEME, DYNAMIC_COLORS, FONT_SCALE,
+            THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
@@ -295,7 +307,7 @@ class PreferencesManager @Inject constructor(
             SPECTRUM_ANALYZER_ENABLED, SPECTRUM_SHOW_ON_NOW_PLAYING, SPECTRUM_FFT_SIZE,
             EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
             EQ_CUSTOM_TARGETS_JSON, EQ_SELECTED_HEADPHONE_ID, EQ_SELECTED_HEADPHONE_NAME,
-            EQ_UPLOADED_HEADPHONES_JSON,
+            EQ_UPLOADED_HEADPHONES_JSON, EQ_AUTO_PREAMP,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
             SCAN_ON_APP_OPEN, MIN_TRACK_DURATION_MS, BACKGROUND_SCAN_INTERVAL,
@@ -585,11 +597,22 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Font scale ---
+    // The UI offers five fixed steps (see FONT_SCALE_PRESETS) rather than a free
+    // slider. The stored value is still a plain float so pre-existing arbitrary
+    // scales keep working and simply snap to the nearest step in the picker.
     val fontScale: Flow<Float> = dataStore.data.map { prefs ->
         prefs[FONT_SCALE] ?: 1.0f
     }
     suspend fun setFontScale(scale: Float) {
         dataStore.edit { it[FONT_SCALE] = scale.coerceIn(0.5f, 2.0f) }
+    }
+
+    /** When true the app follows the OS font size and ignores [fontScale]. */
+    val fontScaleFollowSystem: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[FONT_SCALE_FOLLOW_SYSTEM] ?: false
+    }
+    suspend fun setFontScaleFollowSystem(enabled: Boolean) {
+        dataStore.edit { it[FONT_SCALE_FOLLOW_SYSTEM] = enabled }
     }
 
     // --- Custom font ---
@@ -916,6 +939,7 @@ class PreferencesManager @Inject constructor(
     val eqActivePresetId: Flow<String?> = dataStore.data.map { it[EQ_ACTIVE_PRESET_ID] }
     val eqTargetId: Flow<String> = dataStore.data.map { it[EQ_TARGET_ID] ?: "harman_oe_2018" }
     val eqPreamp: Flow<Double> = dataStore.data.map { it[EQ_PREAMP] ?: 0.0 }
+    val eqAutoPreamp: Flow<Boolean> = dataStore.data.map { it[EQ_AUTO_PREAMP] ?: false }
     val eqBandsJson: Flow<String?> = dataStore.data.map { it[EQ_BANDS_JSON] }
 
     /** System-wide AutoEQ master toggle (global output-mix effect). Off by default. */
@@ -960,6 +984,10 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setEqPreamp(preamp: Double) {
         dataStore.edit { it[EQ_PREAMP] = preamp }
+    }
+
+    suspend fun setEqAutoPreamp(enabled: Boolean) {
+        dataStore.edit { it[EQ_AUTO_PREAMP] = enabled }
     }
 
     suspend fun setEqBands(bandsJson: String?) {
@@ -1315,6 +1343,18 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[MINI_PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
     }
 
+    /** Atmos renderer profile (mode / target layout / HRTF profile id). */
+    val rendererProfile: Flow<tf.monochrome.android.domain.model.RendererProfile> = dataStore.data.map { prefs ->
+        prefs[RENDERER_PROFILE_JSON]
+            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(raw) }.getOrNull() }
+            ?.clamped()
+            ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
+    }
+
+    suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
+        dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
+    }
+
     /** User-saved Player Glass themes (empty until the user saves one). */
     val customPlayerGlassPresets: Flow<List<tf.monochrome.android.domain.model.PlayerGlassPreset>> =
         dataStore.data.map { prefs ->
@@ -1384,8 +1424,10 @@ class PreferencesManager @Inject constructor(
     }
 
     // Full-screen blurred, stretched album-art background behind the player
-    // (Apple-Music / Spotify style). Off by default (keeps the flat gradient).
-    val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: false }
+    // (Apple-Music / Spotify style). ON by default — this also feeds the glass
+    // shader's uBackdropMix, so the default liquid glass lenses real album
+    // tones instead of the flat wash.
+    val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: true }
     suspend fun setPlayerBlurredBackground(enabled: Boolean) {
         dataStore.edit { it[PLAYER_BLURRED_BACKGROUND] = enabled }
     }

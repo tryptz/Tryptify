@@ -140,11 +140,14 @@ fun LocalLibraryTab(
     // Permissions for reading audio files AND sidecar cover images. On API
     // 33+ these are independent runtime grants — without READ_MEDIA_IMAGES
     // we can't stat() the JPG sitting next to a FLAC, so per-track sidecar
-    // covers never load even though the audio plays fine.
+    // covers never load even though the audio plays fine. READ_MEDIA_VIDEO
+    // lets the scanner see Atmos music videos, which MediaStore files in the
+    // video table (only E-AC-3 tracks are actually imported).
     val mediaPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         listOf(
             Manifest.permission.READ_MEDIA_AUDIO,
             Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
         )
     } else {
         listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -182,16 +185,18 @@ fun LocalLibraryTab(
             )
             return@Column
         }
-        // If we have audio but not images yet, prompt once silently — but
-        // don't gate the UI; the user has already opted into local library
-        // and the absence of cover images shouldn't block playback. Keyed on
-        // Unit + a saveable one-shot flag so the system dialog fires once,
-        // instead of re-firing every time the Library tab re-enters
-        // composition (the effect was keyed on the still-false grant state).
-        var imagePermissionRequested by rememberSaveable { mutableStateOf(false) }
+        // If we have audio but not the secondary grants yet (images for sidecar
+        // covers, video for Atmos music videos), prompt once — but don't gate
+        // the UI; the user has already opted into the local library and neither
+        // covers nor the odd video file should block playback. This is also what
+        // surfaces the new video grant to users upgrading over an install that
+        // already had audio, since the audio gate above never re-prompts. Keyed
+        // on Unit + a saveable one-shot flag so the system dialog fires once
+        // instead of re-firing on every re-composition.
+        var secondaryPermissionsRequested by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(Unit) {
-            if (!permissionState.allPermissionsGranted && !imagePermissionRequested) {
-                imagePermissionRequested = true
+            if (!permissionState.allPermissionsGranted && !secondaryPermissionsRequested) {
+                secondaryPermissionsRequested = true
                 permissionState.launchMultiplePermissionRequest()
             }
         }

@@ -104,8 +104,16 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val fontScale: StateFlow<Float> = preferences.fontScale
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+    val fontScaleFollowSystem: StateFlow<Boolean> = preferences.fontScaleFollowSystem
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val customFontUri: StateFlow<String?> = preferences.customFontUri
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    // Lives inside the Lyrics FX blob (a personal field presets never touch)
+    // but is surfaced in Appearance under Dynamic Colors — it's an album-art
+    // glow, not a Studio material knob.
+    val glowBehindArt: StateFlow<Boolean> = preferences.lyricsFx
+        .map { it.glowBehindArt }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- Interface ---
     val gaplessPlayback: StateFlow<Boolean> = preferences.gaplessPlayback
@@ -192,7 +200,7 @@ class SettingsViewModel @Inject constructor(
     val playerDynamicColor: StateFlow<Boolean> = preferences.playerDynamicColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val appTargetFps: StateFlow<Int> = preferences.appTargetFps
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val appRenderResolution: StateFlow<Int> = preferences.appRenderResolution
@@ -291,6 +299,15 @@ class SettingsViewModel @Inject constructor(
     fun setTheme(theme: String) { viewModelScope.launch { preferences.setTheme(theme) } }
     fun setDynamicColors(enabled: Boolean) { viewModelScope.launch { preferences.setDynamicColors(enabled) } }
     fun setFontScale(scale: Float) { viewModelScope.launch { preferences.setFontScale(scale) } }
+    fun setFontScaleFollowSystem(enabled: Boolean) {
+        viewModelScope.launch { preferences.setFontScaleFollowSystem(enabled) }
+    }
+    fun setGlowBehindArt(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = preferences.lyricsFx.first()
+            preferences.setLyricsFx(current.copy(glowBehindArt = enabled))
+        }
+    }
 
     fun importFont(uri: Uri) {
         viewModelScope.launch {

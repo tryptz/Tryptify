@@ -82,6 +82,7 @@ fun EqualizerScreen(
     val toneControls by viewModel.toneControls.collectAsState()
     val currentBands by viewModel.currentBands.collectAsState()
     val currentPreamp by viewModel.currentPreamp.collectAsState()
+    val autoPreamp by viewModel.autoPreamp.collectAsState()
     val availableTargets by viewModel.availableTargets.collectAsState()
     val selectedTarget by viewModel.selectedTarget.collectAsState()
     val activePreset by viewModel.activePreset.collectAsState()
@@ -267,6 +268,35 @@ fun EqualizerScreen(
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
+            }
+
+            // ─── Automatic preamp toggle ───
+            item {
+              tf.monochrome.android.devedit.DevEditable("eq_auto_preamp_toggle", Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Automatic preamp",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Compensates the combined EQ + tone boost so the signal can't clip.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = autoPreamp,
+                        onCheckedChange = { viewModel.setAutoPreamp(it) }
+                    )
+                }
+              }
             }
 
             // ─── Headphone Model Selector ───
@@ -746,7 +776,8 @@ fun EqualizerScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "${currentPreamp.roundToInt()} dB",
+                                if (autoPreamp) "Auto · ${currentPreamp.roundToInt()} dB"
+                                else "${currentPreamp.roundToInt()} dB",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -756,6 +787,7 @@ fun EqualizerScreen(
                             onValueChange = { viewModel.setPreamp(it) },
                             valueRange = -12f..12f,
                             steps = 23,
+                            enabled = !autoPreamp,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

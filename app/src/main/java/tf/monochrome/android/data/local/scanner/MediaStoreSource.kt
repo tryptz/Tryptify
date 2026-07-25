@@ -3,6 +3,8 @@ package tf.monochrome.android.data.local.scanner
 import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -57,6 +59,127 @@ class MediaStoreSource @Inject constructor(
     private fun isExcludedExtension(path: String): Boolean {
         val ext = path.substringAfterLast('.', "").lowercase()
         return ext == "mid" || ext == "midi" || ext == "kar" || ext == "rmi"
+    }
+
+    // ── Atmos video containers ───────────────────────────────────────────────
+    // An .mp4 that carries a video stream lands in MediaStore's *video* table as
+    // video/mp4, never in the audio table, so the query above cannot see it —
+    // even when its audio track is Dolby Atmos and the player renders it fine.
+    // Atmos music videos are the case that matters here, so video rows are
+    // admitted only when the file actually carries an E-AC-3 track. Everything
+    // else (screen recordings, camera clips) stays out of the library.
+
+    private val videoProjection = arrayOf(
+        MediaStore.Video.Media._ID,
+        MediaStore.Video.Media.DATA,
+        MediaStore.Video.Media.DISPLAY_NAME,
+        MediaStore.Video.Media.SIZE,
+        MediaStore.Video.Media.DATE_MODIFIED,
+        MediaStore.Video.Media.DURATION
+    )
+
+    // MediaFormat.MIMETYPE_AUDIO_EAC3_JOC is API 31; spell both out so this
+    // compiles and behaves identically down to minSdk 26.
+    private fun isEac3Mime(mime: String?): Boolean =
+        mime == "audio/eac3" || mime == "audio/eac3-joc"
+
+    /** Containers that can carry an E-AC-3 track — cheap filter before opening. */
+    private fun mayCarryEac3(path: String): Boolean =
+        when (path.substringAfterLast('.', "").lowercase()) {
+            "mp4", "m4v", "mov", "mkv", "ts", "m2ts", "mts" -> true
+            else -> false
+        }
+
+    /**
+     * The MIME of the file's E-AC-3 audio track, or null if it has none. Opens
+     * the container with [MediaExtractor], which reads only the header/index,
+     * not the media data. Returns null on any failure — an unreadable or DRM'd
+     * video must skip quietly rather than abort the whole scan.
+     */
+    private fun eac3TrackMime(uri: Uri): String? {
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(context, uri, null)
+            (0 until extractor.trackCount)
+                .asSequence()
+                .map { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME) }
+                .firstOrNull { isEac3Mime(it) }
+        } catch (e: Exception) {
+            null
+        } catch (e: OutOfMemoryError) {
+            // Malformed containers can make the platform extractor over-allocate.
+            null
+        } finally {
+            runCatching { extractor.release() }
+        }
+    }
+
+    /**
+     * Video-container files whose audio track is E-AC-3, mapped onto the same
+     * [AudioFileInfo] the audio table produces. [sinceSeconds] restricts to rows
+     * modified after that time (incremental scan); null scans everything.
+     *
+     * Deliberately NOT restricted to the library's folder roots: Atmos videos
+     * are usually saved wherever the download landed rather than under a music
+     * folder, and the E-AC-3 requirement is already a narrow enough filter.
+     */
+    private fun queryEac3Video(
+        minDurationMs: Long,
+        excludedPaths: Set<String>,
+        sinceSeconds: Long? = null
+    ): List<AudioFileInfo> {
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        }
+
+        val selection = buildString {
+            append("${MediaStore.Video.Media.DURATION} >= ?")
+            if (sinceSeconds != null) append(" AND ${MediaStore.Video.Media.DATE_MODIFIED} > ?")
+        }
+        val selectionArgs = if (sinceSeconds != null) {
+            arrayOf(minDurationMs.toString(), sinceSeconds.toString())
+        } else {
+            arrayOf(minDurationMs.toString())
+        }
+
+        val results = mutableListOf<AudioFileInfo>()
+        contentResolver.query(collection, videoProjection, selection, selectionArgs, null)
+            ?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
+                val durCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+
+                while (cursor.moveToNext()) {
+                    val path = cursor.getString(dataCol) ?: continue
+                    if (!mayCarryEac3(path)) continue
+                    if (excludedPaths.any { path.startsWith(it) }) continue
+
+                    val uri = Uri.withAppendedPath(collection, cursor.getLong(idCol).toString())
+                    // The only expensive step, and it runs last so the cheap
+                    // filters above have already thrown most candidates out.
+                    val audioMime = eac3TrackMime(uri) ?: continue
+
+                    results.add(
+                        AudioFileInfo(
+                            absolutePath = path,
+                            displayName = cursor.getString(nameCol) ?: path.substringAfterLast('/'),
+                            // Report the audio MIME, not the container's video/mp4,
+                            // so downstream codec detection resolves E-AC-3.
+                            mimeType = audioMime,
+                            sizeBytes = cursor.getLong(sizeCol),
+                            dateModified = cursor.getLong(dateCol) * 1000,
+                            duration = cursor.getLong(durCol),
+                            uri = uri
+                        )
+                    )
+                }
+            }
+        return results
     }
 
     fun queryAllAudio(
@@ -126,6 +249,7 @@ class MediaStoreSource @Inject constructor(
             }
         }
 
+        results += queryEac3Video(minDurationMs, excludedPaths)
         return results
     }
 
@@ -181,6 +305,7 @@ class MediaStoreSource @Inject constructor(
             }
         }
 
+        results += queryEac3Video(minDurationMs, emptySet(), sinceSeconds)
         return results
     }
 
