@@ -135,6 +135,9 @@ class PreferencesManager @Inject constructor(
 
         // Appearance extras
         private val FONT_SCALE = floatPreferencesKey("font_scale")
+        // When true, FONT_SCALE is ignored and the OS accessibility font size is
+        // used instead (Configuration.fontScale).
+        private val FONT_SCALE_FOLLOW_SYSTEM = booleanPreferencesKey("font_scale_follow_system")
         private val CUSTOM_FONT_URI = stringPreferencesKey("custom_font_uri")
 
         // Google Auth
@@ -286,7 +289,7 @@ class PreferencesManager @Inject constructor(
         // deliberately added here.
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY, REPLAY_GAIN_MODE, REPLAY_GAIN_PREAMP,
-            THEME, DYNAMIC_COLORS, FONT_SCALE,
+            THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
@@ -594,11 +597,22 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Font scale ---
+    // The UI offers five fixed steps (see FONT_SCALE_PRESETS) rather than a free
+    // slider. The stored value is still a plain float so pre-existing arbitrary
+    // scales keep working and simply snap to the nearest step in the picker.
     val fontScale: Flow<Float> = dataStore.data.map { prefs ->
         prefs[FONT_SCALE] ?: 1.0f
     }
     suspend fun setFontScale(scale: Float) {
         dataStore.edit { it[FONT_SCALE] = scale.coerceIn(0.5f, 2.0f) }
+    }
+
+    /** When true the app follows the OS font size and ignores [fontScale]. */
+    val fontScaleFollowSystem: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[FONT_SCALE_FOLLOW_SYSTEM] ?: false
+    }
+    suspend fun setFontScaleFollowSystem(enabled: Boolean) {
+        dataStore.edit { it[FONT_SCALE_FOLLOW_SYSTEM] = enabled }
     }
 
     // --- Custom font ---

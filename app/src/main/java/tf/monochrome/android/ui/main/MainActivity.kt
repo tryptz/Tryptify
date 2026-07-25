@@ -139,7 +139,14 @@ class MainActivity : ComponentActivity() {
 
         composeView.setContent {
             val themeName by preferences.theme.collectAsState(initial = "monochrome_dark")
-            val fontScale by preferences.fontScale.collectAsState(initial = 1.0f)
+            val storedFontScale by preferences.fontScale.collectAsState(initial = 1.0f)
+            val followSystemFontScale by preferences.fontScaleFollowSystem.collectAsState(initial = false)
+            // "Follow system" hands typography over to the OS accessibility font
+            // size. Configuration.fontScale already reflects the user's Display >
+            // Font size setting, so no extra permission or listener is needed —
+            // a config change recomposes this and the type updates live.
+            val systemFontScale = androidx.compose.ui.platform.LocalConfiguration.current.fontScale
+            val fontScale = if (followSystemFontScale) systemFontScale else storedFontScale
             val customFontPath by preferences.customFontUri.collectAsState(initial = null)
             val dynamicColorsEnabled by preferences.dynamicColors.collectAsState(initial = false)
             val currentTrack by queueManager.currentTrack.collectAsState()

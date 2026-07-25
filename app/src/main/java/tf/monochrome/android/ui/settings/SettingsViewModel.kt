@@ -104,6 +104,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val fontScale: StateFlow<Float> = preferences.fontScale
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+    val fontScaleFollowSystem: StateFlow<Boolean> = preferences.fontScaleFollowSystem
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val customFontUri: StateFlow<String?> = preferences.customFontUri
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -291,6 +293,9 @@ class SettingsViewModel @Inject constructor(
     fun setTheme(theme: String) { viewModelScope.launch { preferences.setTheme(theme) } }
     fun setDynamicColors(enabled: Boolean) { viewModelScope.launch { preferences.setDynamicColors(enabled) } }
     fun setFontScale(scale: Float) { viewModelScope.launch { preferences.setFontScale(scale) } }
+    fun setFontScaleFollowSystem(enabled: Boolean) {
+        viewModelScope.launch { preferences.setFontScaleFollowSystem(enabled) }
+    }
 
     fun importFont(uri: Uri) {
         viewModelScope.launch {
