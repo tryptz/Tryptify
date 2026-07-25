@@ -76,11 +76,15 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var atmosFrameBuffer: tf.monochrome.android.audio.atmos.AtmosFrameBuffer
 
     /** Shared Atmos tap — used both as the player's factory and to wrap the
-     *  directly-built DASH/progressive sources. */
-    private val atmosTapFactory by lazy {
+     *  directly-built DASH/progressive sources. Built via an annotated helper:
+     *  an @OptIn on the property itself does not reach the lazy {} lambda as
+     *  far as lint's UnsafeOptInUsageError detector is concerned. */
+    private val atmosTapFactory by lazy { buildAtmosTapFactory() }
+
+    @OptIn(UnstableApi::class)
+    private fun buildAtmosTapFactory() =
         tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
             DefaultMediaSourceFactory(this), atmosFrameBuffer)
-    }
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
