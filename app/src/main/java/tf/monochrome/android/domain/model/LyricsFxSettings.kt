@@ -86,8 +86,6 @@ data class LyricsFxSettings(
     val releaseMs: Float = 150f,
     /** 0 = stiff (no overshoot) … 1 = rubbery (rings visibly). */
     val bounce: Float = 0.7f,
-    /** Pop-in size swing when a new line activates (fraction of its size). */
-    val popAmount: Float = 0.08f,
 
     // ── Glow (bass-reactive bloom behind the active line) ──────────────
     /** Extra glow radius beyond the line's own height, in dp. */
@@ -101,7 +99,7 @@ data class LyricsFxSettings(
      */
     val glowBehindArt: Boolean = false,
 ) {
-    /** Spring damping ratio for the pulse/pop springs, derived from [bounce]. */
+    /** Spring damping ratio for the bass-pulse spring, derived from [bounce]. */
     val springDampingRatio: Float
         get() = (0.9f - 0.72f * bounce.coerceIn(0f, 1f)).coerceIn(0.15f, 0.9f)
 
@@ -135,7 +133,6 @@ data class LyricsFxSettings(
             attackMs = attackMs.c(4f, 60f, d.attackMs),
             releaseMs = releaseMs.c(40f, 500f, d.releaseMs),
             bounce = bounce.c(0f, 1f, d.bounce),
-            popAmount = popAmount.c(0f, 0.2f, d.popAmount),
             glowRadiusDp = glowRadiusDp.c(0f, 160f, d.glowRadiusDp),
             glowBrightness = glowBrightness.c(0f, 0.6f, d.glowBrightness),
             glowBehindArt = glowBehindArt,
@@ -180,7 +177,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 23f,
                 glassBodyOpacity = 0.6f, glassRefraction = 0.12f, glassRimBrightness = 1f, glassDispersion = 0.8f,
                 rotationDegrees = 6f, waveSpeed = 0.8f, waveTravelDp = 2f, shadowDepth = 0.6f,
-                bassReact = 0.5f, pumpAmount = 0.05f, bounce = 0.5f, popAmount = 0.05f,
+                bassReact = 0.5f, pumpAmount = 0.05f, bounce = 0.5f,
                 glowRadiusDp = 34f, glowBrightness = 0.16f,
             ),
             // Dreamy — soft wide glow, slow wave, lots of colour spread.
@@ -198,7 +195,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 25f, letterSpacingSp = 0f,
                 glassBodyOpacity = 0.45f, glassRefraction = 0.28f, glassRimBrightness = 1.9f, glassDispersion = 1.8f,
                 rotationDegrees = 14f, waveSpeed = 1.7f, wavePhaseStep = 0.32f,
-                bassReact = 1f, pumpAmount = 0.15f, attackMs = 8f, releaseMs = 110f, bounce = 0.85f, popAmount = 0.13f,
+                bassReact = 1f, pumpAmount = 0.15f, attackMs = 8f, releaseMs = 110f, bounce = 0.85f,
                 glowRadiusDp = 64f, glowBrightness = 0.36f,
             ),
             // Icy — thin crisp glass, barely any wave, faint glow.
@@ -228,13 +225,13 @@ data class LyricsFxSettings(
                 bassReact = 0.4f, pumpAmount = 0.05f, releaseMs = 300f,
                 glowRadiusDp = 54f, glowBrightness = 0.18f,
             ),
-            // Kick-forward — big tight pump + pop, snappy attack.
+            // Kick-forward — big tight pump, snappy attack.
             "Kick" to LyricsFxSettings(
                 maxWrapLines = 3,
                 fontSizeSp = 25f,
                 glassBodyOpacity = 0.6f, glassRefraction = 0.14f, glassRimBrightness = 1.2f, glassDispersion = 1f,
                 rotationDegrees = 10f, waveSpeed = 1.1f,
-                bassReact = 1f, pumpAmount = 0.2f, attackMs = 6f, releaseMs = 100f, bounce = 0.9f, popAmount = 0.16f,
+                bassReact = 1f, pumpAmount = 0.2f, attackMs = 6f, releaseMs = 100f, bounce = 0.9f,
                 glowRadiusDp = 60f, glowBrightness = 0.32f,
             ),
             // Vaporwave — heavy refraction/dispersion, huge bright glow.
@@ -246,13 +243,13 @@ data class LyricsFxSettings(
                 bassReact = 0.8f, pumpAmount = 0.12f, bounce = 0.75f,
                 glowRadiusDp = 110f, glowBrightness = 0.4f,
             ),
-            // Karaoke spotlight — big pop-in, fast attack, bright bloom.
+            // Karaoke spotlight — fast attack, bright bloom.
             "Marquee" to LyricsFxSettings(
                 maxWrapLines = 3,
                 fontSizeSp = 27f,
                 glassBodyOpacity = 0.6f, glassRefraction = 0.16f, glassRimBrightness = 1.4f, glassDispersion = 1.2f,
                 rotationDegrees = 12f, waveSpeed = 1.2f,
-                bassReact = 1f, pumpAmount = 0.16f, attackMs = 8f, releaseMs = 130f, bounce = 0.85f, popAmount = 0.18f,
+                bassReact = 1f, pumpAmount = 0.16f, attackMs = 8f, releaseMs = 130f, bounce = 0.85f,
                 glowRadiusDp = 80f, glowBrightness = 0.36f,
             ),
             // Smooth — deep soft shadow, gentle wave, large low-intensity glow.
@@ -270,7 +267,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 25f,
                 glassBodyOpacity = 0.48f, glassRefraction = 0.22f, glassRimBrightness = 1.6f, glassDispersion = 1.6f,
                 rotationDegrees = 18f, waveSpeed = 2.2f, wavePhaseStep = 0.35f,
-                bassReact = 1f, pumpAmount = 0.18f, attackMs = 6f, releaseMs = 90f, bounce = 0.95f, popAmount = 0.15f,
+                bassReact = 1f, pumpAmount = 0.18f, attackMs = 6f, releaseMs = 90f, bounce = 0.95f,
                 glowRadiusDp = 72f, glowBrightness = 0.34f,
             ),
             // Still — no motion, no pump, no glow (accessible / minimal).
@@ -279,7 +276,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 23f,
                 glassBodyOpacity = 0.55f, glassRefraction = 0.12f, glassRimBrightness = 1.1f, glassDispersion = 0.8f,
                 rotationDegrees = 0f,
-                bassReact = 0f, popAmount = 0f,
+                bassReact = 0f,
                 glowRadiusDp = 0f, glowBrightness = 0f,
             ),
 
@@ -298,7 +295,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 26f, letterSpacingSp = 0.4f,
                 glassBodyOpacity = 0.5f, glassRefraction = 0.3f, glassRimBrightness = 1.4f, glassDispersion = 1.7f,
                 rotationDegrees = 22f, waveSpeed = 0.55f, wavePhaseStep = 0.08f, waveTravelDp = 5f, shadowDepth = 0.5f,
-                bassReact = 0.6f, pumpAmount = 0.08f, attackMs = 22f, releaseMs = 320f, bounce = 0.6f, popAmount = 0.07f,
+                bassReact = 0.6f, pumpAmount = 0.08f, attackMs = 22f, releaseMs = 320f, bounce = 0.6f,
                 glowRadiusDp = 150f, glowBrightness = 0.55f,
             ),
             // Ember — warm near-opaque glass over heavy edge-lensing, a chunky
@@ -308,7 +305,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 27f, letterSpacingSp = 0f,
                 glassBodyOpacity = 0.72f, glassRefraction = 0.36f, glassRimBrightness = 1.1f, glassDispersion = 0.7f,
                 rotationDegrees = 10f, waveSpeed = 0.8f, shadowDepth = 1f,
-                bassReact = 0.8f, pumpAmount = 0.14f, attackMs = 10f, releaseMs = 90f, bounce = 0.4f, popAmount = 0.12f,
+                bassReact = 0.8f, pumpAmount = 0.14f, attackMs = 10f, releaseMs = 90f, bounce = 0.4f,
                 glowRadiusDp = 70f, glowBrightness = 0.34f,
             ),
             // Onyx — matte brutalist: liquid glass OFF (flat solid text),
@@ -318,7 +315,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 22f, letterSpacingSp = -0.4f,
                 liquidGlass = false,
                 rotationDegrees = 4f, waveSpeed = 0.7f, waveTravelDp = 1f, shadowDepth = 0.9f,
-                bassReact = 0.5f, pumpAmount = 0.06f, attackMs = 14f, releaseMs = 120f, bounce = 0.15f, popAmount = 0.04f,
+                bassReact = 0.5f, pumpAmount = 0.06f, attackMs = 14f, releaseMs = 120f, bounce = 0.15f,
                 glowRadiusDp = 20f, glowBrightness = 0.1f,
             ),
             // Prism — maximal cut-glass: full refraction + full chromatic
@@ -328,7 +325,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 25f, letterSpacingSp = 0.1f,
                 glassBodyOpacity = 0.45f, glassRefraction = 0.4f, glassRimBrightness = 1.7f, glassDispersion = 2f,
                 rotationDegrees = 15f, waveSpeed = 1.4f, wavePhaseStep = 0.7f, waveTravelDp = 6f, shadowDepth = 0.6f,
-                bassReact = 1f, pumpAmount = 0.16f, attackMs = 8f, releaseMs = 110f, bounce = 0.85f, popAmount = 0.14f,
+                bassReact = 1f, pumpAmount = 0.16f, attackMs = 8f, releaseMs = 110f, bounce = 0.85f,
                 glowRadiusDp = 66f, glowBrightness = 0.4f,
             ),
             // Mirage — vaporwave heat-haze billboard: big, very airy tracking,
@@ -338,7 +335,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 28f, letterSpacingSp = 0.6f,
                 glassBodyOpacity = 0.55f, glassRefraction = 0.26f, glassRimBrightness = 1.3f, glassDispersion = 1.8f,
                 rotationDegrees = 8f, waveSpeed = 0.5f, wavePhaseStep = 0.12f, waveTravelDp = 4f, shadowDepth = 0f,
-                bassReact = 0.7f, pumpAmount = 0.1f, attackMs = 24f, releaseMs = 260f, bounce = 0.65f, popAmount = 0.08f,
+                bassReact = 0.7f, pumpAmount = 0.1f, attackMs = 24f, releaseMs = 260f, bounce = 0.65f,
                 glowRadiusDp = 120f, glowBrightness = 0.45f,
             ),
             // Ticker — a single-line cinema strip: strict one row, wide side
@@ -348,7 +345,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 20f, letterSpacingSp = 0.5f, edgeMarginDp = 40f,
                 glassBodyOpacity = 0.85f, glassRefraction = 0.08f, glassRimBrightness = 1.2f, glassDispersion = 0.6f,
                 rotationDegrees = 0f, waveTravelDp = 0f, shadowDepth = 0.4f,
-                bassReact = 0.4f, pumpAmount = 0.05f, attackMs = 12f, releaseMs = 70f, bounce = 0.2f, popAmount = 0.03f,
+                bassReact = 0.4f, pumpAmount = 0.05f, attackMs = 12f, releaseMs = 70f, bounce = 0.2f,
                 glowRadiusDp = 24f, glowBrightness = 0.12f,
             ),
             // Halo — ethereal ghost text: minimum body opacity (letters read as a
@@ -358,7 +355,7 @@ data class LyricsFxSettings(
                 fontSizeSp = 24f, letterSpacingSp = 0.2f,
                 glassBodyOpacity = 0.2f, glassRefraction = 0.2f, glassRimBrightness = 2f, glassDispersion = 1.4f,
                 rotationDegrees = 12f, waveSpeed = 0.9f, wavePhaseStep = 0.18f, waveTravelDp = 4f, shadowDepth = 0.5f,
-                bassReact = 0.6f, pumpAmount = 0.09f, attackMs = 18f, releaseMs = 240f, bounce = 0.7f, popAmount = 0.09f,
+                bassReact = 0.6f, pumpAmount = 0.09f, attackMs = 18f, releaseMs = 240f, bounce = 0.7f,
                 glowRadiusDp = 160f, glowBrightness = 0.6f,
             ),
         )

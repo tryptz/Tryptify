@@ -111,8 +111,9 @@ import tf.monochrome.android.ui.player.PlayerDesignTokens
 import tf.monochrome.android.ui.player.TransportIcon
 import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
 import tf.monochrome.android.ui.player.playerGlass
-import tf.monochrome.android.ui.player.Letters3DLine
+import tf.monochrome.android.ui.player.Letters3DRow
 import tf.monochrome.android.ui.player.LocalBeatPulse
+import tf.monochrome.android.ui.player.rememberFrameSeconds
 import tf.monochrome.android.ui.player.LocalLyricGlyphAnchors
 import tf.monochrome.android.ui.player.LocalLyricsFx
 import tf.monochrome.android.ui.player.LyricGlyphAnchors
@@ -706,7 +707,7 @@ fun LyricsFxStudioScreen(
                 FxSlider(
                     "Bass reaction", "${(fx.bassReact * 100).toInt()}%" + if (fx.bassReact < 0.01f) " (off)" else "",
                     fx.bassReact, 0f..1f,
-                    description = "Master intensity for pump, pop-in, and glow.",
+                    description = "Master intensity for pump and glow.",
                 ) { viewModel.update { s -> s.copy(bassReact = it) } }
                 FxSlider("Pump amount", "+${(fx.pumpAmount * 100).toInt()}%", fx.pumpAmount, 0f..0.25f) {
                     viewModel.update { s -> s.copy(pumpAmount = it) }
@@ -723,9 +724,6 @@ fun LyricsFxStudioScreen(
                     "Bounce", "${(fx.bounce * 100).toInt()}%", fx.bounce, 0f..1f,
                     description = "Spring overshoot — 0 tracks stiffly, 100 rings like rubber.",
                 ) { viewModel.update { s -> s.copy(bounce = it) } }
-                FxSlider("Pop-in amount", "${(fx.popAmount * 100).toInt()}%", fx.popAmount, 0f..0.2f) {
-                    viewModel.update { s -> s.copy(popAmount = it) }
-                }
             }
 
             item {
@@ -1383,7 +1381,7 @@ private fun StudioPreview(
                     onSeekTo = {},
                 )
             } else {
-                Letters3DLine(
+                Letters3DRow(
                     text = "Feel the beat tonight",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = fx.fontSizeSp.sp,
@@ -1392,11 +1390,11 @@ private fun StudioPreview(
                         fontWeight = FontWeight.ExtraBold,
                     ).withLyricFont(rememberLyricFontFamily(fx)),
                     color = accent,
+                    time = rememberFrameSeconds(),
                     modifier = Modifier
                         .fxaa()
                         .liquidGlass(tint = accent)
-                        .bassBeat(pulse, { 1f }, fx, anchors),
-                    fontSizeSp = fx.fontSizeSp,
+                        .bassBeat(pulse, fx, anchors),
                 )
             }
         }

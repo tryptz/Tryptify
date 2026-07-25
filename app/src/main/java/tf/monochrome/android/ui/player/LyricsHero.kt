@@ -1,6 +1,9 @@
 package tf.monochrome.android.ui.player
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -8,8 +11,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -409,7 +411,7 @@ internal fun SyncedLyricsView(
     }
 
     // Bass-reactive FX for the active line: pulse from the FFT tap, a frame
-    // clock for the 3D wave, and a pop-in spring per line change. All
+    // clock for the 3D wave. All
     // disabled (and the analyzer never acquired) at intensity 0.
     val fx = LocalLyricsFx.current
     val beatIntensity = fx.bassReact
@@ -421,24 +423,6 @@ internal fun SyncedLyricsView(
     // the full-screen LyricsFxLayer (in the player, no clipping ancestor) blooms
     // the album-accent glow there, so the light can never be cut.
     val glyphAnchors = LocalLyricGlyphAnchors.current
-    // Pop-in: snap to 0 and spring (underdamped → overshoot) back to 1 every
-    // time the active line changes, so each new line pops in right on the
-    // beat that activated it. ~8% size swing keeps it punchy but readable.
-    val popIn = remember { androidx.compose.animation.core.Animatable(1f) }
-    LaunchedEffect(currentLineIndex) {
-        if (currentLineIndex >= 0 && beatIntensity > 0.01f && fx.popAmount > 0.001f) {
-            popIn.snapTo(0f)
-            popIn.animateTo(
-                targetValue = 1f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = fx.springDampingRatio,
-                    stiffness = 500f,
-                ),
-            )
-        }
-    }
-    val popScale: () -> Float = { (1f - fx.popAmount) + fx.popAmount * popIn.value }
-
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         // Half-height TOP padding lets an early line still settle at the active-
         // line anchor with room above it. The BOTTOM padding is deliberately
@@ -454,21 +438,19 @@ internal fun SyncedLyricsView(
         // clip edge, so edge letters never get corner-cut against the border.
         val sideInset = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
         val lineWidth = (maxWidth - sideInset * 2).coerceAtLeast(0.dp)
-        // Headroom for the active line's bass bounce. The line pumps + pops via a
+        // Headroom for the active line's bass bounce. The line pumps via a
         // graphicsLayer scale (bassBeat), but it lives inside the lyric surface's
         // glass render-layer, which only captures `lineWidth` — so a long line
         // swelling past that would be clipped. Fit width-constrained lines to a
-        // slightly narrower box that reserves the PEAK bounce scale plus a small
+        // slightly narrower box that reserves the PEAK pump scale plus a small
         // edge-safety margin, so at full pump the glyphs stay INSIDE the glass
         // clip edge — leaving room for the glass bevel/refraction, which lenses a
         // few px beyond the glyph geometry and would otherwise get corner-cut on a
-        // hard kick. (The bass pulse caps at ~1.6 in rememberBassPulse; pop-in
-        // adds a small overshoot.) Short lines aren't width-constrained, so the
-        // fitter leaves them as-is.
+        // hard kick. (The bass pulse caps at ~1.6 in rememberBassPulse.) Short
+        // lines aren't width-constrained, so the fitter leaves them as-is.
         val bounceHeadroom = if (fx.bassReact > 0.01f) {
             val pumpPeak = 1f + fx.pumpAmount * fx.bassReact * 1.6f
-            val popPeak = 1f + fx.popAmount * 0.25f
-            (pumpPeak * popPeak * BOUNCE_EDGE_SAFETY).coerceIn(1f, 2.2f)
+            (pumpPeak * BOUNCE_EDGE_SAFETY).coerceIn(1f, 2.2f)
         } else {
             1f
         }
@@ -507,7 +489,18 @@ internal fun SyncedLyricsView(
             if (lastCentredLine.intValue == index) {
                 listState.scrollBy(itemCentre - viewportAnchor)
             } else {
-                listState.animateScrollBy(itemCentre - viewportAnchor)
+                // Glide, don't yank: animateScrollBy's default spring is stiff
+                // (settles in ~200ms), which reads as the list snapping to each
+                // new line. A long ease-out tween makes the advance a single
+                // calm glide; fast lyrics simply interrupt it mid-flight and
+                // the next glide starts from wherever the list currently is.
+                listState.animateScrollBy(
+                    itemCentre - viewportAnchor,
+                    animationSpec = tween(
+                        durationMillis = LINE_SWITCH_SCROLL_MS,
+                        easing = FastOutSlowInEasing,
+                    ),
+                )
             }
             lastCentredLine.intValue = index
         }
@@ -530,29 +523,43 @@ internal fun SyncedLyricsView(
             // instead of wrapping or being cut off inside the compact player.
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
-            // Bass FX rides only the active line: the line pumps + pops
-            // (bassBeat) and reports its bounds so the full-screen layer can
-            // bloom the glow behind it.
+            // Bass FX rides only the active line: the line pumps (bassBeat)
+            // and reports its bounds so the full-screen layer can bloom the
+            // glow behind it.
             val lineAnchors = if (isActive) glyphAnchors else null
-            val beatModifier = if (isActive && beatIntensity > 0.01f) {
-                Modifier.bassBeat(bassPulse, popScale, fx, lineAnchors)
+            // Emphasis scale: the active line eases up to full size while its
+            // neighbours settle slightly smaller. The font WEIGHT still snaps
+            // (Medium ↔ ExtraBold can't tween without per-frame re-layout), but
+            // wrapped in this gentle grow/shrink the switch reads as one smooth
+            // motion instead of an instant bolding. Draw-phase only (graphicsLayer
+            // reads the state inside the block), so no recomposition per frame,
+            // and it multiplies cleanly under bassBeat's own pump layer.
+            val emphasis by animateFloatAsState(
+                targetValue = if (isActive) 1f else INACTIVE_LINE_SCALE,
+                animationSpec = tween(durationMillis = LINE_SWITCH_FADE_MS, easing = FastOutSlowInEasing),
+                label = "lineEmphasis",
+            )
+            val beatModifier = (if (isActive && beatIntensity > 0.01f) {
+                Modifier.bassBeat(bassPulse, fx, lineAnchors)
             } else {
                 Modifier
+            }).graphicsLayer {
+                scaleX = emphasis
+                scaleY = emphasis
             }
             val lyricFont = rememberLyricFontFamily(fx)
             val weight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium
-            // One-row fit. lineHeight stays pinned to the BASE size so the row
-            // height never moves with the fitted size — the list never reflows.
-            val fittedSp = rememberFittedLyricSizeSp(
-                text = line.text.ifBlank { "♪" },
-                availableWidth = fitWidth,
-                baseSp = fx.fontSizeSp,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    letterSpacing = fx.letterSpacingSp.sp,
-                    fontWeight = weight,
-                ).withLyricFont(lyricFont),
-                maxRows = fx.maxWrapLines,
-            )
+            // Frozen format: row breaks and font size come from
+            // rememberWrappedLyricLayout, measured with a style that never
+            // varies with the active state — always ExtraBold, the widest
+            // weight. Active and inactive renderers then draw the SAME
+            // precomputed rows at the SAME size, so activation can never
+            // re-wrap a line (2 rows becoming 3) or snap its size. lineHeight
+            // stays pinned to the BASE size so row height never moves either.
+            val measureStyle = MaterialTheme.typography.titleMedium.copy(
+                letterSpacing = fx.letterSpacingSp.sp,
+                fontWeight = FontWeight.ExtraBold,
+            ).withLyricFont(lyricFont)
             if (line.words.isNotEmpty()) {
                 // Only sources with real per-word timing (TIDAL enhanced LRC)
                 // illuminate word-by-word.
@@ -565,11 +572,22 @@ internal fun SyncedLyricsView(
                     accent = accent,
                     onClick = { onSeekTo(line.timeMs) },
                     beatModifier = beatModifier,
-                    fontSizeSp = fittedSp,
+                    availableWidth = fitWidth,
+                    measureStyle = measureStyle,
                 )
             } else {
                 // Line-level sources (LRCLib / Qobuz): illuminate the whole
                 // active line at once.
+                val lineWords = remember(line.text) {
+                    line.text.ifBlank { "♪" }.split(' ').filter { it.isNotEmpty() }.ifEmpty { listOf("♪") }
+                }
+                val layout = rememberWrappedLyricLayout(
+                    words = lineWords,
+                    availableWidth = fitWidth,
+                    baseSp = fx.fontSizeSp,
+                    style = measureStyle,
+                    maxRows = fx.maxWrapLines,
+                )
                 val color by animateColorAsState(
                     targetValue = when {
                         // Full-opacity fill: the glass transparency is applied by
@@ -579,10 +597,14 @@ internal fun SyncedLyricsView(
                         isPast -> Color.White.copy(alpha = 0.35f)
                         else -> Color.White.copy(alpha = 0.62f)
                     },
+                    // Same clock as the emphasis scale, so the light-up and the
+                    // grow arrive together as one motion (the default spring
+                    // finished the colour flip well before the scale settled).
+                    animationSpec = tween(durationMillis = LINE_SWITCH_FADE_MS, easing = FastOutSlowInEasing),
                     label = "lyricColor",
                 )
                 val lineStyle = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = fittedSp.sp,
+                    fontSize = layout.fontSizeSp.sp,
                     lineHeight = (fx.fontSizeSp * 1.26f).sp,
                     letterSpacing = fx.letterSpacingSp.sp,
                     fontWeight = weight,
@@ -591,27 +613,38 @@ internal fun SyncedLyricsView(
                     .fillMaxWidth()
                     .clickable { onSeekTo(line.timeMs) }
                     .padding(vertical = 2.dp)
-                // Render letters individually whenever the 3D wave is active.
+                // The 3D wave only changes HOW each frozen row is drawn (one
+                // Text vs per-letter glyphs at natural advances), never the
+                // rows themselves — so toggling active state moves nothing.
                 val perLetter = isActive && fx.rotationDegrees > 0.05f
-                if (perLetter) {
-                    Letters3DLine(
-                        text = line.text.ifBlank { "♪" },
-                        style = lineStyle,
-                        color = color,
-                        modifier = lineModifier,
-                        fontSizeSp = fittedSp,
-                    )
-                } else {
-                    Text(
-                        text = line.text.ifBlank { "♪" },
-                        style = lineStyle,
-                        color = color,
-                        textAlign = TextAlign.Center,
-                        maxLines = fx.maxWrapLines,
-                        softWrap = fx.maxWrapLines > 1,
-                        overflow = TextOverflow.Clip,
-                        modifier = lineModifier,
-                    )
+                val time = if (perLetter) rememberFrameSeconds() else null
+                Column(
+                    modifier = lineModifier,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    var phaseBase = 0
+                    layout.rowIndices.forEach { row ->
+                        val rowText = row.joinToString(" ") { lineWords[it] }
+                        if (time != null) {
+                            Letters3DRow(
+                                text = rowText,
+                                style = lineStyle,
+                                color = color,
+                                time = time,
+                                phaseBase = phaseBase,
+                            )
+                        } else {
+                            Text(
+                                text = rowText,
+                                style = lineStyle,
+                                color = color,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
+                            )
+                        }
+                        phaseBase += rowText.length + 1
+                    }
                 }
             }
         }
@@ -619,7 +652,6 @@ internal fun SyncedLyricsView(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun KaraokeLyricLine(
     line: LyricLine,
@@ -629,71 +661,86 @@ internal fun KaraokeLyricLine(
     accent: Color,
     onClick: () -> Unit,
     beatModifier: Modifier = Modifier,
-    fontSizeSp: Float = 23f,
+    availableWidth: Dp,
+    measureStyle: TextStyle,
 ) {
     // Render letters individually while active whenever the 3D wave is on.
     // One frame clock per line.
     val fx = LocalLyricsFx.current
     val perLetter = isActive && fx.rotationDegrees > 0.05f
     val time = if (perLetter) rememberFrameSeconds() else null
+    val lyricFont = rememberLyricFontFamily(fx)
+    // Frozen format: rows wrap from the state-independent measurement style,
+    // so a given word always sits on the same row whether the line is active
+    // or not — activation can never turn 2 rows into 3.
+    val wordTexts = remember(line.words) { line.words.map { it.text } }
+    val layout = rememberWrappedLyricLayout(
+        words = wordTexts,
+        availableWidth = availableWidth,
+        baseSp = fx.fontSizeSp,
+        style = measureStyle,
+        maxRows = fx.maxWrapLines,
+    )
     // Font + base style are identical for every word — build them ONCE per line
     // instead of per word inside the loop (only the colour varies per word).
-    val lyricFont = rememberLyricFontFamily(fx)
     val wordStyle = MaterialTheme.typography.titleMedium.copy(
-        fontSize = fontSizeSp.sp,
+        fontSize = layout.fontSizeSp.sp,
         lineHeight = (fx.fontSizeSp * 1.26f).sp,
         letterSpacing = fx.letterSpacingSp.sp,
         fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
     ).withLyricFont(lyricFont)
-    // One row when maxWrapLines == 1, else a FlowRow that wraps between words.
-    val lineModifier = beatModifier
-        .fillMaxWidth()
-        .clickable(onClick = onClick)
-        .padding(vertical = 2.dp)
-    val content: @Composable () -> Unit = {
+    val shadowed = wordStyle.copy(shadow = letter3DShadow(fx.shadowDepth))
+    Column(
+        modifier = beatModifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         var letterBase = 0
-        line.words.forEach { word ->
-            // Solid fills: the liquidGlass() shader turns the active line into
-            // see-through glass, so the karaoke colours are handed to it opaque.
-            val target = when {
-                !isActive -> if (isPast) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.6f)
-                position >= word.endMs -> accent.copy(alpha = 0.9f)   // already sung
-                position >= word.startMs -> accent                    // lighting up now
-                else -> Color.White.copy(alpha = 0.45f)               // not yet reached
-            }
-            val color by animateColorAsState(targetValue = target, label = "wordColor")
-            val display = word.text + " "
-            if (time != null) {
-                val phaseBase = letterBase
-                Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx, fontSizeSp))) {
-                    display.forEachIndexed { j, ch ->
-                        val idx = phaseBase + j
-                        Letter3DText(
-                            text = ch.toString(),
-                            // Low spatial frequency: neighbouring letters stay
-                            // nearly in phase, so the line reads as one long
-                            // smooth ribbon; the step is a Studio setting.
-                            phase = idx * fx.wavePhaseStep,
-                            style = wordStyle.copy(shadow = letter3DShadow(fx.shadowDepth)),
+        layout.rowIndices.forEach { rowWords ->
+            Row {
+                rowWords.forEach { i ->
+                    val word = line.words[i]
+                    // Solid fills: the liquidGlass() shader turns the active line into
+                    // see-through glass, so the karaoke colours are handed to it opaque.
+                    val target = when {
+                        !isActive -> if (isPast) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.6f)
+                        position >= word.endMs -> accent.copy(alpha = 0.9f)   // already sung
+                        position >= word.startMs -> accent                    // lighting up now
+                        else -> Color.White.copy(alpha = 0.45f)               // not yet reached
+                    }
+                    val color by animateColorAsState(targetValue = target, label = "wordColor")
+                    val display = if (i == rowWords.last()) word.text else word.text + " "
+                    if (time != null) {
+                        val phaseBase = letterBase
+                        Row {
+                            display.forEachIndexed { j, ch ->
+                                Letter3DText(
+                                    text = ch.toString(),
+                                    // Low spatial frequency: neighbouring letters stay
+                                    // nearly in phase, so the line reads as one long
+                                    // smooth ribbon; the step is a Studio setting.
+                                    phase = (phaseBase + j) * fx.wavePhaseStep,
+                                    style = shadowed,
+                                    color = color,
+                                    time = time,
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = display,
+                            style = wordStyle,
                             color = color,
-                            time = time,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
+                    letterBase += word.text.length + 1
                 }
-            } else {
-                Text(
-                    text = display,
-                    style = wordStyle,
-                    color = color,
-                )
             }
-            letterBase += display.length
         }
-    }
-    if (fx.maxWrapLines > 1) {
-        FlowRow(modifier = lineModifier, horizontalArrangement = Arrangement.Center) { content() }
-    } else {
-        Row(modifier = lineModifier, horizontalArrangement = Arrangement.Center) { content() }
     }
 }
 
@@ -739,6 +786,22 @@ private const val MIN_LYRIC_SP = 11f
 private const val ACTIVE_LINE_ANCHOR = 0.38f
 
 /**
+ * Line-switch feel. The scroll glide runs a touch longer than the colour/scale
+ * fade so the list is still settling as the new line finishes lighting up —
+ * ending everything on the same frame read as an abrupt full stop.
+ */
+private const val LINE_SWITCH_SCROLL_MS = 600
+private const val LINE_SWITCH_FADE_MS = 450
+
+/**
+ * Resting scale of non-active lines. The active line eases between this and
+ * full size on activation, masking the instant Medium↔ExtraBold weight snap
+ * with a smooth grow/shrink. Subtle on purpose — inactive lines must still
+ * reach toward the screen edges per the one-row fit design.
+ */
+private const val INACTIVE_LINE_SCALE = 0.95f
+
+/**
  * Fixed side inset that keeps the outermost glyphs (and their puffy 3D glass
  * bevels) clear of the lyric layer's clip edge, so edge letters are never
  * corner-cut against the screen border. Added on top of the user's edge margin.
@@ -754,39 +817,81 @@ private val LYRIC_BEVEL_SAFE_DP = 14.dp
 private const val BOUNCE_EDGE_SAFETY = 1.06f
 
 /**
- * The largest font size (≤ [baseSp], down to [MIN_LYRIC_SP]) at which [text]
- * still fits on ONE line within [availableWidth] — so every lyric line renders
- * on a single row and reaches toward the screen edges without being cut, instead
- * of wrapping inside the compact player. Text width scales ~linearly with size,
- * so one measurement at the base size is enough to scale down. The slack factor
- * leaves room for the per-letter 3D swell and inter-letter gaps so the
- * single-row 3D path fits too.
+ * A lyric line's FROZEN wrap: which words sit on which row, and the font size
+ * (≤ base, ≥ [MIN_LYRIC_SP]) at which those rows fit the available width.
+ * Computed once per line from a state-independent measurement style and then
+ * shared by the active and inactive renderers, so activating a line can never
+ * change its row count, break points, or size — the format stays identical to
+ * the unselected state and only colour/weight/draw-phase transforms move.
+ */
+internal data class WrappedLyricLayout(
+    /** Word indices per row, in order. */
+    val rowIndices: List<List<Int>>,
+    val fontSizeSp: Float,
+)
+
+/**
+ * Greedy word-wrap at the largest size that fits [maxRows] rows. Word advances
+ * are measured ONCE at [baseSp] (text width is ~linear in font size, so other
+ * candidate sizes just scale them), then the size steps down until the wrap
+ * fits — which also fixes the old fitter's blind spot: its total-run estimate
+ * ignored break fragmentation, so "fits in 3 rows of length" could still
+ * greedy-wrap into 4 and get clipped. If even the floor size can't fit, rows
+ * are capped the way the old Text renderer capped maxLines (clip, don't grow).
  */
 @Composable
-internal fun rememberFittedLyricSizeSp(
-    text: String,
+internal fun rememberWrappedLyricLayout(
+    words: List<String>,
     availableWidth: Dp,
     baseSp: Float,
     style: TextStyle,
-    maxRows: Int = 1,
-): Float {
+    maxRows: Int,
+): WrappedLyricLayout {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(text, availableWidth, baseSp, maxRows, style.fontWeight, style.letterSpacing, style.fontFamily) {
-        if (text.isBlank()) return@remember baseSp
-        // Capacity is the total horizontal run the text may occupy across maxRows
-        // rows; if it exceeds that at the base size, shrink to fit (so a line wraps
-        // up to maxRows rows, then shrinks rather than wrapping further or clipping).
-        val capacity = with(density) { availableWidth.toPx() } * maxRows.coerceAtLeast(1) * 0.94f
-        if (capacity <= 0f) return@remember baseSp
-        val measured = measurer.measure(
-            text = text,
-            style = style.copy(fontSize = baseSp.sp),
-            maxLines = 1,
-            softWrap = false,
-        ).size.width.toFloat()
-        if (measured <= capacity) baseSp
-        else (baseSp * (capacity / measured)).coerceIn(MIN_LYRIC_SP, baseSp)
+    return remember(words, availableWidth, baseSp, maxRows, style.fontWeight, style.letterSpacing, style.fontFamily) {
+        val rowsBudget = maxRows.coerceAtLeast(1)
+        // Small safety factor: the per-letter 3D path loses kerning (each glyph
+        // is its own composable at its natural advance), which can run a hair
+        // wider than the same row measured as one string.
+        val capacity = with(density) { availableWidth.toPx() } * 0.97f
+        if (words.isEmpty() || capacity.isNaN() || capacity <= 0f) {
+            return@remember WrappedLyricLayout(listOf(words.indices.toList()), baseSp)
+        }
+        val sized = style.copy(fontSize = baseSp.sp)
+        val wordWidths = words.map {
+            measurer.measure(it, style = sized, maxLines = 1, softWrap = false).size.width.toFloat()
+        }
+        // Space advance via subtraction — measuring " " alone can get trimmed.
+        val spaceWidth = (
+            measurer.measure("a a", style = sized, maxLines = 1, softWrap = false).size.width -
+                2f * measurer.measure("a", style = sized, maxLines = 1, softWrap = false).size.width
+            ).coerceAtLeast(0f)
+        var sp = baseSp
+        while (true) {
+            val k = sp / baseSp
+            val rows = mutableListOf<List<Int>>()
+            var current = mutableListOf<Int>()
+            var currentWidth = 0f
+            var wordOverflow = false
+            words.indices.forEach { i ->
+                val w = wordWidths[i] * k
+                if (w > capacity) wordOverflow = true
+                val extended = currentWidth + spaceWidth * k + w
+                when {
+                    current.isEmpty() -> { current.add(i); currentWidth = w }
+                    extended <= capacity -> { current.add(i); currentWidth = extended }
+                    else -> { rows.add(current); current = mutableListOf(i); currentWidth = w }
+                }
+            }
+            if (current.isNotEmpty()) rows.add(current)
+            if ((rows.size <= rowsBudget && !wordOverflow) || sp <= MIN_LYRIC_SP + 0.01f) {
+                return@remember WrappedLyricLayout(rows.take(rowsBudget), sp)
+            }
+            sp = (sp * 0.93f).coerceAtLeast(MIN_LYRIC_SP)
+        }
+        @Suppress("UNREACHABLE_CODE")
+        WrappedLyricLayout(listOf(words.indices.toList()), baseSp)
     }
 }
 
@@ -801,72 +906,39 @@ private fun letter3DShadow(depth: Float) = Shadow(
 )
 
 /**
- * Horizontal breathing room laid out between adjacent per-letter 3D glyphs so
- * they can never bleed into one another. Each [Letter3DText] swells toward the
- * viewer (up to ~9% of its size per unit of ripple intensity) and stamps an
- * extruded backing a couple of pixels to the right — both inside its own
- * transform layer. CJK glyphs fill their advance box with no side bearing, so
- * without a gap that peak swell plus the backing pushed neighbouring characters
- * on top of each other. The gap is exactly the peak horizontal overflow, so at
- * rest the line stays tight and at full swing the letters just kiss.
+ * One precomputed lyric row rendered as per-letter 3D glyphs — a ripple of
+ * rotation travelling along the row, with a baked-in drop shadow for depth.
+ * Every letter sits at its NATURAL text advance (no inter-letter gaps), so
+ * the row occupies the same width as the identical row drawn as one Text and
+ * activating a line never shifts or re-wraps it; the swell/tilt/extrusion are
+ * all draw-phase transforms that overlap harmlessly at their peaks. The row
+ * never wraps — callers feed it rows from [rememberWrappedLyricLayout].
  */
-private fun letterGapDp(fx: LyricsFxSettings, fontSizeSp: Float = fx.fontSizeSp): Dp {
-    val intensity = (fx.rotationDegrees / 9f).coerceAtMost(2.5f)
-    // fontSize * peakSwell = total width the glyph gains at the toward-viewer
-    // peak; +1.5dp covers the extruded backing (offset 1.2dp, scaled by depth).
-    // Sized off the ACTUAL (fitted) glyph size so a shrunk line's gaps shrink too.
-    return (fontSizeSp * 0.09f * intensity + 1.5f).dp
-}
-
-/**
- * Active-line treatment: each character is its own Text inside a per-letter
- * 3D transform — a ripple of rotation travelling along the line — with a
- * baked-in drop shadow for depth. The whole line stays on ONE row (no wrap);
- * the caller fits [style]'s font size to the width. The transforms are
- * draw-only: layout, font size and spacing never change.
- */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun Letters3DLine(
+internal fun Letters3DRow(
     text: String,
     style: TextStyle,
     color: Color,
+    time: State<Float>,
     modifier: Modifier = Modifier,
-    // The fitted size the caller used for [style], so the inter-letter gap scales
-    // with the actual glyph size (passed explicitly rather than read off [style]).
-    fontSizeSp: Float = 23f,
+    // Wave-phase offset of this row's first letter, so the ripple runs
+    // continuously across a multi-row line instead of restarting per row.
+    phaseBase: Int = 0,
 ) {
     val fx = LocalLyricsFx.current
-    val time = rememberFrameSeconds()
     val shadowed = style.copy(shadow = letter3DShadow(fx.shadowDepth))
-    // Word-wise: each word's letters stay together in a Row; the outer container
-    // holds the words. A single row when maxWrapLines == 1, else a FlowRow that
-    // wraps between words up to that many rows (the fit sizes it to that budget).
-    val words = remember(text) { text.split(" ") }
-    val content: @Composable () -> Unit = {
-        var letterBase = 0
-        words.forEachIndexed { index, word ->
-            val display = if (index < words.lastIndex) "$word " else word
-            val phaseBase = letterBase
-            Row(horizontalArrangement = Arrangement.spacedBy(letterGapDp(fx, fontSizeSp))) {
-                display.forEachIndexed { j, ch ->
-                    val idx = phaseBase + j
-                    Letter3DText(
-                        text = ch.toString(),
-                        phase = idx * fx.wavePhaseStep,
-                        style = shadowed,
-                        color = color,
-                        time = time,
-                    )
-                }
-            }
-            letterBase += display.length
+    Row(modifier = modifier) {
+        text.forEachIndexed { j, ch ->
+            Letter3DText(
+                text = ch.toString(),
+                // Low spatial frequency: neighbouring letters stay nearly in
+                // phase, so the row reads as one long smooth ribbon.
+                phase = (phaseBase + j) * fx.wavePhaseStep,
+                style = shadowed,
+                color = color,
+                time = time,
+            )
         }
-    }
-    if (fx.maxWrapLines > 1) {
-        FlowRow(modifier = modifier, horizontalArrangement = Arrangement.Center) { content() }
-    } else {
-        Row(modifier = modifier, horizontalArrangement = Arrangement.Center) { content() }
     }
 }
 

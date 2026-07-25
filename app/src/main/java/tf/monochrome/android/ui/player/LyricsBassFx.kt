@@ -146,21 +146,20 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
 }
 
 /**
- * Line-level part of the beat FX: the element pumps with the bass (scale) and
- * pops in on activation. It also reports the line's root-coordinate bounds
- * into [anchors] so [LyricsFxLayer] can bloom a glow behind the whole line.
- * Nothing is drawn inside this element, so nothing here can be clipped.
+ * Line-level part of the beat FX: the element pumps with the bass (scale).
+ * It also reports the line's root-coordinate bounds into [anchors] so
+ * [LyricsFxLayer] can bloom a glow behind the whole line. Nothing is drawn
+ * inside this element, so nothing here can be clipped.
  */
 internal fun Modifier.bassBeat(
     pulse: State<Float>,
-    popScale: () -> Float,
     fx: LyricsFxSettings,
     anchors: LyricGlyphAnchors?,
 ): Modifier {
     if (fx.bassReact <= 0.01f) return this
     var mod = this.graphicsLayer {
         val p = pulse.value * fx.bassReact
-        val s = popScale() * (1f + fx.pumpAmount * p)
+        val s = 1f + fx.pumpAmount * p
         scaleX = s
         scaleY = s
     }
