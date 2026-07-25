@@ -28,6 +28,7 @@ import tf.monochrome.android.domain.model.FrequencyPoint
 import tf.monochrome.android.domain.model.Headphone
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
+import kotlin.math.pow
 
 @Serializable
 private data class StoredCustomTarget(
@@ -64,6 +65,11 @@ class EqViewModel @Inject constructor(
 
     private val _currentPreamp = MutableStateFlow(0f)
     val currentPreamp: StateFlow<Float> = _currentPreamp.asStateFlow()
+
+    // Automatic preamp: when on, the preamp is derived from the bands (see
+    // applyAutoPreamp) and the manual slider is disabled in the UI.
+    private val _autoPreamp = MutableStateFlow(false)
+    val autoPreamp: StateFlow<Boolean> = _autoPreamp.asStateFlow()
 
     // Bass/treble tone shelves — the SAME shared preference the player's Audio
     // tools panel edits. Instant local state for smooth knobs, debounced persist.
@@ -273,6 +279,22 @@ class EqViewModel @Inject constructor(
             }
         }
 
+        viewModelScope.launch {
+            preferences.eqAutoPreamp.collect { _autoPreamp.value = it }
+        }
+
+        // Automatic preamp re-tracks through this single collector rather than
+        // per-call-site hooks, so EVERY gain mutation path is covered — band
+        // drags/sliders, preset loads, AutoEQ runs, imports, reset, restore,
+        // AND the tone knobs (the shelves are a serial stage after the EQ, so
+        // their boosts eat the same headroom). Toggling auto on also lands
+        // here, since _autoPreamp is a source.
+        viewModelScope.launch {
+            combine(_currentBands, _toneControls, _autoPreamp) { bands, tone, auto ->
+                Triple(bands, tone, auto)
+            }.collect { (bands, tone, auto) -> if (auto) applyAutoPreamp(bands, tone) }
+        }
+
         // Resolve the custom-targets list AND the selected target together so
         // the selection restores against freshly-parsed customs. The previous
         // two independent collectors raced: the target id usually emitted
@@ -397,6 +419,9 @@ class EqViewModel @Inject constructor(
      * resonant peaks before the downstream limiter engages.
      */
     fun setPreamp(preamp: Float) {
+        // The slider is disabled while automatic preamp owns the value; this
+        // guard is belt-and-braces against a race on the toggle.
+        if (_autoPreamp.value) return
         val peakBand = _currentBands.value.maxOfOrNull { kotlin.math.abs(it.gain) } ?: 0f
         val headroom = (EqLimits.AUTOEQ_MAX_TOTAL_DB - peakBand).coerceAtLeast(0f)
         val clamped = preamp.coerceIn(-headroom, headroom)
@@ -404,6 +429,67 @@ class EqViewModel @Inject constructor(
         viewModelScope.launch {
             preferences.setEqPreamp(clamped.toDouble())
         }
+    }
+
+    /**
+     * Toggle automatic preamp. While on, the preamp always sits at minus the
+     * PEAK of the combined magnitude response of the EQ bands plus the tone
+     * shelves, so the summed filter gain can never push the signal above
+     * 0 dBFS; it re-tracks on every band or tone change via the combine
+     * collector in [loadInitialState]. Turning it off simply leaves the last
+     * auto value in place for the slider to take over.
+     */
+    fun setAutoPreamp(enabled: Boolean) {
+        _autoPreamp.value = enabled
+        viewModelScope.launch { preferences.setEqAutoPreamp(enabled) }
+    }
+
+    private fun applyAutoPreamp(
+        bands: List<EqBand>,
+        tone: tf.monochrome.android.domain.model.ToneControls,
+    ) {
+        // Fold the tone shelves in as the same EqBands the audio path runs
+        // (toBands() is empty when the tone stage is switched off — a bypass).
+        val auto = -combinedPeakBoostDb(bands + tone.toBands(), _sampleRate.value)
+        // Epsilon gate: skips the DataStore write when nothing changed (e.g.
+        // cut-only band edits) and settles the collector after a preset load
+        // briefly sets the stored preamp before the recompute lands.
+        if (kotlin.math.abs(auto - _currentPreamp.value) < 0.01f) return
+        _currentPreamp.value = auto
+        viewModelScope.launch { preferences.setEqPreamp(auto.toDouble()) }
+    }
+
+    /**
+     * Peak of the summed filter magnitude response in dB, evaluated on a log-
+     * frequency grid plus every filter's centre frequency (a peaking filter's
+     * maximum sits exactly at its centre, so no narrow peak can fall between
+     * grid points). Using the real response — the same RBJ biquad math the
+     * audio path runs — means overlapping boosts are compensated by what they
+     * actually sum to, and boosts at far-apart frequencies aren't over-
+     * compensated the way naive per-stage max-gain addition would.
+     * Never negative: a cut-only setup needs no preamp.
+     */
+    private fun combinedPeakBoostDb(bands: List<EqBand>, sampleRate: Float): Float {
+        val active = bands.filter { it.enabled }
+        if (active.isEmpty()) return 0f
+        val logMin = kotlin.math.log10(20f)
+        val logMax = kotlin.math.log10(20_000f)
+        val freqs = (0 until AUTO_PREAMP_GRID_POINTS).map { i ->
+            10.0.pow(logMin + i * (logMax - logMin) / (AUTO_PREAMP_GRID_POINTS - 1.0)).toFloat()
+        } + active.map { it.freq }
+        var peak = 0f
+        for (freq in freqs) {
+            var sum = 0f
+            for (band in active) {
+                sum += AutoEqEngine.calculateBiquadResponse(freq, band, sampleRate)
+            }
+            if (sum > peak) peak = sum
+        }
+        return peak
+    }
+
+    private companion object {
+        const val AUTO_PREAMP_GRID_POINTS = 96
     }
 
     /**

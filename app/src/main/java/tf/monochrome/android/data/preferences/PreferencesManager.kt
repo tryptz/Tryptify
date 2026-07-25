@@ -212,6 +212,10 @@ class PreferencesManager @Inject constructor(
         private val EQ_SELECTED_HEADPHONE_NAME = stringPreferencesKey("eq_selected_headphone_name")
         private val EQ_MEASUREMENT_JSON = stringPreferencesKey("eq_measurement_json")
         private val EQ_UPLOADED_HEADPHONES_JSON = stringPreferencesKey("eq_uploaded_headphones_json")
+        // Automatic preamp: preamp tracks -(largest band boost) so the filter
+        // sum can never push the signal above 0 dBFS. Manual slider disabled
+        // while on.
+        private val EQ_AUTO_PREAMP = booleanPreferencesKey("eq_auto_preamp")
         // System-wide AutoEQ: apply the correction to ALL device audio via a
         // global output-mix effect (Wavelet-style), not just this app's playback.
         private val SYSTEM_WIDE_AUTOEQ_ENABLED = booleanPreferencesKey("system_wide_autoeq_enabled")
@@ -300,7 +304,7 @@ class PreferencesManager @Inject constructor(
             SPECTRUM_ANALYZER_ENABLED, SPECTRUM_SHOW_ON_NOW_PLAYING, SPECTRUM_FFT_SIZE,
             EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
             EQ_CUSTOM_TARGETS_JSON, EQ_SELECTED_HEADPHONE_ID, EQ_SELECTED_HEADPHONE_NAME,
-            EQ_UPLOADED_HEADPHONES_JSON,
+            EQ_UPLOADED_HEADPHONES_JSON, EQ_AUTO_PREAMP,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
             SCAN_ON_APP_OPEN, MIN_TRACK_DURATION_MS, BACKGROUND_SCAN_INTERVAL,
@@ -921,6 +925,7 @@ class PreferencesManager @Inject constructor(
     val eqActivePresetId: Flow<String?> = dataStore.data.map { it[EQ_ACTIVE_PRESET_ID] }
     val eqTargetId: Flow<String> = dataStore.data.map { it[EQ_TARGET_ID] ?: "harman_oe_2018" }
     val eqPreamp: Flow<Double> = dataStore.data.map { it[EQ_PREAMP] ?: 0.0 }
+    val eqAutoPreamp: Flow<Boolean> = dataStore.data.map { it[EQ_AUTO_PREAMP] ?: false }
     val eqBandsJson: Flow<String?> = dataStore.data.map { it[EQ_BANDS_JSON] }
 
     /** System-wide AutoEQ master toggle (global output-mix effect). Off by default. */
@@ -965,6 +970,10 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setEqPreamp(preamp: Double) {
         dataStore.edit { it[EQ_PREAMP] = preamp }
+    }
+
+    suspend fun setEqAutoPreamp(enabled: Boolean) {
+        dataStore.edit { it[EQ_AUTO_PREAMP] = enabled }
     }
 
     suspend fun setEqBands(bandsJson: String?) {
