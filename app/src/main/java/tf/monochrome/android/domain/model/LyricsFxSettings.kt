@@ -94,10 +94,11 @@ data class LyricsFxSettings(
     val glowBrightness: Float = 0.22f,
     /**
      * When on, the bass-reactive glow also blooms and pumps behind the album
-     * cover art (not just behind the lyrics). Personal preference — a theme
-     * preset never changes it.
+     * cover art (not just behind the lyrics). ON by default. Personal
+     * preference — a theme preset never changes it. Surfaced in Settings ›
+     * Appearance (under Dynamic Colors), not in the Studio.
      */
-    val glowBehindArt: Boolean = false,
+    val glowBehindArt: Boolean = true,
 ) {
     /** Spring damping ratio for the bass-pulse spring, derived from [bounce]. */
     val springDampingRatio: Float

@@ -108,6 +108,12 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val customFontUri: StateFlow<String?> = preferences.customFontUri
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    // Lives inside the Lyrics FX blob (a personal field presets never touch)
+    // but is surfaced in Appearance under Dynamic Colors — it's an album-art
+    // glow, not a Studio material knob.
+    val glowBehindArt: StateFlow<Boolean> = preferences.lyricsFx
+        .map { it.glowBehindArt }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- Interface ---
     val gaplessPlayback: StateFlow<Boolean> = preferences.gaplessPlayback
@@ -295,6 +301,12 @@ class SettingsViewModel @Inject constructor(
     fun setFontScale(scale: Float) { viewModelScope.launch { preferences.setFontScale(scale) } }
     fun setFontScaleFollowSystem(enabled: Boolean) {
         viewModelScope.launch { preferences.setFontScaleFollowSystem(enabled) }
+    }
+    fun setGlowBehindArt(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = preferences.lyricsFx.first()
+            preferences.setLyricsFx(current.copy(glowBehindArt = enabled))
+        }
     }
 
     fun importFont(uri: Uri) {

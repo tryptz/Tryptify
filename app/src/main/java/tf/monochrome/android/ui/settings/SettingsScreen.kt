@@ -360,6 +360,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
     val customFontUri by viewModel.customFontUri.collectAsState()
     val availableFonts by viewModel.availableFonts.collectAsState()
     val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsState()
+    val glowBehindArt by viewModel.glowBehindArt.collectAsState()
     var showThemeDropdown by remember { mutableStateOf(false) }
 
     // File picker for .ttf font import
@@ -383,6 +384,12 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
             subtitle = "Tint the player, mini player and lyrics from album art — the menus keep the theme color. Off = everything uses the theme color",
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
+        )
+        SettingSwitchItem(
+            title = "Glow behind album art",
+            subtitle = "Bloom the bass-reactive glow around the album cover too, pumping with the kick.",
+            checked = glowBehindArt,
+            onCheckedChange = { viewModel.setGlowBehindArt(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
