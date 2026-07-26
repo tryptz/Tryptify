@@ -36,6 +36,17 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY, APPLE_ONLY }
 
 /**
+ * Format asked of the Apple wrapper. These are the wrapper's own format codes,
+ * not a mapping of [AudioQuality] — Apple's ladder doesn't line up with the
+ * Qobuz/TIDAL tiers, so it is selected separately.
+ */
+enum class AppleQuality(val code: String, val label: String, val summary: String) {
+    HIRES_LOSSLESS("hires-lossless", "Hi-Res Lossless", "ALAC up to 24-bit/192 kHz — largest files"),
+    ALAC("alac", "Lossless", "ALAC up to 24-bit/48 kHz — lossless, smaller"),
+    AAC("aac", "High Efficiency", "AAC 256 kbps — lossy, smallest"),
+}
+
+/**
  * Which word-level lyrics provider(s) to use when TIDAL has no synced lyrics.
  * BOTH tries NetEase first, then Kugou — each is the other's fallback.
  */
@@ -89,6 +100,8 @@ class PreferencesManager @Inject constructor(
         private val APPLE_INSTANCE_URL = stringPreferencesKey("apple_instance_url")
         private val APPLE_WRAPPER_URL = stringPreferencesKey("apple_wrapper_url")
         private val APPLE_WRAPPER_SECRET = stringPreferencesKey("apple_wrapper_secret")
+        private val APPLE_ATMOS_PREFERRED = booleanPreferencesKey("apple_atmos_preferred")
+        private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
 
@@ -542,6 +555,34 @@ class PreferencesManager @Inject constructor(
         dataStore.edit {
             if (secret != null) it[APPLE_WRAPPER_SECRET] = secret else it.remove(APPLE_WRAPPER_SECRET)
         }
+    }
+
+    /**
+     * Prefer the Dolby Atmos master for Apple tracks. Atmos is a separate
+     * encode (EC-3, spatial) rather than a quality tier of ALAC, so it is a
+     * toggle rather than another step on [appleQuality]: when on, Apple
+     * downloads ask the wrapper for `atmos` and only fall back to the chosen
+     * stereo format if the track has no Atmos master.
+     */
+    val appleAtmosPreferred: Flow<Boolean> = dataStore.data.map { it[APPLE_ATMOS_PREFERRED] ?: false }
+
+    suspend fun setAppleAtmosPreferred(enabled: Boolean) {
+        dataStore.edit { it[APPLE_ATMOS_PREFERRED] = enabled }
+    }
+
+    /**
+     * Format requested from the Apple wrapper, independent of the Qobuz/TIDAL
+     * [downloadQuality] tier — Apple's ladder is its own (`hires-lossless`,
+     * `alac`, `aac`) and doesn't map cleanly onto HI_RES/LOSSLESS/HIGH.
+     * Defaults to ALAC: lossless, and universally available.
+     */
+    val appleQuality: Flow<AppleQuality> = dataStore.data.map { prefs ->
+        prefs[APPLE_QUALITY]?.let { runCatching { AppleQuality.valueOf(it) }.getOrNull() }
+            ?: AppleQuality.ALAC
+    }
+
+    suspend fun setAppleQuality(quality: AppleQuality) {
+        dataStore.edit { it[APPLE_QUALITY] = quality.name }
     }
 
     /**

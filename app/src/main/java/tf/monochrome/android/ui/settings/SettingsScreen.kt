@@ -63,6 +63,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1854,6 +1855,71 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
             )
         }
 
+        // --- Apple audio format ---------------------------------------------
+        // Apple's format ladder is its own; it does not map onto the
+        // Qobuz/TIDAL download tier, so it is chosen separately here.
+        val appleQuality by viewModel.appleQuality.collectAsState()
+        val appleAtmos by viewModel.appleAtmosPreferred.collectAsState()
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Apple Music format",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Prefer Dolby Atmos",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Download the spatial master when a track has one. " +
+                        "Tracks without an Atmos version fall back to the format below.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = appleAtmos,
+                onCheckedChange = { viewModel.setAppleAtmosPreferred(it) },
+            )
+        }
+
+        tf.monochrome.android.data.preferences.AppleQuality.entries.forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.setAppleQuality(option) }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = appleQuality == option,
+                    onClick = { viewModel.setAppleQuality(option) },
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = option.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = option.summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 

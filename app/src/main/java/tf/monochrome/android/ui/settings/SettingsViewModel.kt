@@ -267,6 +267,14 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val appleWrapperSecret: StateFlow<String?> = preferences.appleWrapperSecret
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val appleAtmosPreferred: StateFlow<Boolean> = preferences.appleAtmosPreferred
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val appleQuality: StateFlow<tf.monochrome.android.data.preferences.AppleQuality> =
+        preferences.appleQuality.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            tf.monochrome.android.data.preferences.AppleQuality.ALAC,
+        )
     val devModeEnabled: StateFlow<Boolean> = preferences.devModeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val sourceMode: StateFlow<tf.monochrome.android.data.preferences.SourceMode> =
@@ -639,6 +647,18 @@ class SettingsViewModel @Inject constructor(
     fun setAppleWrapperSecret(secret: String?) {
         viewModelScope.launch {
             preferences.setAppleWrapperSecret(secret)
+        }
+    }
+
+    fun setAppleAtmosPreferred(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setAppleAtmosPreferred(enabled)
+        }
+    }
+
+    fun setAppleQuality(quality: tf.monochrome.android.data.preferences.AppleQuality) {
+        viewModelScope.launch {
+            preferences.setAppleQuality(quality)
         }
     }
 
