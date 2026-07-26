@@ -9,6 +9,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -340,6 +341,29 @@ class PlaybackService : MediaSessionService() {
         return object : io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(this@PlaybackService) {
             init {
                 setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
+
+                // Hand ALAC to FFmpeg instead of the platform decoder.
+                //
+                // EXTENSION_RENDERER_MODE_ON puts the FFmpeg renderers *after*
+                // the MediaCodec ones, so any format the platform advertises
+                // wins. This device advertises c2.qti.alac.{sw,hw}.decoder, so
+                // Apple downloads went there and came out silent, while Atmos
+                // (E-AC-3) played fine precisely because it has no platform
+                // decoder here and fell through to FFmpeg.
+                //
+                // Returning no decoders for audio/alac makes
+                // MediaCodecAudioRenderer report the format unsupported, so
+                // ExoPlayer moves on to FfmpegAudioRenderer — the same decoder
+                // already carrying the Atmos path. The bundled libavcodec does
+                // include ALAC, so nothing is lost by skipping the vendor one.
+                setMediaCodecSelector { mimeType, secure, tunneling ->
+                    if (MimeTypes.AUDIO_ALAC.equals(mimeType, ignoreCase = true)) {
+                        emptyList()
+                    } else {
+                        androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT
+                            .getDecoderInfos(mimeType, secure, tunneling)
+                    }
+                }
             }
 
             // Wrap the platform-default MediaCodecAdapter.Factory in
