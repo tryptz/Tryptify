@@ -72,6 +72,13 @@ data class QobuzTrackMatch(
     val artistId: Long?,
 )
 
+/**
+ * No endpoint is configured for the pool a request needs. This is a setup
+ * problem, not a transient one — retrying cannot fix it, so callers that would
+ * otherwise back off (notably DownloadWorker) should fail immediately instead.
+ */
+class NoInstancesConfiguredException : Exception("No API instances available")
+
 @Singleton
 class HiFiApiClient @Inject constructor(
     private val instanceManager: InstanceManager,
@@ -87,6 +94,11 @@ class HiFiApiClient @Inject constructor(
         // instance can't stall the search UI behind coroutineScope's
         // wait-for-all-children semantics.
         private const val QOBUZ_REQUEST_TIMEOUT_MS = 6_000L
+
+        // Minimum confidence to accept an Apple cross-catalog match. Sits above
+        // a title-only agreement (60) so the artist or the duration must also
+        // line up before a track is bridged to a different catalog's id.
+        private const val APPLE_MATCH_MIN_SCORE = 70
     }
 
     private data class CacheEntry(
@@ -113,7 +125,7 @@ class HiFiApiClient @Inject constructor(
                 } else list
             }
 
-        if (instances.isEmpty()) throw Exception("No API instances available")
+        if (instances.isEmpty()) throw NoInstancesConfiguredException()
 
         var lastError: Throwable? = null
         val maxAttempts = instances.size * 2
@@ -310,18 +322,270 @@ class HiFiApiClient @Inject constructor(
         if (!envelope.success || envelope.data == null) return SearchResult()
         val data = envelope.data
 
-        // Tag track ids as Apple so download + playback route to /api/apple/*.
-        // Album/artist ids are NOT registered as Qobuz (Apple album/artist detail
-        // isn't wired yet — registering them would mis-route navigation to Qobuz).
+        // Tag every id as Apple so download, playback AND the detail screens
+        // route to /api/apple/*. Album/artist ids are numeric here (qobuz_id is
+        // populated with the Apple id), and they must NOT be registered as
+        // Qobuz — the two catalogs share no id namespace, so a Qobuz lookup on
+        // an Apple id fails.
         data.tracks?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerAppleTrack(it) } }
+        data.albums?.items?.forEach { item ->
+            (item.qobuzId ?: item.id?.hashCode()?.toLong())
+                ?.let { qobuzIdRegistry.registerAppleAlbum(it) }
+        }
+        data.artists?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerAppleArtist(it) } }
+
+        // Apple TRACK payloads carry no album or artist id — album.id is "",
+        // album.qobuz_id is "0", performer.id/artist.id are 0. Only the albums
+        // and artists sections of the same response have real ids. Without
+        // stitching them together, tapping an album or artist from a track row
+        // navigates with id 0 and falls through to TIDAL ("No API instances
+        // available"). Match on normalized name, which is reliable here because
+        // both sides came from the same query.
+        val albumIdByTitle = data.albums?.items.orEmpty()
+            .mapNotNull { item ->
+                val id = item.qobuzId ?: item.id?.toLongOrNull() ?: return@mapNotNull null
+                normalizeForMatch(item.title).takeIf { it.isNotBlank() }?.let { it to id }
+            }.toMap()
+        val artistIdByName = data.artists?.items.orEmpty()
+            .mapNotNull { item ->
+                val id = item.id ?: return@mapNotNull null
+                normalizeForMatch(item.name).takeIf { it.isNotBlank() }?.let { it to id }
+            }.toMap()
+
+        val tracks = data.tracks?.items.orEmpty().map { item ->
+            val t = item.toDomainTrack()
+            // appleId is the SEPARATE Apple identity: routing reads it directly
+            // off the track, so it survives every conversion (UnifiedTrack round
+            // trips, queue persistence) that the registry lookup could not.
+            val album = t.album?.let { a ->
+                if (a.id != 0L) a
+                else albumIdByTitle[normalizeForMatch(a.title)]
+                    ?.also { qobuzIdRegistry.registerAppleAlbum(it) }
+                    ?.let { a.copy(id = it) }
+                    ?: a
+            }
+            val artist = t.artist?.let { ar ->
+                if (ar.id != 0L) ar
+                else artistIdByName[normalizeForMatch(ar.name)]
+                    ?.also { qobuzIdRegistry.registerAppleArtist(it) }
+                    ?.let { ar.copy(id = it) }
+                    ?: ar
+            }
+            t.copy(appleId = t.id, album = album, artist = artist)
+        }
 
         return SearchResult(
-            tracks = data.tracks?.items?.map { it.toDomainTrack() } ?: emptyList(),
+            tracks = tracks,
             albums = data.albums?.items?.map { it.toDomainAlbum() } ?: emptyList(),
             artists = data.artists?.items?.map { it.toDomainArtist() } ?: emptyList(),
             playlists = emptyList(),
         )
     }
+
+    /**
+     * Apple album detail — GET /api/apple/get-album?album_id=<numeric-id>.
+     *
+     * The instance normalizes Apple into the same envelope the Qobuz endpoint
+     * returns, so decoding and mapping are identical to [getQobuzAlbum]. The
+     * only real differences: the id is numeric (Apple has no alphanumeric slug)
+     * and every id in the response is registered as Apple, not Qobuz.
+     */
+    suspend fun getAppleAlbum(albumId: Long): AlbumDetail? {
+        val instance = instanceManager.appleInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/apple/get-album?album_id=$albumId")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzAlbumDetailEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+
+        if (!envelope.success || envelope.data == null) return null
+        val albumItem = envelope.data
+        qobuzIdRegistry.registerAppleAlbum(albumId)
+        val album = albumItem.toDomainAlbum()
+        val tracks = albumItem.tracks?.items?.map { item ->
+            item.id?.let { qobuzIdRegistry.registerAppleTrack(it) }
+            item.toDomainTrack(fallbackAlbum = album)
+                .let { t -> t.copy(appleId = t.id) }
+        } ?: emptyList()
+        return AlbumDetail(album = album, tracks = tracks)
+    }
+
+    /**
+     * Apple artist detail — GET /api/apple/get-artist?artist_id=<numeric-id>.
+     * Same envelope as [getQobuzArtist]; ids registered as Apple throughout so
+     * clicking a top track or a release stays inside the Apple flow.
+     */
+    suspend fun getAppleArtist(artistId: Long): ArtistDetail? {
+        val instance = instanceManager.appleInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/apple/get-artist?artist_id=$artistId")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzArtistDetailEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+
+        if (!envelope.success || envelope.data?.artist == null) return null
+        val raw = envelope.data.artist
+        qobuzIdRegistry.registerAppleArtist(artistId)
+
+        raw.topTracks.forEach { topTrack ->
+            topTrack.id?.let { qobuzIdRegistry.registerAppleTrack(it) }
+            (topTrack.album?.qobuzId ?: topTrack.album?.id?.hashCode()?.toLong())
+                ?.let { qobuzIdRegistry.registerAppleAlbum(it) }
+        }
+
+        val artist = Artist(
+            id = raw.id ?: artistId,
+            name = raw.name?.display ?: "",
+            picture = raw.images?.portraitUrl(),
+        )
+        val topTracks = raw.topTracks.mapNotNull { it.toDomainTrack() }
+            .map { t -> t.copy(appleId = t.id) }
+        val similar = raw.similarArtists?.items?.mapNotNull { it.toDomainArtist() } ?: emptyList()
+        similar.forEach { qobuzIdRegistry.registerAppleArtist(it.id) }
+
+        val albums = mutableListOf<tf.monochrome.android.domain.model.Album>()
+        val eps = mutableListOf<tf.monochrome.android.domain.model.Album>()
+        val singles = mutableListOf<tf.monochrome.android.domain.model.Album>()
+        raw.releases.forEach { group ->
+            group.items.forEach { item ->
+                (item.qobuzId ?: item.id?.hashCode()?.toLong())
+                    ?.let { qobuzIdRegistry.registerAppleAlbum(it) }
+                val album = item.toDomainAlbum()
+                when (group.type) {
+                    "epSingle" -> if ((item.tracksCount ?: 0) <= 1) singles.add(album) else eps.add(album)
+                    "album", "live", "compilation" -> albums.add(album)
+                    else -> { /* download / awardedRelease / next — skip */ }
+                }
+            }
+        }
+
+        return ArtistDetail(
+            artist = artist,
+            topTracks = topTracks,
+            albums = albums,
+            eps = eps,
+            singles = singles,
+            unreleasedTracks = emptyList(),
+            similarArtists = similar,
+        )
+    }
+
+    /**
+     * Find the Apple Music adamId for a recording the app knows by metadata,
+     * so a Qobuz/TIDAL/local track can be pulled from the Apple wrapper.
+     *
+     * Matching is by title + artist, not ISRC: the instance's Apple layer
+     * indexes text only (an ISRC query returns zero results), so the query is
+     * "<title> <artist>" and candidates are then scored. Duration is the
+     * tie-breaker that separates the original from covers and edits.
+     *
+     * The result (including "no match") is cached in [QobuzIdRegistry] so this
+     * costs one round trip per track, ever. Returns null when Apple isn't
+     * configured, nothing matches confidently, or the request fails.
+     */
+    suspend fun findAppleIdFor(
+        trackId: Long,
+        title: String,
+        artist: String,
+        durationSeconds: Int = 0,
+    ): Long? {
+        qobuzIdRegistry.appleIdFor(trackId)?.let { return it }
+        if (qobuzIdRegistry.hasAppleLookup(trackId)) return null
+        if (title.isBlank()) return null
+
+        val instance = instanceManager.appleInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+        // offset is required by /api/apple/get-music — omitting it is a 400.
+        val query = listOf(title, artist).filter { it.isNotBlank() }.joinToString(" ")
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get(
+                    "$base/api/apple/get-music?q=${query.encodeUrl()}&offset=0"
+                )
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        }
+
+        val items = envelope?.data?.tracks?.items.orEmpty()
+        val best = items
+            .mapNotNull { item ->
+                val id = item.id ?: return@mapNotNull null
+                val score = appleMatchScore(item, title, artist, durationSeconds)
+                if (score < APPLE_MATCH_MIN_SCORE) null else id to score
+            }
+            .maxByOrNull { it.second }
+            ?.first
+
+        if (best == null) {
+            qobuzIdRegistry.markNoAppleMatch(trackId)
+            return null
+        }
+        qobuzIdRegistry.registerAppleIdFor(trackId, best)
+        return best
+    }
+
+    /**
+     * Confidence that [item] is the same recording as the given metadata.
+     * Title carries the most weight, artist next, duration is a bonus — a
+     * title-only agreement is deliberately below [APPLE_MATCH_MIN_SCORE] so a
+     * generic name like "Intro" can't match the wrong song on its own.
+     */
+    private fun appleMatchScore(
+        item: QobuzTrackItem,
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+    ): Int {
+        val wantTitle = normalizeForMatch(title)
+        val gotTitle = normalizeForMatch(item.title)
+        if (wantTitle.isBlank() || gotTitle.isBlank()) return 0
+
+        var score = when {
+            gotTitle == wantTitle -> 60
+            gotTitle.startsWith(wantTitle) || wantTitle.startsWith(gotTitle) -> 40
+            gotTitle.contains(wantTitle) || wantTitle.contains(gotTitle) -> 25
+            else -> return 0
+        }
+
+        val wantArtist = normalizeForMatch(artist)
+        val gotArtist = normalizeForMatch(item.performer?.name ?: item.album?.artist?.name ?: "")
+        if (wantArtist.isNotBlank() && gotArtist.isNotBlank()) {
+            score += when {
+                gotArtist == wantArtist -> 40
+                gotArtist.contains(wantArtist) || wantArtist.contains(gotArtist) -> 28
+                else -> 0
+            }
+        }
+
+        val gotDuration = item.duration ?: 0
+        if (durationSeconds > 0 && gotDuration > 0) {
+            val delta = kotlin.math.abs(gotDuration - durationSeconds)
+            score += when {
+                delta <= 2 -> 20
+                delta <= 5 -> 10
+                delta > 30 -> -30
+                else -> 0
+            }
+        }
+        return score
+    }
+
+    /** Lowercase, strip bracketed suffixes and punctuation, collapse whitespace. */
+    private fun normalizeForMatch(raw: String): String =
+        raw.lowercase()
+            .replace(Regex("\\((?:feat|ft|with)\\.?[^)]*\\)"), " ")
+            .replace(Regex("\\[[^]]*]"), " ")
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
 
     /**
      * Qobuz album detail — GET /api/get-album?album_id=<alphanumeric-slug>.
@@ -1026,7 +1290,19 @@ class HiFiApiClient @Inject constructor(
     // the cloud-cached decrypted file (Range-capable). Atmos-flagged tracks request
     // the atmos variant. Returns null when Apple isn't configured / not yet cached.
     suspend fun getAppleStreamUrl(appleId: Long, quality: AudioQuality, atmos: Boolean): String? {
-        val q = if (atmos) "atmos" else quality.appleCode()
+        // Apple picks its own format ladder (see PreferencesManager.appleQuality),
+        // independent of the Qobuz/TIDAL tier. Atmos is a separate master rather
+        // than a higher tier, so it is a toggle layered on top. `atmos` from the
+        // caller (a THX-flagged release) forces it on for that track.
+        //
+        // The atmos -> stereo fallback is the WRAPPER's job, not ours: it sees
+        // the downloader's exit code and can start the stereo job the moment the
+        // atmos one comes up empty. Doing it here would mean polling out a full
+        // 210s timeout before even discovering there is no Atmos master.
+        val stereoCode = preferences.appleQuality.first().code
+        val wantAtmos = atmos || preferences.appleAtmosPreferred.first()
+        val q = if (wantAtmos) "atmos" else stereoCode
+        val fallback = if (wantAtmos) stereoCode else null
 
         // Tailnet-direct: when a home wrapper/agent URL is set, decrypt + stream
         // straight from the PC over Tailscale — no cloud. Trigger the decrypt, then
@@ -1036,27 +1312,49 @@ class HiFiApiClient @Inject constructor(
         if (agentUrl != null) {
             val secret = preferences.appleWrapperSecret.first().orEmpty()
             val fileUrl = "$agentUrl/files/$appleId.m4a"
-            runCatching {
+            val fallbackField = fallback?.let { ""","fallback":"$it"""" } ?: ""
+            val kicked = runCatching {
                 httpClient.post("$agentUrl/decrypt") {
                     header("X-Agent-Secret", secret)
                     contentType(ContentType.Application.Json)
-                    setBody("""{"adamId":"$appleId","quality":"$q"}""")
-                }
+                    setBody("""{"adamId":"$appleId","quality":"$q"$fallbackField}""")
+                }.status.value
             }
+            android.util.Log.i(
+                "HiFiApiClient",
+                "Apple $appleId (q=$q${fallback?.let { " fallback=$it" } ?: ""}): POST /decrypt -> " +
+                    "${kicked.getOrNull() ?: "unreachable: ${kicked.exceptionOrNull()?.message}"}",
+            )
             val deadline = System.currentTimeMillis() + 210_000L
+            var polls = 0
             while (System.currentTimeMillis() < deadline) {
                 val ready = runCatching {
                     val code = httpClient.get(fileUrl) { header("Range", "bytes=0-0") }.status.value
                     code == 200 || code == 206
                 }.getOrDefault(false)
-                if (ready) return fileUrl
+                if (ready) {
+                    android.util.Log.i("HiFiApiClient", "Apple $appleId: wrapper served after ${polls * 2.5}s")
+                    return fileUrl
+                }
+                polls++
                 delay(2500)
             }
+            // Deliberately no fallback: an Apple track comes from the wrapper or
+            // not at all. Substituting Qobuz/TIDAL here would silently hand back
+            // a different master than the one that was picked.
+            android.util.Log.w("HiFiApiClient", "Apple $appleId: wrapper never served the file (gave up after 210s)")
             return null
         }
 
-        // Cloud path: /api/apple/download-music returns the wrapper-resolved manifest;
-        // read delivery.streamUrl (the cloud-cached decrypted file, Range-capable).
+        // No wrapper configured. An Apple track is only ever served by the
+        // wrapper — never by Qobuz or TIDAL — so the cloud endpoint is the sole
+        // alternative, and it is itself wrapper-backed (/api/apple/* proxies a
+        // wrapper deployment). If neither exists the track is simply not
+        // obtainable; callers must fail rather than substitute another catalog.
+        android.util.Log.i(
+            "HiFiApiClient",
+            "Apple $appleId: no agent/wrapper URL set - falling back to the cloud wrapper endpoint",
+        )
         val instance = instanceManager.appleInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
         return withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
