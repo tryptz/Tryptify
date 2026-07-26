@@ -60,6 +60,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
+    @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     @Inject lateinit var dspManager: DspEngineManager
@@ -400,6 +401,7 @@ class PlaybackService : MediaSessionService() {
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         .setAudioProcessors(
                             arrayOf(
+                                channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
                                 mixBusProcessor,        // DSP engine (mixer/effects)
@@ -432,6 +434,7 @@ class PlaybackService : MediaSessionService() {
                         driver = libusbDriver,
                         volumeController = bypassVolumeController,
                         processors = listOf(
+                            channelDetectorProcessor,
                             atmosAudioProcessor,
                             downmixProcessor,
                             mixBusProcessor,

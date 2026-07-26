@@ -49,6 +49,7 @@ class SettingsViewModel @Inject constructor(
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
+    private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
     private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
@@ -96,6 +97,14 @@ class SettingsViewModel @Inject constructor(
      */
     fun acquireSpectrum() = spectrumAnalyzerTap.acquire()
     fun releaseSpectrum() = spectrumAnalyzerTap.release()
+
+    /** Live detected input format + per-channel peaks from the head of the chain. */
+    val channelDetectorState: StateFlow<tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?> =
+        channelDetectorProcessor.state
+
+    /** Reference-counted like the spectrum tap: metering runs only while shown. */
+    fun acquireChannelDetector() = channelDetectorProcessor.acquire()
+    fun releaseChannelDetector() = channelDetectorProcessor.release()
 
     // --- Appearance ---
     val theme: StateFlow<String> = preferences.theme
