@@ -718,8 +718,8 @@ private fun SpeakerLayoutMap(
                 // Live: glow brightness + reach + dot opacity all render the
                 // channel's volume; a silent channel stays a dim marker.
                 // Idle: the gentle shared pulse.
-                val glowAlpha = if (level != null) 0.08f + 0.62f * level else 0.45f * pulse
-                val glowScale = if (level != null) 0.7f + 1.1f * level else 1f
+                val glowAlpha = if (level != null) 0.10f + 0.70f * level else 0.45f * pulse
+                val glowScale = if (level != null) 0.8f + 1.5f * level else 1f
                 val dotAlpha = if (level != null) 0.35f + 0.65f * level else 0.9f
                 val pos = if (s.isLfe) Offset(cx, cy + ringR * 0.28f)
                 else speakerPosition(s, cx, cy, ringR)
@@ -731,7 +731,7 @@ private fun SpeakerLayoutMap(
                 }
                 drawSpeaker(
                     pos, tint, glowAlpha, glowScale, dotAlpha, dotScale,
-                    textMeasurer, s, onSurface,
+                    Offset(cx, cy), textMeasurer, s, onSurface,
                 )
             }
         }
@@ -786,13 +786,43 @@ private fun DrawScope.drawSpeaker(
     glowScale: Float,
     dotAlpha: Float,
     dotScale: Float,
+    listener: Offset,
     textMeasurer: androidx.compose.ui.text.TextMeasurer,
     speaker: SpeakerChannel,
     labelColor: Color,
 ) {
-    val glowR = 26f * dotScale * glowScale
-    // Soft bloom, rendered from the channel's live level when playing.
+    val glowR = 40f * dotScale * glowScale
     if (glowAlpha > 0.01f) {
+        // Directional light: a tapered beam from the speaker aimed at the
+        // listener — narrow at the source, widening as it travels, fading to
+        // nothing. Reach and width grow with the channel's level, so loud
+        // channels visibly "shine" into the room centre.
+        val toListener = listener - pos
+        val dist = toListener.getDistance()
+        if (dist > 1f) {
+            val dir = toListener / dist
+            val perp = Offset(-dir.y, dir.x)
+            val reach = dist * (0.35f + 0.30f * glowScale).coerceAtMost(0.92f)
+            val end = pos + dir * reach
+            val srcW = glowR * 0.28f
+            val endW = glowR * 0.95f
+            val beam = androidx.compose.ui.graphics.Path().apply {
+                moveTo(pos.x + perp.x * srcW, pos.y + perp.y * srcW)
+                lineTo(end.x + perp.x * endW, end.y + perp.y * endW)
+                lineTo(end.x - perp.x * endW, end.y - perp.y * endW)
+                lineTo(pos.x - perp.x * srcW, pos.y - perp.y * srcW)
+                close()
+            }
+            drawPath(
+                path = beam,
+                brush = Brush.linearGradient(
+                    colors = listOf(tint.copy(alpha = glowAlpha * 0.85f), tint.copy(alpha = 0f)),
+                    start = pos,
+                    end = end,
+                ),
+            )
+        }
+        // Soft bloom at the source, rendered from the channel's live level.
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(tint.copy(alpha = glowAlpha), Color.Transparent),
