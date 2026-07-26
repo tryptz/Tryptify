@@ -1,6 +1,4 @@
-| The new player | |
-|---|---|
-| ![New liquid-glass player — blue](https://raw.githubusercontent.com/tryptz/Tryptify/96892688/docs/screenshots/player-glass-blue.jpg) | ![New liquid-glass player — frost](https://raw.githubusercontent.com/tryptz/Tryptify/96892688/docs/screenshots/player-glass-frost.jpg) |# Tryptify
+# Tryptify
 
 > A native Android hi-fi player and streaming client built around a **C++17 DSP engine**, a clean-room **Dolby Atmos object renderer**, a headphone **AutoEQ** driven by real measurement data, and **bit-perfect USB-DAC output** over a USB Audio Class driver.
 
