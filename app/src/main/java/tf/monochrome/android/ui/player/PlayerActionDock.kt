@@ -136,17 +136,23 @@ fun PlayerActionDock(
         if (g.shadowDepth > 0.01f) {
             val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, glassTint, g.shadowTint)
                 .copy(alpha = 0.28f + 0.55f * g.shadowDepth)
+            // Modifier order matters: the blur must be OUTSIDE the Offscreen
+            // layer. Offscreen always clips to bounds, so blurring inside it
+            // (graphicsLayer→blur) cut the soft spill back to a hard-edged
+            // rectangle around the slab. Blur-outside sees the already-punched,
+            // translated layer and lets the shadow feather past the bounds
+            // (Unbounded), like the skip glyphs' shadows.
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
-                    .graphicsLayer {
-                        translationY = (2f + g.shadowDepth * 6f).dp.toPx()
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    }
                     .blur(
                         radius = (5f + g.shadowSoftness * 22f).dp,
                         edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                    ),
+                    )
+                    .graphicsLayer {
+                        translationY = (2f + g.shadowDepth * 6f).dp.toPx()
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    },
             ) {
                 val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()
                 drawRoundRect(
