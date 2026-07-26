@@ -4,6 +4,10 @@
 
 > Covers everything since 1.7.2, including the unpublished 1.8.0 bump (versionCode 180 → 181).
 
+| The new player | |
+|---|---|
+| ![New liquid-glass player — blue](docs/screenshots/player-glass-blue.jpg) | ![New liquid-glass player — frost](docs/screenshots/player-glass-frost.jpg) |
+
 ### Added
 
 #### Apple Music catalog
