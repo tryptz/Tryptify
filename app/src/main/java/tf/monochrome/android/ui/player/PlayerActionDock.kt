@@ -46,6 +46,34 @@ private val DockRowVerticalPadding = 6.dp
 private val DockItemVerticalPadding = 10.dp
 
 /**
+ * Erase the four dock glyphs from whatever has just been drawn, leaving
+ * icon-shaped holes. Shared by the glass slab and its drop shadow so the two
+ * can never disagree about where the holes are — a shadow whose holes drifted
+ * from the slab's would show up as dark smears through the cut-outs.
+ *
+ * Requires the caller's layer to be [CompositingStrategy.Offscreen], otherwise
+ * DstOut punches through everything behind the dock as well.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.punchDockIcons(
+    icons: List<Painter>,
+) {
+    val iconPx = PlayerDesignTokens.DockIconSize.toPx()
+    val cy = (DockRowVerticalPadding + DockItemVerticalPadding).toPx() + iconPx / 2f
+    // DstOut: dest * (1 - src.alpha) → the opaque icon pixels erase what is
+    // there, leaving an icon-shaped hole; everything else is untouched.
+    val punch = Paint().apply { blendMode = BlendMode.DstOut }
+    val canvas = drawContext.canvas
+    canvas.saveLayer(Rect(0f, 0f, size.width, size.height), punch)
+    icons.forEachIndexed { i, painter ->
+        val cx = size.width * (i + 0.5f) / icons.size
+        translate(cx - iconPx / 2f, cy - iconPx / 2f) {
+            with(painter) { draw(Size(iconPx, iconPx)) }
+        }
+    }
+    canvas.restore()
+}
+
+/**
  * Compact tool row beneath the transport controls: Lyrics · Timer · Mixer/FX · Playlist.
  *
  * The whole rectangle is one liquid-glass slab with the four icons *hollowed out*
@@ -96,10 +124,39 @@ fun PlayerActionDock(
         // accent when none is set (tintColor == 0).
         val g = LocalPlayerGlass.current
         val glassTint = if (g.tintColor != 0) Color(g.tintColor) else accent
-        // NOTE: no drop shadow behind the slab — a shadow there would sit BEHIND
-        // the punched icon holes and show through them (making the holes read as
-        // dark shapes instead of true cut-outs). The slab's own beveled rim + the
-        // button/dock-icon depth carry the glass without it.
+
+        // Drop shadow for the slab, honouring shadowDepth/Softness/Tint exactly
+        // like the play disc and skip glyphs do.
+        //
+        // A plain shadow can't be used here: it would sit behind the punched
+        // icon holes and show through them, turning true cut-outs into dark
+        // icon blobs. So the shadow gets the SAME holes punched out of it — a
+        // slab with holes casts a shadow with holes — which is both physically
+        // right and keeps light coming through the glyphs.
+        if (g.shadowDepth > 0.01f) {
+            val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, glassTint, g.shadowTint)
+                .copy(alpha = 0.28f + 0.55f * g.shadowDepth)
+            Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        translationY = (2f + g.shadowDepth * 6f).dp.toPx()
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                    .blur(
+                        radius = (5f + g.shadowSoftness * 22f).dp,
+                        edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                    ),
+            ) {
+                val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()
+                drawRoundRect(
+                    color = shadowColor,
+                    cornerRadius = CornerRadius(cornerPx, cornerPx),
+                )
+                punchDockIcons(icons)
+            }
+        }
+
         // The glass slab with the four icons carved out of it. Drawn in one
         // offscreen layer so the DstOut punch clears only the glyph shapes (not
         // the whole rectangle) and can't clear the player behind the dock.
@@ -117,20 +174,7 @@ fun PlayerActionDock(
                 color = glassTint,
                 cornerRadius = CornerRadius(cornerPx, cornerPx),
             )
-            val iconPx = PlayerDesignTokens.DockIconSize.toPx()
-            val cy = (DockRowVerticalPadding + DockItemVerticalPadding).toPx() + iconPx / 2f
-            // DstOut: dest * (1 - src.alpha) → the opaque icon pixels erase the
-            // slab, leaving an icon-shaped hole; everything else is untouched.
-            val punch = Paint().apply { blendMode = BlendMode.DstOut }
-            val canvas = drawContext.canvas
-            canvas.saveLayer(Rect(0f, 0f, size.width, size.height), punch)
-            icons.forEachIndexed { i, painter ->
-                val cx = size.width * (i + 0.5f) / icons.size
-                translate(cx - iconPx / 2f, cy - iconPx / 2f) {
-                    with(painter) { draw(Size(iconPx, iconPx)) }
-                }
-            }
-            canvas.restore()
+            punchDockIcons(icons)
         }
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
