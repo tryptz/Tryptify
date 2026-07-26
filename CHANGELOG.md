@@ -24,7 +24,7 @@
 
 #### Player & theming (1.8.0 cycle)
 - **Liquid-glass optics rework** — interior lensing and a structured backdrop replace the old flat refraction, with richer shimmer layered into the glass shader.
-- **Unified theme roster** — Lyrics FX and Player Glass merge into one 17-pair theme roster; the "55" glass theme ships as the default.
+- **Unified theme roster** — Lyrics FX and Player Glass merge into one **17-pair roster** (Default · Chrome · Frosted · Neon · Voltage · Glacier · Bloom · Midnight · Silk · Hyper · Prism · Mirage · Aurora · Onyx · Halo · Ticker · Static), so picking a name on both Studio tabs always composes one coherent look. The shipped default glass material is retuned: ghost body at maximum refraction/dispersion/relief, mirror gloss over a light mist, tilt locked.
 - **Backdrop polish** — the mini player gaussian-frosts the backdrop under its glass slab, the action dock's drop shadow respects its icon cut-outs, and the blurred album background plus "Glow behind album art" (now under Appearance) default ON.
 
 #### Settings & UX
