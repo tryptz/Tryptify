@@ -403,16 +403,21 @@ fun AtmosRendererScreen(
             )
             Spacer(Modifier.height(20.dp))
 
-            // ── Stereo downmix ─────────────────────────────────────────────
-            SectionHeader("Stereo Downmix")
+            // ── Downmix matrix ─────────────────────────────────────────────
+            // Binaural is NOT a downmix choice: whether the render is binaural
+            // is derived from the HRTF mode below (an active HRTF = binaural).
+            // These chips pick only the matrix that folds the mix when the
+            // HRTF is off.
+            SectionHeader("Downmix Matrix")
             ChoiceChips(
-                options = StereoDownmixMode.entries,
-                selected = profile.stereoDownmix,
+                options = listOf(StereoDownmixMode.LO_RO, StereoDownmixMode.LT_RT),
+                selected = profile.stereoDownmix.asMatrix,
                 label = { it.displayName },
                 onSelect = { viewModel.update(profile.copy(stereoDownmix = it)) },
             )
             Text(
-                profile.stereoDownmix.description,
+                profile.stereoDownmix.asMatrix.description +
+                    " Used when the HRTF is off — an active HRTF renders binaurally instead.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -456,8 +461,9 @@ fun AtmosRendererScreen(
             )
             when {
                 !profile.hrtfEnabled -> Text(
-                    "HRTF off — objects fold down to plain stereo and headphone " +
-                        "correction comes from the built-in AutoEQ alone.",
+                    "HRTF off — the selected downmix matrix folds the mix to " +
+                        "stereo and headphone correction comes from the built-in " +
+                        "AutoEQ alone.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

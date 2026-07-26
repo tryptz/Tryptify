@@ -300,6 +300,66 @@ class DownmixProcessorTest {
         assertEquals(0f, fl[1], floatTol)
     }
 
+    // ── Lt/Rt surround encode ────────────────────────────────────────────
+
+    @Test
+    fun `ltRt - BL goes anti-phase with cross-feed`() {
+        val p = processor().apply { setSurroundEncode(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        val out = drainFloats(p, floatBuffer(soloFrame(6, 4))) // BL
+        assertEquals(-0.8165f, out[0], floatTol)
+        assertEquals(0.5774f, out[1], floatTol)
+    }
+
+    @Test
+    fun `ltRt - fronts, center and LFE fold as in LoRo`() {
+        val p = processor().apply { setSurroundEncode(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        val fl = drainFloats(p, floatBuffer(soloFrame(6, 0)))
+        assertEquals(1f, fl[0], floatTol)
+        assertEquals(0f, fl[1], floatTol)
+        val fc = drainFloats(p, floatBuffer(soloFrame(6, 2)))
+        assertEquals(0.70711f, fc[0], floatTol)
+        assertEquals(0.70711f, fc[1], floatTol)
+        val lfe = drainFloats(p, floatBuffer(soloFrame(6, 3)))
+        assertEquals(2.26464f, lfe[0], floatTol)
+        assertEquals(2.26464f, lfe[1], floatTol)
+    }
+
+    @Test
+    fun `ltRt - 6_1 back-center is anti-phase at 0_70711`() {
+        val p = processor().apply { setSurroundEncode(true) }
+        configureAndFlush(p, 48000, 7, C.ENCODING_PCM_FLOAT)
+        val out = drainFloats(p, floatBuffer(soloFrame(7, 4))) // BC
+        assertEquals(-0.70711f, out[0], floatTol)
+        assertEquals(0.70711f, out[1], floatTol)
+    }
+
+    @Test
+    fun `ltRt - 16ch top-front stays a front, top-back encodes as surround`() {
+        val p = processor().apply { setSurroundEncode(true) }
+        configureAndFlush(p, 48000, 16, C.ENCODING_PCM_FLOAT)
+        val tfl = drainFloats(p, floatBuffer(soloFrame(16, 10))) // TFL
+        assertEquals(1f, tfl[0], floatTol)
+        assertEquals(0f, tfl[1], floatTol)
+        val tbr = drainFloats(p, floatBuffer(soloFrame(16, 15))) // TBR
+        assertEquals(-0.5774f, tbr[0], floatTol)
+        assertEquals(0.8165f, tbr[1], floatTol)
+    }
+
+    @Test
+    fun `matrix switch applies on next flush, not mid-stream`() {
+        val p = processor()
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        p.setSurroundEncode(true)
+        // Still Lo/Ro until a flush picks the new tables up.
+        val before = drainFloats(p, floatBuffer(soloFrame(6, 4)))
+        assertEquals(1f, before[0], floatTol)
+        p.flush()
+        val after = drainFloats(p, floatBuffer(soloFrame(6, 4)))
+        assertEquals(-0.8165f, after[0], floatTol)
+    }
+
     // ── 16-channel (9.1.6-style) layout ──────────────────────────────────
     // Order: FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR
 

@@ -96,18 +96,21 @@ class AtmosAudioProcessor @Inject constructor(
             android.util.Log.d(TAG, "profile update ignored — no pipeline (mode=${cur.mode})")
             return
         }
-        // HRTF off = a true plain fold-down. Strength 0 alone is NOT that —
-        // the native dry path is an ITD-only render that still places objects
-        // with per-ear arrival-time delays — so a BINAURAL downmix is also
-        // demoted to Lo/Ro, which makes the pipeline decline the frame
-        // (process() returns -1) and the plain fixed-matrix fold-down runs
-        // instead. Headphone shaping is then left entirely to the built-in
-        // AutoEQ chain. An explicit Lt/Rt choice is honoured as-is.
+        // The downmix pushed to native is DERIVED from the HRTF mode, never
+        // picked directly: an active HRTF (built-in or SOFA) means the
+        // binaural render runs; HRTF off means the profile's matrix choice
+        // (Lo/Ro or Lt/Rt) runs — the pipeline declines the frame (process()
+        // returns -1) and the plain fixed-matrix fold-down handles it, with
+        // headphone shaping left entirely to the built-in AutoEQ chain.
+        // Strength 0 alone is NOT a plain fold — the native dry path is an
+        // ITD-only render that still places objects with per-ear arrival-time
+        // delays — hence the hard demotion. Legacy profiles that stored
+        // BINAURAL as the downmix map to Lo/Ro.
         val strength = if (cur.hrtfEnabled) cur.binauralStrength else 0f
-        val downmix = if (!cur.hrtfEnabled && cur.stereoDownmix == StereoDownmixMode.BINAURAL) {
-            StereoDownmixMode.LO_RO
+        val downmix = if (cur.hrtfEnabled) {
+            StereoDownmixMode.BINAURAL
         } else {
-            cur.stereoDownmix
+            cur.stereoDownmix.asMatrix
         }
         AtmosNative.nativeSetRenderParams(
             p,
@@ -367,21 +370,41 @@ class AtmosAudioProcessor @Inject constructor(
         }
     }
 
-    // Fixed-matrix fold-down for frames without JOC: sides/backs hard-panned
-    // at unity, FC at 0.70710678 to both, LFE at 2.26464431 to both. Channel
-    // order follows the decoder's (FL FR FC LFE SL SR BL BR). Must match the
-    // native AtmosPipeline::render_downmix coefficients.
+    // Fold-down for frames the pipeline declines (no JOC / HRTF off /
+    // passthrough), honouring the profile's downmix matrix. Channel order
+    // follows the decoder's (FL FR FC LFE SL SR BL BR).
+    //
+    // Lo/Ro (fixed matrix, matches native AtmosPipeline::render_downmix):
+    // sides/backs hard-panned at unity, FC at 0.70710678 to both, LFE at
+    // 2.26464431 to both.
+    //
+    // Lt/Rt (surround renderer): Pro Logic II-style passive encode — the
+    // surround pair goes in anti-phase with cross-feed (own side −0.8165,
+    // opposite −0.5774 into Lt; mirrored positive into Rt) so a Pro Logic
+    // decoder can re-expand the fold back to surround. FC/LFE as in Lo/Ro.
     private fun downmixToStereo(frame: FloatArray, channels: Int) {
         val c = channels
+        val ltRt = profile.stereoDownmix.asMatrix ==
+            tf.monochrome.android.domain.model.StereoDownmixMode.LT_RT
         for (i in 0 until FRAME_SAMPLES) {
             val b = i * c
             if (c >= 6) {
                 val mid = 0.70710678f * frame[b + 2] + 2.26464431f * frame[b + 3]
-                var l = frame[b] + mid + frame[b + 4]
-                var r = frame[b + 1] + mid + frame[b + 5]
+                // Surround sums per side (SL+BL / SR+BR when 7.1).
+                var sl = frame[b + 4]
+                var sr = frame[b + 5]
                 if (c >= 8) {
-                    l += frame[b + 6]
-                    r += frame[b + 7]
+                    sl += frame[b + 6]
+                    sr += frame[b + 7]
+                }
+                val l: Float
+                val r: Float
+                if (ltRt) {
+                    l = frame[b] + mid - 0.8165f * sl - 0.5774f * sr
+                    r = frame[b + 1] + mid + 0.5774f * sl + 0.8165f * sr
+                } else {
+                    l = frame[b] + mid + sl
+                    r = frame[b + 1] + mid + sr
                 }
                 stereo[2 * i] = l
                 stereo[2 * i + 1] = r

@@ -16,13 +16,22 @@ import javax.inject.Singleton
  * AutoEQ, Parametric EQ, USB DAC negotiation) keeps its 1/2-channel world
  * view while 3.0–16-channel sources still play.
  *
- * Fold-down uses a fixed per-channel gain matrix (a plain stereo fold, no
- * Lt/Rt matrix-surround encode, no HRTF/virtualization):
+ * Two fold matrices, selected by [setSurroundEncode] (driven by the Atmos
+ * page's Downmix Matrix choice; no HRTF/virtualization either way).
+ *
+ * Lo/Ro — the fixed per-channel gain matrix (default):
  *
  *   FL/BL/BLC/SL/TFL/TSL/TBL → [1, 0]      (hard left)
  *   FR/BR/BRC/SR/TFR/TSR/TBR → [0, 1]      (hard right)
  *   FC (and BC in 6.1)       → [0.70710678, 0.70710678]
  *   LFE                      → [2.26464431, 2.26464431]
+ *
+ * Lt/Rt — the surround renderer: a Pro Logic II-style passive matrix encode.
+ * Fronts/FC/LFE fold as in Lo/Ro; surround-class channels go in anti-phase
+ * with cross-feed (own side −0.8165 / opposite −0.5774 into Lt, mirrored
+ * positive into Rt; 6.1's BC at ∓0.70710678) so a Pro Logic decoder can
+ * re-expand the stereo fold back to surround. Top-front pairs count as
+ * fronts; side/back tops as surrounds.
  *
  * The rows are used verbatim — no re-normalization — so absolute channel
  * levels are preserved exactly as specified. That means a hot multichannel
@@ -82,6 +91,19 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         enabled = e
     }
 
+    /**
+     * Matrix choice: false = Lo/Ro fixed matrix (default), true = Lt/Rt
+     * surround encode. Follows the Atmos page's Downmix Matrix chips; applied
+     * in flush(), so it takes effect on the next reconfigure/seek like
+     * [setEnabled].
+     */
+    @Volatile
+    private var surroundEncode: Boolean = false
+
+    fun setSurroundEncode(e: Boolean) {
+        surroundEncode = e
+    }
+
     // ── AudioProcessor implementation ────────────────────────────────────
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
@@ -94,7 +116,7 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
         if (!enabled || inputAudioFormat.channelCount <= 2 ||
-            !COEF_TABLES.containsKey(inputAudioFormat.channelCount)) {
+            !KIND_TABLES.containsKey(inputAudioFormat.channelCount)) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
@@ -178,7 +200,8 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         // configure — the active format must survive.
         inputFormat = pendingFormat
         if (inputFormat != AudioFormat.NOT_SET) {
-            val rows = COEF_TABLES.getValue(inputFormat.channelCount)
+            val tables = if (surroundEncode) LT_RT_TABLES else LO_RO_TABLES
+            val rows = tables.getValue(inputFormat.channelCount)
             coefL = rows.first
             coefR = rows.second
         }
@@ -201,12 +224,15 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         /** LFE contribution to BOTH sides of the fold (~+7.1 dB). */
         private const val LFE_COEF = 2.26464431f
 
-        /** L/R-class channels are hard-panned to their own side at unity. */
-        private const val SIDE_COEF = 1f
+        // Pro Logic II passive-encode surround gains: own side / cross-feed.
+        private const val LTRT_SURR_MAIN = 0.8165f
+        private const val LTRT_SURR_CROSS = 0.5774f
 
-        // L-rows of the fixed fold matrix, keyed by input channel count.
-        // R mirrors L↔R (FC/LFE/BC feed both sides). Assumed orders
-        // (FLAC / FFmpeg / Android canonical, which agree for 3–8):
+        /** Position class of one input channel; both matrices derive from it. */
+        private enum class Kind { L_FRONT, R_FRONT, CENTER, LFE_CH, L_SURR, R_SURR, C_SURR }
+
+        // Channel classes per input count. Assumed orders (FLAC / FFmpeg /
+        // Android canonical, which agree for 3–8):
         //   3:  FL FR FC
         //   4:  FL FR BL BR            (quad)
         //   5:  FL FR FC BL BR
@@ -214,47 +240,61 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         //   7:  FL FR FC LFE BC SL SR  (6.1)
         //   8:  FL FR FC LFE BL BR SL SR (7.1)
         //   16: FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR (9.1.6)
-        private val RAW_L_ROWS = mapOf(
-            3 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF),
-            4 to floatArrayOf(SIDE_COEF, 0f, SIDE_COEF, 0f),
-            5 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, SIDE_COEF, 0f),
-            6 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, SIDE_COEF, 0f),
-            7 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, CENTER_COEF, SIDE_COEF, 0f),
-            8 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, SIDE_COEF, 0f, SIDE_COEF, 0f),
-            16 to floatArrayOf(
-                SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, SIDE_COEF, 0f, SIDE_COEF, 0f,
-                SIDE_COEF, 0f, SIDE_COEF, 0f, SIDE_COEF, 0f, SIDE_COEF, 0f,
+        // Top-front (TFL/TFR) count as fronts; side/back tops as surrounds.
+        private val KIND_TABLES: Map<Int, Array<Kind>> = mapOf(
+            3 to arrayOf(Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER),
+            4 to arrayOf(Kind.L_FRONT, Kind.R_FRONT, Kind.L_SURR, Kind.R_SURR),
+            5 to arrayOf(Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.L_SURR, Kind.R_SURR),
+            6 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR,
+            ),
+            7 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.C_SURR, Kind.L_SURR, Kind.R_SURR,
+            ),
+            8 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_SURR, Kind.R_SURR,
+            ),
+            16 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_SURR, Kind.R_SURR,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_FRONT, Kind.R_FRONT,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_SURR, Kind.R_SURR,
             ),
         )
 
-        // Which input channel is the L-side source that maps to the R-side
-        // one at the same "position class", per channel count. Rather than
-        // hand-maintaining mirrored tables, derive the R row by swapping
-        // each stereo pair; center-class channels (FC, LFE, BC) stay put.
-        private val STEREO_PAIRS = mapOf(
-            3 to arrayOf(0 to 1),                    // FL↔FR
-            4 to arrayOf(0 to 1, 2 to 3),            // FL↔FR, BL↔BR
-            5 to arrayOf(0 to 1, 3 to 4),            // FL↔FR, BL↔BR
-            6 to arrayOf(0 to 1, 4 to 5),            // FL↔FR, BL↔BR
-            7 to arrayOf(0 to 1, 5 to 6),            // FL↔FR, SL↔SR
-            8 to arrayOf(0 to 1, 4 to 5, 6 to 7),    // FL↔FR, BL↔BR, SL↔SR
-            16 to arrayOf(                           // + BLC↔BRC, TFL↔TFR,
-                0 to 1, 4 to 5, 6 to 7, 8 to 9,      //   TSL↔TSR, TBL↔TBR
-                10 to 11, 12 to 13, 14 to 15,
-            ),
-        )
+        // Verbatim (un-normalized) [L,R] gains for one channel class.
+        private fun loRo(k: Kind): Pair<Float, Float> = when (k) {
+            Kind.L_FRONT, Kind.L_SURR -> 1f to 0f
+            Kind.R_FRONT, Kind.R_SURR -> 0f to 1f
+            Kind.CENTER, Kind.C_SURR -> CENTER_COEF to CENTER_COEF
+            Kind.LFE_CH -> LFE_COEF to LFE_COEF
+        }
 
-        // Verbatim (un-normalized) L/R rows, computed once at class load so
-        // the audio thread only indexes.
-        private val COEF_TABLES: Map<Int, Pair<FloatArray, FloatArray>> =
-            RAW_L_ROWS.mapValues { (count, l) ->
-                val r = FloatArray(l.size)
-                l.copyInto(r)
-                for ((a, b) in STEREO_PAIRS.getValue(count)) {
-                    r[a] = l[b]
-                    r[b] = l[a]
-                }
-                Pair(l, r)
-            }
+        private fun ltRt(k: Kind): Pair<Float, Float> = when (k) {
+            Kind.L_FRONT -> 1f to 0f
+            Kind.R_FRONT -> 0f to 1f
+            Kind.CENTER -> CENTER_COEF to CENTER_COEF
+            Kind.LFE_CH -> LFE_COEF to LFE_COEF
+            Kind.L_SURR -> -LTRT_SURR_MAIN to LTRT_SURR_CROSS
+            Kind.R_SURR -> -LTRT_SURR_CROSS to LTRT_SURR_MAIN
+            Kind.C_SURR -> -CENTER_COEF to CENTER_COEF
+        }
+
+        private fun buildTables(
+            gains: (Kind) -> Pair<Float, Float>,
+        ): Map<Int, Pair<FloatArray, FloatArray>> = KIND_TABLES.mapValues { (_, kinds) ->
+            Pair(
+                FloatArray(kinds.size) { gains(kinds[it]).first },
+                FloatArray(kinds.size) { gains(kinds[it]).second },
+            )
+        }
+
+        // Both matrices computed once at class load; the audio thread only
+        // indexes into the selected pair.
+        private val LO_RO_TABLES = buildTables(::loRo)
+        private val LT_RT_TABLES = buildTables(::ltRt)
     }
 }

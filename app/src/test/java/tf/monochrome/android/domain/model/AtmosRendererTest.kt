@@ -117,7 +117,11 @@ class AtmosRendererTest {
     fun `default profile uses typical safe renderer settings`() {
         val p = RendererProfile.DEFAULT
         assertTrue(p.autoDetectLayout)
-        assertEquals(StereoDownmixMode.BINAURAL, p.stereoDownmix)
+        // The stored downmix is the MATRIX only (binaural is derived from the
+        // HRTF mode, not user-selectable); legacy BINAURAL maps to Lo/Ro.
+        assertEquals(StereoDownmixMode.LO_RO, p.stereoDownmix)
+        assertEquals(StereoDownmixMode.LO_RO, StereoDownmixMode.BINAURAL.asMatrix)
+        assertEquals(StereoDownmixMode.LT_RT, StereoDownmixMode.LT_RT.asMatrix)
         assertEquals(1.0f, p.binauralStrength, 1e-6f)
         assertTrue(p.heightVirtualization)
         assertTrue(p.bassManagement)

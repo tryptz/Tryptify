@@ -283,6 +283,17 @@ class PlaybackService : MediaSessionService() {
                 downmixProcessor.setEnabled(enabled)
             }
         }
+        // The fold matrix (Lo/Ro fixed matrix vs Lt/Rt surround encode)
+        // follows the Atmos page's Downmix Matrix choice, so plain
+        // multichannel PCM folds the same way the Atmos fallback does.
+        serviceScope.launch {
+            preferences.rendererProfile.collect { profile ->
+                downmixProcessor.setSurroundEncode(
+                    profile.stereoDownmix.asMatrix ==
+                        tf.monochrome.android.domain.model.StereoDownmixMode.LT_RT
+                )
+            }
+        }
 
         // Listen to EQ + tone changes and apply them. Tone shelves are folded into
         // the in-app AutoEQ processor whenever the system-wide effect isn't the one
