@@ -14,27 +14,31 @@ import javax.inject.Singleton
  * Multichannel → stereo downmix renderer. Sits FIRST in the AudioProcessor
  * chain so everything downstream (MixBusProcessor → native stereo engine,
  * AutoEQ, Parametric EQ, USB DAC negotiation) keeps its 1/2-channel world
- * view while 3.0–7.1 sources still play.
+ * view while 3.0–16-channel sources still play.
  *
- * Fold-down follows ITU-R BS.775 Lo/Ro (a plain stereo fold, no Lt/Rt
- * matrix-surround encode, no HRTF/virtualization):
+ * Fold-down uses a fixed per-channel gain matrix (a plain stereo fold, no
+ * Lt/Rt matrix-surround encode, no HRTF/virtualization):
  *
- *   Lo = FL + 0.7071·C + 0.7071·SL      Ro = FR + 0.7071·C + 0.7071·SR
+ *   FL/BL/BLC/SL/TFL/TSL/TBL → [1, 0]      (hard left)
+ *   FR/BR/BRC/SR/TFR/TSR/TBR → [0, 1]      (hard right)
+ *   FC (and BC in 6.1)       → [0.70710678, 0.70710678]
+ *   LFE                      → [2.26464431, 2.26464431]
  *
- * with the LFE discarded ([LFE_COEF] = 0) per the BS.775 / AC-3 default —
- * it carries no unique program content and folding it in risks bass
- * overload. Each output row is then normalized so its coefficients sum to
- * 1.0. That costs ~7.7 dB of level on 5.1 versus unity-FL ITU rows, but it
- * is clip-proof by construction and preserves relative imaging — the
- * alternative (unity FL + clamp) audibly pumps on hot masters and can't be
- * repaired downstream because the inter-processor format is PCM16.
+ * The rows are used verbatim — no re-normalization — so absolute channel
+ * levels are preserved exactly as specified. That means a hot multichannel
+ * master CAN exceed full scale after the fold (a full-scale 5.1 frame sums
+ * to ~4.97 on each side): the PCM16 path clamps at the rails, and the float
+ * path relies on downstream headroom.
  *
  * Channel-order assumption: FLAC spec order, FFmpeg native order, and
  * Android's canonical CHANNEL_OUT_* order all agree for 3–8 channels
  * (6 ch = FL FR FC LFE BL BR), so a single per-channel-count table is used.
- * Media3's AudioFormat carries no layout, only a count; sources with an
- * exotic layout at the same count would fold with wrong positions (imaging
- * off), never crash.
+ * 16-channel sources are assumed to be 9.1.6, laid out as
+ * FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR. Counts 9–15
+ * have no well-known layout and pass through untouched. Media3's
+ * AudioFormat carries no layout, only a count; sources with an exotic
+ * layout at the same count would fold with wrong positions (imaging off),
+ * never crash.
  *
  * Mono/stereo input leaves the processor inactive (configure returns
  * [AudioFormat.NOT_SET]) — mono upmix stays MixBusProcessor's job. When
@@ -89,7 +93,8 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             inputAudioFormat.channelCount > MAX_INPUT_CHANNELS) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (!enabled || inputAudioFormat.channelCount <= 2) {
+        if (!enabled || inputAudioFormat.channelCount <= 2 ||
+            !COEF_TABLES.containsKey(inputAudioFormat.channelCount)) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
@@ -173,7 +178,7 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         // configure — the active format must survive.
         inputFormat = pendingFormat
         if (inputFormat != AudioFormat.NOT_SET) {
-            val rows = COEF_TABLES[inputFormat.channelCount - 3]
+            val rows = COEF_TABLES.getValue(inputFormat.channelCount)
             coefL = rows.first
             coefR = rows.second
         }
@@ -188,66 +193,68 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
     }
 
     companion object {
-        const val MAX_INPUT_CHANNELS = 8
+        const val MAX_INPUT_CHANNELS = 16
 
-        /** −3 dB, the ITU-R BS.775 gain for center and surround channels. */
-        private const val MINUS_3_DB = 0.70710678f
+        /** −3 dB: the FC (and 6.1 BC) contribution to each side. */
+        private const val CENTER_COEF = 0.70710678f
 
-        /**
-         * LFE contribution to the fold. 0 per the BS.775 / AC-3 default;
-         * bump to e.g. 0.5f (−6 dB) if LFE fold-in is ever wanted — rows
-         * are re-normalized automatically.
-         */
-        private const val LFE_COEF = 0f
+        /** LFE contribution to BOTH sides of the fold (~+7.1 dB). */
+        private const val LFE_COEF = 2.26464431f
 
-        // Raw ITU-R BS.775 Lo/Ro L-rows per input channel count (index =
-        // channelCount − 3). R mirrors L↔R (and BC feeds both sides).
-        // Assumed orders (FLAC / FFmpeg / Android canonical, which agree):
-        //   3: FL FR FC
-        //   4: FL FR BL BR            (quad)
-        //   5: FL FR FC BL BR
-        //   6: FL FR FC LFE BL BR     (5.1; 5.1-side folds identically)
-        //   7: FL FR FC LFE BC SL SR  (6.1)
-        //   8: FL FR FC LFE BL BR SL SR (7.1)
-        private val RAW_L_ROWS = arrayOf(
-            floatArrayOf(1f, 0f, MINUS_3_DB),
-            floatArrayOf(1f, 0f, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, LFE_COEF, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, LFE_COEF, MINUS_3_DB, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, LFE_COEF, MINUS_3_DB, 0f, MINUS_3_DB, 0f),
+        /** L/R-class channels are hard-panned to their own side at unity. */
+        private const val SIDE_COEF = 1f
+
+        // L-rows of the fixed fold matrix, keyed by input channel count.
+        // R mirrors L↔R (FC/LFE/BC feed both sides). Assumed orders
+        // (FLAC / FFmpeg / Android canonical, which agree for 3–8):
+        //   3:  FL FR FC
+        //   4:  FL FR BL BR            (quad)
+        //   5:  FL FR FC BL BR
+        //   6:  FL FR FC LFE BL BR     (5.1; 5.1-side folds identically)
+        //   7:  FL FR FC LFE BC SL SR  (6.1)
+        //   8:  FL FR FC LFE BL BR SL SR (7.1)
+        //   16: FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR (9.1.6)
+        private val RAW_L_ROWS = mapOf(
+            3 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF),
+            4 to floatArrayOf(SIDE_COEF, 0f, SIDE_COEF, 0f),
+            5 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, SIDE_COEF, 0f),
+            6 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, SIDE_COEF, 0f),
+            7 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, CENTER_COEF, SIDE_COEF, 0f),
+            8 to floatArrayOf(SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, SIDE_COEF, 0f, SIDE_COEF, 0f),
+            16 to floatArrayOf(
+                SIDE_COEF, 0f, CENTER_COEF, LFE_COEF, SIDE_COEF, 0f, SIDE_COEF, 0f,
+                SIDE_COEF, 0f, SIDE_COEF, 0f, SIDE_COEF, 0f, SIDE_COEF, 0f,
+            ),
         )
 
         // Which input channel is the L-side source that maps to the R-side
         // one at the same "position class", per channel count. Rather than
         // hand-maintaining mirrored tables, derive the R row by swapping
         // each stereo pair; center-class channels (FC, LFE, BC) stay put.
-        private val STEREO_PAIRS = arrayOf(
-            arrayOf(0 to 1),                     // 3 ch: FL↔FR
-            arrayOf(0 to 1, 2 to 3),             // 4 ch: FL↔FR, BL↔BR
-            arrayOf(0 to 1, 3 to 4),             // 5 ch: FL↔FR, BL↔BR
-            arrayOf(0 to 1, 4 to 5),             // 6 ch: FL↔FR, BL↔BR
-            arrayOf(0 to 1, 5 to 6),             // 7 ch: FL↔FR, SL↔SR
-            arrayOf(0 to 1, 4 to 5, 6 to 7),     // 8 ch: FL↔FR, BL↔BR, SL↔SR
+        private val STEREO_PAIRS = mapOf(
+            3 to arrayOf(0 to 1),                    // FL↔FR
+            4 to arrayOf(0 to 1, 2 to 3),            // FL↔FR, BL↔BR
+            5 to arrayOf(0 to 1, 3 to 4),            // FL↔FR, BL↔BR
+            6 to arrayOf(0 to 1, 4 to 5),            // FL↔FR, BL↔BR
+            7 to arrayOf(0 to 1, 5 to 6),            // FL↔FR, SL↔SR
+            8 to arrayOf(0 to 1, 4 to 5, 6 to 7),    // FL↔FR, BL↔BR, SL↔SR
+            16 to arrayOf(                           // + BLC↔BRC, TFL↔TFR,
+                0 to 1, 4 to 5, 6 to 7, 8 to 9,      //   TSL↔TSR, TBL↔TBR
+                10 to 11, 12 to 13, 14 to 15,
+            ),
         )
 
-        // Normalized (row sum == 1.0 → mathematically clip-proof) L/R rows,
-        // computed once at class load so the audio thread only indexes.
-        private val COEF_TABLES: Array<Pair<FloatArray, FloatArray>> =
-            Array(RAW_L_ROWS.size) { idx ->
-                val l = RAW_L_ROWS[idx]
+        // Verbatim (un-normalized) L/R rows, computed once at class load so
+        // the audio thread only indexes.
+        private val COEF_TABLES: Map<Int, Pair<FloatArray, FloatArray>> =
+            RAW_L_ROWS.mapValues { (count, l) ->
                 val r = FloatArray(l.size)
                 l.copyInto(r)
-                for ((a, b) in STEREO_PAIRS[idx]) {
+                for ((a, b) in STEREO_PAIRS.getValue(count)) {
                     r[a] = l[b]
                     r[b] = l[a]
                 }
-                val sumL = l.sum()
-                val sumR = r.sum()
-                Pair(
-                    FloatArray(l.size) { l[it] / sumL },
-                    FloatArray(r.size) { r[it] / sumR },
-                )
+                Pair(l, r)
             }
     }
 }

@@ -125,7 +125,7 @@ class AtmosPipeline {
 
   // Renders one E-AC-3 frame to interleaved stereo (`out` holds 2*samples
   // floats). Returns 1 whenever the binaural render is active: the output is
-  // the object render or, for frames without usable JOC, an ITU downmix
+  // the object render or, for frames without usable JOC, a fixed-matrix downmix
   // delayed by the QMF round-trip so both paths are sample-aligned — a path
   // switch is then an equal-power crossfade instead of a cut that also jumps
   // ~12 ms in time. Returns -1 only when the caller's own fold-down should be
@@ -134,7 +134,7 @@ class AtmosPipeline {
   int process_frame(const uint8_t* frame, size_t frame_size, const float* const* bed,
                     int bed_channels, int samples, float* out) {
     // Passthrough / non-binaural fold-downs are the caller's job (it already
-    // has an ITU downmix); returning -1 selects that path.
+    // has a fixed-matrix downmix); returning -1 selects that path.
     if (mode_ == kPassthrough || downmix_ != kBinaural) return -1;
     // One BSI parse serves both dialogue normalization (the stream's own
     // dialnorm) and RF-mode DRC (the stream's own compr gain word).
@@ -247,16 +247,21 @@ class AtmosPipeline {
     }
   }
 
-  // ITU-style fold-down (FL FR FC LFE SL SR; the LFE is omitted per BS.775),
-  // pushed through the kQmfLatency delay line. Matches the Kotlin fallback's
+  // Fixed-matrix fold-down (FL FR FC LFE SL SR BL BR; sides/backs hard-panned
+  // at unity, FC at 0.70710678 to both, LFE at 2.26464431 to both), pushed
+  // through the kQmfLatency delay line. Matches the Kotlin fallback's
   // coefficients so pipeline-off and pipeline-on fallbacks sound identical.
   void render_downmix(const float* const* bed, int ch, int samples, float* out) {
     for (int i = 0; i < samples; ++i) {
       float l, r;
       if (ch >= 6) {
-        const float fc = 0.707f * bed[2][i];
-        l = bed[0][i] + fc + 0.707f * bed[4][i];
-        r = bed[1][i] + fc + 0.707f * bed[5][i];
+        const float mid = 0.70710678f * bed[2][i] + 2.26464431f * bed[3][i];
+        l = bed[0][i] + mid + bed[4][i];
+        r = bed[1][i] + mid + bed[5][i];
+        if (ch >= 8) {
+          l += bed[6][i];
+          r += bed[7][i];
+        }
       } else {
         l = bed[0][i];
         r = ch > 1 ? bed[1][i] : bed[0][i];

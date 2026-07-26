@@ -1243,7 +1243,7 @@ private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
     SettingSwitchItem(
         title = "Downmix multichannel to stereo",
         subtitle = if (enabled) {
-            "5.1/7.1 tracks fold into stereo (ITU-R BS.775) and run through DSP/EQ."
+            "Multichannel tracks fold into stereo (fixed matrix) and run through DSP/EQ."
         } else {
             "Off — multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
         },

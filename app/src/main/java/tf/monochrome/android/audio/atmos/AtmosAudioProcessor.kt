@@ -100,7 +100,7 @@ class AtmosAudioProcessor @Inject constructor(
         // the native dry path is an ITD-only render that still places objects
         // with per-ear arrival-time delays — so a BINAURAL downmix is also
         // demoted to Lo/Ro, which makes the pipeline decline the frame
-        // (process() returns -1) and the plain ITU BS.775 fold-down runs
+        // (process() returns -1) and the plain fixed-matrix fold-down runs
         // instead. Headphone shaping is then left entirely to the built-in
         // AutoEQ chain. An explicit Lt/Rt choice is honoured as-is.
         val strength = if (cur.hrtfEnabled) cur.binauralStrength else 0f
@@ -367,16 +367,24 @@ class AtmosAudioProcessor @Inject constructor(
         }
     }
 
-    // ITU-style 5.1 fold-down for frames without JOC. Channel order follows the
-    // decoder's (FL FR FC LFE SL SR …); extra channels beyond 6 are ignored.
+    // Fixed-matrix fold-down for frames without JOC: sides/backs hard-panned
+    // at unity, FC at 0.70710678 to both, LFE at 2.26464431 to both. Channel
+    // order follows the decoder's (FL FR FC LFE SL SR BL BR). Must match the
+    // native AtmosPipeline::render_downmix coefficients.
     private fun downmixToStereo(frame: FloatArray, channels: Int) {
         val c = channels
         for (i in 0 until FRAME_SAMPLES) {
             val b = i * c
             if (c >= 6) {
-                val fc = 0.707f * frame[b + 2]
-                stereo[2 * i] = frame[b] + fc + 0.707f * frame[b + 4]
-                stereo[2 * i + 1] = frame[b + 1] + fc + 0.707f * frame[b + 5]
+                val mid = 0.70710678f * frame[b + 2] + 2.26464431f * frame[b + 3]
+                var l = frame[b] + mid + frame[b + 4]
+                var r = frame[b + 1] + mid + frame[b + 5]
+                if (c >= 8) {
+                    l += frame[b + 6]
+                    r += frame[b + 7]
+                }
+                stereo[2 * i] = l
+                stereo[2 * i + 1] = r
             } else {
                 stereo[2 * i] = frame[b]
                 stereo[2 * i + 1] = if (c > 1) frame[b + 1] else frame[b]

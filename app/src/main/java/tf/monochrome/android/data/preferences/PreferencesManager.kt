@@ -1223,8 +1223,8 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
-     * Fold multichannel (5.1/7.1) tracks down to stereo (ITU-R BS.775) at
-     * the head of the AudioProcessor chain. Default true — the DSP/EQ
+     * Fold multichannel (5.1/7.1/16 ch) tracks down to stereo (fixed gain
+     * matrix) at the head of the AudioProcessor chain. Default true — the DSP/EQ
      * stages are stereo-only. When false, multichannel PCM passes through
      * to AudioTrack untouched (the device downmixes or outputs natively)
      * and DSP/EQ are bypassed for those tracks.
