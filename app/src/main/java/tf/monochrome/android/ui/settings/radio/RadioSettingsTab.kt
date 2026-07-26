@@ -34,7 +34,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.radio.PLANNER_WEIGHT_MAX
 import tf.monochrome.android.radio.PLANNER_WEIGHT_MIN
 
@@ -70,7 +69,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
                 title = "Planner URL",
                 subtitle = "The Tryptify-Playlist deployment radio requests go to.",
                 value = plannerUrl,
-                placeholder = PreferencesManager.DEFAULT_RADIO_PLANNER_URL,
+                placeholder = "planner URL",
                 onSave = viewModel::setPlannerUrl
             )
 

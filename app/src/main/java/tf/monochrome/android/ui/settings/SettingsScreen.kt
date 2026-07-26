@@ -1659,7 +1659,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 onValueChange = { customInput = it },
                 placeholder = {
                     Text(
-                        "http://127.0.0.1:8000",
+                        "API endpoint",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -1705,7 +1705,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 onValueChange = { qobuzInput = it },
                 placeholder = {
                     Text(
-                        "https://your-qobuz-instance",
+                        "Qobuz instance",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -1751,7 +1751,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 onValueChange = { appleInput = it },
                 placeholder = {
                     Text(
-                        "https://your-apple-instance",
+                        "Apple instance",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -1784,7 +1784,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Tailnet address of the home decrypt agent (e.g. http://100.x.y.z:8790). When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
+                    text = "Address of the home decrypt agent on your tailnet. When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1795,7 +1795,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
             OutlinedTextField(
                 value = appleWrapperInput,
                 onValueChange = { appleWrapperInput = it },
-                placeholder = { Text("http://100.x.y.z:8790", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text("agent address", style = MaterialTheme.typography.bodyMedium) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {

@@ -188,8 +188,11 @@ class PreferencesManager @Inject constructor(
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val AI_RADIO_ENABLED = booleanPreferencesKey("ai_radio_enabled")
 
-        // Radio planner (optional Tryptify-Playlist service)
-        const val DEFAULT_RADIO_PLANNER_URL = "https://tryptify-playlist-production.up.railway.app"
+        // Radio planner (optional Tryptify-Playlist service). No baked-in
+        // default: the deployment is personal infrastructure and doesn't belong
+        // in the source. Blank means "not configured" — RadioPlannerClient
+        // treats it as unavailable and the Radio settings tab asks for a URL.
+        const val DEFAULT_RADIO_PLANNER_URL = ""
         private val RADIO_PLANNER_ENABLED = booleanPreferencesKey("radio_planner_enabled")
         private val RADIO_PLANNER_URL = stringPreferencesKey("radio_planner_url")
         private val RADIO_PLANNER_API_KEY = stringPreferencesKey("radio_planner_api_key")
@@ -539,8 +542,8 @@ class PreferencesManager @Inject constructor(
     }
 
     // Tailnet-direct wrapper/agent: when set, Apple tracks decrypt + stream
-    // straight from the home decrypt-agent over Tailscale (no cloud). Base URL
-    // like http://100.x.y.z:8790; the secret matches the agent's AGENT_SECRET.
+    // straight from the home decrypt-agent over Tailscale (no cloud). Holds the
+    // agent's base URL; the secret matches the agent's AGENT_SECRET.
     val appleWrapperUrl: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_URL] }
 
     suspend fun setAppleWrapperUrl(endpoint: String?) {
