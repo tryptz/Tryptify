@@ -238,14 +238,21 @@ fun DownloadsMonitorSheet(
                                 }
                             }
                         }
+                        // Failed rows get BOTH retry and dismiss. Retry-only left
+                        // zombie rows: a failed record is terminal so plain
+                        // cancellation never removed it, and after a process
+                        // restart retry has no input data to re-enqueue with.
                         if (d.status == DownloadStatus.FAILED) {
                             IconButton(onClick = { onRetry(d.trackId) }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Retry")
                             }
-                        } else {
-                            IconButton(onClick = { onCancel(d.trackId) }) {
-                                Icon(Icons.Default.Close, contentDescription = "Cancel")
-                            }
+                        }
+                        IconButton(onClick = { onCancel(d.trackId) }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription =
+                                    if (d.status == DownloadStatus.FAILED) "Dismiss" else "Cancel",
+                            )
                         }
                     }
                 }

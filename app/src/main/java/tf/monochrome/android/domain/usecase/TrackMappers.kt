@@ -94,7 +94,7 @@ fun Track.toQobuzUnifiedTrack(): UnifiedTrack = UnifiedTrack(
  * decrypted file). The id prefix keeps Apple hits distinct from Qobuz/TIDAL.
  */
 fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
-    id = "apple_$id",
+    id = "apple_${appleId ?: id}",
     title = title,
     durationSeconds = duration,
     trackNumber = trackNumber,
@@ -111,14 +111,18 @@ fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     channelCount = channelCount,
     version = version,
     isThxSpatialAudio = isThxSpatialAudio,
-    source = PlaybackSource.AppleCached(appleId = id),
+    source = PlaybackSource.AppleCached(appleId = appleId ?: id),
     sourceType = SourceType.APPLE,
 )
 
 /**
- * Pick QobuzCached vs HiFiApi by what the registry knows about this track id,
- * so hearted tracks of either origin play correctly through
- * PlayerViewModel.playUnifiedTrack.
+ * Pick the playback source by what the track itself carries first (appleId is
+ * authoritative — Apple and Qobuz share no id namespace), then by what the
+ * registry knows about this track id, so hearted tracks of any origin play
+ * correctly through PlayerViewModel.playUnifiedTrack.
  */
-fun Track.toUnifiedTrackAuto(registry: QobuzIdRegistry): UnifiedTrack =
-    if (registry.isQobuzTrack(id)) toQobuzUnifiedTrack() else toUnifiedTrack()
+fun Track.toUnifiedTrackAuto(registry: QobuzIdRegistry): UnifiedTrack = when {
+    appleId != null || registry.isAppleTrack(id) -> toAppleUnifiedTrack()
+    registry.isQobuzTrack(id) -> toQobuzUnifiedTrack()
+    else -> toUnifiedTrack()
+}

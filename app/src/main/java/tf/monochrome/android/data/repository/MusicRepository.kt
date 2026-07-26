@@ -85,6 +85,17 @@ class MusicRepository @Inject constructor(
             ?: throw IllegalStateException("Qobuz artist not available: $artistId")
     }
 
+    /** Apple album detail — numeric id, no slug (see HiFiApiClient.getAppleAlbum). */
+    suspend fun getAppleAlbum(albumId: Long): Result<AlbumDetail> = runCatching {
+        apiClient.getAppleAlbum(albumId)
+            ?: throw IllegalStateException("Apple album not available: $albumId")
+    }
+
+    suspend fun getAppleArtist(artistId: Long): Result<ArtistDetail> = runCatching {
+        apiClient.getAppleArtist(artistId)
+            ?: throw IllegalStateException("Apple artist not available: $artistId")
+    }
+
     suspend fun searchTracks(query: String, offset: Int = 0, limit: Int = 50): Result<List<Track>> = runCatching {
         apiClient.searchTracks(query, offset, limit)
     }

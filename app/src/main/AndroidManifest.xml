@@ -79,17 +79,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep linking for monochrome.tf URLs -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="monochrome.tf" />
-            </intent-filter>
-
             <!-- Supabase OAuth2 callback deep-link -->
+
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -184,5 +175,16 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
+        <!-- DownloadWorker promotes itself to the foreground for the duration of
+             a transfer. WorkManager hosts that through its own service, which the
+             library manifest declares with no foregroundServiceType — so calling
+             startForeground with dataSync throws "0x1 is not a subset of
+             0x0" and takes the whole process down. Merging the type in here is
+             the supported way to grant it. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>

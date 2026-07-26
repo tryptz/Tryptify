@@ -67,21 +67,34 @@ class ArtistDetailViewModel @Inject constructor(
             val aliasQobuzId = qobuzIdRegistry.qobuzArtistIdFor(artistId)
             val qobuzArtistId = aliasQobuzId ?: artistId
             val preferQobuz = aliasQobuzId != null || qobuzIdRegistry.isQobuzArtist(artistId)
-            val primary = if (preferQobuz) {
-                repository.getQobuzArtist(qobuzArtistId)
-            } else {
-                repository.getArtist(artistId)
-            }
-            val finalResult = if (primary.isSuccess) {
-                primary
-            } else {
-                val secondary = if (preferQobuz) {
-                    repository.getArtist(artistId)
-                } else {
-                    repository.getQobuzArtist(qobuzArtistId)
+
+            // Try the catalog this id actually belongs to first, then the other
+            // one, then TIDAL. Apple and Qobuz ids share no namespace, so order
+            // matters: querying the wrong catalog returns a clean miss, never
+            // the right artist.
+            val ordered = buildList<suspend () -> Result<ArtistDetail>> {
+                if (qobuzIdRegistry.isAppleArtist(artistId)) {
+                    add { repository.getAppleArtist(artistId) }
                 }
-                if (secondary.isSuccess) secondary else primary
+                if (preferQobuz) {
+                    add { repository.getQobuzArtist(qobuzArtistId) }
+                    add { repository.getArtist(artistId) }
+                } else {
+                    add { repository.getArtist(artistId) }
+                    add { repository.getQobuzArtist(qobuzArtistId) }
+                }
+                if (!qobuzIdRegistry.isAppleArtist(artistId)) {
+                    add { repository.getAppleArtist(artistId) }
+                }
             }
+
+            var finalResult: Result<ArtistDetail>? = null
+            for (attempt in ordered) {
+                val r = attempt()
+                if (finalResult == null) finalResult = r
+                if (r.isSuccess) { finalResult = r; break }
+            }
+            finalResult = finalResult ?: Result.failure(Exception("Failed to load artist"))
 
             finalResult
                 .onSuccess { _artistDetail.value = it }

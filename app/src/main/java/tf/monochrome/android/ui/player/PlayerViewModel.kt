@@ -60,6 +60,7 @@ class PlayerViewModel @Inject constructor(
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
+    private val apiClient: tf.monochrome.android.data.api.HiFiApiClient,
     private val trackShareHelper: tf.monochrome.android.share.TrackShareHelper,
     private val radioQueueManager: RadioQueueManager,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
@@ -945,6 +946,33 @@ class PlayerViewModel @Inject constructor(
     val isCurrentTrackLocal: StateFlow<Boolean> = currentTrack
         .map { track -> track != null && isLocalTrack(track) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * Resolve (and cache) the Apple adamId for whatever is playing, so the
+     * downloader already has an Apple source ready by the time the user taps
+     * download. Fire-and-forget: the result lands in QobuzIdRegistry and the
+     * lookup is skipped entirely once a track has been checked once.
+     */
+    private fun prefetchAppleId(track: Track) {
+        if (track.appleId != null || isLocalTrack(track)) return
+        if (qobuzIdRegistry.hasAppleLookup(track.id)) return
+        viewModelScope.launch {
+            runCatching {
+                apiClient.findAppleIdFor(
+                    trackId = track.id,
+                    title = track.title,
+                    artist = track.displayArtist,
+                    durationSeconds = track.duration,
+                )
+            }
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            currentTrack.collect { track -> track?.let(::prefetchAppleId) }
+        }
+    }
 
     fun downloadTrack(track: Track) {
         if (isLocalTrack(track)) return

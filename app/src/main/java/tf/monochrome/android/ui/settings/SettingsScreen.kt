@@ -63,6 +63,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1658,7 +1659,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 onValueChange = { customInput = it },
                 placeholder = {
                     Text(
-                        "http://127.0.0.1:8000",
+                        "API endpoint",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -1704,7 +1705,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 onValueChange = { qobuzInput = it },
                 placeholder = {
                     Text(
-                        "https://your-qobuz-instance",
+                        "Qobuz instance",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -1750,7 +1751,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 onValueChange = { appleInput = it },
                 placeholder = {
                     Text(
-                        "https://your-apple-instance",
+                        "Apple instance",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -1783,7 +1784,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Tailnet address of the home decrypt agent (e.g. http://100.x.y.z:8790). When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
+                    text = "Address of the home decrypt agent on your tailnet. When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1794,7 +1795,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
             OutlinedTextField(
                 value = appleWrapperInput,
                 onValueChange = { appleWrapperInput = it },
-                placeholder = { Text("http://100.x.y.z:8790", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text("agent address", style = MaterialTheme.typography.bodyMedium) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
@@ -1854,6 +1855,71 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
             )
         }
 
+        // --- Apple audio format ---------------------------------------------
+        // Apple's format ladder is its own; it does not map onto the
+        // Qobuz/TIDAL download tier, so it is chosen separately here.
+        val appleQuality by viewModel.appleQuality.collectAsState()
+        val appleAtmos by viewModel.appleAtmosPreferred.collectAsState()
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Apple Music format",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Prefer Dolby Atmos",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Download the spatial master when a track has one. " +
+                        "Tracks without an Atmos version fall back to the format below.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = appleAtmos,
+                onCheckedChange = { viewModel.setAppleAtmosPreferred(it) },
+            )
+        }
+
+        tf.monochrome.android.data.preferences.AppleQuality.entries.forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.setAppleQuality(option) }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = appleQuality == option,
+                    onClick = { viewModel.setAppleQuality(option) },
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = option.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = option.summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1993,9 +2059,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             Spacer(modifier = Modifier.width(8.dp))
             Text("Reset Settings & Cache")
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
-        LinkItem("Website", "https://monochrome.tf", context)
 
         Spacer(modifier = Modifier.height(20.dp))
         SettingsGroupHeader("Account & Sync")
@@ -2301,21 +2364,6 @@ private fun openDonationUrl(context: android.content.Context, url: String) {
     } catch (e: ActivityNotFoundException) {
         Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
     }
-}
-
-@Composable
-private fun LinkItem(label: String, url: String, context: android.content.Context) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
-            // Route through the guarded helper so a device with no browser
-            // (or a locked-down work profile) shows a toast instead of crashing
-            // with ActivityNotFoundException.
-            .clickable { openDonationUrl(context, url) }
-            .padding(vertical = 10.dp)
-    )
 }
 
 // ─── Shared components ─────────────────────────────────────────────────

@@ -56,7 +56,14 @@ data class Track(
     // structured so it can be written to embedded tags on download. Null for most.
     val version: String? = null,
     // THX Spatial Audio release — Qobuz marks it only via version/title text.
-    val isThxSpatialAudio: Boolean = false
+    val isThxSpatialAudio: Boolean = false,
+    // Apple Music identity, kept SEPARATE from [id]. Non-null means this track
+    // came from the Apple catalog and this is its true adamId. Apple and Qobuz
+    // ids share no namespace — inferring the source from [id] alone (the old
+    // QobuzIdRegistry lookup) breaks whenever [id] is a synthetic fallback
+    // (e.g. UnifiedTrack.toLegacyTrack hashing "apple_<id>") and can collide
+    // outright. Routing (download + playback) trusts this field first.
+    val appleId: Long? = null
 ) {
     val displayArtist: String
         get() = artist?.name ?: artists.joinToString(", ") { it.name }
@@ -476,6 +483,13 @@ data class UnifiedTrack(
         val tidalId = when (val s = source) {
             is PlaybackSource.HiFiApi -> s.tidalId
             is PlaybackSource.QobuzCached -> s.qobuzId
+            // Apple tracks keep their true adamId. Before this branch existed
+            // they fell into the hashCode fallback below, which turned
+            // "apple_1688640181" into a garbage (often negative) id — the
+            // download worker then routed them to the Qobuz instance, which
+            // correctly 400'd, and the row sat on "Queued" through four
+            // retries before dying.
+            is PlaybackSource.AppleCached -> s.appleId
             else -> id.hashCode().toLong()
         }
         // Fall back to the audio file path for local sources when the scan
@@ -507,7 +521,8 @@ data class UnifiedTrack(
             volumeNumber = discNumber,
             channelCount = channelCount,
             version = version,
-            isThxSpatialAudio = isThxSpatialAudio
+            isThxSpatialAudio = isThxSpatialAudio,
+            appleId = (source as? PlaybackSource.AppleCached)?.appleId
         )
     }
 }

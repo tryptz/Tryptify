@@ -50,13 +50,21 @@ class AlbumDetailViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
-            val qobuzSlug = qobuzIdRegistry.albumSlugFor(albumId)
-            val qobuzResult = qobuzSlug?.let { repository.getQobuzAlbum(it) }
+            // Apple first when this id came out of the Apple catalog: Apple and
+            // Qobuz ids share no namespace, so trying Qobuz with an Apple id
+            // just wastes a round trip and returns an error.
+            val appleResult = if (qobuzIdRegistry.isAppleAlbum(albumId)) {
+                repository.getAppleAlbum(albumId)
+            } else null
 
-            val finalResult = if (qobuzResult?.isSuccess == true) {
-                qobuzResult
-            } else {
-                repository.getAlbum(albumId)
+            val qobuzSlug = qobuzIdRegistry.albumSlugFor(albumId)
+            val qobuzResult = if (appleResult?.isSuccess == true) null
+                else qobuzSlug?.let { repository.getQobuzAlbum(it) }
+
+            val finalResult = when {
+                appleResult?.isSuccess == true -> appleResult
+                qobuzResult?.isSuccess == true -> qobuzResult
+                else -> repository.getAlbum(albumId)
             }
 
             finalResult

@@ -8,12 +8,16 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import tf.monochrome.android.domain.model.Track
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -59,6 +63,12 @@ class DownloadManager @Inject constructor(
     )
     private val meta = ConcurrentHashMap<Long, DownloadMeta>()
 
+    // FAILED WorkSpecs are terminal: cancelUniqueWork/cancelAllWorkByTag do NOT
+    // touch them, so a "Cancel" tap left the row on screen forever. Cancelling
+    // a failed row instead hides it here (re-enqueueing un-hides it), and
+    // "Cancel all" prunes the terminal records out of WorkManager's db for real.
+    private val dismissed = MutableStateFlow<Set<Long>>(emptySet())
+
     fun downloadTrack(track: Track) {
         enqueueDownload(track)
     }
@@ -67,23 +77,42 @@ class DownloadManager @Inject constructor(
         tracks.forEach { enqueueDownload(it) }
     }
 
-    /** Cancel a single in-flight download. */
+    /**
+     * Cancel a single download. For in-flight work this stops it; for a FAILED
+     * row (which cancellation can't remove) it dismisses the row from the UI.
+     */
     fun cancel(trackId: Long) {
         workManager.cancelUniqueWork("download_$trackId")
+        dismissed.update { it + trackId }
     }
 
-    /** Cancel everything still downloading or queued. */
+    /**
+     * Cancel everything still downloading or queued, and clear out terminal
+     * (failed/cancelled/succeeded) records so the list actually empties.
+     */
     fun cancelAll() {
         workManager.cancelAllWorkByTag("download")
+        workManager.pruneWork()
+        dismissed.update { emptySet() }
     }
 
     /**
      * Re-run a previously enqueued download (typically after a FAILED state).
      * REPLACE clears the terminal work record and starts fresh, so the failed
      * row turns back into a queued/downloading one.
+     *
+     * The original input is only known for downloads enqueued in THIS process
+     * (meta is memory-only, and WorkInfo never exposes input data back). After
+     * a restart a failed row is unrecoverable — dismiss it instead of leaving
+     * a retry button that silently does nothing.
      */
     fun retry(trackId: Long) {
-        val data = meta[trackId]?.inputData ?: return
+        val data = meta[trackId]?.inputData
+        if (data == null) {
+            dismissed.update { it + trackId }
+            return
+        }
+        dismissed.update { it - trackId }
         workManager.enqueueUniqueWork(
             "download_$trackId",
             ExistingWorkPolicy.REPLACE,
@@ -98,6 +127,14 @@ class DownloadManager @Inject constructor(
         return OneTimeWorkRequestBuilder<DownloadWorker>()
             .setInputData(inputData)
             .setConstraints(constraints)
+            // A download is user-initiated, not deferrable housekeeping. Without
+            // this the request is an ordinary JobScheduler job, which Doze and
+            // OEM battery managers are free to postpone indefinitely once the
+            // app leaves the foreground — the row then sits on "Queued" forever
+            // because ENQUEUED is exactly what QUEUED renders. Expedited work is
+            // scheduled immediately; if the app has exhausted its expedited
+            // quota it degrades to a normal request rather than being dropped.
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .addTag("download")
             // Per-track tag so the aggregate observer can recover the track id
             // from WorkInfo (which doesn't expose the unique work name).
@@ -108,6 +145,11 @@ class DownloadManager @Inject constructor(
     private fun enqueueDownload(track: Track) {
         val inputData = workDataOf(
             DownloadWorker.KEY_TRACK_ID to track.id,
+            // Separate Apple identity, resolved NOW while the source is known.
+            // The worker must not re-derive it from track.id at run time — the
+            // shared-id registry lookup is exactly what mis-routed Apple tracks
+            // with synthetic ids to the Qobuz backend.
+            DownloadWorker.KEY_APPLE_ID to (track.appleId ?: -1L),
             DownloadWorker.KEY_TRACK_TITLE to track.title,
             DownloadWorker.KEY_ARTIST_NAME to (track.artist?.name ?: "Unknown Artist"),
             DownloadWorker.KEY_ALBUM_TITLE to (track.album?.title),
@@ -124,6 +166,7 @@ class DownloadManager @Inject constructor(
             inputData = inputData,
         )
 
+        dismissed.update { it - track.id }
         workManager.enqueueUniqueWork(
             "download_${track.id}",
             ExistingWorkPolicy.KEEP,
@@ -158,9 +201,10 @@ class DownloadManager @Inject constructor(
     }
 
     fun observeAllActiveDownloads(): Flow<Map<Long, TrackDownloadState>> {
-        return workManager.getWorkInfosByTagLiveData("download")
-            .asFlow()
-            .map { workInfos ->
+        return combine(
+            workManager.getWorkInfosByTagLiveData("download").asFlow(),
+            dismissed,
+        ) { workInfos, hidden ->
                 workInfos
                     // Keep FAILED alongside the in-flight states — otherwise a
                     // failed download silently disappeared from the pill and the
@@ -178,6 +222,7 @@ class DownloadManager @Inject constructor(
                             // WorkManager unique work names are stored as tags too
                             ?: return@mapNotNull null
                         val id = trackId.toLongOrNull() ?: return@mapNotNull null
+                        if (id in hidden) return@mapNotNull null
                         val progress = info.progress.getFloat(DownloadWorker.KEY_PROGRESS, 0f)
                         val status = when (info.state) {
                             WorkInfo.State.RUNNING -> DownloadStatus.DOWNLOADING
@@ -187,7 +232,7 @@ class DownloadManager @Inject constructor(
                         id to TrackDownloadState(status, progress)
                     }
                     .toMap()
-            }
+        }
     }
 
     /**
