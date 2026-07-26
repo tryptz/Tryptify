@@ -1278,13 +1278,6 @@ class HiFiApiClient @Inject constructor(
         }
     }
 
-    // Apple quality codes accepted by /api/apple/download-music.
-    private fun AudioQuality.appleCode(): String = when (this) {
-        AudioQuality.HI_RES -> "hires-lossless"
-        AudioQuality.LOSSLESS -> "alac"
-        AudioQuality.LOW, AudioQuality.HIGH -> "aac"
-    }
-
     // Resolve the playable URL for an Apple track: hit /api/apple/download-music,
     // which returns the wrapper-resolved manifest, and read delivery.streamUrl —
     // the cloud-cached decrypted file (Range-capable). Atmos-flagged tracks request

@@ -217,10 +217,6 @@ class PreferencesManager @Inject constructor(
         private val SPOTIFY_TOKEN_EXPIRES_AT = longPreferencesKey("spotify_token_expires_at")
         private val SPOTIFY_USER_NAME = stringPreferencesKey("spotify_user_name")
 
-        // PocketBase
-        private val POCKETBASE_TOKEN = stringPreferencesKey("pocketbase_token")
-        private val POCKETBASE_USER_ID = stringPreferencesKey("pocketbase_user_id")
-        private val POCKETBASE_EMAIL = stringPreferencesKey("pocketbase_email")
         // Home screen cache
 
         // EQ / AutoEQ
@@ -981,27 +977,6 @@ class PreferencesManager @Inject constructor(
             it.remove(SPOTIFY_REFRESH_TOKEN)
             it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
             it.remove(SPOTIFY_USER_NAME)
-        }
-    }
-
-    // --- PocketBase ---
-    val pocketBaseToken: Flow<String?> = dataStore.data.map { it[POCKETBASE_TOKEN] }
-    val pocketBaseUserId: Flow<String?> = dataStore.data.map { it[POCKETBASE_USER_ID] }
-    val pocketBaseEmail: Flow<String?> = dataStore.data.map { it[POCKETBASE_EMAIL] }
-
-    suspend fun setPocketBaseAuth(token: String, userId: String, email: String) {
-        dataStore.edit {
-            it[POCKETBASE_TOKEN] = token
-            it[POCKETBASE_USER_ID] = userId
-            it[POCKETBASE_EMAIL] = email
-        }
-    }
-
-    suspend fun clearPocketBaseAuth() {
-        dataStore.edit {
-            it.remove(POCKETBASE_TOKEN)
-            it.remove(POCKETBASE_USER_ID)
-            it.remove(POCKETBASE_EMAIL)
         }
     }
 

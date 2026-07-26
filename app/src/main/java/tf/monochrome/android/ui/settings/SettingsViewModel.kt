@@ -246,7 +246,7 @@ class SettingsViewModel @Inject constructor(
     /** Ensures presets are installed/loaded so the visualizer settings have data. */
     fun prepareVisualizerEngine() = projectMEngineRepository.requestPrepare()
 
-    // --- PocketBase Auth ---
+    // --- Account (Supabase) ---
     val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val userEmail: StateFlow<String?> = authRepository.userEmail

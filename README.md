@@ -235,7 +235,7 @@ Band count is user-selectable (10 by default), and treble safety tapers the maxi
 
 **Custom measurements** — CSV/TXT with auto-detected delimiter, header detection, and European-decimal handling; uploads get their own pinned chip, survive across sessions, and can be deleted by long-press. Finished curves export as an **EqualizerAPO-style parametric text file** through the storage picker.
 
-**Audio integration** — the EQ processor wraps Android's system `Equalizer` effect bound to the ExoPlayer session. Parametric bands are projected onto the device's fixed system bands with a Gaussian gain-estimation model, gains clamp to the hardware's millibel limits, and a preamp clamps against peak band gain to protect headroom. Updates are read via an atomic snapshot per audio block — no clicks during live tweaking.
+**Audio integration** — correction runs as its own `AudioProcessor` in the ExoPlayer chain: an RBJ biquad cascade evaluated per band, per channel, rather than being projected onto whatever fixed bands the device's system equalizer happens to expose. A second, independent parametric processor sits after it, so AutoEQ correction and your own tone shaping stack instead of competing. Both publish `(enabled, preamp, bands)` as a single atomic snapshot read once per audio block, and an auto-preamp clamps against peak band gain to protect headroom — no clicks during live tweaking.
 
 ### System-wide EQ and tone controls
 
@@ -265,7 +265,7 @@ Because bypass skips AudioFlinger entirely, neither `Player.volume` nor the hard
 
 ## Library, downloads & offline
 
-**Scanning** — MediaStore indexing constrained to the **folder roots you pick** (empty = whole device), with an embedded-tag reader, incremental sync keyed on modification time, and a filesystem watcher. A process-wide coordinator guarantees one scan at a time and shares its progress with the Library tab; the first scan runs as a WorkManager job at the end of onboarding. Tag reads are parallel and DB writes batched.
+**Scanning** — MediaStore indexing constrained to the **folder roots you pick** (empty = whole device), with an embedded-tag reader and incremental sync keyed on modification time. A process-wide coordinator guarantees one scan at a time and shares its progress with the Library tab; the first scan runs as a WorkManager job at the end of onboarding. Tag reads are parallel and DB writes batched.
 
 **Tags** — ReplayGain (track/album with peak protection), ISRC, MusicBrainz ids, codec detection, THX detection, disc/track/year, and artist recovery from `"Artist - Title"` filenames when no artist tag exists. Artwork resolves embedded picture → per-track sidecar → folder cover (`cover`/`folder`/`album`/`front`/`artwork`), cached by hash and auto-restored if the cache is evicted.
 
