@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.8.1] — Apple Music
+
+> Covers everything since 1.7.2, including the unpublished 1.8.0 bump (versionCode 180 → 181).
+
+| The new player | |
+|---|---|
+| ![New liquid-glass player — blue](docs/screenshots/player-glass-blue.jpg) | ![New liquid-glass player — frost](docs/screenshots/player-glass-frost.jpg) |
+
+### Added
+
+#### Apple Music catalog
+- **Apple Music as a searchable source** — Apple Music is wired through the configured instance as a first-class catalog alongside TIDAL and Qobuz, with search, album detail, and artist detail. Apple identity is kept strictly separate from Qobuz ids so nothing cross-contaminates the registries, and the first-run onboarding now presents TIDAL, Qobuz, Apple Music & Spotify with their brand logos.
+- **Playback via the wrapper** — streams resolve through `/api/apple/download-music` (wrapper + cloud cache), with an optional **tailnet-direct** mode that talks straight to a home wrapper/agent over your tailnet — no cloud in the path (cleartext HTTP is permitted solely so the app can reach the tailnet agent).
+- **Offline downloads** — Apple tracks download as `.m4a` through the same endpoint, and the player resolves the Apple id for the playing track ahead of time so the download button works immediately.
+- **Format selection + Dolby Atmos** — Settings gains an Apple Music format preference (hi-res lossless / ALAC / AAC — Apple's ladder doesn't map onto the Qobuz/TIDAL tiers, so it's its own setting) and a separate **Dolby Atmos toggle**: when on, the wrapper is asked for the Atmos spatial master and falls back to your chosen stereo format for tracks with no Atmos encode.
+- **ALAC via FFmpeg** — ALAC now decodes with the bundled FFmpeg instead of the platform codec, sidestepping device-dependent decoder quirks.
+
+#### Downloads
+- **Expedited, honest, dismissible** — download work runs as expedited foreground jobs, failures are reported honestly instead of hanging as fake progress, and finished/failed rows can be dismissed from the Download Center.
+
+### Changed
+
+#### Player & theming (1.8.0 cycle)
+- **Liquid-glass optics rework** — interior lensing and a structured backdrop replace the old flat refraction, with richer shimmer layered into the glass shader.
+- **Unified theme roster** — Lyrics FX and Player Glass merge into one 17-pair theme roster; the "55" glass theme ships as the default.
+- **Backdrop polish** — the mini player gaussian-frosts the backdrop under its glass slab, the action dock's drop shadow respects its icon cut-outs, and the blurred album background plus "Glow behind album art" (now under Appearance) default ON.
+
+#### Settings & UX
+- **Five fixed font sizes** — the free-form font-scale slider is replaced with five fixed sizes plus a follow-system option.
+- **One-time donations** — support tips are now one-time only ($3 / $5 / $10); monthly Stripe subscriptions are dropped.
+
+### Fixed
+- **Performance tiering** — devices with missing `cpufreq` data are no longer misclassified as weak CPUs (which silently disabled visual effects).
+- **No baked-in addresses** — the app no longer ships instance addresses or a real tailnet address as the agent placeholder, and the monochrome.tf website link and deep link are removed.
+
 ## [1.7.0] — MonoTrypt DSP Engine
 
 ### Added
