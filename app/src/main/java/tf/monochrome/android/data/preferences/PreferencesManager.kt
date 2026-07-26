@@ -527,7 +527,7 @@ class PreferencesManager @Inject constructor(
 
     // Tailnet-direct wrapper/agent: when set, Apple tracks decrypt + stream
     // straight from the home decrypt-agent over Tailscale (no cloud). Base URL
-    // like http://100.80.88.106:8790; the secret matches the agent's AGENT_SECRET.
+    // like http://100.x.y.z:8790; the secret matches the agent's AGENT_SECRET.
     val appleWrapperUrl: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_URL] }
 
     suspend fun setAppleWrapperUrl(endpoint: String?) {

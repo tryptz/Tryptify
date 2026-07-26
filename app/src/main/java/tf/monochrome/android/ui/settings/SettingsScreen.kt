@@ -1783,7 +1783,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Tailnet address of the home decrypt agent (e.g. http://100.80.88.106:8790). When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
+                    text = "Tailnet address of the home decrypt agent (e.g. http://100.x.y.z:8790). When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1794,7 +1794,7 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
             OutlinedTextField(
                 value = appleWrapperInput,
                 onValueChange = { appleWrapperInput = it },
-                placeholder = { Text("http://100.80.88.106:8790", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text("http://100.x.y.z:8790", style = MaterialTheme.typography.bodyMedium) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
