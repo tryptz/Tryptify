@@ -44,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -73,6 +74,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.ChannelLayout
@@ -90,8 +92,28 @@ import kotlin.math.sin
 @HiltViewModel
 class AtmosRendererViewModel @Inject constructor(
     private val preferences: PreferencesManager,
+    private val channelDetector: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    /** Live detected input format + per-channel peaks, drives the channel map. */
+    val channelState:
+        StateFlow<tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?> =
+        channelDetector.state
+
+    /** Reference-counted metering stake — held only while this screen shows. */
+    fun acquireDetector() = channelDetector.acquire()
+    fun releaseDetector() = channelDetector.release()
+
+    /** Multichannel → stereo fold toggle (same preference as Settings). */
+    val multichannelDownmixEnabled: StateFlow<Boolean> =
+        preferences.multichannelDownmixEnabled.stateIn(
+            viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), true,
+        )
+
+    fun setMultichannelDownmix(enabled: Boolean) {
+        viewModelScope.launch { preferences.setMultichannelDownmixEnabled(enabled) }
+    }
 
     // In-memory working copy so slider drags update the UI instantly; the
     // DataStore write is debounced to the drag's tail (same approach the Player
@@ -266,11 +288,19 @@ fun AtmosRendererScreen(
 ) {
     val profile by viewModel.profile.collectAsState()
     val sofaPresets by viewModel.sofaPresets.collectAsState()
+    val detected by viewModel.channelState.collectAsState()
 
     // Re-sync on every (re-)entry: the HRTF database screen writes the profile
     // and adds preset files behind this ViewModel's back, and navigating back
     // here recomposes the screen fresh.
     LaunchedEffect(Unit) { viewModel.refreshFromStorage() }
+
+    // Per-channel metering for the live channel map runs only while this
+    // screen is visible (same acquire/release contract as the spectrum tap).
+    DisposableEffect(Unit) {
+        viewModel.acquireDetector()
+        onDispose { viewModel.releaseDetector() }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -291,14 +321,24 @@ fun AtmosRendererScreen(
         ) {
             // ── Channel map ────────────────────────────────────────────────
             SectionHeader("Channel Map")
+            val d = detected
             Text(
-                "Speakers the current mix drives, lit on their room positions.",
+                if (d != null) {
+                    val rate = if (d.sampleRate % 1000 == 0) "${d.sampleRate / 1000} kHz"
+                    else "${d.sampleRate} Hz"
+                    "Live: ${d.layoutName} · ${d.channelCount} ch · $rate — " +
+                        "each speaker glows with its channel's level."
+                } else {
+                    "Speakers the current mix drives, lit on their room positions. " +
+                        "Play a track to see live channel levels."
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
             SpeakerLayoutMap(
                 layout = profile.layout,
+                detected = d,
                 accent = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -342,27 +382,24 @@ fun AtmosRendererScreen(
             )
             Spacer(Modifier.height(20.dp))
 
-            // ── Output layout ──────────────────────────────────────────────
-            // Multichannel speaker output would need a multichannel DAC and a
-            // VBAP output path (vbap.h exists, the render/sink wiring does not).
-            // This renderer targets headphones and only outputs binaural stereo,
-            // so these are shown disabled for reference rather than pretending to
-            // work — feeding 5.1/7.1 to a stereo output just folds back down.
-            SectionHeader("Output Layout")
-            Text(
-                "This renderer outputs binaural stereo for headphones. " +
-                    "Multichannel speaker output (5.1 / 7.1 / 7.1.4) needs a " +
-                    "multichannel DAC and isn't supported yet.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
-            ChoiceChips(
-                options = ChannelLayout.entries,
-                selected = ChannelLayout.STEREO,
-                enabled = false,
-                label = { it.label },
-                onSelect = { },
+            // ── Multichannel downmix ───────────────────────────────────────
+            // Replaces the old read-only "Output Layout" (binaural pipeline)
+            // blurb: the setting that actually governs multichannel output —
+            // the fixed-matrix fold to stereo — lives here now. Same
+            // preference as the toggle in Settings › Spatial Audio.
+            SectionHeader("Downmix")
+            val downmixEnabled by viewModel.multichannelDownmixEnabled.collectAsState()
+            SettingSwitchItem(
+                title = "Downmix multichannel to stereo",
+                subtitle = if (downmixEnabled) {
+                    "Multichannel tracks fold into stereo (fixed matrix) and run " +
+                        "through DSP/EQ."
+                } else {
+                    "Off — multichannel passes to the device untouched; DSP/EQ " +
+                        "bypassed for those tracks."
+                },
+                checked = downmixEnabled,
+                onCheckedChange = { viewModel.setMultichannelDownmix(it) },
             )
             Spacer(Modifier.height(20.dp))
 
@@ -629,18 +666,28 @@ private fun LabeledSlider(
 }
 
 /**
- * Top-down room plan: the listener at centre, each speaker of [layout] placed at
- * its azimuth and lit with a soft radial bloom (a gentle pulse = "light fx") so
- * the channels the mix uses read at a glance. Height speakers sit on an inner
- * ring in a warmer tint; the LFE is a small dot below the listener.
+ * Top-down room plan: the listener at centre, each speaker placed at its
+ * azimuth. While a track plays, [detected] drives the map: speakers come from
+ * the channel detector's assumed layout and each one glows with its channel's
+ * live level (volume-rendered light — brighter and wider the louder the
+ * channel). With nothing detected it falls back to [layout]'s speakers with
+ * the idle pulse. Height speakers sit on an inner ring in a warmer tint; the
+ * LFE is a small dot below the listener.
  */
 @Composable
 private fun SpeakerLayoutMap(
     layout: ChannelLayout,
+    detected: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    val speakers = layout.speakers()
+    val speakers = detected?.let { detectedSpeakers(it.channelNames) } ?: layout.speakers()
+    // 0..1 level per speaker from the −60..0 dBFS meter range; null = idle map.
+    val levels = detected?.let { d ->
+        FloatArray(speakers.size) { i ->
+            ((d.peaksDb.getOrElse(i) { -120f } + 60f) / 60f).coerceIn(0f, 1f)
+        }
+    }
     val textMeasurer = rememberTextMeasurer()
     val onSurface = MaterialTheme.colorScheme.onSurface
     val outline = MaterialTheme.colorScheme.outline
@@ -666,20 +713,61 @@ private fun SpeakerLayoutMap(
             drawCircle(color = outline.copy(alpha = 0.25f), radius = ringR, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
             drawCircle(color = onSurface.copy(alpha = 0.5f), radius = ringR * 0.05f, center = Offset(cx, cy))
 
-            speakers.forEach { s ->
-                val pos = speakerPosition(s, cx, cy, ringR)
+            speakers.forEachIndexed { i, s ->
+                val level = levels?.get(i)
+                // Live: glow brightness + reach + dot opacity all render the
+                // channel's volume; a silent channel stays a dim marker.
+                // Idle: the gentle shared pulse.
+                val glowAlpha = if (level != null) 0.08f + 0.62f * level else 0.45f * pulse
+                val glowScale = if (level != null) 0.7f + 1.1f * level else 1f
+                val dotAlpha = if (level != null) 0.35f + 0.65f * level else 0.9f
+                val pos = if (s.isLfe) Offset(cx, cy + ringR * 0.28f)
+                else speakerPosition(s, cx, cy, ringR)
                 val tint = if (s.isHeight) heightTint else accent
-                if (s.isLfe) {
-                    // LFE: directionless, drawn just below the listener.
-                    val lfePos = Offset(cx, cy + ringR * 0.28f)
-                    drawSpeaker(lfePos, tint, pulse, dotScale = 0.85f, textMeasurer, s, onSurface)
-                } else {
-                    drawSpeaker(pos, tint, pulse, dotScale = if (s.isHeight) 0.9f else 1f, textMeasurer, s, onSurface)
+                val dotScale = when {
+                    s.isLfe -> 0.85f
+                    s.isHeight -> 0.9f
+                    else -> 1f
                 }
+                drawSpeaker(
+                    pos, tint, glowAlpha, glowScale, dotAlpha, dotScale,
+                    textMeasurer, s, onSurface,
+                )
             }
         }
     }
 }
+
+/**
+ * Room positions for the channel detector's assumed layout names — the map
+ * counterpart of [tf.monochrome.android.audio.dsp.ChannelDetectorProcessor]'s
+ * channel order tables (FLAC/FFmpeg order; 16 ch = 9.1.6). Unknown names
+ * (generic "Ch n" layouts) are spread evenly around the ring.
+ */
+private fun detectedSpeakers(names: List<String>): List<SpeakerChannel> =
+    names.mapIndexed { i, n ->
+        when (n) {
+            "M" -> SpeakerChannel("M", 0f)
+            "FL" -> SpeakerChannel("FL", -30f)
+            "FR" -> SpeakerChannel("FR", 30f)
+            "FC" -> SpeakerChannel("FC", 0f)
+            "LFE" -> SpeakerChannel("LFE", 0f, isLfe = true)
+            "SL" -> SpeakerChannel("SL", -90f)
+            "SR" -> SpeakerChannel("SR", 90f)
+            "BL" -> SpeakerChannel("BL", -150f)
+            "BR" -> SpeakerChannel("BR", 150f)
+            "BLC" -> SpeakerChannel("BLC", -165f)
+            "BRC" -> SpeakerChannel("BRC", 165f)
+            "BC" -> SpeakerChannel("BC", 180f)
+            "TFL" -> SpeakerChannel("TFL", -45f, 45f)
+            "TFR" -> SpeakerChannel("TFR", 45f, 45f)
+            "TSL" -> SpeakerChannel("TSL", -90f, 45f)
+            "TSR" -> SpeakerChannel("TSR", 90f, 45f)
+            "TBL" -> SpeakerChannel("TBL", -135f, 45f)
+            "TBR" -> SpeakerChannel("TBR", 135f, 45f)
+            else -> SpeakerChannel(n, -180f + 360f * (i + 0.5f) / names.size)
+        }
+    }
 
 /** Screen position for a speaker: azimuth 0 = front (up), growing clockwise. */
 private fun speakerPosition(s: SpeakerChannel, cx: Float, cy: Float, ringR: Float): Offset {
@@ -694,25 +782,29 @@ private fun speakerPosition(s: SpeakerChannel, cx: Float, cy: Float, ringR: Floa
 private fun DrawScope.drawSpeaker(
     pos: Offset,
     tint: Color,
-    pulse: Float,
+    glowAlpha: Float,
+    glowScale: Float,
+    dotAlpha: Float,
     dotScale: Float,
     textMeasurer: androidx.compose.ui.text.TextMeasurer,
     speaker: SpeakerChannel,
     labelColor: Color,
 ) {
-    val glowR = 26f * dotScale
-    // Soft bloom.
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(tint.copy(alpha = 0.45f * pulse), Color.Transparent),
-            center = pos,
+    val glowR = 26f * dotScale * glowScale
+    // Soft bloom, rendered from the channel's live level when playing.
+    if (glowAlpha > 0.01f) {
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(tint.copy(alpha = glowAlpha), Color.Transparent),
+                center = pos,
+                radius = glowR,
+            ),
             radius = glowR,
-        ),
-        radius = glowR,
-        center = pos,
-    )
+            center = pos,
+        )
+    }
     // Solid speaker dot.
-    drawCircle(color = tint.copy(alpha = 0.9f), radius = 7f * dotScale, center = pos)
+    drawCircle(color = tint.copy(alpha = dotAlpha), radius = 7f * dotScale, center = pos)
 
     // Label just below the dot.
     val measured = textMeasurer.measure(
