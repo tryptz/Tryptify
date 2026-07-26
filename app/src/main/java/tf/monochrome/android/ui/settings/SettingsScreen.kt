@@ -2061,9 +2061,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        LinkItem("Website", "https://monochrome.tf", context)
-
-        Spacer(modifier = Modifier.height(20.dp))
         SettingsGroupHeader("Account & Sync")
         val isLoggedIn by viewModel.isLoggedIn.collectAsState()
         val userEmail by viewModel.userEmail.collectAsState()
@@ -2367,21 +2364,6 @@ private fun openDonationUrl(context: android.content.Context, url: String) {
     } catch (e: ActivityNotFoundException) {
         Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
     }
-}
-
-@Composable
-private fun LinkItem(label: String, url: String, context: android.content.Context) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
-            // Route through the guarded helper so a device with no browser
-            // (or a locked-down work profile) shows a toast instead of crashing
-            // with ActivityNotFoundException.
-            .clickable { openDonationUrl(context, url) }
-            .padding(vertical = 10.dp)
-    )
 }
 
 // ─── Shared components ─────────────────────────────────────────────────
