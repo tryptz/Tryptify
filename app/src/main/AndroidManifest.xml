@@ -37,6 +37,13 @@
          version. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!-- Debug screen recorder (Settings > Spatial Audio). RECORD_AUDIO is
+         needed by AudioPlaybackCapture to record the app's OWN media output
+         digitally in stereo — no microphone is ever opened; requested at
+         runtime only when the user starts a debug recording. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
     <!-- USB host mode — required to enumerate and route to USB Audio Class
          DACs. Marked not-required so the app still installs on tablets / TVs
          that lack a USB host port; UsbAudioRouter no-ops on those. -->
@@ -132,6 +139,13 @@
             android:name=".data.import_.SpotifyImportForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Debug screen recorder: native-resolution/fps capture with the
+             app's own stereo media audio (AudioPlaybackCapture). -->
+        <service
+            android:name=".debug.DebugScreenRecordService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <!-- Android Auto Media Browser Service -->
         <service

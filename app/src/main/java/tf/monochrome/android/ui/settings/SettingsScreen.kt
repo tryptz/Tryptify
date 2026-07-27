@@ -1137,6 +1137,9 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         ChannelDetectorCard(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
+        DebugScreenRecorderRow()
+
+        Spacer(modifier = Modifier.height(8.dp))
         Text("Crossfade: ${crossfade}s", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         Text("Blend between tracks", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
@@ -1254,6 +1257,56 @@ private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
         },
         checked = enabled,
         onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
+    )
+}
+
+/**
+ * Debug screen recorder: captures the display at its native panel
+ * resolution and refresh rate with the app's own media audio recorded
+ * digitally in stereo (AudioPlaybackCapture — no microphone). Output goes
+ * to Movies/Tryptify. Android 10+ only; RECORD_AUDIO is requested on first
+ * use purely for the playback-capture API — declining it records video-only.
+ */
+@Composable
+private fun DebugScreenRecorderRow() {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
+    val context = LocalContext.current
+    val recording by tf.monochrome.android.debug.DebugScreenRecordService.recording.collectAsState()
+    val lastSaved by tf.monochrome.android.debug.DebugScreenRecordService.lastSavedName.collectAsState()
+
+    val projectionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == android.app.Activity.RESULT_OK && data != null) {
+            tf.monochrome.android.debug.DebugScreenRecordService.start(
+                context, result.resultCode, data,
+            )
+        }
+    }
+    val audioPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        // Granted → stereo media audio; declined → video-only. Either way,
+        // continue to the system's screen-capture consent.
+        val mpm = context.getSystemService(android.media.projection.MediaProjectionManager::class.java)
+        projectionLauncher.launch(mpm.createScreenCaptureIntent())
+    }
+
+    SettingItem(
+        title = if (recording) "Stop debug screen recording" else "Debug screen recording",
+        subtitle = when {
+            recording -> "Recording… native resolution/fps, stereo media audio. Tap to stop."
+            lastSaved != null -> "Saved: $lastSaved. Tap to record again."
+            else -> "Native resolution & fps, stereo internal audio (no mic) → Movies/Tryptify."
+        },
+        onClick = {
+            if (recording) {
+                tf.monochrome.android.debug.DebugScreenRecordService.stop(context)
+            } else {
+                audioPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            }
+        },
     )
 }
 
