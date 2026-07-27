@@ -140,12 +140,13 @@ data class RendererProfile(
      */
     val lfeLowpass: Boolean = false,
     /**
-     * Master switch for the HRTF binauralizer. Off = the binaural render runs
-     * fully dry (plain stereo fold-down, no head-related colouration), so the
-     * only headphone shaping left in the chain is the app's own built-in
-     * AutoEQ correction.
+     * The ONE spatial option: off (default) = every Atmos track goes through
+     * the coefficient downmix renderer (fixed matrix + preamp + LFE filter);
+     * on = objects are binauralized through the HRTF (built-in KEMAR or a
+     * SOFA). The UI keeps [mode] in lockstep: PASSTHROUGH when off,
+     * OBJECT_RENDER when on.
      */
-    val hrtfEnabled: Boolean = true,
+    val hrtfEnabled: Boolean = false,
     /** HRTF/AutoEQ measurement id for the binaural back-end; null = built-in set. */
     val hrtfProfileId: String? = null,
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */

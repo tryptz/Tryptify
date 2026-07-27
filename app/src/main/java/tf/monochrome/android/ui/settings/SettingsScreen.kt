@@ -1120,7 +1120,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         SettingsGroupHeader("Spatial Audio")
         SettingItem(
             title = "Atmos Renderer Configuration",
-            subtitle = "Renderer mode, output layout, downmix, bass management & channel map",
+            subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
             onClick = { navController.navigate(Screen.AtmosRenderer.route) },
         )
 
