@@ -8,6 +8,9 @@ import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import tf.monochrome.android.data.preferences.PreferencesManager
@@ -55,6 +58,15 @@ class AtmosAudioProcessor @Inject constructor(
     // SOFA change or a fresh pipeline, cleared once (re)applied.
     @Volatile private var sofaApplied = false
 
+    /**
+     * Last custom-SOFA apply outcome, for the renderer UI: path → accepted.
+     * Null while no custom SOFA is selected (built-in HRTF) or before the
+     * first apply. Rejections were previously logcat-only, so the screen
+     * claimed "custom" while the render actually ran the baked KEMAR set.
+     */
+    private val _sofaStatus = MutableStateFlow<Pair<String, Boolean>?>(null)
+    val sofaStatus: StateFlow<Pair<String, Boolean>?> = _sofaStatus.asStateFlow()
+
     init {
         preferences.rendererProfile
             .onEach { updated ->
@@ -71,6 +83,11 @@ class AtmosAudioProcessor @Inject constructor(
         loadedSofaPath = path
         sofaBytes = path?.let { runCatching { java.io.File(it).readBytes() }.getOrNull() }
         sofaApplied = false
+        _sofaStatus.value = when {
+            path == null -> null                    // built-in HRTF selected
+            sofaBytes == null -> path to false      // unreadable file = rejected
+            else -> null                            // pending until applied
+        }
     }
 
     /** Loads the cached SOFA into [p] (or reverts to baked); once per change. */
@@ -80,6 +97,7 @@ class AtmosAudioProcessor @Inject constructor(
         if (bytes != null) {
             val ok = AtmosNative.nativeLoadSofa(p, bytes) == 1
             android.util.Log.i(TAG, "custom HRTF ${if (ok) "loaded" else "REJECTED"} (${bytes.size}B)")
+            loadedSofaPath?.let { _sofaStatus.value = it to ok }
         } else {
             AtmosNative.nativeClearSofa(p)
         }

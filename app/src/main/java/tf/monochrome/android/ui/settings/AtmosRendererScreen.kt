@@ -92,8 +92,16 @@ import kotlin.math.sin
 class AtmosRendererViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     private val channelDetector: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
+    atmosProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    /**
+     * Live SOFA apply outcome from the render pipeline (path → accepted).
+     * Lets the screen say "this .sofa was REJECTED — running built-in KEMAR"
+     * instead of silently claiming the custom HRTF is active.
+     */
+    val sofaStatus: StateFlow<Pair<String, Boolean>?> = atmosProcessor.sofaStatus
 
     /** Live detected input format + per-channel peaks, drives the channel map. */
     val channelState:
@@ -469,11 +477,32 @@ fun AtmosRendererScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                profile.hrtfProfileId != null -> Text(
-                    "Loaded: ${java.io.File(profile.hrtfProfileId!!).name}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                profile.hrtfProfileId != null -> {
+                    val sofaStatus by viewModel.sofaStatus.collectAsState()
+                    val selectedName = java.io.File(profile.hrtfProfileId!!).name
+                    val status = sofaStatus?.takeIf {
+                        java.io.File(it.first).name == selectedName
+                    }
+                    when {
+                        status?.second == false -> Text(
+                            "⚠ $selectedName was REJECTED by the SOFA loader — " +
+                                "the render is using the built-in KEMAR HRTF instead. " +
+                                "The file may be truncated, unsupported, or not a SOFA.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        status?.second == true -> Text(
+                            "Loaded: $selectedName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        else -> Text(
+                            "Selected: $selectedName — applies when playback (re)starts.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 else -> Text(
                     "Built-in is MIT KEMAR. Load a SOFA HRTF (your own or a set like " +
                         "SADIE / CIPIC) to change the binaural voicing.",
