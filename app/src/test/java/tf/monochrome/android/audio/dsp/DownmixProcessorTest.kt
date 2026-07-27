@@ -300,53 +300,6 @@ class DownmixProcessorTest {
         assertEquals(0f, fl[1], floatTol)
     }
 
-    // ── Lt/Rt surround encode ────────────────────────────────────────────
-
-    @Test
-    fun `ltRt - BL goes anti-phase with cross-feed`() {
-        val p = processor().apply { setSurroundEncode(true) }
-        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val out = drainFloats(p, floatBuffer(soloFrame(6, 4))) // BL
-        assertEquals(-0.8165f, out[0], floatTol)
-        assertEquals(0.5774f, out[1], floatTol)
-    }
-
-    @Test
-    fun `ltRt - fronts, center and LFE fold as in LoRo`() {
-        val p = processor().apply { setSurroundEncode(true) }
-        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val fl = drainFloats(p, floatBuffer(soloFrame(6, 0)))
-        assertEquals(1f, fl[0], floatTol)
-        assertEquals(0f, fl[1], floatTol)
-        val fc = drainFloats(p, floatBuffer(soloFrame(6, 2)))
-        assertEquals(0.70711f, fc[0], floatTol)
-        assertEquals(0.70711f, fc[1], floatTol)
-        val lfe = drainFloats(p, floatBuffer(soloFrame(6, 3)))
-        assertEquals(2.26464f, lfe[0], floatTol)
-        assertEquals(2.26464f, lfe[1], floatTol)
-    }
-
-    @Test
-    fun `ltRt - 6_1 back-center is anti-phase at 0_70711`() {
-        val p = processor().apply { setSurroundEncode(true) }
-        configureAndFlush(p, 48000, 7, C.ENCODING_PCM_FLOAT)
-        val out = drainFloats(p, floatBuffer(soloFrame(7, 4))) // BC
-        assertEquals(-0.70711f, out[0], floatTol)
-        assertEquals(0.70711f, out[1], floatTol)
-    }
-
-    @Test
-    fun `ltRt - 16ch top-front stays a front, top-back encodes as surround`() {
-        val p = processor().apply { setSurroundEncode(true) }
-        configureAndFlush(p, 48000, 16, C.ENCODING_PCM_FLOAT)
-        val tfl = drainFloats(p, floatBuffer(soloFrame(16, 10))) // TFL
-        assertEquals(1f, tfl[0], floatTol)
-        assertEquals(0f, tfl[1], floatTol)
-        val tbr = drainFloats(p, floatBuffer(soloFrame(16, 15))) // TBR
-        assertEquals(-0.5774f, tbr[0], floatTol)
-        assertEquals(0.8165f, tbr[1], floatTol)
-    }
-
     @Test
     fun `preamp scales the fold by its linear gain`() {
         val p = processor().apply { setPreampDb(-20f) }
@@ -399,18 +352,15 @@ class DownmixProcessorTest {
     }
 
     @Test
-    fun `matrix and preamp changes apply on the fly at the next buffer`() {
+    fun `preamp changes apply on the fly at the next buffer`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
         val before = drainFloats(p, floatBuffer(soloFrame(6, 4)))
         assertEquals(1f, before[0], floatTol)
-        // No flush: the very next buffer must use the new settings.
-        p.setSurroundEncode(true)
-        val ltRt = drainFloats(p, floatBuffer(soloFrame(6, 4)))
-        assertEquals(-0.8165f, ltRt[0], floatTol)
+        // No flush: the very next buffer must use the new gain.
         p.setPreampDb(-20f)
         val trimmed = drainFloats(p, floatBuffer(soloFrame(6, 4)))
-        assertEquals(-0.08165f, trimmed[0], floatTol)
+        assertEquals(0.1f, trimmed[0], floatTol)
     }
 
     @Test

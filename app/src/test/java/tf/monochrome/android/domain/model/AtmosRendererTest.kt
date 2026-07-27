@@ -117,11 +117,10 @@ class AtmosRendererTest {
     fun `default profile uses typical safe renderer settings`() {
         val p = RendererProfile.DEFAULT
         assertTrue(p.autoDetectLayout)
-        // The stored downmix is the MATRIX only (binaural is derived from the
-        // HRTF mode, not user-selectable); legacy BINAURAL maps to Lo/Ro.
+        // Not user-facing: the fold is the one fixed matrix, and binaural is
+        // derived from the HRTF mode. The field exists for the native ordinal
+        // and stored-blob compatibility only.
         assertEquals(StereoDownmixMode.LO_RO, p.stereoDownmix)
-        assertEquals(StereoDownmixMode.LO_RO, StereoDownmixMode.BINAURAL.asMatrix)
-        assertEquals(StereoDownmixMode.LT_RT, StereoDownmixMode.LT_RT.asMatrix)
         assertEquals(1.0f, p.binauralStrength, 1e-6f)
         assertTrue(p.heightVirtualization)
         assertTrue(p.bassManagement)

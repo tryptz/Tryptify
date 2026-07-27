@@ -17,22 +17,14 @@ import kotlin.math.pow
  * AutoEQ, Parametric EQ, USB DAC negotiation) keeps its 1/2-channel world
  * view while 3.0–16-channel sources still play.
  *
- * Two fold matrices, selected by [setSurroundEncode] (driven by the Atmos
- * page's Downmix Matrix choice; no HRTF/virtualization either way).
- *
- * Lo/Ro — the fixed per-channel gain matrix (default):
+ * One fixed per-channel gain matrix — the peqdb Downmix Renderer's ADC2
+ * direct matrix, no HRTF/virtualization, and deliberately no alternative
+ * matrix options:
  *
  *   FL/BL/BLC/SL/TFL/TSL/TBL → [1, 0]      (hard left)
  *   FR/BR/BRC/SR/TFR/TSR/TBR → [0, 1]      (hard right)
  *   FC (and BC in 6.1)       → [0.70710678, 0.70710678]
  *   LFE                      → [2.26464431, 2.26464431]
- *
- * Lt/Rt — the surround renderer: a Pro Logic II-style passive matrix encode.
- * Fronts/FC/LFE fold as in Lo/Ro; surround-class channels go in anti-phase
- * with cross-feed (own side −0.8165 / opposite −0.5774 into Lt, mirrored
- * positive into Rt; 6.1's BC at ∓0.70710678) so a Pro Logic decoder can
- * re-expand the stereo fold back to surround. Top-front pairs count as
- * fronts; side/back tops as surrounds.
  *
  * The rows are used verbatim — no re-normalization — so absolute channel
  * levels are preserved exactly as specified. That means a hot multichannel
@@ -93,18 +85,6 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
     }
 
     /**
-     * Matrix choice: false = Lo/Ro fixed matrix (default), true = Lt/Rt
-     * surround encode. Follows the Atmos page's Downmix Matrix chips; applies
-     * on the fly at the next buffer boundary.
-     */
-    @Volatile
-    private var surroundEncode: Boolean = false
-
-    fun setSurroundEncode(e: Boolean) {
-        surroundEncode = e
-    }
-
-    /**
      * Master trim (dB) baked into the coefficient rows — the preamp that
      * pulls the hot verbatim matrix below clipping (equivalent of the peqdb
      * Downmix Renderer's --master-gain-db). Applies on the fly at the next
@@ -139,25 +119,23 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
 
     // Snapshot of the settings the current coefficient rows were built from.
     // queueInput() compares against the volatiles at each buffer boundary and
-    // rebuilds on the fly when the user changes matrix / preamp / LFE mode —
-    // no reconfigure or seek needed (a small step discontinuity at the buffer
+    // rebuilds on the fly when the user changes preamp / LFE mode — no
+    // reconfigure or seek needed (a small step discontinuity at the buffer
     // edge is the accepted cost of instant A/B). Only the enable toggle still
     // waits for a reconfigure, because it changes the output format itself.
-    private var appliedLtRt = false
     private var appliedPreampDb = Float.NaN
     private var appliedLfe = false
 
     /**
      * (Re)build the active coefficient rows from the current settings for
      * [inputFormat]. `resetLfeState` clears the filter/delay history — wanted
-     * on flush (seek) and on LFE enable, not on a preamp/matrix-only rebuild
-     * while the LFE path keeps running.
+     * on flush (seek) and on LFE enable, not on a preamp-only rebuild while
+     * the LFE path keeps running.
      */
     private fun rebuildCoefs(resetLfeState: Boolean) {
-        val ltRt = surroundEncode
         val pre = preampDb
         val lfeOn = lfeLowpassEnabled
-        val rows = (if (ltRt) LT_RT_TABLES else LO_RO_TABLES).getValue(inputFormat.channelCount)
+        val rows = COEF_TABLES.getValue(inputFormat.channelCount)
         val gain = 10f.pow(pre / 20f)
         coefL = FloatArray(rows.first.size) { rows.first[it] * gain }
         coefR = FloatArray(rows.second.size) { rows.second[it] * gain }
@@ -173,7 +151,6 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             coefL[lfeIndex] = 0f
             coefR[lfeIndex] = 0f
         }
-        appliedLtRt = ltRt
         appliedPreampDb = pre
         appliedLfe = lfeOn
     }
@@ -211,13 +188,10 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         val numFrames = inputBuffer.remaining() / frameSize
         if (numFrames <= 0) return
 
-        // On-the-fly settings: matrix / preamp / LFE changes apply at the
-        // next buffer boundary instead of waiting for a reconfigure, so
-        // A/B-ing from the Atmos page is instant.
-        if (surroundEncode != appliedLtRt ||
-            preampDb != appliedPreampDb ||
-            lfeLowpassEnabled != appliedLfe
-        ) {
+        // On-the-fly settings: preamp / LFE changes apply at the next buffer
+        // boundary instead of waiting for a reconfigure, so A/B-ing from the
+        // Atmos page is instant.
+        if (preampDb != appliedPreampDb || lfeLowpassEnabled != appliedLfe) {
             rebuildCoefs(resetLfeState = false)
         }
 
@@ -326,11 +300,7 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         /** LFE contribution to BOTH sides of the fold (~+7.1 dB). */
         private const val LFE_COEF = 2.26464431f
 
-        // Pro Logic II passive-encode surround gains: own side / cross-feed.
-        private const val LTRT_SURR_MAIN = 0.8165f
-        private const val LTRT_SURR_CROSS = 0.5774f
-
-        /** Position class of one input channel; both matrices derive from it. */
+        /** Position class of one input channel; the matrix derives from it. */
         private enum class Kind { L_FRONT, R_FRONT, CENTER, LFE_CH, L_SURR, R_SURR, C_SURR }
 
         // Channel classes per input count. Assumed orders (FLAC / FFmpeg /
@@ -368,35 +338,20 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         )
 
         // Verbatim (un-normalized) [L,R] gains for one channel class.
-        private fun loRo(k: Kind): Pair<Float, Float> = when (k) {
+        private fun gains(k: Kind): Pair<Float, Float> = when (k) {
             Kind.L_FRONT, Kind.L_SURR -> 1f to 0f
             Kind.R_FRONT, Kind.R_SURR -> 0f to 1f
             Kind.CENTER, Kind.C_SURR -> CENTER_COEF to CENTER_COEF
             Kind.LFE_CH -> LFE_COEF to LFE_COEF
         }
 
-        private fun ltRt(k: Kind): Pair<Float, Float> = when (k) {
-            Kind.L_FRONT -> 1f to 0f
-            Kind.R_FRONT -> 0f to 1f
-            Kind.CENTER -> CENTER_COEF to CENTER_COEF
-            Kind.LFE_CH -> LFE_COEF to LFE_COEF
-            Kind.L_SURR -> -LTRT_SURR_MAIN to LTRT_SURR_CROSS
-            Kind.R_SURR -> -LTRT_SURR_CROSS to LTRT_SURR_MAIN
-            Kind.C_SURR -> -CENTER_COEF to CENTER_COEF
-        }
-
-        private fun buildTables(
-            gains: (Kind) -> Pair<Float, Float>,
-        ): Map<Int, Pair<FloatArray, FloatArray>> = KIND_TABLES.mapValues { (_, kinds) ->
-            Pair(
-                FloatArray(kinds.size) { gains(kinds[it]).first },
-                FloatArray(kinds.size) { gains(kinds[it]).second },
-            )
-        }
-
-        // Both matrices computed once at class load; the audio thread only
-        // indexes into the selected pair.
-        private val LO_RO_TABLES = buildTables(::loRo)
-        private val LT_RT_TABLES = buildTables(::ltRt)
+        // Computed once at class load; the audio thread only indexes.
+        private val COEF_TABLES: Map<Int, Pair<FloatArray, FloatArray>> =
+            KIND_TABLES.mapValues { (_, kinds) ->
+                Pair(
+                    FloatArray(kinds.size) { gains(kinds[it]).first },
+                    FloatArray(kinds.size) { gains(kinds[it]).second },
+                )
+            }
     }
 }

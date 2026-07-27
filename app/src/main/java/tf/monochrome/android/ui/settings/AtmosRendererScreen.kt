@@ -82,7 +82,6 @@ import tf.monochrome.android.domain.model.DrcMode
 import tf.monochrome.android.domain.model.RendererMode
 import tf.monochrome.android.domain.model.RendererProfile
 import tf.monochrome.android.domain.model.SpeakerChannel
-import tf.monochrome.android.domain.model.StereoDownmixMode
 import tf.monochrome.android.domain.model.speakers
 import javax.inject.Inject
 import kotlin.math.cos
@@ -421,25 +420,10 @@ fun AtmosRendererScreen(
             )
             Spacer(Modifier.height(20.dp))
 
-            // ── Downmix matrix ─────────────────────────────────────────────
-            // Binaural is NOT a downmix choice: whether the render is binaural
-            // is derived from the HRTF mode below (an active HRTF = binaural).
-            // These chips pick only the matrix that folds the mix when the
-            // HRTF is off.
-            SectionHeader("Downmix Matrix")
-            ChoiceChips(
-                options = listOf(StereoDownmixMode.LO_RO, StereoDownmixMode.LT_RT),
-                selected = profile.stereoDownmix.asMatrix,
-                label = { it.displayName },
-                onSelect = { viewModel.update(profile.copy(stereoDownmix = it)) },
-            )
-            Text(
-                profile.stereoDownmix.asMatrix.description +
-                    " Used when the HRTF is off — an active HRTF renders binaurally instead.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(20.dp))
+            // There is deliberately NO downmix-matrix choice here: the fold is
+            // the one fixed matrix (per the peqdb Downmix Renderer spec), and
+            // whether the render is binaural instead is derived from the HRTF
+            // mode below (an active HRTF = binaural, HRTF off = the matrix).
 
             // ── Binaural / headphones ──────────────────────────────────────
             SectionHeader("Binaural (Headphones)")
@@ -479,7 +463,7 @@ fun AtmosRendererScreen(
             )
             when {
                 !profile.hrtfEnabled -> Text(
-                    "HRTF off — the selected downmix matrix folds the mix to " +
+                    "HRTF off — the fixed downmix matrix folds the mix to " +
                         "stereo and headphone correction comes from the built-in " +
                         "AutoEQ alone.",
                     style = MaterialTheme.typography.bodySmall,

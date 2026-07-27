@@ -98,19 +98,19 @@ class AtmosAudioProcessor @Inject constructor(
         }
         // The downmix pushed to native is DERIVED from the HRTF mode, never
         // picked directly: an active HRTF (built-in or SOFA) means the
-        // binaural render runs; HRTF off means the profile's matrix choice
-        // (Lo/Ro or Lt/Rt) runs — the pipeline declines the frame (process()
-        // returns -1) and the plain fixed-matrix fold-down handles it, with
-        // headphone shaping left entirely to the built-in AutoEQ chain.
-        // Strength 0 alone is NOT a plain fold — the native dry path is an
-        // ITD-only render that still places objects with per-ear arrival-time
-        // delays — hence the hard demotion. Legacy profiles that stored
-        // BINAURAL as the downmix map to Lo/Ro.
+        // binaural render runs; HRTF off means the ONE fixed fold matrix
+        // runs (per the peqdb Downmix Renderer spec — there is no matrix
+        // choice) — the pipeline declines the frame (process() returns -1)
+        // and the fixed-matrix fold-down handles it, with headphone shaping
+        // left entirely to the built-in AutoEQ chain. Strength 0 alone is
+        // NOT a plain fold — the native dry path is an ITD-only render that
+        // still places objects with per-ear arrival-time delays — hence the
+        // hard demotion.
         val strength = if (cur.hrtfEnabled) cur.binauralStrength else 0f
         val downmix = if (cur.hrtfEnabled) {
             StereoDownmixMode.BINAURAL
         } else {
-            cur.stereoDownmix.asMatrix
+            StereoDownmixMode.LO_RO
         }
         AtmosNative.nativeSetRenderParams(
             p,
@@ -377,22 +377,14 @@ class AtmosAudioProcessor @Inject constructor(
     }
 
     // Fold-down for frames the pipeline declines (no JOC / HRTF off /
-    // passthrough), honouring the profile's downmix matrix. Channel order
-    // follows the decoder's (FL FR FC LFE SL SR BL BR).
-    //
-    // Lo/Ro (fixed matrix, matches native AtmosPipeline::render_downmix):
-    // sides/backs hard-panned at unity, FC at 0.70710678 to both, LFE at
-    // 2.26464431 to both.
-    //
-    // Lt/Rt (surround renderer): Pro Logic II-style passive encode — the
-    // surround pair goes in anti-phase with cross-feed (own side −0.8165,
-    // opposite −0.5774 into Lt; mirrored positive into Rt) so a Pro Logic
-    // decoder can re-expand the fold back to surround. FC/LFE as in Lo/Ro.
+    // passthrough): the ONE fixed matrix (matches native
+    // AtmosPipeline::render_downmix and the peqdb Downmix Renderer's ADC2
+    // direct matrix) — sides/backs hard-panned at unity, FC at 0.70710678 to
+    // both, LFE at 2.26464431 to both. Channel order follows the decoder's
+    // (FL FR FC LFE SL SR BL BR).
     private fun downmixToStereo(frame: FloatArray, channels: Int) {
         val c = channels
         val cur = profile
-        val ltRt = cur.stereoDownmix.asMatrix ==
-            tf.monochrome.android.domain.model.StereoDownmixMode.LT_RT
         // Downmix preamp (--master-gain-db equivalent): one linear gain on
         // the fold output, computed once per 1536-sample frame.
         val preamp = Math.pow(10.0, cur.downmixPreampDb / 20.0).toFloat()
@@ -415,15 +407,8 @@ class AtmosAudioProcessor @Inject constructor(
                     sl += frame[b + 6]
                     sr += frame[b + 7]
                 }
-                var l: Float
-                var r: Float
-                if (ltRt) {
-                    l = frame[b] + fc - 0.8165f * sl - 0.5774f * sr
-                    r = frame[b + 1] + fc + 0.5774f * sl + 0.8165f * sr
-                } else {
-                    l = frame[b] + fc + sl
-                    r = frame[b + 1] + fc + sr
-                }
+                var l = frame[b] + fc + sl
+                var r = frame[b + 1] + fc + sr
                 if (lfeLp) {
                     val f = 2.26464431f * lfeFold.filterLfe(lfeIn)
                     l = lfeFold.delayDryL(l) + f

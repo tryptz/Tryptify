@@ -71,28 +71,19 @@ enum class ChannelLayout(val channelCount: Int, val label: String) {
 }
 
 /**
- * How the renderer folds a multichannel / object mix down to two channels when
- * the output is stereo (headphones or a 2.0 DAC).
- *
- * The user-facing choice is the MATRIX only (Lo/Ro or Lt/Rt) — binaural is not
- * a downmix the user picks. Whether the render is binaural is derived from the
- * HRTF mode: an active HRTF (built-in or SOFA) means the binauralizer runs;
- * HRTF off means the selected matrix fold runs. [BINAURAL] stays as the first
- * entry because the ordinals cross JNI (0 binaural, 1 Lo/Ro, 2 Lt/Rt) and as a
- * legacy stored value in old profiles (treated as [LO_RO]).
+ * Stereo downmix modes as the NATIVE pipeline understands them — the ordinals
+ * cross JNI (0 binaural, 1 Lo/Ro, 2 Lt/Rt). This is NOT a user choice: there
+ * is exactly one fold matrix (the fixed matrix, per the peqdb Downmix
+ * Renderer spec), and whether the render is binaural instead is derived from
+ * the HRTF mode — an active HRTF (built-in or SOFA) pushes [BINAURAL], HRTF
+ * off pushes [LO_RO]. [LT_RT] exists only to keep the JNI ordinals aligned;
+ * nothing selects it. The profile field remains for stored-blob
+ * compatibility; whatever old value it holds, the derivation above wins.
  */
 enum class StereoDownmixMode(val displayName: String, val description: String) {
-    /** Derived, not user-selectable: pushed to native when an HRTF is active. */
     BINAURAL("Binaural", "Spatialize objects to headphone stereo via HRTF"),
-
-    /** Plain stereo fold-down (Lo/Ro) — the fixed matrix, no surround encoding. */
-    LO_RO("Stereo (Lo/Ro)", "Fixed-matrix stereo fold-down, no surround encoding"),
-
-    /** Matrix-encoded (Lt/Rt) so a Pro Logic decoder can re-expand to surround. */
-    LT_RT("Surround (Lt/Rt)", "Matrix-encoded for Pro Logic re-expansion");
-
-    /** The matrix this value stands for once legacy BINAURAL is mapped away. */
-    val asMatrix: StereoDownmixMode get() = if (this == BINAURAL) LO_RO else this
+    LO_RO("Stereo (Lo/Ro)", "Fixed-matrix stereo fold-down"),
+    LT_RT("Surround (Lt/Rt)", "Unused — kept for native ordinal alignment");
 
     companion object {
         val DEFAULT = LO_RO
