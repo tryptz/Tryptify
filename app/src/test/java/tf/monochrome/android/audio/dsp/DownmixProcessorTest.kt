@@ -399,16 +399,33 @@ class DownmixProcessorTest {
     }
 
     @Test
-    fun `matrix switch applies on next flush, not mid-stream`() {
+    fun `matrix and preamp changes apply on the fly at the next buffer`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        p.setSurroundEncode(true)
-        // Still Lo/Ro until a flush picks the new tables up.
         val before = drainFloats(p, floatBuffer(soloFrame(6, 4)))
         assertEquals(1f, before[0], floatTol)
-        p.flush()
-        val after = drainFloats(p, floatBuffer(soloFrame(6, 4)))
-        assertEquals(-0.8165f, after[0], floatTol)
+        // No flush: the very next buffer must use the new settings.
+        p.setSurroundEncode(true)
+        val ltRt = drainFloats(p, floatBuffer(soloFrame(6, 4)))
+        assertEquals(-0.8165f, ltRt[0], floatTol)
+        p.setPreampDb(-20f)
+        val trimmed = drainFloats(p, floatBuffer(soloFrame(6, 4)))
+        assertEquals(-0.08165f, trimmed[0], floatTol)
+    }
+
+    @Test
+    fun `lfe lowpass toggles on the fly mid-stream`() {
+        val p = processor()
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        // Dry direct first.
+        val dry = drainFloats(p, floatBuffer(soloFrame(6, 3, 0.5f)))
+        assertEquals(1.13232f, dry[0], floatTol)
+        // Enable mid-stream: DC LFE settles to the same matrix gain through
+        // the filter, no flush in between.
+        p.setLfeLowpass(true)
+        val frames = Array(8000) { floatArrayOf(0f, 0f, 0f, 0.5f, 0f, 0f) }
+        val out = drainFloats(p, floatBuffer(*frames))
+        assertEquals(1.13232f, out[out.size - 2], 1e-3f)
     }
 
     // ── 16-channel (9.1.6-style) layout ──────────────────────────────────

@@ -94,9 +94,8 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
 
     /**
      * Matrix choice: false = Lo/Ro fixed matrix (default), true = Lt/Rt
-     * surround encode. Follows the Atmos page's Downmix Matrix chips; applied
-     * in flush(), so it takes effect on the next reconfigure/seek like
-     * [setEnabled].
+     * surround encode. Follows the Atmos page's Downmix Matrix chips; applies
+     * on the fly at the next buffer boundary.
      */
     @Volatile
     private var surroundEncode: Boolean = false
@@ -106,10 +105,10 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
     }
 
     /**
-     * Master trim (dB) baked into the coefficient rows at flush time — the
-     * preamp that pulls the hot verbatim matrix below clipping (equivalent
-     * of the peqdb Downmix Renderer's --master-gain-db). Applied on the next
-     * reconfigure/seek like the other toggles; costs nothing per sample.
+     * Master trim (dB) baked into the coefficient rows — the preamp that
+     * pulls the hot verbatim matrix below clipping (equivalent of the peqdb
+     * Downmix Renderer's --master-gain-db). Applies on the fly at the next
+     * buffer boundary; costs nothing per sample.
      */
     @Volatile
     private var preampDb: Float = 0f
@@ -121,8 +120,8 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
     /**
      * Optional LFE path (the peqdb renderer's --lfe-filter-mode): Butterworth
      * 4th-order 125 Hz low-pass on the LFE feed, dry path delay-matched
-     * before summing. Latched in flush() like the matrix choice. Adds the
-     * filter's group delay (~3.3 ms) of output latency while enabled.
+     * before summing. Applies on the fly at the next buffer boundary. Adds
+     * the filter's group delay (~3.3 ms) of output latency while enabled.
      */
     @Volatile
     private var lfeLowpassEnabled: Boolean = false
@@ -131,12 +130,53 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         lfeLowpassEnabled = e
     }
 
-    // LFE-path state, valid while lfeActive (flush()-latched).
+    // LFE-path state, valid while lfeActive.
     private val lfeFilter = LfeLowPassFilter()
     private var lfeActive = false
     private var lfeIndex = -1
     private var lfeGainL = 0f
     private var lfeGainR = 0f
+
+    // Snapshot of the settings the current coefficient rows were built from.
+    // queueInput() compares against the volatiles at each buffer boundary and
+    // rebuilds on the fly when the user changes matrix / preamp / LFE mode —
+    // no reconfigure or seek needed (a small step discontinuity at the buffer
+    // edge is the accepted cost of instant A/B). Only the enable toggle still
+    // waits for a reconfigure, because it changes the output format itself.
+    private var appliedLtRt = false
+    private var appliedPreampDb = Float.NaN
+    private var appliedLfe = false
+
+    /**
+     * (Re)build the active coefficient rows from the current settings for
+     * [inputFormat]. `resetLfeState` clears the filter/delay history — wanted
+     * on flush (seek) and on LFE enable, not on a preamp/matrix-only rebuild
+     * while the LFE path keeps running.
+     */
+    private fun rebuildCoefs(resetLfeState: Boolean) {
+        val ltRt = surroundEncode
+        val pre = preampDb
+        val lfeOn = lfeLowpassEnabled
+        val rows = (if (ltRt) LT_RT_TABLES else LO_RO_TABLES).getValue(inputFormat.channelCount)
+        val gain = 10f.pow(pre / 20f)
+        coefL = FloatArray(rows.first.size) { rows.first[it] * gain }
+        coefR = FloatArray(rows.second.size) { rows.second[it] * gain }
+        lfeIndex = KIND_TABLES.getValue(inputFormat.channelCount).indexOf(Kind.LFE_CH)
+        val nowActive = lfeOn && lfeIndex >= 0
+        if (nowActive && (resetLfeState || !lfeActive)) {
+            lfeFilter.configure(inputFormat.sampleRate)
+        }
+        lfeActive = nowActive
+        if (lfeActive) {
+            lfeGainL = coefL[lfeIndex]
+            lfeGainR = coefR[lfeIndex]
+            coefL[lfeIndex] = 0f
+            coefR[lfeIndex] = 0f
+        }
+        appliedLtRt = ltRt
+        appliedPreampDb = pre
+        appliedLfe = lfeOn
+    }
 
     // ── AudioProcessor implementation ────────────────────────────────────
 
@@ -170,6 +210,16 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         val frameSize = bytesPerSample * channels
         val numFrames = inputBuffer.remaining() / frameSize
         if (numFrames <= 0) return
+
+        // On-the-fly settings: matrix / preamp / LFE changes apply at the
+        // next buffer boundary instead of waiting for a reconfigure, so
+        // A/B-ing from the Atmos page is instant.
+        if (surroundEncode != appliedLtRt ||
+            preampDb != appliedPreampDb ||
+            lfeLowpassEnabled != appliedLfe
+        ) {
+            rebuildCoefs(resetLfeState = false)
+        }
 
         val outFrameSize = bytesPerSample * 2
         val outBytes = numFrames * outFrameSize
@@ -250,27 +300,9 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         // configure — the active format must survive.
         inputFormat = pendingFormat
         if (inputFormat != AudioFormat.NOT_SET) {
-            val tables = if (surroundEncode) LT_RT_TABLES else LO_RO_TABLES
-            val rows = tables.getValue(inputFormat.channelCount)
-            // Copy before scaling — the table arrays are shared class-level
-            // constants and must never be mutated.
-            val gain = 10f.pow(preampDb / 20f)
-            coefL = FloatArray(rows.first.size) { rows.first[it] * gain }
-            coefR = FloatArray(rows.second.size) { rows.second[it] * gain }
-            // LFE low-pass path: pull the LFE out of the matrix rows and run
-            // it through the filter instead; the dry fold goes through the
-            // matching delay. Latched here so the hot loop never re-checks
-            // the setting mid-stream.
-            val kinds = KIND_TABLES.getValue(inputFormat.channelCount)
-            lfeIndex = kinds.indexOf(Kind.LFE_CH)
-            lfeActive = lfeLowpassEnabled && lfeIndex >= 0
-            if (lfeActive) {
-                lfeGainL = coefL[lfeIndex]
-                lfeGainR = coefR[lfeIndex]
-                coefL[lfeIndex] = 0f
-                coefR[lfeIndex] = 0f
-                lfeFilter.configure(inputFormat.sampleRate)
-            }
+            // Seek/reconfigure: rebuild rows and clear LFE history so no
+            // pre-seek audio leaks out of the filter or the dry delay.
+            rebuildCoefs(resetLfeState = true)
         }
     }
 
