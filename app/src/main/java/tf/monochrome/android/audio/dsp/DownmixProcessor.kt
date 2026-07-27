@@ -9,6 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.pow
 
 /**
  * Multichannel → stereo downmix renderer. Sits FIRST in the AudioProcessor
@@ -102,6 +103,19 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
 
     fun setSurroundEncode(e: Boolean) {
         surroundEncode = e
+    }
+
+    /**
+     * Master trim (dB) baked into the coefficient rows at flush time — the
+     * preamp that pulls the hot verbatim matrix below clipping (equivalent
+     * of the peqdb Downmix Renderer's --master-gain-db). Applied on the next
+     * reconfigure/seek like the other toggles; costs nothing per sample.
+     */
+    @Volatile
+    private var preampDb: Float = 0f
+
+    fun setPreampDb(db: Float) {
+        preampDb = db
     }
 
     // ── AudioProcessor implementation ────────────────────────────────────
@@ -202,8 +216,11 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         if (inputFormat != AudioFormat.NOT_SET) {
             val tables = if (surroundEncode) LT_RT_TABLES else LO_RO_TABLES
             val rows = tables.getValue(inputFormat.channelCount)
-            coefL = rows.first
-            coefR = rows.second
+            // Copy before scaling — the table arrays are shared class-level
+            // constants and must never be mutated.
+            val gain = 10f.pow(preampDb / 20f)
+            coefL = FloatArray(rows.first.size) { rows.first[it] * gain }
+            coefR = FloatArray(rows.second.size) { rows.second[it] * gain }
         }
     }
 

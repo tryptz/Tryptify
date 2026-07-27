@@ -136,6 +136,13 @@ data class RendererProfile(
     /** Fold-down used when the effective output is stereo. */
     val stereoDownmix: StereoDownmixMode = StereoDownmixMode.DEFAULT,
     /**
+     * Master trim (dB) applied inside the stereo fold-down — the equivalent
+     * of the peqdb Downmix Renderer's --master-gain-db preamp. The verbatim
+     * matrix runs hot (a full-scale 5.1 frame sums to ~+14 dBFS), so this is
+     * the knob to pull the fold below clipping. 0 = unity.
+     */
+    val downmixPreampDb: Float = 0f,
+    /**
      * Master switch for the HRTF binauralizer. Off = the binaural render runs
      * fully dry (plain stereo fold-down, no head-related colouration), so the
      * only headphone shaping left in the chain is the app's own built-in
@@ -166,6 +173,7 @@ data class RendererProfile(
             binauralStrength = binauralStrength.c(0f, 1f, 1f),
             crossoverHz = crossoverHz.coerceIn(40, 200),
             lfeGainDb = lfeGainDb.c(-10f, 10f, 0f),
+            downmixPreampDb = downmixPreampDb.c(-24f, 6f, 0f),
         )
     }
 

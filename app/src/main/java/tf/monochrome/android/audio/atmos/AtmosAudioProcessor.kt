@@ -384,8 +384,12 @@ class AtmosAudioProcessor @Inject constructor(
     // decoder can re-expand the fold back to surround. FC/LFE as in Lo/Ro.
     private fun downmixToStereo(frame: FloatArray, channels: Int) {
         val c = channels
-        val ltRt = profile.stereoDownmix.asMatrix ==
+        val cur = profile
+        val ltRt = cur.stereoDownmix.asMatrix ==
             tf.monochrome.android.domain.model.StereoDownmixMode.LT_RT
+        // Downmix preamp (--master-gain-db equivalent): one linear gain on
+        // the fold output, computed once per 1536-sample frame.
+        val preamp = Math.pow(10.0, cur.downmixPreampDb / 20.0).toFloat()
         for (i in 0 until FRAME_SAMPLES) {
             val b = i * c
             if (c >= 6) {
@@ -406,11 +410,11 @@ class AtmosAudioProcessor @Inject constructor(
                     l = frame[b] + mid + sl
                     r = frame[b + 1] + mid + sr
                 }
-                stereo[2 * i] = l
-                stereo[2 * i + 1] = r
+                stereo[2 * i] = l * preamp
+                stereo[2 * i + 1] = r * preamp
             } else {
-                stereo[2 * i] = frame[b]
-                stereo[2 * i + 1] = if (c > 1) frame[b + 1] else frame[b]
+                stereo[2 * i] = frame[b] * preamp
+                stereo[2 * i + 1] = (if (c > 1) frame[b + 1] else frame[b]) * preamp
             }
         }
     }

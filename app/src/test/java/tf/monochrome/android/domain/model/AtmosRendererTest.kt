@@ -137,7 +137,9 @@ class AtmosRendererTest {
             binauralStrength = 5f,
             crossoverHz = 5000,
             lfeGainDb = -99f,
+            downmixPreampDb = 40f,
         ).clamped()
+        assertEquals(6f, wild.downmixPreampDb, 1e-6f)
         assertEquals(1f, wild.binauralStrength, 1e-6f)
         assertEquals(200, wild.crossoverHz)
         assertEquals(-10f, wild.lfeGainDb, 1e-6f)

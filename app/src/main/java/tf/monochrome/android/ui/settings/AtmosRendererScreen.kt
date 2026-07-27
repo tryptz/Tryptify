@@ -401,6 +401,17 @@ fun AtmosRendererScreen(
                 checked = downmixEnabled,
                 onCheckedChange = { viewModel.setMultichannelDownmix(it) },
             )
+            // Master trim inside the fold (the peqdb Downmix Renderer's
+            // --master-gain-db): the verbatim matrix runs hot, this pulls it
+            // below clipping. Applies to both matrices and the Atmos fallback.
+            LabeledSlider(
+                title = "Downmix preamp",
+                valueText = "%+.1f dB".format(profile.downmixPreampDb),
+                value = profile.downmixPreampDb,
+                range = -24f..6f,
+                enabled = downmixEnabled,
+                onValueChange = { viewModel.update(profile.copy(downmixPreampDb = it)) },
+            )
             Spacer(Modifier.height(20.dp))
 
             // ── Downmix matrix ─────────────────────────────────────────────

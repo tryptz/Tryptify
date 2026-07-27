@@ -292,6 +292,7 @@ class PlaybackService : MediaSessionService() {
                     profile.stereoDownmix.asMatrix ==
                         tf.monochrome.android.domain.model.StereoDownmixMode.LT_RT
                 )
+                downmixProcessor.setPreampDb(profile.downmixPreampDb)
             }
         }
 

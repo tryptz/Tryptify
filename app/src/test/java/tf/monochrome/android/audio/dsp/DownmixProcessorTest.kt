@@ -348,6 +348,16 @@ class DownmixProcessorTest {
     }
 
     @Test
+    fun `preamp scales the fold by its linear gain`() {
+        val p = processor().apply { setPreampDb(-20f) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        val fl = drainFloats(p, floatBuffer(soloFrame(6, 0)))
+        assertEquals(0.1f, fl[0], floatTol) // 1.0 × 10^(−20/20)
+        val lfe = drainFloats(p, floatBuffer(soloFrame(6, 3)))
+        assertEquals(0.22646f, lfe[0], floatTol)
+    }
+
+    @Test
     fun `matrix switch applies on next flush, not mid-stream`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
