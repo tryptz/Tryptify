@@ -117,7 +117,10 @@ class AtmosRendererTest {
     fun `default profile uses typical safe renderer settings`() {
         val p = RendererProfile.DEFAULT
         assertTrue(p.autoDetectLayout)
-        assertEquals(StereoDownmixMode.BINAURAL, p.stereoDownmix)
+        // Not user-facing: the fold is the one fixed matrix, and binaural is
+        // derived from the HRTF mode. The field exists for the native ordinal
+        // and stored-blob compatibility only.
+        assertEquals(StereoDownmixMode.LO_RO, p.stereoDownmix)
         assertEquals(1.0f, p.binauralStrength, 1e-6f)
         assertTrue(p.heightVirtualization)
         assertTrue(p.bassManagement)
@@ -133,7 +136,9 @@ class AtmosRendererTest {
             binauralStrength = 5f,
             crossoverHz = 5000,
             lfeGainDb = -99f,
+            downmixPreampDb = 40f,
         ).clamped()
+        assertEquals(6f, wild.downmixPreampDb, 1e-6f)
         assertEquals(1f, wild.binauralStrength, 1e-6f)
         assertEquals(200, wild.crossoverHz)
         assertEquals(-10f, wild.lfeGainDb, 1e-6f)

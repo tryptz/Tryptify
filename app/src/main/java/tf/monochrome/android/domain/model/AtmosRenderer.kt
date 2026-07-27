@@ -71,21 +71,22 @@ enum class ChannelLayout(val channelCount: Int, val label: String) {
 }
 
 /**
- * How the renderer folds a multichannel / object mix down to two channels when
- * the output is stereo (headphones or a 2.0 DAC).
+ * Stereo downmix modes as the NATIVE pipeline understands them — the ordinals
+ * cross JNI (0 binaural, 1 Lo/Ro, 2 Lt/Rt). This is NOT a user choice: there
+ * is exactly one fold matrix (the fixed matrix, per the peqdb Downmix
+ * Renderer spec), and whether the render is binaural instead is derived from
+ * the HRTF mode — an active HRTF (built-in or SOFA) pushes [BINAURAL], HRTF
+ * off pushes [LO_RO]. [LT_RT] exists only to keep the JNI ordinals aligned;
+ * nothing selects it. The profile field remains for stored-blob
+ * compatibility; whatever old value it holds, the derivation above wins.
  */
 enum class StereoDownmixMode(val displayName: String, val description: String) {
-    /** Spatialize objects to headphone stereo through the HRTF binauralizer. */
     BINAURAL("Binaural", "Spatialize objects to headphone stereo via HRTF"),
-
-    /** Plain ITU stereo fold-down (Lo/Ro) — no surround matrix encoding. */
-    LO_RO("Stereo (Lo/Ro)", "Standard stereo fold-down, no surround encoding"),
-
-    /** Matrix-encoded (Lt/Rt) so a Pro Logic decoder can re-expand to surround. */
-    LT_RT("Surround (Lt/Rt)", "Matrix-encoded for Pro Logic re-expansion");
+    LO_RO("Stereo (Lo/Ro)", "Fixed-matrix stereo fold-down"),
+    LT_RT("Surround (Lt/Rt)", "Unused — kept for native ordinal alignment");
 
     companion object {
-        val DEFAULT = BINAURAL
+        val DEFAULT = LO_RO
     }
 }
 
@@ -126,12 +127,26 @@ data class RendererProfile(
     /** Fold-down used when the effective output is stereo. */
     val stereoDownmix: StereoDownmixMode = StereoDownmixMode.DEFAULT,
     /**
-     * Master switch for the HRTF binauralizer. Off = the binaural render runs
-     * fully dry (plain stereo fold-down, no head-related colouration), so the
-     * only headphone shaping left in the chain is the app's own built-in
-     * AutoEQ correction.
+     * Master trim (dB) applied inside the stereo fold-down — the equivalent
+     * of the peqdb Downmix Renderer's --master-gain-db preamp. The verbatim
+     * matrix runs hot (a full-scale 5.1 frame sums to ~+14 dBFS), so this is
+     * the knob to pull the fold below clipping. 0 = unity.
      */
-    val hrtfEnabled: Boolean = true,
+    val downmixPreampDb: Float = 0f,
+    /**
+     * Optional LFE path in the fold (the peqdb renderer's --lfe-filter-mode):
+     * Butterworth 4th-order 125 Hz low-pass on the LFE feed, dry path
+     * delay-matched before summing. false = dry direct LFE (their default).
+     */
+    val lfeLowpass: Boolean = false,
+    /**
+     * The ONE spatial option: off (default) = every Atmos track goes through
+     * the coefficient downmix renderer (fixed matrix + preamp + LFE filter);
+     * on = objects are binauralized through the HRTF (built-in KEMAR or a
+     * SOFA). The UI keeps [mode] in lockstep: PASSTHROUGH when off,
+     * OBJECT_RENDER when on.
+     */
+    val hrtfEnabled: Boolean = false,
     /** HRTF/AutoEQ measurement id for the binaural back-end; null = built-in set. */
     val hrtfProfileId: String? = null,
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */
@@ -156,6 +171,7 @@ data class RendererProfile(
             binauralStrength = binauralStrength.c(0f, 1f, 1f),
             crossoverHz = crossoverHz.coerceIn(40, 200),
             lfeGainDb = lfeGainDb.c(-10f, 10f, 0f),
+            downmixPreampDb = downmixPreampDb.c(-24f, 6f, 0f),
         )
     }
 

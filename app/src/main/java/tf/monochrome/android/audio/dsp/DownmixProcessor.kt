@@ -9,32 +9,38 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.pow
 
 /**
  * Multichannel → stereo downmix renderer. Sits FIRST in the AudioProcessor
  * chain so everything downstream (MixBusProcessor → native stereo engine,
  * AutoEQ, Parametric EQ, USB DAC negotiation) keeps its 1/2-channel world
- * view while 3.0–7.1 sources still play.
+ * view while 3.0–16-channel sources still play.
  *
- * Fold-down follows ITU-R BS.775 Lo/Ro (a plain stereo fold, no Lt/Rt
- * matrix-surround encode, no HRTF/virtualization):
+ * One fixed per-channel gain matrix — the peqdb Downmix Renderer's ADC2
+ * direct matrix, no HRTF/virtualization, and deliberately no alternative
+ * matrix options:
  *
- *   Lo = FL + 0.7071·C + 0.7071·SL      Ro = FR + 0.7071·C + 0.7071·SR
+ *   FL/BL/BLC/SL/TFL/TSL/TBL → [1, 0]      (hard left)
+ *   FR/BR/BRC/SR/TFR/TSR/TBR → [0, 1]      (hard right)
+ *   FC (and BC in 6.1)       → [0.70710678, 0.70710678]
+ *   LFE                      → [2.26464431, 2.26464431]
  *
- * with the LFE discarded ([LFE_COEF] = 0) per the BS.775 / AC-3 default —
- * it carries no unique program content and folding it in risks bass
- * overload. Each output row is then normalized so its coefficients sum to
- * 1.0. That costs ~7.7 dB of level on 5.1 versus unity-FL ITU rows, but it
- * is clip-proof by construction and preserves relative imaging — the
- * alternative (unity FL + clamp) audibly pumps on hot masters and can't be
- * repaired downstream because the inter-processor format is PCM16.
+ * The rows are used verbatim — no re-normalization — so absolute channel
+ * levels are preserved exactly as specified. That means a hot multichannel
+ * master CAN exceed full scale after the fold (a full-scale 5.1 frame sums
+ * to ~4.97 on each side): the PCM16 path clamps at the rails, and the float
+ * path relies on downstream headroom.
  *
  * Channel-order assumption: FLAC spec order, FFmpeg native order, and
  * Android's canonical CHANNEL_OUT_* order all agree for 3–8 channels
  * (6 ch = FL FR FC LFE BL BR), so a single per-channel-count table is used.
- * Media3's AudioFormat carries no layout, only a count; sources with an
- * exotic layout at the same count would fold with wrong positions (imaging
- * off), never crash.
+ * 16-channel sources are assumed to be 9.1.6, laid out as
+ * FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR. Counts 9–15
+ * have no well-known layout and pass through untouched. Media3's
+ * AudioFormat carries no layout, only a count; sources with an exotic
+ * layout at the same count would fold with wrong positions (imaging off),
+ * never crash.
  *
  * Mono/stereo input leaves the processor inactive (configure returns
  * [AudioFormat.NOT_SET]) — mono upmix stays MixBusProcessor's job. When
@@ -78,6 +84,77 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         enabled = e
     }
 
+    /**
+     * Master trim (dB) baked into the coefficient rows — the preamp that
+     * pulls the hot verbatim matrix below clipping (equivalent of the peqdb
+     * Downmix Renderer's --master-gain-db). Applies on the fly at the next
+     * buffer boundary; costs nothing per sample.
+     */
+    @Volatile
+    private var preampDb: Float = 0f
+
+    fun setPreampDb(db: Float) {
+        preampDb = db
+    }
+
+    /**
+     * Optional LFE path (the peqdb renderer's --lfe-filter-mode): Butterworth
+     * 4th-order 125 Hz low-pass on the LFE feed, dry path delay-matched
+     * before summing. Applies on the fly at the next buffer boundary. Adds
+     * the filter's group delay (~3.3 ms) of output latency while enabled.
+     */
+    @Volatile
+    private var lfeLowpassEnabled: Boolean = false
+
+    fun setLfeLowpass(e: Boolean) {
+        lfeLowpassEnabled = e
+    }
+
+    // LFE-path state, valid while lfeActive.
+    private val lfeFilter = LfeLowPassFilter()
+    private var lfeActive = false
+    private var lfeIndex = -1
+    private var lfeGainL = 0f
+    private var lfeGainR = 0f
+
+    // Snapshot of the settings the current coefficient rows were built from.
+    // queueInput() compares against the volatiles at each buffer boundary and
+    // rebuilds on the fly when the user changes preamp / LFE mode — no
+    // reconfigure or seek needed (a small step discontinuity at the buffer
+    // edge is the accepted cost of instant A/B). Only the enable toggle still
+    // waits for a reconfigure, because it changes the output format itself.
+    private var appliedPreampDb = Float.NaN
+    private var appliedLfe = false
+
+    /**
+     * (Re)build the active coefficient rows from the current settings for
+     * [inputFormat]. `resetLfeState` clears the filter/delay history — wanted
+     * on flush (seek) and on LFE enable, not on a preamp-only rebuild while
+     * the LFE path keeps running.
+     */
+    private fun rebuildCoefs(resetLfeState: Boolean) {
+        val pre = preampDb
+        val lfeOn = lfeLowpassEnabled
+        val rows = COEF_TABLES.getValue(inputFormat.channelCount)
+        val gain = 10f.pow(pre / 20f)
+        coefL = FloatArray(rows.first.size) { rows.first[it] * gain }
+        coefR = FloatArray(rows.second.size) { rows.second[it] * gain }
+        lfeIndex = KIND_TABLES.getValue(inputFormat.channelCount).indexOf(Kind.LFE_CH)
+        val nowActive = lfeOn && lfeIndex >= 0
+        if (nowActive && (resetLfeState || !lfeActive)) {
+            lfeFilter.configure(inputFormat.sampleRate)
+        }
+        lfeActive = nowActive
+        if (lfeActive) {
+            lfeGainL = coefL[lfeIndex]
+            lfeGainR = coefR[lfeIndex]
+            coefL[lfeIndex] = 0f
+            coefR[lfeIndex] = 0f
+        }
+        appliedPreampDb = pre
+        appliedLfe = lfeOn
+    }
+
     // ── AudioProcessor implementation ────────────────────────────────────
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
@@ -89,7 +166,8 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             inputAudioFormat.channelCount > MAX_INPUT_CHANNELS) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (!enabled || inputAudioFormat.channelCount <= 2) {
+        if (!enabled || inputAudioFormat.channelCount <= 2 ||
+            !KIND_TABLES.containsKey(inputAudioFormat.channelCount)) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
@@ -109,6 +187,13 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         val frameSize = bytesPerSample * channels
         val numFrames = inputBuffer.remaining() / frameSize
         if (numFrames <= 0) return
+
+        // On-the-fly settings: preamp / LFE changes apply at the next buffer
+        // boundary instead of waiting for a reconfigure, so A/B-ing from the
+        // Atmos page is instant.
+        if (preampDb != appliedPreampDb || lfeLowpassEnabled != appliedLfe) {
+            rebuildCoefs(resetLfeState = false)
+        }
 
         val outFrameSize = bytesPerSample * 2
         val outBytes = numFrames * outFrameSize
@@ -134,15 +219,31 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
                     accL += cL[c] * s
                     accR += cR[c] * s
                 }
-                val off = i * 8
-                outputBuffer.putFloat(off, accL)
-                outputBuffer.putFloat(off + 4, accR)
             } else {
                 for (c in 0 until channels) {
                     val s = inputBuffer.getShort(base + c * 2).toFloat() / 32768f
                     accL += cL[c] * s
                     accR += cR[c] * s
                 }
+            }
+            // LFE low-pass path: the matrix rows carry 0 for the LFE while
+            // active, so the fold above is the dry path — delay it and sum
+            // the filtered LFE on top at the matrix gain.
+            if (lfeActive) {
+                val lfeS = if (isFloat) {
+                    inputBuffer.getFloat(base + lfeIndex * 4)
+                } else {
+                    inputBuffer.getShort(base + lfeIndex * 2).toFloat() / 32768f
+                }
+                val f = lfeFilter.filterLfe(lfeS)
+                accL = lfeFilter.delayDryL(accL) + lfeGainL * f
+                accR = lfeFilter.delayDryR(accR) + lfeGainR * f
+            }
+            if (isFloat) {
+                val off = i * 8
+                outputBuffer.putFloat(off, accL)
+                outputBuffer.putFloat(off + 4, accR)
+            } else {
                 val off = i * 4
                 outputBuffer.putShort(off, (accL * 32768f).toInt().coerceIn(-32768, 32767).toShort())
                 outputBuffer.putShort(off + 2, (accR * 32768f).toInt().coerceIn(-32768, 32767).toShort())
@@ -173,9 +274,9 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         // configure — the active format must survive.
         inputFormat = pendingFormat
         if (inputFormat != AudioFormat.NOT_SET) {
-            val rows = COEF_TABLES[inputFormat.channelCount - 3]
-            coefL = rows.first
-            coefR = rows.second
+            // Seek/reconfigure: rebuild rows and clear LFE history so no
+            // pre-seek audio leaks out of the filter or the dry delay.
+            rebuildCoefs(resetLfeState = true)
         }
     }
 
@@ -185,68 +286,71 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         inputFormat = AudioFormat.NOT_SET
         coefL = FloatArray(0)
         coefR = FloatArray(0)
+        lfeActive = false
+        lfeIndex = -1
+        lfeFilter.reset()
     }
 
     companion object {
-        const val MAX_INPUT_CHANNELS = 8
+        const val MAX_INPUT_CHANNELS = 16
 
-        /** −3 dB, the ITU-R BS.775 gain for center and surround channels. */
-        private const val MINUS_3_DB = 0.70710678f
+        /** −3 dB: the FC (and 6.1 BC) contribution to each side. */
+        private const val CENTER_COEF = 0.70710678f
 
-        /**
-         * LFE contribution to the fold. 0 per the BS.775 / AC-3 default;
-         * bump to e.g. 0.5f (−6 dB) if LFE fold-in is ever wanted — rows
-         * are re-normalized automatically.
-         */
-        private const val LFE_COEF = 0f
+        /** LFE contribution to BOTH sides of the fold (~+7.1 dB). */
+        private const val LFE_COEF = 2.26464431f
 
-        // Raw ITU-R BS.775 Lo/Ro L-rows per input channel count (index =
-        // channelCount − 3). R mirrors L↔R (and BC feeds both sides).
-        // Assumed orders (FLAC / FFmpeg / Android canonical, which agree):
-        //   3: FL FR FC
-        //   4: FL FR BL BR            (quad)
-        //   5: FL FR FC BL BR
-        //   6: FL FR FC LFE BL BR     (5.1; 5.1-side folds identically)
-        //   7: FL FR FC LFE BC SL SR  (6.1)
-        //   8: FL FR FC LFE BL BR SL SR (7.1)
-        private val RAW_L_ROWS = arrayOf(
-            floatArrayOf(1f, 0f, MINUS_3_DB),
-            floatArrayOf(1f, 0f, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, LFE_COEF, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, LFE_COEF, MINUS_3_DB, MINUS_3_DB, 0f),
-            floatArrayOf(1f, 0f, MINUS_3_DB, LFE_COEF, MINUS_3_DB, 0f, MINUS_3_DB, 0f),
+        /** Position class of one input channel; the matrix derives from it. */
+        private enum class Kind { L_FRONT, R_FRONT, CENTER, LFE_CH, L_SURR, R_SURR, C_SURR }
+
+        // Channel classes per input count. Assumed orders (FLAC / FFmpeg /
+        // Android canonical, which agree for 3–8):
+        //   3:  FL FR FC
+        //   4:  FL FR BL BR            (quad)
+        //   5:  FL FR FC BL BR
+        //   6:  FL FR FC LFE BL BR     (5.1; 5.1-side folds identically)
+        //   7:  FL FR FC LFE BC SL SR  (6.1)
+        //   8:  FL FR FC LFE BL BR SL SR (7.1)
+        //   16: FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR (9.1.6)
+        // Top-front (TFL/TFR) count as fronts; side/back tops as surrounds.
+        private val KIND_TABLES: Map<Int, Array<Kind>> = mapOf(
+            3 to arrayOf(Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER),
+            4 to arrayOf(Kind.L_FRONT, Kind.R_FRONT, Kind.L_SURR, Kind.R_SURR),
+            5 to arrayOf(Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.L_SURR, Kind.R_SURR),
+            6 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR,
+            ),
+            7 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.C_SURR, Kind.L_SURR, Kind.R_SURR,
+            ),
+            8 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_SURR, Kind.R_SURR,
+            ),
+            16 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_SURR, Kind.R_SURR,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_FRONT, Kind.R_FRONT,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_SURR, Kind.R_SURR,
+            ),
         )
 
-        // Which input channel is the L-side source that maps to the R-side
-        // one at the same "position class", per channel count. Rather than
-        // hand-maintaining mirrored tables, derive the R row by swapping
-        // each stereo pair; center-class channels (FC, LFE, BC) stay put.
-        private val STEREO_PAIRS = arrayOf(
-            arrayOf(0 to 1),                     // 3 ch: FL↔FR
-            arrayOf(0 to 1, 2 to 3),             // 4 ch: FL↔FR, BL↔BR
-            arrayOf(0 to 1, 3 to 4),             // 5 ch: FL↔FR, BL↔BR
-            arrayOf(0 to 1, 4 to 5),             // 6 ch: FL↔FR, BL↔BR
-            arrayOf(0 to 1, 5 to 6),             // 7 ch: FL↔FR, SL↔SR
-            arrayOf(0 to 1, 4 to 5, 6 to 7),     // 8 ch: FL↔FR, BL↔BR, SL↔SR
-        )
+        // Verbatim (un-normalized) [L,R] gains for one channel class.
+        private fun gains(k: Kind): Pair<Float, Float> = when (k) {
+            Kind.L_FRONT, Kind.L_SURR -> 1f to 0f
+            Kind.R_FRONT, Kind.R_SURR -> 0f to 1f
+            Kind.CENTER, Kind.C_SURR -> CENTER_COEF to CENTER_COEF
+            Kind.LFE_CH -> LFE_COEF to LFE_COEF
+        }
 
-        // Normalized (row sum == 1.0 → mathematically clip-proof) L/R rows,
-        // computed once at class load so the audio thread only indexes.
-        private val COEF_TABLES: Array<Pair<FloatArray, FloatArray>> =
-            Array(RAW_L_ROWS.size) { idx ->
-                val l = RAW_L_ROWS[idx]
-                val r = FloatArray(l.size)
-                l.copyInto(r)
-                for ((a, b) in STEREO_PAIRS[idx]) {
-                    r[a] = l[b]
-                    r[b] = l[a]
-                }
-                val sumL = l.sum()
-                val sumR = r.sum()
+        // Computed once at class load; the audio thread only indexes.
+        private val COEF_TABLES: Map<Int, Pair<FloatArray, FloatArray>> =
+            KIND_TABLES.mapValues { (_, kinds) ->
                 Pair(
-                    FloatArray(l.size) { l[it] / sumL },
-                    FloatArray(r.size) { r[it] / sumR },
+                    FloatArray(kinds.size) { gains(kinds[it]).first },
+                    FloatArray(kinds.size) { gains(kinds[it]).second },
                 )
             }
     }

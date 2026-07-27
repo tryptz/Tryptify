@@ -74,6 +74,7 @@ import android.content.Context
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -102,6 +103,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.style.TextOverflow
 import tf.monochrome.android.ui.eq.EqViewModel
 import tf.monochrome.android.ui.eq.EqProfileMiniGraph
@@ -1118,7 +1120,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         SettingsGroupHeader("Spatial Audio")
         SettingItem(
             title = "Atmos Renderer Configuration",
-            subtitle = "Renderer mode, output layout, downmix, bass management & channel map",
+            subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
             onClick = { navController.navigate(Screen.AtmosRenderer.route) },
         )
 
@@ -1130,6 +1132,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
         Spacer(modifier = Modifier.height(8.dp))
         MultichannelDownmixToggle(viewModel)
+
+        Spacer(modifier = Modifier.height(8.dp))
+        ChannelDetectorCard(viewModel)
+
+        Spacer(modifier = Modifier.height(8.dp))
+        DebugScreenRecorderRow()
 
         Spacer(modifier = Modifier.height(8.dp))
         Text("Crossfade: ${crossfade}s", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
@@ -1243,13 +1251,165 @@ private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
     SettingSwitchItem(
         title = "Downmix multichannel to stereo",
         subtitle = if (enabled) {
-            "5.1/7.1 tracks fold into stereo (ITU-R BS.775) and run through DSP/EQ."
+            "Multichannel tracks fold into stereo (fixed matrix) and run through DSP/EQ."
         } else {
             "Off — multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
         },
         checked = enabled,
         onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
     )
+}
+
+/**
+ * Debug screen recorder: captures the display at its native panel
+ * resolution and refresh rate with the app's own media audio recorded
+ * digitally in stereo (AudioPlaybackCapture — no microphone). Output goes
+ * to Movies/Tryptify. Android 10+ only; RECORD_AUDIO is requested on first
+ * use purely for the playback-capture API — declining it records video-only.
+ */
+@Composable
+private fun DebugScreenRecorderRow() {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
+    val context = LocalContext.current
+    val recording by tf.monochrome.android.debug.DebugScreenRecordService.recording.collectAsState()
+    val lastSaved by tf.monochrome.android.debug.DebugScreenRecordService.lastSavedName.collectAsState()
+
+    val projectionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == android.app.Activity.RESULT_OK && data != null) {
+            tf.monochrome.android.debug.DebugScreenRecordService.start(
+                context, result.resultCode, data,
+            )
+        }
+    }
+    val audioPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        // Granted → stereo media audio; declined → video-only. Either way,
+        // continue to the system's screen-capture consent.
+        val mpm = context.getSystemService(android.media.projection.MediaProjectionManager::class.java)
+        projectionLauncher.launch(mpm.createScreenCaptureIntent())
+    }
+
+    SettingItem(
+        title = if (recording) "Stop debug screen recording" else "Debug screen recording",
+        subtitle = when {
+            recording -> "Recording… native resolution/fps, stereo media audio. Tap to stop."
+            lastSaved != null -> "Saved: $lastSaved. Tap to record again."
+            else -> "Native resolution & fps, stereo internal audio (no mic) → Movies/Tryptify."
+        },
+        onClick = {
+            if (recording) {
+                tf.monochrome.android.debug.DebugScreenRecordService.stop(context)
+            } else {
+                audioPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            }
+        },
+    )
+}
+
+/**
+ * Live channel detector: shows the playing track's channel count, the
+ * assumed layout name (5.1 / 7.1 / 9.1.6 …) and one chip per channel that
+ * lights up while that channel carries signal (peak above −60 dBFS).
+ * Metering runs only while this card is visible (acquire/release, same
+ * contract as the spectrum tap).
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
+    val state by viewModel.channelDetectorState.collectAsState()
+    DisposableEffect(Unit) {
+        viewModel.acquireChannelDetector()
+        onDispose { viewModel.releaseChannelDetector() }
+    }
+    Text(
+        text = "Channel detector",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    val s = state
+    if (s == null) {
+        Text(
+            text = "Idle — play a track to detect its channel layout.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    val rate = if (s.sampleRate % 1000 == 0) "${s.sampleRate / 1000} kHz" else "${s.sampleRate} Hz"
+    val enc = if (s.isFloat) "float" else "16-bit"
+    Text(
+        text = "${s.layoutName} · ${s.channelCount} ch · $rate · $enc",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        s.channelNames.forEachIndexed { i, name ->
+            val db = s.peaksDb.getOrElse(i) {
+                tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.PEAK_FLOOR_DB
+            }
+            val active =
+                db > tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ACTIVE_THRESHOLD_DB
+            // 0..1 level from the −60..0 dBFS meter range, eased between the
+            // ~10 Hz meter ticks so the glow breathes instead of stepping.
+            val level by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = ((db + 60f) / 60f).coerceIn(0f, 1f),
+                animationSpec = androidx.compose.animation.core.tween(120),
+                label = "chGlow$i",
+            )
+            val glowColor = MaterialTheme.colorScheme.primary
+            val label = if (active) "$name ${db.toInt()}" else name
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (active) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier
+                    // Soft radial glow behind the chip, brightness + reach
+                    // scaled by the channel's live level. Drawn before clip()
+                    // so it can spill past the chip bounds (FlowRow doesn't
+                    // clip children).
+                    .drawBehind {
+                        if (level > 0.01f) {
+                            val radius = size.maxDimension * (0.7f + 0.6f * level)
+                            drawCircle(
+                                brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                    colors = listOf(
+                                        glowColor.copy(alpha = 0.55f * level),
+                                        glowColor.copy(alpha = 0f),
+                                    ),
+                                    center = center,
+                                    radius = radius,
+                                ),
+                                radius = radius,
+                                center = center,
+                            )
+                        }
+                    }
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (active) {
+                            MaterialTheme.colorScheme.primary.copy(
+                                alpha = 0.45f + 0.55f * level
+                            )
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
 }
 
 /**

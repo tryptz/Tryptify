@@ -8,6 +8,9 @@ import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import tf.monochrome.android.data.preferences.PreferencesManager
@@ -55,6 +58,15 @@ class AtmosAudioProcessor @Inject constructor(
     // SOFA change or a fresh pipeline, cleared once (re)applied.
     @Volatile private var sofaApplied = false
 
+    /**
+     * Last custom-SOFA apply outcome, for the renderer UI: path → accepted.
+     * Null while no custom SOFA is selected (built-in HRTF) or before the
+     * first apply. Rejections were previously logcat-only, so the screen
+     * claimed "custom" while the render actually ran the baked KEMAR set.
+     */
+    private val _sofaStatus = MutableStateFlow<Pair<String, Boolean>?>(null)
+    val sofaStatus: StateFlow<Pair<String, Boolean>?> = _sofaStatus.asStateFlow()
+
     init {
         preferences.rendererProfile
             .onEach { updated ->
@@ -71,6 +83,11 @@ class AtmosAudioProcessor @Inject constructor(
         loadedSofaPath = path
         sofaBytes = path?.let { runCatching { java.io.File(it).readBytes() }.getOrNull() }
         sofaApplied = false
+        _sofaStatus.value = when {
+            path == null -> null                    // built-in HRTF selected
+            sofaBytes == null -> path to false      // unreadable file = rejected
+            else -> null                            // pending until applied
+        }
     }
 
     /** Loads the cached SOFA into [p] (or reverts to baked); once per change. */
@@ -80,6 +97,7 @@ class AtmosAudioProcessor @Inject constructor(
         if (bytes != null) {
             val ok = AtmosNative.nativeLoadSofa(p, bytes) == 1
             android.util.Log.i(TAG, "custom HRTF ${if (ok) "loaded" else "REJECTED"} (${bytes.size}B)")
+            loadedSofaPath?.let { _sofaStatus.value = it to ok }
         } else {
             AtmosNative.nativeClearSofa(p)
         }
@@ -96,18 +114,21 @@ class AtmosAudioProcessor @Inject constructor(
             android.util.Log.d(TAG, "profile update ignored — no pipeline (mode=${cur.mode})")
             return
         }
-        // HRTF off = a true plain fold-down. Strength 0 alone is NOT that —
-        // the native dry path is an ITD-only render that still places objects
-        // with per-ear arrival-time delays — so a BINAURAL downmix is also
-        // demoted to Lo/Ro, which makes the pipeline decline the frame
-        // (process() returns -1) and the plain ITU BS.775 fold-down runs
-        // instead. Headphone shaping is then left entirely to the built-in
-        // AutoEQ chain. An explicit Lt/Rt choice is honoured as-is.
+        // The downmix pushed to native is DERIVED from the HRTF mode, never
+        // picked directly: an active HRTF (built-in or SOFA) means the
+        // binaural render runs; HRTF off means the ONE fixed fold matrix
+        // runs (per the peqdb Downmix Renderer spec — there is no matrix
+        // choice) — the pipeline declines the frame (process() returns -1)
+        // and the fixed-matrix fold-down handles it, with headphone shaping
+        // left entirely to the built-in AutoEQ chain. Strength 0 alone is
+        // NOT a plain fold — the native dry path is an ITD-only render that
+        // still places objects with per-ear arrival-time delays — hence the
+        // hard demotion.
         val strength = if (cur.hrtfEnabled) cur.binauralStrength else 0f
-        val downmix = if (!cur.hrtfEnabled && cur.stereoDownmix == StereoDownmixMode.BINAURAL) {
-            StereoDownmixMode.LO_RO
+        val downmix = if (cur.hrtfEnabled) {
+            StereoDownmixMode.BINAURAL
         } else {
-            cur.stereoDownmix
+            StereoDownmixMode.LO_RO
         }
         AtmosNative.nativeSetRenderParams(
             p,
@@ -141,6 +162,11 @@ class AtmosAudioProcessor @Inject constructor(
     private var inputFormat = AudioFormat.NOT_SET
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
+
+    // Optional LFE low-pass for the fallback fold (profile.lfeLowpass):
+    // configured lazily to the stream rate on first use, reset on flush.
+    private val lfeFold = tf.monochrome.android.audio.dsp.LfeLowPassFilter()
+    private var lfeFoldRate = 0
 
     // Interleaved bed accumulation (grows to a few frames, reused).
     private var bed = FloatArray(0)
@@ -252,6 +278,7 @@ class AtmosAudioProcessor @Inject constructor(
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
         bedSamples = 0
+        lfeFold.reset()  // no pre-seek audio in the LFE filter / dry delay
         frameBuffer.clear()
         anchorUs = Long.MIN_VALUE
         anchorSamples = 0L
@@ -367,19 +394,52 @@ class AtmosAudioProcessor @Inject constructor(
         }
     }
 
-    // ITU-style 5.1 fold-down for frames without JOC. Channel order follows the
-    // decoder's (FL FR FC LFE SL SR …); extra channels beyond 6 are ignored.
+    // Fold-down for frames the pipeline declines (no JOC / HRTF off /
+    // passthrough): the ONE fixed matrix (matches native
+    // AtmosPipeline::render_downmix and the peqdb Downmix Renderer's ADC2
+    // direct matrix) — sides/backs hard-panned at unity, FC at 0.70710678 to
+    // both, LFE at 2.26464431 to both. Channel order follows the decoder's
+    // (FL FR FC LFE SL SR BL BR).
     private fun downmixToStereo(frame: FloatArray, channels: Int) {
         val c = channels
+        val cur = profile
+        // Downmix preamp (--master-gain-db equivalent): one linear gain on
+        // the fold output, computed once per 1536-sample frame.
+        val preamp = Math.pow(10.0, cur.downmixPreampDb / 20.0).toFloat()
+        // Optional LFE path: low-pass the LFE feed and delay the dry fold to
+        // match. Lazily (re)configured — the toggle can flip mid-stream.
+        val lfeLp = cur.lfeLowpass && c >= 6
+        if (lfeLp && lfeFoldRate != inputFormat.sampleRate) {
+            lfeFoldRate = inputFormat.sampleRate
+            lfeFold.configure(lfeFoldRate)
+        }
         for (i in 0 until FRAME_SAMPLES) {
             val b = i * c
             if (c >= 6) {
-                val fc = 0.707f * frame[b + 2]
-                stereo[2 * i] = frame[b] + fc + 0.707f * frame[b + 4]
-                stereo[2 * i + 1] = frame[b + 1] + fc + 0.707f * frame[b + 5]
+                val fc = 0.70710678f * frame[b + 2]
+                val lfeIn = frame[b + 3]
+                // Surround sums per side (SL+BL / SR+BR when 7.1).
+                var sl = frame[b + 4]
+                var sr = frame[b + 5]
+                if (c >= 8) {
+                    sl += frame[b + 6]
+                    sr += frame[b + 7]
+                }
+                var l = frame[b] + fc + sl
+                var r = frame[b + 1] + fc + sr
+                if (lfeLp) {
+                    val f = 2.26464431f * lfeFold.filterLfe(lfeIn)
+                    l = lfeFold.delayDryL(l) + f
+                    r = lfeFold.delayDryR(r) + f
+                } else {
+                    l += 2.26464431f * lfeIn
+                    r += 2.26464431f * lfeIn
+                }
+                stereo[2 * i] = l * preamp
+                stereo[2 * i + 1] = r * preamp
             } else {
-                stereo[2 * i] = frame[b]
-                stereo[2 * i + 1] = if (c > 1) frame[b + 1] else frame[b]
+                stereo[2 * i] = frame[b] * preamp
+                stereo[2 * i + 1] = (if (c > 1) frame[b + 1] else frame[b]) * preamp
             }
         }
     }

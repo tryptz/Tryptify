@@ -11,12 +11,13 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Pure-JVM tests for the ITU-R BS.775 multichannel → stereo fold-down.
+ * Pure-JVM tests for the fixed-matrix multichannel → stereo fold-down.
  *
- * Expected normalized coefficients (rows sum to 1.0, a = 0.70711, LFE = 0):
- *   6 ch (FL FR FC LFE BL BR): L = [0.41421, 0, 0.29289, 0, 0.29289, 0]
- *   7 ch (FL FR FC LFE BC SL SR): L = [0.32037, 0, 0.22654, 0, 0.22654, 0.22654, 0]
- *   8 ch (FL FR FC LFE BL BR SL SR): L = [0.32037, 0, 0.22654, 0, 0.22654, 0, 0.22654, 0]
+ * Expected coefficients (verbatim, no normalization):
+ *   FL/BL/BLC/SL/TFL/TSL/TBL → [1, 0]
+ *   FR/BR/BRC/SR/TFR/TSR/TBR → [0, 1]
+ *   FC (and BC in 6.1)       → [0.70710678, 0.70710678]
+ *   LFE                      → [2.26464431, 2.26464431]
  */
 class DownmixProcessorTest {
 
@@ -66,66 +67,71 @@ class DownmixProcessorTest {
         return result
     }
 
+    /** One N-channel frame with a single channel at the given level. */
+    private fun soloFrame(channels: Int, index: Int, level: Float = 1f) =
+        FloatArray(channels).also { it[index] = level }
+
     // ── Matrix vectors, 5.1 float ────────────────────────────────────────
 
     @Test
-    fun `5_1 float - FL only folds to left at 0_41421`() {
+    fun `5_1 float - FL only folds hard left at unity`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val out = drainFloats(p, floatBuffer(floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f)))
+        val out = drainFloats(p, floatBuffer(soloFrame(6, 0)))
         assertEquals(2, out.size)
-        assertEquals(0.41421f, out[0], floatTol)
+        assertEquals(1f, out[0], floatTol)
         assertEquals(0f, out[1], floatTol)
     }
 
     @Test
-    fun `5_1 float - FR only folds to right`() {
+    fun `5_1 float - FR only folds hard right at unity`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val out = drainFloats(p, floatBuffer(floatArrayOf(0f, 1f, 0f, 0f, 0f, 0f)))
+        val out = drainFloats(p, floatBuffer(soloFrame(6, 1)))
         assertEquals(0f, out[0], floatTol)
-        assertEquals(0.41421f, out[1], floatTol)
+        assertEquals(1f, out[1], floatTol)
     }
 
     @Test
-    fun `5_1 float - center feeds both sides equally at 0_29289`() {
+    fun `5_1 float - center feeds both sides equally at 0_70711`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val out = drainFloats(p, floatBuffer(floatArrayOf(0f, 0f, 1f, 0f, 0f, 0f)))
-        assertEquals(0.29289f, out[0], floatTol)
-        assertEquals(0.29289f, out[1], floatTol)
+        val out = drainFloats(p, floatBuffer(soloFrame(6, 2)))
+        assertEquals(0.70711f, out[0], floatTol)
+        assertEquals(0.70711f, out[1], floatTol)
         assertEquals(out[0], out[1], 0f)
     }
 
     @Test
-    fun `5_1 float - BL only folds to left only`() {
+    fun `5_1 float - BL only folds hard left at unity`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val out = drainFloats(p, floatBuffer(floatArrayOf(0f, 0f, 0f, 0f, 1f, 0f)))
-        assertEquals(0.29289f, out[0], floatTol)
+        val out = drainFloats(p, floatBuffer(soloFrame(6, 4)))
+        assertEquals(1f, out[0], floatTol)
         assertEquals(0f, out[1], floatTol)
     }
 
     @Test
-    fun `5_1 - LFE is dropped exactly`() {
+    fun `5_1 - LFE feeds both sides at 2_26464431`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val out = drainFloats(p, floatBuffer(floatArrayOf(0f, 0f, 0f, 1f, 0f, 0f)))
-        assertEquals(0f, out[0], 0f)
-        assertEquals(0f, out[1], 0f)
+        val out = drainFloats(p, floatBuffer(soloFrame(6, 3)))
+        assertEquals(2.26464431f, out[0], floatTol)
+        assertEquals(2.26464431f, out[1], floatTol)
     }
 
-    // ── Clipping / normalization ─────────────────────────────────────────
+    // ── Level / clipping behaviour ───────────────────────────────────────
 
     @Test
-    fun `all channels full-scale never exceeds unity (float)`() {
+    fun `all channels full-scale sums verbatim on the float path`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
         val out = drainFloats(p, floatBuffer(FloatArray(6) { 1f }))
-        // Row sums are exactly 1.0 → full-scale everywhere folds to ~1.0.
-        assertEquals(1f, out[0], floatTol)
-        assertEquals(1f, out[1], floatTol)
-        assertTrue(out[0] <= 1f + floatTol && out[1] <= 1f + floatTol)
+        // 1 (FL) + 0.70710678 (FC) + 2.26464431 (LFE) + 1 (BL) — no
+        // normalization, so the float path is allowed to exceed unity.
+        val expected = 1f + 0.70710678f + 2.26464431f + 1f
+        assertEquals(expected, out[0], floatTol)
+        assertEquals(expected, out[1], floatTol)
     }
 
     @Test
@@ -155,15 +161,15 @@ class DownmixProcessorTest {
         )
         val out = drainShorts(p, pcm16Buffer(*frames))
         assertEquals(6, out.size) // 3 frames × 2 channels
-        // Frame 0: FL=0.5 → L ≈ 0.5·0.41421·32768 ≈ 6787
-        assertEquals(6787f, out[0].toFloat(), 3f)
+        // Frame 0: FL=0.5 → L = 0.5·1.0·32768 = 16384
+        assertEquals(16384f, out[0].toFloat(), 3f)
         assertEquals(0f, out[1].toFloat(), 1f)
-        // Frame 1: FC=0.5 → both ≈ 0.5·0.29289·32768 ≈ 4799
-        assertEquals(4799f, out[2].toFloat(), 3f)
-        assertEquals(4799f, out[3].toFloat(), 3f)
-        // Frame 2: LFE only → silence
-        assertEquals(0, out[4].toInt())
-        assertEquals(0, out[5].toInt())
+        // Frame 1: FC=0.5 → both = 0.5·0.70710678·32768 ≈ 11585
+        assertEquals(11585f, out[2].toFloat(), 3f)
+        assertEquals(11585f, out[3].toFloat(), 3f)
+        // Frame 2: LFE=0.9 → 0.9·2.26464431 ≈ 2.038 → clamps at the rail.
+        assertEquals(32767, out[4].toInt())
+        assertEquals(32767, out[5].toInt())
     }
 
     // ── Active / inactive lifecycle ──────────────────────────────────────
@@ -197,8 +203,8 @@ class DownmixProcessorTest {
         assertEquals(2, out3.channelCount)
         assertEquals(96000, out3.sampleRate)
         // And it still mixes correctly after the round trip.
-        val folded = drainFloats(p, floatBuffer(floatArrayOf(0f, 0f, 1f, 0f, 0f, 0f)))
-        assertEquals(0.29289f, folded[0], floatTol)
+        val folded = drainFloats(p, floatBuffer(soloFrame(6, 2)))
+        assertEquals(0.70711f, folded[0], floatTol)
     }
 
     @Test
@@ -207,8 +213,8 @@ class DownmixProcessorTest {
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
         p.flush() // seek: flush() with no configure()
         assertTrue(p.isActive)
-        val out = drainFloats(p, floatBuffer(floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f)))
-        assertEquals(0.41421f, out[0], floatTol)
+        val out = drainFloats(p, floatBuffer(soloFrame(6, 0)))
+        assertEquals(1f, out[0], floatTol)
     }
 
     @Test
@@ -225,9 +231,16 @@ class DownmixProcessorTest {
         processor().configure(AudioFormat(48000, 6, C.ENCODING_PCM_24BIT))
     }
 
+    @Test
+    fun `9 channels (no known layout) passes through inactive`() {
+        val p = processor()
+        assertEquals(AudioFormat.NOT_SET, p.configure(AudioFormat(48000, 9, C.ENCODING_PCM_FLOAT)))
+        assertFalse(p.isActive)
+    }
+
     @Test(expected = AudioProcessor.UnhandledAudioFormatException::class)
-    fun `9 channels throws`() {
-        processor().configure(AudioFormat(48000, 9, C.ENCODING_PCM_FLOAT))
+    fun `17 channels throws`() {
+        processor().configure(AudioFormat(48000, 17, C.ENCODING_PCM_FLOAT))
     }
 
     // ── Output format mapping ────────────────────────────────────────────
@@ -244,24 +257,24 @@ class DownmixProcessorTest {
     fun `consecutive queueInput-getOutput rounds stay correct`() {
         val p = processor()
         configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
-        val first = drainFloats(p, floatBuffer(floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f)))
-        assertEquals(0.41421f, first[0], floatTol)
+        val first = drainFloats(p, floatBuffer(soloFrame(6, 0)))
+        assertEquals(1f, first[0], floatTol)
         // getOutput() swapped in EMPTY_BUFFER; a second round must re-fill.
         assertEquals(0, p.getOutput().remaining())
-        val second = drainFloats(p, floatBuffer(floatArrayOf(0f, 1f, 0f, 0f, 0f, 0f)))
-        assertEquals(0.41421f, second[1], floatTol)
+        val second = drainFloats(p, floatBuffer(soloFrame(6, 1)))
+        assertEquals(1f, second[1], floatTol)
         assertEquals(0f, second[0], floatTol)
     }
 
     // ── 7.1 and 6.1 spot vectors ─────────────────────────────────────────
 
     @Test
-    fun `7_1 - SL folds to left at 0_22654`() {
+    fun `7_1 - SL folds hard left at unity`() {
         val p = processor()
         configureAndFlush(p, 48000, 8, C.ENCODING_PCM_FLOAT)
         // 8 ch order: FL FR FC LFE BL BR SL SR
-        val out = drainFloats(p, floatBuffer(floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
-        assertEquals(0.22654f, out[0], floatTol)
+        val out = drainFloats(p, floatBuffer(soloFrame(8, 6)))
+        assertEquals(1f, out[0], floatTol)
         assertEquals(0f, out[1], floatTol)
     }
 
@@ -270,20 +283,136 @@ class DownmixProcessorTest {
         val p = processor()
         configureAndFlush(p, 48000, 7, C.ENCODING_PCM_FLOAT)
         // 7 ch order: FL FR FC LFE BC SL SR
-        val out = drainFloats(p, floatBuffer(floatArrayOf(0f, 0f, 0f, 0f, 1f, 0f, 0f)))
-        assertEquals(0.22654f, out[0], floatTol)
-        assertEquals(0.22654f, out[1], floatTol)
+        val out = drainFloats(p, floatBuffer(soloFrame(7, 4)))
+        assertEquals(0.70711f, out[0], floatTol)
+        assertEquals(0.70711f, out[1], floatTol)
     }
 
     @Test
-    fun `3_0 - center at 0_41421, fronts at 0_58579`() {
+    fun `3_0 - center at 0_70711, fronts at unity`() {
         val p = processor()
         configureAndFlush(p, 48000, 3, C.ENCODING_PCM_FLOAT)
-        val center = drainFloats(p, floatBuffer(floatArrayOf(0f, 0f, 1f)))
-        assertEquals(0.41421f, center[0], floatTol)
-        assertEquals(0.41421f, center[1], floatTol)
-        val fl = drainFloats(p, floatBuffer(floatArrayOf(1f, 0f, 0f)))
-        assertEquals(0.58579f, fl[0], floatTol)
+        val center = drainFloats(p, floatBuffer(soloFrame(3, 2)))
+        assertEquals(0.70711f, center[0], floatTol)
+        assertEquals(0.70711f, center[1], floatTol)
+        val fl = drainFloats(p, floatBuffer(soloFrame(3, 0)))
+        assertEquals(1f, fl[0], floatTol)
         assertEquals(0f, fl[1], floatTol)
+    }
+
+    @Test
+    fun `preamp scales the fold by its linear gain`() {
+        val p = processor().apply { setPreampDb(-20f) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        val fl = drainFloats(p, floatBuffer(soloFrame(6, 0)))
+        assertEquals(0.1f, fl[0], floatTol) // 1.0 × 10^(−20/20)
+        val lfe = drainFloats(p, floatBuffer(soloFrame(6, 3)))
+        assertEquals(0.22646f, lfe[0], floatTol)
+    }
+
+    // ── LFE low-pass path ────────────────────────────────────────────────
+
+    @Test
+    fun `lfe lowpass - DC LFE settles to the matrix gain (unity DC filter)`() {
+        val p = processor().apply { setLfeLowpass(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        val frames = Array(8000) { floatArrayOf(0f, 0f, 0f, 0.5f, 0f, 0f) }
+        val out = drainFloats(p, floatBuffer(*frames))
+        // Butterworth DC gain is 1 → steady state = 0.5 × 2.26464431.
+        assertEquals(1.13232f, out[out.size - 2], 1e-3f)
+        assertEquals(1.13232f, out[out.size - 1], 1e-3f)
+    }
+
+    @Test
+    fun `lfe lowpass - dry path is delayed by the filter group delay`() {
+        val p = processor().apply { setLfeLowpass(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        // FL impulse in frame 0; delay at 48 kHz = round(48000·2.6131/(2π·125)) = 160.
+        val frames = Array(400) { i ->
+            if (i == 0) floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f) else FloatArray(6)
+        }
+        val out = drainFloats(p, floatBuffer(*frames))
+        assertEquals(0f, out[0], floatTol)
+        assertEquals(1f, out[2 * 160], floatTol)
+        assertEquals(0f, out[2 * 161], floatTol)
+    }
+
+    @Test
+    fun `lfe lowpass - high-frequency LFE content is attenuated to silence`() {
+        val p = processor().apply { setLfeLowpass(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        // 4.8 kHz into the LFE: ~5.3 octaves above 125 Hz → ≥ −127 dB at 24 dB/oct.
+        val frames = Array(4000) { i ->
+            floatArrayOf(0f, 0f, 0f, kotlin.math.sin(2.0 * Math.PI * 4800.0 * i / 48000.0).toFloat() * 0.5f, 0f, 0f)
+        }
+        val out = drainFloats(p, floatBuffer(*frames))
+        for (i in (out.size - 200) until out.size) {
+            assertTrue("leaked hf at $i: ${out[i]}", kotlin.math.abs(out[i]) < 0.01f)
+        }
+    }
+
+    @Test
+    fun `preamp changes apply on the fly at the next buffer`() {
+        val p = processor()
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        val before = drainFloats(p, floatBuffer(soloFrame(6, 4)))
+        assertEquals(1f, before[0], floatTol)
+        // No flush: the very next buffer must use the new gain.
+        p.setPreampDb(-20f)
+        val trimmed = drainFloats(p, floatBuffer(soloFrame(6, 4)))
+        assertEquals(0.1f, trimmed[0], floatTol)
+    }
+
+    @Test
+    fun `lfe lowpass toggles on the fly mid-stream`() {
+        val p = processor()
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        // Dry direct first.
+        val dry = drainFloats(p, floatBuffer(soloFrame(6, 3, 0.5f)))
+        assertEquals(1.13232f, dry[0], floatTol)
+        // Enable mid-stream: DC LFE settles to the same matrix gain through
+        // the filter, no flush in between.
+        p.setLfeLowpass(true)
+        val frames = Array(8000) { floatArrayOf(0f, 0f, 0f, 0.5f, 0f, 0f) }
+        val out = drainFloats(p, floatBuffer(*frames))
+        assertEquals(1.13232f, out[out.size - 2], 1e-3f)
+    }
+
+    // ── 16-channel (9.1.6-style) layout ──────────────────────────────────
+    // Order: FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR
+
+    @Test
+    fun `16ch - configure maps to stereo`() {
+        val out = processor().configure(AudioFormat(48000, 16, C.ENCODING_PCM_FLOAT))
+        assertEquals(AudioFormat(48000, 2, C.ENCODING_PCM_FLOAT), out)
+    }
+
+    @Test
+    fun `16ch - every channel matches the fold matrix`() {
+        val p = processor()
+        configureAndFlush(p, 48000, 16, C.ENCODING_PCM_FLOAT)
+        val expected = arrayOf(
+            floatArrayOf(1f, 0f),                       // FL
+            floatArrayOf(0f, 1f),                       // FR
+            floatArrayOf(0.70710678f, 0.70710678f),     // FC
+            floatArrayOf(2.26464431f, 2.26464431f),     // LFE
+            floatArrayOf(1f, 0f),                       // BL
+            floatArrayOf(0f, 1f),                       // BR
+            floatArrayOf(1f, 0f),                       // BLC
+            floatArrayOf(0f, 1f),                       // BRC
+            floatArrayOf(1f, 0f),                       // SL
+            floatArrayOf(0f, 1f),                       // SR
+            floatArrayOf(1f, 0f),                       // TFL
+            floatArrayOf(0f, 1f),                       // TFR
+            floatArrayOf(1f, 0f),                       // TSL
+            floatArrayOf(0f, 1f),                       // TSR
+            floatArrayOf(1f, 0f),                       // TBL
+            floatArrayOf(0f, 1f),                       // TBR
+        )
+        for (ch in 0 until 16) {
+            val out = drainFloats(p, floatBuffer(soloFrame(16, ch)))
+            assertEquals("ch $ch L", expected[ch][0], out[0], floatTol)
+            assertEquals("ch $ch R", expected[ch][1], out[1], floatTol)
+        }
     }
 }

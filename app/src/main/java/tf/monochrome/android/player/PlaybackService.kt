@@ -60,6 +60,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
+    @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     @Inject lateinit var dspManager: DspEngineManager
@@ -282,6 +283,14 @@ class PlaybackService : MediaSessionService() {
                 downmixProcessor.setEnabled(enabled)
             }
         }
+        // Preamp + LFE path follow the Atmos page's Downmix settings, so
+        // plain multichannel PCM folds the same way the Atmos fallback does.
+        serviceScope.launch {
+            preferences.rendererProfile.collect { profile ->
+                downmixProcessor.setPreampDb(profile.downmixPreampDb)
+                downmixProcessor.setLfeLowpass(profile.lfeLowpass)
+            }
+        }
 
         // Listen to EQ + tone changes and apply them. Tone shelves are folded into
         // the in-app AutoEQ processor whenever the system-wide effect isn't the one
@@ -400,6 +409,7 @@ class PlaybackService : MediaSessionService() {
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         .setAudioProcessors(
                             arrayOf(
+                                channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
                                 mixBusProcessor,        // DSP engine (mixer/effects)
@@ -432,6 +442,7 @@ class PlaybackService : MediaSessionService() {
                         driver = libusbDriver,
                         volumeController = bypassVolumeController,
                         processors = listOf(
+                            channelDetectorProcessor,
                             atmosAudioProcessor,
                             downmixProcessor,
                             mixBusProcessor,

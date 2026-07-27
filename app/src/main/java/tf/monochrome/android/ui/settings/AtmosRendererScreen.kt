@@ -9,7 +9,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,8 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.LinearEasing
@@ -33,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -73,14 +70,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.ChannelLayout
-import tf.monochrome.android.domain.model.DrcMode
 import tf.monochrome.android.domain.model.RendererMode
 import tf.monochrome.android.domain.model.RendererProfile
 import tf.monochrome.android.domain.model.SpeakerChannel
-import tf.monochrome.android.domain.model.StereoDownmixMode
 import tf.monochrome.android.domain.model.speakers
 import javax.inject.Inject
 import kotlin.math.cos
@@ -90,8 +86,36 @@ import kotlin.math.sin
 @HiltViewModel
 class AtmosRendererViewModel @Inject constructor(
     private val preferences: PreferencesManager,
+    private val channelDetector: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
+    atmosProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    /**
+     * Live SOFA apply outcome from the render pipeline (path → accepted).
+     * Lets the screen say "this .sofa was REJECTED — running built-in KEMAR"
+     * instead of silently claiming the custom HRTF is active.
+     */
+    val sofaStatus: StateFlow<Pair<String, Boolean>?> = atmosProcessor.sofaStatus
+
+    /** Live detected input format + per-channel peaks, drives the channel map. */
+    val channelState:
+        StateFlow<tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?> =
+        channelDetector.state
+
+    /** Reference-counted metering stake — held only while this screen shows. */
+    fun acquireDetector() = channelDetector.acquire()
+    fun releaseDetector() = channelDetector.release()
+
+    /** Multichannel → stereo fold toggle (same preference as Settings). */
+    val multichannelDownmixEnabled: StateFlow<Boolean> =
+        preferences.multichannelDownmixEnabled.stateIn(
+            viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), true,
+        )
+
+    fun setMultichannelDownmix(enabled: Boolean) {
+        viewModelScope.launch { preferences.setMultichannelDownmixEnabled(enabled) }
+    }
 
     // In-memory working copy so slider drags update the UI instantly; the
     // DataStore write is debounced to the drag's tail (same approach the Player
@@ -159,22 +183,52 @@ class AtmosRendererViewModel @Inject constructor(
                 // and becomes the active HRTF. Importing is an explicit request
                 // to use one, so it also re-enables the binauralizer.
                 rescanSofaDir()
-                update(_profile.value.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true))
+                update(
+                    _profile.value.copy(
+                        hrtfProfileId = dest.absolutePath, hrtfEnabled = true,
+                        mode = RendererMode.OBJECT_RENDER,
+                    )
+                )
             }
         }
     }
 
     /**
-     * Reverts to the baked HRTF (re-enabling it). Stored SOFA presets are
-     * kept — they stay selectable in the preset list.
+     * The single spatial switch: on = SOFA/HRTF binaural render
+     * (OBJECT_RENDER), off = the coefficient downmix renderer handles every
+     * Atmos track (PASSTHROUGH — the Atmos processor drops out and the
+     * DownmixProcessor folds the decoded bed). Mode and hrtfEnabled always
+     * move together so no half-spatial combination can exist.
      */
-    fun useBuiltInHrtf() {
-        update(_profile.value.copy(hrtfProfileId = null, hrtfEnabled = true))
+    fun setSpatial(enabled: Boolean) {
+        update(
+            _profile.value.copy(
+                hrtfEnabled = enabled,
+                mode = if (enabled) RendererMode.OBJECT_RENDER else RendererMode.PASSTHROUGH,
+            )
+        )
     }
 
-    /** Selects a stored SOFA preset as the active HRTF. */
+    /**
+     * Reverts to the baked HRTF (keeping spatial on). Stored SOFA presets
+     * are kept — they stay selectable in the preset list.
+     */
+    fun useBuiltInHrtf() {
+        update(
+            _profile.value.copy(
+                hrtfProfileId = null, hrtfEnabled = true, mode = RendererMode.OBJECT_RENDER,
+            )
+        )
+    }
+
+    /** Selects a stored SOFA preset as the active HRTF (turns spatial on). */
     fun selectSofa(file: java.io.File) {
-        update(_profile.value.copy(hrtfProfileId = file.absolutePath, hrtfEnabled = true))
+        update(
+            _profile.value.copy(
+                hrtfProfileId = file.absolutePath, hrtfEnabled = true,
+                mode = RendererMode.OBJECT_RENDER,
+            )
+        )
     }
 
     /** Deletes a stored SOFA preset; falls back to built-in if it was active. */
@@ -266,11 +320,19 @@ fun AtmosRendererScreen(
 ) {
     val profile by viewModel.profile.collectAsState()
     val sofaPresets by viewModel.sofaPresets.collectAsState()
+    val detected by viewModel.channelState.collectAsState()
 
     // Re-sync on every (re-)entry: the HRTF database screen writes the profile
     // and adds preset files behind this ViewModel's back, and navigating back
     // here recomposes the screen fresh.
     LaunchedEffect(Unit) { viewModel.refreshFromStorage() }
+
+    // Per-channel metering for the live channel map runs only while this
+    // screen is visible (same acquire/release contract as the spectrum tap).
+    DisposableEffect(Unit) {
+        viewModel.acquireDetector()
+        onDispose { viewModel.releaseDetector() }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -291,14 +353,24 @@ fun AtmosRendererScreen(
         ) {
             // ── Channel map ────────────────────────────────────────────────
             SectionHeader("Channel Map")
+            val d = detected
             Text(
-                "Speakers the current mix drives, lit on their room positions.",
+                if (d != null) {
+                    val rate = if (d.sampleRate % 1000 == 0) "${d.sampleRate / 1000} kHz"
+                    else "${d.sampleRate} Hz"
+                    "Live: ${d.layoutName} · ${d.channelCount} ch · $rate — " +
+                        "each speaker glows with its channel's level."
+                } else {
+                    "Speakers the current mix drives, lit on their room positions. " +
+                        "Play a track to see live channel levels."
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
             SpeakerLayoutMap(
                 layout = profile.layout,
+                detected = d,
                 accent = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -327,231 +399,148 @@ fun AtmosRendererScreen(
             }
             Spacer(Modifier.height(20.dp))
 
-            // ── Renderer mode ──────────────────────────────────────────────
-            SectionHeader("Renderer Mode")
-            ChoiceChips(
-                options = RendererMode.entries,
-                selected = profile.mode,
-                label = { it.displayName },
-                onSelect = { viewModel.update(profile.copy(mode = it)) },
+            // ── Multichannel downmix ───────────────────────────────────────
+            // Replaces the old read-only "Output Layout" (binaural pipeline)
+            // blurb: the setting that actually governs multichannel output —
+            // the fixed-matrix fold to stereo — lives here now. Same
+            // preference as the toggle in Settings › Spatial Audio.
+            SectionHeader("Downmix")
+            val downmixEnabled by viewModel.multichannelDownmixEnabled.collectAsState()
+            SettingSwitchItem(
+                title = "Downmix multichannel to stereo",
+                subtitle = if (downmixEnabled) {
+                    "Multichannel tracks fold into stereo (fixed matrix) and run " +
+                        "through DSP/EQ."
+                } else {
+                    "Off — multichannel passes to the device untouched; DSP/EQ " +
+                        "bypassed for those tracks."
+                },
+                checked = downmixEnabled,
+                onCheckedChange = { viewModel.setMultichannelDownmix(it) },
             )
-            Text(
-                profile.mode.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // Master trim inside the fold (the peqdb Downmix Renderer's
+            // --master-gain-db): the verbatim matrix runs hot, this pulls it
+            // below clipping. Applies to both matrices and the Atmos fallback.
+            LabeledSlider(
+                title = "Downmix preamp",
+                valueText = "%+.1f dB".format(profile.downmixPreampDb),
+                value = profile.downmixPreampDb,
+                range = -24f..6f,
+                enabled = downmixEnabled,
+                onValueChange = { viewModel.update(profile.copy(downmixPreampDb = it)) },
             )
-            Spacer(Modifier.height(20.dp))
-
-            // ── Output layout ──────────────────────────────────────────────
-            // Multichannel speaker output would need a multichannel DAC and a
-            // VBAP output path (vbap.h exists, the render/sink wiring does not).
-            // This renderer targets headphones and only outputs binaural stereo,
-            // so these are shown disabled for reference rather than pretending to
-            // work — feeding 5.1/7.1 to a stereo output just folds back down.
-            SectionHeader("Output Layout")
-            Text(
-                "This renderer outputs binaural stereo for headphones. " +
-                    "Multichannel speaker output (5.1 / 7.1 / 7.1.4) needs a " +
-                    "multichannel DAC and isn't supported yet.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
-            ChoiceChips(
-                options = ChannelLayout.entries,
-                selected = ChannelLayout.STEREO,
-                enabled = false,
-                label = { it.label },
-                onSelect = { },
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // ── Stereo downmix ─────────────────────────────────────────────
-            SectionHeader("Stereo Downmix")
-            ChoiceChips(
-                options = StereoDownmixMode.entries,
-                selected = profile.stereoDownmix,
-                label = { it.displayName },
-                onSelect = { viewModel.update(profile.copy(stereoDownmix = it)) },
-            )
-            Text(
-                profile.stereoDownmix.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            SettingSwitchItem(
+                title = "LFE low-pass (125 Hz)",
+                subtitle = "Butterworth 4th-order on the LFE feed; the dry path is " +
+                    "delay-matched (~3.3 ms) before summing. Off = dry direct LFE.",
+                checked = profile.lfeLowpass,
+                onCheckedChange = { viewModel.update(profile.copy(lfeLowpass = it)) },
             )
             Spacer(Modifier.height(20.dp))
 
-            // ── Binaural / headphones ──────────────────────────────────────
-            SectionHeader("Binaural (Headphones)")
+            // ── Spatial render — the ONE option beyond the fold ───────────
+            // Off (default): every Atmos track goes through the coefficient
+            // downmix renderer above. On: objects are binauralized via the
+            // built-in KEMAR or a SOFA HRTF. Renderer mode follows the switch
+            // (PASSTHROUGH ↔ OBJECT_RENDER) — no separate mode setting.
+            SectionHeader("Spatial Render")
             val sofaPicker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenDocument()
             ) { uri: Uri? -> if (uri != null) viewModel.importSofa(uri) }
             // .sofa has no registered MIME type, so accept any file and let the
             // native loader reject non-SOFA input.
             val sofaMimes = arrayOf("*/*")
-            // Three-way source: Off (dry fold-down, AutoEQ only) / the baked
-            // KEMAR set / a user SOFA. Picking either HRTF option re-enables
-            // the binauralizer if it was off.
-            val hrtfChoice = when {
-                !profile.hrtfEnabled -> HrtfChoice.OFF
-                profile.hrtfProfileId == null -> HrtfChoice.BUILT_IN
-                else -> HrtfChoice.CUSTOM
-            }
-            ChoiceChips(
-                options = HrtfChoice.entries,
-                selected = hrtfChoice,
-                label = { it.label },
-                onSelect = { choice ->
-                    when (choice) {
-                        HrtfChoice.OFF -> viewModel.update(profile.copy(hrtfEnabled = false))
-                        HrtfChoice.BUILT_IN -> viewModel.useBuiltInHrtf()
-                        // Prefer what's already on hand: re-enable the stored
-                        // selection, else the first saved preset; only open the
-                        // file picker when no preset exists yet.
-                        HrtfChoice.CUSTOM -> when {
-                            profile.hrtfProfileId != null ->
-                                viewModel.update(profile.copy(hrtfEnabled = true))
-                            sofaPresets.isNotEmpty() -> viewModel.selectSofa(sofaPresets.first())
-                            else -> sofaPicker.launch(sofaMimes)
-                        }
-                    }
+            SettingSwitchItem(
+                title = "Binaural render (SOFA HRTF)",
+                subtitle = if (profile.hrtfEnabled) {
+                    "Atmos objects are placed around your head via the HRTF below."
+                } else {
+                    "Off — Atmos tracks use the coefficient downmix renderer."
                 },
+                checked = profile.hrtfEnabled,
+                onCheckedChange = { viewModel.setSpatial(it) },
             )
-            when {
-                !profile.hrtfEnabled -> Text(
-                    "HRTF off — objects fold down to plain stereo and headphone " +
-                        "correction comes from the built-in AutoEQ alone.",
+            if (profile.hrtfEnabled) {
+                if (profile.hrtfProfileId == null) Text(
+                    "Using the built-in MIT KEMAR set. Pick a SOFA preset below " +
+                        "(or load one) for your own ears.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                profile.hrtfProfileId != null -> Text(
-                    "Loaded: ${java.io.File(profile.hrtfProfileId!!).name}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                else -> Text(
-                    "Built-in is MIT KEMAR. Load a SOFA HRTF (your own or a set like " +
-                        "SADIE / CIPIC) to change the binaural voicing.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            // Every imported/downloaded .sofa stays on hand as a preset —
-            // tap to switch HRTFs without re-downloading or re-picking.
-            if (sofaPresets.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "SOFA presets",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                sofaPresets.forEach { file ->
-                    val isSelected =
-                        profile.hrtfEnabled && profile.hrtfProfileId == file.absolutePath
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.selectSofa(file) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { viewModel.selectSofa(file) },
+                ) else {
+                    val sofaStatus by viewModel.sofaStatus.collectAsState()
+                    val selectedName = java.io.File(profile.hrtfProfileId!!).name
+                    val status = sofaStatus?.takeIf {
+                        java.io.File(it.first).name == selectedName
+                    }
+                    when {
+                        status?.second == false -> Text(
+                            "⚠ $selectedName was REJECTED by the SOFA loader — " +
+                                "the render is using the built-in KEMAR HRTF instead. " +
+                                "The file may be truncated, unsupported, or not a SOFA.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
                         )
-                        Text(
-                            file.name.removeSuffix(".sofa"),
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
+                        status?.second == true -> Text(
+                            "Loaded: $selectedName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        IconButton(onClick = { viewModel.deleteSofa(file) }) {
-                            Icon(
-                                Icons.Filled.Delete,
-                                contentDescription = "Delete preset",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        else -> Text(
+                            "Selected: $selectedName — applies when playback (re)starts.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                // Every imported/downloaded .sofa stays on hand as a preset —
+                // tap to switch HRTFs without re-downloading or re-picking.
+                if (sofaPresets.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "SOFA presets",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    sofaPresets.forEach { file ->
+                        val isSelected =
+                            profile.hrtfEnabled && profile.hrtfProfileId == file.absolutePath
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.selectSofa(file) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { viewModel.selectSofa(file) },
                             )
+                            Text(
+                                file.name.removeSuffix(".sofa"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = { viewModel.deleteSofa(file) }) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Delete preset",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
-            }
-            Row {
-                TextButton(onClick = {
-                    navController.navigate(tf.monochrome.android.ui.navigation.Screen.HrtfDatabase.route)
-                }) { Text("Browse HRTF database") }
-                TextButton(onClick = { sofaPicker.launch(sofaMimes) }) {
-                    Text("Load .sofa file")
+                Row {
+                    TextButton(onClick = {
+                        navController.navigate(tf.monochrome.android.ui.navigation.Screen.HrtfDatabase.route)
+                    }) { Text("Browse HRTF database") }
+                    TextButton(onClick = { sofaPicker.launch(sofaMimes) }) {
+                        Text("Load .sofa file")
+                    }
                 }
             }
-            LabeledSlider(
-                title = "Binaural strength",
-                valueText = "${(profile.binauralStrength * 100).toInt()}%",
-                value = profile.binauralStrength,
-                range = 0f..1f,
-                enabled = profile.hrtfEnabled,
-                onValueChange = { viewModel.update(profile.copy(binauralStrength = it)) },
-            )
-            SettingSwitchItem(
-                title = "Height virtualization",
-                subtitle = "Virtualize overhead objects on layouts without top speakers",
-                checked = profile.heightVirtualization,
-                onCheckedChange = { viewModel.update(profile.copy(heightVirtualization = it)) },
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // ── Bass management ────────────────────────────────────────────
-            SectionHeader("Bass Management")
-            SettingSwitchItem(
-                title = "Bass management",
-                subtitle = "Send full-range objects' low end to the LFE / subwoofer",
-                checked = profile.bassManagement,
-                onCheckedChange = { viewModel.update(profile.copy(bassManagement = it)) },
-            )
-            LabeledSlider(
-                title = "Crossover",
-                valueText = "${profile.crossoverHz} Hz",
-                value = profile.crossoverHz.toFloat(),
-                range = 40f..200f,
-                steps = 15,
-                enabled = profile.bassManagement,
-                onValueChange = { viewModel.update(profile.copy(crossoverHz = it.toInt())) },
-            )
-            LabeledSlider(
-                title = "LFE gain",
-                valueText = "%+.1f dB".format(profile.lfeGainDb),
-                value = profile.lfeGainDb,
-                range = -10f..10f,
-                onValueChange = { viewModel.update(profile.copy(lfeGainDb = it)) },
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // ── Loudness ───────────────────────────────────────────────────
-            SectionHeader("Loudness & Dynamics")
-            Text(
-                "Dynamic range control",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            ChoiceChips(
-                options = DrcMode.entries,
-                selected = profile.drc,
-                label = { it.displayName },
-                onSelect = { viewModel.update(profile.copy(drc = it)) },
-            )
-            Text(
-                "The decoder always applies the stream's Line-mode DRC. " +
-                    "Light/Standard add post-render leveling on top; Heavy uses " +
-                    "the stream's own RF compression gain (compr) when present.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            SettingSwitchItem(
-                title = "Dialogue normalization",
-                subtitle = "Align loudness to the stream's dialnorm reference",
-                checked = profile.dialogNormalization,
-                onCheckedChange = { viewModel.update(profile.copy(dialogNormalization = it)) },
-            )
             Spacer(Modifier.height(16.dp))
 
             TextButton(onClick = { viewModel.reset() }) { Text("Reset to defaults") }
@@ -571,27 +560,6 @@ private fun SectionHeader(title: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(bottom = 4.dp),
     )
-}
-
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-@Composable
-private fun <T> ChoiceChips(
-    options: List<T>,
-    selected: T,
-    enabled: Boolean = true,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { option ->
-            FilterChip(
-                selected = option == selected,
-                enabled = enabled,
-                onClick = { onSelect(option) },
-                label = { Text(label(option)) },
-            )
-        }
-    }
 }
 
 @Composable
@@ -629,18 +597,30 @@ private fun LabeledSlider(
 }
 
 /**
- * Top-down room plan: the listener at centre, each speaker of [layout] placed at
- * its azimuth and lit with a soft radial bloom (a gentle pulse = "light fx") so
- * the channels the mix uses read at a glance. Height speakers sit on an inner
- * ring in a warmer tint; the LFE is a small dot below the listener.
+ * Top-down SQUARE room plan: the listener at centre, each speaker projected
+ * from its azimuth onto the room's walls (corners for the diagonals, like a
+ * real rectangular room). While a track plays, [detected] drives the map:
+ * speakers come from the channel detector's assumed layout and each one glows
+ * with its channel's live level (volume-rendered light — brighter and wider
+ * the louder the channel), beaming toward the listener. With nothing detected
+ * it falls back to [layout]'s speakers with the idle pulse. Height speakers
+ * sit on an inner square in a warmer tint; the LFE is a small dot below the
+ * listener.
  */
 @Composable
 private fun SpeakerLayoutMap(
     layout: ChannelLayout,
+    detected: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    val speakers = layout.speakers()
+    val speakers = detected?.let { detectedSpeakers(it.channelNames) } ?: layout.speakers()
+    // 0..1 level per speaker from the −60..0 dBFS meter range; null = idle map.
+    val levels = detected?.let { d ->
+        FloatArray(speakers.size) { i ->
+            ((d.peaksDb.getOrElse(i) { -120f } + 60f) / 60f).coerceIn(0f, 1f)
+        }
+    }
     val textMeasurer = rememberTextMeasurer()
     val onSurface = MaterialTheme.colorScheme.onSurface
     val outline = MaterialTheme.colorScheme.outline
@@ -660,59 +640,150 @@ private fun SpeakerLayoutMap(
         Canvas(modifier = Modifier.fillMaxSize()) {
             val cx = size.width / 2f
             val cy = size.height / 2f
-            val ringR = min(cx, cy) * 0.82f
+            val half = min(cx, cy) * 0.82f
 
-            // Room boundary + listener.
-            drawCircle(color = outline.copy(alpha = 0.25f), radius = ringR, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
-            drawCircle(color = onSurface.copy(alpha = 0.5f), radius = ringR * 0.05f, center = Offset(cx, cy))
+            // Square room boundary (slightly rounded corners) + listener.
+            drawRoundRect(
+                color = outline.copy(alpha = 0.25f),
+                topLeft = Offset(cx - half, cy - half),
+                size = androidx.compose.ui.geometry.Size(2f * half, 2f * half),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(half * 0.10f, half * 0.10f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f),
+            )
+            drawCircle(color = onSurface.copy(alpha = 0.5f), radius = half * 0.05f, center = Offset(cx, cy))
 
-            speakers.forEach { s ->
-                val pos = speakerPosition(s, cx, cy, ringR)
+            speakers.forEachIndexed { i, s ->
+                val level = levels?.get(i)
+                // Live: glow brightness + reach + dot opacity all render the
+                // channel's volume; a silent channel stays a dim marker.
+                // Idle: the gentle shared pulse.
+                val glowAlpha = if (level != null) 0.10f + 0.70f * level else 0.45f * pulse
+                val glowScale = if (level != null) 0.8f + 1.5f * level else 1f
+                val dotAlpha = if (level != null) 0.35f + 0.65f * level else 0.9f
+                val pos = if (s.isLfe) Offset(cx, cy + half * 0.28f)
+                else speakerPosition(s, cx, cy, half)
                 val tint = if (s.isHeight) heightTint else accent
-                if (s.isLfe) {
-                    // LFE: directionless, drawn just below the listener.
-                    val lfePos = Offset(cx, cy + ringR * 0.28f)
-                    drawSpeaker(lfePos, tint, pulse, dotScale = 0.85f, textMeasurer, s, onSurface)
-                } else {
-                    drawSpeaker(pos, tint, pulse, dotScale = if (s.isHeight) 0.9f else 1f, textMeasurer, s, onSurface)
+                val dotScale = when {
+                    s.isLfe -> 0.85f
+                    s.isHeight -> 0.9f
+                    else -> 1f
                 }
+                drawSpeaker(
+                    pos, tint, glowAlpha, glowScale, dotAlpha, dotScale,
+                    Offset(cx, cy), textMeasurer, s, onSurface,
+                )
             }
         }
     }
 }
 
-/** Screen position for a speaker: azimuth 0 = front (up), growing clockwise. */
-private fun speakerPosition(s: SpeakerChannel, cx: Float, cy: Float, ringR: Float): Offset {
-    // Height speakers pulled onto an inner ring so they read as "above".
-    val r = ringR * if (s.isHeight) 0.55f else 1f
+/**
+ * Room positions for the channel detector's assumed layout names — the map
+ * counterpart of [tf.monochrome.android.audio.dsp.ChannelDetectorProcessor]'s
+ * channel order tables (FLAC/FFmpeg order; 16 ch = 9.1.6). Unknown names
+ * (generic "Ch n" layouts) are spread evenly around the ring.
+ */
+private fun detectedSpeakers(names: List<String>): List<SpeakerChannel> =
+    names.mapIndexed { i, n ->
+        when (n) {
+            "M" -> SpeakerChannel("M", 0f)
+            "FL" -> SpeakerChannel("FL", -30f)
+            "FR" -> SpeakerChannel("FR", 30f)
+            "FC" -> SpeakerChannel("FC", 0f)
+            "LFE" -> SpeakerChannel("LFE", 0f, isLfe = true)
+            "SL" -> SpeakerChannel("SL", -90f)
+            "SR" -> SpeakerChannel("SR", 90f)
+            "BL" -> SpeakerChannel("BL", -150f)
+            "BR" -> SpeakerChannel("BR", 150f)
+            "BLC" -> SpeakerChannel("BLC", -165f)
+            "BRC" -> SpeakerChannel("BRC", 165f)
+            "BC" -> SpeakerChannel("BC", 180f)
+            "TFL" -> SpeakerChannel("TFL", -45f, 45f)
+            "TFR" -> SpeakerChannel("TFR", 45f, 45f)
+            "TSL" -> SpeakerChannel("TSL", -90f, 45f)
+            "TSR" -> SpeakerChannel("TSR", 90f, 45f)
+            "TBL" -> SpeakerChannel("TBL", -135f, 45f)
+            "TBR" -> SpeakerChannel("TBR", 135f, 45f)
+            else -> SpeakerChannel(n, -180f + 360f * (i + 0.5f) / names.size)
+        }
+    }
+
+/**
+ * Screen position for a speaker in the SQUARE room: azimuth 0 = front (up),
+ * growing clockwise. The direction vector is projected onto the square's
+ * boundary (divide by the larger axis component), so walls hold the cardinal
+ * speakers and corners hold the diagonals — like speakers along real walls.
+ */
+private fun speakerPosition(s: SpeakerChannel, cx: Float, cy: Float, half: Float): Offset {
+    // Height speakers pulled onto an inner square so they read as "above".
+    val r = half * if (s.isHeight) 0.55f else 1f
     val az = Math.toRadians(s.azimuthDeg.toDouble())
-    val x = cx + r * sin(az).toFloat()
-    val y = cy - r * cos(az).toFloat()
-    return Offset(x, y)
+    var dx = sin(az).toFloat()
+    var dy = -cos(az).toFloat()
+    val m = maxOf(kotlin.math.abs(dx), kotlin.math.abs(dy))
+    if (m > 1e-6f) {
+        dx /= m
+        dy /= m
+    }
+    return Offset(cx + dx * r, cy + dy * r)
 }
 
 private fun DrawScope.drawSpeaker(
     pos: Offset,
     tint: Color,
-    pulse: Float,
+    glowAlpha: Float,
+    glowScale: Float,
+    dotAlpha: Float,
     dotScale: Float,
+    listener: Offset,
     textMeasurer: androidx.compose.ui.text.TextMeasurer,
     speaker: SpeakerChannel,
     labelColor: Color,
 ) {
-    val glowR = 26f * dotScale
-    // Soft bloom.
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(tint.copy(alpha = 0.45f * pulse), Color.Transparent),
-            center = pos,
+    val glowR = 40f * dotScale * glowScale
+    if (glowAlpha > 0.01f) {
+        // Directional light: a tapered beam from the speaker aimed at the
+        // listener — narrow at the source, widening as it travels, fading to
+        // nothing. Reach and width grow with the channel's level, so loud
+        // channels visibly "shine" into the room centre.
+        val toListener = listener - pos
+        val dist = toListener.getDistance()
+        if (dist > 1f) {
+            val dir = toListener / dist
+            val perp = Offset(-dir.y, dir.x)
+            val reach = dist * (0.35f + 0.30f * glowScale).coerceAtMost(0.92f)
+            val end = pos + dir * reach
+            val srcW = glowR * 0.28f
+            val endW = glowR * 0.95f
+            val beam = androidx.compose.ui.graphics.Path().apply {
+                moveTo(pos.x + perp.x * srcW, pos.y + perp.y * srcW)
+                lineTo(end.x + perp.x * endW, end.y + perp.y * endW)
+                lineTo(end.x - perp.x * endW, end.y - perp.y * endW)
+                lineTo(pos.x - perp.x * srcW, pos.y - perp.y * srcW)
+                close()
+            }
+            drawPath(
+                path = beam,
+                brush = Brush.linearGradient(
+                    colors = listOf(tint.copy(alpha = glowAlpha * 0.85f), tint.copy(alpha = 0f)),
+                    start = pos,
+                    end = end,
+                ),
+            )
+        }
+        // Soft bloom at the source, rendered from the channel's live level.
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(tint.copy(alpha = glowAlpha), Color.Transparent),
+                center = pos,
+                radius = glowR,
+            ),
             radius = glowR,
-        ),
-        radius = glowR,
-        center = pos,
-    )
+            center = pos,
+        )
+    }
     // Solid speaker dot.
-    drawCircle(color = tint.copy(alpha = 0.9f), radius = 7f * dotScale, center = pos)
+    drawCircle(color = tint.copy(alpha = dotAlpha), radius = 7f * dotScale, center = pos)
 
     // Label just below the dot.
     val measured = textMeasurer.measure(
@@ -725,13 +796,3 @@ private fun DrawScope.drawSpeaker(
     )
 }
 
-/**
- * The three binaural back-end sources on the renderer page. OFF bypasses the
- * HRTF entirely (dry stereo fold-down — the built-in AutoEQ becomes the only
- * headphone shaping); the other two pick which impulse-response set drives it.
- */
-private enum class HrtfChoice(val label: String) {
-    OFF("Off (AutoEQ only)"),
-    BUILT_IN("Built-in HRTF"),
-    CUSTOM("Custom HRTF (SOFA)"),
-}
