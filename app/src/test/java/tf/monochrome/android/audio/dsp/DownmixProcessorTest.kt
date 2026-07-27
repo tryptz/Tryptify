@@ -357,6 +357,47 @@ class DownmixProcessorTest {
         assertEquals(0.22646f, lfe[0], floatTol)
     }
 
+    // ── LFE low-pass path ────────────────────────────────────────────────
+
+    @Test
+    fun `lfe lowpass - DC LFE settles to the matrix gain (unity DC filter)`() {
+        val p = processor().apply { setLfeLowpass(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        val frames = Array(8000) { floatArrayOf(0f, 0f, 0f, 0.5f, 0f, 0f) }
+        val out = drainFloats(p, floatBuffer(*frames))
+        // Butterworth DC gain is 1 → steady state = 0.5 × 2.26464431.
+        assertEquals(1.13232f, out[out.size - 2], 1e-3f)
+        assertEquals(1.13232f, out[out.size - 1], 1e-3f)
+    }
+
+    @Test
+    fun `lfe lowpass - dry path is delayed by the filter group delay`() {
+        val p = processor().apply { setLfeLowpass(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        // FL impulse in frame 0; delay at 48 kHz = round(48000·2.6131/(2π·125)) = 160.
+        val frames = Array(400) { i ->
+            if (i == 0) floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f) else FloatArray(6)
+        }
+        val out = drainFloats(p, floatBuffer(*frames))
+        assertEquals(0f, out[0], floatTol)
+        assertEquals(1f, out[2 * 160], floatTol)
+        assertEquals(0f, out[2 * 161], floatTol)
+    }
+
+    @Test
+    fun `lfe lowpass - high-frequency LFE content is attenuated to silence`() {
+        val p = processor().apply { setLfeLowpass(true) }
+        configureAndFlush(p, 48000, 6, C.ENCODING_PCM_FLOAT)
+        // 4.8 kHz into the LFE: ~5.3 octaves above 125 Hz → ≥ −127 dB at 24 dB/oct.
+        val frames = Array(4000) { i ->
+            floatArrayOf(0f, 0f, 0f, kotlin.math.sin(2.0 * Math.PI * 4800.0 * i / 48000.0).toFloat() * 0.5f, 0f, 0f)
+        }
+        val out = drainFloats(p, floatBuffer(*frames))
+        for (i in (out.size - 200) until out.size) {
+            assertTrue("leaked hf at $i: ${out[i]}", kotlin.math.abs(out[i]) < 0.01f)
+        }
+    }
+
     @Test
     fun `matrix switch applies on next flush, not mid-stream`() {
         val p = processor()

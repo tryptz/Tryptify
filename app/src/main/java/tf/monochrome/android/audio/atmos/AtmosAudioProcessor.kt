@@ -145,6 +145,11 @@ class AtmosAudioProcessor @Inject constructor(
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
+    // Optional LFE low-pass for the fallback fold (profile.lfeLowpass):
+    // configured lazily to the stream rate on first use, reset on flush.
+    private val lfeFold = tf.monochrome.android.audio.dsp.LfeLowPassFilter()
+    private var lfeFoldRate = 0
+
     // Interleaved bed accumulation (grows to a few frames, reused).
     private var bed = FloatArray(0)
     private var bedSamples = 0
@@ -255,6 +260,7 @@ class AtmosAudioProcessor @Inject constructor(
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
         bedSamples = 0
+        lfeFold.reset()  // no pre-seek audio in the LFE filter / dry delay
         frameBuffer.clear()
         anchorUs = Long.MIN_VALUE
         anchorSamples = 0L
@@ -390,10 +396,18 @@ class AtmosAudioProcessor @Inject constructor(
         // Downmix preamp (--master-gain-db equivalent): one linear gain on
         // the fold output, computed once per 1536-sample frame.
         val preamp = Math.pow(10.0, cur.downmixPreampDb / 20.0).toFloat()
+        // Optional LFE path: low-pass the LFE feed and delay the dry fold to
+        // match. Lazily (re)configured — the toggle can flip mid-stream.
+        val lfeLp = cur.lfeLowpass && c >= 6
+        if (lfeLp && lfeFoldRate != inputFormat.sampleRate) {
+            lfeFoldRate = inputFormat.sampleRate
+            lfeFold.configure(lfeFoldRate)
+        }
         for (i in 0 until FRAME_SAMPLES) {
             val b = i * c
             if (c >= 6) {
-                val mid = 0.70710678f * frame[b + 2] + 2.26464431f * frame[b + 3]
+                val fc = 0.70710678f * frame[b + 2]
+                val lfeIn = frame[b + 3]
                 // Surround sums per side (SL+BL / SR+BR when 7.1).
                 var sl = frame[b + 4]
                 var sr = frame[b + 5]
@@ -401,14 +415,22 @@ class AtmosAudioProcessor @Inject constructor(
                     sl += frame[b + 6]
                     sr += frame[b + 7]
                 }
-                val l: Float
-                val r: Float
+                var l: Float
+                var r: Float
                 if (ltRt) {
-                    l = frame[b] + mid - 0.8165f * sl - 0.5774f * sr
-                    r = frame[b + 1] + mid + 0.5774f * sl + 0.8165f * sr
+                    l = frame[b] + fc - 0.8165f * sl - 0.5774f * sr
+                    r = frame[b + 1] + fc + 0.5774f * sl + 0.8165f * sr
                 } else {
-                    l = frame[b] + mid + sl
-                    r = frame[b + 1] + mid + sr
+                    l = frame[b] + fc + sl
+                    r = frame[b + 1] + fc + sr
+                }
+                if (lfeLp) {
+                    val f = 2.26464431f * lfeFold.filterLfe(lfeIn)
+                    l = lfeFold.delayDryL(l) + f
+                    r = lfeFold.delayDryR(r) + f
+                } else {
+                    l += 2.26464431f * lfeIn
+                    r += 2.26464431f * lfeIn
                 }
                 stereo[2 * i] = l * preamp
                 stereo[2 * i + 1] = r * preamp

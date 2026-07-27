@@ -118,6 +118,26 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         preampDb = db
     }
 
+    /**
+     * Optional LFE path (the peqdb renderer's --lfe-filter-mode): Butterworth
+     * 4th-order 125 Hz low-pass on the LFE feed, dry path delay-matched
+     * before summing. Latched in flush() like the matrix choice. Adds the
+     * filter's group delay (~3.3 ms) of output latency while enabled.
+     */
+    @Volatile
+    private var lfeLowpassEnabled: Boolean = false
+
+    fun setLfeLowpass(e: Boolean) {
+        lfeLowpassEnabled = e
+    }
+
+    // LFE-path state, valid while lfeActive (flush()-latched).
+    private val lfeFilter = LfeLowPassFilter()
+    private var lfeActive = false
+    private var lfeIndex = -1
+    private var lfeGainL = 0f
+    private var lfeGainR = 0f
+
     // ── AudioProcessor implementation ────────────────────────────────────
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
@@ -175,15 +195,31 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
                     accL += cL[c] * s
                     accR += cR[c] * s
                 }
-                val off = i * 8
-                outputBuffer.putFloat(off, accL)
-                outputBuffer.putFloat(off + 4, accR)
             } else {
                 for (c in 0 until channels) {
                     val s = inputBuffer.getShort(base + c * 2).toFloat() / 32768f
                     accL += cL[c] * s
                     accR += cR[c] * s
                 }
+            }
+            // LFE low-pass path: the matrix rows carry 0 for the LFE while
+            // active, so the fold above is the dry path — delay it and sum
+            // the filtered LFE on top at the matrix gain.
+            if (lfeActive) {
+                val lfeS = if (isFloat) {
+                    inputBuffer.getFloat(base + lfeIndex * 4)
+                } else {
+                    inputBuffer.getShort(base + lfeIndex * 2).toFloat() / 32768f
+                }
+                val f = lfeFilter.filterLfe(lfeS)
+                accL = lfeFilter.delayDryL(accL) + lfeGainL * f
+                accR = lfeFilter.delayDryR(accR) + lfeGainR * f
+            }
+            if (isFloat) {
+                val off = i * 8
+                outputBuffer.putFloat(off, accL)
+                outputBuffer.putFloat(off + 4, accR)
+            } else {
                 val off = i * 4
                 outputBuffer.putShort(off, (accL * 32768f).toInt().coerceIn(-32768, 32767).toShort())
                 outputBuffer.putShort(off + 2, (accR * 32768f).toInt().coerceIn(-32768, 32767).toShort())
@@ -221,6 +257,20 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             val gain = 10f.pow(preampDb / 20f)
             coefL = FloatArray(rows.first.size) { rows.first[it] * gain }
             coefR = FloatArray(rows.second.size) { rows.second[it] * gain }
+            // LFE low-pass path: pull the LFE out of the matrix rows and run
+            // it through the filter instead; the dry fold goes through the
+            // matching delay. Latched here so the hot loop never re-checks
+            // the setting mid-stream.
+            val kinds = KIND_TABLES.getValue(inputFormat.channelCount)
+            lfeIndex = kinds.indexOf(Kind.LFE_CH)
+            lfeActive = lfeLowpassEnabled && lfeIndex >= 0
+            if (lfeActive) {
+                lfeGainL = coefL[lfeIndex]
+                lfeGainR = coefR[lfeIndex]
+                coefL[lfeIndex] = 0f
+                coefR[lfeIndex] = 0f
+                lfeFilter.configure(inputFormat.sampleRate)
+            }
         }
     }
 
@@ -230,6 +280,9 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         inputFormat = AudioFormat.NOT_SET
         coefL = FloatArray(0)
         coefR = FloatArray(0)
+        lfeActive = false
+        lfeIndex = -1
+        lfeFilter.reset()
     }
 
     companion object {

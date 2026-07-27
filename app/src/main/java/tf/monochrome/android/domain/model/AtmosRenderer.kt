@@ -143,6 +143,12 @@ data class RendererProfile(
      */
     val downmixPreampDb: Float = 0f,
     /**
+     * Optional LFE path in the fold (the peqdb renderer's --lfe-filter-mode):
+     * Butterworth 4th-order 125 Hz low-pass on the LFE feed, dry path
+     * delay-matched before summing. false = dry direct LFE (their default).
+     */
+    val lfeLowpass: Boolean = false,
+    /**
      * Master switch for the HRTF binauralizer. Off = the binaural render runs
      * fully dry (plain stereo fold-down, no head-related colouration), so the
      * only headphone shaping left in the chain is the app's own built-in

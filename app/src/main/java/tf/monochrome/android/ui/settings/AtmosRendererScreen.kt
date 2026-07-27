@@ -412,6 +412,13 @@ fun AtmosRendererScreen(
                 enabled = downmixEnabled,
                 onValueChange = { viewModel.update(profile.copy(downmixPreampDb = it)) },
             )
+            SettingSwitchItem(
+                title = "LFE low-pass (125 Hz)",
+                subtitle = "Butterworth 4th-order on the LFE feed; the dry path is " +
+                    "delay-matched (~3.3 ms) before summing. Off = dry direct LFE.",
+                checked = profile.lfeLowpass,
+                onCheckedChange = { viewModel.update(profile.copy(lfeLowpass = it)) },
+            )
             Spacer(Modifier.height(20.dp))
 
             // ── Downmix matrix ─────────────────────────────────────────────

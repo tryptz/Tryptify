@@ -293,6 +293,7 @@ class PlaybackService : MediaSessionService() {
                         tf.monochrome.android.domain.model.StereoDownmixMode.LT_RT
                 )
                 downmixProcessor.setPreampDb(profile.downmixPreampDb)
+                downmixProcessor.setLfeLowpass(profile.lfeLowpass)
             }
         }
 
