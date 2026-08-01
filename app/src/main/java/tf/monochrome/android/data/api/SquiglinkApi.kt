@@ -89,12 +89,25 @@ class SquiglinkApi {
     suspend fun fetchMeasurementText(host: String, fileName: String): String? =
         withContext(Dispatchers.IO) {
             for (channel in arrayOf("L", "R")) {
-                val name = URLEncoder.encode("$fileName $channel.txt", "UTF-8").replace("+", "%20")
-                val body = fetchUrl("$host/data/$name")
+                val body = fetchChannel(host, fileName, channel)
                 if (body != null) return@withContext body
             }
             null
         }
+
+    /**
+     * Fetch exactly ONE channel's FR text ("L" or "R"); null when that channel
+     * isn't published. No fallback on purpose — per-ear calibration needs to
+     * know the difference between "here is the right ear" and "here is
+     * whatever existed".
+     */
+    suspend fun fetchMeasurementChannelText(host: String, fileName: String, channel: String): String? =
+        withContext(Dispatchers.IO) { fetchChannel(host, fileName, channel) }
+
+    private fun fetchChannel(host: String, fileName: String, channel: String): String? {
+        val name = URLEncoder.encode("$fileName $channel.txt", "UTF-8").replace("+", "%20")
+        return fetchUrl("$host/data/$name")
+    }
 
     fun clearCache() {
         cachedHeadphones = null

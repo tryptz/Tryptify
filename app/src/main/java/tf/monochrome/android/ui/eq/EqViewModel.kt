@@ -978,6 +978,61 @@ class EqViewModel @Inject constructor(
         } catch (_: Exception) { }
     }
 
+    /**
+     * Load a squig.link L/R measurement pair and compute BOTH ears' corrections
+     * in one go. Returns false when neither channel file exists (caller falls
+     * back to the single-file path). A missing single channel borrows the other
+     * ear's curve, and the labels say which file each ear actually got.
+     */
+    private suspend fun loadStereoPair(
+        measurement: tf.monochrome.android.domain.model.AutoEqMeasurement,
+    ): Boolean {
+        val lText = headphoneRepository.fetchMeasurementChannelText(measurement, "L")
+        val rText = headphoneRepository.fetchMeasurementChannelText(measurement, "R")
+        if (lText == null && rText == null) return false
+
+        val lParsed = lText?.let { EqDataParser.parseRawData(it) }.orEmpty()
+        val rParsed = rText?.let { EqDataParser.parseRawData(it) }.orEmpty()
+        val leftCurve = lParsed.ifEmpty { rParsed }
+        val rightCurve = rParsed.ifEmpty { lParsed }
+        if (leftCurve.isEmpty()) return false
+
+        val target = _selectedTarget.value.data
+        if (target.isEmpty()) {
+            // Handled here (error surfaced) — returning true stops the caller
+            // from re-fetching just to hit the same wall.
+            _error.value = "Target curve not available"
+            return true
+        }
+
+        fun compute(m: List<FrequencyPoint>) = AutoEqEngine.runAutoEqAlgorithm(
+            measurement = m,
+            target = target,
+            bandCount = _bandCount.value,
+            maxFrequency = _maxFrequency.value,
+            sampleRate = _sampleRate.value,
+        )
+
+        _originalMeasurement.value = leftCurve
+        persistMeasurement(leftCurve)
+        _measurementLabelL.value = measurement.fileName +
+            (if (lParsed.isNotEmpty()) " L" else " R") + " · " + measurement.source
+        val bandsL = compute(leftCurve)
+        _currentBands.value = bandsL
+        saveBandsToPreferences(bandsL)
+
+        _originalMeasurementR.value = rightCurve
+        persistMeasurementR(rightCurve)
+        _measurementLabelR.value = measurement.fileName +
+            (if (rParsed.isNotEmpty()) " R" else " L") + " · " + measurement.source
+        val bandsR = compute(rightCurve)
+        _currentBandsR.value = bandsR
+        saveBandsRToPreferences(bandsR)
+
+        _error.value = null
+        return true
+    }
+
     private suspend fun persistMeasurementR(points: List<FrequencyPoint>) {
         try {
             val json = kotlinx.serialization.json.Json.encodeToString(
@@ -996,6 +1051,20 @@ class EqViewModel @Inject constructor(
             _isCalculating.value = true
             _error.value = null
 
+            // 2-channel mode + squig.link: the source publishes true per-ear
+            // files ("<name> L.txt"/"<name> R.txt"), so one selection from the
+            // primary picker fills BOTH ears with their own corrections.
+            if (channel == EqChannel.LEFT && _stereoMode.value &&
+                measurement.target == "squiglink" &&
+                measurement.rig != tf.monochrome.android.domain.model.MeasurementRig.UPLOADED
+            ) {
+                if (loadStereoPair(measurement)) {
+                    _isCalculating.value = false
+                    return
+                }
+                // Neither channel file exists — fall through to the generic path.
+            }
+
             // Uploaded measurements carry their FR data inline on the
             // Headphone — short-circuit the remote fetch.
             val parsed = if (measurement.rig == tf.monochrome.android.domain.model.MeasurementRig.UPLOADED) {
@@ -1004,7 +1073,17 @@ class EqViewModel @Inject constructor(
                     ?.data
                     ?: emptyList()
             } else {
-                val csvData = headphoneRepository.fetchMeasurementText(measurement)
+                // squig.link: prefer the exact channel file for the ear being
+                // loaded — the old L-then-R fallback handed the RIGHT picker
+                // the left ear's data whenever an L file existed.
+                val csvData = if (measurement.target == "squiglink") {
+                    val want = if (channel == EqChannel.RIGHT) "R" else "L"
+                    val other = if (channel == EqChannel.RIGHT) "L" else "R"
+                    headphoneRepository.fetchMeasurementChannelText(measurement, want)
+                        ?: headphoneRepository.fetchMeasurementChannelText(measurement, other)
+                } else {
+                    headphoneRepository.fetchMeasurementText(measurement)
+                }
                 if (csvData == null) {
                     _error.value = "Failed to fetch measurement"
                     _isCalculating.value = false

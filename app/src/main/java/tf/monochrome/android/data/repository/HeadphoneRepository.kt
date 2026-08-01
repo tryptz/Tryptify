@@ -46,6 +46,20 @@ class HeadphoneRepository @Inject constructor(
         else -> autoEqApi.fetchMeasurementByPath(measurement.path, measurement.fileName).getOrNull()
     }
 
+    /**
+     * Fetch one specific channel ("L"/"R") of a measurement. Only squig.link
+     * publishes per-channel files; other sources return null and callers fall
+     * back to the single-file path. Null also means "this channel isn't
+     * published" — deliberately NOT papered over with the other channel.
+     */
+    suspend fun fetchMeasurementChannelText(measurement: AutoEqMeasurement, channel: String): String? =
+        when (measurement.target) {
+            "squiglink" -> squiglinkApi.fetchMeasurementChannelText(
+                measurement.host, measurement.fileName, channel,
+            )
+            else -> null
+        }
+
     private fun mergeByName(all: List<Headphone>): List<Headphone> =
         all.groupBy { it.name }.map { (name, group) ->
             Headphone(
