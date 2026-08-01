@@ -104,6 +104,15 @@ class EqViewModel @Inject constructor(
     private val _smoothing = MutableStateFlow(0f)
     val smoothing: StateFlow<Float> = _smoothing.asStateFlow()
 
+    // Fitting algorithm — selectable so shelf-ends and peaking-only stacks
+    // can be A/B'd on the same measurement. Applies on the next AutoEQ press.
+    private val _algorithm = MutableStateFlow(tf.monochrome.android.audio.eq.AutoEqAlgorithm.PEAKING)
+    val algorithm: StateFlow<tf.monochrome.android.audio.eq.AutoEqAlgorithm> = _algorithm.asStateFlow()
+
+    fun setAlgorithm(algorithm: tf.monochrome.android.audio.eq.AutoEqAlgorithm) {
+        _algorithm.value = algorithm
+    }
+
     private val _currentPreamp = MutableStateFlow(0f)
     val currentPreamp: StateFlow<Float> = _currentPreamp.asStateFlow()
 
@@ -586,6 +595,7 @@ class EqViewModel @Inject constructor(
         bandCount = _bandCount.value,
         maxFrequency = _maxFrequency.value,
         sampleRate = _sampleRate.value,
+        algorithm = _algorithm.value,
     )
 
     /**

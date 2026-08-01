@@ -106,6 +106,7 @@ fun EqualizerScreen(
     val measurementSampleL by viewModel.measurementSampleL.collectAsState()
     val measurementSampleR by viewModel.measurementSampleR.collectAsState()
     val smoothing by viewModel.smoothing.collectAsState()
+    val algorithm by viewModel.algorithm.collectAsState()
 
     // Which ear the graph, band list and export operate on. Off-stereo this is
     // always the left/mono channel, so everything below reduces to the old UI.
@@ -394,6 +395,32 @@ fun EqualizerScreen(
                         enabled = !autoPreamp,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+              }
+            }
+
+            // ─── Algorithm selector — applies on the next AutoEQ press ───
+            item {
+              tf.monochrome.android.devedit.DevEditable("eq_algorithm_row", Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "ALGORITHM",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    tf.monochrome.android.audio.eq.AutoEqAlgorithm.entries.forEach { algo ->
+                        FilterChip(
+                            selected = algorithm == algo,
+                            onClick = { viewModel.setAlgorithm(algo) },
+                            label = { Text(algo.label) },
+                        )
+                    }
                 }
               }
             }

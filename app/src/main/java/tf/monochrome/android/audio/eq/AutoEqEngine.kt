@@ -17,6 +17,25 @@ import kotlin.math.max
  * AutoEqEngine — Headphone correction filter generator.
  * Greedy iterative algorithm matching the SeapEngine implementation.
  */
+/**
+ * How the correction stack is fitted.
+ *
+ * [PEAKING] — the classic greedy fit: every band is a bell, including at the
+ * frequency extremes.
+ *
+ * [SHELF_ENDS] — fits a low shelf and a high shelf FIRST, then bells on the
+ * residual. Engineering rationale: headphone deviations at the extremes are
+ * broad tilts (bass roll-off/boost, treble tilt), not resonances — a shelf
+ * matches that shape with one filter where bells leave ripple, extrapolates
+ * gracefully below/above the measurement's reliable range (rig bass data
+ * under ~40 Hz is seal-dependent noise), and carries no resonant overshoot
+ * into the preamp headroom budget.
+ */
+enum class AutoEqAlgorithm(val label: String) {
+    PEAKING("Peaking"),
+    SHELF_ENDS("Shelf ends"),
+}
+
 object AutoEqEngine {
 
     /**
@@ -143,7 +162,8 @@ object AutoEqEngine {
         maxFrequency: Float = 16000f,
         minFrequency: Float = 20f,
         @Suppress("UNUSED_PARAMETER") maxQ: Float = MAX_Q.toFloat(),
-        sampleRate: Float = DEFAULT_SAMPLE_RATE
+        sampleRate: Float = DEFAULT_SAMPLE_RATE,
+        algorithm: AutoEqAlgorithm = AutoEqAlgorithm.PEAKING,
     ): List<EqBand> {
         val offset = getNormalizationOffset(target) - getNormalizationOffset(measurement)
 
@@ -154,7 +174,28 @@ object AutoEqEngine {
 
         val bands = mutableListOf<EqBand>()
 
-        for (i in 0 until bandCount) {
+        if (algorithm == AutoEqAlgorithm.SHELF_ENDS) {
+            // Low shelf: corner at AutoEq's conventional 105 Hz, gain fitted to
+            // the mean error below it. Full ±12 range — bass boosts are the
+            // shelf's whole job.
+            fitEndShelf(
+                error, FilterType.LOWSHELF,
+                corner = 105f, regionLo = minFrequency, regionHi = 105f,
+                maxBoost = MAX_BOOST, sampleRate = sampleRate, id = bands.size,
+            )?.let(bands::add)
+            // High shelf: corner at 10 kHz (pulled down when the fit range
+            // ends earlier). Boost capped at 4 dB — the plateau spans the
+            // whole top octave, where measurement confidence and hearing-
+            // damage risk both argue for restraint; cuts keep the full range.
+            val hiCorner = kotlin.math.min(10_000f, maxFrequency * 0.75f)
+            fitEndShelf(
+                error, FilterType.HIGHSHELF,
+                corner = hiCorner, regionLo = hiCorner, regionHi = maxFrequency,
+                maxBoost = 4.0, sampleRate = sampleRate, id = bands.size,
+            )?.let(bands::add)
+        }
+
+        while (bands.size < bandCount) {
             var maxDev = 0.0
             var maxWeightedDev = 0.0
             var peakFreq = 1000.0
@@ -232,7 +273,7 @@ object AutoEqEngine {
             if (gain > 0.0 && q > 2.0) q = 2.0          // boost safety
 
             val newBand = EqBand(
-                id = i,
+                id = bands.size,
                 type = FilterType.PEAKING,
                 freq = peakFreq.toFloat(),
                 gain = gain.toFloat(),
@@ -250,5 +291,53 @@ object AutoEqEngine {
 
         // Sort by frequency, re-index
         return bands.sortedBy { it.freq }.mapIndexed { idx, b -> b.copy(id = idx) }
+    }
+
+    /**
+     * Fits one end shelf to the mean residual error over [regionLo, regionHi]
+     * and subtracts its real (RBJ) response from the error curve. Returns null
+     * when the region is empty or the fitted gain is below 1 dB — a broadband
+     * tilt under 1 dB sits at the just-noticeable difference, and residual
+     * sub-dB offsets also appear spuriously whenever midband normalization
+     * shifts the whole curve. Not worth a filter slot either way.
+     */
+    private fun fitEndShelf(
+        error: MutableList<FrequencyPoint>,
+        type: FilterType,
+        corner: Float,
+        regionLo: Float,
+        regionHi: Float,
+        maxBoost: Double,
+        sampleRate: Float,
+        id: Int,
+    ): EqBand? {
+        var sum = 0.0
+        var count = 0
+        for (p in error) {
+            if (p.freq in regionLo..regionHi) {
+                sum += p.gain
+                count++
+            }
+        }
+        if (count == 0) return null
+        var gain = -(sum / count)
+        if (gain > maxBoost) gain = maxBoost
+        if (gain < -MAX_CUT) gain = -MAX_CUT
+        if (abs(gain) < 1.0) return null
+
+        // Butterworth shoulder: monotonic, no corner overshoot to re-correct.
+        val band = EqBand(
+            id = id,
+            type = type,
+            freq = corner,
+            gain = gain.toFloat(),
+            q = 0.707f,
+            enabled = true,
+        )
+        for (j in error.indices) {
+            val response = calculateBiquadResponse(error[j].freq, band, sampleRate)
+            error[j] = FrequencyPoint(error[j].freq, error[j].gain + response)
+        }
+        return band
     }
 }
