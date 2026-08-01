@@ -120,7 +120,7 @@ import tf.monochrome.android.ui.theme.themeDisplayNames
 
 // "Radio" is appended after "About" so existing hardcoded tab indices
 // ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About", "Radio")
+private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "Radio", "About")
 
 /** One selectable step in the Appearance › Font Size picker. */
 private data class FontScalePreset(val label: String, val scale: Float)
@@ -220,8 +220,8 @@ fun SettingsScreen(
                     6 -> DownloadsTab(viewModel)
                     7 -> InstancesTab(viewModel)
                     8 -> SystemTab(viewModel, navController)
-                    9 -> AboutTab()
-                    10 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                    9 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                    10 -> AboutTab()
                 }
             }
         }
