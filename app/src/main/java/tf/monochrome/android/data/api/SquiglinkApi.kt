@@ -105,8 +105,16 @@ class SquiglinkApi {
         withContext(Dispatchers.IO) { fetchChannel(host, fileName, channel) }
 
     private fun fetchChannel(host: String, fileName: String, channel: String): String? {
-        val name = URLEncoder.encode("$fileName $channel.txt", "UTF-8").replace("+", "%20")
-        return fetchUrl("$host/data/$name")
+        // Two live naming conventions. Single-sample instances publish
+        // "<name> L.txt"; multi-sample rigs number their sweeps with NO
+        // un-numbered alias — Listener's GRAS publishes only "<name> L1.txt" —
+        // so the first sample is the fallback. (Verified live: precog serves
+        // "… L.txt" and 404s "… L1.txt"; listener is the exact inverse.)
+        for (suffix in arrayOf(channel, "${channel}1")) {
+            val name = URLEncoder.encode("$fileName $suffix.txt", "UTF-8").replace("+", "%20")
+            fetchUrl("$host/data/$name")?.let { return it }
+        }
+        return null
     }
 
     fun clearCache() {
