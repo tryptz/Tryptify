@@ -119,7 +119,6 @@ fun EqualizerScreen(
     var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var showTargetMenu by remember { mutableStateOf(false) }
     var showHeadphoneSelect by remember { mutableStateOf(false) }
-    var showMeasurementUpload by remember { mutableStateOf(false) }
     var showPresetMenu by remember { mutableStateOf(false) }
     var showBandsExpanded by rememberSaveable { mutableStateOf(true) }
     var showProfilesExpanded by rememberSaveable { mutableStateOf(true) }
@@ -308,6 +307,39 @@ fun EqualizerScreen(
               }
             }
 
+            // ─── Preamp (right under the graph it applies to) ───
+            item {
+              tf.monochrome.android.devedit.DevEditable("eq_preamp_slider", Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Preamp",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (autoPreamp) "Auto · ${currentPreamp.roundToInt()} dB"
+                            else "${currentPreamp.roundToInt()} dB",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = if (currentPreamp.isNaN()) 0f else currentPreamp.coerceIn(-24f, 24f),
+                        onValueChange = { viewModel.setPreamp(it) },
+                        valueRange = -24f..24f,
+                        steps = 47,
+                        enabled = !autoPreamp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+              }
+            }
+
             // ─── Bass / treble tone shelves (shares the player's tone setting) ───
             item {
                 tf.monochrome.android.ui.player.ToneControlsPanel(
@@ -472,16 +504,6 @@ fun EqualizerScreen(
                     }
                     // Entry point for the guided measurement-calibration flow,
                     // which was fully built but previously unreachable.
-                    TextButton(onClick = { showMeasurementUpload = true }) {
-                        Icon(
-                            Icons.Default.UploadFile,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Upload & calibrate a measurement")
-                    }
                     TextButton(onClick = { showProfileImport = true }) {
                         Icon(
                             Icons.Default.UploadFile,
@@ -919,39 +941,6 @@ fun EqualizerScreen(
             }
 
             if (showBandsExpanded) {
-                // Preamp
-                item {
-                  tf.monochrome.android.devedit.DevEditable("eq_preamp_slider", Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Preamp",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                if (autoPreamp) "Auto · ${currentPreamp.roundToInt()} dB"
-                                else "${currentPreamp.roundToInt()} dB",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Slider(
-                            value = if (currentPreamp.isNaN()) 0f else currentPreamp.coerceIn(-24f, 24f),
-                            onValueChange = { viewModel.setPreamp(it) },
-                            valueRange = -24f..24f,
-                            steps = 47,
-                            enabled = !autoPreamp,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                  }
-                }
-
                 // Band sliders
                 items(activeBands) { band ->
                     EqBandSlider(
@@ -1113,26 +1102,6 @@ fun EqualizerScreen(
         )
     }
 
-    if (showMeasurementUpload) {
-        AlertDialog(
-            onDismissRequest = { showMeasurementUpload = false },
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Transparent),
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            ),
-            content = {
-                MeasurementUploadScreen(
-                    viewModel = viewModel,
-                    onDismiss = { showMeasurementUpload = false },
-                    onCalibrationComplete = { showMeasurementUpload = false }
-                )
-            }
-        )
-    }
 
     presetToDelete?.let { preset ->
         AlertDialog(
