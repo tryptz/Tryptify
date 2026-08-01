@@ -348,6 +348,10 @@ fun FrequencyResponseGraph(
             }
 
             // EQ band dots ride the corrected curve, so they hide with it.
+            // Above ten bands the dots switch to compact handles — numbers and
+            // full-size circles at 31 bands are a wall that buries the very
+            // curve they annotate; the selected band always gets full detail.
+            val compactDots = eqBands.count { it.enabled } > 10
             if ("eqL" !in hiddenCurves) eqBands.forEach { band ->
                 if (!band.enabled) return@forEach
                 // Find normalized positions
@@ -414,41 +418,56 @@ fun FrequencyResponseGraph(
                     )
                 }
 
+                val dotRadius = when {
+                    isSelected -> 17f
+                    compactDots -> 6.5f
+                    else -> 15f
+                }
                 // Main dot shadow/border
                 drawCircle(
                     color = Color.Black,
-                    radius = if (isSelected) 19f else 17f,
+                    radius = dotRadius + 2f,
                     center = Offset(dotX, dotY)
                 )
 
                 // Main dot
                 drawCircle(
                     color = bandColor,
-                    radius = if (isSelected) 17f else 15f,
+                    radius = dotRadius,
                     center = Offset(dotX, dotY)
                 )
                 // White border
                 drawCircle(
                     color = curveNeutral,
-                    radius = if (isSelected) 17f else 15f,
+                    radius = dotRadius,
                     center = Offset(dotX, dotY),
-                    style = Stroke(width = if (isSelected) 3f else 2.5f)
+                    style = Stroke(
+                        width = when {
+                            isSelected -> 3f
+                            compactDots -> 1.5f
+                            else -> 2.5f
+                        }
+                    )
                 )
 
                 // Band number, so a dot maps to its row in the list below.
-                val numPaint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.WHITE
-                    textSize = 9.sp.toPx()
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    isFakeBoldText = true
-                    isAntiAlias = true
+                // Compact handles skip it (unreadable at that size and count);
+                // the selected band always shows its number.
+                if (!compactDots || isSelected) {
+                    val numPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.WHITE
+                        textSize = 9.sp.toPx()
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isFakeBoldText = true
+                        isAntiAlias = true
+                    }
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "${band.id + 1}",
+                        dotX,
+                        dotY + numPaint.textSize * 0.35f,
+                        numPaint,
+                    )
                 }
-                drawContext.canvas.nativeCanvas.drawText(
-                    "${band.id + 1}",
-                    dotX,
-                    dotY + numPaint.textSize * 0.35f,
-                    numPaint,
-                )
             }
         }
 
