@@ -1229,7 +1229,9 @@ fun EqualizerScreen(
 fun EqBandSlider(
     band: EqBand,
     onBandChanged: (EqBand) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Parametric rows are removable; AutoEQ rows (fixed band count) pass null.
+    onDelete: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -1240,8 +1242,19 @@ fun EqBandSlider(
         // --- Filter type ---
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onDelete != null) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Remove band",
+                        modifier = Modifier.size(15.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
             FilterType.values().forEach { type ->
                 val isSel = band.type == type
                 Box(
