@@ -220,6 +220,44 @@ class ParametricEqViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Import a parsed EqualizerAPO profile: saved as a Parametric profile,
+     * optionally loaded as the live curve. Mono by design — per-ear EQ lives
+     * on the AutoEQ surface.
+     */
+    fun importApoProfile(
+        profile: tf.monochrome.android.data.import_.ParsedEqProfile,
+        name: String,
+        apply: Boolean,
+    ) {
+        viewModelScope.launch {
+            try {
+                val bands = profile.bands.mapIndexed { i, b -> b.copy(id = i) }
+                val preset = EqPreset(
+                    id = "custom_paramEq_${System.currentTimeMillis()}",
+                    name = name,
+                    description = "Imported EqualizerAPO profile",
+                    bands = bands,
+                    preamp = profile.preamp,
+                    isCustom = true,
+                )
+                repository.savePreset(preset)
+                if (apply) {
+                    _currentBands.value = bands
+                    saveBands(bands)
+                    _currentPreamp.value = profile.preamp
+                    preferences.setParamEqPreamp(profile.preamp.toDouble())
+                    _activePreset.value = preset
+                    preferences.setParamEqActivePreset(preset.id)
+                    if (!_enabled.value) setEnabled(true)
+                }
+                _error.value = null
+            } catch (e: Exception) {
+                _error.value = "Failed to import profile: ${e.message}"
+            }
+        }
+    }
+
     fun deletePreset(presetId: String) {
         viewModelScope.launch {
             try {

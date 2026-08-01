@@ -581,6 +581,9 @@ data class EqPreset(
     val name: String,
     val description: String = "",
     val bands: List<EqBand> = emptyList(),
+    // Right-ear bands when the preset was saved in 2-channel mode; null = mono
+    // (bands drives both ears).
+    val bandsR: List<EqBand>? = null,
     val preamp: Float = 0f,
     val targetId: String = "",
     val targetName: String = "",

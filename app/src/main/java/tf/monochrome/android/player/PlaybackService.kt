@@ -297,14 +297,26 @@ class PlaybackService : MediaSessionService() {
         // handling this app's audio, so tone works independent of the system-wide
         // toggle (and without double-processing when it IS on).
         serviceScope.launch {
+            // Seven sources exceeds combine's typed overloads (max 5), so this
+            // uses the vararg form and casts each slot back out by position.
             kotlinx.coroutines.flow.combine(
                 preferences.eqEnabled,
                 preferences.eqBandsJson,
+                preferences.eqBandsRJson,
+                preferences.eqStereoMode,
                 preferences.eqPreamp,
                 preferences.systemToneControls,
                 preferences.systemWideAutoEqEnabled,
-            ) { enabled, bandsJson, preamp, tone, systemWide ->
-                EqApply(enabled, bandsJson, preamp, tone, systemWide)
+            ) { v ->
+                EqApply(
+                    enabled = v[0] as Boolean,
+                    bandsJson = v[1] as String?,
+                    bandsRJson = v[2] as String?,
+                    stereo = v[3] as Boolean,
+                    preamp = v[4] as Double,
+                    tone = v[5] as tf.monochrome.android.domain.model.ToneControls,
+                    systemWide = v[6] as Boolean,
+                )
             }.collect { applyEqSettings(it) }
         }
 
@@ -678,6 +690,8 @@ class PlaybackService : MediaSessionService() {
     private data class EqApply(
         val enabled: Boolean,
         val bandsJson: String?,
+        val bandsRJson: String?,
+        val stereo: Boolean,
         val preamp: Double,
         val tone: tf.monochrome.android.domain.model.ToneControls,
         val systemWide: Boolean,
@@ -704,6 +718,8 @@ class PlaybackService : MediaSessionService() {
                     EqApply(
                         enabled = preferences.eqEnabled.first(),
                         bandsJson = preferences.eqBandsJson.first(),
+                        bandsRJson = preferences.eqBandsRJson.first(),
+                        stereo = preferences.eqStereoMode.first(),
                         preamp = preferences.eqPreamp.first(),
                         tone = preferences.systemToneControls.first(),
                         systemWide = preferences.systemWideAutoEqEnabled.first(),
@@ -730,15 +746,24 @@ class PlaybackService : MediaSessionService() {
                 return
             }
             val json = Json { ignoreUnknownKeys = true }
-            val autoBands = if (cfg.enabled && !cfg.bandsJson.isNullOrEmpty()) {
-                json.decodeFromString<List<EqBand>>(cfg.bandsJson)
-            } else {
-                emptyList()
-            }
-            val bands = autoBands + cfg.tone.toBands()
+            fun decode(bandsJson: String?): List<EqBand> =
+                if (cfg.enabled && !bandsJson.isNullOrEmpty()) {
+                    json.decodeFromString(bandsJson)
+                } else {
+                    emptyList()
+                }
+            val autoL = decode(cfg.bandsJson)
+            // 2-channel mode gives the right ear its own curve; with the switch
+            // off (or no R curve saved yet) the left list drives both ears.
+            val autoR = if (cfg.stereo) decode(cfg.bandsRJson).ifEmpty { autoL } else autoL
+            // Tone shelves are ear-agnostic: appended to both channels so
+            // bass/treble stay centred regardless of the calibration split.
+            val toneBands = cfg.tone.toBands()
+            val bandsL = autoL + toneBands
+            val bandsR = autoR + toneBands
             val preamp = if (cfg.enabled) cfg.preamp else 0.0
-            val active = bands.any { it.enabled }
-            autoEqProcessor.applyBands(bands, preamp.toFloat(), active)
+            val active = bandsL.any { it.enabled } || bandsR.any { it.enabled }
+            autoEqProcessor.applyBands(bandsL, bandsR, preamp.toFloat(), active)
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }

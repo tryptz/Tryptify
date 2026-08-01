@@ -75,6 +75,9 @@ object ApoProfileParser {
     private val GAIN = keyword("Gain")
     private val Q = keyword("Q")
 
+    private val FILTER_TOKEN = Regex("(?i)Filter\\s*\\d+\\s*:")
+    private val PREAMP_TOKEN = Regex("(?i)Preamp\\s*:")
+
     /** Types with a direct [FilterType] equivalent. */
     private val PEAKING_CODES = setOf("PK", "PEQ", "EQ", "PEAKING")
     private val LOWSHELF_CODES = setOf("LS", "LSC", "LOWSHELF", "LSQ")
@@ -100,6 +103,7 @@ object ApoProfileParser {
         if (looksLikeMeasurementCsv(text)) {
             return ParsedEqProfile(looksLikeMeasurement = true)
         }
+        val prepared = ensureLineStructure(text)
 
         val warnings = mutableListOf<String>()
         val bands = mutableListOf<EqBand>()
@@ -109,7 +113,7 @@ object ApoProfileParser {
         var clampedGain = 0
         var clampedFreq = 0
 
-        for (raw in text.lineSequence()) {
+        for (raw in prepared.lineSequence()) {
             val line = raw.substringBefore('#').trim()
             if (line.isEmpty()) continue
 
@@ -143,7 +147,15 @@ object ApoProfileParser {
                 continue
             }
 
-            parseCsvBand(line, bands.size)?.let { bands += it }
+            parseCsvBand(line, bands.size)?.let { csv ->
+                // CSV rows go through the same clamp accounting as filter lines.
+                var b = csv
+                if (kotlin.math.abs(b.gain) > maxBandGainDb) {
+                    clampedGain++
+                    b = b.copy(gain = b.gain.coerceIn(-maxBandGainDb, maxBandGainDb))
+                }
+                bands += b
+            }
         }
 
         if (bands.isEmpty()) {
@@ -173,6 +185,24 @@ object ApoProfileParser {
         }
 
         return ParsedEqProfile(bands = bands, preamp = preamp, warnings = warnings)
+    }
+
+    /**
+     * Chat, web and PDF copies routinely strip a profile's newlines, gluing the
+     * comment header and every filter into one line — where the first '#'
+     * would swallow the whole text and zero filters would parse. When there
+     * are clearly more Filter tokens than lines, rebuild the structure by
+     * starting a fresh line at every Filter/Preamp token. Well-formed files
+     * are left untouched (their token count never exceeds their line count).
+     */
+    private fun ensureLineStructure(text: String): String {
+        val filters = FILTER_TOKEN.findAll(text).count()
+        if (filters <= 1) return text
+        val lines = text.count { it == '\n' } + 1
+        if (lines >= filters) return text
+        var rebuilt = FILTER_TOKEN.replace(text) { "\n" + it.value }
+        rebuilt = PREAMP_TOKEN.replace(rebuilt) { "\n" + it.value }
+        return rebuilt
     }
 
     private fun preampFor(bands: List<EqBand>): Float =

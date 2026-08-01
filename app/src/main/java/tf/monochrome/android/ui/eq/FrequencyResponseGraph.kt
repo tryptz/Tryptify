@@ -81,6 +81,11 @@ fun FrequencyResponseGraph(
     // Absolute cap used when mapping a drag's Y-pixel back to a gain value.
     // Defaults to the AutoEQ cap; Parametric EQ callers pass EqLimits.PARAMETRIC_MAX_BAND_DB.
     maxAbsDragGain: Float = EqLimits.AUTOEQ_MAX_BAND_DB,
+    // Read-only overlay of the OTHER ear in 2-channel mode: its measurement
+    // and bands render as stroke-only curves behind the primary channel, with
+    // no drag dots — edits always go through the primary channel props.
+    secondaryMeasurement: List<FrequencyPoint> = emptyList(),
+    secondaryBands: List<EqBand>? = null,
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
@@ -142,6 +147,45 @@ fun FrequencyResponseGraph(
                 }
                 FrequencyPoint(freq, g)
             }.filter { it.gain.isFinite() }
+        }
+    }
+
+    // Secondary (other-ear) corrected curve, mirroring correctedCurve. Falls
+    // back to the primary measurement when the other ear has no curve of its
+    // own yet, so the overlay still shows what that ear's bands would do.
+    val secondaryCorrected = remember(
+        secondaryMeasurement, secondaryBands, originalCurve, preamp, sampleRate, zeroOffset,
+    ) {
+        val bands = secondaryBands
+        if (bands == null) {
+            emptyList()
+        } else {
+            val base = secondaryMeasurement.ifEmpty { originalCurve }
+            if (base.isNotEmpty()) {
+                base.map { point ->
+                    var g = point.gain + preamp
+                    bands.forEach { band ->
+                        if (band.enabled) {
+                            g += AutoEqEngine.calculateBiquadResponse(point.freq, band, sampleRate)
+                        }
+                    }
+                    FrequencyPoint(point.freq, g)
+                }.filter { it.gain.isFinite() }
+            } else if (bands.isNotEmpty()) {
+                val samples = 256
+                val logMin = log10(MIN_FREQ)
+                val logMax = log10(MAX_FREQ)
+                (0 until samples).map { i ->
+                    val freq = 10f.pow(logMin + i.toFloat() / (samples - 1) * (logMax - logMin))
+                    var g = preamp + zeroOffset
+                    bands.forEach { band ->
+                        if (band.enabled) g += AutoEqEngine.calculateBiquadResponse(freq, band, sampleRate)
+                    }
+                    FrequencyPoint(freq, g)
+                }.filter { it.gain.isFinite() }
+            } else {
+                emptyList()
+            }
         }
     }
 
@@ -268,6 +312,16 @@ fun FrequencyResponseGraph(
             // Target curve (bright white dashed) — normalized to measurement
             if (normalizedTarget.size > 1) {
                 drawDashedCurve(normalizedTarget, primary, w, h, minGain, maxGain, 2.5f)
+            }
+
+            // Other ear (2-channel mode): stroke-only so it reads as context
+            // behind the primary channel's filled curve, drawn first so the
+            // primary stays on top.
+            if (secondaryMeasurement.size > 1) {
+                drawCurve(secondaryMeasurement, Color(0xFF4A9EFF).copy(alpha = 0.35f), w, h, minGain, maxGain, 1.5f)
+            }
+            if (secondaryCorrected.size > 1) {
+                drawCurve(secondaryCorrected, Color(0xFFFFB300), w, h, minGain, maxGain, 2f)
             }
 
             // Corrected curve (bright red solid) with fabfilter pro-q 3 style fill

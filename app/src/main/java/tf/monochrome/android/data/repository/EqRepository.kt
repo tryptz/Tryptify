@@ -181,11 +181,27 @@ class EqRepository @Inject constructor(
             corrupted = true
             emptyList()
         }
+        // Same philosophy as bandsJson: a right channel that fails to decode
+        // must not silently fall back to mono — that would quietly change what
+        // the user hears in one ear. Mark the preset corrupted instead.
+        val bandsR = bandsRJson?.let { rJson ->
+            try {
+                json.decodeFromString<List<EqBand>>(rJson)
+            } catch (e: Exception) {
+                Log.e(
+                    "EqRepository",
+                    "Failed to decode R bands for preset '$id' (${e.javaClass.simpleName}: ${e.message})"
+                )
+                corrupted = true
+                null
+            }
+        }
         return EqPreset(
             id = id,
             name = name,
             description = description,
             bands = bands,
+            bandsR = bandsR,
             preamp = preamp,
             targetId = targetId,
             targetName = targetName,
@@ -208,6 +224,13 @@ class EqRepository @Inject constructor(
                 json.encodeToString(bands)
             } catch (e: Exception) {
                 "[]"
+            },
+            bandsRJson = bandsR?.let {
+                try {
+                    json.encodeToString(it)
+                } catch (e: Exception) {
+                    null
+                }
             },
             preamp = preamp,
             targetId = targetId,

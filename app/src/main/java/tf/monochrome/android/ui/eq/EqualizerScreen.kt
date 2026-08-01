@@ -36,6 +36,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -91,6 +92,20 @@ fun EqualizerScreen(
     val isCalculating by viewModel.isCalculating.collectAsState()
     val originalMeasurement by viewModel.originalMeasurement.collectAsState()
     val selectedHeadphone by viewModel.selectedHeadphone.collectAsState()
+    val stereoMode by viewModel.stereoMode.collectAsState()
+    val currentBandsR by viewModel.currentBandsR.collectAsState()
+    val originalMeasurementR by viewModel.originalMeasurementR.collectAsState()
+    val editChannel by viewModel.editChannel.collectAsState()
+    val measurementLabelL by viewModel.measurementLabelL.collectAsState()
+    val measurementLabelR by viewModel.measurementLabelR.collectAsState()
+
+    // Which ear the graph, band list and export operate on. Off-stereo this is
+    // always the left/mono channel, so everything below reduces to the old UI.
+    val editRight = stereoMode && editChannel == EqChannel.RIGHT
+    val activeBands = if (editRight) currentBandsR else currentBands
+    val activeMeasurement =
+        if (editRight) originalMeasurementR.ifEmpty { originalMeasurement }
+        else originalMeasurement
     val bandCount by viewModel.bandCount.collectAsState()
     val maxFrequency by viewModel.maxFrequency.collectAsState()
     val sampleRate by viewModel.sampleRate.collectAsState()
@@ -110,6 +125,9 @@ fun EqualizerScreen(
     var saveName by rememberSaveable { mutableStateOf("") }
     var saveDescription by rememberSaveable { mutableStateOf("") }
     var showTargetNameDialog by rememberSaveable { mutableStateOf(false) }
+    var importForRight by rememberSaveable { mutableStateOf(false) }
+    var showProfileImport by rememberSaveable { mutableStateOf(false) }
+    var headphoneSelectForRight by rememberSaveable { mutableStateOf(false) }
     var pendingTargetData by rememberSaveable { mutableStateOf("") }
     var targetName by rememberSaveable { mutableStateOf("") }
     var presetToDelete by remember { mutableStateOf<tf.monochrome.android.domain.model.EqPreset?>(null) }
@@ -135,7 +153,10 @@ fun EqualizerScreen(
         try {
             val rawData = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (!rawData.isNullOrEmpty()) {
-                viewModel.importMeasurementData(rawData)
+                viewModel.importMeasurementData(
+                    rawData,
+                    if (importForRight) EqChannel.RIGHT else EqChannel.LEFT,
+                )
             } else {
                 android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
             }
@@ -245,17 +266,44 @@ fun EqualizerScreen(
             // ─── Interactive Frequency Graph ───
             item {
               tf.monochrome.android.devedit.DevEditable("eq_graph", Modifier.fillMaxWidth()) {
-                FrequencyResponseGraph(
-                    originalCurve = originalMeasurement,
-                    targetCurve = selectedTarget.data,
-                    eqBands = currentBands,
-                    preamp = currentPreamp,
-                    sampleRate = sampleRate,
-                    onBandDragged = { bandId, freq, gain ->
-                        viewModel.updateBandByDrag(bandId, freq, gain)
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
+                Column {
+                    if (stereoMode) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = !editRight,
+                                onClick = { viewModel.setEditChannel(EqChannel.LEFT) },
+                                label = { Text("Left ear") },
+                            )
+                            FilterChip(
+                                selected = editRight,
+                                onClick = { viewModel.setEditChannel(EqChannel.RIGHT) },
+                                label = { Text("Right ear") },
+                            )
+                        }
+                    }
+                    FrequencyResponseGraph(
+                        originalCurve = activeMeasurement,
+                        targetCurve = selectedTarget.data,
+                        eqBands = activeBands,
+                        preamp = currentPreamp,
+                        sampleRate = sampleRate,
+                        onBandDragged = { bandId, freq, gain ->
+                            viewModel.updateBandByDrag(bandId, freq, gain)
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        secondaryMeasurement =
+                            if (stereoMode) {
+                                if (editRight) originalMeasurement else originalMeasurementR
+                            } else emptyList(),
+                        secondaryBands =
+                            if (stereoMode) {
+                                if (editRight) currentBands else currentBandsR
+                            } else null,
+                    )
+                }
               }
             }
 
@@ -304,26 +352,123 @@ fun EqualizerScreen(
               tf.monochrome.android.devedit.DevEditable("eq_headphone_selector", Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     SectionLabel("HEADPHONE MODEL")
-                    SelectorRow(
-                        value = selectedHeadphone?.name ?: "Select headphone...",
-                        onClick = { showHeadphoneSelect = true },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = { measurementFilePicker.launch("text/*") },
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .liquidGlass(
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                            ) {
-                                Icon(
-                                    Icons.Default.UploadFile,
-                                    contentDescription = "Import measurement file",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+
+                    // ── 2-channel (per-ear) switch ──
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "2-channel calibration",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Separate left/right corrections. Non-destructive to " +
+                                    "switch off; system-wide EQ stays mono.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    )
+                        Switch(
+                            checked = stereoMode,
+                            onCheckedChange = { viewModel.setStereoMode(it) }
+                        )
+                    }
+
+                    if (stereoMode) {
+                        Text(
+                            "LEFT EAR",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        SelectorRow(
+                            value = measurementLabelL
+                                ?: selectedHeadphone?.name
+                                ?: "Select left measurement...",
+                            onClick = {
+                                headphoneSelectForRight = false
+                                showHeadphoneSelect = true
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        importForRight = false
+                                        measurementFilePicker.launch("text/*")
+                                    },
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .liquidGlass(shape = RoundedCornerShape(8.dp))
+                                ) {
+                                    Icon(
+                                        Icons.Default.UploadFile,
+                                        contentDescription = "Import left measurement file",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "RIGHT EAR",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        SelectorRow(
+                            value = measurementLabelR ?: "Select right measurement...",
+                            onClick = {
+                                headphoneSelectForRight = true
+                                showHeadphoneSelect = true
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        importForRight = true
+                                        measurementFilePicker.launch("text/*")
+                                    },
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .liquidGlass(shape = RoundedCornerShape(8.dp))
+                                ) {
+                                    Icon(
+                                        Icons.Default.UploadFile,
+                                        contentDescription = "Import right measurement file",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        )
+                    } else {
+                        SelectorRow(
+                            value = selectedHeadphone?.name ?: "Select headphone...",
+                            onClick = {
+                                headphoneSelectForRight = false
+                                showHeadphoneSelect = true
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        importForRight = false
+                                        measurementFilePicker.launch("text/*")
+                                    },
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .liquidGlass(
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                ) {
+                                    Icon(
+                                        Icons.Default.UploadFile,
+                                        contentDescription = "Import measurement file",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        )
+                    }
                     // Entry point for the guided measurement-calibration flow,
                     // which was fully built but previously unreachable.
                     TextButton(onClick = { showMeasurementUpload = true }) {
@@ -335,6 +480,16 @@ fun EqualizerScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Upload & calibrate a measurement")
+                    }
+                    TextButton(onClick = { showProfileImport = true }) {
+                        Icon(
+                            Icons.Default.UploadFile,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Import EQ profile (APO txt / CSV)")
                     }
                 }
               }
@@ -460,11 +615,13 @@ fun EqualizerScreen(
                 ) {
                     IconButton(
                         onClick = {
-                            if (currentBands.isEmpty()) {
+                            if (activeBands.isEmpty()) {
                                 android.widget.Toast.makeText(context, "No EQ bands to export", android.widget.Toast.LENGTH_SHORT).show()
                             } else {
-                                pendingEqExport = buildParametricEqText(currentBands, currentPreamp)
-                                eqExportLauncher.launch("MonochromeEQ.txt")
+                                pendingEqExport = buildParametricEqText(activeBands, currentPreamp)
+                                eqExportLauncher.launch(
+                                    if (editRight) "MonochromeEQ-R.txt" else "MonochromeEQ.txt"
+                                )
                             }
                         },
                         modifier = Modifier
@@ -795,7 +952,7 @@ fun EqualizerScreen(
                 }
 
                 // Band sliders
-                items(currentBands) { band ->
+                items(activeBands) { band ->
                     EqBandSlider(
                         band = band,
                         onBandChanged = { viewModel.updateBand(band.id, it) },
@@ -887,6 +1044,20 @@ fun EqualizerScreen(
         )
     }
 
+    if (showProfileImport) {
+        ImportEqProfileSheet(
+            maxBandGainDb = EqLimits.AUTOEQ_MAX_BAND_DB,
+            channelChoices = stereoMode,
+            onDismiss = { showProfileImport = false },
+            onImport = { profile, name, channel, apply ->
+                viewModel.importApoProfile(profile, name, channel, apply)
+            },
+            onMeasurementDetected = { raw, channel ->
+                viewModel.importMeasurementData(raw, channel ?: EqChannel.LEFT)
+            },
+        )
+    }
+
     if (showHeadphoneSelect) {
         AlertDialog(
             onDismissRequest = { showHeadphoneSelect = false },
@@ -901,6 +1072,7 @@ fun EqualizerScreen(
             content = {
                 HeadphoneSelectScreen(
                     viewModel = viewModel,
+                    channel = if (headphoneSelectForRight) EqChannel.RIGHT else EqChannel.LEFT,
                     onHeadphoneSelected = { showHeadphoneSelect = false },
                     onDismiss = { showHeadphoneSelect = false }
                 )

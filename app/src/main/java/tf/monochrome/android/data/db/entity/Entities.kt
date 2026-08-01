@@ -181,6 +181,10 @@ data class EqPresetEntity(
     val name: String,
     val description: String = "",
     val bandsJson: String = "[]",  // Serialized List<EqBand>
+    // Right-channel bands for per-ear calibration; null = mono preset (the
+    // left list drives both ears). Nullable so every pre-v11 row is a valid
+    // mono preset with no data rewrite.
+    val bandsRJson: String? = null,
     val preamp: Float = 0f,
     val targetId: String = "",
     val targetName: String = "",

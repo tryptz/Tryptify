@@ -68,7 +68,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -122,6 +122,18 @@ abstract class MusicDatabase : RoomDatabase() {
                     "UPDATE local_tracks SET isDolbyAtmos = 1 " +
                         "WHERE title LIKE '%Dolby Atmos%' OR album LIKE '%Dolby Atmos%'"
                 )
+            }
+        }
+
+        /**
+         * v10 → v11: per-ear AutoEQ. Adds a nullable right-channel band list to
+         * saved EQ presets; NULL means a mono preset whose left list drives
+         * both ears, so every existing row stays valid as-is. A real migration
+         * so saved presets survive the upgrade.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE eq_presets ADD COLUMN bandsRJson TEXT")
             }
         }
     }

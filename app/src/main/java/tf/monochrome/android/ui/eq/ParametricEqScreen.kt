@@ -87,6 +87,7 @@ fun ParametricEqScreen(
     }
 
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showImportSheet by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
     var saveDescription by remember { mutableStateOf("") }
     var presetToDelete by remember { mutableStateOf<EqPreset?>(null) }
@@ -231,6 +232,29 @@ fun ParametricEqScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .liquidGlass(shape = RoundedCornerShape(12.dp))
+                            .bounceClick(onClick = { showImportSheet = true })
+                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            "Import profile (APO txt / CSV)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
               }
             }
@@ -318,6 +342,16 @@ fun ParametricEqScreen(
                 }
             }
         }
+    }
+
+    if (showImportSheet) {
+        ImportEqProfileSheet(
+            maxBandGainDb = EqLimits.PARAMETRIC_MAX_BAND_DB,
+            onDismiss = { showImportSheet = false },
+            onImport = { profile, name, _, apply ->
+                viewModel.importApoProfile(profile, name, apply)
+            },
+        )
     }
 
     if (showSaveDialog) {
