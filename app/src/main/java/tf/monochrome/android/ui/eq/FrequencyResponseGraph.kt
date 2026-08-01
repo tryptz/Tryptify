@@ -291,8 +291,8 @@ fun FrequencyResponseGraph(
             // Grid
             drawGrid(w, h, minGain, maxGain, zeroOffset)
 
-            // dB labels on right
-            drawDbLabels(w, h, minGain, maxGain)
+            // dB labels on right — relative to the centre line
+            drawDbLabels(w, h, minGain, maxGain, zeroOffset)
 
             // Frequency labels at bottom
             drawFreqLabels(w, h)
@@ -311,14 +311,25 @@ fun FrequencyResponseGraph(
                 )
             }
 
-            // Original measurement curve (bright blue for visibility)
-            if (originalCurve.size > 1 && "measL" !in hiddenCurves) {
-                drawCurve(originalCurve, Color(0xFF4A9EFF), w, h, minGain, maxGain, 2.5f)
+            // Correction-gap shading: the region between the measurement and
+            // the target IS the problem the EQ exists to fix. Shading it makes
+            // "why does the correction curve look like that" readable at a
+            // glance — the correction mirrors this shape.
+            if (originalCurve.size > 1 && normalizedTarget.size > 1 &&
+                "measL" !in hiddenCurves && "target" !in hiddenCurves
+            ) {
+                drawCurveGap(originalCurve, normalizedTarget, primary.copy(alpha = 0.08f), w, h, minGain, maxGain)
             }
 
-            // Target curve (bright white dashed) — normalized to measurement
+            // Original measurement curve — an INPUT, drawn thinner and dimmer
+            // than the corrected result so the eye lands on the outcome first.
+            if (originalCurve.size > 1 && "measL" !in hiddenCurves) {
+                drawCurve(originalCurve, Color(0xFF4A9EFF).copy(alpha = 0.8f), w, h, minGain, maxGain, 1.5f)
+            }
+
+            // Target curve (dashed) — the other input, same receded weight.
             if (normalizedTarget.size > 1 && "target" !in hiddenCurves) {
-                drawDashedCurve(normalizedTarget, primary, w, h, minGain, maxGain, 2.5f)
+                drawDashedCurve(normalizedTarget, primary.copy(alpha = 0.85f), w, h, minGain, maxGain, 1.5f)
             }
 
             // Other ear (2-channel mode): stroke-only so it reads as context
@@ -355,7 +366,8 @@ fun FrequencyResponseGraph(
                     drawCurve(contributionPoints, curveNeutral.copy(alpha = 0.2f), w, h, minGain, maxGain, 1.5f)
 
                     // Floating Tooltip
-                    val infoText = "${band.freq.toInt()}Hz  ${"%.1f".format(band.gain)}dB"
+                    val infoText =
+                        "${band.freq.toInt()} Hz  ${"%.1f".format(band.gain)} dB  Q ${"%.2f".format(band.q)}"
                     val paint = android.graphics.Paint().apply {
                         color = android.graphics.Color.WHITE
                         // sp (not raw px) so the label scales with display
@@ -377,15 +389,27 @@ fun FrequencyResponseGraph(
                     drawContext.canvas.nativeCanvas.drawText(infoText, dotX, rectTop, paint)
                 }
 
-                // Dynamic color based on frequency (Rainbow/Spectrum)
-                val hue = ((log10(band.freq) - log10(20f)) / (log10(20000f) - log10(20f)) * 360f)
-                val bandColor = Color.hsl(hue, 0.7f, 0.6f)
+                // Colour encodes what the band DOES — green boosts, red cuts,
+                // grey ≈ flat — instead of the old frequency-rainbow, which was
+                // decorative but said nothing about the band's effect.
+                val bandColor = when {
+                    band.gain > 0.25f -> Color(0xFF4CAF50)
+                    band.gain < -0.25f -> Color(0xFFE53935)
+                    else -> Color(0xFF9E9E9E)
+                }
 
-                // Glow for selected/dragged band
                 if (isSelected) {
+                    // Vertical guide so the band's frequency reads against the
+                    // axis while dragging.
+                    drawLine(
+                        color = curveNeutral.copy(alpha = 0.25f),
+                        start = Offset(dotX, GRAPH_PADDING_TOP),
+                        end = Offset(dotX, h - GRAPH_PADDING_BOTTOM),
+                        strokeWidth = 1.5f,
+                    )
                     drawCircle(
                         color = bandColor.copy(alpha = 0.4f),
-                        radius = 32f,
+                        radius = 34f,
                         center = Offset(dotX, dotY)
                     )
                 }
@@ -393,22 +417,37 @@ fun FrequencyResponseGraph(
                 // Main dot shadow/border
                 drawCircle(
                     color = Color.Black,
-                    radius = if (isSelected) 17f else 15f,
+                    radius = if (isSelected) 19f else 17f,
                     center = Offset(dotX, dotY)
                 )
 
                 // Main dot
                 drawCircle(
                     color = bandColor,
-                    radius = if (isSelected) 15f else 13f,
+                    radius = if (isSelected) 17f else 15f,
                     center = Offset(dotX, dotY)
                 )
                 // White border
                 drawCircle(
                     color = curveNeutral,
-                    radius = if (isSelected) 15f else 13f,
+                    radius = if (isSelected) 17f else 15f,
                     center = Offset(dotX, dotY),
                     style = Stroke(width = if (isSelected) 3f else 2.5f)
+                )
+
+                // Band number, so a dot maps to its row in the list below.
+                val numPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    textSize = 9.sp.toPx()
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isFakeBoldText = true
+                    isAntiAlias = true
+                }
+                drawContext.canvas.nativeCanvas.drawText(
+                    "${band.id + 1}",
+                    dotX,
+                    dotY + numPaint.textSize * 0.35f,
+                    numPaint,
                 )
             }
         }
@@ -472,12 +511,12 @@ private fun LegendDot(
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
-                .background(color, RoundedCornerShape(4.dp))
+                .size(10.dp)
+                .background(color, RoundedCornerShape(5.dp))
         )
         Text(
             label,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             color = labelColor
         )
     }
@@ -727,19 +766,32 @@ private fun DrawScope.drawGrid(
         range > 30 -> 5f
         else -> 5f
     }
-    var g = (minGain / step).toInt() * step
-    while (g <= maxGain) {
-        val y = gainToY(g, height, minGain, maxGain)
+    // Step on RELATIVE dB so lines land exactly on the ±labels, with the
+    // centre (0 dB) line emphasized — it is the "no change" reference the
+    // whole graph reads against.
+    var rel = kotlin.math.ceil((minGain - zeroOffset) / step) * step
+    while (rel + zeroOffset <= maxGain) {
+        val y = gainToY(rel + zeroOffset, height, minGain, maxGain)
         if (y in GRAPH_PADDING_TOP..(height - GRAPH_PADDING_BOTTOM)) {
-            // Highlight the zero/center line
-            val lineColor = if (abs(g - zeroOffset) < 0.5f) zeroLineColor else gridColor
-            drawLine(lineColor, Offset(GRAPH_PADDING_LEFT, y), Offset(width - GRAPH_PADDING_RIGHT, y), 1f)
+            val isZero = abs(rel) < 0.5f
+            drawLine(
+                if (isZero) zeroLineColor else gridColor,
+                Offset(GRAPH_PADDING_LEFT, y),
+                Offset(width - GRAPH_PADDING_RIGHT, y),
+                if (isZero) 2f else 1f,
+            )
         }
-        g += step
+        rel += step
     }
 }
 
-private fun DrawScope.drawDbLabels(width: Float, height: Float, minGain: Float, maxGain: Float) {
+private fun DrawScope.drawDbLabels(
+    width: Float,
+    height: Float,
+    minGain: Float,
+    maxGain: Float,
+    zeroOffset: Float,
+) {
     val range = maxGain - minGain
     val step = when {
         range > 60 -> 10f
@@ -752,18 +804,23 @@ private fun DrawScope.drawDbLabels(width: Float, height: Float, minGain: Float, 
         textAlign = android.graphics.Paint.Align.LEFT
         isAntiAlias = true
     }
-    var g = (minGain / step).toInt() * step
-    while (g <= maxGain) {
+    // Labels are RELATIVE to the centre line ("+5", "0", "−5"), not raw SPL.
+    // The axis is normalized to the measurement's midband level, so absolute
+    // numbers like "73" carried no meaning a user could act on — what matters
+    // is how far above or below neutral the curve sits.
+    var rel = kotlin.math.ceil((minGain - zeroOffset) / step) * step
+    while (rel + zeroOffset <= maxGain) {
+        val g = rel + zeroOffset
         val y = gainToY(g, height, minGain, maxGain)
         if (y in GRAPH_PADDING_TOP..(height - GRAPH_PADDING_BOTTOM)) {
             drawContext.canvas.nativeCanvas.drawText(
-                "${g.toInt()}",
+                if (rel > 0f) "+${rel.toInt()}" else "${rel.toInt()}",
                 width - GRAPH_PADDING_RIGHT + 4f,
                 y + 7f,
                 paint
             )
         }
-        g += step
+        rel += step
     }
 }
 
@@ -785,6 +842,44 @@ private fun DrawScope.drawFreqLabels(width: Float, height: Float) {
             label, x, height - 2f, paint
         )
     }
+}
+
+/**
+ * Translucent fill between two curves — used to shade the measurement↔target
+ * gap. Both are resampled onto a shared log-frequency grid over their
+ * overlapping range, so differing point densities can't shear the polygon.
+ */
+private fun DrawScope.drawCurveGap(
+    a: List<FrequencyPoint>,
+    b: List<FrequencyPoint>,
+    color: Color,
+    width: Float,
+    height: Float,
+    minGain: Float,
+    maxGain: Float,
+) {
+    if (a.size < 2 || b.size < 2) return
+    val lo = maxOf(a.first().freq, b.first().freq).coerceAtLeast(MIN_FREQ)
+    val hi = minOf(a.last().freq, b.last().freq).coerceAtMost(MAX_FREQ)
+    if (hi <= lo) return
+    val samples = 128
+    val logLo = log10(lo)
+    val logHi = log10(hi)
+    val path = Path()
+    for (i in 0..samples) {
+        val freq = 10f.pow(logLo + i.toFloat() / samples * (logHi - logLo))
+        val x = freqToX(freq, width)
+        val y = gainToY(interpolateGain(freq, a), height, minGain, maxGain)
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    for (i in samples downTo 0) {
+        val freq = 10f.pow(logLo + i.toFloat() / samples * (logHi - logLo))
+        val x = freqToX(freq, width)
+        val y = gainToY(interpolateGain(freq, b), height, minGain, maxGain)
+        path.lineTo(x, y)
+    }
+    path.close()
+    drawPath(path, color)
 }
 
 private fun DrawScope.drawCurve(
