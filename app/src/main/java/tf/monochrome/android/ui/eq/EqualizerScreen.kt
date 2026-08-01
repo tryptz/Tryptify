@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.EqBand
+import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import kotlin.math.roundToInt
@@ -940,10 +941,10 @@ fun EqualizerScreen(
                             )
                         }
                         Slider(
-                            value = if (currentPreamp.isNaN()) 0f else currentPreamp.coerceIn(-12f, 12f),
+                            value = if (currentPreamp.isNaN()) 0f else currentPreamp.coerceIn(-24f, 24f),
                             onValueChange = { viewModel.setPreamp(it) },
-                            valueRange = -12f..12f,
-                            steps = 23,
+                            valueRange = -24f..24f,
+                            steps = 47,
                             enabled = !autoPreamp,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1163,13 +1164,48 @@ fun EqBandSlider(
             .liquidGlass(shape = RoundedCornerShape(8.dp))
             .padding(12.dp)
     ) {
+        // --- Filter type ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            FilterType.values().forEach { type ->
+                val isSel = band.type == type
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .liquidGlass(
+                            shape = RoundedCornerShape(6.dp),
+                            tintAlpha = if (isSel) 0.45f else 0.15f,
+                        )
+                        .bounceClick(onClick = { onBandChanged(band.copy(type = type)) })
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        when (type) {
+                            FilterType.PEAKING -> "PEAK"
+                            FilterType.LOWSHELF -> "LOW-S"
+                            FilterType.HIGHSHELF -> "HIGH-S"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSel) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
         // --- Frequency Slider ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Freq (${band.type})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Freq", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${band.freq.toInt()} Hz", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         }
         val minLogFreq = kotlin.math.log10(20f)
@@ -1207,10 +1243,11 @@ fun EqBandSlider(
             )
         }
         Slider(
-            value = if (band.gain.isNaN()) 0f else band.gain.coerceIn(-12f, 12f),
+            value = if (band.gain.isNaN()) 0f
+                    else band.gain.coerceIn(-EqLimits.AUTOEQ_MAX_BAND_DB, EqLimits.AUTOEQ_MAX_BAND_DB),
             onValueChange = { onBandChanged(band.copy(gain = it)) },
-            valueRange = -12f..12f,
-            steps = 23,
+            valueRange = -EqLimits.AUTOEQ_MAX_BAND_DB..EqLimits.AUTOEQ_MAX_BAND_DB,
+            steps = 2 * EqLimits.AUTOEQ_MAX_BAND_DB.toInt() - 1,
             modifier = Modifier.fillMaxWidth().height(32.dp)
         )
         

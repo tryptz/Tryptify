@@ -25,7 +25,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -192,6 +194,11 @@ fun FrequencyResponseGraph(
     var selectedBandId by remember { mutableIntStateOf(-1) }
     var isDragging by remember { mutableStateOf(false) }
 
+    // Curves hidden via legend taps. Plain remember, not saveable: a hidden
+    // curve reappearing after process death is harmless, and a Set isn't
+    // Bundle-friendly anyway. Keys: measL / target / eqL / measR / eqR.
+    var hiddenCurves by remember { mutableStateOf(setOf<String>()) }
+
     // The pointer gestures below are keyed on Unit so they are NOT torn down and
     // restarted every time a band drag mutates `eqBands` (which froze the drag
     // mid-gesture). All the values they need are read through updated-state
@@ -305,32 +312,32 @@ fun FrequencyResponseGraph(
             }
 
             // Original measurement curve (bright blue for visibility)
-            if (originalCurve.size > 1) {
+            if (originalCurve.size > 1 && "measL" !in hiddenCurves) {
                 drawCurve(originalCurve, Color(0xFF4A9EFF), w, h, minGain, maxGain, 2.5f)
             }
 
             // Target curve (bright white dashed) — normalized to measurement
-            if (normalizedTarget.size > 1) {
+            if (normalizedTarget.size > 1 && "target" !in hiddenCurves) {
                 drawDashedCurve(normalizedTarget, primary, w, h, minGain, maxGain, 2.5f)
             }
 
             // Other ear (2-channel mode): stroke-only so it reads as context
             // behind the primary channel's filled curve, drawn first so the
             // primary stays on top.
-            if (secondaryMeasurement.size > 1) {
+            if (secondaryMeasurement.size > 1 && "measR" !in hiddenCurves) {
                 drawCurve(secondaryMeasurement, Color(0xFF4A9EFF).copy(alpha = 0.35f), w, h, minGain, maxGain, 1.5f)
             }
-            if (secondaryCorrected.size > 1) {
+            if (secondaryCorrected.size > 1 && "eqR" !in hiddenCurves) {
                 drawCurve(secondaryCorrected, Color(0xFFFFB300), w, h, minGain, maxGain, 2f)
             }
 
             // Corrected curve (bright red solid) with fabfilter pro-q 3 style fill
-            if (correctedCurve.size > 1) {
+            if (correctedCurve.size > 1 && "eqL" !in hiddenCurves) {
                 drawFilledCurve(correctedCurve, Color(0xFFFF4444), w, h, minGain, maxGain, zeroOffset, 2.5f)
             }
 
-            // EQ band dots
-            eqBands.forEach { band ->
+            // EQ band dots ride the corrected curve, so they hide with it.
+            if ("eqL" !in hiddenCurves) eqBands.forEach { band ->
                 if (!band.enabled) return@forEach
                 // Find normalized positions
                 val dotX = freqToX(band.freq, w)
@@ -406,29 +413,62 @@ fun FrequencyResponseGraph(
             }
         }
 
-        // Legend overlay (hidden in parametric-only mode since there's no measurement/target curve)
+        // Legend overlay (hidden in parametric-only mode since there's no
+        // measurement/target curve). Every entry is a toggle: tapping hides or
+        // shows its curve, and the entry dims while hidden. In 2-channel mode
+        // the other ear's curves get their own entries.
         if (showLegend) {
+            val stereo = secondaryBands != null
+            val entries = buildList {
+                add(Triple("measL", if (stereo) "L meas" else "Original", Color(0xFF4A9EFF)))
+                add(Triple("target", "Target", primary))
+                add(Triple("eqL", if (stereo) "L EQ" else "Corrected", Color(0xFFFF4444)))
+                if (stereo) {
+                    add(Triple("measR", "R meas", Color(0xFF4A9EFF).copy(alpha = 0.5f)))
+                    add(Triple("eqR", "R EQ", Color(0xFFFFB300)))
+                }
+            }
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(legendBackground)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
+                horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally)
             ) {
-                LegendDot("Original", Color(0xFF4A9EFF), legendLabelColor)
-                LegendDot("Target (Primary)", primary, legendLabelColor)
-                LegendDot("Corrected", Color(0xFFFF4444), legendLabelColor)
+                entries.forEach { (key, label, color) ->
+                    LegendDot(
+                        label = label,
+                        color = color,
+                        labelColor = legendLabelColor,
+                        active = key !in hiddenCurves,
+                        onClick = {
+                            hiddenCurves =
+                                if (key in hiddenCurves) hiddenCurves - key
+                                else hiddenCurves + key
+                        },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun LegendDot(label: String, color: Color, labelColor: Color) {
+private fun LegendDot(
+    label: String,
+    color: Color,
+    labelColor: Color,
+    active: Boolean = true,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .let { m -> if (onClick != null) m.clip(RoundedCornerShape(4.dp)).clickable(onClick = onClick) else m }
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+            .graphicsLayer { alpha = if (active) 1f else 0.35f }
     ) {
         Box(
             modifier = Modifier
