@@ -303,22 +303,17 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        val smoothSteps = listOf(0f, 1f / 24f, 1f / 12f, 1f / 6f, 1f / 3f)
-                        val smoothLabels = listOf("Off", "1/24", "1/12", "1/6", "1/3")
-                        val smoothIdx = smoothSteps
-                            .indexOfFirst { kotlin.math.abs(it - smoothing) < 0.001f }
-                            .coerceAtLeast(0)
                         Slider(
-                            value = smoothIdx.toFloat(),
+                            value = smoothing,
                             onValueChange = {
-                                viewModel.setSmoothing(smoothSteps[it.roundToInt().coerceIn(0, 4)])
+                                // 1 % increments, SeapEngine's scale.
+                                viewModel.setSmoothing(it.roundToInt().toFloat().coerceIn(0f, 100f))
                             },
-                            valueRange = 0f..4f,
-                            steps = 3,
+                            valueRange = 0f..100f,
                             modifier = Modifier.weight(1f).height(28.dp)
                         )
                         Text(
-                            smoothLabels[smoothIdx],
+                            "${smoothing.roundToInt()}%",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )

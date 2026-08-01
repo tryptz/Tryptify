@@ -20,36 +20,33 @@ import kotlin.math.max
 object AutoEqEngine {
 
     /**
-     * Fractional-octave smoothing (the family squig.link/REW use): each point
-     * becomes a gaussian-weighted average of its neighbours within
-     * ±[octaves]/2 on the log-frequency axis. 0 (or too few points) returns
-     * the input untouched. Tames rig artefacts and narrow unit-to-unit jitter
-     * so the optimizer corrects the audible trend instead of burning bands on
-     * spikes that don't survive a reseat of the headphone.
+     * Measurement smoothing, ported verbatim from SeapEngine's graph tool
+     * (the `a7` helper): a triangular-weighted moving average whose window
+     * radius grows with the 0–100 % slider — radius = floor(percent / 2.5)
+     * POINTS, weights 1 − |offset|/(radius+1). Index-based on purpose:
+     * measurement files are log-spaced in frequency, so a point window IS an
+     * octave window, and matching SeapEngine exactly means a profile tuned
+     * there reproduces identically here. 0 % (or <3 points) is a no-op.
      */
     fun smoothCurve(
         points: List<FrequencyPoint>,
-        octaves: Float,
+        percent: Float,
     ): List<FrequencyPoint> {
-        if (octaves <= 0f || points.size < 3) return points
-        val logs = FloatArray(points.size) { kotlin.math.log2(points[it].freq) }
-        val half = octaves / 2f
-        val sigma = octaves / 4f
+        if (percent <= 0f || points.size < 3) return points
+        val radius = kotlin.math.max(1, (percent / 2.5f).toInt())
         val out = ArrayList<FrequencyPoint>(points.size)
-        var lo = 0
         for (i in points.indices) {
-            while (lo < points.size && logs[lo] < logs[i] - half) lo++
-            var j = lo
+            var sum = 0f
             var wSum = 0f
-            var vSum = 0f
-            while (j < points.size && logs[j] <= logs[i] + half) {
-                val d = (logs[j] - logs[i]) / sigma
-                val w = kotlin.math.exp(-0.5f * d * d)
-                wSum += w
-                vSum += w * points[j].gain
-                j++
+            for (c in -radius..radius) {
+                val j = i + c
+                if (j in points.indices) {
+                    val w = 1f - kotlin.math.abs(c).toFloat() / (radius + 1)
+                    sum += points[j].gain * w
+                    wSum += w
+                }
             }
-            out.add(FrequencyPoint(points[i].freq, if (wSum > 0f) vSum / wSum else points[i].gain))
+            out.add(FrequencyPoint(points[i].freq, sum / wSum))
         }
         return out
     }

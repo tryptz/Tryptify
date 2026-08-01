@@ -99,7 +99,8 @@ class EqViewModel @Inject constructor(
     private val _measurementSampleR = MutableStateFlow<String?>(null)
     val measurementSampleR: StateFlow<String?> = _measurementSampleR.asStateFlow()
 
-    // Measurement smoothing (octave fraction; 0 = off). Session-scoped.
+    // Measurement smoothing, SeapEngine-style percent (0–100; 0 = off).
+    // Session-scoped.
     private val _smoothing = MutableStateFlow(0f)
     val smoothing: StateFlow<Float> = _smoothing.asStateFlow()
 
@@ -562,9 +563,9 @@ class EqViewModel @Inject constructor(
     }
 
     /**
-     * Measurement smoothing in octave fractions (0 = off, up to 1/3 oct).
-     * Applied to the measurement JUST before the optimizer runs — raw curves
-     * stay stored, so stepping the slider re-derives corrections without
+     * Measurement smoothing percent (0–100, SeapEngine's scale). Applied to
+     * the measurement JUST before the optimizer runs — raw curves stay
+     * stored, so moving the slider re-derives corrections without
      * re-fetching anything.
      */
     fun setSmoothing(fraction: Float) {
