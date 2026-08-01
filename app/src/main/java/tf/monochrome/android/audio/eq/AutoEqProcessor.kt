@@ -44,10 +44,11 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private data class Snapshot(
         val enabled: Boolean,
         val preampLinear: Float,
-        val bands: Array<BandState>
+        val bandsL: Array<BandState>,
+        val bandsR: Array<BandState>
     )
 
-    private val stateRef = AtomicReference(Snapshot(false, 1f, emptyArray()))
+    private val stateRef = AtomicReference(Snapshot(false, 1f, emptyArray(), emptyArray()))
     private var appliedSnapshot: Snapshot? = null
 
     // Per-band biquad filter state (audio thread only, rebuilt when bands change)
@@ -55,19 +56,38 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private var filtersR = arrayOf<BiquadFilter>()
     private var sampleRate = 44100.0
 
-    fun applyBands(bands: List<EqBand>, preamp: Float, enabled: Boolean) {
+    /** Same curve on both ears. */
+    fun applyBands(bands: List<EqBand>, preamp: Float, enabled: Boolean) =
+        applyBands(bands, bands, preamp, enabled)
+
+    /**
+     * Independent curves per channel, for per-ear headphone calibration.
+     *
+     * The two lists may differ in length — a left calibration with 10 filters
+     * and a right with 8 is entirely normal — so the filter chains are built
+     * and run separately rather than index-locked to each other.
+     */
+    fun applyBands(
+        bandsL: List<EqBand>,
+        bandsR: List<EqBand>,
+        preamp: Float,
+        enabled: Boolean,
+    ) {
+        fun List<EqBand>.toStates() = map { band ->
+            BandState(
+                freq = band.freq,
+                gain = band.gain,
+                q = band.q,
+                type = band.type,
+                enabled = band.enabled
+            )
+        }.toTypedArray()
+
         val snap = Snapshot(
             enabled = enabled,
             preampLinear = if (preamp == 0f) 1f else 10f.pow(preamp / 20f),
-            bands = bands.map { band ->
-                BandState(
-                    freq = band.freq,
-                    gain = band.gain,
-                    q = band.q,
-                    type = band.type,
-                    enabled = band.enabled
-                )
-            }.toTypedArray()
+            bandsL = bandsL.toStates(),
+            bandsR = bandsR.toStates()
         )
         stateRef.set(snap)
     }
@@ -152,7 +172,8 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         val snap = stateRef.get()
         if (snap.enabled) {
             if (snap !== appliedSnapshot) {
-                rebuildFilters(snap.bands)
+                filtersL = buildChain(snap.bandsL)
+                filtersR = buildChain(snap.bandsR)
                 appliedSnapshot = snap
             }
             applyEq(numFrames, snap.preampLinear)
@@ -229,26 +250,26 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                 scratchR[i] *= preampLinear
             }
         }
-        // Biquad bands
-        for (i in filtersL.indices) {
-            filtersL[i].processBlock(scratchL, numFrames)
-            filtersR[i].processBlock(scratchR, numFrames)
-        }
+        // Biquad bands. Indexed per channel, NOT off a shared range: the two
+        // chains hold different filter counts whenever the ears are calibrated
+        // separately, and driving both from filtersL.indices would walk off the
+        // end of the shorter one on the audio thread.
+        for (i in filtersL.indices) filtersL[i].processBlock(scratchL, numFrames)
+        for (i in filtersR.indices) filtersR[i].processBlock(scratchR, numFrames)
     }
 
-    private fun rebuildFilters(bands: Array<BandState>) {
+    private fun buildChain(bands: Array<BandState>): Array<BiquadFilter> {
         val active = bands.filter { it.enabled && it.gain != 0f }
-        filtersL = Array(active.size) { BiquadFilter() }
-        filtersR = Array(active.size) { BiquadFilter() }
+        val chain = Array(active.size) { BiquadFilter() }
         for ((i, band) in active.withIndex()) {
             val type = when (band.type) {
                 FilterType.LOWSHELF -> BiquadType.LOW_SHELF
                 FilterType.HIGHSHELF -> BiquadType.HIGH_SHELF
                 else -> BiquadType.PEAKING
             }
-            filtersL[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
-            filtersR[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
+            chain[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
         }
+        return chain
     }
 
     // ── RBJ biquad (pure Kotlin, Transposed Direct Form II) ─────────────

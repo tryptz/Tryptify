@@ -3,6 +3,13 @@ package tf.monochrome.android.ui.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -185,9 +192,20 @@ fun MainPlayerRoute(
     }
     val animatedDominant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.dominant,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 800),
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1800),
         label = "playerBackground",
     )
+    // Vibrant tweens alongside dominant so the whole palette crossfades to the
+    // next track rather than the background easing while every accent that
+    // reads `vibrant` — hero ring, spectrum, glass tint — snaps on track change.
+    // Shorter than the background's 800ms: accents sit on top of the art, and
+    // at 800ms they visibly lag the cover that has already swiped in.
+    val animatedVibrant by androidx.compose.animation.animateColorAsState(
+        targetValue = albumColors.vibrant,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1300),
+        label = "playerAccent",
+    )
+    val blendedColors = AlbumColors(animatedDominant, animatedVibrant)
     val spectrumColor = MaterialTheme.colorScheme.primary
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
@@ -264,7 +282,7 @@ fun MainPlayerRoute(
         sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
-        albumColors = AlbumColors(animatedDominant, albumColors.vibrant),
+        albumColors = blendedColors,
         visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER,
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
@@ -321,8 +339,8 @@ fun MainPlayerRoute(
         // tones when the blurred album background is on (Apple-OS style).
         LocalPlayerBackdrop provides PlayerBackdrop(
             blurredArt = blurredBackground,
-            dominant = albumColors.dominant,
-            secondary = albumColors.vibrant,
+            dominant = blendedColors.dominant,
+            secondary = blendedColors.vibrant,
         ),
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,
@@ -408,7 +426,69 @@ fun MainPlayerRoute(
                 // (expensive) art/visualizer doesn't recompose mid-dissolve.
                 val showAlbumHero by remember { derivedStateOf { lyricsProgress < 0.999f } }
                 val showLyricsHero by remember { derivedStateOf { lyricsProgress > 0.001f } }
-                Box(modifier = heroModifier, contentAlignment = Alignment.Center) {
+
+                // Horizontal swipe across the hero skips tracks, matching the
+                // gesture (and the 50px threshold) the mini player already uses.
+                //
+                // detectHorizontalDragGestures, not detectDragGestures: the
+                // latter consumes vertical drags too, which would swallow the
+                // pull-up that opens the audio-tools sheet and the lyric list's
+                // own scrolling. Suppressed entirely in visualizer mode, where
+                // horizontal drags belong to the touch waveform.
+                val swipeSkipEnabled = viewMode != NowPlayingViewMode.VISUALIZER
+                // Art offset, in px, driven by the finger and then animated out
+                // and back in. An Animatable rather than a plain float so the
+                // release animation and a mid-flight new drag can't fight: a
+                // fresh snapTo cancels whatever animation is running.
+                val heroOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+                val heroScope = rememberCoroutineScope()
+                val trackSwipe = Modifier.pointerInput(swipeSkipEnabled) {
+                    if (!swipeSkipEnabled) return@pointerInput
+                    val width = size.width.toFloat().coerceAtLeast(1f)
+                    // Commit distance. Compose's own touch slop only decides
+                    // when a drag *starts*; this is how far it has to travel
+                    // before it counts as a skip. Scaled off the art's width
+                    // (~22%) rather than a fixed pixel count, so it asks for the
+                    // same proportion of a gesture on any screen density.
+                    val skipThreshold = width * 0.22f
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            heroScope.launch {
+                                val dx = heroOffset.value
+                                // Carry the outgoing art the rest of the way off,
+                                // switch track, then bring the incoming one in
+                                // from the opposite edge — so the direction of
+                                // travel matches the direction of the swipe.
+                                when {
+                                    dx < -skipThreshold -> {
+                                        heroOffset.animateTo(-width, tween(140))
+                                        playerViewModel.skipToNext()
+                                        heroOffset.snapTo(width)
+                                        heroOffset.animateTo(0f, tween(260))
+                                    }
+                                    dx > skipThreshold -> {
+                                        heroOffset.animateTo(width, tween(140))
+                                        playerViewModel.skipToPrevious()
+                                        heroOffset.snapTo(-width)
+                                        heroOffset.animateTo(0f, tween(260))
+                                    }
+                                    // Under the threshold: spring back, no skip.
+                                    else -> heroOffset.animateTo(0f, spring())
+                                }
+                            }
+                        },
+                        onDragCancel = { heroScope.launch { heroOffset.animateTo(0f, spring()) } },
+                        onHorizontalDrag = { change, amount ->
+                            change.consume()
+                            heroScope.launch { heroOffset.snapTo(heroOffset.value + amount) }
+                        },
+                    )
+                }
+
+                Box(
+                    modifier = heroModifier.then(trackSwipe),
+                    contentAlignment = Alignment.Center,
+                ) {
                     if (showAlbumHero) {
                         val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
                             PlayerHeroStyle.Visualizer
@@ -434,13 +514,25 @@ fun MainPlayerRoute(
                             } else base
                         }
                         PlayerHero(
-                            modifier = artMod.graphicsLayer { alpha = 1f - lyricsProgress },
+                            modifier = artMod.graphicsLayer {
+                                // Follows the finger, then rides the release
+                                // animation out and the next cover in.
+                                translationX = heroOffset.value
+                                // Fade with distance so the swap happens while
+                                // the art is already dim, hiding the instant at
+                                // which the cover actually changes. Read in the
+                                // draw phase, so a drag costs no recomposition.
+                                val travelled =
+                                    (abs(heroOffset.value) / size.width.coerceAtLeast(1f))
+                                        .coerceIn(0f, 1f)
+                                alpha = (1f - lyricsProgress) * (1f - travelled * 0.85f)
+                            },
                             style = effectiveStyle,
                             isFullscreen = isFullscreenActive,
                             track = currentTrack,
                             isPlaying = isPlaying,
                             progress = state.progress,
-                            albumColors = albumColors,
+                            albumColors = blendedColors,
                             visualizerSensitivity = visualizerSensitivity,
                             visualizerBrightness = visualizerBrightness,
                             visualizerEngineStatus = visualizerEngineStatus,
@@ -477,7 +569,7 @@ fun MainPlayerRoute(
                         LyricsHeroBox(
                             lyrics = lyrics,
                             isLoading = isLyricsLoading,
-                            albumColors = albumColors,
+                            albumColors = blendedColors,
                             positionMs = playerViewModel.positionMs,
                             // One element, two states: compact taps expand
                             // (synced lyrics only); expanded line taps seek and

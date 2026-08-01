@@ -8,6 +8,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -120,8 +124,14 @@ fun LocalLibraryTab(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
 
-    var selectedSubTab by rememberSaveable { mutableIntStateOf(0) }
     val subTabs = listOf("Albums", "Artists", "Songs", "Genres", "Folders")
+    // Sub-tabs are swipeable pages. The tab row above them is a selector onto
+    // the SAME pager state rather than a second source of truth, so a swipe and
+    // a tap can't disagree — and ScrollableTabRow scrolls the selected tab into
+    // view, which is what un-clips "Folders" when you swipe onto it.
+    val subTabPager = rememberPagerState(pageCount = { subTabs.size })
+    val subTabScope = rememberCoroutineScope()
+    val selectedSubTab = subTabPager.currentPage
     var showSearch by remember { mutableStateOf(false) }
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     // Focus the field (and pop the IME) the moment search opens, so it doesn't
@@ -248,25 +258,30 @@ fun LocalLibraryTab(
             return@Column
         }
 
-        // Sub-tabs + action buttons
+        // Sub-tabs get the full width. Sharing one row with the sort menu and
+        // four icon buttons left the five labels about 120dp on a 360dp screen,
+        // so "Albums" and "Folders" were clipped at both ends and the row was
+        // permanently mid-scroll. Actions moved to their own row underneath.
+        ScrollableTabRow(
+            selectedTabIndex = selectedSubTab,
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.background,
+            edgePadding = 8.dp
+        ) {
+            subTabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedSubTab == index,
+                    onClick = { subTabScope.launch { subTabPager.animateScrollToPage(index) } },
+                    text = { Text(title, style = MaterialTheme.typography.bodySmall) }
+                )
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ScrollableTabRow(
-                selectedTabIndex = selectedSubTab,
-                modifier = Modifier.weight(1f),
-                containerColor = MaterialTheme.colorScheme.background,
-                edgePadding = 8.dp
-            ) {
-                subTabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedSubTab == index,
-                        onClick = { selectedSubTab = index },
-                        text = { Text(title, style = MaterialTheme.typography.bodySmall) }
-                    )
-                }
-            }
             if (selectedSubTab in 0..2) {
                 val (keys, current, onChange) = when (selectedSubTab) {
                     0 -> Triple(ALBUM_SORT_KEYS, albumSort, viewModel::setAlbumSort)
@@ -309,18 +324,33 @@ fun LocalLibraryTab(
         val genrePairs = remember(localGenres) {
             localGenres.map { it.name to it.trackCount }
         }
-        when (selectedSubTab) {
-            0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
-            1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
-            2 -> SongList(tracks = sortedTracks, onTrackClick = onTrackClick, navController = navController)
-            3 -> GenreList(
-                genres = genrePairs,
-                onGenreClick = onGenreClick
-            )
-            4 -> FolderList(
-                folders = rootFolders,
-                onFolderClick = onFolderClick
-            )
+        // Nested inside Library's section pager, which is itself nested in the
+        // nav host's Home↔Library pager. Compose chains all three through nested
+        // scroll: this innermost one consumes the drag until it runs out of
+        // sub-tabs, then the section pager takes over, then the outer one — so
+        // it's one continuous swipe from Albums all the way out to Home.
+        //
+        // fillMaxWidth without weight() on purpose: the `when` this replaced
+        // sized itself from its child under the Column's remaining-height
+        // constraint, and weight(1f) would starve the empty state below it.
+        HorizontalPager(
+            state = subTabPager,
+            modifier = Modifier.fillMaxWidth(),
+            beyondViewportPageCount = 0,
+        ) { page ->
+            when (page) {
+                0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
+                1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
+                2 -> SongList(tracks = sortedTracks, onTrackClick = onTrackClick, navController = navController)
+                3 -> GenreList(
+                    genres = genrePairs,
+                    onGenreClick = onGenreClick
+                )
+                4 -> FolderList(
+                    folders = rootFolders,
+                    onFolderClick = onFolderClick
+                )
+            }
         }
 
         // Empty state

@@ -9,11 +9,11 @@ import kotlinx.serialization.json.Json
  * Liquid-glass parameters for the PLAYER chrome (the transport buttons) — the
  * same refractive-glass controls the lyrics have, but for the player. Tuned in
  * the Player Visuals Studio's "Player Glass" tab and persisted as one JSON blob.
- * Defaults reproduce the shipped look: a ghost-thin body pushed to maximum
- * refraction/dispersion/relief — deeply lensed pillowy glass with a bright
- * fringed rim, a tight mirror-polished glint over a light mist, a calm living
- * surface, a locked (tilt-free) key light high on the back-left, and the
- * deepest, softest drop shadow.
+ * Defaults reproduce the shipped look: a ghost-thin body at full refraction
+ * with heavy dispersion, a mirror-strong room reflection under a tight
+ * polished glint, a dim rim on a hairline edge, perfectly clear (unfrosted)
+ * glass at neutral relief, a calm living surface, a locked (tilt-free) key
+ * light at 215°, and a faint, tight drop shadow.
  */
 @Serializable
 data class PlayerGlassSettings(
@@ -24,19 +24,19 @@ data class PlayerGlassSettings(
     /** How hard the bevel lenses the backdrop. */
     val refraction: Float = 0.4f,
     /** Specular rim brightness (the lit glass edge). */
-    val rimBrightness: Float = 2f,
+    val rimBrightness: Float = 0.2633547f,
     /** Chromatic aberration at the refracting edges. */
-    val dispersion: Float = 2f,
+    val dispersion: Float = 1.8702691f,
     /** Bevel sample rings 1/2/3 → 5/9/13 taps per pixel (quality vs GPU cost). */
     val sampleRings: Int = 3,
     /** Bevel shoulder width (1 = neutral, higher = rounder, softer glass edge). */
     val roundness: Float = 2f,
     /** Profondeur / relief: 1 = neutral, higher = steeper, deeper 3D bevel. */
-    val depth: Float = 2f,
+    val depth: Float = 1.0025804f,
     /** Drop-shadow depth (darkness) under the round play button (0 = flat, 1 = deepest). */
-    val shadowDepth: Float = 1f,
+    val shadowDepth: Float = 0.20475428f,
     /** Environment ("room") reflection strength on the glass (0 = none, 2 = strong). */
-    val reflection: Float = 0.55f,
+    val reflection: Float = 2f,
     /** Highlight polish: 0 = soft/frosted-wide glint, 1 = tight mirror-polished. */
     val gloss: Float = 1f,
     /** Living-liquid surface motion: 0 = still glass, 1 = full shimmer/undulation. */
@@ -44,13 +44,13 @@ data class PlayerGlassSettings(
     /** How strongly device tilt moves the light/reflection (0 = static studio light). */
     val tiltReactivity: Float = 0f,
     /** Key-light direction in degrees (0..360) — where the highlights sit. */
-    val lightAngleDeg: Float = 280f,
+    val lightAngleDeg: Float = 215.1965f,
     /** Reflective rim width: 0 = thin crisp edge, 1 = broad glassy shoulder. */
-    val edgeWidth: Float = 0.89f,
+    val edgeWidth: Float = 0f,
     /** Frosted roughness: 0 = clear glass, 1 = misted/frosted. */
-    val frost: Float = 0.17f,
+    val frost: Float = 0f,
     /** Drop-shadow softness (blur/spread): 0 = tight, 1 = soft diffuse. */
-    val shadowSoftness: Float = 0.92f,
+    val shadowSoftness: Float = 0.01565171f,
     /** Drop-shadow tint: 0 = neutral black, 1 = full accent-tinted glow. */
     val shadowTint: Float = 0f,
     /** Button glass tint as an ARGB int; 0 = use the current album accent. */

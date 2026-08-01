@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.pager.HorizontalPager
@@ -62,6 +63,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.components.MiniPlayer
+import tf.monochrome.android.ui.components.SwipeToLibraryHint
+import tf.monochrome.android.ui.components.SwipeHintPillHeight
+import tf.monochrome.android.ui.components.swipeHintPillWidth
 import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.detail.AlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
@@ -74,6 +78,8 @@ import tf.monochrome.android.ui.eq.ParametricEqScreen
 import tf.monochrome.android.ui.home.HomeScreen
 import tf.monochrome.android.ui.mixer.MixerScreen
 import tf.monochrome.android.ui.library.LibraryScreen
+import tf.monochrome.android.ui.library.LIBRARY_SECTION_NAMES
+import tf.monochrome.android.ui.library.librarySections
 import tf.monochrome.android.ui.library.DownloadsScreen
 import tf.monochrome.android.ui.library.PlaylistScreen
 import tf.monochrome.android.ui.player.NowPlayingScreen
@@ -188,6 +194,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val scope = rememberCoroutineScope()
 
+    // Library's own section pager lives up here rather than inside LibraryScreen
+    // so the top-bar indicator can count and track every page in the app — Home
+    // plus each Library section — instead of only the Home↔Library split.
+    val settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel()
+    val libraryTabOrder by settingsViewModel.libraryTabOrder.collectAsState()
+    val librarySectionIds = remember(libraryTabOrder) { librarySections(libraryTabOrder) }
+    val librarySectionPager = rememberPagerState(pageCount = { librarySectionIds.size })
+
     // One-shot landing route handed over by onboarding ("library" lands on
     // the Library pager tab; anything else is a plain navigation target).
     LaunchedEffect(Unit) {
@@ -280,7 +294,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 HomeScreen(navController = navController, playerViewModel = playerViewModel)
                             }
                             1 -> tf.monochrome.android.devedit.DevEditScreen("library") {
-                                LibraryScreen(navController = navController, playerViewModel = playerViewModel)
+                                LibraryScreen(
+                                    navController = navController,
+                                    playerViewModel = playerViewModel,
+                                    sections = librarySectionIds,
+                                    sectionPager = librarySectionPager,
+                                )
                             }
                         }
                     }
@@ -513,6 +532,69 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         )
                     }
                 }
+            }
+        }
+
+        // ── Layer 1.5: page indicator ───────────────────────────────
+        // Compact glass pill centred on the TopAppBar's own centre line, in the
+        // free gap between the screens' titles and their action icons. Drawn
+        // OVER the pager, not behind it: Haze can only blur content already
+        // drawn this frame, so a pill under the pager loses its frost entirely.
+        if (isOnMainTab) {
+            CompositionLocalProvider(
+                tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
+            ) {
+                SwipeToLibraryHint(
+                    // Home, then one slot per Library section.
+                    pageCount = 1 + librarySectionIds.size,
+                    progressProvider = {
+                        // Flattens the two nested pagers onto one axis: Home is
+                        // 0, the local library 1, each further section 2, 3, …
+                        // Multiplying by the outer position keeps it continuous
+                        // across the Home↔Library crossing instead of jumping
+                        // when Library was left on a later section.
+                        val outer = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                        val inner = librarySectionPager.currentPage +
+                            librarySectionPager.currentPageOffsetFraction
+                        outer * (1f + inner)
+                    },
+                    // Tap walks forward one page and wraps at the end. Both
+                    // pagers animate, so the worm plays the same way it does
+                    // under a finger.
+                    onClick = {
+                        scope.launch {
+                            if (pagerState.currentPage == 0) {
+                                librarySectionPager.scrollToPage(0)
+                                pagerState.animateScrollToPage(1)
+                            } else {
+                                val next = librarySectionPager.currentPage + 1
+                                if (next < librarySectionIds.size) {
+                                    librarySectionPager.animateScrollToPage(next)
+                                } else {
+                                    pagerState.animateScrollToPage(0)
+                                }
+                            }
+                        }
+                    },
+                    onClickLabel = when {
+                        pagerState.currentPage == 0 -> "Open Library"
+                        librarySectionPager.currentPage + 1 < librarySectionIds.size ->
+                            "Open " + (LIBRARY_SECTION_NAMES[
+                                librarySectionIds[librarySectionPager.currentPage + 1]
+                            ] ?: "next section")
+                        else -> "Open Home"
+                    },
+                    hazeState = hazeState,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        // The TopAppBar pads itself for the status bar and is
+                        // 64.dp tall, so this drops the pill onto its centre.
+                        .padding(top = statusBarHeight + (64.dp - SwipeHintPillHeight) / 2)
+                        .size(
+                            width = swipeHintPillWidth(1 + librarySectionIds.size),
+                            height = SwipeHintPillHeight,
+                        ),
+                )
             }
         }
 
