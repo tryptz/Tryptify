@@ -563,35 +563,13 @@ class EqViewModel @Inject constructor(
     }
 
     /**
-     * Measurement smoothing percent (0–100, SeapEngine's scale). Applied to
-     * the measurement JUST before the optimizer runs — raw curves stay
-     * stored, so moving the slider re-derives corrections without
-     * re-fetching anything.
+     * Measurement smoothing percent (0–100, SeapEngine's scale). Preview
+     * only: the graph's curves smooth immediately, but corrections are NOT
+     * re-derived until the AutoEQ button is pressed — SeapEngine's Generate
+     * semantics, and it keeps slider drags from thrashing the audio path.
      */
     fun setSmoothing(fraction: Float) {
-        if (fraction == _smoothing.value) return
         _smoothing.value = fraction
-        viewModelScope.launch {
-            val target = _selectedTarget.value.data
-            if (target.isEmpty()) return@launch
-            try {
-                _isCalculating.value = true
-                val l = _originalMeasurement.value
-                if (l.isNotEmpty()) {
-                    val bands = runEngine(l, target)
-                    _currentBands.value = bands
-                    saveBandsToPreferences(bands)
-                }
-                val r = _originalMeasurementR.value
-                if (r.isNotEmpty()) {
-                    val bands = runEngine(r, target)
-                    _currentBandsR.value = bands
-                    saveBandsRToPreferences(bands)
-                }
-            } finally {
-                _isCalculating.value = false
-            }
-        }
     }
 
     /**
@@ -1376,16 +1354,14 @@ class EqViewModel @Inject constructor(
     }
 
     fun runAutoEq() {
-        // Recompute for the ear currently being edited — same routing idiom as
-        // updateBand. Without this, running AutoEQ with the Right ear selected
-        // read the LEFT measurement and overwrote the LEFT bands.
-        val editRight = _stereoMode.value && _editChannel.value == EqChannel.RIGHT
-        val measurement =
-            if (editRight) _originalMeasurementR.value else _originalMeasurement.value
-        if (measurement.isEmpty()) {
-            _error.value =
-                if (editRight) "No right-ear measurement loaded"
-                else "No headphone measurement loaded"
+        // Reprocess is explicit: the smoothing slider only previews, and this
+        // button re-derives corrections at the current settings — for EVERY
+        // ear that has a measurement, so a smoothing change can't leave the
+        // two ears computed at different settings.
+        val measL = _originalMeasurement.value
+        val measR = if (_stereoMode.value) _originalMeasurementR.value else emptyList<FrequencyPoint>()
+        if (measL.isEmpty() && measR.isEmpty()) {
+            _error.value = "No headphone measurement loaded"
             return
         }
         val target = _selectedTarget.value.data
@@ -1397,16 +1373,18 @@ class EqViewModel @Inject constructor(
             try {
                 _isCalculating.value = true
                 _error.value = null
-                val bands = runEngine(measurement, target)
-                if (editRight) {
-                    _currentBandsR.value = bands
-                    saveBandsRToPreferences(bands)
-                } else {
+                if (measL.isNotEmpty()) {
+                    val bands = runEngine(measL, target)
                     _currentBands.value = bands
                     saveBandsToPreferences(bands)
                 }
+                if (measR.isNotEmpty()) {
+                    val bands = runEngine(measR, target)
+                    _currentBandsR.value = bands
+                    saveBandsRToPreferences(bands)
+                }
             } catch (e: Exception) {
-                _error.value = "AutoEQ calculation failed: ${e.message}"
+                _error.value = "AutoEQ calculation failed: " + e.message
             } finally {
                 _isCalculating.value = false
             }

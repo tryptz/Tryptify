@@ -398,6 +398,19 @@ fun EqualizerScreen(
               }
             }
 
+            // ─── AutoEQ (reprocess at current smoothing/target/params) ───
+            item {
+              tf.monochrome.android.devedit.DevEditable("eq_autoeq_button", Modifier.fillMaxWidth()) {
+                GradientAutoEqButton(
+                    isCalculating = isCalculating,
+                    onClick = { viewModel.runAutoEq() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+              }
+            }
+
             // ─── Bass / treble tone shelves (shares the player's tone setting) ───
             item {
                 tf.monochrome.android.ui.player.ToneControlsPanel(
@@ -750,11 +763,7 @@ fun EqualizerScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    GradientAutoEqButton(
-                        isCalculating = isCalculating,
-                        onClick = { viewModel.runAutoEq() },
-                        modifier = Modifier.weight(1f)
-                    )
+                    Spacer(modifier = Modifier.weight(1f))
                     IconButton(
                         onClick = {
                             val hp = selectedHeadphone?.name
