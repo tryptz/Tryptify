@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -127,6 +128,7 @@ fun EqualizerScreen(
     var showTargetNameDialog by rememberSaveable { mutableStateOf(false) }
     var importForRight by rememberSaveable { mutableStateOf(false) }
     var showProfileImport by rememberSaveable { mutableStateOf(false) }
+    var showHelp by rememberSaveable { mutableStateOf(false) }
     var headphoneSelectForRight by rememberSaveable { mutableStateOf(false) }
     var pendingTargetData by rememberSaveable { mutableStateOf("") }
     var targetName by rememberSaveable { mutableStateOf("") }
@@ -254,6 +256,18 @@ fun EqualizerScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        IconButton(
+                            onClick = { showHelp = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                                contentDescription = "Help",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                         Switch(
                             checked = eqEnabled,
                             onCheckedChange = { viewModel.toggleEq() }
@@ -1032,6 +1046,10 @@ fun EqualizerScreen(
                 TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
             }
         )
+    }
+
+    if (showHelp) {
+        AutoEqHelpSheet(onDismiss = { showHelp = false })
     }
 
     if (showProfileImport) {
