@@ -60,6 +60,35 @@ class HeadphoneRepository @Inject constructor(
             else -> null
         }
 
+    /** Channel text + the sample name that actually answered ("L"/"L1"). */
+    suspend fun fetchMeasurementChannel(
+        measurement: AutoEqMeasurement,
+        channel: String,
+    ): Pair<String, String>? = when (measurement.target) {
+        "squiglink" -> squiglinkApi.fetchMeasurementChannel(
+            measurement.host, measurement.fileName, channel,
+        )
+        else -> null
+    }
+
+    /** One exact sample ("L2", "R3", …); squig.link only. */
+    suspend fun fetchMeasurementSampleText(measurement: AutoEqMeasurement, sample: String): String? =
+        when (measurement.target) {
+            "squiglink" -> squiglinkApi.fetchMeasurementSampleText(
+                measurement.host, measurement.fileName, sample,
+            )
+            else -> null
+        }
+
+    /** Published sample names for a channel prefix ("L" -> [L1, L2, …]); squig.link only. */
+    suspend fun listMeasurementSamples(measurement: AutoEqMeasurement, channelPrefix: String): List<String> =
+        when (measurement.target) {
+            "squiglink" -> squiglinkApi.listSamples(
+                measurement.host, measurement.fileName, channelPrefix,
+            )
+            else -> emptyList()
+        }
+
     private fun mergeByName(all: List<Headphone>): List<Headphone> =
         all.groupBy { it.name }.map { (name, group) ->
             Headphone(

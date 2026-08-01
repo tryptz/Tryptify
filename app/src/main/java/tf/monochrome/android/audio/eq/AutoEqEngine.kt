@@ -19,6 +19,41 @@ import kotlin.math.max
  */
 object AutoEqEngine {
 
+    /**
+     * Fractional-octave smoothing (the family squig.link/REW use): each point
+     * becomes a gaussian-weighted average of its neighbours within
+     * ±[octaves]/2 on the log-frequency axis. 0 (or too few points) returns
+     * the input untouched. Tames rig artefacts and narrow unit-to-unit jitter
+     * so the optimizer corrects the audible trend instead of burning bands on
+     * spikes that don't survive a reseat of the headphone.
+     */
+    fun smoothCurve(
+        points: List<FrequencyPoint>,
+        octaves: Float,
+    ): List<FrequencyPoint> {
+        if (octaves <= 0f || points.size < 3) return points
+        val logs = FloatArray(points.size) { kotlin.math.log2(points[it].freq) }
+        val half = octaves / 2f
+        val sigma = octaves / 4f
+        val out = ArrayList<FrequencyPoint>(points.size)
+        var lo = 0
+        for (i in points.indices) {
+            while (lo < points.size && logs[lo] < logs[i] - half) lo++
+            var j = lo
+            var wSum = 0f
+            var vSum = 0f
+            while (j < points.size && logs[j] <= logs[i] + half) {
+                val d = (logs[j] - logs[i]) / sigma
+                val w = kotlin.math.exp(-0.5f * d * d)
+                wSum += w
+                vSum += w * points[j].gain
+                j++
+            }
+            out.add(FrequencyPoint(points[i].freq, if (wSum > 0f) vSum / wSum else points[i].gain))
+        }
+        return out
+    }
+
     private const val MAX_BOOST = 12.0
     private const val MAX_CUT = 12.0
     private const val MIN_Q = 0.6

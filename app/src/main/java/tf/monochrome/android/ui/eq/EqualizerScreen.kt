@@ -24,6 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import tf.monochrome.android.audio.eq.AutoEqEngine
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -100,6 +103,9 @@ fun EqualizerScreen(
     val editChannel by viewModel.editChannel.collectAsState()
     val measurementLabelL by viewModel.measurementLabelL.collectAsState()
     val measurementLabelR by viewModel.measurementLabelR.collectAsState()
+    val measurementSampleL by viewModel.measurementSampleL.collectAsState()
+    val measurementSampleR by viewModel.measurementSampleR.collectAsState()
+    val smoothing by viewModel.smoothing.collectAsState()
 
     // Which ear the graph, band list and export operate on. Off-stereo this is
     // always the left/mono channel, so everything below reduces to the old UI.
@@ -281,6 +287,42 @@ fun EqualizerScreen(
             item {
               tf.monochrome.android.devedit.DevEditable("eq_graph", Modifier.fillMaxWidth()) {
                 Column {
+                    // ── Measurement smoothing ──
+                    // Discrete fractional-octave steps, applied to the
+                    // measurement before the optimizer runs. Displayed curves
+                    // smooth along with it so what you see is what gets EQ'd.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "SMOOTHING",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val smoothSteps = listOf(0f, 1f / 24f, 1f / 12f, 1f / 6f, 1f / 3f)
+                        val smoothLabels = listOf("Off", "1/24", "1/12", "1/6", "1/3")
+                        val smoothIdx = smoothSteps
+                            .indexOfFirst { kotlin.math.abs(it - smoothing) < 0.001f }
+                            .coerceAtLeast(0)
+                        Slider(
+                            value = smoothIdx.toFloat(),
+                            onValueChange = {
+                                viewModel.setSmoothing(smoothSteps[it.roundToInt().coerceIn(0, 4)])
+                            },
+                            valueRange = 0f..4f,
+                            steps = 3,
+                            modifier = Modifier.weight(1f).height(28.dp)
+                        )
+                        Text(
+                            smoothLabels[smoothIdx],
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     if (stereoMode) {
                         Row(
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -298,8 +340,18 @@ fun EqualizerScreen(
                             )
                         }
                     }
+                    // Graph shows the SMOOTHED measurements — the same curves
+                    // the optimizer actually corrects at this slider setting.
+                    val displayMeasurement = remember(activeMeasurement, smoothing) {
+                        AutoEqEngine.smoothCurve(activeMeasurement, smoothing)
+                    }
+                    val otherMeasurement =
+                        if (editRight) originalMeasurement else originalMeasurementR
+                    val displayOther = remember(otherMeasurement, smoothing) {
+                        AutoEqEngine.smoothCurve(otherMeasurement, smoothing)
+                    }
                     FrequencyResponseGraph(
-                        originalCurve = activeMeasurement,
+                        originalCurve = displayMeasurement,
                         targetCurve = selectedTarget.data,
                         eqBands = activeBands,
                         preamp = currentPreamp,
@@ -308,10 +360,7 @@ fun EqualizerScreen(
                             viewModel.updateBandByDrag(bandId, freq, gain)
                         },
                         modifier = Modifier.padding(horizontal = 12.dp),
-                        secondaryMeasurement =
-                            if (stereoMode) {
-                                if (editRight) originalMeasurement else originalMeasurementR
-                            } else emptyList(),
+                        secondaryMeasurement = if (stereoMode) displayOther else emptyList(),
                         secondaryBands =
                             if (stereoMode) {
                                 if (editRight) currentBands else currentBandsR
@@ -441,20 +490,31 @@ fun EqualizerScreen(
                                 showHeadphoneSelect = true
                             },
                             trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        importForRight = false
-                                        measurementFilePicker.launch("text/*")
-                                    },
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .liquidGlass(shape = RoundedCornerShape(8.dp))
-                                ) {
-                                    Icon(
-                                        Icons.Default.UploadFile,
-                                        contentDescription = "Import left measurement file",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    measurementSampleL?.let { sample ->
+                                        SampleStepper(
+                                            label = sample,
+                                            onStep = { forward ->
+                                                viewModel.cycleMeasurementSample(EqChannel.LEFT, forward)
+                                            },
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            importForRight = false
+                                            measurementFilePicker.launch("text/*")
+                                        },
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .liquidGlass(shape = RoundedCornerShape(8.dp))
+                                    ) {
+                                        Icon(
+                                            Icons.Default.UploadFile,
+                                            contentDescription = "Import left measurement file",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         )
@@ -471,20 +531,31 @@ fun EqualizerScreen(
                                 showHeadphoneSelect = true
                             },
                             trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        importForRight = true
-                                        measurementFilePicker.launch("text/*")
-                                    },
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .liquidGlass(shape = RoundedCornerShape(8.dp))
-                                ) {
-                                    Icon(
-                                        Icons.Default.UploadFile,
-                                        contentDescription = "Import right measurement file",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    measurementSampleR?.let { sample ->
+                                        SampleStepper(
+                                            label = sample,
+                                            onStep = { forward ->
+                                                viewModel.cycleMeasurementSample(EqChannel.RIGHT, forward)
+                                            },
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            importForRight = true
+                                            measurementFilePicker.launch("text/*")
+                                        },
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .liquidGlass(shape = RoundedCornerShape(8.dp))
+                                    ) {
+                                        Icon(
+                                            Icons.Default.UploadFile,
+                                            contentDescription = "Import right measurement file",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         )
@@ -496,22 +567,33 @@ fun EqualizerScreen(
                                 showHeadphoneSelect = true
                             },
                             trailingIcon = {
-                                IconButton(
-                                    onClick = {
-                                        importForRight = false
-                                        measurementFilePicker.launch("text/*")
-                                    },
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .liquidGlass(
-                                            shape = RoundedCornerShape(8.dp)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    measurementSampleL?.let { sample ->
+                                        SampleStepper(
+                                            label = sample,
+                                            onStep = { forward ->
+                                                viewModel.cycleMeasurementSample(EqChannel.LEFT, forward)
+                                            },
                                         )
-                                ) {
-                                    Icon(
-                                        Icons.Default.UploadFile,
-                                        contentDescription = "Import measurement file",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            importForRight = false
+                                            measurementFilePicker.launch("text/*")
+                                        },
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .liquidGlass(
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.UploadFile,
+                                            contentDescription = "Import measurement file",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         )
@@ -1256,6 +1338,50 @@ fun EqBandSlider(
                 modifier = Modifier.fillMaxWidth().height(32.dp)
             )
         }
+    }
+}
+
+/**
+ * squig-style sample switcher: ▲/▼ step through a measurement's published
+ * sweeps (L → L1 → L2 → …, wrapping) with the current sample shown between
+ * the arrows.
+ */
+@Composable
+private fun SampleStepper(
+    label: String,
+    onStep: (forward: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .size(width = 36.dp, height = 44.dp)
+            .liquidGlass(shape = RoundedCornerShape(8.dp)),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            Icons.Default.KeyboardArrowUp,
+            contentDescription = "Next sample",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clickable { onStep(true) }
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        Icon(
+            Icons.Default.KeyboardArrowDown,
+            contentDescription = "Previous sample",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clickable { onStep(false) }
+        )
     }
 }
 

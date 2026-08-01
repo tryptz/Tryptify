@@ -87,6 +87,22 @@ class EqViewModel @Inject constructor(
     private val _measurementLabelR = MutableStateFlow<String?>(null)
     val measurementLabelR: StateFlow<String?> = _measurementLabelR.asStateFlow()
 
+    // Sample stepping (squig.link publishes numbered sweeps: L1/L2/L3…).
+    // The loaded measurement is kept per ear so the ▲▼ stepper can re-fetch a
+    // different sample; the sample name drives the stepper's label and
+    // visibility (null = no steppable measurement loaded on that ear).
+    private var selectedMeasL: tf.monochrome.android.domain.model.AutoEqMeasurement? = null
+    private var selectedMeasR: tf.monochrome.android.domain.model.AutoEqMeasurement? = null
+    private val sampleListCache = mutableMapOf<String, List<String>>()
+    private val _measurementSampleL = MutableStateFlow<String?>(null)
+    val measurementSampleL: StateFlow<String?> = _measurementSampleL.asStateFlow()
+    private val _measurementSampleR = MutableStateFlow<String?>(null)
+    val measurementSampleR: StateFlow<String?> = _measurementSampleR.asStateFlow()
+
+    // Measurement smoothing (octave fraction; 0 = off). Session-scoped.
+    private val _smoothing = MutableStateFlow(0f)
+    val smoothing: StateFlow<Float> = _smoothing.asStateFlow()
+
     private val _currentPreamp = MutableStateFlow(0f)
     val currentPreamp: StateFlow<Float> = _currentPreamp.asStateFlow()
 
@@ -545,6 +561,120 @@ class EqViewModel @Inject constructor(
         _editChannel.value = channel
     }
 
+    /**
+     * Measurement smoothing in octave fractions (0 = off, up to 1/3 oct).
+     * Applied to the measurement JUST before the optimizer runs — raw curves
+     * stay stored, so stepping the slider re-derives corrections without
+     * re-fetching anything.
+     */
+    fun setSmoothing(fraction: Float) {
+        if (fraction == _smoothing.value) return
+        _smoothing.value = fraction
+        viewModelScope.launch {
+            val target = _selectedTarget.value.data
+            if (target.isEmpty()) return@launch
+            try {
+                _isCalculating.value = true
+                val l = _originalMeasurement.value
+                if (l.isNotEmpty()) {
+                    val bands = runEngine(l, target)
+                    _currentBands.value = bands
+                    saveBandsToPreferences(bands)
+                }
+                val r = _originalMeasurementR.value
+                if (r.isNotEmpty()) {
+                    val bands = runEngine(r, target)
+                    _currentBandsR.value = bands
+                    saveBandsRToPreferences(bands)
+                }
+            } finally {
+                _isCalculating.value = false
+            }
+        }
+    }
+
+    /**
+     * Single choke point for the optimizer: every path (database select,
+     * stereo pair, file import, sample stepping, manual re-run) funnels
+     * through here so smoothing is applied uniformly.
+     */
+    private fun runEngine(
+        measurement: List<FrequencyPoint>,
+        target: List<FrequencyPoint>,
+    ): List<EqBand> = AutoEqEngine.runAutoEqAlgorithm(
+        measurement = AutoEqEngine.smoothCurve(measurement, _smoothing.value),
+        target = target,
+        bandCount = _bandCount.value,
+        maxFrequency = _maxFrequency.value,
+        sampleRate = _sampleRate.value,
+    )
+
+    /**
+     * Step the loaded squig.link measurement to its next/previous published
+     * sample (L1 → L2 → …, wrapping) and recompute that ear's correction from
+     * the new sweep. Which samples exist is discovered once per
+     * measurement+channel with HEAD probes and cached for the session.
+     */
+    fun cycleMeasurementSample(channel: EqChannel, forward: Boolean) {
+        val meas = (if (channel == EqChannel.RIGHT) selectedMeasR else selectedMeasL) ?: return
+        val prefix = if (channel == EqChannel.RIGHT) "R" else "L"
+        viewModelScope.launch {
+            try {
+                _isCalculating.value = true
+                _error.value = null
+                val key = meas.host + "|" + meas.fileName + "|" + prefix
+                val samples = sampleListCache.getOrPut(key) {
+                    headphoneRepository.listMeasurementSamples(meas, prefix)
+                }
+                if (samples.size <= 1) {
+                    _error.value = "Only one " + prefix + " sample is published for this measurement"
+                    return@launch
+                }
+                val sampleFlow =
+                    if (channel == EqChannel.RIGHT) _measurementSampleR else _measurementSampleL
+                val idx = samples.indexOf(sampleFlow.value).coerceAtLeast(0)
+                val next = samples[(idx + if (forward) 1 else samples.size - 1) % samples.size]
+
+                val text = headphoneRepository.fetchMeasurementSampleText(meas, next)
+                if (text == null) {
+                    _error.value = "Failed to fetch sample " + next
+                    return@launch
+                }
+                val parsed = EqDataParser.parseRawData(text)
+                if (parsed.isEmpty()) {
+                    _error.value = "Failed to parse sample " + next
+                    return@launch
+                }
+                val target = _selectedTarget.value.data
+                if (target.isEmpty()) {
+                    _error.value = "Target curve not available"
+                    return@launch
+                }
+                val bands = runEngine(parsed, target)
+                val label = meas.fileName + " " + next + " · " + meas.source
+                if (channel == EqChannel.RIGHT) {
+                    _originalMeasurementR.value = parsed
+                    persistMeasurementR(parsed)
+                    _measurementLabelR.value = label
+                    _measurementSampleR.value = next
+                    _currentBandsR.value = bands
+                    saveBandsRToPreferences(bands)
+                } else {
+                    _originalMeasurement.value = parsed
+                    persistMeasurement(parsed)
+                    _measurementLabelL.value = label
+                    _measurementSampleL.value = next
+                    _currentBands.value = bands
+                    saveBandsToPreferences(bands)
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to switch sample: " + e.message
+            } finally {
+                _isCalculating.value = false
+            }
+        }
+    }
+
     private data class PreampSources(
         val bandsL: List<EqBand>,
         val bandsR: List<EqBand>,
@@ -803,13 +933,7 @@ class EqViewModel @Inject constructor(
                     return@launch
                 }
 
-                val bands = AutoEqEngine.runAutoEqAlgorithm(
-                    measurement = measurement,
-                    target = target,
-                    bandCount = _bandCount.value,
-                    maxFrequency = _maxFrequency.value,
-                    sampleRate = _sampleRate.value
-                )
+                val bands = runEngine(measurement, target)
 
                 _currentBands.value = bands
                 saveBandsToPreferences(bands)
@@ -987,12 +1111,12 @@ class EqViewModel @Inject constructor(
     private suspend fun loadStereoPair(
         measurement: tf.monochrome.android.domain.model.AutoEqMeasurement,
     ): Boolean {
-        val lText = headphoneRepository.fetchMeasurementChannelText(measurement, "L")
-        val rText = headphoneRepository.fetchMeasurementChannelText(measurement, "R")
-        if (lText == null && rText == null) return false
+        val lFetch = headphoneRepository.fetchMeasurementChannel(measurement, "L")
+        val rFetch = headphoneRepository.fetchMeasurementChannel(measurement, "R")
+        if (lFetch == null && rFetch == null) return false
 
-        val lParsed = lText?.let { EqDataParser.parseRawData(it) }.orEmpty()
-        val rParsed = rText?.let { EqDataParser.parseRawData(it) }.orEmpty()
+        val lParsed = lFetch?.first?.let { EqDataParser.parseRawData(it) }.orEmpty()
+        val rParsed = rFetch?.first?.let { EqDataParser.parseRawData(it) }.orEmpty()
         val leftCurve = lParsed.ifEmpty { rParsed }
         val rightCurve = rParsed.ifEmpty { lParsed }
         if (leftCurve.isEmpty()) return false
@@ -1005,26 +1129,27 @@ class EqViewModel @Inject constructor(
             return true
         }
 
-        fun compute(m: List<FrequencyPoint>) = AutoEqEngine.runAutoEqAlgorithm(
-            measurement = m,
-            target = target,
-            bandCount = _bandCount.value,
-            maxFrequency = _maxFrequency.value,
-            sampleRate = _sampleRate.value,
-        )
+        fun compute(m: List<FrequencyPoint>) = runEngine(m, target)
+
+        val lSample = if (lParsed.isNotEmpty()) lFetch!!.second else rFetch!!.second
+        val rSample = if (rParsed.isNotEmpty()) rFetch!!.second else lFetch!!.second
 
         _originalMeasurement.value = leftCurve
         persistMeasurement(leftCurve)
-        _measurementLabelL.value = measurement.fileName +
-            (if (lParsed.isNotEmpty()) " L" else " R") + " · " + measurement.source
+        _measurementLabelL.value =
+            measurement.fileName + " " + lSample + " · " + measurement.source
+        selectedMeasL = measurement
+        _measurementSampleL.value = lSample
         val bandsL = compute(leftCurve)
         _currentBands.value = bandsL
         saveBandsToPreferences(bandsL)
 
         _originalMeasurementR.value = rightCurve
         persistMeasurementR(rightCurve)
-        _measurementLabelR.value = measurement.fileName +
-            (if (rParsed.isNotEmpty()) " R" else " L") + " · " + measurement.source
+        _measurementLabelR.value =
+            measurement.fileName + " " + rSample + " · " + measurement.source
+        selectedMeasR = measurement
+        _measurementSampleR.value = rSample
         val bandsR = compute(rightCurve)
         _currentBandsR.value = bandsR
         saveBandsRToPreferences(bandsR)
@@ -1067,6 +1192,7 @@ class EqViewModel @Inject constructor(
 
             // Uploaded measurements carry their FR data inline on the
             // Headphone — short-circuit the remote fetch.
+            var sampleUsed: String? = null
             val parsed = if (measurement.rig == tf.monochrome.android.domain.model.MeasurementRig.UPLOADED) {
                 _uploadedHeadphones.value
                     .firstOrNull { it.name == measurement.fileName }
@@ -1079,8 +1205,10 @@ class EqViewModel @Inject constructor(
                 val csvData = if (measurement.target == "squiglink") {
                     val want = if (channel == EqChannel.RIGHT) "R" else "L"
                     val other = if (channel == EqChannel.RIGHT) "L" else "R"
-                    headphoneRepository.fetchMeasurementChannelText(measurement, want)
-                        ?: headphoneRepository.fetchMeasurementChannelText(measurement, other)
+                    val hit = headphoneRepository.fetchMeasurementChannel(measurement, want)
+                        ?: headphoneRepository.fetchMeasurementChannel(measurement, other)
+                    sampleUsed = hit?.second
+                    hit?.first
                 } else {
                     headphoneRepository.fetchMeasurementText(measurement)
                 }
@@ -1097,15 +1225,20 @@ class EqViewModel @Inject constructor(
                 return
             }
 
-            val label = measurement.fileName + " · " + measurement.source
+            val label = measurement.fileName +
+                (sampleUsed?.let { " " + it } ?: "") + " · " + measurement.source
             if (channel == EqChannel.RIGHT) {
                 _originalMeasurementR.value = parsed
                 persistMeasurementR(parsed)
                 _measurementLabelR.value = label
+                selectedMeasR = if (sampleUsed != null) measurement else null
+                _measurementSampleR.value = sampleUsed
             } else {
                 _originalMeasurement.value = parsed
                 persistMeasurement(parsed)
                 _measurementLabelL.value = label
+                selectedMeasL = if (sampleUsed != null) measurement else null
+                _measurementSampleL.value = sampleUsed
             }
 
             val target = _selectedTarget.value.data
@@ -1115,13 +1248,7 @@ class EqViewModel @Inject constructor(
                 return
             }
 
-            val bands = AutoEqEngine.runAutoEqAlgorithm(
-                measurement = parsed,
-                target = target,
-                bandCount = _bandCount.value,
-                maxFrequency = _maxFrequency.value,
-                sampleRate = _sampleRate.value,
-            )
+            val bands = runEngine(parsed, target)
             if (channel == EqChannel.RIGHT) {
                 _currentBandsR.value = bands
                 saveBandsRToPreferences(bands)
@@ -1175,13 +1302,7 @@ class EqViewModel @Inject constructor(
                             return@collect
                         }
 
-                        val bands = AutoEqEngine.runAutoEqAlgorithm(
-                            measurement = measurement,
-                            target = target,
-                            bandCount = _bandCount.value,
-                            maxFrequency = _maxFrequency.value,
-                            sampleRate = _sampleRate.value
-                        )
+                        val bands = runEngine(measurement, target)
 
                         _currentBands.value = bands
                         saveBandsToPreferences(bands)
@@ -1280,13 +1401,7 @@ class EqViewModel @Inject constructor(
             try {
                 _isCalculating.value = true
                 _error.value = null
-                val bands = AutoEqEngine.runAutoEqAlgorithm(
-                    measurement = measurement,
-                    target = target,
-                    bandCount = _bandCount.value,
-                    maxFrequency = _maxFrequency.value,
-                    sampleRate = _sampleRate.value
-                )
+                val bands = runEngine(measurement, target)
                 if (editRight) {
                     _currentBandsR.value = bands
                     saveBandsRToPreferences(bands)
@@ -1324,10 +1439,14 @@ class EqViewModel @Inject constructor(
                     _originalMeasurementR.value = measurement
                     persistMeasurementR(measurement)
                     _measurementLabelR.value = "Imported file"
+                    selectedMeasR = null
+                    _measurementSampleR.value = null
                 } else {
                     _originalMeasurement.value = measurement
                     persistMeasurement(measurement)
                     _measurementLabelL.value = "Imported file"
+                    selectedMeasL = null
+                    _measurementSampleL.value = null
                 }
 
                 val target = _selectedTarget.value.data
@@ -1337,13 +1456,7 @@ class EqViewModel @Inject constructor(
                     return@launch
                 }
 
-                val bands = AutoEqEngine.runAutoEqAlgorithm(
-                    measurement = measurement,
-                    target = target,
-                    bandCount = _bandCount.value,
-                    maxFrequency = _maxFrequency.value,
-                    sampleRate = _sampleRate.value
-                )
+                val bands = runEngine(measurement, target)
 
                 if (channel == EqChannel.RIGHT) {
                     _currentBandsR.value = bands
