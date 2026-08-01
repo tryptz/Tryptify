@@ -348,8 +348,8 @@ fun ParametricEqScreen(
         ImportEqProfileSheet(
             maxBandGainDb = EqLimits.PARAMETRIC_MAX_BAND_DB,
             onDismiss = { showImportSheet = false },
-            onImport = { profile, name, _, apply ->
-                viewModel.importApoProfile(profile, name, apply)
+            onImport = { left, right, name ->
+                (left ?: right)?.let { viewModel.importApoProfile(it, name, apply = true) }
             },
         )
     }

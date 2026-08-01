@@ -1137,10 +1137,10 @@ fun EqualizerScreen(
     if (showProfileImport) {
         ImportEqProfileSheet(
             maxBandGainDb = EqLimits.AUTOEQ_MAX_BAND_DB,
-            channelChoices = stereoMode,
+            perEar = true,
             onDismiss = { showProfileImport = false },
-            onImport = { profile, name, channel, apply ->
-                viewModel.importApoProfile(profile, name, channel, apply)
+            onImport = { left, right, name ->
+                viewModel.importApoProfile(left, right, name)
             },
             onMeasurementDetected = { raw, channel ->
                 viewModel.importMeasurementData(raw, channel ?: EqChannel.LEFT)

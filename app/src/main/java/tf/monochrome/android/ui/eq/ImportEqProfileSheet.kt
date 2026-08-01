@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -43,64 +42,37 @@ import tf.monochrome.android.data.import_.ParsedEqProfile
  * Import an EqualizerAPO-style parametric profile (`ParametricEQ.txt` or a
  * band CSV) by paste or file.
  *
- * The centrepiece is the live preview: an EQ profile is invisible until it
- * plays, and a bad import is *audible* — so the parsed curve, the filter
- * count, and every warning the parser produced (skipped filter types, clamped
- * gains, derived preamp) are shown BEFORE anything is saved or applied.
- * Nothing is fixed up silently.
+ * With [perEar] the sheet is two panes — LEFT and RIGHT — each with its own
+ * paste window and Open-file button, and one Upload button at the end:
+ *  - only L filled  → mono import (drives both ears)
+ *  - L and R filled → a stereo preset; each ear gets its own filter stack
+ *  - only R filled  → imported as mono (it's the only curve there is)
  *
- * [channelChoices] — non-null on the AutoEQ surface while 2-channel mode is
- * on: the profile can target both ears or just one. Null hides the selector
- * (Parametric EQ, or mono AutoEQ).
- *
- * [onMeasurementDetected] — AutoEq publishes a frequency-response CSV right
- * next to the PEQ file, and users will inevitably hand us one. The parser
- * recognises it; if this callback is set the sheet offers to import it down
- * the measurement path instead of failing with "no filters found".
+ * The preview shows both stacks at once (right ear as the amber overlay) plus
+ * every warning the parser produced — an EQ profile is invisible until it
+ * plays, so nothing is fixed up or applied silently.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImportEqProfileSheet(
     maxBandGainDb: Float,
     onDismiss: () -> Unit,
-    onImport: (profile: ParsedEqProfile, name: String, channel: EqChannel?, apply: Boolean) -> Unit,
-    channelChoices: Boolean = false,
+    onImport: (left: ParsedEqProfile?, right: ParsedEqProfile?, name: String) -> Unit,
+    perEar: Boolean = false,
     onMeasurementDetected: ((raw: String, channel: EqChannel?) -> Unit)? = null,
 ) {
-    val context = LocalContext.current
-    var rawText by rememberSaveable { mutableStateOf("") }
+    var rawL by rememberSaveable { mutableStateOf("") }
+    var rawR by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
-    // null = both ears (or mono); otherwise the single ear to import into.
-    var targetChannel by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val parsed = remember(rawText, maxBandGainDb) {
-        if (rawText.isBlank()) null else ApoProfileParser.parse(rawText, maxBandGainDb)
+    val parsedL = remember(rawL, maxBandGainDb) {
+        if (rawL.isBlank()) null else ApoProfileParser.parse(rawL, maxBandGainDb)
     }
-
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        try {
-            val text = context.contentResolver.openInputStream(uri)
-                ?.bufferedReader()?.use { it.readText() }
-            if (!text.isNullOrBlank()) {
-                rawText = text
-                if (name.isBlank()) {
-                    // Last path segment, minus extension and SAF's "primary:" /
-                    // "raw:" prefixes — a sensible default the user can retype.
-                    name = uri.lastPathSegment
-                        ?.substringAfterLast('/')
-                        ?.substringAfterLast(':')
-                        ?.removeSuffix(".txt")
-                        ?.removeSuffix(".csv")
-                        ?: ""
-                }
-            }
-        } catch (_: Exception) {
-            // Unreadable file: leave the sheet as-is; the empty state explains.
-        }
+    val parsedR = remember(rawR, maxBandGainDb) {
+        if (rawR.isBlank()) null else ApoProfileParser.parse(rawR, maxBandGainDb)
     }
+    val validL = parsedL?.takeIf { !it.isEmpty && !it.looksLikeMeasurement }
+    val validR = parsedR?.takeIf { !it.isEmpty && !it.looksLikeMeasurement }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -117,161 +89,198 @@ fun ImportEqProfileSheet(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "EqualizerAPO / AutoEq ParametricEQ.txt, or a type,fc,gain,q CSV. " +
-                    "Paste below or open a file.",
+                if (perEar) {
+                    "EqualizerAPO / AutoEq ParametricEQ.txt or a type,fc,gain,q CSV. " +
+                        "Fill LEFT only for a mono profile, or both panes for a " +
+                        "per-ear stereo profile."
+                } else {
+                    "EqualizerAPO / AutoEq ParametricEQ.txt, or a type,fc,gain,q CSV. " +
+                        "Paste below or open a file."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TextButton(onClick = { filePicker.launch("*/*") }) {
-                    Icon(
-                        Icons.Default.UploadFile,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("Open file")
-                }
-            }
-
-            OutlinedTextField(
-                value = rawText,
-                onValueChange = { rawText = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 96.dp, max = 160.dp),
-                placeholder = {
-                    Text(
-                        "Preamp: -6.8 dB\nFilter 1: ON PK Fc 105 Hz Gain -2.9 dB Q 0.70",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+            ProfilePane(
+                title = if (perEar) "LEFT EAR" else null,
+                raw = rawL,
+                onRaw = { rawL = it },
+                parsed = parsedL,
+                onFileName = { if (name.isBlank()) name = it },
+                onMeasurementImport = onMeasurementDetected?.let { cb ->
+                    { text -> cb(text, EqChannel.LEFT); onDismiss() }
                 },
-                textStyle = MaterialTheme.typography.bodySmall,
             )
 
-            when {
-                parsed == null -> Unit
+            if (perEar) {
+                ProfilePane(
+                    title = "RIGHT EAR",
+                    raw = rawR,
+                    onRaw = { rawR = it },
+                    parsed = parsedR,
+                    onFileName = { if (name.isBlank()) name = it },
+                    onMeasurementImport = onMeasurementDetected?.let { cb ->
+                        { text -> cb(text, EqChannel.RIGHT); onDismiss() }
+                    },
+                )
+            }
 
-                parsed.looksLikeMeasurement -> {
+            if (validL != null || validR != null) {
+                // ── Live preview: L primary, R as the amber overlay ──
+                val primaryProfile = validL ?: validR!!
+                FrequencyResponseGraph(
+                    originalCurve = emptyList(),
+                    targetCurve = emptyList(),
+                    eqBands = primaryProfile.bands,
+                    preamp = primaryProfile.preamp,
+                    centerOnZero = true,
+                    showLegend = false,
+                    maxAbsDragGain = maxBandGainDb,
+                    secondaryBands = if (validL != null && validR != null) validR.bands else null,
+                )
+                val summary = buildString {
+                    append(primaryProfile.bands.size)
+                    append(" filters")
+                    if (validL != null && validR != null) {
+                        append(" L / ")
+                        append(validR.bands.size)
+                        append(" filters R")
+                    }
+                    append(" · preamp ")
+                    append("%.1f dB".format(minOf(
+                        validL?.preamp ?: Float.MAX_VALUE,
+                        validR?.preamp ?: Float.MAX_VALUE,
+                    )))
+                }
+                Text(summary, style = MaterialTheme.typography.labelMedium)
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Profile name") },
+                    singleLine = true,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    enabled = validL != null || validR != null,
+                    onClick = {
+                        onImport(validL, validR, name.ifBlank { "Imported profile" })
+                        onDismiss()
+                    },
+                ) { Text("Upload") }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/** One channel's paste window + Open-file button + live parse feedback. */
+@Composable
+private fun ProfilePane(
+    title: String?,
+    raw: String,
+    onRaw: (String) -> Unit,
+    parsed: ParsedEqProfile?,
+    onFileName: (String) -> Unit,
+    onMeasurementImport: ((String) -> Unit)?,
+) {
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        try {
+            val text = context.contentResolver.openInputStream(uri)
+                ?.bufferedReader()?.use { it.readText() }
+            if (!text.isNullOrBlank()) {
+                onRaw(text)
+                uri.lastPathSegment
+                    ?.substringAfterLast('/')
+                    ?.substringAfterLast(':')
+                    ?.removeSuffix(".txt")
+                    ?.removeSuffix(".csv")
+                    ?.let(onFileName)
+            }
+        } catch (_: Exception) {
+            // Unreadable file: leave the pane as-is.
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                title ?: "PROFILE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
+            )
+            TextButton(
+                onClick = { filePicker.launch("*/*") },
+                modifier = Modifier.height(28.dp),
+            ) {
+                Icon(
+                    Icons.Default.UploadFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Open file", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        OutlinedTextField(
+            value = raw,
+            onValueChange = onRaw,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp, max = 130.dp),
+            placeholder = {
+                Text(
+                    "Preamp: -6.8 dB\nFilter 1: ON PK Fc 105 Hz Gain -2.9 dB Q 0.70",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            },
+            textStyle = MaterialTheme.typography.bodySmall,
+        )
+        when {
+            parsed == null -> Unit
+            parsed.looksLikeMeasurement -> {
+                Text(
+                    "This looks like a frequency-response measurement, not a filter profile.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+                if (onMeasurementImport != null) {
+                    TextButton(onClick = { onMeasurementImport(raw) }) {
+                        Text("Import as measurement instead")
+                    }
+                }
+            }
+            parsed.isEmpty -> parsed.warnings.forEach { w ->
+                Text(w, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            else -> {
+                Text(
+                    "${parsed.bands.size} filters · preamp ${"%.1f".format(parsed.preamp)} dB",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                parsed.warnings.forEach { w ->
                     Text(
-                        "This looks like a frequency-response measurement " +
-                            "(AutoEq CSV), not a filter profile.",
+                        "⚠ $w",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
-                    if (onMeasurementDetected != null) {
-                        Button(onClick = {
-                            onMeasurementDetected(
-                                rawText,
-                                targetChannel?.let { EqChannel.valueOf(it) },
-                            )
-                            onDismiss()
-                        }) { Text("Import as measurement instead") }
-                    } else {
-                        Text(
-                            "Import it from the AutoEQ screen's measurement picker.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                parsed.isEmpty -> {
-                    parsed.warnings.forEach { w ->
-                        Text(
-                            w,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-
-                else -> {
-                    // ── Live preview ──
-                    FrequencyResponseGraph(
-                        originalCurve = emptyList(),
-                        targetCurve = emptyList(),
-                        eqBands = parsed.bands,
-                        preamp = parsed.preamp,
-                        centerOnZero = true,
-                        showLegend = false,
-                        maxAbsDragGain = maxBandGainDb,
-                    )
-                    Text(
-                        "${parsed.bands.size} filters · preamp " +
-                            "%.1f dB".format(parsed.preamp),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    parsed.warnings.forEach { w ->
-                        Text(
-                            "⚠ $w",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.tertiary,
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Profile name") },
-                        singleLine = true,
-                    )
-
-                    if (channelChoices) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = targetChannel == null,
-                                onClick = { targetChannel = null },
-                                label = { Text("Both ears") },
-                            )
-                            FilterChip(
-                                selected = targetChannel == EqChannel.LEFT.name,
-                                onClick = { targetChannel = EqChannel.LEFT.name },
-                                label = { Text("Left") },
-                            )
-                            FilterChip(
-                                selected = targetChannel == EqChannel.RIGHT.name,
-                                onClick = { targetChannel = EqChannel.RIGHT.name },
-                                label = { Text("Right") },
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(onClick = onDismiss) { Text("Cancel") }
-                        Spacer(Modifier.width(4.dp))
-                        TextButton(
-                            onClick = {
-                                onImport(
-                                    parsed,
-                                    name.ifBlank { "Imported profile" },
-                                    targetChannel?.let { EqChannel.valueOf(it) },
-                                    false,
-                                )
-                                onDismiss()
-                            },
-                        ) { Text("Save") }
-                        Spacer(Modifier.width(4.dp))
-                        Button(
-                            onClick = {
-                                onImport(
-                                    parsed,
-                                    name.ifBlank { "Imported profile" },
-                                    targetChannel?.let { EqChannel.valueOf(it) },
-                                    true,
-                                )
-                                onDismiss()
-                            },
-                        ) { Text("Save & apply") }
-                    }
-                    Spacer(Modifier.height(8.dp))
                 }
             }
         }

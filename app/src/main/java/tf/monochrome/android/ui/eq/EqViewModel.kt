@@ -802,74 +802,69 @@ class EqViewModel @Inject constructor(
     }
 
     /**
-     * Import a parsed EqualizerAPO profile: always saved as a custom preset,
-     * optionally applied immediately. [channel] narrows the apply to one ear
-     * (2-channel mode); null applies to both — and mirrors into R whenever an
-     * R list exists, so a stale right-ear curve can't survive a "both" import.
+     * Import parsed EqualizerAPO profiles from the L/R panes: always saved as
+     * ONE preset (right ear in bandsR when both panes were filled), optionally
+     * applied. A both-panes import switches 2-channel mode on — distinct
+     * per-ear stacks are meaningless without it. Preamp is shared, so the
+     * safer (more negative) of the two wins.
      */
     fun importApoProfile(
-        profile: tf.monochrome.android.data.import_.ParsedEqProfile,
+        left: tf.monochrome.android.data.import_.ParsedEqProfile?,
+        right: tf.monochrome.android.data.import_.ParsedEqProfile?,
         name: String,
-        channel: EqChannel?,
-        apply: Boolean,
+        apply: Boolean = true,
     ) {
+        val primary = left ?: right ?: return
         viewModelScope.launch {
             try {
                 // Re-id sequentially: band ids key the UI's selection and the
                 // file's own filter numbers may repeat or skip.
-                val bands = profile.bands.mapIndexed { i, b -> b.copy(id = i) }
+                val bandsL = primary.bands.mapIndexed { i, b -> b.copy(id = i) }
+                val bandsR = if (left != null && right != null) {
+                    right.bands.mapIndexed { i, b -> b.copy(id = i) }
+                } else null
+                val preamp = minOf(primary.preamp, right?.preamp ?: primary.preamp)
                 val preset = EqPreset(
                     id = "custom_preset_${System.currentTimeMillis()}",
                     name = name,
                     description = "Imported EqualizerAPO profile",
-                    bands = bands,
-                    preamp = profile.preamp,
+                    bands = bandsL,
+                    bandsR = bandsR,
+                    preamp = preamp,
                     isCustom = true,
                 )
                 eqRepository.savePreset(preset)
                 if (apply) {
-                    when (channel) {
-                        EqChannel.RIGHT -> {
-                            _currentBandsR.value = bands
-                            saveBandsRToPreferences(bands)
+                    _currentBands.value = bandsL
+                    saveBandsToPreferences(bandsL)
+                    if (bandsR != null) {
+                        _currentBandsR.value = bandsR
+                        saveBandsRToPreferences(bandsR)
+                        if (!_stereoMode.value) {
+                            _stereoMode.value = true
+                            preferences.setEqStereoMode(true)
                         }
-                        EqChannel.LEFT -> {
-                            _currentBands.value = bands
-                            saveBandsToPreferences(bands)
-                        }
-                        null -> {
-                            _currentBands.value = bands
-                            saveBandsToPreferences(bands)
-                            if (_currentBandsR.value.isNotEmpty()) {
-                                _currentBandsR.value = bands
-                                saveBandsRToPreferences(bands)
-                            }
-                        }
+                    } else if (_stereoMode.value && _currentBandsR.value.isNotEmpty()) {
+                        // Mono import while stereo is on: both ears follow it,
+                        // same rule as loading a mono preset.
+                        _currentBandsR.value = bandsL
+                        saveBandsRToPreferences(bandsL)
                     }
-                    if (channel == EqChannel.RIGHT) {
-                        // Right-only apply: the preset's bands landed on ONE
-                        // ear, so it is not "the active preset". Clearing the
-                        // persisted id makes restart restore from the raw
-                        // per-ear band prefs — exactly the state applied here.
-                        _activePreset.value = null
-                        preferences.setEqActivePreset(null)
-                    } else {
-                        _activePreset.value = preset
-                        preferences.setEqActivePreset(preset.id)
-                    }
+                    _activePreset.value = preset
+                    preferences.setEqActivePreset(preset.id)
                     // Auto-preamp recomputes from the bands on its own; only a
                     // manual preamp adopts the file's value.
                     if (!_autoPreamp.value) {
-                        _currentPreamp.value = profile.preamp
-                        preferences.setEqPreamp(profile.preamp.toDouble())
+                        _currentPreamp.value = preamp
+                        preferences.setEqPreamp(preamp.toDouble())
                     }
-                    // "Save & apply" means HEAR it — enabling here beats
-                    // silently importing into a bypassed EQ.
+                    // "Upload" means HEAR it — enabling beats silently
+                    // importing into a bypassed EQ.
                     if (!_eqEnabled.value) enableEq()
                 }
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = "Failed to import profile: ${e.message}"
+                _error.value = "Failed to import profile: " + e.message
             }
         }
     }
