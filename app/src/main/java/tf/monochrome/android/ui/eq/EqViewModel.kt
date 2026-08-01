@@ -586,17 +586,19 @@ class EqViewModel @Inject constructor(
      * stereo pair, file import, sample stepping, manual re-run) funnels
      * through here so smoothing is applied uniformly.
      */
-    private fun runEngine(
+    private suspend fun runEngine(
         measurement: List<FrequencyPoint>,
         target: List<FrequencyPoint>,
-    ): List<EqBand> = AutoEqEngine.runAutoEqAlgorithm(
-        measurement = AutoEqEngine.smoothCurve(measurement, _smoothing.value),
-        target = target,
-        bandCount = _bandCount.value,
-        maxFrequency = _maxFrequency.value,
-        sampleRate = _sampleRate.value,
-        algorithm = _algorithm.value,
-    )
+    ): List<EqBand> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        AutoEqEngine.runAutoEqAlgorithm(
+            measurement = AutoEqEngine.smoothCurve(measurement, _smoothing.value),
+            target = target,
+            bandCount = _bandCount.value,
+            maxFrequency = _maxFrequency.value,
+            sampleRate = _sampleRate.value,
+            algorithm = _algorithm.value,
+        )
+    }
 
     /**
      * Step the loaded squig.link measurement to its next/previous published
@@ -1113,7 +1115,7 @@ class EqViewModel @Inject constructor(
             return true
         }
 
-        fun compute(m: List<FrequencyPoint>) = runEngine(m, target)
+        suspend fun compute(m: List<FrequencyPoint>) = runEngine(m, target)
 
         val lSample = if (lParsed.isNotEmpty()) lFetch!!.second else rFetch!!.second
         val rSample = if (rParsed.isNotEmpty()) rFetch!!.second else lFetch!!.second

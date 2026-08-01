@@ -82,9 +82,25 @@ object AutoEqEngine {
         sampleRate: Float = DEFAULT_SAMPLE_RATE
     ): Float {
         if (!band.enabled) return 0f
-
-        val w0 = 2.0 * PI * band.freq.toDouble() / sampleRate.toDouble()
+        val c = coeffsFor(band, sampleRate)
         val phi = 2.0 * PI * freqHz.toDouble() / sampleRate.toDouble()
+        return magnitudeDb(c, cos(phi), cos(2.0 * phi)).toFloat()
+    }
+
+    /**
+     * Normalized RBJ coefficients for a band. Split out of the response
+     * calculation because they are FIXED per band — only the phase term varies
+     * per evaluation frequency. The refinement pass exploits this: coefficients
+     * once per candidate, then a transcendental-free magnitude per grid point
+     * against precomputed cos(φ)/cos(2φ) tables.
+     */
+    private class BiquadCoeffs(
+        val b0: Double, val b1: Double, val b2: Double,
+        val a1: Double, val a2: Double,
+    )
+
+    private fun coeffsFor(band: EqBand, sampleRate: Float): BiquadCoeffs {
+        val w0 = 2.0 * PI * band.freq.toDouble() / sampleRate.toDouble()
         val alpha = sin(w0) / (2.0 * band.q.toDouble())
         val A = 10.0.pow(band.gain.toDouble() / 40.0)
         val cosW0 = cos(w0)
@@ -122,18 +138,17 @@ object AutoEqEngine {
                 a2 = 1.0 - alpha / A
             }
         }
-
         val inv = 1.0 / a0
-        val b0n = b0 * inv; val b1n = b1 * inv; val b2n = b2 * inv
-        val a1n = a1 * inv; val a2n = a2 * inv
+        return BiquadCoeffs(b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv)
+    }
 
-        val cp = cos(phi); val c2p = cos(2.0 * phi)
-        val num = b0n*b0n + b1n*b1n + b2n*b2n +
-                  2.0*(b0n*b1n + b1n*b2n)*cp + 2.0*b0n*b2n*c2p
-        val den = 1.0 + a1n*a1n + a2n*a2n +
-                  2.0*(a1n + a1n*a2n)*cp + 2.0*a2n*c2p
-
-        return (10.0 * log10(num / den)).toFloat()
+    /** |H| in dB at a grid point, given cos(φ) and cos(2φ). Pure arithmetic. */
+    private fun magnitudeDb(c: BiquadCoeffs, cp: Double, c2p: Double): Double {
+        val num = c.b0 * c.b0 + c.b1 * c.b1 + c.b2 * c.b2 +
+            2.0 * (c.b0 * c.b1 + c.b1 * c.b2) * cp + 2.0 * c.b0 * c.b2 * c2p
+        val den = 1.0 + c.a1 * c.a1 + c.a2 * c.a2 +
+            2.0 * (c.a1 + c.a1 * c.a2) * cp + 2.0 * c.a2 * c2p
+        return 10.0 * log10(num / den)
     }
 
     private fun interpolate(freq: Float, data: List<FrequencyPoint>): Float {
@@ -213,12 +228,7 @@ object AutoEqEngine {
                 }
 
                 // Priority weighting
-                val priority = when {
-                    freq < 300.0  -> 1.5
-                    freq < 4000.0 -> 1.0
-                    freq < 8000.0 -> 0.5
-                    else          -> 0.25
-                }
+                val priority = priorityWeight(freq)
 
                 val weightedAbs = abs(v * priority)
                 if (weightedAbs > abs(maxWeightedDev)) {
@@ -289,8 +299,146 @@ object AutoEqEngine {
             }
         }
 
+        // Cyclic refinement: the greedy loop froze each band at fit time, so
+        // early choices never adapt to later ones — exactly what starves
+        // low band counts. Re-fitting each band against the residual all the
+        // OTHERS leave lets a small stack cooperate like a jointly-optimized
+        // one.
+        refineBands(bands, error, minFrequency, maxFrequency, sampleRate)
+
         // Sort by frequency, re-index
         return bands.sortedBy { it.freq }.mapIndexed { idx, b -> b.copy(id = idx) }
+    }
+
+    private fun priorityWeight(freq: Double): Double = when {
+        freq < 300.0  -> 1.5
+        freq < 4000.0 -> 1.0
+        freq < 8000.0 -> 0.5
+        else          -> 0.25
+    }
+
+    /** Frequency-dependent boost/cut clamp shared by the greedy fit and refinement. */
+    private fun clampGain(g: Double, type: FilterType, freq: Double): Double {
+        val boostCap = when {
+            type == FilterType.LOWSHELF -> MAX_BOOST
+            type == FilterType.HIGHSHELF -> 4.0
+            freq > 6000.0 -> 3.0
+            freq > 3000.0 -> 6.0
+            else -> MAX_BOOST
+        }
+        return g.coerceIn(-MAX_CUT, boostCap)
+    }
+
+    /**
+     * Cyclic coordinate descent over the fitted stack (a few sweeps):
+     * for each band, remove its response from the residual, then re-fit it on
+     * what the OTHER bands actually leave behind — frequency and Q over a
+     * local log-grid (shelves keep their corner and slope; only their gain
+     * refits), gain in closed form by weighted least squares. The dB response
+     * of an RBJ filter is near-linear in its gain setting for the ranges used
+     * here, which is what makes the closed-form gain valid; candidates are
+     * still SCORED with the exact response, so the approximation only picks
+     * the search point, never the final answer. Bands another band fully
+     * absorbed (|gain| < 0.2 dB) are dropped rather than left as noise.
+     */
+    private fun refineBands(
+        bands: MutableList<EqBand>,
+        residual: MutableList<FrequencyPoint>,
+        minFrequency: Float,
+        maxFrequency: Float,
+        sampleRate: Float,
+        sweeps: Int = 4,
+    ) {
+        if (bands.isEmpty()) return
+        val n = residual.size
+
+        // Phase tables: cos(φ)/cos(2φ) per grid point, computed ONCE. Every
+        // candidate evaluation after this is pure arithmetic — the win that
+        // makes a wide candidate grid and multiple sweeps cost milliseconds.
+        val cp = DoubleArray(n)
+        val c2p = DoubleArray(n)
+        val weights = DoubleArray(n)
+        for (j in 0 until n) {
+            val phi = 2.0 * PI * residual[j].freq.toDouble() / sampleRate.toDouble()
+            cp[j] = cos(phi)
+            c2p[j] = cos(2.0 * phi)
+            val f = residual[j].freq.toDouble()
+            weights[j] = if (f < minFrequency || f > maxFrequency) 0.0 else priorityWeight(f)
+        }
+        val res = DoubleArray(n) { residual[it].gain.toDouble() }
+
+        var prevTotal = Double.MAX_VALUE
+        for (sweep in 0 until sweeps) {
+            for (k in bands.indices) {
+                val band = bands[k]
+                // Residual with band k's contribution removed.
+                val ck = coeffsFor(band, sampleRate)
+                val eWo = DoubleArray(n)
+                for (j in 0 until n) eWo[j] = res[j] - magnitudeDb(ck, cp[j], c2p[j])
+
+                // ±half-octave in frequency, 0.5–2× in Q — wide enough to walk
+                // out of a bad greedy seed over a few sweeps.
+                val freqCands: List<Float>
+                val qCands: List<Float>
+                if (band.type == FilterType.PEAKING) {
+                    freqCands = listOf(0.71f, 0.84f, 1f, 1.19f, 1.41f)
+                        .map { (band.freq * it).coerceIn(minFrequency, maxFrequency) }
+                        .distinct()
+                    qCands = listOf(0.5f, 0.7f, 1f, 1.4f, 2f)
+                        .map { (band.q * it).coerceIn(MIN_Q.toFloat(), MAX_Q.toFloat()) }
+                        .distinct()
+                } else {
+                    freqCands = listOf(band.freq)
+                    qCands = listOf(band.q)
+                }
+
+                var best = band
+                var bestScore = Double.MAX_VALUE
+                for (fc in freqCands) for (qc0 in qCands) {
+                    var qc = qc0
+                    if (band.type == FilterType.PEAKING && fc > 5000f && qc > 3f) qc = 3f
+
+                    // Closed-form gain from the +1 dB basis shape (RBJ dB
+                    // response is near-linear in gain at these ranges); the
+                    // exact response still does the scoring below.
+                    val cProbe = coeffsFor(band.copy(freq = fc, q = qc, gain = 1f), sampleRate)
+                    var num = 0.0
+                    var den = 1e-9
+                    for (j in 0 until n) {
+                        val sj = magnitudeDb(cProbe, cp[j], c2p[j])
+                        num += weights[j] * eWo[j] * sj
+                        den += weights[j] * sj * sj
+                    }
+                    var g = clampGain(-num / den, band.type, fc.toDouble())
+                    if (band.type == FilterType.PEAKING && g > 0.0 && qc > 2f) qc = 2f
+                    val cand = band.copy(freq = fc, q = qc, gain = g.toFloat())
+
+                    val cCand = coeffsFor(cand, sampleRate)
+                    var score = 0.0
+                    for (j in 0 until n) {
+                        val r = eWo[j] + magnitudeDb(cCand, cp[j], c2p[j])
+                        score += weights[j] * r * r
+                    }
+                    if (score < bestScore) {
+                        bestScore = score
+                        best = cand
+                    }
+                }
+
+                bands[k] = best
+                val cBest = coeffsFor(best, sampleRate)
+                for (j in 0 until n) res[j] = eWo[j] + magnitudeDb(cBest, cp[j], c2p[j])
+            }
+
+            // Converged? Stop early rather than burning identical sweeps.
+            var total = 0.0
+            for (j in 0 until n) total += weights[j] * res[j] * res[j]
+            if (prevTotal - total < prevTotal * 0.005) break
+            prevTotal = total
+        }
+
+        for (j in 0 until n) residual[j] = FrequencyPoint(residual[j].freq, res[j].toFloat())
+        bands.removeAll { abs(it.gain) < 0.2f }
     }
 
     /**
