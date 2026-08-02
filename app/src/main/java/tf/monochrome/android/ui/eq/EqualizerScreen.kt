@@ -361,6 +361,7 @@ fun EqualizerScreen(
                             if (stereoMode) {
                                 if (editRight) currentBands else currentBandsR
                             } else null,
+                        primaryIsRight = editRight,
                     )
                 }
               }
@@ -430,7 +431,8 @@ fun EqualizerScreen(
               tf.monochrome.android.devedit.DevEditable("eq_autoeq_button", Modifier.fillMaxWidth()) {
                 GradientAutoEqButton(
                     isCalculating = isCalculating,
-                    onClick = { viewModel.runAutoEq() },
+                    // Re-press mid-computation is a race, not a retry.
+                    onClick = { if (!isCalculating) viewModel.runAutoEq() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp)

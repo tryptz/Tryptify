@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.eq.AutoEqEngine
 import tf.monochrome.android.audio.eq.EqDataParser
@@ -112,6 +115,41 @@ class EqViewModel @Inject constructor(
     fun setAlgorithm(algorithm: tf.monochrome.android.audio.eq.AutoEqAlgorithm) {
         _algorithm.value = algorithm
     }
+
+    // ONE mutation job at a time. AutoEq presses, sample steps and measurement
+    // loads cancel-and-replace each other; the join guarantees the previous
+    // job's writes (and its finally) fully complete before the next starts, so
+    // per-ear state can never end up torn across two sources.
+    private var fitJob: Job? = null
+
+    private fun launchFit(block: suspend CoroutineScope.() -> Unit) {
+        val previous = fitJob
+        fitJob = viewModelScope.launch {
+            previous?.cancelAndJoin()
+            block()
+        }
+    }
+
+    /**
+     * Fit settings snapshotted ONCE per user action and threaded through every
+     * per-ear fit of that action — a slider moved mid-computation must never
+     * leave the two ears corrected at different settings.
+     */
+    private data class FitSettings(
+        val smoothing: Float,
+        val bandCount: Int,
+        val maxFrequency: Float,
+        val sampleRate: Float,
+        val algorithm: tf.monochrome.android.audio.eq.AutoEqAlgorithm,
+    )
+
+    private fun fitSettings() = FitSettings(
+        _smoothing.value,
+        _bandCount.value,
+        _maxFrequency.value,
+        _sampleRate.value,
+        _algorithm.value,
+    )
 
     private val _currentPreamp = MutableStateFlow(0f)
     val currentPreamp: StateFlow<Float> = _currentPreamp.asStateFlow()
@@ -528,7 +566,13 @@ class EqViewModel @Inject constructor(
         // The slider is disabled while automatic preamp owns the value; this
         // guard is belt-and-braces against a race on the toggle.
         if (_autoPreamp.value) return
-        val peakBand = _currentBands.value.maxOfOrNull { kotlin.math.abs(it.gain) } ?: 0f
+        // The shared preamp guards BOTH ears' headroom — clamp against the
+        // hotter one, exactly as applyAutoPreamp does.
+        val peakL = _currentBands.value.maxOfOrNull { kotlin.math.abs(it.gain) } ?: 0f
+        val peakR = if (_stereoMode.value) {
+            _currentBandsR.value.maxOfOrNull { kotlin.math.abs(it.gain) } ?: 0f
+        } else 0f
+        val peakBand = maxOf(peakL, peakR)
         val headroom = (EqLimits.AUTOEQ_MAX_TOTAL_DB - peakBand).coerceAtLeast(0f)
         val clamped = preamp.coerceIn(-headroom, headroom)
         _currentPreamp.value = clamped
@@ -589,14 +633,15 @@ class EqViewModel @Inject constructor(
     private suspend fun runEngine(
         measurement: List<FrequencyPoint>,
         target: List<FrequencyPoint>,
+        settings: FitSettings,
     ): List<EqBand> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         AutoEqEngine.runAutoEqAlgorithm(
-            measurement = AutoEqEngine.smoothCurve(measurement, _smoothing.value),
+            measurement = AutoEqEngine.smoothCurve(measurement, settings.smoothing),
             target = target,
-            bandCount = _bandCount.value,
-            maxFrequency = _maxFrequency.value,
-            sampleRate = _sampleRate.value,
-            algorithm = _algorithm.value,
+            bandCount = settings.bandCount,
+            maxFrequency = settings.maxFrequency,
+            sampleRate = settings.sampleRate,
+            algorithm = settings.algorithm,
         )
     }
 
@@ -609,17 +654,25 @@ class EqViewModel @Inject constructor(
     fun cycleMeasurementSample(channel: EqChannel, forward: Boolean) {
         val meas = (if (channel == EqChannel.RIGHT) selectedMeasR else selectedMeasL) ?: return
         val prefix = if (channel == EqChannel.RIGHT) "R" else "L"
-        viewModelScope.launch {
+        launchFit {
             try {
                 _isCalculating.value = true
                 _error.value = null
                 val key = meas.host + "|" + meas.fileName + "|" + prefix
-                val samples = sampleListCache.getOrPut(key) {
-                    headphoneRepository.listMeasurementSamples(meas, prefix)
+                // Cache only non-empty lists: sampleExists maps network
+                // failures to false, so an empty result usually means the
+                // probe couldn't reach the server, not that no samples exist —
+                // caching it would kill the stepper for the whole session.
+                val samples = sampleListCache[key]
+                    ?: headphoneRepository.listMeasurementSamples(meas, prefix)
+                        .also { if (it.isNotEmpty()) sampleListCache[key] = it }
+                if (samples.isEmpty()) {
+                    _error.value = "Couldn't reach the measurement server — try again"
+                    return@launchFit
                 }
-                if (samples.size <= 1) {
+                if (samples.size == 1) {
                     _error.value = "Only one " + prefix + " sample is published for this measurement"
-                    return@launch
+                    return@launchFit
                 }
                 val sampleFlow =
                     if (channel == EqChannel.RIGHT) _measurementSampleR else _measurementSampleL
@@ -629,19 +682,19 @@ class EqViewModel @Inject constructor(
                 val text = headphoneRepository.fetchMeasurementSampleText(meas, next)
                 if (text == null) {
                     _error.value = "Failed to fetch sample " + next
-                    return@launch
+                    return@launchFit
                 }
                 val parsed = EqDataParser.parseRawData(text)
                 if (parsed.isEmpty()) {
                     _error.value = "Failed to parse sample " + next
-                    return@launch
+                    return@launchFit
                 }
                 val target = _selectedTarget.value.data
                 if (target.isEmpty()) {
                     _error.value = "Target curve not available"
-                    return@launch
+                    return@launchFit
                 }
-                val bands = runEngine(parsed, target)
+                val bands = runEngine(parsed, target, fitSettings())
                 val label = meas.fileName + " " + next + " · " + meas.source
                 if (channel == EqChannel.RIGHT) {
                     _originalMeasurementR.value = parsed
@@ -814,11 +867,25 @@ class EqViewModel @Inject constructor(
                 val bandsR = if (left != null && right != null) {
                     right.bands.mapIndexed { i, b -> b.copy(id = i) }
                 } else null
-                val preamp = minOf(primary.preamp, right?.preamp ?: primary.preamp)
+                // Never trust a file with the headroom budget: clamp exactly
+                // as the manual slider does, against the hotter ear's peak. An
+                // unbounded file preamp would otherwise reach the audio path
+                // directly — and the import force-enables the EQ.
+                val rawPreamp = minOf(primary.preamp, right?.preamp ?: primary.preamp)
+                val peak = maxOf(
+                    bandsL.maxOfOrNull { kotlin.math.abs(it.gain) } ?: 0f,
+                    bandsR?.maxOfOrNull { kotlin.math.abs(it.gain) } ?: 0f,
+                )
+                val headroom = (EqLimits.AUTOEQ_MAX_TOTAL_DB - peak).coerceAtLeast(0f)
+                val preamp = rawPreamp.coerceIn(-headroom, headroom)
                 val preset = EqPreset(
                     id = "custom_preset_${System.currentTimeMillis()}",
                     name = name,
                     description = "Imported EqualizerAPO profile",
+                    // Restart restores the active preset's target; an empty id
+                    // would silently reset the user's target choice to Harman.
+                    targetId = _selectedTarget.value.id,
+                    targetName = _selectedTarget.value.label,
                     bands = bandsL,
                     bandsR = bandsR,
                     preamp = preamp,
@@ -898,7 +965,7 @@ class EqViewModel @Inject constructor(
      * @param bandCount Number of EQ bands to generate (typically 10)
      */
     fun calculateAutoEq(measurementCsv: String) {
-        viewModelScope.launch {
+        launchFit {
             try {
                 _isCalculating.value = true
                 _error.value = null
@@ -907,7 +974,7 @@ class EqViewModel @Inject constructor(
                 if (measurement.isEmpty()) {
                     _error.value = "Failed to parse measurement data"
                     _isCalculating.value = false
-                    return@launch
+                    return@launchFit
                 }
 
                 _originalMeasurement.value = measurement
@@ -916,10 +983,10 @@ class EqViewModel @Inject constructor(
                 if (target.isEmpty()) {
                     _error.value = "Target curve not available"
                     _isCalculating.value = false
-                    return@launch
+                    return@launchFit
                 }
 
-                val bands = runEngine(measurement, target)
+                val bands = runEngine(measurement, target, fitSettings())
 
                 _currentBands.value = bands
                 saveBandsToPreferences(bands)
@@ -1072,7 +1139,7 @@ class EqViewModel @Inject constructor(
         channel: EqChannel = EqChannel.LEFT,
     ) {
         _selectedHeadphone.value = headphone
-        viewModelScope.launch {
+        launchFit {
             preferences.setEqSelectedHeadphone(headphone.id, headphone.name)
             loadHeadphonePresetForMeasurement(measurement, channel)
         }
@@ -1115,7 +1182,8 @@ class EqViewModel @Inject constructor(
             return true
         }
 
-        suspend fun compute(m: List<FrequencyPoint>) = runEngine(m, target)
+        val settings = fitSettings()
+        suspend fun compute(m: List<FrequencyPoint>) = runEngine(m, target, settings)
 
         val lSample = if (lParsed.isNotEmpty()) lFetch!!.second else rFetch!!.second
         val rSample = if (rParsed.isNotEmpty()) rFetch!!.second else lFetch!!.second
@@ -1234,7 +1302,7 @@ class EqViewModel @Inject constructor(
                 return
             }
 
-            val bands = runEngine(parsed, target)
+            val bands = runEngine(parsed, target, fitSettings())
             if (channel == EqChannel.RIGHT) {
                 _currentBandsR.value = bands
                 saveBandsRToPreferences(bands)
@@ -1288,7 +1356,7 @@ class EqViewModel @Inject constructor(
                             return@collect
                         }
 
-                        val bands = runEngine(measurement, target)
+                        val bands = runEngine(measurement, target, fitSettings())
 
                         _currentBands.value = bands
                         saveBandsToPreferences(bands)
@@ -1366,35 +1434,42 @@ class EqViewModel @Inject constructor(
     }
 
     fun runAutoEq() {
-        // Reprocess is explicit: the smoothing slider only previews, and this
-        // button re-derives corrections at the current settings — for EVERY
-        // ear that has a measurement, so a smoothing change can't leave the
-        // two ears computed at different settings.
-        val measL = _originalMeasurement.value
-        val measR = if (_stereoMode.value) _originalMeasurementR.value else emptyList<FrequencyPoint>()
-        if (measL.isEmpty() && measR.isEmpty()) {
-            _error.value = "No headphone measurement loaded"
-            return
-        }
-        val target = _selectedTarget.value.data
-        if (target.isEmpty()) {
-            _error.value = "Target curve not available"
-            return
-        }
-        viewModelScope.launch {
+        if (_isCalculating.value) return
+        launchFit {
             try {
                 _isCalculating.value = true
                 _error.value = null
+                // Reprocess is explicit: the smoothing slider only previews,
+                // and this press re-derives EVERY ear that has a measurement.
+                // Measurements and settings are read INSIDE the serialized job
+                // — reading them at press time raced an in-flight sample step,
+                // fitting an ear from a measurement it no longer shows.
+                val settings = fitSettings()
+                val measL = _originalMeasurement.value
+                val measR =
+                    if (_stereoMode.value) _originalMeasurementR.value
+                    else emptyList<FrequencyPoint>()
+                if (measL.isEmpty() && measR.isEmpty()) {
+                    _error.value = "No headphone measurement loaded"
+                    return@launchFit
+                }
+                val target = _selectedTarget.value.data
+                if (target.isEmpty()) {
+                    _error.value = "Target curve not available"
+                    return@launchFit
+                }
                 if (measL.isNotEmpty()) {
-                    val bands = runEngine(measL, target)
+                    val bands = runEngine(measL, target, settings)
                     _currentBands.value = bands
                     saveBandsToPreferences(bands)
                 }
                 if (measR.isNotEmpty()) {
-                    val bands = runEngine(measR, target)
+                    val bands = runEngine(measR, target, settings)
                     _currentBandsR.value = bands
                     saveBandsRToPreferences(bands)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _error.value = "AutoEQ calculation failed: " + e.message
             } finally {
@@ -1409,7 +1484,7 @@ class EqViewModel @Inject constructor(
      * Import measurement from raw file contents (read by UI via ContentResolver)
      */
     fun importMeasurementData(rawData: String, channel: EqChannel = EqChannel.LEFT) {
-        viewModelScope.launch {
+        launchFit {
             try {
                 _isCalculating.value = true
                 _error.value = null
@@ -1418,10 +1493,16 @@ class EqViewModel @Inject constructor(
                 if (measurement.isEmpty()) {
                     _error.value = "Failed to parse measurement file"
                     _isCalculating.value = false
-                    return@launch
+                    return@launchFit
                 }
 
                 if (channel == EqChannel.RIGHT) {
+                    if (!_stereoMode.value) {
+                        // A right-ear import is meaningless with 2-channel off:
+                        // the data would be neither audible nor visible.
+                        _stereoMode.value = true
+                        preferences.setEqStereoMode(true)
+                    }
                     _originalMeasurementR.value = measurement
                     persistMeasurementR(measurement)
                     _measurementLabelR.value = "Imported file"
@@ -1439,10 +1520,10 @@ class EqViewModel @Inject constructor(
                 if (target.isEmpty()) {
                     _error.value = "Target curve not available"
                     _isCalculating.value = false
-                    return@launch
+                    return@launchFit
                 }
 
-                val bands = runEngine(measurement, target)
+                val bands = runEngine(measurement, target, fitSettings())
 
                 if (channel == EqChannel.RIGHT) {
                     _currentBandsR.value = bands

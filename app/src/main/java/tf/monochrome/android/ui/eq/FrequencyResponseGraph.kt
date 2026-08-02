@@ -88,6 +88,10 @@ fun FrequencyResponseGraph(
     // no drag dots — edits always go through the primary channel props.
     secondaryMeasurement: List<FrequencyPoint> = emptyList(),
     secondaryBands: List<EqBand>? = null,
+    // True when the PRIMARY (edited) channel is the right ear. Callers pass
+    // the active ear as primary, so without this the legend would label the
+    // right ear's curves "L meas"/"L EQ" whenever the Right chip is selected.
+    primaryIsRight: Boolean = false,
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
@@ -198,6 +202,7 @@ fun FrequencyResponseGraph(
     // curve reappearing after process death is harmless, and a Set isn't
     // Bundle-friendly anyway. Keys: measL / target / eqL / measR / eqR.
     var hiddenCurves by remember { mutableStateOf(setOf<String>()) }
+    val eqDotsHidden by rememberUpdatedState("eqL" in hiddenCurves)
 
     // The pointer gestures below are keyed on Unit so they are NOT torn down and
     // restarted every time a band drag mutates `eqBands` (which froze the drag
@@ -233,6 +238,7 @@ fun FrequencyResponseGraph(
                 .pointerInput(Unit) {
                     if (onBandDragged == null) return@pointerInput
                     detectTapGestures { offset ->
+                        if (eqDotsHidden) return@detectTapGestures
                         val tapped = findNearestBand(
                             offset, latestEqBands, latestCorrected, latestPreamp, latestSampleRate,
                             size.width.toFloat(), size.height.toFloat(),
@@ -245,6 +251,8 @@ fun FrequencyResponseGraph(
                     if (onBandDragged == null) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        // Hidden dots must not be silently draggable.
+                        if (eqDotsHidden) return@awaitEachGesture
                         // Grab the band nearest the finger's landing point. If none
                         // is under it, bail without consuming so the enclosing
                         // pager / scroll gets the drag instead of the graph
@@ -477,13 +485,18 @@ fun FrequencyResponseGraph(
         // the other ear's curves get their own entries.
         if (showLegend) {
             val stereo = secondaryBands != null
+            // Slot keys stay fixed (measL = primary slot); LABELS follow the
+            // ear actually occupying the slot, so switching the edit chip
+            // never misattributes one ear's curve to the other.
+            val p1 = if (primaryIsRight) "R" else "L"
+            val p2 = if (primaryIsRight) "L" else "R"
             val entries = buildList {
-                add(Triple("measL", if (stereo) "L meas" else "Original", Color(0xFF4A9EFF)))
+                add(Triple("measL", if (stereo) "$p1 meas" else "Original", Color(0xFF4A9EFF)))
                 add(Triple("target", "Target", primary))
-                add(Triple("eqL", if (stereo) "L EQ" else "Corrected", Color(0xFFFF4444)))
+                add(Triple("eqL", if (stereo) "$p1 EQ" else "Corrected", Color(0xFFFF4444)))
                 if (stereo) {
-                    add(Triple("measR", "R meas", Color(0xFF4A9EFF).copy(alpha = 0.5f)))
-                    add(Triple("eqR", "R EQ", Color(0xFFFFB300)))
+                    add(Triple("measR", "$p2 meas", Color(0xFF4A9EFF).copy(alpha = 0.5f)))
+                    add(Triple("eqR", "$p2 EQ", Color(0xFFFFB300)))
                 }
             }
             Row(

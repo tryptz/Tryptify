@@ -245,8 +245,11 @@ class ParametricEqViewModel @Inject constructor(
                 if (apply) {
                     _currentBands.value = bands
                     saveBands(bands)
-                    _currentPreamp.value = profile.preamp
-                    preferences.setParamEqPreamp(profile.preamp.toDouble())
+                    // A file's preamp is untrusted input — clamp to the range
+                    // the page's own slider allows.
+                    val preamp = profile.preamp.coerceIn(-24f, 24f)
+                    _currentPreamp.value = preamp
+                    preferences.setParamEqPreamp(preamp.toDouble())
                     _activePreset.value = preset
                     preferences.setParamEqActivePreset(preset.id)
                     if (!_enabled.value) setEnabled(true)
