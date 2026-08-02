@@ -61,12 +61,21 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.punchDockIcons(
     val cy = (DockRowVerticalPadding + DockItemVerticalPadding).toPx() + iconPx / 2f
     // DstOut: dest * (1 - src.alpha) → the opaque icon pixels erase what is
     // there, leaving an icon-shaped hole; everything else is untouched.
-    val punch = Paint().apply { blendMode = BlendMode.DstOut }
+    // Anti-aliased punch + whole-pixel glyph placement: Paint() defaults to
+    // isAntiAlias = false (hard stair-stepped hole edges), and a glyph drawn
+    // at a fractional offset gets resampled into soft, uneven edges.
+    val punch = Paint().apply {
+        blendMode = BlendMode.DstOut
+        isAntiAlias = true
+    }
     val canvas = drawContext.canvas
     canvas.saveLayer(Rect(0f, 0f, size.width, size.height), punch)
     icons.forEachIndexed { i, painter ->
         val cx = size.width * (i + 0.5f) / icons.size
-        translate(cx - iconPx / 2f, cy - iconPx / 2f) {
+        translate(
+            kotlin.math.round(cx - iconPx / 2f),
+            kotlin.math.round(cy - iconPx / 2f),
+        ) {
             with(painter) { draw(Size(iconPx, iconPx)) }
         }
     }
