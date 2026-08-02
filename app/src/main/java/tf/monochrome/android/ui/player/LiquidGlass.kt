@@ -307,7 +307,14 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uBackdropMix", 0f)
             shader.setFloatUniform("uBodyOpacity", g.bodyOpacity)
             shader.setFloatUniform("uRefraction", g.refraction)
-            shader.setFloatUniform("uRimGain", g.rimBrightness)
+            // Rim fades out with the last stretch of body opacity: at 0 the
+            // body is invisible and a full-strength rim would leave floating
+            // box outlines around every plate (visible on the transport skips).
+            // Above 0.15 body the rim is untouched.
+            shader.setFloatUniform(
+                "uRimGain",
+                g.rimBrightness * (g.bodyOpacity / 0.15f).coerceIn(0f, 1f),
+            )
             shader.setFloatUniform("uDispersion", g.dispersion)
             shader.setFloatUniform("uSampleRings", g.sampleRings.toFloat())
             shader.setFloatUniform("uRoundness", g.roundness)
