@@ -82,6 +82,7 @@ fun MainPlayerRoute(
     playerViewModel: PlayerViewModel,
 ) {
     val currentTrack by playerViewModel.currentTrack.collectAsState()
+    val miniGlass by playerViewModel.miniPlayerGlass.collectAsState()
     val currentUnified by playerViewModel.currentUnifiedTrack.collectAsState()
     val queue by playerViewModel.queue.collectAsState()
     val currentIndex by playerViewModel.currentIndex.collectAsState()
@@ -347,6 +348,7 @@ fun MainPlayerRoute(
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
         MainPlayerScreen(
+            miniGlass = miniGlass,
             state = state,
             isFullscreen = isFullscreenActive,
             formatTime = playerViewModel::formatTime,

@@ -1030,6 +1030,9 @@ private fun PlayerGlassTab(
             )
         }
         Spacer(Modifier.height(14.dp))
+        // Controls are grouped by what they affect, in paint order: what the
+        // glass IS (body), its 3D form (shape & bevel), how light plays on it
+        // (light & reflections), what it casts (drop shadow), then render cost.
         StudioSection("Player Glass")
         FxToggle(
             "Button liquid glass", glass.enabled,
@@ -1039,22 +1042,22 @@ private fun PlayerGlassTab(
             "Glass progress bar", glass.progressGlass,
             description = "Thin glass tube scrubber that fills up, with a sine-wave bulge at the playhead dot.",
         ) { onUpdate { g -> g.copy(progressGlass = it) } }
+
+        StudioSection("Glass body")
         FxSlider(
             "Glass opacity", "${(glass.bodyOpacity * 100).toInt()}%", glass.bodyOpacity, 0.2f..1f,
             description = "Lower makes the buttons more see-through.",
         ) { onUpdate { g -> g.copy(bodyOpacity = it) } }
         FxSlider(
-            "Refraction", "%.2f".format(glass.refraction), glass.refraction, 0f..0.4f,
-            description = "How hard the beveled edges lens the backdrop behind them.",
-        ) { onUpdate { g -> g.copy(refraction = it) } }
+            "Frosted blur", "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
+            description = "Frosts the glass, from clear to misted.",
+        ) { onUpdate { g -> g.copy(frost = it) } }
         FxSlider(
-            "Edge highlight", "${(glass.rimBrightness * 100).toInt()}%", glass.rimBrightness, 0f..2f,
-            description = "Brightness of the specular glass rim.",
-        ) { onUpdate { g -> g.copy(rimBrightness = it) } }
-        FxSlider(
-            "Chromatic aberration", "${(glass.dispersion * 100).toInt()}%", glass.dispersion, 0f..2f,
-            description = "Colour fringing at the refracting edges.",
-        ) { onUpdate { g -> g.copy(dispersion = it) } }
+            "Surface motion", "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
+            description = "Living-liquid shimmer on the glass surface (0 = still).",
+        ) { onUpdate { g -> g.copy(surfaceMotion = it) } }
+
+        StudioSection("Shape & bevel")
         FxSlider(
             "Roundness", "%.2f".format(glass.roundness), glass.roundness, 0.5f..2f,
             description = "Rolls the glass edge from a sharp bevel to a round, pillowy shoulder.",
@@ -1064,15 +1067,31 @@ private fun PlayerGlassTab(
             description = "How thick and deep the relief reads — higher pops the buttons more in 3D.",
         ) { onUpdate { g -> g.copy(depth = it) } }
         FxSlider(
-            "Shadow depth", "${(glass.shadowDepth * 100).toInt()}%", glass.shadowDepth, 0f..1f,
-            description = "Drop shadow under the round play button — lifts it off the surface.",
-        ) { onUpdate { g -> g.copy(shadowDepth = it) } }
+            "Refraction", "%.2f".format(glass.refraction), glass.refraction, 0f..0.4f,
+            description = "How hard the beveled edges lens the backdrop behind them.",
+        ) { onUpdate { g -> g.copy(refraction = it) } }
         FxSlider(
-            "Per-pixel samples",
-            "${glass.sampleRings} (${when (glass.sampleRings) { 1 -> 5; 2 -> 9; else -> 13 }} taps)",
-            glass.sampleRings.toFloat(), 1f..3f, steps = 1,
-            description = "Bevel quality vs GPU cost.",
-        ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
+            "Chromatic aberration", "${(glass.dispersion * 100).toInt()}%", glass.dispersion, 0f..2f,
+            description = "Colour fringing at the refracting edges.",
+        ) { onUpdate { g -> g.copy(dispersion = it) } }
+
+        StudioSection("Light & reflections")
+        FxSlider(
+            "Light angle", "${glass.lightAngleDeg.toInt()}°", glass.lightAngleDeg, 0f..360f,
+            description = "Direction the key light comes from — where the highlights sit.",
+        ) { onUpdate { g -> g.copy(lightAngleDeg = it) } }
+        FxSlider(
+            "Tilt reactivity", "${(glass.tiltReactivity * 100).toInt()}%", glass.tiltReactivity, 0f..1.5f,
+            description = "How strongly tilting the phone moves the light and reflection.",
+        ) { onUpdate { g -> g.copy(tiltReactivity = it) } }
+        FxSlider(
+            "Edge highlight", "${(glass.rimBrightness * 100).toInt()}%", glass.rimBrightness, 0f..2f,
+            description = "Brightness of the specular glass rim.",
+        ) { onUpdate { g -> g.copy(rimBrightness = it) } }
+        FxSlider(
+            "Edge width", "${(glass.edgeWidth * 100).toInt()}%", glass.edgeWidth, 0f..1f,
+            description = "Reflective rim: thin crisp edge to a broad glassy shoulder.",
+        ) { onUpdate { g -> g.copy(edgeWidth = it) } }
         FxSlider(
             "Reflection", "${(glass.reflection * 100).toInt()}%", glass.reflection, 0f..2f,
             description = "How much of the room/environment reflection shows on the glass.",
@@ -1081,36 +1100,28 @@ private fun PlayerGlassTab(
             "Gloss", "${(glass.gloss * 100).toInt()}%", glass.gloss, 0f..1f,
             description = "Highlight polish: soft frosted-wide glint to a tight mirror.",
         ) { onUpdate { g -> g.copy(gloss = it) } }
-        FxSlider(
-            "Surface motion", "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
-            description = "Living-liquid shimmer on the glass surface (0 = still).",
-        ) { onUpdate { g -> g.copy(surfaceMotion = it) } }
-        FxSlider(
-            "Frosted blur", "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
-            description = "Frosts the glass, from clear to misted.",
-        ) { onUpdate { g -> g.copy(frost = it) } }
 
-        StudioSection("Light & shadow")
+        StudioSection("Drop shadow")
         FxSlider(
-            "Tilt reactivity", "${(glass.tiltReactivity * 100).toInt()}%", glass.tiltReactivity, 0f..1.5f,
-            description = "How strongly tilting the phone moves the light and reflection.",
-        ) { onUpdate { g -> g.copy(tiltReactivity = it) } }
-        FxSlider(
-            "Light angle", "${glass.lightAngleDeg.toInt()}°", glass.lightAngleDeg, 0f..360f,
-            description = "Direction the key light comes from — where the highlights sit.",
-        ) { onUpdate { g -> g.copy(lightAngleDeg = it) } }
-        FxSlider(
-            "Edge width", "${(glass.edgeWidth * 100).toInt()}%", glass.edgeWidth, 0f..1f,
-            description = "Reflective rim: thin crisp edge to a broad glassy shoulder.",
-        ) { onUpdate { g -> g.copy(edgeWidth = it) } }
+            "Shadow depth", "${(glass.shadowDepth * 100).toInt()}%", glass.shadowDepth, 0f..1f,
+            description = "Drop shadow under the glass buttons and dock — lifts them off the surface.",
+        ) { onUpdate { g -> g.copy(shadowDepth = it) } }
         FxSlider(
             "Shadow softness", "${(glass.shadowSoftness * 100).toInt()}%", glass.shadowSoftness, 0f..1f,
-            description = "Blur / spread of the drop shadow under the play button.",
+            description = "Blur / spread of the drop shadow.",
         ) { onUpdate { g -> g.copy(shadowSoftness = it) } }
         FxSlider(
             "Shadow tint", "${(glass.shadowTint * 100).toInt()}%", glass.shadowTint, 0f..1f,
             description = "Colour of the drop shadow: neutral black to accent glow.",
         ) { onUpdate { g -> g.copy(shadowTint = it) } }
+
+        StudioSection("Quality")
+        FxSlider(
+            "Per-pixel samples",
+            "${glass.sampleRings} (${when (glass.sampleRings) { 1 -> 5; 2 -> 9; else -> 13 }} taps)",
+            glass.sampleRings.toFloat(), 1f..3f, steps = 1,
+            description = "Bevel quality vs GPU cost.",
+        ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
         Spacer(Modifier.height(20.dp))
         OutlinedButton(
             onClick = { onApplyPreset(PlayerGlassSettings.DEFAULT) },

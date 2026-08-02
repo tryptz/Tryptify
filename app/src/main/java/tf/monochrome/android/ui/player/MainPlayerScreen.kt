@@ -125,6 +125,10 @@ data class MainPlayerUiState(
 @Composable
 fun MainPlayerScreen(
     state: MainPlayerUiState,
+    // The audio-tools sheet renders in the MINI player's glass material, not
+    // the full player's — the sheet is chrome overlaying the player, exactly
+    // the mini player's role, so it follows that Studio setting.
+    miniGlass: tf.monochrome.android.domain.model.PlayerGlassSettings,
     isFullscreen: Boolean,
     formatTime: (Long) -> String,
     onToggleLike: () -> Unit,
@@ -488,6 +492,9 @@ fun MainPlayerScreen(
         ) {
             // Granular, stable params (not the whole `state`) so this always-
             // composed sheet is SKIPPED on every position tick during playback.
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalPlayerGlass provides miniGlass,
+            ) {
             StatusOverlayPanel(
                 accent = accent,
                 outputLabel = state.outputLabel,
@@ -511,6 +518,7 @@ fun MainPlayerScreen(
                 onToneControlsChange = onToneControlsChange,
                 onDismiss = { animateRevealTo(0f, 0f) },
             )
+            }
         }
     }
 }
@@ -575,14 +583,41 @@ private fun StatusOverlayPanel(
     onDismiss: () -> Unit,
 ) {
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val g = LocalPlayerGlass.current
+    val useGlass = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+        g.enabled
+    val glassTint = if (g.tintColor != 0) Color(g.tintColor) else accent
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 32.dp, shape = shape, clip = false)
             .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f),
         shape = shape,
-        color = PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
+        // The old 92%-opaque black painted OVER the liquidGlass modifier and
+        // buried it — the sheet read as a flat slab. Glass mode keeps only a
+        // readability wash (the AGSL slab is nearly transparent at low
+        // bodyOpacity, and the tiles sit over bright album art); the opaque
+        // fill remains solely as the pre-Tiramisu / glass-off fallback.
+        color = if (useGlass) PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.45f)
+                else PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
     ) {
+        androidx.compose.foundation.layout.Box {
+        if (useGlass) {
+            // The mini player's slab: a tint rectangle relit by the playerGlass
+            // shader (bevel, refraction, rim — all from the Studio's mini
+            // player settings). Offscreen so the shader only sees the slab.
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .playerGlass(tint = glassTint)
+                    .graphicsLayer {
+                        compositingStrategy =
+                            androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                    },
+            ) {
+                drawRect(color = glassTint)
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -648,6 +683,7 @@ private fun StatusOverlayPanel(
             ToggleRow("Compressor", "Oxford dynamics", compressorEnabled, accent, onCompressorToggle)
             ToggleRow("Inflator", "Oxford loudness", inflatorEnabled, accent, onInflatorToggle)
         }
+            }
     }
 }
 
