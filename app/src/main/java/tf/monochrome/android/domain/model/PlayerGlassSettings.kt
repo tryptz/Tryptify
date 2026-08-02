@@ -73,7 +73,7 @@ data class PlayerGlassSettings(
         val d = DEFAULT
         fun Float.c(min: Float, max: Float, fb: Float) = if (isFinite()) coerceIn(min, max) else fb
         return copy(
-            bodyOpacity = bodyOpacity.c(0.2f, 1f, d.bodyOpacity),
+            bodyOpacity = bodyOpacity.c(0f, 1f, d.bodyOpacity),
             refraction = refraction.c(0f, 0.4f, d.refraction),
             rimBrightness = rimBrightness.c(0f, 2f, d.rimBrightness),
             dispersion = dispersion.c(0f, 2f, d.dispersion),

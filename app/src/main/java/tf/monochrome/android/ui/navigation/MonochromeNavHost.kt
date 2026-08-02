@@ -647,7 +647,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             onSkipPreviousClick = { playerViewModel.skipToPrevious() },
                             onClick = { navController.navigate(Screen.NowPlaying.route) },
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            hazeState = hazeState
+                            // No frost on detail screens (Settings, EQ, …): the
+                            // haze source is the tab pager, so here the frost
+                            // has nothing real to sample and its base colour
+                            // renders as a solid bar behind the mini player.
+                            // Null skips the frost layer — the glass slab
+                            // floats clean over the screen's own content.
+                            hazeState = null
                         )
                     }
                 }

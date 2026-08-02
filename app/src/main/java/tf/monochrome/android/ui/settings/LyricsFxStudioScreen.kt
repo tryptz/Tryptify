@@ -1045,8 +1045,8 @@ private fun PlayerGlassTab(
 
         StudioSection("Glass body")
         FxSlider(
-            "Glass opacity", "${(glass.bodyOpacity * 100).toInt()}%", glass.bodyOpacity, 0.2f..1f,
-            description = "Lower makes the buttons more see-through.",
+            "Glass opacity", "${(glass.bodyOpacity * 100).toInt()}%", glass.bodyOpacity, 0f..1f,
+            description = "Lower makes the buttons more see-through (0 = body fully invisible, edges remain).",
         ) { onUpdate { g -> g.copy(bodyOpacity = it) } }
         FxSlider(
             "Frosted blur", "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
