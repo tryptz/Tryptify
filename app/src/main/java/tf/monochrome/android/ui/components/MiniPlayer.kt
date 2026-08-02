@@ -221,11 +221,12 @@ fun MiniPlayer(
         // light themes and deepens it on dark ones, and Haze's default noise
         // adds the fine frosted grain.
         val profile = LocalPerformanceProfile.current
-        if (hazeState != null && profile.allowHazeBlur) {
+        if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
-            val frostTint = if (isDark) Color.Black.copy(alpha = 0.32f)
-                            else Color.White.copy(alpha = 0.45f)
+            val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
+                            else Color.White.copy(alpha = 0.45f))
+                .let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
             Box(
                 Modifier
                     .matchParentSize()
@@ -233,7 +234,7 @@ fun MiniPlayer(
                         state = hazeState,
                         style = HazeStyle(
                             backgroundColor = frostBg,
-                            blurRadius = 40.dp,
+                            blurRadius = glass.hazeBlurDp.dp,
                             tints = listOf(HazeTint(frostTint)),
                         ),
                     )

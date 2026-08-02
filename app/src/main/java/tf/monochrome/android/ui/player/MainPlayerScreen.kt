@@ -64,6 +64,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import tf.monochrome.android.performance.LocalPerformanceProfile
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -125,6 +133,10 @@ data class MainPlayerUiState(
 @Composable
 fun MainPlayerScreen(
     state: MainPlayerUiState,
+    // The audio-tools sheet renders in the MINI player's glass material, not
+    // the full player's — the sheet is chrome overlaying the player, exactly
+    // the mini player's role, so it follows that Studio setting.
+    miniGlass: tf.monochrome.android.domain.model.PlayerGlassSettings,
     isFullscreen: Boolean,
     formatTime: (Long) -> String,
     onToggleLike: () -> Unit,
@@ -220,7 +232,13 @@ fun MainPlayerScreen(
     // closed, and so we never read `reveal` in composition.
     BackHandler(enabled = scrimVisible) { animateRevealTo(0f, 0f) }
 
+    // Frost source for the audio-tools sheet: the backdrop layers (gradient,
+    // album wash, glow, stain) register as ONE haze source so the sheet can
+    // gaussian-blur what's visually behind it — the same frost the mini
+    // player gets from the nav host's source.
+    val hazeState = rememberHazeState()
     Box(modifier = Modifier.fillMaxSize()) {
+        Box(Modifier.matchParentSize().hazeSource(hazeState)) {
         // Background on its own node so the dither layer wraps just the
         // gradient, not the whole screen's content.
         Box(
@@ -263,6 +281,7 @@ fun MainPlayerScreen(
                 albumColors = state.albumColors,
                 alpha = { stainAlpha },
             )
+        }
         }
 
         // Reactive glow — full-screen, above the stain, behind the
@@ -488,8 +507,12 @@ fun MainPlayerScreen(
         ) {
             // Granular, stable params (not the whole `state`) so this always-
             // composed sheet is SKIPPED on every position tick during playback.
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalPlayerGlass provides miniGlass,
+            ) {
             StatusOverlayPanel(
                 accent = accent,
+                hazeState = hazeState,
                 outputLabel = state.outputLabel,
                 soundLabel = state.soundLabel,
                 speedLabel = state.speedLabel,
@@ -511,6 +534,7 @@ fun MainPlayerScreen(
                 onToneControlsChange = onToneControlsChange,
                 onDismiss = { animateRevealTo(0f, 0f) },
             )
+            }
         }
     }
 }
@@ -553,6 +577,7 @@ private fun SwipeUpHandle(onClick: () -> Unit) {
 @Composable
 private fun StatusOverlayPanel(
     accent: Color,
+    hazeState: HazeState?,
     outputLabel: String,
     soundLabel: String,
     speedLabel: String,
@@ -575,14 +600,62 @@ private fun StatusOverlayPanel(
     onDismiss: () -> Unit,
 ) {
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val g = LocalPlayerGlass.current
+    val useGlass = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+        g.enabled
+    val glassTint = if (g.tintColor != 0) Color(g.tintColor) else accent
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 32.dp, shape = shape, clip = false)
             .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f),
         shape = shape,
-        color = PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
+        // The old 92%-opaque black painted OVER the liquidGlass modifier and
+        // buried it — the sheet read as a flat slab. Glass mode keeps only a
+        // readability wash (the AGSL slab is nearly transparent at low
+        // bodyOpacity, and the tiles sit over bright album art); the opaque
+        // fill remains solely as the pre-Tiramisu / glass-off fallback.
+        color = if (useGlass) PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.45f)
+                else PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
     ) {
+        androidx.compose.foundation.layout.Box {
+        // Frosted backdrop UNDER the slab — the mini player's exact recipe.
+        val profile = LocalPerformanceProfile.current
+        if (useGlass && hazeState != null && profile.allowHazeBlur && g.hazeBlurDp > 0f) {
+            val frostBg = MaterialTheme.colorScheme.background
+            val isDark = frostBg.luminance() <= 0.5f
+            val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
+                            else Color.White.copy(alpha = 0.45f))
+                .let { it.copy(alpha = (it.alpha * g.hazeTint).coerceIn(0f, 1f)) }
+            androidx.compose.foundation.layout.Box(
+                Modifier
+                    .matchParentSize()
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle(
+                            backgroundColor = frostBg,
+                            blurRadius = g.hazeBlurDp.dp,
+                            tints = listOf(HazeTint(frostTint)),
+                        ),
+                    )
+            )
+        }
+        if (useGlass) {
+            // The mini player's slab: a tint rectangle relit by the playerGlass
+            // shader (bevel, refraction, rim — all from the Studio's mini
+            // player settings). Offscreen so the shader only sees the slab.
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .playerGlass(tint = glassTint)
+                    .graphicsLayer {
+                        compositingStrategy =
+                            androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                    },
+            ) {
+                drawRect(color = glassTint)
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -648,6 +721,7 @@ private fun StatusOverlayPanel(
             ToggleRow("Compressor", "Oxford dynamics", compressorEnabled, accent, onCompressorToggle)
             ToggleRow("Inflator", "Oxford loudness", inflatorEnabled, accent, onInflatorToggle)
         }
+            }
     }
 }
 

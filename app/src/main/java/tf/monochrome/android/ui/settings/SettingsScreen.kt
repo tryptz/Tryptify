@@ -29,7 +29,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -115,7 +120,7 @@ import tf.monochrome.android.ui.theme.themeDisplayNames
 
 // "Radio" is appended after "About" so existing hardcoded tab indices
 // ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "About", "Radio")
+private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "Radio", "About")
 
 /** One selectable step in the Appearance › Font Size picker. */
 private data class FontScalePreset(val label: String, val scale: Float)
@@ -140,9 +145,16 @@ fun SettingsScreen(
     initialTab: Int = 0,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    // rememberSaveable so the selected settings tab survives background process
-    // death instead of snapping back to the first tab.
-    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    // Tabs are swipeable pages. The chip row is a selector onto the SAME pager
+    // state rather than a second source of truth, so a swipe and a tap can't
+    // disagree. rememberPagerState saves its own page across process death,
+    // which is what the old rememberSaveable int was doing here.
+    val settingsPager = rememberPagerState(
+        initialPage = initialTab.coerceIn(0, settingsTabs.lastIndex),
+        pageCount = { settingsTabs.size },
+    )
+    val settingsScope = rememberCoroutineScope()
+    val selectedTab = settingsPager.currentPage
 
     // Toast one-shot ViewModel messages (font import, backup import, …) from
     // one always-composed collector, regardless of which tab is showing.
@@ -166,18 +178,21 @@ fun SettingsScreen(
             )
         )
 
-        // Tab row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+        // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
+        // scroll the selected chip into view — swiping out to Radio (11th of 11)
+        // would otherwise leave the highlighted chip off-screen behind you.
+        val chipRow = rememberLazyListState()
+        LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
+        LazyRow(
+            state = chipRow,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            settingsTabs.forEachIndexed { index, tab ->
+            itemsIndexed(settingsTabs) { index, tab ->
                 FilterChip(
                     selected = selectedTab == index,
-                    onClick = { selectedTab = index },
+                    onClick = { settingsScope.launch { settingsPager.animateScrollToPage(index) } },
                     label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -187,19 +202,27 @@ fun SettingsScreen(
             }
         }
 
-        tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[selectedTab])}") {
-            when (selectedTab) {
-                0 -> AppearanceTab(viewModel)
-                1 -> InterfaceTab(viewModel, navController)
-                2 -> ScrobblingTab(viewModel)
-                3 -> AudioTab(viewModel, navController)
-                4 -> EqualizerTab(navController)
-                5 -> LibrarySettingsTab(viewModel)
-                6 -> DownloadsTab(viewModel)
-                7 -> InstancesTab(viewModel)
-                8 -> SystemTab(viewModel, navController)
-                9 -> AboutTab()
-                10 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+        HorizontalPager(
+            state = settingsPager,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            // Each tab is a full settings form; keeping neighbours composed
+            // would mean building all 11 of them up front.
+            beyondViewportPageCount = 0,
+        ) { page ->
+            tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
+                when (page) {
+                    0 -> AppearanceTab(viewModel)
+                    1 -> InterfaceTab(viewModel, navController)
+                    2 -> ScrobblingTab(viewModel)
+                    3 -> AudioTab(viewModel, navController)
+                    4 -> EqualizerTab(navController)
+                    5 -> LibrarySettingsTab(viewModel)
+                    6 -> DownloadsTab(viewModel)
+                    7 -> InstancesTab(viewModel)
+                    8 -> SystemTab(viewModel, navController)
+                    9 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                    10 -> AboutTab()
+                }
             }
         }
     }

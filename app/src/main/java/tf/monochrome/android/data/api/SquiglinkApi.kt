@@ -89,12 +89,85 @@ class SquiglinkApi {
     suspend fun fetchMeasurementText(host: String, fileName: String): String? =
         withContext(Dispatchers.IO) {
             for (channel in arrayOf("L", "R")) {
-                val name = URLEncoder.encode("$fileName $channel.txt", "UTF-8").replace("+", "%20")
-                val body = fetchUrl("$host/data/$name")
+                val body = fetchChannel(host, fileName, channel)
                 if (body != null) return@withContext body
             }
             null
         }
+
+    /**
+     * Fetch exactly ONE channel's FR text ("L" or "R"); null when that channel
+     * isn't published. No fallback on purpose — per-ear calibration needs to
+     * know the difference between "here is the right ear" and "here is
+     * whatever existed".
+     */
+    suspend fun fetchMeasurementChannelText(host: String, fileName: String, channel: String): String? =
+        withContext(Dispatchers.IO) { fetchChannel(host, fileName, channel) }
+
+    private fun fetchChannel(host: String, fileName: String, channel: String): String? =
+        fetchChannelWithSample(host, fileName, channel)?.first
+
+    /**
+     * Like [fetchMeasurementChannelText] but also reports WHICH sample file
+     * answered ("L" or "L1"), so the sample stepper knows its starting point.
+     *
+     * Two live naming conventions. Single-sample instances publish
+     * "<name> L.txt"; multi-sample rigs number their sweeps with NO
+     * un-numbered alias — Listener's GRAS publishes only "<name> L1.txt" —
+     * so the first sample is the fallback. (Verified live: precog serves
+     * "… L.txt" and 404s "… L1.txt"; listener is the exact inverse.)
+     */
+    suspend fun fetchMeasurementChannel(
+        host: String,
+        fileName: String,
+        channel: String,
+    ): Pair<String, String>? = withContext(Dispatchers.IO) {
+        fetchChannelWithSample(host, fileName, channel)
+    }
+
+    private fun fetchChannelWithSample(
+        host: String,
+        fileName: String,
+        channel: String,
+    ): Pair<String, String>? {
+        for (suffix in arrayOf(channel, "${channel}1")) {
+            fetchSampleUrl(host, fileName, suffix)?.let { return it to suffix }
+        }
+        return null
+    }
+
+    /** Fetch one exact sample file ("L2", "R3", …); null when not published. */
+    suspend fun fetchMeasurementSampleText(host: String, fileName: String, sample: String): String? =
+        withContext(Dispatchers.IO) { fetchSampleUrl(host, fileName, sample) }
+
+    /**
+     * Which sample files exist for a channel — probes "<name> L.txt" and
+     * "<name> L1..L6.txt" with HEAD requests (headers only, no body). Called
+     * lazily on first stepper use and cached by the caller, so browsing never
+     * pays for it.
+     */
+    suspend fun listSamples(host: String, fileName: String, channelPrefix: String): List<String> =
+        withContext(Dispatchers.IO) {
+            val candidates = listOf(channelPrefix) + (1..6).map { "$channelPrefix$it" }
+            candidates.filter { sampleExists(host, fileName, it) }
+        }
+
+    private fun fetchSampleUrl(host: String, fileName: String, sample: String): String? {
+        val name = URLEncoder.encode("$fileName $sample.txt", "UTF-8").replace("+", "%20")
+        return fetchUrl("$host/data/$name")
+    }
+
+    private fun sampleExists(host: String, fileName: String, sample: String): Boolean = try {
+        val name = URLEncoder.encode("$fileName $sample.txt", "UTF-8").replace("+", "%20")
+        val connection = (URL("$host/data/$name").openConnection() as java.net.HttpURLConnection).apply {
+            requestMethod = "HEAD"
+            connectTimeout = 8_000
+            readTimeout = 8_000
+        }
+        connection.responseCode == 200
+    } catch (_: Exception) {
+        false
+    }
 
     fun clearCache() {
         cachedHeadphones = null

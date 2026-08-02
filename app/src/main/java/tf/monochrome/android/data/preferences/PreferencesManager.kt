@@ -230,6 +230,12 @@ class PreferencesManager @Inject constructor(
         private val EQ_TARGET_ID = stringPreferencesKey("eq_target_id")
         private val EQ_PREAMP = doublePreferencesKey("eq_preamp")
         private val EQ_BANDS_JSON = stringPreferencesKey("eq_bands_json")
+        // Per-ear AutoEQ: right-channel bands + the 2-channel switch. The R
+        // list persists even while the switch is off, so toggling stereo off
+        // and back on is non-destructive.
+        private val EQ_BANDS_R_JSON = stringPreferencesKey("eq_bands_r_json")
+        private val EQ_STEREO_MODE = booleanPreferencesKey("eq_stereo_mode")
+        private val EQ_MEASUREMENT_R_JSON = stringPreferencesKey("eq_measurement_r_json")
         private val EQ_CUSTOM_TARGETS_JSON = stringPreferencesKey("eq_custom_targets_json")
         private val EQ_SELECTED_HEADPHONE_ID = stringPreferencesKey("eq_selected_headphone_id")
         private val EQ_SELECTED_HEADPHONE_NAME = stringPreferencesKey("eq_selected_headphone_name")
@@ -328,6 +334,7 @@ class PreferencesManager @Inject constructor(
             EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
             EQ_CUSTOM_TARGETS_JSON, EQ_SELECTED_HEADPHONE_ID, EQ_SELECTED_HEADPHONE_NAME,
             EQ_UPLOADED_HEADPHONES_JSON, EQ_AUTO_PREAMP,
+            EQ_BANDS_R_JSON, EQ_STEREO_MODE,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
             SCAN_ON_APP_OPEN, MIN_TRACK_DURATION_MS, BACKGROUND_SCAN_INTERVAL,
@@ -1025,6 +1032,8 @@ class PreferencesManager @Inject constructor(
     val eqPreamp: Flow<Double> = dataStore.data.map { it[EQ_PREAMP] ?: 0.0 }
     val eqAutoPreamp: Flow<Boolean> = dataStore.data.map { it[EQ_AUTO_PREAMP] ?: false }
     val eqBandsJson: Flow<String?> = dataStore.data.map { it[EQ_BANDS_JSON] }
+    val eqBandsRJson: Flow<String?> = dataStore.data.map { it[EQ_BANDS_R_JSON] }
+    val eqStereoMode: Flow<Boolean> = dataStore.data.map { it[EQ_STEREO_MODE] ?: false }
 
     /** System-wide AutoEQ master toggle (global output-mix effect). Off by default. */
     val systemWideAutoEqEnabled: Flow<Boolean> =
@@ -1084,6 +1093,20 @@ class PreferencesManager @Inject constructor(
         }
     }
 
+    suspend fun setEqBandsR(bandsJson: String?) {
+        dataStore.edit {
+            if (bandsJson != null) {
+                it[EQ_BANDS_R_JSON] = bandsJson
+            } else {
+                it.remove(EQ_BANDS_R_JSON)
+            }
+        }
+    }
+
+    suspend fun setEqStereoMode(enabled: Boolean) {
+        dataStore.edit { it[EQ_STEREO_MODE] = enabled }
+    }
+
     val eqCustomTargetsJson: Flow<String> = dataStore.data.map { it[EQ_CUSTOM_TARGETS_JSON] ?: "[]" }
     suspend fun setEqCustomTargets(json: String) {
         dataStore.edit { it[EQ_CUSTOM_TARGETS_JSON] = json }
@@ -1111,6 +1134,15 @@ class PreferencesManager @Inject constructor(
         dataStore.edit {
             if (json != null) it[EQ_MEASUREMENT_JSON] = json
             else it.remove(EQ_MEASUREMENT_JSON)
+        }
+    }
+
+    // Right-channel counterpart of the cached measurement, for 2-channel mode.
+    val eqMeasurementRJson: Flow<String?> = dataStore.data.map { it[EQ_MEASUREMENT_R_JSON] }
+    suspend fun setEqMeasurementRJson(json: String?) {
+        dataStore.edit {
+            if (json != null) it[EQ_MEASUREMENT_R_JSON] = json
+            else it.remove(EQ_MEASUREMENT_R_JSON)
         }
     }
 

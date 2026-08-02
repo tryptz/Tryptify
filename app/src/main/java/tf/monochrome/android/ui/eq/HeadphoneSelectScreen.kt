@@ -76,6 +76,7 @@ fun HeadphoneSelectScreen(
     viewModel: EqViewModel,
     onHeadphoneSelected: (Headphone) -> Unit,
     onDismiss: () -> Unit,
+    channel: EqChannel = EqChannel.LEFT,
 ) {
     val availableHeadphones by viewModel.availableHeadphones.collectAsState()
     val uploadedHeadphones by viewModel.uploadedHeadphones.collectAsState()
@@ -340,6 +341,7 @@ fun HeadphoneSelectScreen(
                                         viewModel.selectMeasurement(
                                             entry.row.headphone,
                                             entry.row.measurement,
+                                            channel,
                                         )
                                         onHeadphoneSelected(entry.row.headphone)
                                     },

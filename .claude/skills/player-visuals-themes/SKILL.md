@@ -126,7 +126,7 @@ default (2 / 0 / 0).
 | Field | Range | Default | Visual effect |
 |---|---|---|---|
 | `enabled` | bool | true | Master button-glass toggle. **False = flat buttons.** |
-| `bodyOpacity` | 0.2..1 | 0.5 | Glass body see-through amount. Low = ghost/invisible-ink. |
+| `bodyOpacity` | 0..1 | 0.5 | Glass body see-through amount. Low = ghost/invisible-ink; 0 = body fully invisible (edges/rim remain). |
 | `refraction` | 0..0.4 | 0.16 | Bevel lensing of the backdrop. 0.4 + high depth/dispersion = diamond. |
 | `rimBrightness` | 0..2 | 1.3 | Lit specular rim brightness. |
 | `dispersion` | 0..2 | 1.2 | Chromatic aberration at edges. |

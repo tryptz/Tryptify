@@ -25,7 +25,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -81,6 +83,15 @@ fun FrequencyResponseGraph(
     // Absolute cap used when mapping a drag's Y-pixel back to a gain value.
     // Defaults to the AutoEQ cap; Parametric EQ callers pass EqLimits.PARAMETRIC_MAX_BAND_DB.
     maxAbsDragGain: Float = EqLimits.AUTOEQ_MAX_BAND_DB,
+    // Read-only overlay of the OTHER ear in 2-channel mode: its measurement
+    // and bands render as stroke-only curves behind the primary channel, with
+    // no drag dots — edits always go through the primary channel props.
+    secondaryMeasurement: List<FrequencyPoint> = emptyList(),
+    secondaryBands: List<EqBand>? = null,
+    // True when the PRIMARY (edited) channel is the right ear. Callers pass
+    // the active ear as primary, so without this the legend would label the
+    // right ear's curves "L meas"/"L EQ" whenever the Right chip is selected.
+    primaryIsRight: Boolean = false,
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
@@ -145,8 +156,53 @@ fun FrequencyResponseGraph(
         }
     }
 
+    // Secondary (other-ear) corrected curve, mirroring correctedCurve. Falls
+    // back to the primary measurement when the other ear has no curve of its
+    // own yet, so the overlay still shows what that ear's bands would do.
+    val secondaryCorrected = remember(
+        secondaryMeasurement, secondaryBands, originalCurve, preamp, sampleRate, zeroOffset,
+    ) {
+        val bands = secondaryBands
+        if (bands == null) {
+            emptyList()
+        } else {
+            val base = secondaryMeasurement.ifEmpty { originalCurve }
+            if (base.isNotEmpty()) {
+                base.map { point ->
+                    var g = point.gain + preamp
+                    bands.forEach { band ->
+                        if (band.enabled) {
+                            g += AutoEqEngine.calculateBiquadResponse(point.freq, band, sampleRate)
+                        }
+                    }
+                    FrequencyPoint(point.freq, g)
+                }.filter { it.gain.isFinite() }
+            } else if (bands.isNotEmpty()) {
+                val samples = 256
+                val logMin = log10(MIN_FREQ)
+                val logMax = log10(MAX_FREQ)
+                (0 until samples).map { i ->
+                    val freq = 10f.pow(logMin + i.toFloat() / (samples - 1) * (logMax - logMin))
+                    var g = preamp + zeroOffset
+                    bands.forEach { band ->
+                        if (band.enabled) g += AutoEqEngine.calculateBiquadResponse(freq, band, sampleRate)
+                    }
+                    FrequencyPoint(freq, g)
+                }.filter { it.gain.isFinite() }
+            } else {
+                emptyList()
+            }
+        }
+    }
+
     var selectedBandId by remember { mutableIntStateOf(-1) }
     var isDragging by remember { mutableStateOf(false) }
+
+    // Curves hidden via legend taps. Plain remember, not saveable: a hidden
+    // curve reappearing after process death is harmless, and a Set isn't
+    // Bundle-friendly anyway. Keys: measL / target / eqL / measR / eqR.
+    var hiddenCurves by remember { mutableStateOf(setOf<String>()) }
+    val eqDotsHidden by rememberUpdatedState("eqL" in hiddenCurves)
 
     // The pointer gestures below are keyed on Unit so they are NOT torn down and
     // restarted every time a band drag mutates `eqBands` (which froze the drag
@@ -182,6 +238,7 @@ fun FrequencyResponseGraph(
                 .pointerInput(Unit) {
                     if (onBandDragged == null) return@pointerInput
                     detectTapGestures { offset ->
+                        if (eqDotsHidden) return@detectTapGestures
                         val tapped = findNearestBand(
                             offset, latestEqBands, latestCorrected, latestPreamp, latestSampleRate,
                             size.width.toFloat(), size.height.toFloat(),
@@ -194,6 +251,8 @@ fun FrequencyResponseGraph(
                     if (onBandDragged == null) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        // Hidden dots must not be silently draggable.
+                        if (eqDotsHidden) return@awaitEachGesture
                         // Grab the band nearest the finger's landing point. If none
                         // is under it, bail without consuming so the enclosing
                         // pager / scroll gets the drag instead of the graph
@@ -240,8 +299,8 @@ fun FrequencyResponseGraph(
             // Grid
             drawGrid(w, h, minGain, maxGain, zeroOffset)
 
-            // dB labels on right
-            drawDbLabels(w, h, minGain, maxGain)
+            // dB labels on right — relative to the centre line
+            drawDbLabels(w, h, minGain, maxGain, zeroOffset)
 
             // Frequency labels at bottom
             drawFreqLabels(w, h)
@@ -260,23 +319,48 @@ fun FrequencyResponseGraph(
                 )
             }
 
-            // Original measurement curve (bright blue for visibility)
-            if (originalCurve.size > 1) {
-                drawCurve(originalCurve, Color(0xFF4A9EFF), w, h, minGain, maxGain, 2.5f)
+            // Correction-gap shading: the region between the measurement and
+            // the target IS the problem the EQ exists to fix. Shading it makes
+            // "why does the correction curve look like that" readable at a
+            // glance — the correction mirrors this shape.
+            if (originalCurve.size > 1 && normalizedTarget.size > 1 &&
+                "measL" !in hiddenCurves && "target" !in hiddenCurves
+            ) {
+                drawCurveGap(originalCurve, normalizedTarget, primary.copy(alpha = 0.08f), w, h, minGain, maxGain)
             }
 
-            // Target curve (bright white dashed) — normalized to measurement
-            if (normalizedTarget.size > 1) {
-                drawDashedCurve(normalizedTarget, primary, w, h, minGain, maxGain, 2.5f)
+            // Original measurement curve — an INPUT, drawn thinner and dimmer
+            // than the corrected result so the eye lands on the outcome first.
+            if (originalCurve.size > 1 && "measL" !in hiddenCurves) {
+                drawCurve(originalCurve, Color(0xFF4A9EFF).copy(alpha = 0.8f), w, h, minGain, maxGain, 1.5f)
+            }
+
+            // Target curve (dashed) — the other input, same receded weight.
+            if (normalizedTarget.size > 1 && "target" !in hiddenCurves) {
+                drawDashedCurve(normalizedTarget, primary.copy(alpha = 0.85f), w, h, minGain, maxGain, 1.5f)
+            }
+
+            // Other ear (2-channel mode): stroke-only so it reads as context
+            // behind the primary channel's filled curve, drawn first so the
+            // primary stays on top.
+            if (secondaryMeasurement.size > 1 && "measR" !in hiddenCurves) {
+                drawCurve(secondaryMeasurement, Color(0xFF4A9EFF).copy(alpha = 0.35f), w, h, minGain, maxGain, 1.5f)
+            }
+            if (secondaryCorrected.size > 1 && "eqR" !in hiddenCurves) {
+                drawCurve(secondaryCorrected, Color(0xFFFFB300), w, h, minGain, maxGain, 2f)
             }
 
             // Corrected curve (bright red solid) with fabfilter pro-q 3 style fill
-            if (correctedCurve.size > 1) {
+            if (correctedCurve.size > 1 && "eqL" !in hiddenCurves) {
                 drawFilledCurve(correctedCurve, Color(0xFFFF4444), w, h, minGain, maxGain, zeroOffset, 2.5f)
             }
 
-            // EQ band dots
-            eqBands.forEach { band ->
+            // EQ band dots ride the corrected curve, so they hide with it.
+            // Above ten bands the dots switch to compact handles — numbers and
+            // full-size circles at 31 bands are a wall that buries the very
+            // curve they annotate; the selected band always gets full detail.
+            val compactDots = eqBands.count { it.enabled } > 10
+            if ("eqL" !in hiddenCurves) eqBands.forEach { band ->
                 if (!band.enabled) return@forEach
                 // Find normalized positions
                 val dotX = freqToX(band.freq, w)
@@ -294,7 +378,8 @@ fun FrequencyResponseGraph(
                     drawCurve(contributionPoints, curveNeutral.copy(alpha = 0.2f), w, h, minGain, maxGain, 1.5f)
 
                     // Floating Tooltip
-                    val infoText = "${band.freq.toInt()}Hz  ${"%.1f".format(band.gain)}dB"
+                    val infoText =
+                        "${band.freq.toInt()} Hz  ${"%.1f".format(band.gain)} dB  Q ${"%.2f".format(band.q)}"
                     val paint = android.graphics.Paint().apply {
                         color = android.graphics.Color.WHITE
                         // sp (not raw px) so the label scales with display
@@ -316,74 +401,154 @@ fun FrequencyResponseGraph(
                     drawContext.canvas.nativeCanvas.drawText(infoText, dotX, rectTop, paint)
                 }
 
-                // Dynamic color based on frequency (Rainbow/Spectrum)
-                val hue = ((log10(band.freq) - log10(20f)) / (log10(20000f) - log10(20f)) * 360f)
-                val bandColor = Color.hsl(hue, 0.7f, 0.6f)
+                // Colour encodes what the band DOES — green boosts, red cuts,
+                // grey ≈ flat — instead of the old frequency-rainbow, which was
+                // decorative but said nothing about the band's effect.
+                val bandColor = when {
+                    band.gain > 0.25f -> Color(0xFF4CAF50)
+                    band.gain < -0.25f -> Color(0xFFE53935)
+                    else -> Color(0xFF9E9E9E)
+                }
 
-                // Glow for selected/dragged band
                 if (isSelected) {
+                    // Vertical guide so the band's frequency reads against the
+                    // axis while dragging.
+                    drawLine(
+                        color = curveNeutral.copy(alpha = 0.25f),
+                        start = Offset(dotX, GRAPH_PADDING_TOP),
+                        end = Offset(dotX, h - GRAPH_PADDING_BOTTOM),
+                        strokeWidth = 1.5f,
+                    )
                     drawCircle(
                         color = bandColor.copy(alpha = 0.4f),
-                        radius = 32f,
+                        radius = 34f,
                         center = Offset(dotX, dotY)
                     )
                 }
 
+                val dotRadius = when {
+                    isSelected -> 17f
+                    compactDots -> 6.5f
+                    else -> 15f
+                }
                 // Main dot shadow/border
                 drawCircle(
                     color = Color.Black,
-                    radius = if (isSelected) 17f else 15f,
+                    radius = dotRadius + 2f,
                     center = Offset(dotX, dotY)
                 )
 
                 // Main dot
                 drawCircle(
                     color = bandColor,
-                    radius = if (isSelected) 15f else 13f,
+                    radius = dotRadius,
                     center = Offset(dotX, dotY)
                 )
                 // White border
                 drawCircle(
                     color = curveNeutral,
-                    radius = if (isSelected) 15f else 13f,
+                    radius = dotRadius,
                     center = Offset(dotX, dotY),
-                    style = Stroke(width = if (isSelected) 3f else 2.5f)
+                    style = Stroke(
+                        width = when {
+                            isSelected -> 3f
+                            compactDots -> 1.5f
+                            else -> 2.5f
+                        }
+                    )
                 )
+
+                // Band number, so a dot maps to its row in the list below.
+                // Compact handles skip it (unreadable at that size and count);
+                // the selected band always shows its number.
+                if (!compactDots || isSelected) {
+                    val numPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.WHITE
+                        textSize = 9.sp.toPx()
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isFakeBoldText = true
+                        isAntiAlias = true
+                    }
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "${band.id + 1}",
+                        dotX,
+                        dotY + numPaint.textSize * 0.35f,
+                        numPaint,
+                    )
+                }
             }
         }
 
-        // Legend overlay (hidden in parametric-only mode since there's no measurement/target curve)
+        // Legend overlay (hidden in parametric-only mode since there's no
+        // measurement/target curve). Every entry is a toggle: tapping hides or
+        // shows its curve, and the entry dims while hidden. In 2-channel mode
+        // the other ear's curves get their own entries.
         if (showLegend) {
+            val stereo = secondaryBands != null
+            // Slot keys stay fixed (measL = primary slot); LABELS follow the
+            // ear actually occupying the slot, so switching the edit chip
+            // never misattributes one ear's curve to the other.
+            val p1 = if (primaryIsRight) "R" else "L"
+            val p2 = if (primaryIsRight) "L" else "R"
+            val entries = buildList {
+                add(Triple("measL", if (stereo) "$p1 meas" else "Original", Color(0xFF4A9EFF)))
+                add(Triple("target", "Target", primary))
+                add(Triple("eqL", if (stereo) "$p1 EQ" else "Corrected", Color(0xFFFF4444)))
+                if (stereo) {
+                    add(Triple("measR", "$p2 meas", Color(0xFF4A9EFF).copy(alpha = 0.5f)))
+                    add(Triple("eqR", "$p2 EQ", Color(0xFFFFB300)))
+                }
+            }
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(legendBackground)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
+                horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally)
             ) {
-                LegendDot("Original", Color(0xFF4A9EFF), legendLabelColor)
-                LegendDot("Target (Primary)", primary, legendLabelColor)
-                LegendDot("Corrected", Color(0xFFFF4444), legendLabelColor)
+                entries.forEach { (key, label, color) ->
+                    LegendDot(
+                        label = label,
+                        color = color,
+                        labelColor = legendLabelColor,
+                        active = key !in hiddenCurves,
+                        onClick = {
+                            hiddenCurves =
+                                if (key in hiddenCurves) hiddenCurves - key
+                                else hiddenCurves + key
+                        },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun LegendDot(label: String, color: Color, labelColor: Color) {
+private fun LegendDot(
+    label: String,
+    color: Color,
+    labelColor: Color,
+    active: Boolean = true,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .let { m -> if (onClick != null) m.clip(RoundedCornerShape(4.dp)).clickable(onClick = onClick) else m }
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+            .graphicsLayer { alpha = if (active) 1f else 0.35f }
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
-                .background(color, RoundedCornerShape(4.dp))
+                .size(10.dp)
+                .background(color, RoundedCornerShape(5.dp))
         )
         Text(
             label,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             color = labelColor
         )
     }
@@ -633,19 +798,32 @@ private fun DrawScope.drawGrid(
         range > 30 -> 5f
         else -> 5f
     }
-    var g = (minGain / step).toInt() * step
-    while (g <= maxGain) {
-        val y = gainToY(g, height, minGain, maxGain)
+    // Step on RELATIVE dB so lines land exactly on the ±labels, with the
+    // centre (0 dB) line emphasized — it is the "no change" reference the
+    // whole graph reads against.
+    var rel = kotlin.math.ceil((minGain - zeroOffset) / step) * step
+    while (rel + zeroOffset <= maxGain) {
+        val y = gainToY(rel + zeroOffset, height, minGain, maxGain)
         if (y in GRAPH_PADDING_TOP..(height - GRAPH_PADDING_BOTTOM)) {
-            // Highlight the zero/center line
-            val lineColor = if (abs(g - zeroOffset) < 0.5f) zeroLineColor else gridColor
-            drawLine(lineColor, Offset(GRAPH_PADDING_LEFT, y), Offset(width - GRAPH_PADDING_RIGHT, y), 1f)
+            val isZero = abs(rel) < 0.5f
+            drawLine(
+                if (isZero) zeroLineColor else gridColor,
+                Offset(GRAPH_PADDING_LEFT, y),
+                Offset(width - GRAPH_PADDING_RIGHT, y),
+                if (isZero) 2f else 1f,
+            )
         }
-        g += step
+        rel += step
     }
 }
 
-private fun DrawScope.drawDbLabels(width: Float, height: Float, minGain: Float, maxGain: Float) {
+private fun DrawScope.drawDbLabels(
+    width: Float,
+    height: Float,
+    minGain: Float,
+    maxGain: Float,
+    zeroOffset: Float,
+) {
     val range = maxGain - minGain
     val step = when {
         range > 60 -> 10f
@@ -658,18 +836,23 @@ private fun DrawScope.drawDbLabels(width: Float, height: Float, minGain: Float, 
         textAlign = android.graphics.Paint.Align.LEFT
         isAntiAlias = true
     }
-    var g = (minGain / step).toInt() * step
-    while (g <= maxGain) {
+    // Labels are RELATIVE to the centre line ("+5", "0", "−5"), not raw SPL.
+    // The axis is normalized to the measurement's midband level, so absolute
+    // numbers like "73" carried no meaning a user could act on — what matters
+    // is how far above or below neutral the curve sits.
+    var rel = kotlin.math.ceil((minGain - zeroOffset) / step) * step
+    while (rel + zeroOffset <= maxGain) {
+        val g = rel + zeroOffset
         val y = gainToY(g, height, minGain, maxGain)
         if (y in GRAPH_PADDING_TOP..(height - GRAPH_PADDING_BOTTOM)) {
             drawContext.canvas.nativeCanvas.drawText(
-                "${g.toInt()}",
+                if (rel > 0f) "+${rel.toInt()}" else "${rel.toInt()}",
                 width - GRAPH_PADDING_RIGHT + 4f,
                 y + 7f,
                 paint
             )
         }
-        g += step
+        rel += step
     }
 }
 
@@ -691,6 +874,44 @@ private fun DrawScope.drawFreqLabels(width: Float, height: Float) {
             label, x, height - 2f, paint
         )
     }
+}
+
+/**
+ * Translucent fill between two curves — used to shade the measurement↔target
+ * gap. Both are resampled onto a shared log-frequency grid over their
+ * overlapping range, so differing point densities can't shear the polygon.
+ */
+private fun DrawScope.drawCurveGap(
+    a: List<FrequencyPoint>,
+    b: List<FrequencyPoint>,
+    color: Color,
+    width: Float,
+    height: Float,
+    minGain: Float,
+    maxGain: Float,
+) {
+    if (a.size < 2 || b.size < 2) return
+    val lo = maxOf(a.first().freq, b.first().freq).coerceAtLeast(MIN_FREQ)
+    val hi = minOf(a.last().freq, b.last().freq).coerceAtMost(MAX_FREQ)
+    if (hi <= lo) return
+    val samples = 128
+    val logLo = log10(lo)
+    val logHi = log10(hi)
+    val path = Path()
+    for (i in 0..samples) {
+        val freq = 10f.pow(logLo + i.toFloat() / samples * (logHi - logLo))
+        val x = freqToX(freq, width)
+        val y = gainToY(interpolateGain(freq, a), height, minGain, maxGain)
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    for (i in samples downTo 0) {
+        val freq = 10f.pow(logLo + i.toFloat() / samples * (logHi - logLo))
+        val x = freqToX(freq, width)
+        val y = gainToY(interpolateGain(freq, b), height, minGain, maxGain)
+        path.lineTo(x, y)
+    }
+    path.close()
+    drawPath(path, color)
 }
 
 private fun DrawScope.drawCurve(

@@ -21,8 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.Slider
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -87,6 +89,7 @@ fun ParametricEqScreen(
     }
 
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showImportSheet by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
     var saveDescription by remember { mutableStateOf("") }
     var presetToDelete by remember { mutableStateOf<EqPreset?>(null) }
@@ -155,56 +158,98 @@ fun ParametricEqScreen(
                         maxAbsDragGain = EqLimits.PARAMETRIC_MAX_BAND_DB,
                         spectrumBins = if (spectrumEnabled) spectrumBins else FloatArray(0),
                         spectrumColor = MaterialTheme.colorScheme.primary,
+                        onBandDragged = { bandId, freq, gain ->
+                            viewModel.updateBandByDrag(bandId, freq, gain)
+                        },
                     )
                 }
               }
             }
 
-            // Edit pill button
+            // Preamp — same placement as the AutoEQ page: under the graph.
             item {
-              tf.monochrome.android.devedit.DevEditable("peq_edit_button", Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
+              tf.monochrome.android.devedit.DevEditable("peq_preamp_slider", Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(50))
-                            .background(MaterialTheme.colorScheme.primary)
-                            .bounceClick(onClick = { navController.navigate(Screen.ParametricEqEdit.route) })
-                            .padding(vertical = 14.dp),
-                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Tune,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "Edit",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            letterSpacing = 2.sp
+                            "Preamp",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "${currentPreamp.toInt()} dB",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
+                    Slider(
+                        value = if (currentPreamp.isNaN()) 0f else currentPreamp.coerceIn(-24f, 24f),
+                        onValueChange = { viewModel.setPreamp(it) },
+                        valueRange = -24f..24f,
+                        steps = 47,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
               }
             }
 
-            // Save-as-preset button
+            // Bands — edited inline with the same rows as the AutoEQ screen
+            // (type selector, freq/gain/Q sliders), replacing the separate
+            // Edit page hop.
             item {
-              tf.monochrome.android.devedit.DevEditable("peq_save_button", Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                Text(
+                    "BANDS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp)
+                )
+            }
+            items(currentBands, key = { it.id }) { band ->
+                EqBandSlider(
+                    band = band,
+                    onBandChanged = { viewModel.updateBand(it) },
+                    onDelete = { viewModel.removeBand(band.id) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
+            // Add band + profile actions. A COLUMN of rows — these were once
+            // stacked in a Box, which drew Save and Import on top of each
+            // other as one garbled row.
+            item {
+              tf.monochrome.android.devedit.DevEditable("peq_actions", Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .liquidGlass(shape = RoundedCornerShape(12.dp))
+                            .bounceClick(onClick = { viewModel.addBand() })
+                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            "Add band",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -227,6 +272,28 @@ fun ParametricEqScreen(
                         )
                         Text(
                             "Save current as profile",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .liquidGlass(shape = RoundedCornerShape(12.dp))
+                            .bounceClick(onClick = { showImportSheet = true })
+                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.UploadFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            "Import profile (APO txt / CSV)",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -318,6 +385,16 @@ fun ParametricEqScreen(
                 }
             }
         }
+    }
+
+    if (showImportSheet) {
+        ImportEqProfileSheet(
+            maxBandGainDb = EqLimits.PARAMETRIC_MAX_BAND_DB,
+            onDismiss = { showImportSheet = false },
+            onImport = { left, right, name ->
+                (left ?: right)?.let { viewModel.importApoProfile(it, name, apply = true) }
+            },
+        )
     }
 
     if (showSaveDialog) {

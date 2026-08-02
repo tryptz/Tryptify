@@ -46,6 +46,49 @@ class HeadphoneRepository @Inject constructor(
         else -> autoEqApi.fetchMeasurementByPath(measurement.path, measurement.fileName).getOrNull()
     }
 
+    /**
+     * Fetch one specific channel ("L"/"R") of a measurement. Only squig.link
+     * publishes per-channel files; other sources return null and callers fall
+     * back to the single-file path. Null also means "this channel isn't
+     * published" — deliberately NOT papered over with the other channel.
+     */
+    suspend fun fetchMeasurementChannelText(measurement: AutoEqMeasurement, channel: String): String? =
+        when (measurement.target) {
+            "squiglink" -> squiglinkApi.fetchMeasurementChannelText(
+                measurement.host, measurement.fileName, channel,
+            )
+            else -> null
+        }
+
+    /** Channel text + the sample name that actually answered ("L"/"L1"). */
+    suspend fun fetchMeasurementChannel(
+        measurement: AutoEqMeasurement,
+        channel: String,
+    ): Pair<String, String>? = when (measurement.target) {
+        "squiglink" -> squiglinkApi.fetchMeasurementChannel(
+            measurement.host, measurement.fileName, channel,
+        )
+        else -> null
+    }
+
+    /** One exact sample ("L2", "R3", …); squig.link only. */
+    suspend fun fetchMeasurementSampleText(measurement: AutoEqMeasurement, sample: String): String? =
+        when (measurement.target) {
+            "squiglink" -> squiglinkApi.fetchMeasurementSampleText(
+                measurement.host, measurement.fileName, sample,
+            )
+            else -> null
+        }
+
+    /** Published sample names for a channel prefix ("L" -> [L1, L2, …]); squig.link only. */
+    suspend fun listMeasurementSamples(measurement: AutoEqMeasurement, channelPrefix: String): List<String> =
+        when (measurement.target) {
+            "squiglink" -> squiglinkApi.listSamples(
+                measurement.host, measurement.fileName, channelPrefix,
+            )
+            else -> emptyList()
+        }
+
     private fun mergeByName(all: List<Headphone>): List<Headphone> =
         all.groupBy { it.name }.map { (name, group) ->
             Headphone(

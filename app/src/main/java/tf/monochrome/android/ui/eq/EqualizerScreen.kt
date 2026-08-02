@@ -23,6 +23,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import tf.monochrome.android.audio.eq.AutoEqEngine
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -36,6 +40,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +73,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.EqBand
+import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import kotlin.math.roundToInt
@@ -91,6 +97,24 @@ fun EqualizerScreen(
     val isCalculating by viewModel.isCalculating.collectAsState()
     val originalMeasurement by viewModel.originalMeasurement.collectAsState()
     val selectedHeadphone by viewModel.selectedHeadphone.collectAsState()
+    val stereoMode by viewModel.stereoMode.collectAsState()
+    val currentBandsR by viewModel.currentBandsR.collectAsState()
+    val originalMeasurementR by viewModel.originalMeasurementR.collectAsState()
+    val editChannel by viewModel.editChannel.collectAsState()
+    val measurementLabelL by viewModel.measurementLabelL.collectAsState()
+    val measurementLabelR by viewModel.measurementLabelR.collectAsState()
+    val measurementSampleL by viewModel.measurementSampleL.collectAsState()
+    val measurementSampleR by viewModel.measurementSampleR.collectAsState()
+    val smoothing by viewModel.smoothing.collectAsState()
+    val algorithm by viewModel.algorithm.collectAsState()
+
+    // Which ear the graph, band list and export operate on. Off-stereo this is
+    // always the left/mono channel, so everything below reduces to the old UI.
+    val editRight = stereoMode && editChannel == EqChannel.RIGHT
+    val activeBands = if (editRight) currentBandsR else currentBands
+    val activeMeasurement =
+        if (editRight) originalMeasurementR.ifEmpty { originalMeasurement }
+        else originalMeasurement
     val bandCount by viewModel.bandCount.collectAsState()
     val maxFrequency by viewModel.maxFrequency.collectAsState()
     val sampleRate by viewModel.sampleRate.collectAsState()
@@ -103,13 +127,16 @@ fun EqualizerScreen(
     var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var showTargetMenu by remember { mutableStateOf(false) }
     var showHeadphoneSelect by remember { mutableStateOf(false) }
-    var showMeasurementUpload by remember { mutableStateOf(false) }
     var showPresetMenu by remember { mutableStateOf(false) }
     var showBandsExpanded by rememberSaveable { mutableStateOf(true) }
     var showProfilesExpanded by rememberSaveable { mutableStateOf(true) }
     var saveName by rememberSaveable { mutableStateOf("") }
     var saveDescription by rememberSaveable { mutableStateOf("") }
     var showTargetNameDialog by rememberSaveable { mutableStateOf(false) }
+    var importForRight by rememberSaveable { mutableStateOf(false) }
+    var showProfileImport by rememberSaveable { mutableStateOf(false) }
+    var showHelp by rememberSaveable { mutableStateOf(false) }
+    var headphoneSelectForRight by rememberSaveable { mutableStateOf(false) }
     var pendingTargetData by rememberSaveable { mutableStateOf("") }
     var targetName by rememberSaveable { mutableStateOf("") }
     var presetToDelete by remember { mutableStateOf<tf.monochrome.android.domain.model.EqPreset?>(null) }
@@ -135,7 +162,10 @@ fun EqualizerScreen(
         try {
             val rawData = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (!rawData.isNullOrEmpty()) {
-                viewModel.importMeasurementData(rawData)
+                viewModel.importMeasurementData(
+                    rawData,
+                    if (importForRight) EqChannel.RIGHT else EqChannel.LEFT,
+                )
             } else {
                 android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
             }
@@ -233,6 +263,18 @@ fun EqualizerScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        IconButton(
+                            onClick = { showHelp = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                                contentDescription = "Help",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                         Switch(
                             checked = eqEnabled,
                             onCheckedChange = { viewModel.toggleEq() }
@@ -245,16 +287,155 @@ fun EqualizerScreen(
             // ─── Interactive Frequency Graph ───
             item {
               tf.monochrome.android.devedit.DevEditable("eq_graph", Modifier.fillMaxWidth()) {
-                FrequencyResponseGraph(
-                    originalCurve = originalMeasurement,
-                    targetCurve = selectedTarget.data,
-                    eqBands = currentBands,
-                    preamp = currentPreamp,
-                    sampleRate = sampleRate,
-                    onBandDragged = { bandId, freq, gain ->
-                        viewModel.updateBandByDrag(bandId, freq, gain)
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                Column {
+                    // ── Measurement smoothing ──
+                    // Discrete fractional-octave steps, applied to the
+                    // measurement before the optimizer runs. Displayed curves
+                    // smooth along with it so what you see is what gets EQ'd.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "SMOOTHING",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = smoothing,
+                            onValueChange = {
+                                // 1 % increments, SeapEngine's scale.
+                                viewModel.setSmoothing(it.roundToInt().toFloat().coerceIn(0f, 100f))
+                            },
+                            valueRange = 0f..100f,
+                            modifier = Modifier.weight(1f).height(28.dp)
+                        )
+                        Text(
+                            "${smoothing.roundToInt()}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    if (stereoMode) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = !editRight,
+                                onClick = { viewModel.setEditChannel(EqChannel.LEFT) },
+                                label = { Text("Left ear") },
+                            )
+                            FilterChip(
+                                selected = editRight,
+                                onClick = { viewModel.setEditChannel(EqChannel.RIGHT) },
+                                label = { Text("Right ear") },
+                            )
+                        }
+                    }
+                    // Graph shows the SMOOTHED measurements — the same curves
+                    // the optimizer actually corrects at this slider setting.
+                    val displayMeasurement = remember(activeMeasurement, smoothing) {
+                        AutoEqEngine.smoothCurve(activeMeasurement, smoothing)
+                    }
+                    val otherMeasurement =
+                        if (editRight) originalMeasurement else originalMeasurementR
+                    val displayOther = remember(otherMeasurement, smoothing) {
+                        AutoEqEngine.smoothCurve(otherMeasurement, smoothing)
+                    }
+                    FrequencyResponseGraph(
+                        originalCurve = displayMeasurement,
+                        targetCurve = selectedTarget.data,
+                        eqBands = activeBands,
+                        preamp = currentPreamp,
+                        sampleRate = sampleRate,
+                        onBandDragged = { bandId, freq, gain ->
+                            viewModel.updateBandByDrag(bandId, freq, gain)
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        secondaryMeasurement = if (stereoMode) displayOther else emptyList(),
+                        secondaryBands =
+                            if (stereoMode) {
+                                if (editRight) currentBands else currentBandsR
+                            } else null,
+                        primaryIsRight = editRight,
+                    )
+                }
+              }
+            }
+
+            // ─── Preamp (right under the graph it applies to) ───
+            item {
+              tf.monochrome.android.devedit.DevEditable("eq_preamp_slider", Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Preamp",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (autoPreamp) "Auto · ${currentPreamp.roundToInt()} dB"
+                            else "${currentPreamp.roundToInt()} dB",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = if (currentPreamp.isNaN()) 0f else currentPreamp.coerceIn(-24f, 24f),
+                        onValueChange = { viewModel.setPreamp(it) },
+                        valueRange = -24f..24f,
+                        steps = 47,
+                        enabled = !autoPreamp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+              }
+            }
+
+            // ─── Algorithm selector — applies on the next AutoEQ press ───
+            item {
+              tf.monochrome.android.devedit.DevEditable("eq_algorithm_row", Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "ALGORITHM",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    tf.monochrome.android.audio.eq.AutoEqAlgorithm.entries.forEach { algo ->
+                        FilterChip(
+                            selected = algorithm == algo,
+                            onClick = { viewModel.setAlgorithm(algo) },
+                            label = { Text(algo.label) },
+                        )
+                    }
+                }
+              }
+            }
+
+            // ─── AutoEQ (reprocess at current smoothing/target/params) ───
+            item {
+              tf.monochrome.android.devedit.DevEditable("eq_autoeq_button", Modifier.fillMaxWidth()) {
+                GradientAutoEqButton(
+                    isCalculating = isCalculating,
+                    // Re-press mid-computation is a race, not a retry.
+                    onClick = { if (!isCalculating) viewModel.runAutoEq() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                 )
               }
             }
@@ -304,29 +485,159 @@ fun EqualizerScreen(
               tf.monochrome.android.devedit.DevEditable("eq_headphone_selector", Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     SectionLabel("HEADPHONE MODEL")
-                    SelectorRow(
-                        value = selectedHeadphone?.name ?: "Select headphone...",
-                        onClick = { showHeadphoneSelect = true },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = { measurementFilePicker.launch("text/*") },
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .liquidGlass(
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                            ) {
-                                Icon(
-                                    Icons.Default.UploadFile,
-                                    contentDescription = "Import measurement file",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+
+                    // ── 2-channel (per-ear) switch ──
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "2-channel calibration",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Separate left/right corrections. Non-destructive to " +
+                                    "switch off; system-wide EQ stays mono.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    )
+                        Switch(
+                            checked = stereoMode,
+                            onCheckedChange = { viewModel.setStereoMode(it) }
+                        )
+                    }
+
+                    if (stereoMode) {
+                        Text(
+                            "LEFT EAR",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        SelectorRow(
+                            value = measurementLabelL
+                                ?: selectedHeadphone?.name
+                                ?: "Select left measurement...",
+                            onClick = {
+                                headphoneSelectForRight = false
+                                showHeadphoneSelect = true
+                            },
+                            trailingIcon = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    measurementSampleL?.let { sample ->
+                                        SampleStepper(
+                                            label = sample,
+                                            onStep = { forward ->
+                                                viewModel.cycleMeasurementSample(EqChannel.LEFT, forward)
+                                            },
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            importForRight = false
+                                            measurementFilePicker.launch("text/*")
+                                        },
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .liquidGlass(shape = RoundedCornerShape(8.dp))
+                                    ) {
+                                        Icon(
+                                            Icons.Default.UploadFile,
+                                            contentDescription = "Import left measurement file",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "RIGHT EAR",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        SelectorRow(
+                            value = measurementLabelR ?: "Select right measurement...",
+                            onClick = {
+                                headphoneSelectForRight = true
+                                showHeadphoneSelect = true
+                            },
+                            trailingIcon = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    measurementSampleR?.let { sample ->
+                                        SampleStepper(
+                                            label = sample,
+                                            onStep = { forward ->
+                                                viewModel.cycleMeasurementSample(EqChannel.RIGHT, forward)
+                                            },
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            importForRight = true
+                                            measurementFilePicker.launch("text/*")
+                                        },
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .liquidGlass(shape = RoundedCornerShape(8.dp))
+                                    ) {
+                                        Icon(
+                                            Icons.Default.UploadFile,
+                                            contentDescription = "Import right measurement file",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    } else {
+                        SelectorRow(
+                            value = selectedHeadphone?.name ?: "Select headphone...",
+                            onClick = {
+                                headphoneSelectForRight = false
+                                showHeadphoneSelect = true
+                            },
+                            trailingIcon = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    measurementSampleL?.let { sample ->
+                                        SampleStepper(
+                                            label = sample,
+                                            onStep = { forward ->
+                                                viewModel.cycleMeasurementSample(EqChannel.LEFT, forward)
+                                            },
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            importForRight = false
+                                            measurementFilePicker.launch("text/*")
+                                        },
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .liquidGlass(
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.UploadFile,
+                                            contentDescription = "Import measurement file",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    }
                     // Entry point for the guided measurement-calibration flow,
                     // which was fully built but previously unreachable.
-                    TextButton(onClick = { showMeasurementUpload = true }) {
+                    TextButton(onClick = { showProfileImport = true }) {
                         Icon(
                             Icons.Default.UploadFile,
                             contentDescription = null,
@@ -334,7 +645,7 @@ fun EqualizerScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Upload & calibrate a measurement")
+                        Text("Import EQ profile (APO txt / CSV)")
                     }
                 }
               }
@@ -460,11 +771,13 @@ fun EqualizerScreen(
                 ) {
                     IconButton(
                         onClick = {
-                            if (currentBands.isEmpty()) {
+                            if (activeBands.isEmpty()) {
                                 android.widget.Toast.makeText(context, "No EQ bands to export", android.widget.Toast.LENGTH_SHORT).show()
                             } else {
-                                pendingEqExport = buildParametricEqText(currentBands, currentPreamp)
-                                eqExportLauncher.launch("MonochromeEQ.txt")
+                                pendingEqExport = buildParametricEqText(activeBands, currentPreamp)
+                                eqExportLauncher.launch(
+                                    if (editRight) "MonochromeEQ-R.txt" else "MonochromeEQ.txt"
+                                )
                             }
                         },
                         modifier = Modifier
@@ -479,11 +792,7 @@ fun EqualizerScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    GradientAutoEqButton(
-                        isCalculating = isCalculating,
-                        onClick = { viewModel.runAutoEq() },
-                        modifier = Modifier.weight(1f)
-                    )
+                    Spacer(modifier = Modifier.weight(1f))
                     IconButton(
                         onClick = {
                             val hp = selectedHeadphone?.name
@@ -761,41 +1070,8 @@ fun EqualizerScreen(
             }
 
             if (showBandsExpanded) {
-                // Preamp
-                item {
-                  tf.monochrome.android.devedit.DevEditable("eq_preamp_slider", Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Preamp",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                if (autoPreamp) "Auto · ${currentPreamp.roundToInt()} dB"
-                                else "${currentPreamp.roundToInt()} dB",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Slider(
-                            value = if (currentPreamp.isNaN()) 0f else currentPreamp.coerceIn(-12f, 12f),
-                            onValueChange = { viewModel.setPreamp(it) },
-                            valueRange = -12f..12f,
-                            steps = 23,
-                            enabled = !autoPreamp,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                  }
-                }
-
                 // Band sliders
-                items(currentBands) { band ->
+                items(activeBands) { band ->
                     EqBandSlider(
                         band = band,
                         onBandChanged = { viewModel.updateBand(band.id, it) },
@@ -887,6 +1163,24 @@ fun EqualizerScreen(
         )
     }
 
+    if (showHelp) {
+        AutoEqHelpSheet(onDismiss = { showHelp = false })
+    }
+
+    if (showProfileImport) {
+        ImportEqProfileSheet(
+            maxBandGainDb = EqLimits.AUTOEQ_MAX_BAND_DB,
+            perEar = true,
+            onDismiss = { showProfileImport = false },
+            onImport = { left, right, name ->
+                viewModel.importApoProfile(left, right, name)
+            },
+            onMeasurementDetected = { raw, channel ->
+                viewModel.importMeasurementData(raw, channel ?: EqChannel.LEFT)
+            },
+        )
+    }
+
     if (showHeadphoneSelect) {
         AlertDialog(
             onDismissRequest = { showHeadphoneSelect = false },
@@ -901,6 +1195,7 @@ fun EqualizerScreen(
             content = {
                 HeadphoneSelectScreen(
                     viewModel = viewModel,
+                    channel = if (headphoneSelectForRight) EqChannel.RIGHT else EqChannel.LEFT,
                     onHeadphoneSelected = { showHeadphoneSelect = false },
                     onDismiss = { showHeadphoneSelect = false }
                 )
@@ -940,26 +1235,6 @@ fun EqualizerScreen(
         )
     }
 
-    if (showMeasurementUpload) {
-        AlertDialog(
-            onDismissRequest = { showMeasurementUpload = false },
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Transparent),
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            ),
-            content = {
-                MeasurementUploadScreen(
-                    viewModel = viewModel,
-                    onDismiss = { showMeasurementUpload = false },
-                    onCalibrationComplete = { showMeasurementUpload = false }
-                )
-            }
-        )
-    }
 
     presetToDelete?.let { preset ->
         AlertDialog(
@@ -983,7 +1258,9 @@ fun EqualizerScreen(
 fun EqBandSlider(
     band: EqBand,
     onBandChanged: (EqBand) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Parametric rows are removable; AutoEQ rows (fixed band count) pass null.
+    onDelete: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -991,13 +1268,59 @@ fun EqBandSlider(
             .liquidGlass(shape = RoundedCornerShape(8.dp))
             .padding(12.dp)
     ) {
+        // --- Filter type ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (onDelete != null) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Remove band",
+                        modifier = Modifier.size(15.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            FilterType.values().forEach { type ->
+                val isSel = band.type == type
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .liquidGlass(
+                            shape = RoundedCornerShape(6.dp),
+                            tintAlpha = if (isSel) 0.45f else 0.15f,
+                        )
+                        .bounceClick(onClick = { onBandChanged(band.copy(type = type)) })
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        when (type) {
+                            FilterType.PEAKING -> "PEAK"
+                            FilterType.LOWSHELF -> "LOW-S"
+                            FilterType.HIGHSHELF -> "HIGH-S"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSel) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
         // --- Frequency Slider ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Freq (${band.type})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Freq", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${band.freq.toInt()} Hz", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         }
         val minLogFreq = kotlin.math.log10(20f)
@@ -1035,10 +1358,11 @@ fun EqBandSlider(
             )
         }
         Slider(
-            value = if (band.gain.isNaN()) 0f else band.gain.coerceIn(-12f, 12f),
+            value = if (band.gain.isNaN()) 0f
+                    else band.gain.coerceIn(-EqLimits.AUTOEQ_MAX_BAND_DB, EqLimits.AUTOEQ_MAX_BAND_DB),
             onValueChange = { onBandChanged(band.copy(gain = it)) },
-            valueRange = -12f..12f,
-            steps = 23,
+            valueRange = -EqLimits.AUTOEQ_MAX_BAND_DB..EqLimits.AUTOEQ_MAX_BAND_DB,
+            steps = 2 * EqLimits.AUTOEQ_MAX_BAND_DB.toInt() - 1,
             modifier = Modifier.fillMaxWidth().height(32.dp)
         )
         
@@ -1060,6 +1384,50 @@ fun EqBandSlider(
                 modifier = Modifier.fillMaxWidth().height(32.dp)
             )
         }
+    }
+}
+
+/**
+ * squig-style sample switcher: ▲/▼ step through a measurement's published
+ * sweeps (L → L1 → L2 → …, wrapping) with the current sample shown between
+ * the arrows.
+ */
+@Composable
+private fun SampleStepper(
+    label: String,
+    onStep: (forward: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .size(width = 36.dp, height = 44.dp)
+            .liquidGlass(shape = RoundedCornerShape(8.dp)),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            Icons.Default.KeyboardArrowUp,
+            contentDescription = "Next sample",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clickable { onStep(true) }
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        Icon(
+            Icons.Default.KeyboardArrowDown,
+            contentDescription = "Previous sample",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clickable { onStep(false) }
+        )
     }
 }
 

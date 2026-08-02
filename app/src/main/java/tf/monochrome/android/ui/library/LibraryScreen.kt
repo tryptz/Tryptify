@@ -3,7 +3,10 @@ package tf.monochrome.android.ui.library
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,16 +20,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -34,10 +39,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,16 +64,44 @@ import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
-import tf.monochrome.android.ui.settings.SettingsViewModel
+
+/**
+ * The section Library lands on — page 0, and deliberately absent from the
+ * overflow menu, since it's reached by swiping back rather than being picked.
+ */
+internal const val LOCAL_SECTION = "local"
+
+/** Display names for every Library section id. */
+internal val LIBRARY_SECTION_NAMES = mapOf(
+    "overview" to "Overview",
+    "local" to "Local",
+    "playlists" to "Playlists",
+    "favorites" to "Favorites",
+    "downloads" to "Downloads",
+)
+
+/**
+ * Library's pages in order: the local library first, then whatever the user has
+ * left in their configured section order.
+ *
+ * Shared with the nav host, which owns the `PagerState` for these pages so the
+ * top-bar indicator can count and track every one of them — Home plus each
+ * Library section — rather than just Home vs Library.
+ */
+internal fun librarySections(order: List<String>): List<String> =
+    listOf(LOCAL_SECTION) + order.filter { it != LOCAL_SECTION && it in LIBRARY_SECTION_NAMES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
+    // Hoisted to the nav host: it owns these so the top-bar page indicator can
+    // track Library's sections, not just the Home↔Library split.
+    sections: List<String>,
+    sectionPager: PagerState,
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
-    settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
     val favoriteTracks by viewModel.favoriteTracks.collectAsState()
     val recentTracks by viewModel.recentTracks.collectAsState()
@@ -77,18 +111,14 @@ fun LibraryScreen(
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val activeDownloads by playerViewModel.activeDownloads.collectAsState()
 
-    val libraryTabOrder by settingsViewModel.libraryTabOrder.collectAsState()
+    val sectionScope = rememberCoroutineScope()
+    val currentSectionId = sections.getOrElse(sectionPager.currentPage) { LOCAL_SECTION }
 
-    val tabDisplayNames = mapOf(
-        "overview" to "Overview",
-        "local" to "Local",
-        "playlists" to "Playlists",
-        "favorites" to "Favorites",
-        "downloads" to "Downloads"
-    )
-    val tabs = libraryTabOrder.mapNotNull { id -> tabDisplayNames[id]?.let { id to it } }
-
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    // The overflow menu survives as a shortcut past the swipe — Downloads sits
+    // several pages deep — not as the only way in.
+    val menuSections = sections.drop(1).mapNotNull { id ->
+        LIBRARY_SECTION_NAMES[id]?.let { id to it }
+    }
 
     // Saveable so the dialog reopens after a process death triggered by its own
     // SAF CSV picker; the dialog's typed fields + picked uri are saveable too.
@@ -98,9 +128,16 @@ fun LibraryScreen(
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
 
     val selection = rememberTrackSelectionState<Long>()
+    // Back out of a menu section returns to the local library rather than
+    // leaving Library entirely. Composed BEFORE the selection handler on
+    // purpose: the dispatcher serves the LAST-composed enabled callback first,
+    // so an active selection still wins the first back press.
+    BackHandler(enabled = sectionPager.currentPage != 0) {
+        sectionScope.launch { sectionPager.animateScrollToPage(0) }
+    }
     BackHandler(enabled = selection.active) { selection.clear() }
-    // Lists (and delete semantics) differ per tab — drop any selection on switch.
-    LaunchedEffect(selectedTabIndex) { selection.clear() }
+    // Lists (and delete semantics) differ per section — drop any selection on switch.
+    LaunchedEffect(currentSectionId) { selection.clear() }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -199,15 +236,66 @@ fun LibraryScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        var sectionMenuOpen by remember { mutableStateOf(false) }
+
         tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Library",
+                        // Titled for whatever is actually on screen: "Library"
+                        // is the local library, anything else names itself so
+                        // the menu section you picked is identifiable.
+                        text = if (currentSectionId == LOCAL_SECTION) "Library"
+                               else LIBRARY_SECTION_NAMES[currentSectionId] ?: "Library",
                         style = MaterialTheme.typography.headlineMedium
                     )
                 },
+                navigationIcon = {
+                    // Only while a menu section is showing — the local library
+                    // has no entry in the menu, so this is the way back to it.
+                    if (currentSectionId != LOCAL_SECTION) {
+                        IconButton(onClick = {
+                            sectionScope.launch { sectionPager.animateScrollToPage(0) }
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back to local library",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                },
                 actions = {
+                    // Settings lets the user strip sections out of the order,
+                    // so the button goes away rather than opening an empty menu.
+                    if (menuSections.isNotEmpty()) Box {
+                        IconButton(onClick = { sectionMenuOpen = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "Other library sections",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = sectionMenuOpen,
+                            onDismissRequest = { sectionMenuOpen = false }
+                        ) {
+                            menuSections.forEach { (id, title) ->
+                                DropdownMenuItem(
+                                    text = { Text(title) },
+                                    onClick = {
+                                        val page = sections.indexOf(id)
+                                        if (page >= 0) {
+                                            sectionScope.launch {
+                                                sectionPager.animateScrollToPage(page)
+                                            }
+                                        }
+                                        sectionMenuOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,
@@ -221,24 +309,6 @@ fun LibraryScreen(
                 )
             )
         }
-
-        tf.monochrome.android.devedit.DevEditable("library_tab_row", Modifier.fillMaxWidth()) {
-            ScrollableTabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = Color.Transparent,
-                edgePadding = 8.dp
-            ) {
-                tabs.forEachIndexed { index, (_, title) ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
-                    )
-                }
-            }
-        }
-
-        val currentSectionId = tabs.getOrNull(selectedTabIndex)?.first ?: "overview"
 
         AnimatedVisibility(visible = selection.active) {
             TrackSelectionBar(
@@ -260,11 +330,22 @@ fun LibraryScreen(
         }
 
         val sectionStateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
-        // Preserve each tab's scroll position (and the Local tab's own sub-tab
-        // state) across tab switches, instead of remounting a fresh list that
-        // snaps back to the top every time the user changes tabs.
-        sectionStateHolder.SaveableStateProvider(currentSectionId) {
-        when (currentSectionId) {
+        // Preserve each section's scroll position (and the local library's own
+        // sub-tab state) across section switches, instead of remounting a fresh
+        // list that snaps back to the top every time.
+        //
+        // Nested inside the nav host's Home↔Library pager, same axis. Compose
+        // resolves that through nested scroll: this inner pager consumes the
+        // drag until it's at page 0 and the user keeps pulling right, at which
+        // point the outer pager takes over and carries them to Home.
+        HorizontalPager(
+            state = sectionPager,
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 0,
+        ) { page ->
+        val sectionId = sections[page]
+        sectionStateHolder.SaveableStateProvider(sectionId) {
+        when (sectionId) {
             "overview" ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -500,6 +581,7 @@ fun LibraryScreen(
 
             "downloads" ->
                 DownloadsScreen(navController = navController)
+        }
         }
         }
     }

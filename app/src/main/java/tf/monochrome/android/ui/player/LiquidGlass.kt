@@ -761,12 +761,25 @@ half4 main(float2 p) {
     float sheetI = exp(-sd * sd) * uLiquid * (0.30 + 0.70 * fres);
     col3 += float3(1.0, 0.985, 0.95) * sheetI * 0.5 * uRimGain;
 
+    // Highlight shoulder: every edge term above stacks additively in the same
+    // 1-2px band (Fresnel rim + glint + sheet, each gained by its own knob), and
+    // the premultiply clamp below used to flatten any overflow into a solid
+    // max-brightness line — the over-sharpened halo look when several edge
+    // settings run hot. Roll intensities above the knee off asymptotically
+    // toward white instead; pixels below the knee are bit-identical, so calm
+    // presets keep their exact look and only blown rim pixels are compressed.
+    float3 overHi = max(col3 - 0.82, float3(0.0));
+    col3 = min(col3, float3(0.82)) + 0.18 * (1.0 - exp(-overHi / 0.18));
+
     // Transparent face, opaque bright rim: alpha is low across the body (backdrop
     // reads through) and climbs to full where Fresnel and the glint peak, so the
     // rim highlight reads as a crisp glass edge rather than being clamped away.
     // The light sheet lifts alpha too — without that, the shine pass would be
     // clamped invisible on see-through faces (premultiplied rgb <= alpha).
-    float rim = clamp(fres * 1.2 + spec + sheetI * 0.6, 0.0, 1.0);
+    // Same shoulder as the colour: the outline saturates to opaque gradually
+    // instead of snapping, so the rim doesn't etch a hard 1px contour.
+    float rimSum = fres * 1.2 + spec + sheetI * 0.6;
+    float rim = min(rimSum, 0.82) + 0.18 * (1.0 - exp(-max(rimSum - 0.82, 0.0) / 0.18));
     float outA = clamp(a * (uBodyOpacity + (1.0 - uBodyOpacity) * rim), 0.0, a);
 
     float3 col = col3 * outA;              // premultiplied
