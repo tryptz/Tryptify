@@ -47,6 +47,8 @@ class PlayerGlassSettingsTest {
         assertEquals(2f, c.dispersion, 0f)
         assertEquals(3, c.sampleRings)
         assertEquals(360f, c.lightAngleDeg, 0f)
+        assertEquals(80f, PlayerGlassSettings(hazeBlurDp = 500f).clamped().hazeBlurDp, 0f)
+        assertEquals(0f, PlayerGlassSettings(hazeTint = -3f).clamped().hazeTint, 0f)
     }
 
     @Test

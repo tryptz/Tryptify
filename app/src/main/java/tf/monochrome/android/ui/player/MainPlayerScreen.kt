@@ -621,11 +621,12 @@ private fun StatusOverlayPanel(
         androidx.compose.foundation.layout.Box {
         // Frosted backdrop UNDER the slab — the mini player's exact recipe.
         val profile = LocalPerformanceProfile.current
-        if (useGlass && hazeState != null && profile.allowHazeBlur) {
+        if (useGlass && hazeState != null && profile.allowHazeBlur && g.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
-            val frostTint = if (isDark) Color.Black.copy(alpha = 0.32f)
-                            else Color.White.copy(alpha = 0.45f)
+            val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
+                            else Color.White.copy(alpha = 0.45f))
+                .let { it.copy(alpha = (it.alpha * g.hazeTint).coerceIn(0f, 1f)) }
             androidx.compose.foundation.layout.Box(
                 Modifier
                     .matchParentSize()
@@ -633,7 +634,7 @@ private fun StatusOverlayPanel(
                         state = hazeState,
                         style = HazeStyle(
                             backgroundColor = frostBg,
-                            blurRadius = 40.dp,
+                            blurRadius = g.hazeBlurDp.dp,
                             tints = listOf(HazeTint(frostTint)),
                         ),
                     )

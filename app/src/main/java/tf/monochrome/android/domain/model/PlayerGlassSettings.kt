@@ -59,6 +59,15 @@ data class PlayerGlassSettings(
     val previewBg: Int = 0,
     /** Glass "thermometer" scrubber (tube + sine-bulge dot) vs a plain slider. */
     val progressGlass: Boolean = true,
+    /**
+     * Backdrop (Haze) frost blur radius in dp for surfaces that gaussian-blur
+     * what's behind them — the mini player bar, the player's audio-tools
+     * sheet, the nav pill. 0 disables the frost layer entirely. Distinct from
+     * [frost], which is the shader's surface roughness.
+     */
+    val hazeBlurDp: Float = 40f,
+    /** Strength multiplier on the frost layer's luminance-picked tint (0–2). */
+    val hazeTint: Float = 1f,
 ) {
     fun clamped(): PlayerGlassSettings {
         val d = DEFAULT
@@ -81,6 +90,8 @@ data class PlayerGlassSettings(
             frost = frost.c(0f, 1f, d.frost),
             shadowSoftness = shadowSoftness.c(0f, 1f, d.shadowSoftness),
             shadowTint = shadowTint.c(0f, 1f, d.shadowTint),
+            hazeBlurDp = hazeBlurDp.c(0f, 80f, d.hazeBlurDp),
+            hazeTint = hazeTint.c(0f, 2f, d.hazeTint),
         )
     }
 

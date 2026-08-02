@@ -1052,6 +1052,18 @@ private fun PlayerGlassTab(
             "Frosted blur", "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
             description = "Frosts the glass, from clear to misted.",
         ) { onUpdate { g -> g.copy(frost = it) } }
+        if (previewMini) {
+            // Haze backdrop frost — only surfaces driven by the MINI glass
+            // (mini player bar, audio-tools sheet, nav pill) render it.
+            FxSlider(
+                "Backdrop blur", "%.0f dp".format(glass.hazeBlurDp), glass.hazeBlurDp, 0f..80f,
+                description = "Gaussian blur of whatever sits behind the bar (0 = off).",
+            ) { onUpdate { g -> g.copy(hazeBlurDp = it) } }
+            FxSlider(
+                "Backdrop tint", "${(glass.hazeTint * 100).toInt()}%", glass.hazeTint, 0f..2f,
+                description = "Strength of the frost layer's darkening/lightening wash.",
+            ) { onUpdate { g -> g.copy(hazeTint = it) } }
+        }
         FxSlider(
             "Surface motion", "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
             description = "Living-liquid shimmer on the glass surface (0 = still).",
