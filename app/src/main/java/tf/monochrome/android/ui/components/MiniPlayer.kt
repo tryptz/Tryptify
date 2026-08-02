@@ -264,11 +264,20 @@ fun MiniPlayer(
             val skipCx = size.width - padPx - cellPx * 0.5f
             val playCx = size.width - padPx - cellPx * 1.5f
 
-            val punch = Paint().apply { blendMode = BlendMode.DstOut }
+            // AA punch + whole-pixel glyph placement — same hygiene as the
+            // action dock: default Paint() punches with hard stair-stepped
+            // edges, and fractional offsets resample the small glyphs soft.
+            val punch = Paint().apply {
+                blendMode = BlendMode.DstOut
+                isAntiAlias = true
+            }
             val canvas = drawContext.canvas
             canvas.saveLayer(Rect(0f, 0f, size.width, size.height), punch)
             listOf(playCx to playPainter, skipCx to skipPainter).forEach { (cx, painter) ->
-                translate(cx - iconPx / 2f, cy - iconPx / 2f) {
+                translate(
+                    kotlin.math.round(cx - iconPx / 2f),
+                    kotlin.math.round(cy - iconPx / 2f),
+                ) {
                     with(painter) { draw(Size(iconPx, iconPx)) }
                 }
             }
