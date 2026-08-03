@@ -117,7 +117,6 @@ fun EqualizerScreen(
         else originalMeasurement
     val bandCount by viewModel.bandCount.collectAsState()
     val maxFrequency by viewModel.maxFrequency.collectAsState()
-    val sampleRate by viewModel.sampleRate.collectAsState()
     val availableHeadphones by viewModel.availableHeadphones.collectAsState()
     val showTutorial by viewModel.showTutorial.collectAsState()
 
@@ -351,7 +350,6 @@ fun EqualizerScreen(
                         targetCurve = selectedTarget.data,
                         eqBands = activeBands,
                         preamp = currentPreamp,
-                        sampleRate = sampleRate,
                         onBandDragged = { bandId, freq, gain ->
                             viewModel.updateBandByDrag(bandId, freq, gain)
                         },
@@ -743,15 +741,6 @@ fun EqualizerScreen(
                         options = listOf("8k", "12k", "16k", "20k"),
                         onValueChanged = {
                             viewModel.setMaxFrequency(parseFreqLabel(it))
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ParameterDropdown(
-                        label = "SAMPLE RATE",
-                        value = formatSampleRate(sampleRate),
-                        options = listOf("44.1k", "48k", "96k", "192k"),
-                        onValueChanged = {
-                            viewModel.setSampleRate(parseSampleRate(it))
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -1437,22 +1426,6 @@ private fun formatFreqLabel(freq: Float): String = "${(freq / 1000).toInt()}k"
 
 private fun parseFreqLabel(label: String): Float =
     label.removeSuffix("k").toFloat() * 1000f
-
-private fun formatSampleRate(rate: Float): String = when (rate.toInt()) {
-    44100 -> "44.1k"
-    48000 -> "48k"
-    96000 -> "96k"
-    192000 -> "192k"
-    else -> "${(rate / 1000).toInt()}k"
-}
-
-private fun parseSampleRate(label: String): Float = when (label) {
-    "44.1k" -> 44100f
-    "48k" -> 48000f
-    "96k" -> 96000f
-    "192k" -> 192000f
-    else -> 48000f
-}
 
 /**
  * Serialize the current EQ to EqualizerAPO-style ParametricEQ text, which
