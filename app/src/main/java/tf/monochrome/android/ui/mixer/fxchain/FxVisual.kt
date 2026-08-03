@@ -38,6 +38,7 @@ import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.ln
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
@@ -336,8 +337,9 @@ private fun DrawScope.drawCurve(
 }
 
 /**
- * Live oscilloscope of the bus tap: per-column min/max bands of the actual
- * audio, drawn around `centerFrac` with `ampFrac` half-height.
+ * Live oscilloscope of the bus tap: a continuous filled min/max envelope of
+ * the actual audio, drawn around `centerFrac` with `ampFrac` half-height.
+ * Silence renders as an unbroken hairline.
  */
 private fun DrawScope.drawScopeTap(
     s: FxVisualStyle,
@@ -352,22 +354,24 @@ private fun DrawScope.drawScopeTap(
     val mm = M.waveMinMax(wave, waveLen, buckets)
     val cy = centerFrac * size.height
     val amp = ampFrac * size.height
-    val colW = size.width / buckets
-    val minLen = 0.75.dp.toPx()
-    val col = s.curve.copy(alpha = s.curve.alpha * alpha)
+    val minHalf = 0.4.dp.toPx()
+    val path = Path()
+    path.moveTo(0f, cy - minHalf)
     for (k in 0 until buckets) {
-        val lo = mm[k * 2].coerceIn(-1f, 1f)
-        val hi = mm[k * 2 + 1].coerceIn(-1f, 1f)
-        val x = (k + 0.5f) * colW
-        var yTop = cy - hi * amp
-        var yBot = cy - lo * amp
-        if (yBot - yTop < minLen) {  // keep silence visible as a hairline
-            val mid = (yTop + yBot) / 2f
-            yTop = mid - minLen / 2f
-            yBot = mid + minLen / 2f
-        }
-        drawLine(col, Offset(x, yTop), Offset(x, yBot), strokeWidth = colW * 0.65f)
+        val x = (k + 0.5f) / buckets * size.width
+        val yTop = min(cy - mm[k * 2 + 1].coerceIn(-1f, 1f) * amp, cy - minHalf)
+        path.lineTo(x, yTop)
     }
+    path.lineTo(size.width, cy - minHalf)
+    path.lineTo(size.width, cy + minHalf)
+    for (k in buckets - 1 downTo 0) {
+        val x = (k + 0.5f) / buckets * size.width
+        val yBot = max(cy - mm[k * 2].coerceIn(-1f, 1f) * amp, cy + minHalf)
+        path.lineTo(x, yBot)
+    }
+    path.lineTo(0f, cy + minHalf)
+    path.close()
+    drawPath(path, s.curve.copy(alpha = s.curve.alpha * alpha))
 }
 
 /** Log-frequency response curve; [db] gives magnitude at each frequency. */
@@ -419,11 +423,6 @@ private fun DrawScope.drawTransfer(
     drawCurve(s) { t -> yFor(-60f + 60f * t) }
 
     if (liveInDb != null && liveInDb > -59f) {
-        // Level dot riding the transfer curve at the current input level.
-        val t = ((liveInDb + 60f) / 60f).coerceIn(0f, 1f)
-        val center = Offset(t * size.width, yFor(liveInDb).coerceIn(0f, 1f) * size.height)
-        drawCircle(s.glow, radius = 5.dp.toPx(), center = center)
-        drawCircle(s.curve, radius = 2.5.dp.toPx(), center = center)
         // Gain-reduction bar: how far below unity the curve pushes this level.
         val gr = (liveInDb - outDb(liveInDb)).coerceAtLeast(0f)
         if (gr > 0.05f) {
@@ -495,12 +494,6 @@ private fun DrawScope.drawShaperCurve(
             active, s.curve,
             style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         )
-        for (x in floatArrayOf(-inLin, inLin)) {
-            drawCircle(
-                s.curve, radius = 2.5.dp.toPx(),
-                center = Offset((x + 1f) / 2f * size.width, yFor(x).coerceIn(0f, 1f) * size.height)
-            )
-        }
     }
 }
 
@@ -565,7 +558,6 @@ private fun DrawScope.drawStereo(s: FxVisualStyle, p: (Int) -> Float) {
     path.close()
     drawPath(path, s.curve.copy(alpha = 0.12f * s.dim))
     strokeNeon(path, s)
-    drawCircle(s.curve, radius = 2.dp.toPx(), center = Offset(cx, cy))
 }
 
 /** Channel mixer: four signed bars (L→L, R→L, L→R, R→R) around the center line. */
@@ -840,9 +832,12 @@ private fun DrawScope.drawTapeStop(s: FxVisualStyle, p: (Int) -> Float, time: Fl
     // Playhead loops along the dive at the configured stop time (+ short rest).
     val cycle = (p(1) / 1000f).coerceAtLeast(0.05f)
     val prog = ((time.mod(cycle + 0.5f)) / cycle).coerceAtMost(1f)
-    drawCircle(
-        s.curve, radius = 2.5.dp.toPx(),
-        center = Offset(prog * size.width, (0.90f - speedAt(prog) * 0.78f) * size.height)
+    val px = prog * size.width
+    drawLine(
+        s.curve.copy(alpha = 0.45f * s.dim),
+        Offset(px, (0.90f - speedAt(prog) * 0.78f) * size.height),
+        Offset(px, size.height),
+        strokeWidth = 1.5.dp.toPx()
     )
 }
 
@@ -939,9 +934,11 @@ private fun DrawScope.drawReverser(s: FxVisualStyle, p: (Int) -> Float, time: Fl
     val cycleIdx = floor(time / windowSec).toInt().mod(windows)
     val frac = 1f - (time / windowSec - floor(time / windowSec))  // 1 → 0, backwards
     val tHead = ((cycleIdx + frac) * window).coerceAtMost(1f)
-    val localHead = frac
-    drawCircle(
-        s.curve, radius = 2.5.dp.toPx(),
-        center = Offset(tHead * size.width, (0.90f - heightAt(localHead) * 0.75f) * size.height)
+    val hx = tHead * size.width
+    drawLine(
+        s.curve.copy(alpha = 0.45f * s.dim),
+        Offset(hx, (0.90f - heightAt(frac) * 0.75f) * size.height),
+        Offset(hx, size.height),
+        strokeWidth = 1.5.dp.toPx()
     )
 }
