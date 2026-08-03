@@ -314,13 +314,20 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         val active = bands.filter { it.enabled && it.gain != 0f }
         val chain = Array(active.size) { EqBiquad() }
         val rate = sampleRate * osFactor
+        // At 1x, peaking bands use matched-Z (decramped) coefficients so the
+        // top octave lands on the analog prototype without oversampling; at
+        // higher factors plain RBJ is already accurate at the internal rate.
+        val matched = osFactor == 1
         for ((i, band) in active.withIndex()) {
             val type = when (band.type) {
                 FilterType.LOWSHELF -> EqBiquadType.LOW_SHELF
                 FilterType.HIGHSHELF -> EqBiquadType.HIGH_SHELF
                 else -> EqBiquadType.PEAKING
             }
-            chain[i].configure(type, rate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
+            chain[i].configure(
+                type, rate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble(),
+                matched = matched
+            )
         }
         return chain
     }

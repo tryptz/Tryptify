@@ -2,6 +2,8 @@ package tf.monochrome.android.audio.eq
 
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.cosh
+import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -15,13 +17,94 @@ import kotlin.math.sqrt
 
 internal enum class EqBiquadType { PEAKING, LOW_SHELF, HIGH_SHELF }
 
+/**
+ * Matched-Z ("decramped") peaking coefficients after M. Vicanek, "Matched
+ * Second Order Digital Filters" (2016), §4.4: poles from impulse invariance
+ * (no peak narrowing towards Nyquist), numerator solved so that DC gain is
+ * unity, the center-frequency gain is exact, and the response has its
+ * extremum at the center — landing on the analog prototype the correction
+ * curves are designed against instead of the bilinear transform's cramped
+ * shape. At 48 kHz this reduces the top-octave error of an 18 kHz band from
+ * ~4 dB (RBJ) to ~0.15 dB.
+ *
+ * Returns normalized [b0, b1, b2, a1, a2] (a0 = 1), or null when any
+ * coefficient degenerates (caller falls back to RBJ).
+ */
+internal fun matchedPeakingCoefficients(
+    sr: Double,
+    freq: Double,
+    q: Double,
+    gainDb: Double,
+): DoubleArray? {
+    if (sr <= 0.0 || !freq.isFinite() || !q.isFinite() || !gainDb.isFinite()) return null
+    val f = freq.coerceIn(1.0, sr * 0.499)
+    val qq = q.coerceAtLeast(0.05)
+    val g = 10.0.pow(gainDb / 20.0)          // linear peak amplitude gain
+    val w0 = 2.0 * Math.PI * f / sr
+
+    // Poles: impulse-invariance mapping of s² + 2·qp·ω0·s + ω0²,
+    // with 2·qp = 1/(√G·Q) from the analog prototype's denominator.
+    val qp = 1.0 / (2.0 * sqrt(g) * qq)
+    val a2 = exp(-2.0 * qp * w0)
+    val a1 = if (qp <= 1.0) {
+        -2.0 * exp(-qp * w0) * cos(sqrt(1.0 - qp * qp) * w0)
+    } else {
+        -2.0 * exp(-qp * w0) * cosh(sqrt(qp * qp - 1.0) * w0)
+    }
+
+    // Numerator via the φ-basis magnitude match (Vicanek eqs. 26/27, 44/45, 29).
+    val p1 = sin(w0 / 2.0).let { it * it }
+    val p0 = 1.0 - p1
+    val p2 = 4.0 * p0 * p1
+    val bigA0 = (1.0 + a1 + a2).let { it * it }
+    val bigA1 = (1.0 - a1 + a2).let { it * it }
+    val bigA2 = -4.0 * a2
+    val bigB0 = bigA0
+    val r1 = (bigA0 * p0 + bigA1 * p1 + bigA2 * p2) * g * g
+    val r2 = (-bigA0 + bigA1 + 4.0 * (p0 - p1) * bigA2) * g * g
+    val bigB2 = (r1 - r2 * p1 - bigB0) / (4.0 * p1 * p1)
+    val bigB1 = r2 + bigB0 + 4.0 * (p1 - p0) * bigB2
+    if (bigB0 < 0.0 || bigB1 < 0.0) return null
+    val w = 0.5 * (sqrt(bigB0) + sqrt(bigB1))
+    val disc = w * w + bigB2
+    if (disc < 0.0) return null
+    val b0 = 0.5 * (w + sqrt(disc))
+    if (b0 == 0.0) return null
+    val b1 = 0.5 * (sqrt(bigB0) - sqrt(bigB1))
+    val b2 = -bigB2 / (4.0 * b0)
+
+    val out = doubleArrayOf(b0, b1, b2, a1, a2)
+    return if (out.all { it.isFinite() }) out else null
+}
+
 /** RBJ biquad (Transposed Direct Form II) with NaN/degenerate-coefficient guards. */
 internal class EqBiquad {
     private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
     private var a1 = 0f; private var a2 = 0f
     private var z1 = 0f; private var z2 = 0f
 
-    fun configure(type: EqBiquadType, sr: Double, freq: Double, q: Double, gainDb: Double) {
+    /**
+     * [matched] selects Vicanek matched-Z coefficients for PEAKING bands (the
+     * decramped 1x path); shelves and any degenerate input fall back to RBJ.
+     */
+    fun configure(
+        type: EqBiquadType,
+        sr: Double,
+        freq: Double,
+        q: Double,
+        gainDb: Double,
+        matched: Boolean = false,
+    ) {
+        if (matched && type == EqBiquadType.PEAKING) {
+            val c = matchedPeakingCoefficients(sr, freq, q, gainDb)
+            if (c != null) {
+                b0 = c[0].toFloat(); b1 = c[1].toFloat(); b2 = c[2].toFloat()
+                a1 = c[3].toFloat(); a2 = c[4].toFloat()
+                z1 = 0f; z2 = 0f
+                return
+            }
+            // fall through to RBJ on degenerate input
+        }
         val w0 = 2.0 * Math.PI * freq / sr
         val cosw0 = cos(w0)
         val sinw0 = sin(w0)

@@ -105,9 +105,18 @@ object AutoEqEngine {
         val A = 10.0.pow(band.gain.toDouble() / 40.0)
         val cosW0 = cos(w0)
 
-        // RBJ Audio EQ Cookbook biquad coefficients per filter type. These
-        // must mirror ParametricEqProcessor.BiquadFilter.configure() so the
-        // displayed response curve matches the actual audio processing.
+        // Coefficients per filter type, mirroring the audio path so the
+        // displayed/fitted response matches what actually plays: PEAKING uses
+        // the same matched-Z (Vicanek) coefficients as AutoEqProcessor's 1x
+        // chain — keeping the optimizer's model, the graph, and the audio in
+        // agreement near Nyquist — with RBJ as the shelf/degenerate fallback.
+        if (band.type == FilterType.PEAKING) {
+            val m = matchedPeakingCoefficients(
+                sampleRate.toDouble(), band.freq.toDouble(),
+                band.q.toDouble(), band.gain.toDouble()
+            )
+            if (m != null) return BiquadCoeffs(m[0], m[1], m[2], m[3], m[4])
+        }
         val b0: Double; val b1: Double; val b2: Double
         val a0: Double; val a1: Double; val a2: Double
         when (band.type) {

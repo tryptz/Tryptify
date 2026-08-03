@@ -111,18 +111,17 @@ class AutoEqOversamplingTest {
     }
 
     @Test
-    fun `PINS BEHAVIOR - plain 1x RBJ biquads cramp near Nyquist`() {
-        // Not a requirement: this documents why the oversampling option exists
-        // with the CURRENT plain-RBJ coefficients. If the 1x path ever moves
-        // to decramped designs (matched-Z / Orfanidis / Massberg), this test
-        // SHOULD fail — delete it and consider demoting the oversampling
-        // selector, because 1x would then be accurate on its own.
+    fun `1x matched-Z peaking lands on the analog curve without oversampling`() {
+        // The old "PINS BEHAVIOR: 1x RBJ cramps" test tripped exactly as
+        // designed when the 1x path moved to Vicanek matched-Z coefficients —
+        // this is its replacement requirement: the default path is accurate
+        // on its own now, with no resampling CPU spent.
         val band = listOf(EqBand(0, FilterType.PEAKING, 18000f, 12f, 1f, true))
         val probe = 15000.0
         val target = analogPeakingDb(probe, 18000.0, 1.0, 12.0)
         val db1 = 20.0 * log10(measure(makeProcessor(1, band), probe))
-        assertTrue("1x currently cramps by >1 dB (was ${abs(db1 - target)})",
-            abs(db1 - target) > 1.0)
+        assertTrue("1x within 1 dB of analog target (was ${abs(db1 - target)})",
+            abs(db1 - target) < 1.0)
     }
 
     @Test

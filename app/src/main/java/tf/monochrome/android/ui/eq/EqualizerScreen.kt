@@ -527,8 +527,9 @@ fun EqualizerScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Runs the correction filters at a higher internal " +
-                                    "rate for more accurate response near 20 kHz.",
+                                "Runs the filters at a higher internal rate. Peaking " +
+                                    "bands are already rate-corrected (matched-Z); this " +
+                                    "additionally refines shelf bands near 20 kHz.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -40,6 +40,37 @@ class EqDspKernelsTest {
     }
 
     @Test
+    fun `matched peaking lands on the analog prototype across the top octave`() {
+        val fs = 48000.0
+        fun analogDb(f: Double, f0: Double, q: Double, gDb: Double): Double {
+            val a = Math.pow(10.0, gDb / 40.0)
+            val x = f / f0
+            val re = 1.0 - x * x
+            val num = sqrt(re * re + (x * a / q) * (x * a / q))
+            val den = sqrt(re * re + (x / (a * q)) * (x / (a * q)))
+            return 20.0 * kotlin.math.log10(num / den)
+        }
+        fun matchedDb(probe: Double, f0: Double, q: Double, gDb: Double): Double {
+            val n = 32768
+            val bq = EqBiquad()
+            bq.configure(EqBiquadType.PEAKING, fs, f0, q, gDb, matched = true)
+            val x = FloatArray(n) { sin(2.0 * PI * probe * it / fs).toFloat() }
+            bq.processBlock(x, n)
+            return 20.0 * kotlin.math.log10(goertzel(x, n / 2, n, probe, fs))
+        }
+        // Boost: +12 dB at 18 kHz, probed across the audible top octave.
+        for (probe in doubleArrayOf(10000.0, 15000.0, 17000.0, 20000.0)) {
+            val err = abs(matchedDb(probe, 18000.0, 1.0, 12.0) - analogDb(probe, 18000.0, 1.0, 12.0))
+            assertTrue("probe $probe err $err", err < 0.5)
+        }
+        // Center gain is exact, boost and cut.
+        assertEquals(12.0, matchedDb(18000.0, 18000.0, 1.0, 12.0), 0.05)
+        assertEquals(-8.0, matchedDb(15000.0, 15000.0, 2.0, -8.0), 0.05)
+        // Low-frequency bands stay numerically sane and match RBJ territory.
+        assertEquals(6.0, matchedDb(100.0, 100.0, 1.0, 6.0), 0.1)
+    }
+
+    @Test
     fun `degenerate configure falls back to passthrough`() {
         val bq = EqBiquad()
         bq.configure(EqBiquadType.PEAKING, 48000.0, Double.NaN, 1.0, 6.0)
