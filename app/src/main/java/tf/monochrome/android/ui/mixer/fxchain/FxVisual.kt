@@ -63,7 +63,8 @@ private val MOTION_TYPES = setOf(
 private val NO_SCOPE_UNDERLAY = setOf(
     SnapinType.GAIN, SnapinType.COMPRESSOR, SnapinType.LIMITER, SnapinType.GATE,
     SnapinType.DYNAMICS, SnapinType.COMPACTOR, SnapinType.TRANSIENT_SHAPER,
-    SnapinType.DISTORTION, SnapinType.SHAPER, SnapinType.CHORUS, SnapinType.ENSEMBLE
+    SnapinType.DISTORTION, SnapinType.SHAPER, SnapinType.MISSTORTION,
+    SnapinType.CHORUS, SnapinType.ENSEMBLE
 )
 
 /**
@@ -222,6 +223,9 @@ internal fun FxVisual(
             }
             SnapinType.SHAPER -> drawShaperCurve(style, liveInDb = liveInDb) { x ->
                 M.shaperOverflow(p(2).toInt(), x * M.dbToLin(p(0)))
+            }
+            SnapinType.MISSTORTION -> drawShaperCurve(style, liveInDb = liveInDb) { x ->
+                M.misstortionShape(x * M.dbToLin(p(0)), p(1), p(2), p(3) / 100f)
             }
             SnapinType.BITCRUSH -> drawBitcrush(style, p)
             SnapinType.PHASE_DISTORTION -> drawWave(style) { t ->

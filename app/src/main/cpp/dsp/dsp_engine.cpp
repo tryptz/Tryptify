@@ -34,6 +34,7 @@
 #include "snapins/trance_gate.h"
 #include "snapins/eq_10band.h"
 #include "snapins/disperser.h"
+#include "snapins/misstortion.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -107,6 +108,7 @@ SnapinProcessor* createSnapin(SnapinType type) {
         case SnapinType::TRANCE_GATE: return new TranceGateProcessor();
         case SnapinType::EQ_10BAND:  return new Eq10BandProcessor();
         case SnapinType::DISPERSER:  return new DisperserProcessor();
+        case SnapinType::MISSTORTION: return new MisstortionProcessor();
         default:
             LOGE("Unsupported snapin type: %d", static_cast<int>(type));
             return nullptr;

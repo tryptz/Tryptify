@@ -219,6 +219,24 @@ class FxVisualMathTest {
         assertTrue(abs(M.phaseDistortion(t, 100f, 0f) - kotlin.math.sin(t)) > 0.01f)
     }
 
+    @Test
+    fun `misstortion shape mirrors the original processing chain`() {
+        // No drive, symmetry 50%: both halves scaled by 0.5
+        assertEquals(0.3f, M.misstortionShape(0.6f, 0f, 0f, 0.5f), tol)
+        assertEquals(-0.3f, M.misstortionShape(-0.6f, 0f, 0f, 0.5f), tol)
+        // Hard clip at +12 dB drive: 0.5 * ~3.98 clamps to 1, then × sym
+        assertEquals(0.5f, M.misstortionShape(0.5f, 12f, 0f, 0.5f), tol)
+        // Soft clip: atan(x·drive) clamped into [-1+sym, sym] before symmetry
+        val soft = M.misstortionShape(0.9f, 0f, 20f, 0.5f)
+        assertEquals(0.5f * 0.5f, soft, tol)  // atan(9) ≈ 1.46 → clamp 0.5 → ×0.5
+        // Full symmetry kills the negative half entirely…
+        assertEquals(0f, M.misstortionShape(-0.8f, 12f, 0f, 1f), tol)
+        // …and passes the positive half unscaled
+        assertEquals(1f, M.misstortionShape(0.8f, 12f, 0f, 1f), tol)
+        // Drives at 0 dB are inactive: pure symmetry multiply only
+        assertEquals(0.75f * 0.25f, M.misstortionShape(0.75f, 0f, 0f, 0.25f), tol)
+    }
+
     // ── Trance gate patterns ────────────────────────────────────────────────
 
     @Test

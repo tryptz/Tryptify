@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.mixer.fxchain
 
 import kotlin.math.abs
+import kotlin.math.atan
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
@@ -348,6 +349,24 @@ internal object FxVisualMath {
             }
             x
         }
+    }
+
+    /**
+     * Misstortion transfer curve, mirroring `snapins/misstortion.h`:
+     * hard clip → atan soft clip into the asymmetric window [-1+sym, sym] →
+     * symmetry multiply (negative half × (1−sym), positive half × sym).
+     * [symmetry01] is 0..1; drives are in dB and inactive at ≤ 0 dB.
+     */
+    fun misstortionShape(x: Float, driveHardDb: Float, driveSoftDb: Float, symmetry01: Float): Float {
+        var s = x
+        val hard = dbToLin(driveHardDb)
+        if (hard > 1f) s = (s * hard).coerceIn(-1f, 1f)
+        val soft = dbToLin(driveSoftDb)
+        if (soft > 1f) {
+            s = atan(s * soft)
+            s = s.coerceIn(-1f + symmetry01, symmetry01)
+        }
+        return if (s < 0f) s * (1f - symmetry01) else s * symmetry01
     }
 
     /** Bit-depth quantization used by the Bitcrush display. */
