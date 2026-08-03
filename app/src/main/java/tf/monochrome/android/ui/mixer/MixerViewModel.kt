@@ -33,6 +33,9 @@ class MixerViewModel @Inject constructor(
     val buses: StateFlow<List<BusConfig>> = dspManager.buses
     val busLevels: StateFlow<List<BusLevels>> = dspManager.busLevels
 
+    // Live audio tap (per-plugin meters + scope waveform) for the FX chain.
+    val fxTap = dspManager.fxTap
+
     /** Channel coloring mode: false = curated palette, true = album/theme-derived. */
     val channelDynamicColor: StateFlow<Boolean> = preferencesManager.mixerChannelDynamic
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -53,6 +56,9 @@ class MixerViewModel @Inject constructor(
         viewModelScope.launch {
             while (isActive) {
                 dspManager.pollLevels()
+                // Same cadence for the FX-chain audio tap (per-plugin meters +
+                // scope waveform of the selected bus).
+                dspManager.pollFxTap(_selectedBusIndex.value)
                 delay(16L)
             }
         }

@@ -186,6 +186,32 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetBusLevels(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetPluginMeters(
+    JNIEnv* env, jobject /*thiz*/, jlong enginePtr, jint busIndex, jfloatArray outMeters) {
+    auto* engine = getEngine(enginePtr);
+    if (!engine || !outMeters) return;
+    int len = env->GetArrayLength(outMeters);
+    float* arr = env->GetFloatArrayElements(outMeters, nullptr);
+    if (arr) {
+        engine->getPluginMeters(busIndex, arr, len);
+        env->ReleaseFloatArrayElements(outMeters, arr, 0);
+    }
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetBusWaveform(
+    JNIEnv* env, jobject /*thiz*/, jlong enginePtr, jint busIndex, jfloatArray outWave) {
+    auto* engine = getEngine(enginePtr);
+    if (!engine || !outWave) return 0;
+    int len = env->GetArrayLength(outWave);
+    float* arr = env->GetFloatArrayElements(outWave, nullptr);
+    if (!arr) return 0;
+    int written = engine->getBusWaveform(busIndex, arr, len);
+    env->ReleaseFloatArrayElements(outWave, arr, 0);
+    return written;
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeResetPluginState(
     JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr) {
     auto* engine = getEngine(enginePtr);

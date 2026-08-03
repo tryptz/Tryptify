@@ -342,6 +342,32 @@ internal object FxVisualMath {
 
     // ── Misc ────────────────────────────────────────────────────────────────
 
+    /**
+     * Reduce a waveform to per-bucket min/max pairs for scope drawing:
+     * `out[2k] = min`, `out[2k+1] = max` of bucket k. Buckets cover [0, length)
+     * evenly; empty buckets (length < buckets) collapse to 0..0.
+     */
+    fun waveMinMax(wave: FloatArray, length: Int, buckets: Int): FloatArray {
+        val out = FloatArray(buckets * 2)
+        val len = length.coerceIn(0, wave.size)
+        if (len == 0 || buckets <= 0) return out
+        for (k in 0 until buckets) {
+            val start = (k.toLong() * len / buckets).toInt()
+            val end = ((k + 1).toLong() * len / buckets).toInt()
+            if (start >= end) continue
+            var lo = wave[start]
+            var hi = wave[start]
+            for (i in start + 1 until end) {
+                val v = wave[i]
+                if (v < lo) lo = v
+                if (v > hi) hi = v
+            }
+            out[k * 2] = lo
+            out[k * 2 + 1] = hi
+        }
+        return out
+    }
+
     /** MIDI note number → frequency in Hz (A4 = 69 = 440 Hz). */
     fun midiToHz(note: Float): Float = 440f * 2f.pow((note - 69f) / 12f)
 

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tf.monochrome.android.audio.dsp.SnapinType
+import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.mixer.FLKnobControl
@@ -59,6 +60,7 @@ fun FxCard(
     accent: Color,
     expanded: Boolean,
     dragging: Boolean,
+    live: FxTapFrame?,
     dragHandle: Modifier,
     onToggleExpand: () -> Unit,
     onBypass: () -> Unit,
@@ -174,7 +176,7 @@ fun FxCard(
                     .padding(horizontal = MonoDimens.spacingSm, vertical = MonoDimens.spacingSm),
                 verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)
             ) {
-                FxVisual(plugin = plugin, accent = accent)
+                FxVisual(plugin = plugin, accent = accent, slotIndex = position - 1, live = live)
 
                 val defs = getParamDefs(plugin.type)
                 if (plugin.type == SnapinType.EQ_10BAND) {

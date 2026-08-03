@@ -195,6 +195,36 @@ DspEngine::~DspEngine() {
 
 // ── Audio processing ────────────────────────────────────────────────────
 
+// Linear peak across a stereo pair — used for the per-plugin tap meters.
+static inline float stereoPeak(const float* l, const float* r, int n) {
+    float p = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float al = std::fabs(l[i]);
+        if (al > p) p = al;
+        float ar = std::fabs(r[i]);
+        if (ar > p) p = ar;
+    }
+    return p;
+}
+
+static inline void zeroSlotMeters(Bus& bus) {
+    for (int s = 0; s < MAX_PLUGINS_PER_BUS; s++) {
+        bus.slotInPeak[s].store(0.0f, std::memory_order_relaxed);
+        bus.slotOutPeak[s].store(0.0f, std::memory_order_relaxed);
+    }
+}
+
+// Append silence to a bus's waveform tap so the scope decays instead of
+// freezing on the last audible block.
+static inline void writeWaveSilence(Bus& bus, int numFrames) {
+    int wp = bus.waveTapPos.load(std::memory_order_relaxed);
+    for (int i = 0; i < numFrames; i++) {
+        bus.waveTap[wp] = 0.0f;
+        wp = (wp + 1) & (WAVE_TAP_SIZE - 1);
+    }
+    bus.waveTapPos.store(wp, std::memory_order_relaxed);
+}
+
 void DspEngine::process(float* left, float* right, int numFrames) {
     // Flush denormals to zero — prevents 10-100x CPU spikes in feedback tails
     enableFlushToZero();
@@ -224,6 +254,8 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         if (!busInputEnabled || busMuted || (hasSolo && !busSoloed)) {
             bus.peakL.store(0.0f, std::memory_order_relaxed);
             bus.peakR.store(0.0f, std::memory_order_relaxed);
+            zeroSlotMeters(bus);
+            writeWaveSilence(bus, numFrames);
             continue;
         }
 
@@ -232,25 +264,38 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         std::copy(right, right + numFrames, busR_.data());
 
         // Run plugin chain with dry/wet blending (skip when mixer DSP is bypassed)
-        for (auto& plugin : bus.plugins) {
-            if (mixBypass) break;
-            if (plugin && !plugin->isBypassed()) {
-                float dw = plugin->getDryWet();
-                if (dw >= 0.999f) {
-                    // Fully wet — no copy needed
-                    plugin->process(busL_.data(), busR_.data(), numFrames);
-                } else if (dw <= 0.001f) {
-                    // Fully dry — skip processing
-                } else {
-                    // Blend: save dry into pre-allocated buffers, process, mix
-                    std::copy(busL_.begin(), busL_.begin() + numFrames, dryBufL_.begin());
-                    std::copy(busR_.begin(), busR_.begin() + numFrames, dryBufR_.begin());
-                    plugin->process(busL_.data(), busR_.data(), numFrames);
-                    float wet = dw, dry = 1.0f - dw;
-                    for (int i = 0; i < numFrames; i++) {
-                        busL_[i] = dryBufL_[i] * dry + busL_[i] * wet;
-                        busR_[i] = dryBufR_[i] * dry + busR_[i] * wet;
+        if (mixBypass) {
+            zeroSlotMeters(bus);
+        } else {
+            for (size_t s = 0; s < bus.plugins.size(); s++) {
+                auto& plugin = bus.plugins[s];
+                if (plugin && !plugin->isBypassed()) {
+                    bus.slotInPeak[s].store(
+                        stereoPeak(busL_.data(), busR_.data(), numFrames),
+                        std::memory_order_relaxed);
+                    float dw = plugin->getDryWet();
+                    if (dw >= 0.999f) {
+                        // Fully wet — no copy needed
+                        plugin->process(busL_.data(), busR_.data(), numFrames);
+                    } else if (dw <= 0.001f) {
+                        // Fully dry — skip processing
+                    } else {
+                        // Blend: save dry into pre-allocated buffers, process, mix
+                        std::copy(busL_.begin(), busL_.begin() + numFrames, dryBufL_.begin());
+                        std::copy(busR_.begin(), busR_.begin() + numFrames, dryBufR_.begin());
+                        plugin->process(busL_.data(), busR_.data(), numFrames);
+                        float wet = dw, dry = 1.0f - dw;
+                        for (int i = 0; i < numFrames; i++) {
+                            busL_[i] = dryBufL_[i] * dry + busL_[i] * wet;
+                            busR_[i] = dryBufR_[i] * dry + busR_[i] * wet;
+                        }
                     }
+                    bus.slotOutPeak[s].store(
+                        stereoPeak(busL_.data(), busR_.data(), numFrames),
+                        std::memory_order_relaxed);
+                } else {
+                    bus.slotInPeak[s].store(0.0f, std::memory_order_relaxed);
+                    bus.slotOutPeak[s].store(0.0f, std::memory_order_relaxed);
                 }
             }
         }
@@ -260,6 +305,7 @@ void DspEngine::process(float* left, float* right, int numFrames) {
 
         // Apply bus gain + pan with smoothing, sum into master input
         float busPeakL = 0.0f, busPeakR = 0.0f;
+        int wavePos = bus.waveTapPos.load(std::memory_order_relaxed);
         for (int i = 0; i < numFrames; i++) {
             bus.smoothGainL += gainSmoothCoeff_ * (bus.targetGainL - bus.smoothGainL);
             bus.smoothGainR += gainSmoothCoeff_ * (bus.targetGainR - bus.smoothGainR);
@@ -271,7 +317,11 @@ void DspEngine::process(float* left, float* right, int numFrames) {
             float absR = std::fabs(sR);
             if (absL > busPeakL) busPeakL = absL;
             if (absR > busPeakR) busPeakR = absR;
+            // Post-fader mono scope tap
+            bus.waveTap[wavePos] = 0.5f * (sL + sR);
+            wavePos = (wavePos + 1) & (WAVE_TAP_SIZE - 1);
         }
+        bus.waveTapPos.store(wavePos, std::memory_order_relaxed);
         // Update peak meters (relaxed store — UI reads are non-critical)
         bus.peakL.store(busPeakL, std::memory_order_relaxed);
         bus.peakR.store(busPeakR, std::memory_order_relaxed);
@@ -279,8 +329,12 @@ void DspEngine::process(float* left, float* right, int numFrames) {
 
     // Run master bus chain with dry/wet blending
     Bus& master = buses_[MASTER_BUS];
-    for (auto& plugin : master.plugins) {
+    for (size_t s = 0; s < master.plugins.size(); s++) {
+        auto& plugin = master.plugins[s];
         if (plugin && !plugin->isBypassed()) {
+            master.slotInPeak[s].store(
+                stereoPeak(sumL_.data(), sumR_.data(), numFrames),
+                std::memory_order_relaxed);
             float dw = plugin->getDryWet();
             if (dw >= 0.999f) {
                 plugin->process(sumL_.data(), sumR_.data(), numFrames);
@@ -296,6 +350,12 @@ void DspEngine::process(float* left, float* right, int numFrames) {
                     sumR_[i] = dryBufR_[i] * dry + sumR_[i] * wet;
                 }
             }
+            master.slotOutPeak[s].store(
+                stereoPeak(sumL_.data(), sumR_.data(), numFrames),
+                std::memory_order_relaxed);
+        } else {
+            master.slotInPeak[s].store(0.0f, std::memory_order_relaxed);
+            master.slotOutPeak[s].store(0.0f, std::memory_order_relaxed);
         }
     }
 
@@ -305,6 +365,7 @@ void DspEngine::process(float* left, float* right, int numFrames) {
     recalcBusGains(masterGainDb, masterPan, master.targetGainL, master.targetGainR);
     float masterPeakL = 0.0f, masterPeakR = 0.0f;
     bool clipped = false;
+    int masterWavePos = master.waveTapPos.load(std::memory_order_relaxed);
     for (int i = 0; i < numFrames; i++) {
         master.smoothGainL += gainSmoothCoeff_ * (master.targetGainL - master.smoothGainL);
         master.smoothGainR += gainSmoothCoeff_ * (master.targetGainR - master.smoothGainR);
@@ -315,7 +376,11 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         if (absL > masterPeakL) masterPeakL = absL;
         if (absR > masterPeakR) masterPeakR = absR;
         if (absL > 1.0f || absR > 1.0f) clipped = true;
+        // Post-fader mono scope tap
+        master.waveTap[masterWavePos] = 0.5f * (left[i] + right[i]);
+        masterWavePos = (masterWavePos + 1) & (WAVE_TAP_SIZE - 1);
     }
+    master.waveTapPos.store(masterWavePos, std::memory_order_relaxed);
     master.peakL.store(masterPeakL, std::memory_order_relaxed);
     master.peakR.store(masterPeakR, std::memory_order_relaxed);
     if (clipped) clipped_.store(true, std::memory_order_relaxed);
@@ -497,6 +562,31 @@ void DspEngine::getBusLevels(float* outLevels, int maxFloats) {
 
 bool DspEngine::getAndResetClipped() {
     return clipped_.exchange(false, std::memory_order_relaxed);
+}
+
+void DspEngine::getPluginMeters(int busIndex, float* out, int maxFloats) {
+    if (busIndex < 0 || busIndex >= TOTAL_BUSES || !out) return;
+    Bus& bus = buses_[busIndex];
+    auto toDb = [](float lin) {
+        return (lin > 1e-10f) ? std::max(-60.0f, 20.0f * std::log10(lin)) : -60.0f;
+    };
+    for (int s = 0; s < MAX_PLUGINS_PER_BUS && s * 2 + 1 < maxFloats; s++) {
+        out[s * 2]     = toDb(bus.slotInPeak[s].load(std::memory_order_relaxed));
+        out[s * 2 + 1] = toDb(bus.slotOutPeak[s].load(std::memory_order_relaxed));
+    }
+}
+
+int DspEngine::getBusWaveform(int busIndex, float* out, int maxSamples) {
+    if (busIndex < 0 || busIndex >= TOTAL_BUSES || !out || maxSamples <= 0) return 0;
+    Bus& bus = buses_[busIndex];
+    int n = std::min(maxSamples, WAVE_TAP_SIZE);
+    // Single-writer ring; read without locking — a torn block boundary is
+    // invisible in a scope display.
+    int wp = bus.waveTapPos.load(std::memory_order_relaxed);
+    for (int i = 0; i < n; i++) {
+        out[i] = bus.waveTap[(wp - n + i + WAVE_TAP_SIZE) & (WAVE_TAP_SIZE - 1)];
+    }
+    return n;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

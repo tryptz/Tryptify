@@ -75,6 +75,10 @@ class MixBusProcessor @Inject constructor(
     external fun nativeSetPluginDryWet(enginePtr: Long, busIndex: Int, slotIndex: Int, dryWet: Float)
     external fun nativeSetBusInputEnabled(enginePtr: Long, busIndex: Int, enabled: Boolean)
     external fun nativeGetBusLevels(enginePtr: Long, outLevels: FloatArray)
+    // Per-plugin tap meters for one bus: [slot0_inDb, slot0_outDb, ...] (dB, floor -60)
+    external fun nativeGetPluginMeters(enginePtr: Long, busIndex: Int, outMeters: FloatArray)
+    // Most recent post-fader mono waveform for a bus, oldest first; returns samples written
+    external fun nativeGetBusWaveform(enginePtr: Long, busIndex: Int, outWave: FloatArray): Int
     external fun nativeGetAndResetClipped(enginePtr: Long): Boolean
     external fun nativeResetPluginState(enginePtr: Long)
     external fun nativeSetMixBypassed(enginePtr: Long, bypassed: Boolean)

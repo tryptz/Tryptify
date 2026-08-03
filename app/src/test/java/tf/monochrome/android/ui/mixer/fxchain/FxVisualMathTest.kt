@@ -255,6 +255,24 @@ class FxVisualMathTest {
     }
 
     @Test
+    fun `waveMinMax reduces buckets to min-max pairs`() {
+        // Ramp -1..1 over 100 samples, 4 buckets
+        val wave = FloatArray(100) { it / 99f * 2f - 1f }
+        val mm = M.waveMinMax(wave, 100, 4)
+        assertEquals(8, mm.size)
+        assertEquals(-1f, mm[0], tol)              // bucket 0 min = first sample
+        assertEquals(wave[24], mm[1], tol)         // bucket 0 max = last of bucket
+        assertEquals(wave[75], mm[6], tol)         // bucket 3 min
+        assertEquals(1f, mm[7], tol)               // bucket 3 max = last sample
+        // Length 0 → all zeros
+        assertTrue(M.waveMinMax(wave, 0, 4).all { it == 0f })
+        // Length beyond array is clamped
+        val clamped = M.waveMinMax(floatArrayOf(0.5f, -0.5f), 10, 2)
+        assertEquals(0.5f, clamped[1], tol)
+        assertEquals(-0.5f, clamped[2], tol)
+    }
+
+    @Test
     fun `formant response peaks near the vowel formants`() {
         // /a/ corner (x=0, y=0): F1=800, F2=1200
         val atF1 = M.formantDb(800f, 0f, 0f, 8f, 0f, 0f)

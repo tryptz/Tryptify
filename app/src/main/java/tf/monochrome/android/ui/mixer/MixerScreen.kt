@@ -288,10 +288,12 @@ fun MixerScreen(
                     }
                 }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    val fxTap by viewModel.fxTap.collectAsState()
                     tf.monochrome.android.ui.mixer.fxchain.FxChainPage(
                         buses = buses,
                         selectedBusIndex = selectedBusIndex,
                         enabled = enabled,
+                        fxTap = fxTap,
                         busAccent = { idx ->
                             if (buses.getOrNull(idx)?.isMaster == true) accent
                             else busAccent(channelDynamicColor, accent, idx)

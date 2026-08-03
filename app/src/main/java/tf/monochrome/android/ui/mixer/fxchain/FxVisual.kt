@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.dsp.SnapinType
+import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.mixer.getParamDefs
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -49,6 +50,18 @@ private val MOTION_TYPES = setOf(
     SnapinType.CHORUS, SnapinType.ENSEMBLE, SnapinType.FLANGER, SnapinType.PHASER,
     SnapinType.RING_MOD, SnapinType.TRANCE_GATE, SnapinType.TAPE_STOP,
     SnapinType.REVERSER, SnapinType.DELAY
+)
+
+/**
+ * Snapin types that do NOT get the faint live-scope underlay: Gain draws the
+ * scope full-size, the dynamics family shows a level dot + gain-reduction bar
+ * on its transfer curve instead, the waveshapers highlight their exercised
+ * region, and the voice-LFO displays are already dense.
+ */
+private val NO_SCOPE_UNDERLAY = setOf(
+    SnapinType.GAIN, SnapinType.COMPRESSOR, SnapinType.LIMITER, SnapinType.GATE,
+    SnapinType.DYNAMICS, SnapinType.COMPACTOR, SnapinType.TRANSIENT_SHAPER,
+    SnapinType.DISTORTION, SnapinType.SHAPER, SnapinType.CHORUS, SnapinType.ENSEMBLE
 )
 
 /**
@@ -75,12 +88,21 @@ private class FxVisualStyle(
  * (LFO modulation, gate patterns, tape/reverse playheads) animate at the speed
  * their Rate/Time knobs dictate. Motion pauses while the snapin is bypassed
  * and the whole drawing dims.
+ *
+ * When [live] (the bus audio tap) is present, the panel reacts to the actual
+ * signal: the neon glow breathes with the plugin's output level, dynamics get
+ * a level dot riding the transfer curve plus a gain-reduction bar, waveshapers
+ * highlight the region of the curve the signal is exercising, Gain shows the
+ * live bus waveform, and most other panels get a faint scope underlay of the
+ * real audio.
  */
 @Composable
 internal fun FxVisual(
     plugin: PluginInstance,
     accent: Color,
     modifier: Modifier = Modifier,
+    slotIndex: Int = -1,
+    live: FxTapFrame? = null,
 ) {
     val type = plugin.type ?: return
     val defs = getParamDefs(type)
@@ -101,11 +123,20 @@ internal fun FxVisual(
 
     val clock = rememberFxClock(running = type in MOTION_TYPES && !plugin.bypassed)
 
+    // Live tap values for this slot (null while bypassed so overlays vanish
+    // and the panel falls back to its static, dimmed look).
+    val tapped = live != null && slotIndex >= 0 && !plugin.bypassed
+    val liveInDb = if (tapped) live!!.inDb(slotIndex) else null
+    val liveOutDb = if (tapped) live!!.outDb(slotIndex) else null
+    // 0 at −55 dB and below, 1 at 0 dB — drives the signal-reactive glow.
+    val activity = liveOutDb?.let { ((it + 55f) / 55f).coerceIn(0f, 1f) }
+
     val cs = MaterialTheme.colorScheme
     val dim = if (plugin.bypassed) 0.35f else 1f
+    val glowBreath = activity?.let { 0.6f + 0.8f * it } ?: 1f
     val style = FxVisualStyle(
         curve = accent.copy(alpha = dim),
-        glow = accent.copy(alpha = 0.22f * dim),
+        glow = accent.copy(alpha = (0.22f * dim * glowBreath).coerceAtMost(0.45f)),
         grid = cs.onSurfaceVariant.copy(alpha = 0.12f),
         ref = cs.onSurfaceVariant.copy(alpha = 0.30f),
         dim = dim,
@@ -122,9 +153,14 @@ internal fun FxVisual(
         val p: (Int) -> Float = { i -> values.getOrElse(i) { 0f } }
         val time = clock.value
         drawPanelGrid(style)
+        // Faint scope of the actual bus audio behind the schematic curve.
+        if (tapped && type !in NO_SCOPE_UNDERLAY) {
+            drawScopeTap(style, live!!.wave, live.waveLen,
+                centerFrac = 0.76f, ampFrac = 0.17f, alpha = 0.30f)
+        }
         when (type) {
             // ── Utility ──
-            SnapinType.GAIN -> drawGain(style, p)
+            SnapinType.GAIN -> drawGain(style, p, if (tapped) live else null)
             SnapinType.STEREO -> drawStereo(style, p)
             SnapinType.CHANNEL_MIXER -> drawChannelMixer(style, p)
             SnapinType.HAAS -> drawHaas(style, p)
@@ -151,30 +187,30 @@ internal fun FxVisual(
             }
             SnapinType.RESONATOR -> drawResonator(style, p)
             // ── Dynamics ──
-            SnapinType.COMPRESSOR -> drawTransfer(style, threshDb = p(3)) { inDb ->
+            SnapinType.COMPRESSOR -> drawTransfer(style, threshDb = p(3), liveInDb = liveInDb) { inDb ->
                 M.compressorOutDb(inDb, p(3), p(2), p(4), p(5))
             }
-            SnapinType.LIMITER -> drawTransfer(style, threshDb = p(1)) { inDb ->
+            SnapinType.LIMITER -> drawTransfer(style, threshDb = p(1), liveInDb = liveInDb) { inDb ->
                 M.limiterOutDb(inDb, p(0), p(1), p(4))
             }
-            SnapinType.GATE -> drawTransfer(style, threshDb = p(3)) { inDb ->
+            SnapinType.GATE -> drawTransfer(style, threshDb = p(3), liveInDb = liveInDb) { inDb ->
                 val out = M.gateOutDb(inDb, p(3), p(4), p(5))
                 if (p(7) > 0.5f) inDb - (p(5) - (inDb - out)) else out
             }
-            SnapinType.DYNAMICS -> drawTransfer(style) { inDb ->
+            SnapinType.DYNAMICS -> drawTransfer(style, liveInDb = liveInDb) { inDb ->
                 val level = inDb + p(7)
                 level + M.dynamicsGainDb(level, p(0), p(1), p(2), p(3), p(6)) + p(8)
             }
-            SnapinType.COMPACTOR -> drawTransfer(style, threshDb = p(3)) { inDb ->
+            SnapinType.COMPACTOR -> drawTransfer(style, threshDb = p(3), liveInDb = liveInDb) { inDb ->
                 M.compactorOutDb(inDb, p(3), p(5))
             }
             SnapinType.TRANSIENT_SHAPER -> drawTransientShaper(style, p)
             SnapinType.TRANCE_GATE -> drawTranceGate(style, p, time)
             // ── Distortion ──
-            SnapinType.DISTORTION -> drawShaperCurve(style) { x ->
+            SnapinType.DISTORTION -> drawShaperCurve(style, liveInDb = liveInDb) { x ->
                 M.distortionShape(p(1).toInt(), x * M.dbToLin(p(0)) + p(3))
             }
-            SnapinType.SHAPER -> drawShaperCurve(style) { x ->
+            SnapinType.SHAPER -> drawShaperCurve(style, liveInDb = liveInDb) { x ->
                 M.shaperOverflow(p(2).toInt(), x * M.dbToLin(p(0)))
             }
             SnapinType.BITCRUSH -> drawBitcrush(style, p)
@@ -299,6 +335,41 @@ private fun DrawScope.drawCurve(
     strokeNeon(path, s)
 }
 
+/**
+ * Live oscilloscope of the bus tap: per-column min/max bands of the actual
+ * audio, drawn around `centerFrac` with `ampFrac` half-height.
+ */
+private fun DrawScope.drawScopeTap(
+    s: FxVisualStyle,
+    wave: FloatArray,
+    waveLen: Int,
+    centerFrac: Float = 0.5f,
+    ampFrac: Float = 0.40f,
+    alpha: Float = 1f,
+) {
+    if (waveLen <= 0) return
+    val buckets = 96
+    val mm = M.waveMinMax(wave, waveLen, buckets)
+    val cy = centerFrac * size.height
+    val amp = ampFrac * size.height
+    val colW = size.width / buckets
+    val minLen = 0.75.dp.toPx()
+    val col = s.curve.copy(alpha = s.curve.alpha * alpha)
+    for (k in 0 until buckets) {
+        val lo = mm[k * 2].coerceIn(-1f, 1f)
+        val hi = mm[k * 2 + 1].coerceIn(-1f, 1f)
+        val x = (k + 0.5f) * colW
+        var yTop = cy - hi * amp
+        var yBot = cy - lo * amp
+        if (yBot - yTop < minLen) {  // keep silence visible as a hairline
+            val mid = (yTop + yBot) / 2f
+            yTop = mid - minLen / 2f
+            yBot = mid + minLen / 2f
+        }
+        drawLine(col, Offset(x, yTop), Offset(x, yBot), strokeWidth = colW * 0.65f)
+    }
+}
+
 /** Log-frequency response curve; [db] gives magnitude at each frequency. */
 private fun DrawScope.drawResponse(
     s: FxVisualStyle,
@@ -320,10 +391,13 @@ private fun DrawScope.drawResponse(
 /**
  * Dynamics transfer curve: input −60..0 dB (x) vs output −60..0 dB (y), over a
  * faint unity diagonal. [threshDb], when finite, draws a threshold marker.
+ * With a live tap, a dot rides the curve at the current input level and a
+ * gain-reduction bar grows from the top-right corner.
  */
 private fun DrawScope.drawTransfer(
     s: FxVisualStyle,
     threshDb: Float = Float.NaN,
+    liveInDb: Float? = null,
     outDb: (inDb: Float) -> Float,
 ) {
     drawLine(
@@ -339,9 +413,28 @@ private fun DrawScope.drawTransfer(
             strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
         )
     }
-    drawCurve(s) { t ->
-        val inDb = -60f + 60f * t
+    val yFor: (Float) -> Float = { inDb ->
         1f - ((outDb(inDb).coerceIn(-60f, 0f) + 60f) / 60f)
+    }
+    drawCurve(s) { t -> yFor(-60f + 60f * t) }
+
+    if (liveInDb != null && liveInDb > -59f) {
+        // Level dot riding the transfer curve at the current input level.
+        val t = ((liveInDb + 60f) / 60f).coerceIn(0f, 1f)
+        val center = Offset(t * size.width, yFor(liveInDb).coerceIn(0f, 1f) * size.height)
+        drawCircle(s.glow, radius = 5.dp.toPx(), center = center)
+        drawCircle(s.curve, radius = 2.5.dp.toPx(), center = center)
+        // Gain-reduction bar: how far below unity the curve pushes this level.
+        val gr = (liveInDb - outDb(liveInDb)).coerceAtLeast(0f)
+        if (gr > 0.05f) {
+            val barW = (gr / 24f).coerceAtMost(1f) * size.width * 0.35f
+            drawLine(
+                s.curve.copy(alpha = 0.85f * s.dim),
+                Offset(size.width - barW, 3.dp.toPx()),
+                Offset(size.width, 3.dp.toPx()),
+                strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round
+            )
+        }
     }
 }
 
@@ -365,18 +458,49 @@ private fun DrawScope.drawWave(
 
 /**
  * Waveshaper transfer curve: input −1..1 (x) → output −1..1 (y), over a faint
- * identity diagonal — the classic distortion transfer display.
+ * identity diagonal — the classic distortion transfer display. With a live
+ * tap, the segment of the curve the signal is currently exercising
+ * (|x| ≤ input peak) is restroked brighter with end-cap dots.
  */
-private fun DrawScope.drawShaperCurve(s: FxVisualStyle, shape: (x: Float) -> Float) {
+private fun DrawScope.drawShaperCurve(
+    s: FxVisualStyle,
+    liveInDb: Float? = null,
+    shape: (x: Float) -> Float,
+) {
     drawLine(
         s.ref,
         Offset(0f, size.height), Offset(size.width, 0f),
         strokeWidth = 1f,
         pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
     )
-    drawCurve(s, samples = 220, fill = false) { t ->
-        val x = t * 2f - 1f
-        0.5f - shape(x).coerceIn(-1.25f, 1.25f) * 0.40f
+    val yFor: (Float) -> Float = { x -> 0.5f - shape(x).coerceIn(-1.25f, 1.25f) * 0.40f }
+    drawCurve(s, samples = 220, fill = false) { t -> yFor(t * 2f - 1f) }
+
+    if (liveInDb != null && liveInDb > -59f) {
+        val inLin = M.dbToLin(liveInDb).coerceIn(0.01f, 1f)
+        // Restroke the exercised region brighter.
+        val active = Path()
+        val steps = 60
+        for (i in 0..steps) {
+            val x = -inLin + (2f * inLin) * i / steps
+            val px = (x + 1f) / 2f * size.width
+            val py = yFor(x).coerceIn(0f, 1f) * size.height
+            if (i == 0) active.moveTo(px, py) else active.lineTo(px, py)
+        }
+        drawPath(
+            active, s.glow,
+            style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+        drawPath(
+            active, s.curve,
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+        for (x in floatArrayOf(-inLin, inLin)) {
+            drawCircle(
+                s.curve, radius = 2.5.dp.toPx(),
+                center = Offset((x + 1f) / 2f * size.width, yFor(x).coerceIn(0f, 1f) * size.height)
+            )
+        }
     }
 }
 
@@ -407,11 +531,20 @@ private fun DrawScope.drawSpike(
 // Utility snapins
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Gain: reference sine at unity behind the gain-scaled (and clipped) copy. */
-private fun DrawScope.drawGain(s: FxVisualStyle, p: (Int) -> Float) {
+/**
+ * Gain: with a live tap, a full-size oscilloscope of the actual bus audio
+ * (post-fader, so the knob visibly scales it) over a faint gain-scaled sine;
+ * without one, the schematic reference sine vs the gain-scaled copy.
+ */
+private fun DrawScope.drawGain(s: FxVisualStyle, p: (Int) -> Float, live: FxTapFrame?) {
     val amp = M.dbToLin(p(0)).coerceAtMost(4f)
-    drawWave(s, alpha = 0.20f) { t -> sin(TWO_PI * 2f * t) }
-    drawWave(s) { t -> (sin(TWO_PI * 2f * t) * amp).coerceIn(-1.12f, 1.12f) }
+    if (live != null) {
+        drawWave(s, alpha = 0.15f) { t -> (sin(TWO_PI * 2f * t) * amp).coerceIn(-1.12f, 1.12f) }
+        drawScopeTap(s, live.wave, live.waveLen, centerFrac = 0.5f, ampFrac = 0.42f)
+    } else {
+        drawWave(s, alpha = 0.20f) { t -> sin(TWO_PI * 2f * t) }
+        drawWave(s) { t -> (sin(TWO_PI * 2f * t) * amp).coerceIn(-1.12f, 1.12f) }
+    }
 }
 
 /** Stereo: goniometer-style ellipse — width sets X radius, mid sets Y, pan offsets. */
