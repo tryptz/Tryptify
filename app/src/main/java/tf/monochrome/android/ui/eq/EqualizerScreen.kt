@@ -512,6 +512,55 @@ fun EqualizerScreen(
                         )
                     }
 
+                    // Oversampling: run the correction biquads at 2-4x the
+                    // stream rate so top-octave bands escape the digital
+                    // near-Nyquist cramping and land on the intended curve.
+                    val eqOversampling by viewModel.oversampling.collectAsState()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Oversampling",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Runs the correction filters at a higher internal " +
+                                    "rate for more accurate response near 20 kHz.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(1, 2, 4).forEach { factor ->
+                                val selected = eqOversampling == factor
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            if (selected)
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                                            else
+                                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                                    .copy(alpha = 0.5f)
+                                        )
+                                        .clickable { viewModel.setOversampling(factor) }
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (factor == 1) "Off" else "${factor}x",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (selected) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (stereoMode) {
                         Text(
                             "LEFT EAR",

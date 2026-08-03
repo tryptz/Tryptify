@@ -9,6 +9,7 @@ import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.FilterType
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,6 +56,24 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private var filtersL = arrayOf<BiquadFilter>()
     private var filtersR = arrayOf<BiquadFilter>()
     private var sampleRate = 44100.0
+
+    // ── Oversampling (1x/2x/4x) ─────────────────────────────────────────
+    // EQ is linear, so this isn't about aliasing: running the biquads at a
+    // multiple of the stream rate undoes the bilinear-transform "cramping"
+    // that skews peaking/shelf shapes near Nyquist, so the top-octave
+    // correction lands on the intended analog curve. Audio-thread state is
+    // rebuilt whenever the factor changes.
+    private val osFactorRef = AtomicInteger(1)
+    private var appliedOsFactor = -1
+    private var osBufL = FloatArray(0)
+    private var osBufR = FloatArray(0)
+    private val resamplerL = ChannelResampler()
+    private val resamplerR = ChannelResampler()
+
+    /** Oversampling factor for the EQ chain: 1 (off), 2, or 4. */
+    fun setOversampling(factor: Int) {
+        osFactorRef.set(if (factor >= 4) 4 else if (factor >= 2) 2 else 1)
+    }
 
     /** Same curve on both ears. */
     fun applyBands(bands: List<EqBand>, preamp: Float, enabled: Boolean) =
@@ -171,12 +190,31 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         // Apply EQ if enabled
         val snap = stateRef.get()
         if (snap.enabled) {
-            if (snap !== appliedSnapshot) {
-                filtersL = buildChain(snap.bandsL)
-                filtersR = buildChain(snap.bandsR)
+            val os = osFactorRef.get()
+            if (snap !== appliedSnapshot || os != appliedOsFactor) {
+                filtersL = buildChain(snap.bandsL, os)
+                filtersR = buildChain(snap.bandsR, os)
+                if (os > 1) {
+                    resamplerL.prepare(sampleRate, os)
+                    resamplerR.prepare(sampleRate, os)
+                }
                 appliedSnapshot = snap
+                appliedOsFactor = os
             }
-            applyEq(numFrames, snap.preampLinear)
+            if (os > 1) {
+                val osFrames = numFrames * os
+                if (osBufL.size < osFrames) {
+                    osBufL = FloatArray(osFrames)
+                    osBufR = FloatArray(osFrames)
+                }
+                resamplerL.upsample(scratchL, osBufL, numFrames)
+                resamplerR.upsample(scratchR, osBufR, numFrames)
+                applyEq(osBufL, osBufR, osFrames, snap.preampLinear)
+                resamplerL.downsample(osBufL, scratchL, numFrames)
+                resamplerR.downsample(osBufR, scratchR, numFrames)
+            } else {
+                applyEq(scratchL, scratchR, numFrames, snap.preampLinear)
+            }
         }
 
         // Interleave output (always stereo)
@@ -225,8 +263,10 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
             if (formatChanged) {
                 inputFormat = pendingFormat
                 sampleRate = inputFormat.sampleRate.toDouble()
-                // Force filter rebuild on next block (sample-rate-dependent coefficients).
+                // Force filter + resampler rebuild on next block
+                // (sample-rate-dependent coefficients).
                 appliedSnapshot = null
+                appliedOsFactor = -1
             }
             pendingFormat = AudioFormat.NOT_SET
         }
@@ -239,37 +279,128 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         filtersL = emptyArray()
         filtersR = emptyArray()
         appliedSnapshot = null
+        appliedOsFactor = -1
+        resamplerL.reset()
+        resamplerR.reset()
     }
 
     // ── DSP internals ───────────────────────────────────────────────────
 
-    private fun applyEq(numFrames: Int, preampLinear: Float) {
+    private fun applyEq(bufL: FloatArray, bufR: FloatArray, numFrames: Int, preampLinear: Float) {
         if (preampLinear != 1f) {
             for (i in 0 until numFrames) {
-                scratchL[i] *= preampLinear
-                scratchR[i] *= preampLinear
+                bufL[i] *= preampLinear
+                bufR[i] *= preampLinear
             }
         }
         // Biquad bands. Indexed per channel, NOT off a shared range: the two
         // chains hold different filter counts whenever the ears are calibrated
         // separately, and driving both from filtersL.indices would walk off the
         // end of the shorter one on the audio thread.
-        for (i in filtersL.indices) filtersL[i].processBlock(scratchL, numFrames)
-        for (i in filtersR.indices) filtersR[i].processBlock(scratchR, numFrames)
+        for (i in filtersL.indices) filtersL[i].processBlock(bufL, numFrames)
+        for (i in filtersR.indices) filtersR[i].processBlock(bufR, numFrames)
     }
 
-    private fun buildChain(bands: Array<BandState>): Array<BiquadFilter> {
+    private fun buildChain(bands: Array<BandState>, osFactor: Int): Array<BiquadFilter> {
         val active = bands.filter { it.enabled && it.gain != 0f }
         val chain = Array(active.size) { BiquadFilter() }
+        val rate = sampleRate * osFactor
         for ((i, band) in active.withIndex()) {
             val type = when (band.type) {
                 FilterType.LOWSHELF -> BiquadType.LOW_SHELF
                 FilterType.HIGHSHELF -> BiquadType.HIGH_SHELF
                 else -> BiquadType.PEAKING
             }
-            chain[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
+            chain[i].configure(type, rate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
         }
         return chain
+    }
+
+    /**
+     * One-channel 2x/4x resampler: zero-stuff + 8th-order Butterworth
+     * anti-image low-pass up, matching filter + decimation down, both at
+     * 0.9 × the base Nyquist (mirrors ChannelOversampler in the native DSP).
+     */
+    private class ChannelResampler {
+        private val up = Array(STAGES) { LpBiquad() }
+        private val down = Array(STAGES) { LpBiquad() }
+        private var factor = 1
+
+        fun prepare(baseRate: Double, factor: Int) {
+            this.factor = factor.coerceIn(1, 4)
+            if (this.factor <= 1) { reset(); return }
+            val osRate = baseRate * this.factor
+            val fc = 0.45 * baseRate
+            for (i in 0 until STAGES) {
+                up[i].configure(osRate, fc, BUTTERWORTH_Q[i])
+                down[i].configure(osRate, fc, BUTTERWORTH_Q[i])
+            }
+            reset()
+        }
+
+        fun reset() {
+            for (i in 0 until STAGES) { up[i].reset(); down[i].reset() }
+        }
+
+        /** [out] receives n * factor samples. */
+        fun upsample(input: FloatArray, out: FloatArray, n: Int) {
+            val gain = factor.toFloat()
+            var k = 0
+            for (i in 0 until n) {
+                for (f in 0 until factor) {
+                    var s = if (f == 0) input[i] * gain else 0f
+                    for (b in 0 until STAGES) s = up[b].process(s)
+                    out[k++] = s
+                }
+            }
+        }
+
+        /** Consumes n * factor samples, writes n. */
+        fun downsample(input: FloatArray, out: FloatArray, n: Int) {
+            var k = 0
+            for (i in 0 until n) {
+                var keep = 0f
+                for (f in 0 until factor) {
+                    var s = input[k++]
+                    for (b in 0 until STAGES) s = down[b].process(s)
+                    if (f == 0) keep = s
+                }
+                out[i] = keep
+            }
+        }
+
+        private class LpBiquad {
+            private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
+            private var a1 = 0f; private var a2 = 0f
+            private var z1 = 0f; private var z2 = 0f
+
+            fun configure(sr: Double, freq: Double, q: Double) {
+                val w0 = 2.0 * Math.PI * freq / sr
+                val cosw0 = cos(w0)
+                val alpha = sin(w0) / (2.0 * q)
+                val a0 = 1.0 + alpha
+                b0 = (((1.0 - cosw0) / 2.0) / a0).toFloat()
+                b1 = ((1.0 - cosw0) / a0).toFloat()
+                b2 = b0
+                a1 = ((-2.0 * cosw0) / a0).toFloat()
+                a2 = ((1.0 - alpha) / a0).toFloat()
+                z1 = 0f; z2 = 0f
+            }
+
+            fun reset() { z1 = 0f; z2 = 0f }
+
+            fun process(x: Float): Float {
+                val y = b0 * x + z1
+                z1 = b1 * x - a1 * y + z2
+                z2 = b2 * x - a2 * y
+                return y
+            }
+        }
+
+        companion object {
+            private const val STAGES = 4
+            private val BUTTERWORTH_Q = doubleArrayOf(0.50980, 0.60134, 0.89998, 2.56292)
+        }
     }
 
     // ── RBJ biquad (pure Kotlin, Transposed Direct Form II) ─────────────
