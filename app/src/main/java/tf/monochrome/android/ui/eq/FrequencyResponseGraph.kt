@@ -44,6 +44,7 @@ import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.domain.model.FrequencyPoint
 import tf.monochrome.android.audio.eq.AutoEqEngine
 import kotlin.math.abs
+import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -218,7 +219,24 @@ fun FrequencyResponseGraph(
     val latestMaxAbsDragGain by rememberUpdatedState(maxAbsDragGain)
     val latestOnBandDragged by rememberUpdatedState(onBandDragged)
 
-    val graphBackground = MaterialTheme.colorScheme.surface
+    // Per-band contribution curves for the profile-line pass (drawn behind the
+    // response). Memoized: 31 bands × a few hundred grid points of biquad
+    // response is too much to recompute inside every Canvas frame during a
+    // drag. Falls back to a log grid when there's no measurement to anchor on.
+    val bandContributions = remember(eqBands, sampleRate, zeroOffset, originalCurve) {
+        val grid: List<Float> =
+            if (originalCurve.isNotEmpty()) originalCurve.map { it.freq }
+            else List(96) { i -> (20.0 * 1000.0.pow(i / 95.0)).toFloat() }
+        eqBands.filter { it.enabled && it.gain != 0f }.map { band ->
+            band to grid.map { f ->
+                FrequencyPoint(f, zeroOffset + AutoEqEngine.calculateBiquadResponse(f, band, sampleRate))
+            }
+        }
+    }
+
+    // Semi-transparent panel: the graph reads as a dark glass sheet over the
+    // screen background instead of a solid card.
+    val graphBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f)
     val legendBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
     val legendLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
     // Theme-aware curve colors (were hardcoded white → invisible on the light
@@ -351,6 +369,25 @@ fun FrequencyResponseGraph(
             }
 
             // Corrected curve (bright red solid) with fabfilter pro-q 3 style fill
+            // Per-band profile curves, drawn BEHIND the frequency response:
+            // one thin semi-transparent line per enabled band, hue-mapped along
+            // the log-frequency axis (yellow/green lows → cyan/blue mids →
+            // violet/magenta highs). Lines only — no fills, no markers. The
+            // selected band's line draws brighter and thicker.
+            if ("eqL" !in hiddenCurves) {
+                for ((band, pts) in bandContributions) {
+                    val t = (ln(band.freq.coerceAtLeast(20f) / 20f) / ln(1000f)).coerceIn(0f, 1f)
+                    val hue = 60f + 240f * t
+                    val selected = selectedBandId == band.id
+                    drawCurve(
+                        pts,
+                        Color.hsv(hue, 0.85f, 1f).copy(alpha = if (selected) 0.95f else 0.5f),
+                        w, h, minGain, maxGain,
+                        if (selected) 2.5f else 1.5f
+                    )
+                }
+            }
+
             if (correctedCurve.size > 1 && "eqL" !in hiddenCurves) {
                 drawFilledCurve(correctedCurve, Color(0xFFFF4444), w, h, minGain, maxGain, zeroOffset, 2.5f)
             }
@@ -369,14 +406,9 @@ fun FrequencyResponseGraph(
 
                 val isSelected = selectedBandId == band.id
 
-                // Individual band contribution curve (Pro-Q style highlight)
+                // The selected band's contribution already draws highlighted in
+                // the per-band profile pass above; here only the tooltip.
                 if (isSelected) {
-                    val contributionPoints = originalCurve.map { p ->
-                        val biquad = AutoEqEngine.calculateBiquadResponse(p.freq, band, sampleRate)
-                        FrequencyPoint(p.freq, zeroOffset + biquad)
-                    }
-                    drawCurve(contributionPoints, curveNeutral.copy(alpha = 0.2f), w, h, minGain, maxGain, 1.5f)
-
                     // Floating Tooltip
                     val infoText =
                         "${band.freq.toInt()} Hz  ${"%.1f".format(band.gain)} dB  Q ${"%.2f".format(band.q)}"
