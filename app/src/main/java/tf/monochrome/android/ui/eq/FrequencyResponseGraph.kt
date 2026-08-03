@@ -350,22 +350,22 @@ fun FrequencyResponseGraph(
             // Original measurement curve — an INPUT, drawn thinner and dimmer
             // than the corrected result so the eye lands on the outcome first.
             if (originalCurve.size > 1 && "measL" !in hiddenCurves) {
-                drawCurve(originalCurve, Color(0xFF4A9EFF).copy(alpha = 0.8f), w, h, minGain, maxGain, 1.5f)
+                drawCurve(originalCurve, Color(0xFF4A9EFF).copy(alpha = 0.8f), w, h, minGain, maxGain, 3f)
             }
 
             // Target curve (dashed) — the other input, same receded weight.
             if (normalizedTarget.size > 1 && "target" !in hiddenCurves) {
-                drawDashedCurve(normalizedTarget, primary.copy(alpha = 0.85f), w, h, minGain, maxGain, 1.5f)
+                drawDashedCurve(normalizedTarget, primary.copy(alpha = 0.85f), w, h, minGain, maxGain, 3f)
             }
 
             // Other ear (2-channel mode): stroke-only so it reads as context
             // behind the primary channel's filled curve, drawn first so the
             // primary stays on top.
             if (secondaryMeasurement.size > 1 && "measR" !in hiddenCurves) {
-                drawCurve(secondaryMeasurement, Color(0xFF4A9EFF).copy(alpha = 0.35f), w, h, minGain, maxGain, 1.5f)
+                drawCurve(secondaryMeasurement, Color(0xFF4A9EFF).copy(alpha = 0.35f), w, h, minGain, maxGain, 2.5f)
             }
             if (secondaryCorrected.size > 1 && "eqR" !in hiddenCurves) {
-                drawCurve(secondaryCorrected, Color(0xFFFFB300), w, h, minGain, maxGain, 2f)
+                drawCurve(secondaryCorrected, Color(0xFFFFB300), w, h, minGain, maxGain, 3.5f)
             }
 
             // Corrected curve (bright red solid) with fabfilter pro-q 3 style fill
@@ -389,7 +389,7 @@ fun FrequencyResponseGraph(
             }
 
             if (correctedCurve.size > 1 && "eqL" !in hiddenCurves) {
-                drawFilledCurve(correctedCurve, Color(0xFFFF4444), w, h, minGain, maxGain, zeroOffset, 2.5f)
+                drawFilledCurve(correctedCurve, Color(0xFFFF4444), w, h, minGain, maxGain, zeroOffset, 4f)
             }
 
             // EQ band dots ride the corrected curve, so they hide with it.
