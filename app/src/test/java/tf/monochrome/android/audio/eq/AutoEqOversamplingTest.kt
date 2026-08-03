@@ -28,7 +28,10 @@ class AutoEqOversamplingTest {
     private val sampleRate = 48000
 
     /** Push [frames] of a stereo float sine through the processor; returns steady-state L amplitude. */
-    private fun measure(proc: AutoEqProcessor, freq: Double, frames: Int = 32768): Double {
+    private fun measure(proc: AutoEqProcessor, freq: Double, frames: Int = 32768): Double =
+        measureAt(proc, freq, sampleRate, frames)
+
+    private fun measureAt(proc: AutoEqProcessor, freq: Double, rate: Int, frames: Int = 32768): Double {
         val out = FloatArray(frames)
         var written = 0
         var phaseIdx = 0
@@ -37,7 +40,7 @@ class AutoEqOversamplingTest {
         while (written < frames) {
             buf.clear()
             for (i in 0 until chunk) {
-                val s = sin(2.0 * PI * freq * (phaseIdx + i) / sampleRate).toFloat()
+                val s = sin(2.0 * PI * freq * (phaseIdx + i) / rate).toFloat()
                 buf.putFloat(s)
                 buf.putFloat(s)
             }
@@ -52,7 +55,7 @@ class AutoEqOversamplingTest {
         }
         // Goertzel amplitude over the steady tail
         val start = frames / 2
-        val w = 2.0 * PI * freq / sampleRate
+        val w = 2.0 * PI * freq / rate
         val c = 2.0 * cos(w)
         var s1 = 0.0; var s2 = 0.0
         for (i in start until frames) {
@@ -97,19 +100,74 @@ class AutoEqOversamplingTest {
     @Test
     fun `4x oversampling lands the top-octave response on the analog curve`() {
         // +12 dB peak at 18 kHz, Q 1 — deep cramping territory at 48 kHz.
+        // This is the requirement: the oversampled mode matches the analog
+        // prototype the correction curves are designed against.
         val band = listOf(EqBand(0, FilterType.PEAKING, 18000f, 12f, 1f, true))
         val probe = 15000.0
         val target = analogPeakingDb(probe, 18000.0, 1.0, 12.0)
-
-        val db1 = 20.0 * log10(measure(makeProcessor(1, band), probe))
         val db4 = 20.0 * log10(measure(makeProcessor(4, band), probe))
+        assertTrue("4x within 1 dB of analog target (was ${abs(db4 - target)})",
+            abs(db4 - target) < 1.0)
+    }
 
-        val err1 = abs(db1 - target)
-        val err4 = abs(db4 - target)
-        // Oversampling must be strictly more accurate, and land within 1 dB.
-        assertTrue("4x ($err4 dB off) should beat 1x ($err1 dB off)", err4 < err1)
-        assertTrue("4x within 1 dB of analog target (was $err4)", err4 < 1.0)
-        assertTrue("1x is visibly cramped (sanity, was $err1)", err1 > err4 + 0.25)
+    @Test
+    fun `PINS BEHAVIOR - plain 1x RBJ biquads cramp near Nyquist`() {
+        // Not a requirement: this documents why the oversampling option exists
+        // with the CURRENT plain-RBJ coefficients. If the 1x path ever moves
+        // to decramped designs (matched-Z / Orfanidis / Massberg), this test
+        // SHOULD fail — delete it and consider demoting the oversampling
+        // selector, because 1x would then be accurate on its own.
+        val band = listOf(EqBand(0, FilterType.PEAKING, 18000f, 12f, 1f, true))
+        val probe = 15000.0
+        val target = analogPeakingDb(probe, 18000.0, 1.0, 12.0)
+        val db1 = 20.0 * log10(measure(makeProcessor(1, band), probe))
+        assertTrue("1x currently cramps by >1 dB (was ${abs(db1 - target)})",
+            abs(db1 - target) > 1.0)
+    }
+
+    @Test
+    fun `oversampling auto-disables on hi-res streams`() {
+        // At 96 kHz Nyquist is already at 48 kHz — cramping in the audio band
+        // is negligible and 4x would run the chain at 384 kHz for nothing.
+        // The gate makes 4x behave identically to 1x (same code path).
+        val hiRes = 96000
+        val band = listOf(EqBand(0, FilterType.PEAKING, 18000f, 12f, 1f, true))
+        fun makeAt(os: Int): AutoEqProcessor {
+            val proc = AutoEqProcessor()
+            proc.configure(AudioFormat(hiRes, 2, C.ENCODING_PCM_FLOAT))
+            proc.flush()
+            proc.setOversampling(os)
+            proc.applyBands(band, preamp = 0f, enabled = true)
+            return proc
+        }
+        val db1 = 20.0 * log10(measureAt(makeAt(1), 15000.0, hiRes))
+        val db4 = 20.0 * log10(measureAt(makeAt(4), 15000.0, hiRes))
+        assertEquals(db1, db4, 0.01)
+    }
+
+    @Test
+    fun `flat chain is a hard bypass - output is bit-identical to input`() {
+        // Zero-gain bands build an empty filter chain; with unity preamp the
+        // resampler must be structurally out of the path, not just clean.
+        val proc = makeProcessor(4, listOf(EqBand(0, FilterType.PEAKING, 1000f, 0f, 1f, true)))
+        val n = 4096
+        val buf = ByteBuffer.allocateDirect(n * 8).order(ByteOrder.nativeOrder())
+        val input = FloatArray(n)
+        for (i in 0 until n) {
+            val s = sin(2.0 * PI * 997.0 * i / sampleRate).toFloat()
+            input[i] = s
+            buf.putFloat(s); buf.putFloat(s)
+        }
+        buf.flip()
+        proc.queueInput(buf)
+        val o = proc.output
+        var i = 0
+        while (o.remaining() >= 8) {
+            val l = o.getFloat(); o.getFloat()
+            assertEquals("sample $i untouched", input[i], l, 0f)
+            i++
+        }
+        assertTrue(i > 0)
     }
 
     @Test

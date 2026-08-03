@@ -13,12 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * Standalone 10-band parametric EQ AudioProcessor for AutoEQ headphone correction.
@@ -53,8 +48,8 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private var appliedSnapshot: Snapshot? = null
 
     // Per-band biquad filter state (audio thread only, rebuilt when bands change)
-    private var filtersL = arrayOf<BiquadFilter>()
-    private var filtersR = arrayOf<BiquadFilter>()
+    private var filtersL = arrayOf<EqBiquad>()
+    private var filtersR = arrayOf<EqBiquad>()
     private var sampleRate = 44100.0
 
     // ── Oversampling (1x/2x/4x) ─────────────────────────────────────────
@@ -74,6 +69,15 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     fun setOversampling(factor: Int) {
         osFactorRef.set(if (factor >= 4) 4 else if (factor >= 2) 2 else 1)
     }
+
+    /**
+     * The factor actually used for the current stream. Gated by rate: at
+     * ≥ 88.2 kHz Nyquist already sits at ≥ 44.1 kHz, so cramping in the audio
+     * band is negligible and oversampling would burn 4 × the CPU on exactly
+     * the hi-res content where it buys nothing — auto-off instead.
+     */
+    private fun effectiveOsFactor(): Int =
+        if (sampleRate >= 88200.0) 1 else osFactorRef.get()
 
     /** Same curve on both ears. */
     fun applyBands(bands: List<EqBand>, preamp: Float, enabled: Boolean) =
@@ -190,7 +194,7 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         // Apply EQ if enabled
         val snap = stateRef.get()
         if (snap.enabled) {
-            val os = osFactorRef.get()
+            val os = effectiveOsFactor()
             if (snap !== appliedSnapshot || os != appliedOsFactor) {
                 filtersL = buildChain(snap.bandsL, os)
                 filtersR = buildChain(snap.bandsR, os)
@@ -201,7 +205,12 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                 appliedSnapshot = snap
                 appliedOsFactor = os
             }
-            if (os > 1) {
+            // Hard bypass when the chain is flat: with no active filters and
+            // unity preamp the samples are left untouched — the resampler is
+            // structurally out of the path, not merely measuring clean.
+            val hasWork = filtersL.isNotEmpty() || filtersR.isNotEmpty() ||
+                snap.preampLinear != 1f
+            if (hasWork && os > 1) {
                 val osFrames = numFrames * os
                 if (osBufL.size < osFrames) {
                     osBufL = FloatArray(osFrames)
@@ -212,7 +221,7 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                 applyEq(osBufL, osBufR, osFrames, snap.preampLinear)
                 resamplerL.downsample(osBufL, scratchL, numFrames)
                 resamplerR.downsample(osBufR, scratchR, numFrames)
-            } else {
+            } else if (hasWork) {
                 applyEq(scratchL, scratchR, numFrames, snap.preampLinear)
             }
         }
@@ -301,185 +310,24 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         for (i in filtersR.indices) filtersR[i].processBlock(bufR, numFrames)
     }
 
-    private fun buildChain(bands: Array<BandState>, osFactor: Int): Array<BiquadFilter> {
+    private fun buildChain(bands: Array<BandState>, osFactor: Int): Array<EqBiquad> {
         val active = bands.filter { it.enabled && it.gain != 0f }
-        val chain = Array(active.size) { BiquadFilter() }
+        val chain = Array(active.size) { EqBiquad() }
         val rate = sampleRate * osFactor
         for ((i, band) in active.withIndex()) {
             val type = when (band.type) {
-                FilterType.LOWSHELF -> BiquadType.LOW_SHELF
-                FilterType.HIGHSHELF -> BiquadType.HIGH_SHELF
-                else -> BiquadType.PEAKING
+                FilterType.LOWSHELF -> EqBiquadType.LOW_SHELF
+                FilterType.HIGHSHELF -> EqBiquadType.HIGH_SHELF
+                else -> EqBiquadType.PEAKING
             }
             chain[i].configure(type, rate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
         }
         return chain
     }
 
-    /**
-     * One-channel 2x/4x resampler: zero-stuff + 8th-order Butterworth
-     * anti-image low-pass up, matching filter + decimation down, both at
-     * 0.9 × the base Nyquist (mirrors ChannelOversampler in the native DSP).
-     */
-    private class ChannelResampler {
-        private val up = Array(STAGES) { LpBiquad() }
-        private val down = Array(STAGES) { LpBiquad() }
-        private var factor = 1
-
-        fun prepare(baseRate: Double, factor: Int) {
-            this.factor = factor.coerceIn(1, 4)
-            if (this.factor <= 1) { reset(); return }
-            val osRate = baseRate * this.factor
-            val fc = 0.45 * baseRate
-            for (i in 0 until STAGES) {
-                up[i].configure(osRate, fc, BUTTERWORTH_Q[i])
-                down[i].configure(osRate, fc, BUTTERWORTH_Q[i])
-            }
-            reset()
-        }
-
-        fun reset() {
-            for (i in 0 until STAGES) { up[i].reset(); down[i].reset() }
-        }
-
-        /** [out] receives n * factor samples. */
-        fun upsample(input: FloatArray, out: FloatArray, n: Int) {
-            val gain = factor.toFloat()
-            var k = 0
-            for (i in 0 until n) {
-                for (f in 0 until factor) {
-                    var s = if (f == 0) input[i] * gain else 0f
-                    for (b in 0 until STAGES) s = up[b].process(s)
-                    out[k++] = s
-                }
-            }
-        }
-
-        /** Consumes n * factor samples, writes n. */
-        fun downsample(input: FloatArray, out: FloatArray, n: Int) {
-            var k = 0
-            for (i in 0 until n) {
-                var keep = 0f
-                for (f in 0 until factor) {
-                    var s = input[k++]
-                    for (b in 0 until STAGES) s = down[b].process(s)
-                    if (f == 0) keep = s
-                }
-                out[i] = keep
-            }
-        }
-
-        private class LpBiquad {
-            private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
-            private var a1 = 0f; private var a2 = 0f
-            private var z1 = 0f; private var z2 = 0f
-
-            fun configure(sr: Double, freq: Double, q: Double) {
-                val w0 = 2.0 * Math.PI * freq / sr
-                val cosw0 = cos(w0)
-                val alpha = sin(w0) / (2.0 * q)
-                val a0 = 1.0 + alpha
-                b0 = (((1.0 - cosw0) / 2.0) / a0).toFloat()
-                b1 = ((1.0 - cosw0) / a0).toFloat()
-                b2 = b0
-                a1 = ((-2.0 * cosw0) / a0).toFloat()
-                a2 = ((1.0 - alpha) / a0).toFloat()
-                z1 = 0f; z2 = 0f
-            }
-
-            fun reset() { z1 = 0f; z2 = 0f }
-
-            fun process(x: Float): Float {
-                val y = b0 * x + z1
-                z1 = b1 * x - a1 * y + z2
-                z2 = b2 * x - a2 * y
-                return y
-            }
-        }
-
-        companion object {
-            private const val STAGES = 4
-            private val BUTTERWORTH_Q = doubleArrayOf(0.50980, 0.60134, 0.89998, 2.56292)
-        }
-    }
-
-    // ── RBJ biquad (pure Kotlin, Transposed Direct Form II) ─────────────
-
-    private enum class BiquadType { PEAKING, LOW_SHELF, HIGH_SHELF }
-
     private class BandState(
         val freq: Float, val gain: Float, val q: Float,
         val type: FilterType, val enabled: Boolean
     )
 
-    private class BiquadFilter {
-        private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
-        private var a1 = 0f; private var a2 = 0f
-        private var z1 = 0f; private var z2 = 0f
-
-        fun configure(type: BiquadType, sr: Double, freq: Double, q: Double, gainDb: Double) {
-            val w0 = 2.0 * Math.PI * freq / sr
-            val cosw0 = cos(w0)
-            val sinw0 = sin(w0)
-            val alpha = sinw0 / (2.0 * q)
-            var nb0: Double; var nb1: Double; var nb2: Double
-            var na0: Double; var na1: Double; var na2: Double
-
-            when (type) {
-                BiquadType.PEAKING -> {
-                    val a = 10.0.pow(gainDb / 40.0)
-                    nb0 = 1.0 + alpha * a; nb1 = -2.0 * cosw0; nb2 = 1.0 - alpha * a
-                    na0 = 1.0 + alpha / a; na1 = -2.0 * cosw0; na2 = 1.0 - alpha / a
-                }
-                BiquadType.LOW_SHELF -> {
-                    val a = 10.0.pow(gainDb / 40.0)
-                    val sq = 2.0 * sqrt(a) * alpha
-                    nb0 = a * ((a + 1) - (a - 1) * cosw0 + sq)
-                    nb1 = 2.0 * a * ((a - 1) - (a + 1) * cosw0)
-                    nb2 = a * ((a + 1) - (a - 1) * cosw0 - sq)
-                    na0 = (a + 1) + (a - 1) * cosw0 + sq
-                    na1 = -2.0 * ((a - 1) + (a + 1) * cosw0)
-                    na2 = (a + 1) + (a - 1) * cosw0 - sq
-                }
-                BiquadType.HIGH_SHELF -> {
-                    val a = 10.0.pow(gainDb / 40.0)
-                    val sq = 2.0 * sqrt(a) * alpha
-                    nb0 = a * ((a + 1) + (a - 1) * cosw0 + sq)
-                    nb1 = -2.0 * a * ((a - 1) + (a + 1) * cosw0)
-                    nb2 = a * ((a + 1) + (a - 1) * cosw0 - sq)
-                    na0 = (a + 1) - (a - 1) * cosw0 + sq
-                    na1 = 2.0 * ((a - 1) - (a + 1) * cosw0)
-                    na2 = (a + 1) - (a - 1) * cosw0 - sq
-                }
-            }
-            if (abs(na0) < 1e-20 || !na0.isFinite()) {
-                // Degenerate coefficient — fall back to passthrough instead of emitting NaN/Inf audio.
-                b0 = 1f; b1 = 0f; b2 = 0f; a1 = 0f; a2 = 0f
-                z1 = 0f; z2 = 0f
-                return
-            }
-            val nb0f = (nb0 / na0).toFloat()
-            val nb1f = (nb1 / na0).toFloat()
-            val nb2f = (nb2 / na0).toFloat()
-            val na1f = (na1 / na0).toFloat()
-            val na2f = (na2 / na0).toFloat()
-            if (!nb0f.isFinite() || !nb1f.isFinite() || !nb2f.isFinite() ||
-                !na1f.isFinite() || !na2f.isFinite()) {
-                b0 = 1f; b1 = 0f; b2 = 0f; a1 = 0f; a2 = 0f
-            } else {
-                b0 = nb0f; b1 = nb1f; b2 = nb2f; a1 = na1f; a2 = na2f
-            }
-            z1 = 0f; z2 = 0f
-        }
-
-        fun processBlock(data: FloatArray, n: Int) {
-            for (i in 0 until n) {
-                val x = data[i]
-                val y = b0 * x + z1
-                z1 = b1 * x - a1 * y + z2
-                z2 = b2 * x - a2 * y
-                data[i] = y
-            }
-        }
-    }
 }
