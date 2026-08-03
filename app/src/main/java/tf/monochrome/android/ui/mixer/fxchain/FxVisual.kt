@@ -195,6 +195,7 @@ internal fun FxVisual(
                 M.biquadDb(shape, f, p(1), p(2))
             }
             SnapinType.RESONATOR -> drawResonator(style, p)
+            SnapinType.DISPERSER -> drawDisperser(style, p)
             // ── Dynamics ──
             SnapinType.COMPRESSOR -> drawTransfer(style, threshDb = p(3), liveInDb = liveInDb) { inDb ->
                 M.compressorOutDb(inDb, p(3), p(2), p(4), p(5))
@@ -676,6 +677,29 @@ private fun DrawScope.drawResonator(s: FxVisualStyle, p: (Int) -> Float) {
         var h = (0.25f + 0.75f * intensity) * decay.pow(k - 1)
         if (k % 2 == 0) h *= 0.35f + 0.65f * timbre   // timbre morphs even harmonics in
         drawSpike(s, M.freqToT(fk) * size.width, h, alpha = 0.5f + 0.5f / k)
+    }
+}
+
+/**
+ * Disperser: group-delay curve of the all-pass stack — delay is longer where
+ * the curve is higher. Amount multiplies the per-stage delay, Pinch narrows
+ * the hump around the Frequency marker. Magnitude is flat, so unlike every
+ * other filter this axis is time, not dB (saturating map, ~20 ms half-scale).
+ */
+private fun DrawScope.drawDisperser(s: FxVisualStyle, p: (Int) -> Float) {
+    val stages = p(0).toInt().coerceIn(1, 96)
+    val f0 = p(1)
+    val q = p(2)
+    // Frequency marker (draggable line in the original's display)
+    val fx = M.freqToT(f0) * size.width
+    drawLine(
+        s.curve.copy(alpha = 0.30f * s.dim), Offset(fx, 0f), Offset(fx, size.height),
+        strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+    )
+    drawCurve(s) { t ->
+        val tauMs = stages * M.allpassGroupDelayMs(M.freqAt(t), f0, q)
+        val sat = tauMs / (tauMs + 20f)
+        0.92f - sat.coerceIn(0f, 1f) * 0.84f
     }
 }
 

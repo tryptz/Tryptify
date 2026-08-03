@@ -14,7 +14,8 @@ enum class BiquadType {
     Notch,
     LowShelf,
     HighShelf,
-    Peaking
+    Peaking,
+    AllPass
 };
 
 class Biquad {
@@ -98,6 +99,16 @@ public:
                 a2 = 1.0 - alpha / A;
                 break;
             }
+            case BiquadType::AllPass:
+                // Unity magnitude everywhere; 360° of phase rotation around
+                // freq, sharpness set by q (RBJ cookbook APF).
+                b0 = 1.0 - alpha;
+                b1 = -2.0 * cosw0;
+                b2 = 1.0 + alpha;
+                a0 = 1.0 + alpha;
+                a1 = -2.0 * cosw0;
+                a2 = 1.0 - alpha;
+                break;
         }
 
         // Normalize

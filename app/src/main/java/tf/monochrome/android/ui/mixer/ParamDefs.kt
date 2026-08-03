@@ -301,6 +301,11 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
             add(ParamDef("B$b On", 0f, 1f, 1f, "", steps = 1))
         }
     }
+    SnapinType.DISPERSER -> listOf(
+        ParamDef("Amount", 1f, 96f, 12f, "", steps = 95),
+        ParamDef("Freq", 20f, 20000f, 250f, "Hz"),
+        ParamDef("Pinch", 0.2f, 10f, 0.71f, "")
+    )
     null -> emptyList()
 }
 

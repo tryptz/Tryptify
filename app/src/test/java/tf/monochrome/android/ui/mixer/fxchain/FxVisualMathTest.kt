@@ -255,6 +255,31 @@ class FxVisualMathTest {
     }
 
     @Test
+    fun `allpass group delay peaks at the tuned frequency and stays positive`() {
+        val f0 = 500f; val q = 2f
+        val atF0 = M.allpassGroupDelayMs(f0, f0, q)
+        // Analog 2nd-order APF peak group delay = 2Q/(pi*f0) seconds
+        assertEquals(2f * q / (Math.PI.toFloat() * f0) * 1000f, atF0, atF0 * 0.1f)
+        assertTrue(atF0 > M.allpassGroupDelayMs(f0 * 4f, f0, q))
+        assertTrue(atF0 > M.allpassGroupDelayMs(f0 / 4f, f0, q))
+        // All-pass group delay is non-negative across the band
+        for (t in 0..20) {
+            assertTrue(M.allpassGroupDelayMs(M.freqAt(t / 20f), f0, q) >= -1e-3f)
+        }
+    }
+
+    @Test
+    fun `pinch concentrates the delay around the cutoff`() {
+        val f0 = 500f
+        val narrowAtF0 = M.allpassGroupDelayMs(f0, f0, 8f)
+        val wideAtF0 = M.allpassGroupDelayMs(f0, f0, 0.5f)
+        assertTrue(narrowAtF0 > wideAtF0)                       // taller at the cutoff…
+        val narrowFar = M.allpassGroupDelayMs(f0 * 8f, f0, 8f)
+        val wideFar = M.allpassGroupDelayMs(f0 * 8f, f0, 0.5f)
+        assertTrue(narrowFar < wideFar)                         // …thinner away from it
+    }
+
+    @Test
     fun `waveMinMax reduces buckets to min-max pairs`() {
         // Ramp -1..1 over 100 samples, 4 buckets
         val wave = FloatArray(100) { it / 99f * 2f - 1f }

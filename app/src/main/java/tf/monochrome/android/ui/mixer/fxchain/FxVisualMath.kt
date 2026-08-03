@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.mixer.fxchain
 
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -198,6 +199,42 @@ internal object FxVisualMath {
             sum += biquadDb(BiquadShape.PEAK, freq, fNotch, q, depthDb)
         }
         return sum
+    }
+
+    /**
+     * Phase (radians, principal value) of one RBJ 2nd-order all-pass biquad at
+     * [freq] for a filter tuned to [f0] with quality [q]. Magnitude is unity
+     * everywhere — the phase is the whole story (see `snapins/disperser.h`).
+     */
+    fun allpassPhase(freq: Float, f0: Float, q: Float): Float {
+        val fs = SAMPLE_RATE
+        val w0 = 2f * Math.PI.toFloat() * (f0.coerceIn(10f, fs * 0.45f) / fs)
+        val alpha = sin(w0) / (2f * q.coerceAtLeast(0.05f))
+        val cw = cos(w0)
+        val b0 = 1f - alpha; val b1 = -2f * cw; val b2 = 1f + alpha
+        val a0 = 1f + alpha; val a1 = -2f * cw; val a2 = 1f - alpha
+        val w = 2f * Math.PI.toFloat() * (freq.coerceIn(1f, fs * 0.499f) / fs)
+        val numRe = b0 + b1 * cos(w) + b2 * cos(2f * w)
+        val numIm = -(b1 * sin(w) + b2 * sin(2f * w))
+        val denRe = a0 + a1 * cos(w) + a2 * cos(2f * w)
+        val denIm = -(a1 * sin(w) + a2 * sin(2f * w))
+        return atan2(numIm, numRe) - atan2(denIm, denRe)
+    }
+
+    /**
+     * Group delay in ms of ONE all-pass stage at [freq] (−dφ/dω, numeric with
+     * wrap correction). The Disperser display multiplies by the stage count.
+     */
+    fun allpassGroupDelayMs(freq: Float, f0: Float, q: Float): Float {
+        val df = (freq * 0.01f).coerceAtLeast(0.5f)
+        val p1 = allpassPhase(freq - df / 2f, f0, q)
+        val p2 = allpassPhase(freq + df / 2f, f0, q)
+        var dphi = p2 - p1
+        val pi = Math.PI.toFloat()
+        val twoPi = 2f * pi
+        while (dphi > pi) dphi -= twoPi
+        while (dphi < -pi) dphi += twoPi
+        return (-dphi / (twoPi * df)) * 1000f
     }
 
     // ── Dynamics transfer curves (input dB → output dB) ─────────────────────
