@@ -50,6 +50,12 @@ class MixerViewModel @Inject constructor(
     private val _currentPresetName = MutableStateFlow<String?>(null)
     val currentPresetName: StateFlow<String?> = _currentPresetName.asStateFlow()
 
+    // Declared before the init block below: viewModelScope launches on
+    // Dispatchers.Main.immediate, so the poll loop's first iteration runs
+    // synchronously inside the constructor and reads this property.
+    private val _selectedBusIndex = MutableStateFlow(0)
+    val selectedBusIndex: StateFlow<Int> = _selectedBusIndex.asStateFlow()
+
     init {
         // 60 Hz meter poll — fluid VU bars under fast transients. pollLevels
         // is a native hot-path read; cheap enough to call at frame rate.
@@ -63,9 +69,6 @@ class MixerViewModel @Inject constructor(
             }
         }
     }
-
-    private val _selectedBusIndex = MutableStateFlow(0)
-    val selectedBusIndex: StateFlow<Int> = _selectedBusIndex.asStateFlow()
 
     private val _showPluginPicker = MutableStateFlow(false)
     val showPluginPicker: StateFlow<Boolean> = _showPluginPicker.asStateFlow()
