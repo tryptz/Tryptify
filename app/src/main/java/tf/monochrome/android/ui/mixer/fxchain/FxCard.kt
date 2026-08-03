@@ -174,6 +174,8 @@ fun FxCard(
                     .padding(horizontal = MonoDimens.spacingSm, vertical = MonoDimens.spacingSm),
                 verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)
             ) {
+                FxVisual(plugin = plugin, accent = accent)
+
                 val defs = getParamDefs(plugin.type)
                 if (plugin.type == SnapinType.EQ_10BAND) {
                     Eq10BandKnobs(defs, plugin, accent, onParam)
