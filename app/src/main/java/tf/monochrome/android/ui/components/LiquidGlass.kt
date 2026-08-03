@@ -104,7 +104,9 @@ fun Modifier.liquidGlass(
                 blurRadius = blurRadius,
                 tints = listOf(
                     HazeTint(color = tintColor.copy(alpha = adaptedTintAlpha))
-                )
+                ),
+                // Haze's default noise (0.15) reads as grain on dark frost.
+                noiseFactor = 0f,
             )
         )
     }

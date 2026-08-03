@@ -636,6 +636,7 @@ private fun StatusOverlayPanel(
                             backgroundColor = frostBg,
                             blurRadius = g.hazeBlurDp.dp,
                             tints = listOf(HazeTint(frostTint)),
+                            noiseFactor = 0f,
                         ),
                     )
             )

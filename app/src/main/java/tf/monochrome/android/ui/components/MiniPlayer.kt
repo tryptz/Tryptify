@@ -218,8 +218,9 @@ fun MiniPlayer(
         // colours — a Transparent background with an empty tint list resolves
         // to a no-op and the effect silently draws nothing. The neutral
         // black/white tint (picked by theme luminance) lightens the frost on
-        // light themes and deepens it on dark ones, and Haze's default noise
-        // adds the fine frosted grain.
+        // light themes and deepens it on dark ones. Haze's default noise
+        // (0.15) is disabled: over a dark backdrop it reads as visible grain
+        // rather than frost.
         val profile = LocalPerformanceProfile.current
         if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
@@ -236,6 +237,7 @@ fun MiniPlayer(
                             backgroundColor = frostBg,
                             blurRadius = glass.hazeBlurDp.dp,
                             tints = listOf(HazeTint(frostTint)),
+                            noiseFactor = 0f,
                         ),
                     )
             )

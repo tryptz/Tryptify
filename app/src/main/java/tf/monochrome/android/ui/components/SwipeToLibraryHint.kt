@@ -135,6 +135,7 @@ fun SwipeToLibraryHint(
                             backgroundColor = frostBg,
                             blurRadius = glass.hazeBlurDp.dp,
                             tints = listOf(HazeTint(frostTint)),
+                            noiseFactor = 0f,
                         ),
                     )
             )
