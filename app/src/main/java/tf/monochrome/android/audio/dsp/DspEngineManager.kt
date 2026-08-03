@@ -40,7 +40,7 @@ class DspEngineManager @Inject constructor(
     private val _buses = MutableStateFlow(BusConfig.defaultBuses())
     val buses: StateFlow<List<BusConfig>> = _buses.asStateFlow()
 
-    // Meter levels — polled from UI at ~50ms intervals
+    // Meter levels — polled from the UI once per display frame
     // [peakL, peakR, holdL, holdR] per bus = 4 floats each
     private val levelsBuffer = FloatArray(TOTAL_BUSES * 4)
     private val _busLevels = MutableStateFlow(List(TOTAL_BUSES) { BusLevels() })
@@ -56,6 +56,7 @@ class DspEngineManager @Inject constructor(
     private var fxMetersBus = -1
     private val fxWaveBuffer = FloatArray(FX_WAVE_SAMPLES)
     private var fxTapSeq = 0L
+    private var fxLastPollNanos = 0L
     private val _fxTap = MutableStateFlow<FxTapFrame?>(null)
     val fxTap: StateFlow<FxTapFrame?> = _fxTap.asStateFlow()
 
@@ -112,8 +113,9 @@ class DspEngineManager @Inject constructor(
 
     /**
      * Poll the per-plugin tap meters and post-fader waveform for [busIndex]
-     * into [fxTap]. Called from the same 60 Hz loop as [pollLevels]; meters get
-     * instant attack and a ~45 dB/s release so short transients stay visible.
+     * into [fxTap]. Called once per display frame (60 or 120 Hz); meters get
+     * instant attack and a wall-clock ~45 dB/s release, so the fall speed is
+     * the same at any poll rate and short transients stay visible.
      */
     fun pollFxTap(busIndex: Int) {
         val ptr = processor.getEnginePtr()
@@ -123,11 +125,16 @@ class DspEngineManager @Inject constructor(
             fxMetersRaw.copyInto(fxMetersSmoothed)
             fxMetersBus = busIndex
         }
+        val now = System.nanoTime()
+        val dt = if (fxLastPollNanos == 0L) 0.016f
+                 else ((now - fxLastPollNanos) / 1e9f).coerceIn(0f, 0.1f)
+        fxLastPollNanos = now
+        val release = FX_METER_RELEASE_DB_PER_SEC * dt
         for (i in fxMetersSmoothed.indices) {
             val raw = fxMetersRaw[i]
             fxMetersSmoothed[i] =
                 if (raw >= fxMetersSmoothed[i]) raw
-                else (fxMetersSmoothed[i] - FX_METER_RELEASE_DB_PER_POLL).coerceAtLeast(-60f)
+                else (fxMetersSmoothed[i] - release).coerceAtLeast(-60f)
         }
         val waveLen = processor.nativeGetBusWaveform(ptr, busIndex, fxWaveBuffer)
         _fxTap.value = FxTapFrame(
@@ -149,8 +156,8 @@ class DspEngineManager @Inject constructor(
         // Must be <= WAVE_TAP_SIZE in dsp_engine.h.
         const val FX_WAVE_SAMPLES = 1024
 
-        // Tap meter release: dB subtracted per 16 ms poll (~45 dB/s fall).
-        private const val FX_METER_RELEASE_DB_PER_POLL = 0.75f
+        // Tap meter release in dB/s of wall-clock time — poll-rate independent.
+        private const val FX_METER_RELEASE_DB_PER_SEC = 45f
 
         // Parameter bounds — mirror the native clamps in dsp_engine.cpp / snapin_processor.h.
         // Clamping in Kotlin keeps the StateFlow value in sync with what native actually stores.

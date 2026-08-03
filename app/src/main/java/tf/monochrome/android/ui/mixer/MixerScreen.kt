@@ -47,9 +47,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -122,6 +124,18 @@ fun MixerScreen(
     navController: NavController,
     viewModel: MixerViewModel
 ) {
+    // Frame-synced meter/tap polling: one native read per display frame, so
+    // the VU meters and FX visuals update at the panel's native refresh rate
+    // (120 Hz where the device permits) and stop while the mixer is off
+    // screen. Replaces the old fixed 16 ms ViewModel loop that capped
+    // everything at 60 Hz.
+    LaunchedEffect(Unit) {
+        while (true) {
+            withFrameNanos { }
+            viewModel.pollTick()
+        }
+    }
+
     val enabled by viewModel.enabled.collectAsState()
     val buses by viewModel.buses.collectAsState()
     val selectedBusIndex by viewModel.selectedBusIndex.collectAsState()

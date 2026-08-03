@@ -14,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -21,7 +23,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 
 /**
  * Segmented vertical VU meter.
@@ -58,15 +61,33 @@ fun VuMeter(
         label = "vuLevel"
     )
 
-    // ── Peak hold — tracks max and decays slowly ───────────────────────
+    // ── Peak hold — frame-driven ballistics ────────────────────────────
+    // Hold the maximum for 700 ms, then fall at ~0.35 full-scale/s
+    // (≈21 dB/s), floored at the live level. Frame-clock driven, so the
+    // decay speed is identical at 60 and 120 Hz, and the old stuck-segment
+    // bug (a fixed 0.04 step per 800 ms effect restart — 20 s to drain a
+    // full-scale peak, hanging over an empty meter) is gone. Sleeps while
+    // the meter is fully idle.
     var peak by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(animatedLevel) {
-        if (animatedLevel > peak) peak = animatedLevel
-    }
-    LaunchedEffect(peak) {
-        if (peak > 0f) {
-            delay(800)
-            peak = (peak - 0.04f).coerceAtLeast(0f)
+    LaunchedEffect(Unit) {
+        val holdNanos = 700_000_000L
+        var lastFrame = 0L
+        var heldSince = 0L
+        while (isActive) {
+            if (peak <= 0f && animatedLevel <= 0f) {
+                snapshotFlow { animatedLevel }.first { it > 0f }
+                lastFrame = 0L
+            }
+            withFrameNanos { now ->
+                val dt = if (lastFrame == 0L) 0f else (now - lastFrame) / 1e9f
+                lastFrame = now
+                if (animatedLevel >= peak) {
+                    peak = animatedLevel
+                    heldSince = now
+                } else if (now - heldSince > holdNanos) {
+                    peak = (peak - dt * 0.35f).coerceAtLeast(animatedLevel)
+                }
+            }
         }
     }
 

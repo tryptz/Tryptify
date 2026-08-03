@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import tf.monochrome.android.audio.dsp.oxford.CompressorEffect
 import tf.monochrome.android.audio.dsp.oxford.CompressorPreset
@@ -821,12 +820,13 @@ fun OxfordEffectsTabs(
     var selected by rememberSaveable { mutableStateOf(initialTab.coerceIn(0, 1)) }
     val tabs = listOf("Compressor", "Inflator")
 
-    // 60 Hz meter polling — keeps the LED bars fluid under fast transients.
+    // Frame-synced meter polling — one read per display frame keeps the LED
+    // bars fluid under fast transients, at 120 Hz where the device permits.
     LaunchedEffect(inflator, compressor) {
         while (isActive) {
+            withFrameNanos { }
             inflator.pollMeters()
             compressor.pollMeters()
-            delay(16L)
         }
     }
 

@@ -5,7 +5,7 @@ package tf.monochrome.android.audio.dsp.model
  * in/out peak meters for [busIndex] plus the bus's post-fader mono waveform.
  *
  * The arrays are owned and reused by [tf.monochrome.android.audio.dsp.DspEngineManager]
- * to keep the 60 Hz poll allocation-free — consumers must read them, not
+ * to keep the per-frame poll allocation-free — consumers must read them, not
  * retain them across frames. [seq] increments per poll so each snapshot is a
  * distinct StateFlow emission even though the array instances repeat.
  */

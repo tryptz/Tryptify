@@ -3,13 +3,11 @@ package tf.monochrome.android.ui.mixer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.audio.dsp.DspEngineManager
@@ -50,24 +48,18 @@ class MixerViewModel @Inject constructor(
     private val _currentPresetName = MutableStateFlow<String?>(null)
     val currentPresetName: StateFlow<String?> = _currentPresetName.asStateFlow()
 
-    // Declared before the init block below: viewModelScope launches on
-    // Dispatchers.Main.immediate, so the poll loop's first iteration runs
-    // synchronously inside the constructor and reads this property.
     private val _selectedBusIndex = MutableStateFlow(0)
     val selectedBusIndex: StateFlow<Int> = _selectedBusIndex.asStateFlow()
 
-    init {
-        // 60 Hz meter poll — fluid VU bars under fast transients. pollLevels
-        // is a native hot-path read; cheap enough to call at frame rate.
-        viewModelScope.launch {
-            while (isActive) {
-                dspManager.pollLevels()
-                // Same cadence for the FX-chain audio tap (per-plugin meters +
-                // scope waveform of the selected bus).
-                dspManager.pollFxTap(_selectedBusIndex.value)
-                delay(16L)
-            }
-        }
+    /**
+     * One meter + FX-tap poll (cheap native reads). Called by the mixer UI
+     * once per display frame, so meters and visuals run at the panel's native
+     * refresh rate — 120 Hz where the device permits — and polling stops
+     * entirely while the mixer is off screen.
+     */
+    fun pollTick() {
+        dspManager.pollLevels()
+        dspManager.pollFxTap(_selectedBusIndex.value)
     }
 
     private val _showPluginPicker = MutableStateFlow(false)
