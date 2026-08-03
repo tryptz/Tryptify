@@ -302,7 +302,10 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
         }
     }
     SnapinType.DISPERSER -> listOf(
-        ParamDef("Amount", 1f, 96f, 12f, "", steps = 95),
+        // Amount tops out at 32 stages like the original (community
+        // recreations reach sonic parity with 32 series all-pass filters);
+        // the native processor clamps higher values anyway.
+        ParamDef("Amount", 1f, 32f, 12f, "", steps = 31),
         ParamDef("Freq", 20f, 20000f, 250f, "Hz"),
         ParamDef("Pinch", 0.2f, 10f, 0.71f, "")
     )
