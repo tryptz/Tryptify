@@ -70,6 +70,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -542,11 +543,18 @@ private fun DayLineChart(data: List<DayAggregate>) {
         val w = size.width
         val h = size.height
         // A single data point can't stroke a line (moveTo with no lineTo) — draw
-        // a dot instead of the empty stroke + stray gradient wedge.
+        // a short flat segment at its level instead of the empty stroke + stray
+        // gradient wedge (no dot markers on graphs).
         if (data.size < 2) {
             val only = data.firstOrNull() ?: return@Canvas
             val y = h - (only.playCount / maxV.toFloat()) * h * grow
-            drawCircle(color = color, radius = 6f, center = Offset(w / 2, y))
+            drawLine(
+                color = color,
+                start = Offset(w / 2 - 16f, y),
+                end = Offset(w / 2 + 16f, y),
+                strokeWidth = 3f,
+                cap = StrokeCap.Round,
+            )
             return@Canvas
         }
         val path = Path()

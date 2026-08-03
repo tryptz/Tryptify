@@ -419,55 +419,29 @@ fun FrequencyResponseGraph(
                         end = Offset(dotX, h - GRAPH_PADDING_BOTTOM),
                         strokeWidth = 1.5f,
                     )
-                    drawCircle(
-                        color = bandColor.copy(alpha = 0.4f),
-                        radius = 34f,
-                        center = Offset(dotX, dotY)
-                    )
                 }
 
-                val dotRadius = when {
-                    isSelected -> 17f
-                    compactDots -> 6.5f
-                    else -> 15f
-                }
-                // Main dot shadow/border
-                drawCircle(
-                    color = Color.Black,
-                    radius = dotRadius + 2f,
-                    center = Offset(dotX, dotY)
-                )
-
-                // Main dot
-                drawCircle(
-                    color = bandColor,
-                    radius = dotRadius,
-                    center = Offset(dotX, dotY)
-                )
-                // White border
-                drawCircle(
-                    color = curveNeutral,
-                    radius = dotRadius,
-                    center = Offset(dotX, dotY),
-                    style = Stroke(
-                        width = when {
-                            isSelected -> 3f
-                            compactDots -> 1.5f
-                            else -> 2.5f
-                        }
-                    )
-                )
-
-                // Band number, so a dot maps to its row in the list below.
-                // Compact handles skip it (unreadable at that size and count);
-                // the selected band always shows its number.
+                // No handle circles — the numbered label alone marks the band,
+                // tinted by what the band does (green boost / red cut / grey
+                // flat) so the colour semantics survive without a dot, and maps
+                // it to its row in the list below. Compact mode (>10 bands)
+                // skips labels except the selected band, since 31 of them bury
+                // the curve they annotate; taps still select the nearest band.
                 if (!compactDots || isSelected) {
                     val numPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.WHITE
-                        textSize = 9.sp.toPx()
+                        color = android.graphics.Color.argb(
+                            255,
+                            (bandColor.red * 255).toInt(),
+                            (bandColor.green * 255).toInt(),
+                            (bandColor.blue * 255).toInt(),
+                        )
+                        textSize = (if (isSelected) 12 else 9).sp.toPx()
                         textAlign = android.graphics.Paint.Align.CENTER
                         isFakeBoldText = true
                         isAntiAlias = true
+                        // Legibility over the curve now that there's no dot
+                        // backdrop behind the glyph.
+                        setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
                     }
                     drawContext.canvas.nativeCanvas.drawText(
                         "${band.id + 1}",
