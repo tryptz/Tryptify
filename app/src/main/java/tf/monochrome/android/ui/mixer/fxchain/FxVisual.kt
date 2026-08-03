@@ -154,7 +154,7 @@ internal fun FxVisual(
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(76.dp)
+            .height(112.dp)
             .clip(MonoDimens.shapeSm)
             .background(panelBg)
     ) {
