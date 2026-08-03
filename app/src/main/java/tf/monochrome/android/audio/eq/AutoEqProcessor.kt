@@ -9,7 +9,6 @@ import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.FilterType
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +19,9 @@ import kotlin.math.pow
  * Completely independent of the mixer/DSP engine — sits in ExoPlayer's pipeline
  * as its own processor, always active when EQ is enabled.
  *
- * Uses RBJ Audio EQ Cookbook biquad filters (peaking, low shelf, high shelf).
+ * Uses decramped biquads (peaking, low shelf, high shelf): Vicanek matched-Z
+ * peaking and tournament-matched shelves, so the response lands on the analog
+ * prototypes the correction curves are designed against — see EqDspKernels.
  */
 @Singleton
 @OptIn(UnstableApi::class)
@@ -51,33 +52,6 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private var filtersL = arrayOf<EqBiquad>()
     private var filtersR = arrayOf<EqBiquad>()
     private var sampleRate = 44100.0
-
-    // ── Oversampling (1x/2x/4x) ─────────────────────────────────────────
-    // EQ is linear, so this isn't about aliasing: running the biquads at a
-    // multiple of the stream rate undoes the bilinear-transform "cramping"
-    // that skews peaking/shelf shapes near Nyquist, so the top-octave
-    // correction lands on the intended analog curve. Audio-thread state is
-    // rebuilt whenever the factor changes.
-    private val osFactorRef = AtomicInteger(1)
-    private var appliedOsFactor = -1
-    private var osBufL = FloatArray(0)
-    private var osBufR = FloatArray(0)
-    private val resamplerL = ChannelResampler()
-    private val resamplerR = ChannelResampler()
-
-    /** Oversampling factor for the EQ chain: 1 (off), 2, or 4. */
-    fun setOversampling(factor: Int) {
-        osFactorRef.set(if (factor >= 4) 4 else if (factor >= 2) 2 else 1)
-    }
-
-    /**
-     * The factor actually used for the current stream. Gated by rate: at
-     * ≥ 88.2 kHz Nyquist already sits at ≥ 44.1 kHz, so cramping in the audio
-     * band is negligible and oversampling would burn 4 × the CPU on exactly
-     * the hi-res content where it buys nothing — auto-off instead.
-     */
-    private fun effectiveOsFactor(): Int =
-        if (sampleRate >= 88200.0) 1 else osFactorRef.get()
 
     /** Same curve on both ears. */
     fun applyBands(bands: List<EqBand>, preamp: Float, enabled: Boolean) =
@@ -194,34 +168,16 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         // Apply EQ if enabled
         val snap = stateRef.get()
         if (snap.enabled) {
-            val os = effectiveOsFactor()
-            if (snap !== appliedSnapshot || os != appliedOsFactor) {
-                filtersL = buildChain(snap.bandsL, os)
-                filtersR = buildChain(snap.bandsR, os)
-                if (os > 1) {
-                    resamplerL.prepare(sampleRate, os)
-                    resamplerR.prepare(sampleRate, os)
-                }
+            if (snap !== appliedSnapshot) {
+                filtersL = buildChain(snap.bandsL)
+                filtersR = buildChain(snap.bandsR)
                 appliedSnapshot = snap
-                appliedOsFactor = os
             }
             // Hard bypass when the chain is flat: with no active filters and
-            // unity preamp the samples are left untouched — the resampler is
-            // structurally out of the path, not merely measuring clean.
+            // unity preamp the samples are left untouched.
             val hasWork = filtersL.isNotEmpty() || filtersR.isNotEmpty() ||
                 snap.preampLinear != 1f
-            if (hasWork && os > 1) {
-                val osFrames = numFrames * os
-                if (osBufL.size < osFrames) {
-                    osBufL = FloatArray(osFrames)
-                    osBufR = FloatArray(osFrames)
-                }
-                resamplerL.upsample(scratchL, osBufL, numFrames)
-                resamplerR.upsample(scratchR, osBufR, numFrames)
-                applyEq(osBufL, osBufR, osFrames, snap.preampLinear)
-                resamplerL.downsample(osBufL, scratchL, numFrames)
-                resamplerR.downsample(osBufR, scratchR, numFrames)
-            } else if (hasWork) {
+            if (hasWork) {
                 applyEq(scratchL, scratchR, numFrames, snap.preampLinear)
             }
         }
@@ -272,10 +228,9 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
             if (formatChanged) {
                 inputFormat = pendingFormat
                 sampleRate = inputFormat.sampleRate.toDouble()
-                // Force filter + resampler rebuild on next block
-                // (sample-rate-dependent coefficients).
+                // Force filter rebuild on next block (sample-rate-dependent
+                // coefficients).
                 appliedSnapshot = null
-                appliedOsFactor = -1
             }
             pendingFormat = AudioFormat.NOT_SET
         }
@@ -288,9 +243,6 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         filtersL = emptyArray()
         filtersR = emptyArray()
         appliedSnapshot = null
-        appliedOsFactor = -1
-        resamplerL.reset()
-        resamplerR.reset()
     }
 
     // ── DSP internals ───────────────────────────────────────────────────
@@ -310,14 +262,12 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         for (i in filtersR.indices) filtersR[i].processBlock(bufR, numFrames)
     }
 
-    private fun buildChain(bands: Array<BandState>, osFactor: Int): Array<EqBiquad> {
+    private fun buildChain(bands: Array<BandState>): Array<EqBiquad> {
         val active = bands.filter { it.enabled && it.gain != 0f }
         val chain = Array(active.size) { EqBiquad() }
-        val rate = sampleRate * osFactor
-        // At 1x, peaking bands use matched-Z (decramped) coefficients so the
-        // top octave lands on the analog prototype without oversampling; at
-        // higher factors plain RBJ is already accurate at the internal rate.
-        val matched = osFactor == 1
+        // Decramped (matched) coefficients throughout: peaking bands use
+        // Vicanek matched-Z, shelves the tournament-matched design — the top
+        // octave lands on the analog prototype with no oversampling machinery.
         for ((i, band) in active.withIndex()) {
             val type = when (band.type) {
                 FilterType.LOWSHELF -> EqBiquadType.LOW_SHELF
@@ -325,8 +275,8 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                 else -> EqBiquadType.PEAKING
             }
             chain[i].configure(
-                type, rate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble(),
-                matched = matched
+                type, sampleRate, band.freq.toDouble(), band.q.toDouble(),
+                band.gain.toDouble(), matched = true
             )
         }
         return chain

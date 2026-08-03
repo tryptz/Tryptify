@@ -599,14 +599,6 @@ class EqViewModel @Inject constructor(
      * right-ear bands stay in DataStore and come straight back on re-enable —
      * only the flag changes what the audio path applies.
      */
-    /** AutoEQ oversampling factor (1/2/4): see AutoEqProcessor.setOversampling. */
-    val oversampling: StateFlow<Int> = preferences.autoEqOversampling
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 1)
-
-    fun setOversampling(factor: Int) {
-        viewModelScope.launch { preferences.setAutoEqOversampling(factor) }
-    }
-
     fun setStereoMode(enabled: Boolean) {
         _stereoMode.value = enabled
         if (enabled && _currentBandsR.value.isEmpty() && _currentBands.value.isNotEmpty()) {

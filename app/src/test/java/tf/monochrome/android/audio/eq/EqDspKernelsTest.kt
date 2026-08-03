@@ -71,6 +71,56 @@ class EqDspKernelsTest {
     }
 
     @Test
+    fun `tournament shelves beat or match RBJ against the analog prototype`() {
+        val fs = 48000.0
+        fun analogShelfDb(f: Double, f0: Double, q: Double, gDb: Double, high: Boolean): Double {
+            val a = Math.pow(10.0, gDb / 40.0)
+            val x = f / f0
+            val im = sqrt(a) / q * x
+            val num: Double; val den: Double
+            if (high) {
+                num = kotlin.math.hypot(1.0 - a * x * x, im)
+                den = kotlin.math.hypot(a - x * x, im)
+            } else {
+                num = kotlin.math.hypot(a - x * x, im)
+                den = kotlin.math.hypot(1.0 - a * x * x, im)
+            }
+            return 20.0 * kotlin.math.log10(a * num / den)
+        }
+        fun digitalDb(c: DoubleArray, f: Double): Double {
+            val w = 2.0 * PI * f / fs
+            val nr = c[0] + c[1] * cos(w) + c[2] * cos(2 * w)
+            val ni = c[1] * sin(w) + c[2] * sin(2 * w)
+            val dr = 1.0 + c[3] * cos(w) + c[4] * cos(2 * w)
+            val di = c[3] * sin(w) + c[4] * sin(2 * w)
+            return 10.0 * kotlin.math.log10((nr * nr + ni * ni) / (dr * dr + di * di))
+        }
+        data class Case(val f0: Double, val q: Double, val g: Double, val high: Boolean)
+        val cases = listOf(
+            Case(10000.0, 0.707, 12.0, true),   // RBJ errs ~1.0-1.3 dB here
+            Case(10000.0, 0.707, -12.0, true),
+            Case(18000.0, 0.707, 8.0, true),    // extreme corner: RBJ ~2.3 dB
+            Case(14000.0, 1.0, 10.0, true),
+            Case(105.0, 0.707, 4.0, false),     // classic AutoEQ low shelf
+            Case(8000.0, 0.707, -8.0, false),
+        )
+        val probes = DoubleArray(12) { 40.0 * Math.pow(fs * 0.475 / 40.0, it / 11.0) }
+        for (case in cases) {
+            val c = matchedShelfCoefficients(fs, case.f0, case.q, case.g, case.high)
+            assertTrue("coefficients for $case", c != null)
+            val worst = probes.maxOf {
+                abs(digitalDb(c!!, it) - analogShelfDb(it, case.f0, case.q, case.g, case.high))
+            }
+            assertTrue("$case worst err $worst < 1.0 dB", worst < 1.0)
+        }
+        // The tournament must never lose to plain RBJ: the 10 kHz +12 shelf is
+        // a case where RBJ alone errs ~1 dB — matched must do better.
+        val c = matchedShelfCoefficients(fs, 10000.0, 0.707, 12.0, true)!!
+        val worst = probes.maxOf { abs(digitalDb(c, it) - analogShelfDb(it, 10000.0, 0.707, 12.0, true)) }
+        assertTrue("10k shelf worst err $worst < 0.5 dB", worst < 0.5)
+    }
+
+    @Test
     fun `degenerate configure falls back to passthrough`() {
         val bq = EqBiquad()
         bq.configure(EqBiquadType.PEAKING, 48000.0, Double.NaN, 1.0, 6.0)
@@ -78,42 +128,5 @@ class EqDspKernelsTest {
         bq.processBlock(x, 3)
         assertEquals(0.25f, x[0], 1e-6f)
         assertEquals(-0.5f, x[1], 1e-6f)
-    }
-
-    @Test
-    fun `resampler round-trip is transparent in the audio band`() {
-        val n = 16384
-        val fs = 48000.0
-        for (factor in intArrayOf(2, 4)) {
-            val rs = ChannelResampler()
-            rs.prepare(fs, factor)
-            val input = FloatArray(n) { sin(2.0 * PI * 1000.0 * it / fs).toFloat() }
-            val hi = FloatArray(n * factor)
-            val out = FloatArray(n)
-            rs.upsample(input, hi, n)
-            rs.downsample(hi, out, n)
-            val amp = goertzel(out, n / 2, n, 1000.0, fs)
-            assertEquals("factor $factor", 1.0, amp, 0.01)
-        }
-    }
-
-    @Test
-    fun `resampler images are suppressed`() {
-        // Zero-stuffing a 1 kHz sine at 4x creates images at 23, 25, 47... kHz
-        // of the 192 kHz stream; the anti-image filter must crush them.
-        val n = 16384
-        val fs = 48000.0
-        val factor = 4
-        val rs = ChannelResampler()
-        rs.prepare(fs, factor)
-        val input = FloatArray(n) { sin(2.0 * PI * 1000.0 * it / fs).toFloat() }
-        val hi = FloatArray(n * factor)
-        rs.upsample(input, hi, n)
-        val osRate = fs * factor
-        val image = goertzel(hi, n * factor / 2, n * factor, 47000.0, osRate)
-        val fund = goertzel(hi, n * factor / 2, n * factor, 1000.0, osRate)
-        assertTrue("fundamental present (${fund})", abs(fund - 1.0) < 0.05)
-        assertTrue("47 kHz image below -40 dB (was ${20 * kotlin.math.log10(image)})",
-            image < 0.01)
     }
 }

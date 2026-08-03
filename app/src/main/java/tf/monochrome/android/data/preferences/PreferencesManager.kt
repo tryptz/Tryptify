@@ -235,7 +235,6 @@ class PreferencesManager @Inject constructor(
         // and back on is non-destructive.
         private val EQ_BANDS_R_JSON = stringPreferencesKey("eq_bands_r_json")
         private val EQ_STEREO_MODE = booleanPreferencesKey("eq_stereo_mode")
-        private val AUTOEQ_OVERSAMPLING = intPreferencesKey("autoeq_oversampling")
         private val EQ_MEASUREMENT_R_JSON = stringPreferencesKey("eq_measurement_r_json")
         private val EQ_CUSTOM_TARGETS_JSON = stringPreferencesKey("eq_custom_targets_json")
         private val EQ_SELECTED_HEADPHONE_ID = stringPreferencesKey("eq_selected_headphone_id")
@@ -335,7 +334,7 @@ class PreferencesManager @Inject constructor(
             EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
             EQ_CUSTOM_TARGETS_JSON, EQ_SELECTED_HEADPHONE_ID, EQ_SELECTED_HEADPHONE_NAME,
             EQ_UPLOADED_HEADPHONES_JSON, EQ_AUTO_PREAMP,
-            EQ_BANDS_R_JSON, EQ_STEREO_MODE, AUTOEQ_OVERSAMPLING,
+            EQ_BANDS_R_JSON, EQ_STEREO_MODE,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
             SCAN_ON_APP_OPEN, MIN_TRACK_DURATION_MS, BACKGROUND_SCAN_INTERVAL,
@@ -1106,13 +1105,6 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setEqStereoMode(enabled: Boolean) {
         dataStore.edit { it[EQ_STEREO_MODE] = enabled }
-    }
-
-    /** AutoEQ oversampling factor: 1 (off), 2, or 4. */
-    val autoEqOversampling: Flow<Int> = dataStore.data.map { it[AUTOEQ_OVERSAMPLING] ?: 1 }
-    suspend fun setAutoEqOversampling(factor: Int) {
-        val snapped = if (factor >= 4) 4 else if (factor >= 2) 2 else 1
-        dataStore.edit { it[AUTOEQ_OVERSAMPLING] = snapped }
     }
 
     val eqCustomTargetsJson: Flow<String> = dataStore.data.map { it[EQ_CUSTOM_TARGETS_JSON] ?: "[]" }

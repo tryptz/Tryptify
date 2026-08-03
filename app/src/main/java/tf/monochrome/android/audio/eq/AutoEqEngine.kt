@@ -110,13 +110,18 @@ object AutoEqEngine {
         // the same matched-Z (Vicanek) coefficients as AutoEqProcessor's 1x
         // chain — keeping the optimizer's model, the graph, and the audio in
         // agreement near Nyquist — with RBJ as the shelf/degenerate fallback.
-        if (band.type == FilterType.PEAKING) {
-            val m = matchedPeakingCoefficients(
+        val m = when (band.type) {
+            FilterType.PEAKING -> matchedPeakingCoefficients(
                 sampleRate.toDouble(), band.freq.toDouble(),
-                band.q.toDouble(), band.gain.toDouble()
-            )
-            if (m != null) return BiquadCoeffs(m[0], m[1], m[2], m[3], m[4])
+                band.q.toDouble(), band.gain.toDouble())
+            FilterType.LOWSHELF -> matchedShelfCoefficients(
+                sampleRate.toDouble(), band.freq.toDouble(),
+                band.q.toDouble(), band.gain.toDouble(), high = false)
+            FilterType.HIGHSHELF -> matchedShelfCoefficients(
+                sampleRate.toDouble(), band.freq.toDouble(),
+                band.q.toDouble(), band.gain.toDouble(), high = true)
         }
+        if (m != null) return BiquadCoeffs(m[0], m[1], m[2], m[3], m[4])
         val b0: Double; val b1: Double; val b2: Double
         val a0: Double; val a1: Double; val a2: Double
         when (band.type) {

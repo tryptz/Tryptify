@@ -320,12 +320,6 @@ class PlaybackService : MediaSessionService() {
             }.collect { applyEqSettings(it) }
         }
 
-        // AutoEQ oversampling: runs the correction biquads at a multiple of
-        // the stream rate so top-octave bands escape near-Nyquist cramping.
-        serviceScope.launch {
-            preferences.autoEqOversampling.collect { autoEqProcessor.setOversampling(it) }
-        }
-
         // Listen to Parametric EQ changes and apply them
         serviceScope.launch {
             kotlinx.coroutines.flow.combine(
