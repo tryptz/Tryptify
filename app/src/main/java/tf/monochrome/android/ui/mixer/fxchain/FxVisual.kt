@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
@@ -131,6 +132,12 @@ internal fun FxVisual(
     val liveOutDb = if (tapped) live!!.outDb(slotIndex) else null
     // 0 at −55 dB and below, 1 at 0 dB — drives the signal-reactive glow.
     val activity = liveOutDb?.let { ((it + 55f) / 55f).coerceIn(0f, 1f) }
+    // How hard the effect is working: output activity, or the amount it bends
+    // the level (12 dB of in→out delta saturates it) — whichever is stronger.
+    // Colors the live waveform: idle FX draw it dim, working FX light it up.
+    val fxDelta = if (liveInDb != null && liveOutDb != null)
+        (abs(liveInDb - liveOutDb) / 12f).coerceIn(0f, 1f) else 0f
+    val fxIntensity = activity?.let { max(it, fxDelta) } ?: 1f
 
     val cs = MaterialTheme.colorScheme
     val dim = if (plugin.bypassed) 0.35f else 1f
@@ -154,14 +161,15 @@ internal fun FxVisual(
         val p: (Int) -> Float = { i -> values.getOrElse(i) { 0f } }
         val time = clock.value
         drawPanelGrid(style)
-        // Faint scope of the actual bus audio behind the schematic curve.
+        // Faint scope of the actual bus audio behind the schematic curve,
+        // lit by how hard this effect is currently working.
         if (tapped && type !in NO_SCOPE_UNDERLAY) {
             drawScopeTap(style, live!!.wave, live.waveLen,
-                centerFrac = 0.76f, ampFrac = 0.17f, alpha = 0.30f)
+                centerFrac = 0.76f, ampFrac = 0.17f, alpha = 0.35f, intensity = fxIntensity)
         }
         when (type) {
             // ── Utility ──
-            SnapinType.GAIN -> drawGain(style, p, if (tapped) live else null)
+            SnapinType.GAIN -> drawGain(style, p, if (tapped) live else null, fxIntensity)
             SnapinType.STEREO -> drawStereo(style, p)
             SnapinType.CHANNEL_MIXER -> drawChannelMixer(style, p)
             SnapinType.HAAS -> drawHaas(style, p)
@@ -340,6 +348,11 @@ private fun DrawScope.drawCurve(
  * Live oscilloscope of the bus tap: a continuous filled min/max envelope of
  * the actual audio, drawn around `centerFrac` with `ampFrac` half-height.
  * Silence renders as an unbroken hairline.
+ *
+ * The waveform is colored by intensity: each column's brightness follows its
+ * own signal level, the loudest peaks heat toward white, and [intensity]
+ * (how hard the effect is working, 0..1) scales the whole trace — an idle
+ * effect draws a dim waveform, a working one lights it up.
  */
 private fun DrawScope.drawScopeTap(
     s: FxVisualStyle,
@@ -348,6 +361,7 @@ private fun DrawScope.drawScopeTap(
     centerFrac: Float = 0.5f,
     ampFrac: Float = 0.40f,
     alpha: Float = 1f,
+    intensity: Float = 1f,
 ) {
     if (waveLen <= 0) return
     val buckets = 96
@@ -371,7 +385,16 @@ private fun DrawScope.drawScopeTap(
     }
     path.lineTo(0f, cy + minHalf)
     path.close()
-    drawPath(path, s.curve.copy(alpha = s.curve.alpha * alpha))
+
+    val boost = 0.35f + 0.65f * intensity.coerceIn(0f, 1f)
+    val stops = Array(buckets) { k ->
+        val level = max(abs(mm[k * 2]), abs(mm[k * 2 + 1])).coerceIn(0f, 1f)
+        val heat = level.pow(0.6f)
+        val col = lerp(s.curve, Color.White, (heat - 0.75f).coerceAtLeast(0f) * 0.8f * intensity)
+        val a = s.curve.alpha * alpha * boost * (0.25f + 0.75f * heat)
+        (k + 0.5f) / buckets to col.copy(alpha = a.coerceIn(0f, 1f))
+    }
+    drawPath(path, Brush.horizontalGradient(colorStops = stops))
 }
 
 /** Log-frequency response curve; [db] gives magnitude at each frequency. */
@@ -529,11 +552,17 @@ private fun DrawScope.drawSpike(
  * (post-fader, so the knob visibly scales it) over a faint gain-scaled sine;
  * without one, the schematic reference sine vs the gain-scaled copy.
  */
-private fun DrawScope.drawGain(s: FxVisualStyle, p: (Int) -> Float, live: FxTapFrame?) {
+private fun DrawScope.drawGain(
+    s: FxVisualStyle,
+    p: (Int) -> Float,
+    live: FxTapFrame?,
+    intensity: Float = 1f,
+) {
     val amp = M.dbToLin(p(0)).coerceAtMost(4f)
     if (live != null) {
         drawWave(s, alpha = 0.15f) { t -> (sin(TWO_PI * 2f * t) * amp).coerceIn(-1.12f, 1.12f) }
-        drawScopeTap(s, live.wave, live.waveLen, centerFrac = 0.5f, ampFrac = 0.42f)
+        drawScopeTap(s, live.wave, live.waveLen, centerFrac = 0.5f, ampFrac = 0.42f,
+            intensity = intensity)
     } else {
         drawWave(s, alpha = 0.20f) { t -> sin(TWO_PI * 2f * t) }
         drawWave(s) { t -> (sin(TWO_PI * 2f * t) * amp).coerceIn(-1.12f, 1.12f) }
