@@ -1,4 +1,5 @@
 #pragma once
+#include "biquad.h"
 #include <vector>
 #include <cstring>
 #include <cmath>
@@ -54,4 +55,71 @@ private:
     std::vector<float> downBuf_;
     float h_[4] = {};
     float dh_[4] = {};
+};
+
+// N-times oversampler (2x/4x) for one audio channel, used by the per-snapin
+// oversampling wrapper in SnapinProcessor: zero-stuff + 8th-order Butterworth
+// anti-image filter on the way up, matching anti-alias filter + decimation on
+// the way down. Both filters sit at 0.9 × the base Nyquist, so nonlinear
+// snapins fold harmonics far above the audio band instead of aliasing back
+// into it.
+class ChannelOversampler {
+public:
+    void prepare(double baseRate, int factor) {
+        factor_ = factor < 1 ? 1 : (factor > 4 ? 4 : factor);
+        if (factor_ <= 1 || baseRate <= 0.0) { reset(); return; }
+        const double osRate = baseRate * factor_;
+        const double fc = 0.45 * baseRate;  // 0.9 × base Nyquist
+        // 8th-order Butterworth cascade Q values
+        static const double kQ[kStages] = {0.50980, 0.60134, 0.89998, 2.56292};
+        for (int i = 0; i < kStages; i++) {
+            up_[i].configure(BiquadType::LowPass, osRate, fc, kQ[i]);
+            down_[i].configure(BiquadType::LowPass, osRate, fc, kQ[i]);
+        }
+        reset();
+    }
+
+    void reset() {
+        for (int i = 0; i < kStages; i++) {
+            up_[i].reset();
+            down_[i].reset();
+        }
+    }
+
+    int factor() const { return factor_; }
+
+    // [out] must hold n * factor samples.
+    void upsample(const float* in, float* out, int n) {
+        const float gain = static_cast<float>(factor_);
+        int k = 0;
+        for (int i = 0; i < n; i++) {
+            for (int f = 0; f < factor_; f++) {
+                float s = (f == 0) ? in[i] * gain : 0.0f;
+                for (int b = 0; b < kStages; b++) s = up_[b].process(s);
+                out[k++] = s;
+            }
+        }
+    }
+
+    // Consumes n * factor samples from [in], writes n samples to [out]. Every
+    // high-rate sample runs through the anti-alias filter so its state stays
+    // continuous; one output per group is kept.
+    void downsample(const float* in, float* out, int n) {
+        int k = 0;
+        for (int i = 0; i < n; i++) {
+            float keep = 0.0f;
+            for (int f = 0; f < factor_; f++) {
+                float s = in[k++];
+                for (int b = 0; b < kStages; b++) s = down_[b].process(s);
+                if (f == 0) keep = s;
+            }
+            out[i] = keep;
+        }
+    }
+
+private:
+    static constexpr int kStages = 4;
+    Biquad up_[kStages];
+    Biquad down_[kStages];
+    int factor_ = 1;
 };

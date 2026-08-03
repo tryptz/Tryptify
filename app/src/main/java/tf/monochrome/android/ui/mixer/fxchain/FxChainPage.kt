@@ -71,6 +71,7 @@ fun FxChainPage(
     onRemove: (busIndex: Int, slotIndex: Int) -> Unit,
     onDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit,
     onParam: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
+    onOversample: (busIndex: Int, slotIndex: Int, factor: Int) -> Unit,
     onMove: (busIndex: Int, from: Int, to: Int) -> Unit,
 ) {
     val bus = buses.getOrNull(selectedBusIndex)
@@ -169,6 +170,7 @@ fun FxChainPage(
                     onRemove = { onRemove(selectedBusIndex, index) },
                     onDryWet = { dw -> onDryWet(selectedBusIndex, index, dw) },
                     onParam = { pi, v -> onParam(selectedBusIndex, index, pi, v) },
+                    onOversample = { f -> onOversample(selectedBusIndex, index, f) },
                     modifier = Modifier
                         .zIndex(if (isDragged) 1f else 0f)
                         .graphicsLayer {

@@ -175,6 +175,10 @@ class MixerViewModel @Inject constructor(
         dspManager.setPluginDryWet(busIndex, slotIndex, dryWet)
     }
 
+    fun setPluginOversampling(busIndex: Int, slotIndex: Int, factor: Int) {
+        dspManager.setPluginOversampling(busIndex, slotIndex, factor)
+    }
+
     // ── Presets ──────────────────────────────────────────────────────────
 
     fun savePreset(name: String) {

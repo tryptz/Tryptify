@@ -327,6 +327,21 @@ class DspEngineManager @Inject constructor(
         requestSave()
     }
 
+    /** Per-plugin oversampling: 1 (off), 2, or 4. Snaps other values down. */
+    fun setPluginOversampling(busIndex: Int, slotIndex: Int, factor: Int) {
+        val snapped = if (factor >= 4) 4 else if (factor >= 2) 2 else 1
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L) processor.nativeSetPluginOversampling(ptr, busIndex, slotIndex, snapped)
+        updateBus(busIndex) { bus ->
+            val plugins = bus.plugins.toMutableList()
+            if (slotIndex in plugins.indices) {
+                plugins[slotIndex] = plugins[slotIndex].copy(oversampling = snapped)
+            }
+            bus.copy(plugins = plugins)
+        }
+        requestSave()
+    }
+
     // ── Plugin state reset (for gapless track transitions) ───────────────
 
     fun resetPluginState() {
@@ -377,7 +392,10 @@ class DspEngineManager @Inject constructor(
                     val params = plugObj["params"]?.jsonArray
                         ?.mapIndexed { pi, pv -> pi to sanitizeParam(pv.jsonPrimitive.float) }
                         ?.toMap() ?: emptyMap()
-                    PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params)
+                    val os = when (plugObj["os"]?.jsonPrimitive?.int ?: 1) {
+                        4 -> 4; 2 -> 2; else -> 1
+                    }
+                    PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params, os)
                 } ?: emptyList()
 
                 val rawGain = obj["gain"]?.jsonPrimitive?.float ?: 0f

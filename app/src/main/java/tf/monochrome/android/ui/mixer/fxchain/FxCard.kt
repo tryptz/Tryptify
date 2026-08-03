@@ -67,6 +67,7 @@ fun FxCard(
     onRemove: () -> Unit,
     onDryWet: (Float) -> Unit,
     onParam: (paramIndex: Int, value: Float) -> Unit,
+    onOversample: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val bypassed = plugin.bypassed
@@ -186,6 +187,55 @@ fun FxCard(
                 }
 
                 DryWetRow(plugin.dryWet, accent, onDryWet)
+
+                OversampleRow(plugin.oversampling, accent, onOversample)
+            }
+        }
+    }
+}
+
+/**
+ * Per-plugin oversampling selector: Off / 2x / 4x. Runs the snapin at a
+ * multiple of the stream rate between anti-alias resamplers — worth its CPU on
+ * nonlinear effects (distortions, bitcrush, ring mod), where it removes
+ * aliasing; changing it resets the effect's internal state.
+ */
+@Composable
+private fun OversampleRow(
+    current: Int,
+    accent: Color,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = "OS",
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        listOf(1, 2, 4).forEach { factor ->
+            val selected = current == factor
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        if (selected) accent.copy(alpha = 0.22f)
+                        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+                    )
+                    .clickable { onSelect(factor) }
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = if (factor == 1) "Off" else "${factor}x",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selected) accent
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

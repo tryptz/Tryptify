@@ -318,6 +318,7 @@ fun MixerScreen(
                         onRemove = { b, s -> viewModel.removePlugin(b, s) },
                         onDryWet = { b, s, dw -> viewModel.setPluginDryWet(b, s, dw) },
                         onParam = { b, s, p, v -> viewModel.setParameter(b, s, p, v) },
+                        onOversample = { b, s, f -> viewModel.setPluginOversampling(b, s, f) },
                         onMove = { b, from, to -> viewModel.movePlugin(b, from, to) },
                     )
                 }

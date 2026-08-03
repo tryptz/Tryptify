@@ -184,7 +184,15 @@ void DspEngine::reconfigure(int sampleRate, int maxBlockSize) {
 
         for (auto& bus : buses_) {
             for (auto& plugin : bus.plugins) {
-                if (plugin) plugin->prepare(static_cast<double>(sampleRate_), maxBlockSize_);
+                if (plugin) plugin->prepareOS(static_cast<double>(sampleRate_), maxBlockSize_);
+            }
+        }
+    } else if (blockGrew) {
+        // Oversampling scratch buffers are sized from the max block — re-prepare
+        // so processOS never writes past them after the block grows.
+        for (auto& bus : buses_) {
+            for (auto& plugin : bus.plugins) {
+                if (plugin) plugin->prepareOS(static_cast<double>(sampleRate_), maxBlockSize_);
             }
         }
     }
@@ -280,14 +288,14 @@ void DspEngine::process(float* left, float* right, int numFrames) {
                     float dw = plugin->getDryWet();
                     if (dw >= 0.999f) {
                         // Fully wet — no copy needed
-                        plugin->process(busL_.data(), busR_.data(), numFrames);
+                        plugin->processOS(busL_.data(), busR_.data(), numFrames);
                     } else if (dw <= 0.001f) {
                         // Fully dry — skip processing
                     } else {
                         // Blend: save dry into pre-allocated buffers, process, mix
                         std::copy(busL_.begin(), busL_.begin() + numFrames, dryBufL_.begin());
                         std::copy(busR_.begin(), busR_.begin() + numFrames, dryBufR_.begin());
-                        plugin->process(busL_.data(), busR_.data(), numFrames);
+                        plugin->processOS(busL_.data(), busR_.data(), numFrames);
                         float wet = dw, dry = 1.0f - dw;
                         for (int i = 0; i < numFrames; i++) {
                             busL_[i] = dryBufL_[i] * dry + busL_[i] * wet;
@@ -341,13 +349,13 @@ void DspEngine::process(float* left, float* right, int numFrames) {
                 std::memory_order_relaxed);
             float dw = plugin->getDryWet();
             if (dw >= 0.999f) {
-                plugin->process(sumL_.data(), sumR_.data(), numFrames);
+                plugin->processOS(sumL_.data(), sumR_.data(), numFrames);
             } else if (dw <= 0.001f) {
                 // Fully dry — skip
             } else {
                 std::copy(sumL_.begin(), sumL_.begin() + numFrames, dryBufL_.begin());
                 std::copy(sumR_.begin(), sumR_.begin() + numFrames, dryBufR_.begin());
-                plugin->process(sumL_.data(), sumR_.data(), numFrames);
+                plugin->processOS(sumL_.data(), sumR_.data(), numFrames);
                 float wet = dw, dry = 1.0f - dw;
                 for (int i = 0; i < numFrames; i++) {
                     sumL_[i] = dryBufL_[i] * dry + sumL_[i] * wet;
@@ -478,7 +486,7 @@ int DspEngine::addPlugin(int busIndex, int slotIndex, int pluginType) {
     auto* proc = createSnapin(static_cast<SnapinType>(pluginType));
     if (!proc) return -1;
 
-    proc->prepare(static_cast<double>(sampleRate_), maxBlockSize_);
+    proc->prepareOS(static_cast<double>(sampleRate_), maxBlockSize_);
 
     std::lock_guard<std::mutex> lock(chainMutex_);
 
@@ -548,6 +556,16 @@ void DspEngine::setPluginDryWet(int busIndex, int slotIndex, float dryWet) {
     if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
     if (bus.plugins[slotIndex]) {
         bus.plugins[slotIndex]->setDryWet(dryWet);
+    }
+}
+
+void DspEngine::setPluginOversampling(int busIndex, int slotIndex, int factor) {
+    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    std::lock_guard<std::mutex> lock(chainMutex_);
+    Bus& bus = buses_[busIndex];
+    if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
+    if (bus.plugins[slotIndex]) {
+        bus.plugins[slotIndex]->setOversampling(factor);
     }
 }
 
@@ -656,6 +674,7 @@ std::string DspEngine::getStateJson() const {
             ss << "{\"type\":" << static_cast<int>(plug->getType())
                << ",\"bypassed\":" << (plug->isBypassed() ? "true" : "false")
                << ",\"dryWet\":" << plug->getDryWet()
+               << ",\"os\":" << plug->getOversampling()
                << ",\"params\":[";
             for (int i = 0; i < plug->getNumParameters(); i++) {
                 if (i > 0) ss << ",";
@@ -752,7 +771,7 @@ void DspEngine::loadStateJson(const std::string& json) {
 
                 auto* proc = createSnapin(static_cast<SnapinType>(plugType));
                 if (proc) {
-                    proc->prepare(static_cast<double>(sampleRate_), maxBlockSize_);
+                    proc->prepareOS(static_cast<double>(sampleRate_), maxBlockSize_);
 
                     size_t bypPos = json.find("\"bypassed\":", pos);
                     if (bypPos != std::string::npos) {
@@ -765,6 +784,13 @@ void DspEngine::loadStateJson(const std::string& json) {
                         // setDryWet already filters NaN + clamps to [0,1]
                         proc->setDryWet(readFloat(dwPos + 9));
                         pos = dwPos + 9;
+                    }
+
+                    // Optional (absent in pre-oversampling saves; defaults to 1)
+                    size_t osPos = json.find("\"os\":", pos);
+                    if (osPos != std::string::npos && osPos < json.find("\"params\":", pos)) {
+                        proc->setOversampling(static_cast<int>(readFloat(osPos + 5)));
+                        pos = osPos + 5;
                     }
 
                     size_t paramsPos = json.find("\"params\":[", pos);

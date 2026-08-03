@@ -85,6 +85,9 @@ public:
     void setParameter(int busIndex, int slotIndex, int paramIndex, float value);
     void setPluginBypassed(int busIndex, int slotIndex, bool bypassed);
     void setPluginDryWet(int busIndex, int slotIndex, float dryWet);
+    // Per-plugin oversampling factor: 1 (off), 2, or 4. Re-prepares the
+    // plugin at baseRate × factor (resets its state, like a rate change).
+    void setPluginOversampling(int busIndex, int slotIndex, int factor);
     void setBusInputEnabled(int busIndex, bool enabled);
     void setMixBypassed(bool bypassed);
 

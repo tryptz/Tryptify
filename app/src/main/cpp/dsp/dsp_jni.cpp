@@ -186,6 +186,13 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetBusLevels(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetPluginOversampling(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr, jint busIndex, jint slotIndex, jint factor) {
+    auto* engine = getEngine(enginePtr);
+    if (engine) engine->setPluginOversampling(busIndex, slotIndex, factor);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetPluginMeters(
     JNIEnv* env, jobject /*thiz*/, jlong enginePtr, jint busIndex, jfloatArray outMeters) {
     auto* engine = getEngine(enginePtr);
