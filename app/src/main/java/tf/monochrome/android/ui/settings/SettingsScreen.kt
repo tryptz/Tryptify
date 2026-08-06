@@ -2516,11 +2516,12 @@ private fun AboutTab() {
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // One-time donations via Stripe's in-app PaymentSheet (card / Google Pay,
-            // the donor never leaves the app), with Ko-fi kept as a one-tap fallback.
-            tf.monochrome.android.ui.donate.DonateSupportCard(
-                onOpenKofi = { openDonationUrl(context, "https://ko-fi.com/trypt") }
-            )
+            Button(
+                onClick = { openDonationUrl(context, "https://ko-fi.com/trypt") },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Tip on Ko-fi")
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
             Text(
