@@ -139,7 +139,6 @@ class EqViewModel @Inject constructor(
         val smoothing: Float,
         val bandCount: Int,
         val maxFrequency: Float,
-        val sampleRate: Float,
         val algorithm: tf.monochrome.android.audio.eq.AutoEqAlgorithm,
     )
 
@@ -147,7 +146,6 @@ class EqViewModel @Inject constructor(
         _smoothing.value,
         _bandCount.value,
         _maxFrequency.value,
-        _sampleRate.value,
         _algorithm.value,
     )
 
@@ -211,9 +209,6 @@ class EqViewModel @Inject constructor(
 
     private val _maxFrequency = MutableStateFlow(16000f)
     val maxFrequency: StateFlow<Float> = _maxFrequency.asStateFlow()
-
-    private val _sampleRate = MutableStateFlow(48000f)
-    val sampleRate: StateFlow<Float> = _sampleRate.asStateFlow()
 
 
     // ===== Uploaded user measurements =====
@@ -640,7 +635,7 @@ class EqViewModel @Inject constructor(
             target = target,
             bandCount = settings.bandCount,
             maxFrequency = settings.maxFrequency,
-            sampleRate = settings.sampleRate,
+            sampleRate = MODEL_SAMPLE_RATE,
             algorithm = settings.algorithm,
         )
     }
@@ -734,9 +729,9 @@ class EqViewModel @Inject constructor(
         // ONE shared preamp sized to the hotter ear. Per-channel preamps would
         // silently re-tilt L/R balance; the curves carry any intended
         // asymmetry, the preamp only guards headroom.
-        val peakL = combinedPeakBoostDb(src.bandsL + toneBands, _sampleRate.value)
+        val peakL = combinedPeakBoostDb(src.bandsL + toneBands, MODEL_SAMPLE_RATE)
         val peakR = if (src.stereo && src.bandsR.isNotEmpty()) {
-            combinedPeakBoostDb(src.bandsR + toneBands, _sampleRate.value)
+            combinedPeakBoostDb(src.bandsR + toneBands, MODEL_SAMPLE_RATE)
         } else 0f
         val auto = -maxOf(peakL, peakR)
         // Epsilon gate: skips the DataStore write when nothing changed (e.g.
@@ -778,6 +773,13 @@ class EqViewModel @Inject constructor(
 
     private companion object {
         const val AUTO_PREAMP_GRID_POINTS = 96
+
+        // Canonical rate for the fit/graph response model. With matched
+        // (decramped) coefficients the modeled response is rate-invariant to
+        // within a few tenths of a dB — playback always configures its filters
+        // at the stream's real rate and both land on the same analog
+        // prototype — so the old user-facing sample-rate selector was retired.
+        const val MODEL_SAMPLE_RATE = 48000f
     }
 
     /**
@@ -1401,10 +1403,6 @@ class EqViewModel @Inject constructor(
 
     fun setMaxFrequency(freq: Float) {
         _maxFrequency.value = freq
-    }
-
-    fun setSampleRate(rate: Float) {
-        _sampleRate.value = rate
     }
 
     fun updateBandByDrag(bandId: Int, newFreq: Float, newGain: Float) {

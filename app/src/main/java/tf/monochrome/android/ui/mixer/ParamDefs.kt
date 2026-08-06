@@ -301,6 +301,25 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
             add(ParamDef("B$b On", 0f, 1f, 1f, "", steps = 1))
         }
     }
+    SnapinType.DISPERSER -> listOf(
+        // Amount tops out at 32 stages like the original (community
+        // recreations reach sonic parity with 32 series all-pass filters);
+        // the native processor clamps higher values anyway.
+        ParamDef("Amount", 1f, 32f, 12f, "", steps = 31),
+        ParamDef("Freq", 20f, 20000f, 250f, "Hz"),
+        ParamDef("Pinch", 0.2f, 10f, 0.71f, "")
+    )
+    SnapinType.MISSTORTION -> listOf(
+        ParamDef("In", -50f, 50f, 0f, "dB"),
+        ParamDef("Hard", 0f, 50f, 0f, "dB"),
+        ParamDef("Soft", 0f, 50f, 0f, "dB"),
+        ParamDef("Symm", 0f, 100f, 50f, "%"),
+        ParamDef("HP", 0f, 20000f, 20f, "Hz"),
+        ParamDef("LP", 1f, 20000f, 20000f, "Hz"),
+        ParamDef("Filter", 0f, 2f, 0f, "", steps = 2),
+        ParamDef("Out", -50f, 50f, 0f, "dB"),
+        ParamDef("Mix", 0f, 100f, 100f, "%")
+    )
     null -> emptyList()
 }
 

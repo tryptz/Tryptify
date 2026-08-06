@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.model.BusConfig
+import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -62,6 +63,7 @@ fun FxChainPage(
     buses: List<BusConfig>,
     selectedBusIndex: Int,
     enabled: Boolean,
+    fxTap: FxTapFrame? = null,
     busAccent: (Int) -> Color,
     onSelectBus: (Int) -> Unit,
     onAddEffect: () -> Unit,
@@ -69,6 +71,7 @@ fun FxChainPage(
     onRemove: (busIndex: Int, slotIndex: Int) -> Unit,
     onDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit,
     onParam: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
+    onOversample: (busIndex: Int, slotIndex: Int, factor: Int) -> Unit,
     onMove: (busIndex: Int, from: Int, to: Int) -> Unit,
 ) {
     val bus = buses.getOrNull(selectedBusIndex)
@@ -141,6 +144,10 @@ fun FxChainPage(
                     accent = cardAccent,
                     expanded = item.uid in expandedUids,
                     dragging = isDragged,
+                    // Only expanded cards draw the tap, so collapsed cards
+                    // keep a stable (null) input and skip the 60 Hz recompose.
+                    live = if (item.uid in expandedUids && fxTap?.busIndex == selectedBusIndex)
+                        fxTap else null,
                     dragHandle = Modifier.pointerInput(item.uid) {
                         detectDragGestures(
                             onDragStart = {
@@ -163,6 +170,7 @@ fun FxChainPage(
                     onRemove = { onRemove(selectedBusIndex, index) },
                     onDryWet = { dw -> onDryWet(selectedBusIndex, index, dw) },
                     onParam = { pi, v -> onParam(selectedBusIndex, index, pi, v) },
+                    onOversample = { f -> onOversample(selectedBusIndex, index, f) },
                     modifier = Modifier
                         .zIndex(if (isDragged) 1f else 0f)
                         .graphicsLayer {

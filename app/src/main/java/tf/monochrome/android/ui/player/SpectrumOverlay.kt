@@ -11,7 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -174,22 +173,5 @@ fun SpectrumOverlay(
             color = currentColor.copy(alpha = 0.55f),
             style = Stroke(width = 5f)
         )
-
-        // Soft glow dot at the loudest bin — moves with the music.
-        var peakIdx = 0
-        var peakY = h
-        for (i in 0 until n) if (ys[i] < peakY) { peakY = ys[i]; peakIdx = i }
-        if (peakY < h - 4f) {
-            drawCircle(
-                color = currentColor.copy(alpha = 0.55f),
-                radius = 9f,
-                center = Offset(xs[peakIdx], peakY)
-            )
-            drawCircle(
-                color = Color.White,
-                radius = 3f,
-                center = Offset(xs[peakIdx], peakY)
-            )
-        }
     }
 }

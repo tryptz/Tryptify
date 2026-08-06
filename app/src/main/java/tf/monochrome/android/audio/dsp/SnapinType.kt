@@ -35,10 +35,12 @@ enum class SnapinType(val displayName: String, val category: SnapinCategory) {
     RING_MOD("Ring Mod", SnapinCategory.MODULATION),
     TAPE_STOP("Tape Stop", SnapinCategory.MODULATION),
     TRANCE_GATE("Trance Gate", SnapinCategory.DYNAMICS),
-    EQ_10BAND("10-Band EQ", SnapinCategory.EQ_FILTER);
+    EQ_10BAND("10-Band EQ", SnapinCategory.EQ_FILTER),
+    DISPERSER("Disperser", SnapinCategory.EQ_FILTER),
+    MISSTORTION("Misstortion", SnapinCategory.DISTORTION);
 
     val isAvailable: Boolean
-        get() = true  // All 33 snapins implemented
+        get() = true  // Every snapin in this enum has a native processor
 
     companion object {
         fun fromOrdinal(ordinal: Int): SnapinType? =

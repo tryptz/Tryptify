@@ -3,13 +3,11 @@ package tf.monochrome.android.ui.mixer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.audio.dsp.DspEngineManager
@@ -33,6 +31,9 @@ class MixerViewModel @Inject constructor(
     val buses: StateFlow<List<BusConfig>> = dspManager.buses
     val busLevels: StateFlow<List<BusLevels>> = dspManager.busLevels
 
+    // Live audio tap (per-plugin meters + scope waveform) for the FX chain.
+    val fxTap = dspManager.fxTap
+
     /** Channel coloring mode: false = curated palette, true = album/theme-derived. */
     val channelDynamicColor: StateFlow<Boolean> = preferencesManager.mixerChannelDynamic
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -47,19 +48,19 @@ class MixerViewModel @Inject constructor(
     private val _currentPresetName = MutableStateFlow<String?>(null)
     val currentPresetName: StateFlow<String?> = _currentPresetName.asStateFlow()
 
-    init {
-        // 60 Hz meter poll — fluid VU bars under fast transients. pollLevels
-        // is a native hot-path read; cheap enough to call at frame rate.
-        viewModelScope.launch {
-            while (isActive) {
-                dspManager.pollLevels()
-                delay(16L)
-            }
-        }
-    }
-
     private val _selectedBusIndex = MutableStateFlow(0)
     val selectedBusIndex: StateFlow<Int> = _selectedBusIndex.asStateFlow()
+
+    /**
+     * One meter + FX-tap poll (cheap native reads). Called by the mixer UI
+     * once per display frame, so meters and visuals run at the panel's native
+     * refresh rate — 120 Hz where the device permits — and polling stops
+     * entirely while the mixer is off screen.
+     */
+    fun pollTick() {
+        dspManager.pollLevels()
+        dspManager.pollFxTap(_selectedBusIndex.value)
+    }
 
     private val _showPluginPicker = MutableStateFlow(false)
     val showPluginPicker: StateFlow<Boolean> = _showPluginPicker.asStateFlow()
@@ -172,6 +173,10 @@ class MixerViewModel @Inject constructor(
 
     fun setPluginDryWet(busIndex: Int, slotIndex: Int, dryWet: Float) {
         dspManager.setPluginDryWet(busIndex, slotIndex, dryWet)
+    }
+
+    fun setPluginOversampling(busIndex: Int, slotIndex: Int, factor: Int) {
+        dspManager.setPluginOversampling(busIndex, slotIndex, factor)
     }
 
     // ── Presets ──────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -107,7 +109,26 @@ fun SwipeToLibraryHint(
 ) {
     if (pageCount < 2) return
 
-    val glass = LocalPlayerGlass.current
+    // This slab is ~26 dp tall and nearly all edge. The glass shader draws its
+    // visible outline from the Fresnel rim, whose bevel band scales with the
+    // user's big-plate tunings (roundness widens the alpha-gradient taps,
+    // depth steepens the normals, dispersion fringes them, low body opacity
+    // leaves ONLY the rim visible). At this size the outer edge's bevel band
+    // and the punched marks' bevel bands overlap and interfere, so the pill's
+    // silhouette warps — it reads misshapen or cut. Clamp the slab to a
+    // tight, solid-bodied profile here; the material still tracks the user's
+    // tint and frost, just scaled to the pill.
+    val rawGlass = LocalPlayerGlass.current
+    val glass = remember(rawGlass) {
+        rawGlass.copy(
+            bodyOpacity = rawGlass.bodyOpacity.coerceAtLeast(0.55f),
+            roundness = rawGlass.roundness.coerceAtMost(1f),
+            depth = rawGlass.depth.coerceAtMost(1f),
+            refraction = rawGlass.refraction.coerceAtMost(0.3f),
+            dispersion = rawGlass.dispersion.coerceAtMost(0.5f),
+            rimBrightness = rawGlass.rimBrightness.coerceAtMost(1f),
+        )
+    }
     val profile = LocalPerformanceProfile.current
     val tint = if (glass.tintColor != 0) Color(glass.tintColor)
                else MaterialTheme.colorScheme.primary
@@ -143,6 +164,9 @@ fun SwipeToLibraryHint(
 
         // The glass slab with the marks carved out of it. One offscreen layer so
         // the DstOut punch clears only the mark shapes, not the whole rectangle.
+        // Wrapped so playerGlass picks up the clamped small-slab settings above
+        // rather than the raw big-plate tuning from the nav host.
+        CompositionLocalProvider(LocalPlayerGlass provides glass) {
         Canvas(
             modifier = Modifier
                 .matchParentSize()
@@ -196,6 +220,7 @@ fun SwipeToLibraryHint(
                 cornerRadius = CornerRadius(r, r),
                 blendMode = BlendMode.DstOut,
             )
+        }
         }
 
         // Tap target over the marks only. Sized and placed to match where the

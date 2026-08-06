@@ -23,6 +23,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.BusLevels
+import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.data.preferences.PreferencesManager
 import javax.inject.Inject
@@ -39,7 +40,7 @@ class DspEngineManager @Inject constructor(
     private val _buses = MutableStateFlow(BusConfig.defaultBuses())
     val buses: StateFlow<List<BusConfig>> = _buses.asStateFlow()
 
-    // Meter levels — polled from UI at ~50ms intervals
+    // Meter levels — polled from the UI once per display frame
     // [peakL, peakR, holdL, holdR] per bus = 4 floats each
     private val levelsBuffer = FloatArray(TOTAL_BUSES * 4)
     private val _busLevels = MutableStateFlow(List(TOTAL_BUSES) { BusLevels() })
@@ -47,6 +48,17 @@ class DspEngineManager @Inject constructor(
 
     private val _clipped = MutableStateFlow(false)
     val clipped: StateFlow<Boolean> = _clipped.asStateFlow()
+
+    // Live audio tap for the FX-chain visualizations. Buffers are reused every
+    // poll (see FxTapFrame docs); only the frame wrapper is allocated at 60 Hz.
+    private val fxMetersRaw = FloatArray(MAX_PLUGINS_PER_BUS * 2)
+    private val fxMetersSmoothed = FloatArray(MAX_PLUGINS_PER_BUS * 2) { -60f }
+    private var fxMetersBus = -1
+    private val fxWaveBuffer = FloatArray(FX_WAVE_SAMPLES)
+    private var fxTapSeq = 0L
+    private var fxLastPollNanos = 0L
+    private val _fxTap = MutableStateFlow<FxTapFrame?>(null)
+    val fxTap: StateFlow<FxTapFrame?> = _fxTap.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val saveSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -99,11 +111,53 @@ class DspEngineManager @Inject constructor(
         _clipped.value = false
     }
 
+    /**
+     * Poll the per-plugin tap meters and post-fader waveform for [busIndex]
+     * into [fxTap]. Called once per display frame (60 or 120 Hz); meters get
+     * instant attack and a wall-clock ~45 dB/s release, so the fall speed is
+     * the same at any poll rate and short transients stay visible.
+     */
+    fun pollFxTap(busIndex: Int) {
+        val ptr = processor.getEnginePtr()
+        if (ptr == 0L) return
+        processor.nativeGetPluginMeters(ptr, busIndex, fxMetersRaw)
+        if (fxMetersBus != busIndex) {
+            fxMetersRaw.copyInto(fxMetersSmoothed)
+            fxMetersBus = busIndex
+        }
+        val now = System.nanoTime()
+        val dt = if (fxLastPollNanos == 0L) 0.016f
+                 else ((now - fxLastPollNanos) / 1e9f).coerceIn(0f, 0.1f)
+        fxLastPollNanos = now
+        val release = FX_METER_RELEASE_DB_PER_SEC * dt
+        for (i in fxMetersSmoothed.indices) {
+            val raw = fxMetersRaw[i]
+            fxMetersSmoothed[i] =
+                if (raw >= fxMetersSmoothed[i]) raw
+                else (fxMetersSmoothed[i] - release).coerceAtLeast(-60f)
+        }
+        val waveLen = processor.nativeGetBusWaveform(ptr, busIndex, fxWaveBuffer)
+        _fxTap.value = FxTapFrame(
+            seq = ++fxTapSeq,
+            busIndex = busIndex,
+            meters = fxMetersSmoothed,
+            wave = fxWaveBuffer,
+            waveLen = waveLen
+        )
+    }
+
     companion object {
         private const val TOTAL_BUSES = 5
 
         // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
         const val MAX_PLUGINS_PER_BUS = 16
+
+        // FX-chain scope tap: samples fetched per poll (~21 ms at 48 kHz).
+        // Must be <= WAVE_TAP_SIZE in dsp_engine.h.
+        const val FX_WAVE_SAMPLES = 1024
+
+        // Tap meter release in dB/s of wall-clock time — poll-rate independent.
+        private const val FX_METER_RELEASE_DB_PER_SEC = 45f
 
         // Parameter bounds — mirror the native clamps in dsp_engine.cpp / snapin_processor.h.
         // Clamping in Kotlin keeps the StateFlow value in sync with what native actually stores.
@@ -273,6 +327,21 @@ class DspEngineManager @Inject constructor(
         requestSave()
     }
 
+    /** Per-plugin oversampling: 1 (off), 2, or 4. Snaps other values down. */
+    fun setPluginOversampling(busIndex: Int, slotIndex: Int, factor: Int) {
+        val snapped = if (factor >= 4) 4 else if (factor >= 2) 2 else 1
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L) processor.nativeSetPluginOversampling(ptr, busIndex, slotIndex, snapped)
+        updateBus(busIndex) { bus ->
+            val plugins = bus.plugins.toMutableList()
+            if (slotIndex in plugins.indices) {
+                plugins[slotIndex] = plugins[slotIndex].copy(oversampling = snapped)
+            }
+            bus.copy(plugins = plugins)
+        }
+        requestSave()
+    }
+
     // ── Plugin state reset (for gapless track transitions) ───────────────
 
     fun resetPluginState() {
@@ -323,7 +392,10 @@ class DspEngineManager @Inject constructor(
                     val params = plugObj["params"]?.jsonArray
                         ?.mapIndexed { pi, pv -> pi to sanitizeParam(pv.jsonPrimitive.float) }
                         ?.toMap() ?: emptyMap()
-                    PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params)
+                    val os = when (plugObj["os"]?.jsonPrimitive?.int ?: 1) {
+                        4 -> 4; 2 -> 2; else -> 1
+                    }
+                    PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params, os)
                 } ?: emptyList()
 
                 val rawGain = obj["gain"]?.jsonPrimitive?.float ?: 0f

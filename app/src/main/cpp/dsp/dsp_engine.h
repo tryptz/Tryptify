@@ -12,6 +12,10 @@ static constexpr int MASTER_BUS = 4;
 static constexpr int TOTAL_BUSES = 5;  // 4 mix + 1 master
 static constexpr int MAX_PLUGINS_PER_BUS = 16;
 
+// Per-bus post-fader waveform tap ring size. Power of two (index masking);
+// ~43 ms at 48 kHz — enough history for the FX-chain scope displays.
+static constexpr int WAVE_TAP_SIZE = 2048;
+
 struct Bus {
     std::vector<std::unique_ptr<SnapinProcessor>> plugins;
 
@@ -31,6 +35,18 @@ struct Bus {
     // Peak meter levels (written by audio thread, read by UI thread)
     std::atomic<float> peakL{0.0f};
     std::atomic<float> peakR{0.0f};
+
+    // Per-slot audio tap: linear block peak into / out of each plugin.
+    // Written by the audio thread each block, read by the UI thread for the
+    // FX-chain visualizations. Zeroed for bypassed/empty slots.
+    std::atomic<float> slotInPeak[MAX_PLUGINS_PER_BUS] = {};
+    std::atomic<float> slotOutPeak[MAX_PLUGINS_PER_BUS] = {};
+
+    // Post-fader mono waveform tap. Single writer (audio thread); the UI
+    // reads a snapshot without locking — a torn read across the write head
+    // is imperceptible in a scope display.
+    float waveTap[WAVE_TAP_SIZE] = {};
+    std::atomic<int> waveTapPos{0};
 
     // Meter ballistics (audio thread only)
     float decayL = 0.0f;
@@ -69,6 +85,9 @@ public:
     void setParameter(int busIndex, int slotIndex, int paramIndex, float value);
     void setPluginBypassed(int busIndex, int slotIndex, bool bypassed);
     void setPluginDryWet(int busIndex, int slotIndex, float dryWet);
+    // Per-plugin oversampling factor: 1 (off), 2, or 4. Re-prepares the
+    // plugin at baseRate × factor (resets its state, like a rate change).
+    void setPluginOversampling(int busIndex, int slotIndex, int factor);
     void setBusInputEnabled(int busIndex, bool enabled);
     void setMixBypassed(bool bypassed);
 
@@ -79,6 +98,14 @@ public:
 
     // Clipping detection — returns true if master output clipped since last check
     bool getAndResetClipped();
+
+    // Per-plugin tap meters for one bus, in dB (floor -60):
+    // [slot0_inDb, slot0_outDb, slot1_inDb, ...] — MAX_PLUGINS_PER_BUS * 2 floats.
+    void getPluginMeters(int busIndex, float* out, int maxFloats);
+
+    // Copy the most recent post-fader mono waveform for a bus, oldest sample
+    // first. Returns the number of samples written (<= maxSamples).
+    int getBusWaveform(int busIndex, float* out, int maxSamples);
 
     // Reset all plugin internal state (delay lines, filters, etc.) without destroying
     void resetPluginState();
