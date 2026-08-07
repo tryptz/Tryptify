@@ -11,8 +11,10 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -118,6 +120,8 @@ data class MainPlayerUiState(
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
+    val crossfeedEnabled: Boolean = false,
+    val autoEqEnabled: Boolean = false,
     val systemWideAutoEqEnabled: Boolean = false,
     val toneControls: tf.monochrome.android.domain.model.ToneControls =
         tf.monochrome.android.domain.model.ToneControls.DEFAULT,
@@ -156,6 +160,12 @@ fun MainPlayerScreen(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onCrossfeedToggle: (Boolean) -> Unit,
+    // Long-pressing an effect row opens that tool's configuration page.
+    onCompressorOpen: () -> Unit,
+    onInflatorOpen: () -> Unit,
+    onCrossfeedOpen: () -> Unit,
+    onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     topBar: @Composable () -> Unit,
@@ -520,6 +530,8 @@ fun MainPlayerScreen(
                 waveformActive = state.waveformActive,
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
+                crossfeedEnabled = state.crossfeedEnabled,
+                autoEqEnabled = state.autoEqEnabled,
                 systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
                 toneControls = state.toneControls,
                 onOutput = onOutput,
@@ -530,6 +542,11 @@ fun MainPlayerScreen(
                 onWaveform = onWaveform,
                 onCompressorToggle = onCompressorToggle,
                 onInflatorToggle = onInflatorToggle,
+                onCrossfeedToggle = onCrossfeedToggle,
+                onCompressorOpen = onCompressorOpen,
+                onInflatorOpen = onInflatorOpen,
+                onCrossfeedOpen = onCrossfeedOpen,
+                onAutoEqToggle = onAutoEqToggle,
                 onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
                 onToneControlsChange = onToneControlsChange,
                 onDismiss = { animateRevealTo(0f, 0f) },
@@ -585,6 +602,8 @@ private fun StatusOverlayPanel(
     waveformActive: Boolean,
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
+    crossfeedEnabled: Boolean,
+    autoEqEnabled: Boolean,
     systemWideAutoEqEnabled: Boolean,
     toneControls: tf.monochrome.android.domain.model.ToneControls,
     onOutput: () -> Unit,
@@ -595,6 +614,11 @@ private fun StatusOverlayPanel(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onCrossfeedToggle: (Boolean) -> Unit,
+    onCompressorOpen: () -> Unit,
+    onInflatorOpen: () -> Unit,
+    onCrossfeedOpen: () -> Unit,
+    onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     onDismiss: () -> Unit,
@@ -681,15 +705,34 @@ private fun StatusOverlayPanel(
                         .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
                 )
             }
-            // Top of the audio options: apply the AutoEQ headphone correction to
-            // ALL device audio (Wavelet-style global effect), not just this app.
-            ToggleRow(
-                "System-wide AutoEQ",
-                "Apply your headphone EQ to all device audio",
-                systemWideAutoEqEnabled,
-                accent,
-                onSystemWideAutoEqToggle,
-            )
+            // Top of the audio options: the AutoEQ headphone correction. The
+            // Wavelet-style system-wide variant is a sub-toggle that only
+            // appears while AutoEQ itself is on (and turning AutoEQ off also
+            // clears it, so the global effect never runs hidden).
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ToggleRow(
+                    "AutoEQ",
+                    "Headphone EQ correction",
+                    autoEqEnabled,
+                    accent,
+                    onAutoEqToggle,
+                )
+                AnimatedVisibility(visible = autoEqEnabled) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, top = 12.dp),
+                    ) {
+                        ToggleRow(
+                            "System-wide",
+                            "Apply to all device audio",
+                            systemWideAutoEqEnabled,
+                            accent,
+                            onSystemWideAutoEqToggle,
+                        )
+                    }
+                }
+            }
             // Bass/treble tone shelves (independent of the system-wide toggle —
             // applied in-app, or via the global effect when system-wide is on).
             ToneControlsPanel(
@@ -718,9 +761,13 @@ private fun StatusOverlayPanel(
                 OverlayAction(Icons.Default.GraphicEq, "Waveform", accent, waveformActive, onWaveform)
             }
 
-            // Effects toggles
-            ToggleRow("Compressor", "Oxford dynamics", compressorEnabled, accent, onCompressorToggle)
-            ToggleRow("Inflator", "Oxford loudness", inflatorEnabled, accent, onInflatorToggle)
+            // Effects toggles — long-press a row to open that tool's page.
+            ToggleRow("Compressor", "Oxford dynamics. Hold to configure", compressorEnabled, accent,
+                onCompressorToggle, onLongPress = onCompressorOpen)
+            ToggleRow("Inflator", "Oxford loudness. Hold to configure", inflatorEnabled, accent,
+                onInflatorToggle, onLongPress = onInflatorOpen)
+            ToggleRow("Crossfeed", "Speaker simulation. Hold to configure", crossfeedEnabled, accent,
+                onCrossfeedToggle, onLongPress = onCrossfeedOpen)
         }
             }
     }
@@ -766,15 +813,28 @@ private fun RowScope.OverlayAction(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ToggleRow(
     label: String,
     subtitle: String,
     checked: Boolean,
     accent: Color,
     onCheckedChange: (Boolean) -> Unit,
+    onLongPress: (() -> Unit)? = null,
 ) {
+    val rowModifier = if (onLongPress != null) {
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = { onCheckedChange(!checked) },
+                onLongClick = onLongPress,
+            )
+    } else {
+        Modifier.fillMaxWidth()
+    }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {

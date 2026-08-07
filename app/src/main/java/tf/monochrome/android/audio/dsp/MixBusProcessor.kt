@@ -8,6 +8,7 @@ import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect
 import tf.monochrome.android.audio.dsp.oxford.CompressorEffect
 import tf.monochrome.android.audio.dsp.oxford.InflatorEffect
 import java.nio.ByteBuffer
@@ -20,6 +21,7 @@ import javax.inject.Singleton
 class MixBusProcessor @Inject constructor(
     private val inflator: InflatorEffect,
     private val compressor: CompressorEffect,
+    private val crossfeed: CrossfeedEffect,
 ) : AudioProcessor {
 
     private var enginePtr: Long = 0L
@@ -299,6 +301,7 @@ class MixBusProcessor @Inject constructor(
                 nativeProcess(enginePtr, chunkScratchInL, chunkScratchInR, chunkScratchOutL, chunkScratchOutR, n)
                 inflator.processArrays(chunkScratchOutL, chunkScratchOutR, n)
                 compressor.processArrays(chunkScratchOutL, chunkScratchOutR, n)
+                crossfeed.processArrays(chunkScratchOutL, chunkScratchOutR, n)
                 System.arraycopy(chunkScratchOutL, 0, scratchOutL, processed, n)
                 System.arraycopy(chunkScratchOutR, 0, scratchOutR, processed, n)
             } else {
@@ -306,6 +309,7 @@ class MixBusProcessor @Inject constructor(
                 nativeProcess(enginePtr, scratchInL, scratchInR, scratchOutL, scratchOutR, n)
                 inflator.processArrays(scratchOutL, scratchOutR, n)
                 compressor.processArrays(scratchOutL, scratchOutR, n)
+                crossfeed.processArrays(scratchOutL, scratchOutR, n)
             }
             processed += n
         }
@@ -387,6 +391,7 @@ class MixBusProcessor @Inject constructor(
             // its own sample-rate prep call on every format change.
             inflator.prepare(inputFormat.sampleRate.toDouble(), 2)
             compressor.prepare(inputFormat.sampleRate.toDouble(), 2)
+            crossfeed.prepare(inputFormat.sampleRate.toDouble())
 
             // Signal ready (false→true transition ensures StateFlow emits)
             _engineReady.value = false

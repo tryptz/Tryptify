@@ -92,6 +92,8 @@ import tf.monochrome.android.ui.search.SearchScreen
 import tf.monochrome.android.ui.settings.SettingsScreen
 import tf.monochrome.android.ui.carmode.CarModeScreen
 import tf.monochrome.android.ui.debug.DebugLogScreen
+import tf.monochrome.android.ui.crossfeed.CrossfeedScreen
+import tf.monochrome.android.ui.crossfeed.CrossfeedViewModel
 import tf.monochrome.android.ui.oxford.OxfordEffectsTabs
 import tf.monochrome.android.ui.oxford.OxfordViewModel
 
@@ -141,6 +143,7 @@ sealed class Screen(val route: String) {
         /** tab: 0 = Compressor, 1 = Inflator. */
         fun createRoute(tab: Int = 0) = "oxford?tab=$tab"
     }
+    data object Crossfeed : Screen("crossfeed")
     data object DebugLog : Screen("debug_log")
     data object LyricsFxStudio : Screen("lyrics_fx_studio")
     data object AtmosRenderer : Screen("atmos_renderer")
@@ -417,6 +420,16 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             inflator = vm.inflator,
                             compressor = vm.compressor,
                             initialTab = tab,
+                            onBack = { navController.popBackStack() },
+                            modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
+                        )
+                    }
+                }
+                composable(Screen.Crossfeed.route) {
+                    val vm: CrossfeedViewModel = hiltViewModel()
+                    tf.monochrome.android.devedit.DevEditScreen("crossfeed") {
+                        CrossfeedScreen(
+                            effect = vm.crossfeed,
                             onBack = { navController.popBackStack() },
                             modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
                         )

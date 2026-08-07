@@ -67,6 +67,7 @@ class PlayerViewModel @Inject constructor(
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
+    private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
 ) : ViewModel() {
 
@@ -252,6 +253,27 @@ class PlayerViewModel @Inject constructor(
     fun setCompressorEnabled(on: Boolean) = compressorEffect.setBypass(!on)
 
     fun setInflatorEnabled(on: Boolean) = inflatorEffect.setEffectIn(on)
+
+    // --- Crossfeed (headphone speaker simulation) ---
+    val crossfeedEnabled: StateFlow<Boolean> = crossfeedEffect.state
+        .map { it.enabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setCrossfeedEnabled(on: Boolean) = crossfeedEffect.setEnabled(on)
+
+    // --- AutoEQ (headphone correction) ---
+    // The in-app correction flag; the same one the Equalizer screen toggles.
+    val autoEqEnabled: StateFlow<Boolean> = preferences.eqEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setAutoEqEnabled(on: Boolean) {
+        viewModelScope.launch {
+            preferences.setEqEnabled(on)
+            // The system-wide sub-toggle only shows while AutoEQ is on; clear it
+            // on the way out so the global effect can't keep running invisibly.
+            if (!on) preferences.setSystemWideAutoEqEnabled(false)
+        }
+    }
 
     // --- System-wide AutoEQ (global output-mix effect) ---
     // The SystemAudioEqController (app singleton) observes this preference and
