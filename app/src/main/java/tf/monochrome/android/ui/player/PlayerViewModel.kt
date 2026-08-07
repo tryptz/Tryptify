@@ -67,6 +67,7 @@ class PlayerViewModel @Inject constructor(
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
+    private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
 ) : ViewModel() {
 
@@ -252,6 +253,13 @@ class PlayerViewModel @Inject constructor(
     fun setCompressorEnabled(on: Boolean) = compressorEffect.setBypass(!on)
 
     fun setInflatorEnabled(on: Boolean) = inflatorEffect.setEffectIn(on)
+
+    // --- Crossfeed (headphone speaker simulation) ---
+    val crossfeedEnabled: StateFlow<Boolean> = crossfeedEffect.state
+        .map { it.enabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setCrossfeedEnabled(on: Boolean) = crossfeedEffect.setEnabled(on)
 
     // --- System-wide AutoEQ (global output-mix effect) ---
     // The SystemAudioEqController (app singleton) observes this preference and

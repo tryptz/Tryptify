@@ -11,8 +11,10 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -118,6 +120,7 @@ data class MainPlayerUiState(
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
+    val crossfeedEnabled: Boolean = false,
     val systemWideAutoEqEnabled: Boolean = false,
     val toneControls: tf.monochrome.android.domain.model.ToneControls =
         tf.monochrome.android.domain.model.ToneControls.DEFAULT,
@@ -156,6 +159,11 @@ fun MainPlayerScreen(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onCrossfeedToggle: (Boolean) -> Unit,
+    // Long-pressing an effect row opens that tool's configuration page.
+    onCompressorOpen: () -> Unit,
+    onInflatorOpen: () -> Unit,
+    onCrossfeedOpen: () -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     topBar: @Composable () -> Unit,
@@ -520,6 +528,7 @@ fun MainPlayerScreen(
                 waveformActive = state.waveformActive,
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
+                crossfeedEnabled = state.crossfeedEnabled,
                 systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
                 toneControls = state.toneControls,
                 onOutput = onOutput,
@@ -530,6 +539,10 @@ fun MainPlayerScreen(
                 onWaveform = onWaveform,
                 onCompressorToggle = onCompressorToggle,
                 onInflatorToggle = onInflatorToggle,
+                onCrossfeedToggle = onCrossfeedToggle,
+                onCompressorOpen = onCompressorOpen,
+                onInflatorOpen = onInflatorOpen,
+                onCrossfeedOpen = onCrossfeedOpen,
                 onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
                 onToneControlsChange = onToneControlsChange,
                 onDismiss = { animateRevealTo(0f, 0f) },
@@ -585,6 +598,7 @@ private fun StatusOverlayPanel(
     waveformActive: Boolean,
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
+    crossfeedEnabled: Boolean,
     systemWideAutoEqEnabled: Boolean,
     toneControls: tf.monochrome.android.domain.model.ToneControls,
     onOutput: () -> Unit,
@@ -595,6 +609,10 @@ private fun StatusOverlayPanel(
     onWaveform: () -> Unit,
     onCompressorToggle: (Boolean) -> Unit,
     onInflatorToggle: (Boolean) -> Unit,
+    onCrossfeedToggle: (Boolean) -> Unit,
+    onCompressorOpen: () -> Unit,
+    onInflatorOpen: () -> Unit,
+    onCrossfeedOpen: () -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     onDismiss: () -> Unit,
@@ -718,9 +736,13 @@ private fun StatusOverlayPanel(
                 OverlayAction(Icons.Default.GraphicEq, "Waveform", accent, waveformActive, onWaveform)
             }
 
-            // Effects toggles
-            ToggleRow("Compressor", "Oxford dynamics", compressorEnabled, accent, onCompressorToggle)
-            ToggleRow("Inflator", "Oxford loudness", inflatorEnabled, accent, onInflatorToggle)
+            // Effects toggles — long-press a row to open that tool's page.
+            ToggleRow("Compressor", "Oxford dynamics · hold to configure", compressorEnabled, accent,
+                onCompressorToggle, onLongPress = onCompressorOpen)
+            ToggleRow("Inflator", "Oxford loudness · hold to configure", inflatorEnabled, accent,
+                onInflatorToggle, onLongPress = onInflatorOpen)
+            ToggleRow("Crossfeed", "Speaker simulation · hold to configure", crossfeedEnabled, accent,
+                onCrossfeedToggle, onLongPress = onCrossfeedOpen)
         }
             }
     }
@@ -766,15 +788,28 @@ private fun RowScope.OverlayAction(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ToggleRow(
     label: String,
     subtitle: String,
     checked: Boolean,
     accent: Color,
     onCheckedChange: (Boolean) -> Unit,
+    onLongPress: (() -> Unit)? = null,
 ) {
+    val rowModifier = if (onLongPress != null) {
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = { onCheckedChange(!checked) },
+                onLongClick = onLongPress,
+            )
+    } else {
+        Modifier.fillMaxWidth()
+    }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {

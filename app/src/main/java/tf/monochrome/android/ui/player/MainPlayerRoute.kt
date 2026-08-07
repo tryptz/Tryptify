@@ -107,6 +107,7 @@ fun MainPlayerRoute(
     val preservePitch by playerViewModel.preservePitch.collectAsState()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsState()
+    val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsState()
     val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsState()
     val toneControls by playerViewModel.toneControls.collectAsState()
 
@@ -288,6 +289,7 @@ fun MainPlayerRoute(
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
+        crossfeedEnabled = crossfeedEnabled,
         systemWideAutoEqEnabled = systemWideAutoEqEnabled,
         toneControls = toneControls,
     )
@@ -382,6 +384,10 @@ fun MainPlayerRoute(
             onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
             onCompressorToggle = playerViewModel::setCompressorEnabled,
             onInflatorToggle = playerViewModel::setInflatorEnabled,
+            onCrossfeedToggle = playerViewModel::setCrossfeedEnabled,
+            onCompressorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 0)) },
+            onInflatorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 1)) },
+            onCrossfeedOpen = { navController.navigate(Screen.Crossfeed.route) },
             onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
             onToneControlsChange = playerViewModel::setToneControls,
             topBar = {
