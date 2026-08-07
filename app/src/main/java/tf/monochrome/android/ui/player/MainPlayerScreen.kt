@@ -121,6 +121,7 @@ data class MainPlayerUiState(
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
     val crossfeedEnabled: Boolean = false,
+    val autoEqEnabled: Boolean = false,
     val systemWideAutoEqEnabled: Boolean = false,
     val toneControls: tf.monochrome.android.domain.model.ToneControls =
         tf.monochrome.android.domain.model.ToneControls.DEFAULT,
@@ -164,6 +165,7 @@ fun MainPlayerScreen(
     onCompressorOpen: () -> Unit,
     onInflatorOpen: () -> Unit,
     onCrossfeedOpen: () -> Unit,
+    onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     topBar: @Composable () -> Unit,
@@ -529,6 +531,7 @@ fun MainPlayerScreen(
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
                 crossfeedEnabled = state.crossfeedEnabled,
+                autoEqEnabled = state.autoEqEnabled,
                 systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
                 toneControls = state.toneControls,
                 onOutput = onOutput,
@@ -543,6 +546,7 @@ fun MainPlayerScreen(
                 onCompressorOpen = onCompressorOpen,
                 onInflatorOpen = onInflatorOpen,
                 onCrossfeedOpen = onCrossfeedOpen,
+                onAutoEqToggle = onAutoEqToggle,
                 onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
                 onToneControlsChange = onToneControlsChange,
                 onDismiss = { animateRevealTo(0f, 0f) },
@@ -599,6 +603,7 @@ private fun StatusOverlayPanel(
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
     crossfeedEnabled: Boolean,
+    autoEqEnabled: Boolean,
     systemWideAutoEqEnabled: Boolean,
     toneControls: tf.monochrome.android.domain.model.ToneControls,
     onOutput: () -> Unit,
@@ -613,6 +618,7 @@ private fun StatusOverlayPanel(
     onCompressorOpen: () -> Unit,
     onInflatorOpen: () -> Unit,
     onCrossfeedOpen: () -> Unit,
+    onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     onDismiss: () -> Unit,
@@ -699,15 +705,34 @@ private fun StatusOverlayPanel(
                         .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
                 )
             }
-            // Top of the audio options: apply the AutoEQ headphone correction to
-            // ALL device audio (Wavelet-style global effect), not just this app.
-            ToggleRow(
-                "System-wide AutoEQ",
-                "Apply your headphone EQ to all device audio",
-                systemWideAutoEqEnabled,
-                accent,
-                onSystemWideAutoEqToggle,
-            )
+            // Top of the audio options: the AutoEQ headphone correction. The
+            // Wavelet-style system-wide variant is a sub-toggle that only
+            // appears while AutoEQ itself is on (and turning AutoEQ off also
+            // clears it, so the global effect never runs hidden).
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ToggleRow(
+                    "AutoEQ",
+                    "Headphone EQ correction",
+                    autoEqEnabled,
+                    accent,
+                    onAutoEqToggle,
+                )
+                AnimatedVisibility(visible = autoEqEnabled) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, top = 12.dp),
+                    ) {
+                        ToggleRow(
+                            "System-wide",
+                            "Apply to all device audio",
+                            systemWideAutoEqEnabled,
+                            accent,
+                            onSystemWideAutoEqToggle,
+                        )
+                    }
+                }
+            }
             // Bass/treble tone shelves (independent of the system-wide toggle —
             // applied in-app, or via the global effect when system-wide is on).
             ToneControlsPanel(

@@ -108,6 +108,7 @@ fun MainPlayerRoute(
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsState()
     val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsState()
+    val autoEqEnabled by playerViewModel.autoEqEnabled.collectAsState()
     val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsState()
     val toneControls by playerViewModel.toneControls.collectAsState()
 
@@ -290,6 +291,7 @@ fun MainPlayerRoute(
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
         crossfeedEnabled = crossfeedEnabled,
+        autoEqEnabled = autoEqEnabled,
         systemWideAutoEqEnabled = systemWideAutoEqEnabled,
         toneControls = toneControls,
     )
@@ -388,6 +390,7 @@ fun MainPlayerRoute(
             onCompressorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 0)) },
             onInflatorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 1)) },
             onCrossfeedOpen = { navController.navigate(Screen.Crossfeed.route) },
+            onAutoEqToggle = playerViewModel::setAutoEqEnabled,
             onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
             onToneControlsChange = playerViewModel::setToneControls,
             topBar = {

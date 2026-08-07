@@ -261,6 +261,20 @@ class PlayerViewModel @Inject constructor(
 
     fun setCrossfeedEnabled(on: Boolean) = crossfeedEffect.setEnabled(on)
 
+    // --- AutoEQ (headphone correction) ---
+    // The in-app correction flag; the same one the Equalizer screen toggles.
+    val autoEqEnabled: StateFlow<Boolean> = preferences.eqEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setAutoEqEnabled(on: Boolean) {
+        viewModelScope.launch {
+            preferences.setEqEnabled(on)
+            // The system-wide sub-toggle only shows while AutoEQ is on; clear it
+            // on the way out so the global effect can't keep running invisibly.
+            if (!on) preferences.setSystemWideAutoEqEnabled(false)
+        }
+    }
+
     // --- System-wide AutoEQ (global output-mix effect) ---
     // The SystemAudioEqController (app singleton) observes this preference and
     // attaches/detaches the global effect; the ViewModel only flips the flag.
