@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedAlgorithm
 import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect
 import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedState
 import kotlin.math.cos
@@ -106,10 +109,10 @@ fun CrossfeedScreen(
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = "Blends a touch of each channel into the " +
-                                    "opposite ear — delayed and darkened the way a " +
-                                    "real room would — so headphones image like a " +
-                                    "speaker pair in front of you.",
+                                text = "Feeds a small amount of each channel into " +
+                                    "the opposite ear, slightly delayed and " +
+                                    "low-pass filtered, so headphones sound more " +
+                                    "like a pair of speakers.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -123,62 +126,98 @@ fun CrossfeedScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    SpeakerStage(
-                        angleDeg = state.speakerAngleDeg,
-                        enabled = state.enabled,
+                    // Algorithm picker — the physical speaker model plus the
+                    // classic fixed networks (BS2B / Chu Moy / Jan Meier).
+                    Text(
+                        text = "Algorithm",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(1.45f)
-                            .alpha(if (state.enabled) 1f else 0.45f),
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(
-                            text = "Speaker angle",
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = "${state.speakerAngleDeg.roundToInt()}°",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        CrossfeedAlgorithm.entries.forEach { algo ->
+                            FilterChip(
+                                selected = state.algorithm == algo,
+                                onClick = { effect.setAlgorithm(algo) },
+                                label = {
+                                    Text(
+                                        text = algo.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                },
+                            )
+                        }
                     }
-                    Slider(
-                        value = state.speakerAngleDeg,
-                        onValueChange = effect::setSpeakerAngleDeg,
-                        valueRange = CrossfeedState.MIN_ANGLE_DEG..CrossfeedState.MAX_ANGLE_DEG,
-                        enabled = state.enabled,
-                    )
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "30° · narrow",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = "180° · headphones",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Narrow angles pull the stereo image together in " +
-                            "front of you (strongest crossfeed). At 180° the " +
-                            "speakers sit at your ears — plain headphones, no " +
-                            "crossfeed at all.",
+                        text = state.algorithm.blurb,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+
+                    if (state.algorithm == CrossfeedAlgorithm.SPEAKER) {
+                        Spacer(Modifier.height(16.dp))
+
+                        SpeakerStage(
+                            angleDeg = state.speakerAngleDeg,
+                            enabled = state.enabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1.45f)
+                                .alpha(if (state.enabled) 1f else 0.45f),
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Speaker angle",
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "${state.speakerAngleDeg.roundToInt()}°",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Slider(
+                            value = state.speakerAngleDeg,
+                            onValueChange = effect::setSpeakerAngleDeg,
+                            valueRange = CrossfeedState.MIN_ANGLE_DEG..CrossfeedState.MAX_ANGLE_DEG,
+                            enabled = state.enabled,
+                        )
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "30° narrow",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "180° headphones",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Narrow angles give the strongest crossfeed. " +
+                                "At 180° the speakers sit at your ears and no " +
+                                "crossfeed is applied.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }

@@ -762,11 +762,11 @@ private fun StatusOverlayPanel(
             }
 
             // Effects toggles — long-press a row to open that tool's page.
-            ToggleRow("Compressor", "Oxford dynamics · hold to configure", compressorEnabled, accent,
+            ToggleRow("Compressor", "Oxford dynamics. Hold to configure", compressorEnabled, accent,
                 onCompressorToggle, onLongPress = onCompressorOpen)
-            ToggleRow("Inflator", "Oxford loudness · hold to configure", inflatorEnabled, accent,
+            ToggleRow("Inflator", "Oxford loudness. Hold to configure", inflatorEnabled, accent,
                 onInflatorToggle, onLongPress = onInflatorOpen)
-            ToggleRow("Crossfeed", "Speaker simulation · hold to configure", crossfeedEnabled, accent,
+            ToggleRow("Crossfeed", "Speaker simulation. Hold to configure", crossfeedEnabled, accent,
                 onCrossfeedToggle, onLongPress = onCrossfeedOpen)
         }
             }

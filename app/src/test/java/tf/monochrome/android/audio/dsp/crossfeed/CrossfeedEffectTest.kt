@@ -59,6 +59,48 @@ class CrossfeedEffectTest {
     }
 
     @Test
+    fun `speaker model is the default algorithm`() {
+        assertEquals(CrossfeedAlgorithm.SPEAKER, freshEffect().state.value.algorithm)
+    }
+
+    @Test
+    fun `fixed algorithms feed the opposite ear at their published levels`() {
+        // Same signal through each network; a hotter feed level must leave more
+        // contralateral energy: BS2B (−4.5 dB) > Chu Moy (−6) > Meier (−9.5).
+        fun tailEnergyFor(algo: CrossfeedAlgorithm): Double {
+            val fx = freshEffect()
+            fx.setEnabled(true)
+            fx.setAlgorithm(algo)
+            val frames = 4096
+            val l = FloatArray(frames) { kotlin.math.sin(it * 0.05f) }
+            val r = FloatArray(frames)
+            fx.processArrays(l, r, frames)
+            return (frames / 2 until frames).sumOf { abs(r[it]).toDouble() }
+        }
+        val bs2b = tailEnergyFor(CrossfeedAlgorithm.BS2B)
+        val cmoy = tailEnergyFor(CrossfeedAlgorithm.CMOY)
+        val meier = tailEnergyFor(CrossfeedAlgorithm.JMEIER)
+        assertTrue("all algorithms should crossfeed", meier > 1.0)
+        assertTrue("BS2B should feed harder than Chu Moy", bs2b > cmoy)
+        assertTrue("Chu Moy should feed harder than Meier", cmoy > meier)
+    }
+
+    @Test
+    fun `switching algorithm mid-stream stays bounded`() {
+        val fx = freshEffect()
+        fx.setEnabled(true)
+        val frames = 1024
+        for (algo in CrossfeedAlgorithm.entries) {
+            fx.setAlgorithm(algo)
+            val l = FloatArray(frames) { kotlin.math.sin(it * 0.05f) }
+            val r = FloatArray(frames) { kotlin.math.cos(it * 0.03f) }
+            fx.processArrays(l, r, frames)
+            assertTrue(l.all { it.isFinite() && abs(it) <= 1.5f })
+            assertTrue(r.all { it.isFinite() && abs(it) <= 1.5f })
+        }
+    }
+
+    @Test
     fun `angle is clamped to the supported range`() {
         val fx = freshEffect()
         fx.setSpeakerAngleDeg(500f)

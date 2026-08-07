@@ -20,14 +20,51 @@ import javax.inject.Singleton
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.pow
 import kotlin.math.sin
+
+/**
+ * Selectable crossfeed tunings. SPEAKER derives its feed level and delay from
+ * the user's speaker angle; the rest are fixed classic networks whose feed
+ * level / cutoff / delay triplets follow the published bs2b tunings.
+ */
+enum class CrossfeedAlgorithm(
+    val label: String,
+    val blurb: String,
+    val feedDb: Float,
+    val cutoffHz: Double,
+    val delayUs: Double,
+) {
+    SPEAKER(
+        "Speaker angle",
+        "Physical model. Set the virtual speaker angle with the slider below.",
+        feedDb = 0f, cutoffHz = 700.0, delayUs = 0.0, // derived from the angle
+    ),
+    BS2B(
+        "BS2B",
+        "Bauer stereophonic-to-binaural. 700 Hz cut, -4.5 dB feed, 260 µs delay.",
+        feedDb = -4.5f, cutoffHz = 700.0, delayUs = 260.0,
+    ),
+    CMOY(
+        "Chu Moy",
+        "Chu Moy crossfeeder. 700 Hz cut, -6 dB feed, 260 µs delay.",
+        feedDb = -6.0f, cutoffHz = 700.0, delayUs = 260.0,
+    ),
+    JMEIER(
+        "Jan Meier",
+        "Jan Meier CORDA network. 650 Hz cut, -9.5 dB feed, 280 µs delay.",
+        feedDb = -9.5f, cutoffHz = 650.0, delayUs = 280.0,
+    );
+}
 
 data class CrossfeedState(
     val enabled: Boolean = false,
+    val algorithm: CrossfeedAlgorithm = CrossfeedAlgorithm.SPEAKER,
     /**
      * Total angle between the two virtual speakers as seen from the listener,
      * in degrees. 30° = narrow frontal pair (strongest crossfeed), 180° =
      * speakers at the ears, i.e. plain headphones (no crossfeed at all).
+     * Only meaningful for [CrossfeedAlgorithm.SPEAKER].
      */
     val speakerAngleDeg: Float = DEFAULT_ANGLE_DEG,
 ) {
@@ -87,6 +124,8 @@ class CrossfeedEffect @Inject constructor() {
     }
 
     fun setEnabled(on: Boolean) = update { it.copy(enabled = on) }
+
+    fun setAlgorithm(algorithm: CrossfeedAlgorithm) = update { it.copy(algorithm = algorithm) }
 
     fun setSpeakerAngleDeg(deg: Float) = update {
         it.copy(speakerAngleDeg = deg.coerceIn(CrossfeedState.MIN_ANGLE_DEG, CrossfeedState.MAX_ANGLE_DEG))
@@ -154,23 +193,31 @@ class CrossfeedEffect @Inject constructor() {
         lpR = fR
     }
 
-    /** Map the speaker angle onto gain/delay/filter coefficients. */
+    /** Map the selected algorithm (and, for SPEAKER, the angle) onto coefficients. */
     private fun recompute() {
         val s = _state.value
-        val halfAngleRad = Math.toRadians(s.speakerAngleDeg / 2.0)
+        if (s.algorithm == CrossfeedAlgorithm.SPEAKER) {
+            val halfAngleRad = Math.toRadians(s.speakerAngleDeg / 2.0)
 
-        // Woodworth ITD for a source at the speaker's azimuth: r/c · (θ + sin θ).
-        val itdSec = HEAD_RADIUS_M / SPEED_OF_SOUND_MS * (halfAngleRad + sin(halfAngleRad))
-        targetDelaySamples = (itdSec * sampleRate).toFloat().coerceIn(0f, RING_SIZE - 2f)
+            // Woodworth ITD for a source at the speaker's azimuth: r/c · (θ + sin θ).
+            val itdSec = HEAD_RADIUS_M / SPEED_OF_SOUND_MS * (halfAngleRad + sin(halfAngleRad))
+            targetDelaySamples = (itdSec * sampleRate).toFloat().coerceIn(0f, RING_SIZE - 2f)
 
-        // Contralateral level: cos(halfAngle) → full crossfeed as the pair
-        // narrows toward the front, zero when the speakers sit at the ears
-        // (180°), which is exactly "plain headphones". MAX_CROSS ≈ -4 dB at
-        // 30°, in bs2b/Meier territory.
-        targetCrossGain = if (!s.enabled) 0f
-            else MAX_CROSS_GAIN * cos(halfAngleRad).toFloat().coerceAtLeast(0f)
+            // Contralateral level: cos(halfAngle) → full crossfeed as the pair
+            // narrows toward the front, zero when the speakers sit at the ears
+            // (180°), which is exactly "plain headphones". MAX_CROSS ≈ -4 dB at
+            // 30°, in bs2b/Meier territory.
+            targetCrossGain = if (!s.enabled) 0f
+                else MAX_CROSS_GAIN * cos(halfAngleRad).toFloat().coerceAtLeast(0f)
 
-        lowpassCoeff = onePoleCoeff(HEAD_SHADOW_CUTOFF_HZ)
+            lowpassCoeff = onePoleCoeff(HEAD_SHADOW_CUTOFF_HZ)
+        } else {
+            targetDelaySamples = (s.algorithm.delayUs * 1e-6 * sampleRate)
+                .toFloat().coerceIn(0f, RING_SIZE - 2f)
+            targetCrossGain = if (!s.enabled) 0f
+                else 10f.pow(s.algorithm.feedDb / 20f)
+            lowpassCoeff = onePoleCoeff(s.algorithm.cutoffHz)
+        }
         smoothCoeff = onePoleCoeff(1.0 / (2.0 * PI * SMOOTH_TIME_SEC))
     }
 
