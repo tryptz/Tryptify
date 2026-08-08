@@ -41,7 +41,7 @@ Tryptify is an audiophile-grade music player whose interesting parts live below 
 - **Native DSP mixing console** — 4 buses + master, **32 original C++ audio processors** (up to 16 per bus), ARM NEON SIMD, lock-free parameter updates between the UI and audio threads, true bypass when off.
 - **Headphone AutoEQ** — a 10-band parametric generator that builds correction filters from **4,000+ frequency-response measurements** (squig.link + the AutoEq dataset), 10 target curves, measurement-rig–aware filtering, and custom CSV/TXT import.
 - **Bit-perfect USB-DAC output** — a libusb **UAC1 + UAC2** driver that claims the streaming interface from the kernel and drives the isochronous endpoint directly, with asynchronous-feedback pacing and a watchdog fallback.
-- **Local library** — MediaStore indexing with an embedded-tag reader, incremental sync, and a filesystem watcher; ReplayGain (track/album with peak protection), gapless playback, drag-to-reorder queue, variable speed.
+- **Local library** — MediaStore indexing with an embedded-tag reader, incremental sync, and a filesystem watcher; gapless playback and crossfade, drag-to-reorder queue, variable speed.
 - **Real-time visualizer** — a ProjectM OpenGL renderer tapping the post-DSP PCM, tinted by album-art color extraction.
 - **Modern Android surface** — Compose + Material 3 throughout, a Glance home-screen widget, an Android Auto media browser, Chromecast via Media3 Cast, 16 themes plus live system dark-mode and dynamic album-art coloring.
 
@@ -52,7 +52,7 @@ Tryptify is an audiophile-grade music player whose interesting parts live below 
 The core is a C++17 native library (`monochrome_dsp`) embedded inside the ExoPlayer audio pipeline. It uses ARM NEON SIMD, denormal flush-to-zero, and lock-free atomic state hand-off so the real-time audio thread never blocks on the UI.
 
 ```
-ExoPlayer → ReplayGain → AutoEQ / ParamEQ → MixBusProcessor (JNI) → ProjectM tap → AudioSink
+ExoPlayer → AutoEQ / ParamEQ → MixBusProcessor (JNI) → ProjectM tap → AudioSink
                                                   │                                    │
                                             Native DspEngine             ┌─────────────┴─────────────┐
                                             ├─ Bus 1  [up to 16 plugins] │  default → DefaultAudioSink
@@ -141,7 +141,7 @@ tf.monochrome.android/
 │   └── preferences/# DataStore settings
 ├── di/             # Hilt modules
 ├── domain/         # Models + use cases (incl. MeasurementRig)
-├── player/         # Media3 PlaybackService, QueueManager, StreamResolver, ReplayGain
+├── player/         # Media3 PlaybackService, QueueManager, StreamResolver, crossfade
 ├── ui/
 │   ├── mixer/      # BusStrip, PluginSlot, PluginPicker, PluginEditor, DspCanvas
 │   ├── eq/         # Parametric + AutoEQ screens, FrequencyResponseGraph, rig chips

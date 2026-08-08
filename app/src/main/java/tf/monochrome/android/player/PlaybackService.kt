@@ -42,7 +42,6 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.scrobbling.ScrobblingService
 import tf.monochrome.android.domain.model.EqBand
-import tf.monochrome.android.domain.model.ReplayGainValues
 import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
@@ -55,7 +54,6 @@ class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var streamResolver: StreamResolver
-    @Inject lateinit var replayGainProcessor: ReplayGainProcessor
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
@@ -109,7 +107,6 @@ class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var currentReplayGain: ReplayGainValues? = null
 
     // Last track the ProjectM preset was advanced for — so a real track change
     // (skip, previous, pick a new song) rolls the visualizer to a fresh preset
@@ -215,7 +212,7 @@ class PlaybackService : MediaSessionService() {
                     }
                     Player.STATE_READY -> {
                         consecutivePlayerErrors = 0
-                        applyReplayGain()
+                        applyVolume()
                         applyPlaybackSpeed()
                         applyEq()
                         applyParametricEq()
@@ -282,13 +279,10 @@ class PlaybackService : MediaSessionService() {
                 ) {
                     queueManager.next()
                     trimPlayedItems()
-                    // Each pre-queued source carries no stream-level ReplayGain
-                    // (they're local files and Qobuz cache reads), and there is
-                    // no STATE_READY between gapless items to re-apply on, so
-                    // reset it here rather than letting the previous track's
-                    // gain leak into this one.
-                    currentReplayGain = null
-                    applyReplayGain()
+                    // There is no STATE_READY between gapless items, so the
+                    // volume is re-asserted here — it's the only hook the
+                    // hand-off gives us.
+                    applyVolume()
                     serviceScope.launch { preloadNextTracks() }
                 }
                 syncGaplessNext()
@@ -641,7 +635,6 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             try {
                 val (mediaItem, trackStream) = streamResolver.resolveMediaItem(track)
-                currentReplayGain = trackStream?.replayGain
 
                 if (mediaItem == null) {
                     // Stream URL couldn't be resolved (offline / API error /
@@ -677,7 +670,6 @@ class PlaybackService : MediaSessionService() {
                 val unifiedTrack = unifiedTrackRegistry[currentTrack.id]
                 if (unifiedTrack != null) {
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
-                    currentReplayGain = resolved.trackStream?.replayGain
                     if (!resolved.isPlayable) {
                         onTrackEnded()
                         return@launch
@@ -690,7 +682,6 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 val (mediaItem, trackStream) = streamResolver.resolveMediaItem(currentTrack)
-                currentReplayGain = trackStream?.replayGain
 
                 if (mediaItem == null) {
                     onTrackEnded()
@@ -797,13 +788,13 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    // Volume has two independent inputs — the user slider with ReplayGain
-    // applied, and the crossfade ramp — and both used to want to own
-    // player.volume outright. They're kept apart here: [baseVolume] is the
-    // level the track should play at, [crossfadeGain] is where the blend has
-    // got to, and only [pushVolume] multiplies them onto the player. Without
-    // this, a STATE_READY in the middle of a blend reset the ramp to full and
-    // the incoming track slammed in at once.
+    // Volume has two independent inputs — the user slider and the crossfade
+    // ramp — and both would otherwise want to own player.volume outright.
+    // They're kept apart here: [baseVolume] is the level the track should play
+    // at, [crossfadeGain] is where the blend has got to, and only [pushVolume]
+    // multiplies them onto the player. Without this, a STATE_READY landing in
+    // the middle of a blend reset the ramp to full and the incoming track
+    // slammed in at once.
     @Volatile private var baseVolume = 1f
     @Volatile private var crossfadeGain = 1f
 
@@ -812,15 +803,14 @@ class PlaybackService : MediaSessionService() {
         player.volume = effective
         // Mirror to the libusb bypass path. Player.volume runs
         // inside DefaultAudioSink which we skip when bypass is
-        // hot, so without this line the slider + ReplayGain
-        // attenuation only applies on the AudioFlinger fallback.
+        // hot, so without this line the volume slider and the blend
+        // ramp only apply on the AudioFlinger fallback.
         bypassVolumeController.setVolume(effective)
     }
 
-    private fun applyReplayGain() {
+    private fun applyVolume() {
         serviceScope.launch {
-            val volume = preferences.volume.first().toFloat()
-            baseVolume = replayGainProcessor.calculateVolume(volume, currentReplayGain)
+            baseVolume = preferences.volume.first().toFloat()
             pushVolume()
         }
     }

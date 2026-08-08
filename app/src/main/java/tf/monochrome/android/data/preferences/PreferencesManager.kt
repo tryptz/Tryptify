@@ -22,7 +22,6 @@ import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
-import tf.monochrome.android.domain.model.ReplayGainMode
 import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.radio.RadioPlannerWeights
@@ -70,9 +69,6 @@ class PreferencesManager @Inject constructor(
         private val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         private val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
 
-        // ReplayGain
-        private val REPLAY_GAIN_MODE = stringPreferencesKey("replay_gain_mode")
-        private val REPLAY_GAIN_PREAMP = doublePreferencesKey("replay_gain_preamp")
 
         // Player state
         private val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
@@ -315,7 +311,7 @@ class PreferencesManager @Inject constructor(
         // device — and a newly added key defaults to "not synced" until it's
         // deliberately added here.
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
-            WIFI_QUALITY, CELLULAR_QUALITY, REPLAY_GAIN_MODE, REPLAY_GAIN_PREAMP,
+            WIFI_QUALITY, CELLULAR_QUALITY,
             THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
@@ -368,23 +364,6 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setCellularQuality(quality: AudioQuality) {
         dataStore.edit { it[CELLULAR_QUALITY] = quality.name }
-    }
-
-    // ReplayGain
-    val replayGainMode: Flow<ReplayGainMode> = dataStore.data.map { prefs ->
-        prefs[REPLAY_GAIN_MODE]?.let { ReplayGainMode.valueOf(it) } ?: ReplayGainMode.OFF
-    }
-
-    val replayGainPreamp: Flow<Double> = dataStore.data.map { prefs ->
-        prefs[REPLAY_GAIN_PREAMP] ?: 0.0
-    }
-
-    suspend fun setReplayGainMode(mode: ReplayGainMode) {
-        dataStore.edit { it[REPLAY_GAIN_MODE] = mode.name }
-    }
-
-    suspend fun setReplayGainPreamp(preamp: Double) {
-        dataStore.edit { it[REPLAY_GAIN_PREAMP] = preamp }
     }
 
     // Player state
