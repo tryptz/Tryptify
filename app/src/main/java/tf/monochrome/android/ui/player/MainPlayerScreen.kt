@@ -50,6 +50,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -100,9 +101,6 @@ data class MainPlayerUiState(
     val isThxSpatialAudio: Boolean = false,
     val isPlaying: Boolean,
     val isBuffering: Boolean = false,
-    val positionMs: Long,
-    val durationMs: Long,
-    val progress: Float,
     val isLiked: Boolean,
     val playbackSpeed: Float,
     val shuffleEnabled: Boolean,
@@ -144,6 +142,16 @@ data class MainPlayerUiState(
 @Composable
 fun MainPlayerScreen(
     state: MainPlayerUiState,
+    /**
+     * Play head and track length, deliberately passed as [State] rather than as
+     * fields on [MainPlayerUiState]. They change four times a second, and while
+     * they lived on the state object every tick rebuilt it — re-executing this
+     * whole screen, the hero and the glass around it, for a number only the
+     * progress row and the ring actually read. Only the composables that read
+     * `.value` recompose now; everything else sees a stable state object.
+     */
+    positionState: State<Long>,
+    durationState: State<Long>,
     // The audio-tools sheet renders in the MINI player's glass material, not
     // the full player's — the sheet is chrome overlaying the player, exactly
     // the mini player's role, so it follows that Studio setting.
@@ -405,26 +413,16 @@ fun MainPlayerScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                var isSeeking by remember { mutableStateOf(false) }
-                var seekPosition by remember { mutableFloatStateOf(0f) }
-                val displayFraction = if (isSeeking) seekPosition else state.progress
-                val displayPositionMs =
-                    if (isSeeking) (seekPosition * state.durationMs).toLong() else state.positionMs
                 DevEditable("progress", Modifier.fillMaxWidth()) {
-                    PlayerProgress(
-                        fraction = displayFraction,
-                        elapsedLabel = formatTime(displayPositionMs),
-                        totalLabel = formatTime(state.durationMs),
+                    // Its own composable so the position tick recomposes this
+                    // and nothing else.
+                    PlayerProgressSection(
+                        positionState = positionState,
+                        durationState = durationState,
                         centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
                         accent = accent,
-                        onSeek = { value ->
-                            isSeeking = true
-                            seekPosition = value
-                        },
-                        onSeekFinished = { value ->
-                            onSeekCommit(value)
-                            isSeeking = false
-                        },
+                        formatTime = formatTime,
+                        onSeekCommit = onSeekCommit,
                     )
                 }
 
@@ -563,6 +561,46 @@ fun MainPlayerScreen(
             }
         }
     }
+}
+
+/**
+ * The scrubber and its time labels — the only part of the player that needs the
+ * play head. Split out so a position tick recomposes this and nothing above it.
+ */
+@Composable
+private fun PlayerProgressSection(
+    positionState: State<Long>,
+    durationState: State<Long>,
+    centerLabel: String,
+    accent: androidx.compose.ui.graphics.Color,
+    formatTime: (Long) -> String,
+    onSeekCommit: (Float) -> Unit,
+) {
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPosition by remember { mutableFloatStateOf(0f) }
+    val positionMs = positionState.value
+    val durationMs = durationState.value
+    val fraction = if (isSeeking) {
+        seekPosition
+    } else if (durationMs > 0) {
+        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val displayPositionMs = if (isSeeking) (seekPosition * durationMs).toLong() else positionMs
+    PlayerProgress(
+        fraction = fraction,
+        elapsedLabel = formatTime(displayPositionMs),
+        totalLabel = formatTime(durationMs),
+        centerLabel = centerLabel,
+        accent = accent,
+        onSeek = { value ->
+            isSeeking = true
+            seekPosition = value
+        },
+        onSeekFinished = { value ->
+            onSeekCommit(value)
+            isSeeking = false
+        },
+    )
 }
 
 @Composable

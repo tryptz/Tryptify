@@ -89,8 +89,12 @@ fun MainPlayerRoute(
     val currentIndex by playerViewModel.currentIndex.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
     val isBuffering by playerViewModel.isBuffering.collectAsState()
-    val positionMs by playerViewModel.positionMs.collectAsState()
-    val durationMs by playerViewModel.durationMs.collectAsState()
+    // Held as State, never read with `.value` in this composable: the play head
+    // ticks four times a second, and reading it here recomposed the entire
+    // player — hero, glass, artwork and all — for a number only the scrubber
+    // and the progress ring consume. They read it themselves, further down.
+    val positionState = playerViewModel.positionMs.collectAsState()
+    val durationState = playerViewModel.durationMs.collectAsState()
     val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsState()
     val repeatMode by playerViewModel.repeatMode.collectAsState()
     val isLiked by playerViewModel.isCurrentTrackLiked.collectAsState()
@@ -282,9 +286,6 @@ fun MainPlayerRoute(
         isThxSpatialAudio = currentUnified?.isThxSpatialAudio ?: currentTrack?.isThxSpatialAudio ?: false,
         isPlaying = isPlaying,
         isBuffering = isBuffering,
-        positionMs = positionMs,
-        durationMs = durationMs,
-        progress = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
         isLiked = isLiked,
         playbackSpeed = playbackSpeed,
         shuffleEnabled = shuffleEnabled,
@@ -367,6 +368,8 @@ fun MainPlayerRoute(
         MainPlayerScreen(
             miniGlass = miniGlass,
             state = state,
+            positionState = positionState,
+            durationState = durationState,
             isFullscreen = isFullscreenActive,
             formatTime = playerViewModel::formatTime,
             onToggleLike = playerViewModel::toggleLikeCurrentTrack,
@@ -555,7 +558,10 @@ fun MainPlayerRoute(
                             isFullscreen = isFullscreenActive,
                             track = currentTrack,
                             isPlaying = isPlaying,
-                            progress = state.progress,
+                            progress = {
+                                val d = durationState.value
+                                if (d > 0) (positionState.value.toFloat() / d).coerceIn(0f, 1f) else 0f
+                            },
                             albumColors = blendedColors,
                             blendMillis = colorBlendMs,
                             userTrackChanges = userTrackChanges,

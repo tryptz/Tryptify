@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -147,11 +148,12 @@ class PlayerViewModel @Inject constructor(
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
-    val progress: StateFlow<Float>
-        get() = MutableStateFlow(
-            if (_durationMs.value > 0) _positionMs.value.toFloat() / _durationMs.value.toFloat()
-            else 0f
-        ).asStateFlow()
+    // No `progress` flow here on purpose. There was one, and it was a getter
+    // that allocated a fresh MutableStateFlow on every read, seeded from the
+    // position at that instant and then never updated again — a StateFlow that
+    // could not change. Nothing consumed it (both call sites compute the
+    // fraction themselves from position and duration), so it was pure garbage
+    // per access.
 
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
@@ -479,12 +481,19 @@ class PlayerViewModel @Inject constructor(
     private fun startPositionPolling() {
         viewModelScope.launch {
             while (isActive) {
-                mediaController?.let { mc ->
-                    if (mc.isPlaying) {
-                        _positionMs.value = mc.currentPosition.coerceAtLeast(0)
-                        _durationMs.value = mc.duration.coerceAtLeast(0)
-                    }
+                val mc = mediaController
+                if (mc == null || !mc.isPlaying) {
+                    // Nothing is moving, so there is nothing to read. This used
+                    // to tick four times a second regardless — for the whole
+                    // life of the ViewModel, paused or not, controller or not —
+                    // to copy the same number onto itself. Wait for playback
+                    // instead; seekTo and syncState already publish the position
+                    // directly when it changes while paused.
+                    _isPlaying.first { it }
+                    continue
                 }
+                _positionMs.value = mc.currentPosition.coerceAtLeast(0)
+                _durationMs.value = mc.duration.coerceAtLeast(0)
                 delay(250) // 4 updates/sec for smooth progress
             }
         }

@@ -82,7 +82,7 @@ fun AddToPlaylistSheet(
                     }
                 }
 
-                items(playlists) { playlist ->
+                items(playlists, key = { it.id }) { playlist ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

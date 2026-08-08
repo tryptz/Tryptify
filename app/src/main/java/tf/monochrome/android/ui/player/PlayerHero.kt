@@ -91,7 +91,13 @@ fun PlayerHero(
     isFullscreen: Boolean = false,
     track: Track?,
     isPlaying: Boolean,
-    progress: Float,
+    /**
+     * The play head as a 0..1 fraction, as a lambda rather than a value. Only
+     * the progress ring reads it, and it reads it in the draw phase — passing
+     * the number itself recomposed this whole hero (and the artwork inside it)
+     * four times a second on a screen where nothing else had changed.
+     */
+    progress: () -> Float,
     albumColors: AlbumColors,
     // How long the artwork takes to change track, and whether the change was
     // asked for. See [MorphingCoverArt].
@@ -226,7 +232,7 @@ private fun SquareArtHero(
 @Composable
 private fun CircularProgressHero(
     track: Track?,
-    progress: Float,
+    progress: () -> Float,
     accent: Color,
     blendMillis: Int,
     userTrackChanges: Int,
@@ -272,7 +278,7 @@ private fun CircularProgressHero(
             drawArc(
                 color = accent,
                 startAngle = -90f,
-                sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                sweepAngle = 360f * progress().coerceIn(0f, 1f),
                 useCenter = false,
                 topLeft = Offset(inset, inset),
                 size = Size(size.width - stroke, size.height - stroke),

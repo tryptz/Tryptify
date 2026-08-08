@@ -499,7 +499,7 @@ fun HomeScreen(
                     item {
                         SectionHeader(title = "Recently Played")
                     }
-                    items(recentTracks) { track ->
+                    items(recentTracks, key = { it.id }) { track ->
                         TrackItem(
                             track = track,
                             isLiked = favoriteTrackIds.contains(track.id),

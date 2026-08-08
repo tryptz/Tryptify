@@ -197,6 +197,8 @@ class PlaybackService : MediaSessionService() {
             // updatePeriodMillis=0 (no polling), so it only refreshes when the
             // service pushes an update on a real playback change.
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Also what wakes the blend watcher — see startCrossfadeWatcher.
+                playingSignal.value = isPlaying
                 refreshNowPlayingWidget()
             }
 
@@ -867,6 +869,13 @@ class PlaybackService : MediaSessionService() {
 
     @Volatile private var crossfadeMs = 0L
 
+    /**
+     * Mirrors [player]'s playing state as something suspendable. Player.Listener
+     * is a callback, and the blend watcher needs to *wait* for playback rather
+     * than poll for it.
+     */
+    private val playingSignal = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     // Live copies of the two DSP settings a blend's chain has to be told about;
     // defaults match PreferencesManager's until the collectors above land.
     @Volatile private var dspBlockSize = 1024
@@ -985,13 +994,31 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * Watches the play head so a blend can begin before the track runs out.
-     * Cheap enough to poll: a few comparisons a second, and only while a blend
-     * length is actually set.
+     *
+     * There is no callback for "the playhead reached duration - blend", so this
+     * has to poll — but only when there is something to poll for. The comment
+     * here used to claim it ran "only while a blend length is actually set" and
+     * it did nothing of the sort: the loop ticked four times a second for the
+     * life of the service, and since the default blend is zero, the overwhelmingly
+     * common case was waking ~345,000 times a day to evaluate `canCrossfade()`
+     * as false. It now parks on the preference and on playback, so a gapless
+     * user costs nothing and a blending one costs a few comparisons a second
+     * while a track is actually running.
      */
     @OptIn(UnstableApi::class)
     private fun startCrossfadeWatcher() {
         serviceScope.launch {
             while (true) {
+                // Suspends until a blend length is set; wakes on the next
+                // preference change rather than on a timer.
+                if (crossfadeMs == 0L) {
+                    preferences.crossfadeDuration.first { it > 0 }
+                    continue
+                }
+                if (!player.isPlaying) {
+                    playingSignal.first { it }
+                    continue
+                }
                 kotlinx.coroutines.delay(CROSSFADE_POLL_MS)
                 if (!canCrossfade() || crossfade.isRunning) continue
                 if (!player.isPlaying) continue
