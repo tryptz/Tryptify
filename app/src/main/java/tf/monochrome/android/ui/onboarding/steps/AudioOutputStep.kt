@@ -14,10 +14,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -29,8 +29,8 @@ import tf.monochrome.android.ui.theme.MonoDimens
  */
 @Composable
 fun AudioOutputStep(viewModel: OnboardingViewModel) {
-    val usbDevice by viewModel.usbDevice.collectAsState()
-    val bitPerfectEnabled by viewModel.usbBitPerfectEnabled.collectAsState()
+    val usbDevice by viewModel.usbDevice.collectAsStateWithLifecycle()
+    val bitPerfectEnabled by viewModel.usbBitPerfectEnabled.collectAsStateWithLifecycle()
 
     OnboardingStepScaffold(
         title = "Bit-perfect out",

@@ -18,11 +18,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
@@ -36,7 +36,7 @@ import tf.monochrome.android.ui.theme.MonoDimens
 @Composable
 fun DownloadLocationStep(viewModel: OnboardingViewModel) {
     val context = LocalContext.current
-    val downloadUri by viewModel.downloadFolderUri.collectAsState()
+    val downloadUri by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
 
     val downloadFolderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()

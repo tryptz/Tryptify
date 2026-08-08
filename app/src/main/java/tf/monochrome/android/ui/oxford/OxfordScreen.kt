@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.isActive
 import tf.monochrome.android.audio.dsp.oxford.CompressorEffect
 import tf.monochrome.android.audio.dsp.oxford.CompressorPreset
@@ -534,8 +535,8 @@ fun InflatorScreen(
     effect: InflatorEffect,
     modifier: Modifier = Modifier,
 ) {
-    val state by effect.state.collectAsState()
-    val peak  by effect.peak.collectAsState()
+    val state by effect.state.collectAsStateWithLifecycle()
+    val peak  by effect.peak.collectAsStateWithLifecycle()
     var showHelp by rememberSaveable { mutableStateOf(false) }
 
     if (showHelp) {
@@ -693,9 +694,9 @@ fun CompressorScreen(
     effect: CompressorEffect,
     modifier: Modifier = Modifier,
 ) {
-    val state by effect.state.collectAsState()
-    val peak  by effect.peak.collectAsState()
-    val grDb  by effect.gainReductionDb.collectAsState()
+    val state by effect.state.collectAsStateWithLifecycle()
+    val peak  by effect.peak.collectAsStateWithLifecycle()
+    val grDb  by effect.gainReductionDb.collectAsStateWithLifecycle()
     var showHelp by rememberSaveable { mutableStateOf(false) }
 
     if (showHelp) {

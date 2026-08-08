@@ -31,7 +31,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.domain.model.EqTarget
 
 /**
@@ -63,11 +63,11 @@ fun MeasurementUploadScreen(
     onDismiss: () -> Unit,
     onCalibrationComplete: () -> Unit
 ) {
-    val isCalculating by viewModel.isCalculating.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val selectedTarget by viewModel.selectedTarget.collectAsState()
-    val availableTargets by viewModel.availableTargets.collectAsState()
-    val currentBands by viewModel.currentBands.collectAsState()
+    val isCalculating by viewModel.isCalculating.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val selectedTarget by viewModel.selectedTarget.collectAsStateWithLifecycle()
+    val availableTargets by viewModel.availableTargets.collectAsStateWithLifecycle()
+    val currentBands by viewModel.currentBands.collectAsStateWithLifecycle()
 
     var measurementData by remember { mutableStateOf("") }
     var bandCount by remember { mutableFloatStateOf(10f) }

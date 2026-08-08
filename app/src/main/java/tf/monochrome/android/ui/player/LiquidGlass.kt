@@ -76,21 +76,53 @@ internal val LocalPlayerBackdrop = androidx.compose.runtime.compositionLocalOf {
 private var frameClockEpochNanos = -1L
 
 /**
+ * The single state object every glass surface animates from.
+ *
+ * It used to be one `mutableFloatStateOf` *per call site*, and there are six of
+ * them — the lyric glass, the panel, the player chrome, two per-letter lyric
+ * paths and the Studio preview. With the player open, six independent state
+ * objects were each written every frame, so one frame dirtied six separate
+ * invalidation scopes even though all six held the identical number.
+ *
+ * Sharing one holder makes that one write and one scope. The per-surface
+ * `withFrameNanos` loops stay (they are a single Choreographer callback list,
+ * and they all compute the same value, so the redundant writes are equal-valued
+ * and Compose's structural-equality policy drops them for free).
+ *
+ * Deliberately NOT gated on `surfaceMotion`: the default is 0.53 and every
+ * shipped theme animates, so a "no motion" gate would essentially never fire.
+ * The glass is a continuously-animated effect by design.
+ */
+private val frameClockSeconds = mutableFloatStateOf(0f)
+
+/**
  * Per-frame clock in seconds on a shared app-wide timeline. Read it from draw
  * or layout lambdas (graphicsLayer, drawBehind) so animation never recomposes.
+ *
+ * Pass `animated = false` when the calling surface's shader has no live
+ * time-varying term — every `uTime` use in [LIQUID_GLASS_SRC] is now scaled by
+ * `uLiquid`, so a surface at `surfaceMotion = 0` renders identically frame to
+ * frame and has no reason to drive one.
+ *
+ * The gate matters most for the mini player, which is mounted app-wide by the
+ * nav host: with its motion at zero, the library, search and settings screens
+ * stop being pinned at display refresh rate by a strip of glass that isn't
+ * moving. The `if` is deliberate — flipping [animated] recomposes, which
+ * enters or leaves the effect, so the loop starts and stops with it.
  */
 @Composable
-internal fun rememberFrameSeconds(): State<Float> {
-    val timeSec = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            withFrameNanos { now ->
-                if (frameClockEpochNanos < 0L) frameClockEpochNanos = now
-                timeSec.floatValue = (now - frameClockEpochNanos) / 1_000_000_000f
+internal fun rememberFrameSeconds(animated: Boolean = true): State<Float> {
+    if (animated) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                withFrameNanos { now ->
+                    if (frameClockEpochNanos < 0L) frameClockEpochNanos = now
+                    frameClockSeconds.floatValue = (now - frameClockEpochNanos) / 1_000_000_000f
+                }
             }
         }
     }
-    return timeSec
+    return frameClockSeconds
 }
 
 /**
@@ -295,7 +327,12 @@ private fun playerGlassModifier(
     bulgeAmount: () -> Float,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
-    val timeSec = rememberFrameSeconds()
+    // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
+    // surface's motion is user-tunable — and every uTime term in the shader is
+    // scaled by uLiquid, so at zero it renders identically frame to frame and
+    // has no reason to drive a clock. This is the mini player, mounted app-wide
+    // by the nav host, so the gate reaches every screen.
+    val timeSec = rememberFrameSeconds(animated = g.surfaceMotion > 0f)
     val tilt = rememberGravityTilt()
     return Modifier.graphicsLayer {
         if (size.minDimension > 0f) {
@@ -719,15 +756,19 @@ half4 main(float2 p) {
     // uGloss-controlled exponent (higher = tighter mirror), dispersed for sparkle.
     float2 lightXY = float2(cos(uLightAngle), -sin(uLightAngle));
     float3 L = normalize(float3(
-        lightXY.x * 0.5 - uTilt.x * 0.8 * uTiltAmount + 0.25 * sin(uTime * 0.37),
-        lightXY.y * 0.5 + uTilt.y * 0.8 * uTiltAmount + 0.20 * cos(uTime * 0.29),
+        // Scaled by uLiquid like every other time-varying term: the file's own
+        // contract is that surfaceMotion = 0 "stays perfectly still", and these
+        // three were the exceptions that kept the glint and the dispersion
+        // drifting anyway — which meant a still preset still cost a frame clock.
+        lightXY.x * 0.5 - uTilt.x * 0.8 * uTiltAmount + 0.25 * sin(uTime * 0.37) * uLiquid,
+        lightXY.y * 0.5 + uTilt.y * 0.8 * uTiltAmount + 0.20 * cos(uTime * 0.29) * uLiquid,
         0.85));
     float3 H = normalize(L + float3(0.0, 0.0, 1.0));
     float ndh   = max(dot(N, H), 0.0);
     float spec  = pow(ndh, uGloss);
     // The rainbow spread of the glint slowly widens and narrows, so the
     // chromatic fringe cycles instead of sitting frozen on the bevel.
-    float dsp   = 0.015 * uDispersion * (1.0 + 0.35 * sin(uTime * 0.9));
+    float dsp   = 0.015 * uDispersion * (1.0 + 0.35 * sin(uTime * 0.9) * uLiquid);
     float specR = pow(max(dot(normalize(N + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
     float specB = pow(max(dot(normalize(N - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
 

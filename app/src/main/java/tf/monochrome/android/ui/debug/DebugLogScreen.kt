@@ -40,7 +40,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
@@ -55,6 +54,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.debug.DebugLogEntry
 import java.text.SimpleDateFormat
@@ -67,10 +67,10 @@ fun DebugLogScreen(
     navController: NavController,
     viewModel: DebugLogViewModel = hiltViewModel(),
 ) {
-    val entries by viewModel.entries.collectAsState()
-    val query by viewModel.query.collectAsState()
-    val levelFilter by viewModel.levelFilter.collectAsState()
-    val totalSize by viewModel.totalSize.collectAsState()
+    val entries by viewModel.entries.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val levelFilter by viewModel.levelFilter.collectAsStateWithLifecycle()
+    val totalSize by viewModel.totalSize.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showClearConfirm by remember { mutableStateOf(false) }

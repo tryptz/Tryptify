@@ -52,6 +52,22 @@ public:
             // resonance generated above Nyquist straight into the band. The
             // osL_/osR_ members were already here for this and simply never
             // called. Now they are.
+            //
+            // This also made the filter 6 dB louder, and that is the fix, not a
+            // side effect to trim back out. Zero-stuffing costs exactly the
+            // interpolation gain (a factor of L) and the old hand-rolled path
+            // never applied it, so the ladder's own passband sat 6 dB below
+            // unity — a 220 Hz tone through an 8 kHz lowpass at resonance 0 came
+            // out at half amplitude. ChannelOversampler applies the x2 in up2
+            // and measures dead unity end to end, so what is here now is right.
+            //
+            // Measured old vs new across cutoff (500/2k/8k), resonance (0/40/80)
+            // and drive (0/6/18 dB): exactly +6.02 dB at every setting with
+            // saturation off, and +0.7 to +6.3 dB with it on — the spread being
+            // how hard the saturator was already limiting, which swallows most
+            // of the 6 dB at low cutoff and none of it at high cutoff with
+            // resonance up. Anything that scales the output back down here would
+            // be reinstating the bug.
             float upL[2], upR[2];
             osL_.upsample(&left[i], upL, 1);
             osR_.upsample(&right[i], upR, 1);

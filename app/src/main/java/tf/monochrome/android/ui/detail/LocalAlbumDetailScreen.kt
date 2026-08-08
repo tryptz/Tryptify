@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
@@ -34,8 +35,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,13 +46,21 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.ClickableArtists
 import tf.monochrome.android.ui.components.ErrorScreen
 import tf.monochrome.android.ui.components.LoadingScreen
+import tf.monochrome.android.ui.components.TrackListToolbar
+import tf.monochrome.android.ui.components.TrackOrder
+import tf.monochrome.android.ui.components.TrackSort
+import tf.monochrome.android.ui.components.TrackSortSaver
+import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
+import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.navigation.openArtist
+import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,12 +71,29 @@ fun LocalAlbumDetailScreen(
     onPlayAll: (List<UnifiedTrack>) -> Unit,
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
     onAddToQueue: (UnifiedTrack) -> Unit,
+    playerViewModel: PlayerViewModel,
     viewModel: LocalAlbumDetailViewModel = hiltViewModel()
 ) {
-    val album by viewModel.album.collectAsState()
-    val tracks by viewModel.tracks.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
+    val album by viewModel.album.collectAsStateWithLifecycle()
+    val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+
+    var listQuery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
+        mutableStateOf(TrackSort())
+    }
+    val visibleTracks = remember(tracks, listQuery, listSort) {
+        tracks.applyUnifiedSearchAndSort(listQuery, listSort)
+    }
+
+    var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
+    UnifiedTrackContextMenuHost(
+        track = menuTrack,
+        onDismissRequest = { menuTrack = null },
+        navController = navController,
+        playerViewModel = playerViewModel,
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -159,7 +187,7 @@ fun LocalAlbumDetailScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 FilledIconButton(
-                                    onClick = { if (tracks.isNotEmpty()) onPlayAll(tracks) },
+                                    onClick = { if (visibleTracks.isNotEmpty()) onPlayAll(visibleTracks) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.primary
@@ -172,7 +200,7 @@ fun LocalAlbumDetailScreen(
                                     )
                                 }
                                 FilledIconButton(
-                                    onClick = { if (tracks.isNotEmpty()) onShuffleAll(tracks) },
+                                    onClick = { if (visibleTracks.isNotEmpty()) onShuffleAll(visibleTracks) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -190,12 +218,29 @@ fun LocalAlbumDetailScreen(
                         }
                     }
 
-                    itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                    item {
+                        TrackListToolbar(
+                            query = listQuery,
+                            onQueryChange = { listQuery = it },
+                            sort = listSort,
+                            onSortChange = { listSort = it },
+                            // No "Album": one album, one value.
+                            orders = listOf(
+                                TrackOrder.ORIGINAL,
+                                TrackOrder.TITLE,
+                                TrackOrder.ARTIST,
+                                TrackOrder.DURATION,
+                            ),
+                        )
+                    }
+
+                    itemsIndexed(visibleTracks, key = { _, track -> track.id }) { index, track ->
                         LocalTrackRow(
                             track = track,
                             trackNumber = track.trackNumber ?: (index + 1),
-                            onClick = { onPlayTrack(track, tracks) },
+                            onClick = { onPlayTrack(track, visibleTracks) },
                             onAddToQueue = { onAddToQueue(track) },
+                            onMoreClick = { menuTrack = track },
                             navController = navController
                         )
                     }
@@ -211,6 +256,7 @@ private fun LocalTrackRow(
     trackNumber: Int,
     onClick: () -> Unit,
     onAddToQueue: () -> Unit,
+    onMoreClick: () -> Unit,
     navController: NavController
 ) {
     Surface(
@@ -272,6 +318,14 @@ private fun LocalTrackRow(
                 Icon(
                     Icons.AutoMirrored.Filled.PlaylistAdd,
                     contentDescription = "Add to queue",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            IconButton(onClick = onMoreClick) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    contentDescription = "More options",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )

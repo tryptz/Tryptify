@@ -68,7 +68,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 11,
+    version = 13,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -134,6 +134,65 @@ abstract class MusicDatabase : RoomDatabase() {
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE eq_presets ADD COLUMN bandsRJson TEXT")
+            }
+        }
+
+        /**
+         * Composite index behind the library's main query, which is
+         * `SELECT * FROM local_tracks ORDER BY albumArtist, album, discNumber,
+         * trackNumber`. Only `albumArtist` and `album` were indexed, and never
+         * together, so SQLite could not satisfy the ordering from an index and
+         * built a temporary B-tree over the whole table on every emission —
+         * which Room re-fires on every write to `local_tracks`, i.e. once per
+         * 500-row batch during a scan.
+         *
+         * The index name MUST match what Room generates from the @Index
+         * annotation on LocalTrackEntity (`index_<table>_<col>_<col>…`), or
+         * Room's schema validation fails on open and — because the builder
+         * carries fallbackToDestructiveMigration — silently drops the user's
+         * library. Verified against Room's own generated CREATE INDEX output
+         * for this table.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "`index_local_tracks_albumArtist_album_discNumber_trackNumber` " +
+                        "ON `local_tracks` (`albumArtist`, `album`, `discNumber`, `trackNumber`)"
+                )
+            }
+        }
+
+        /**
+         * Folded title column + index behind the "play the on-device copy"
+         * lookup, which shortlisted candidates with `title LIKE 'song%'`.
+         *
+         * That is a prefix pattern, so it looks indexable — but SQLite's LIKE
+         * is case-insensitive by default and it only applies the LIKE
+         * optimisation when the column carries NOCASE collation, which an
+         * existing BINARY column cannot gain without rebuilding the table. So
+         * every uncached resolution scanned all of local_tracks, on the path to
+         * starting playback. A pre-folded column range-scans an ordinary index
+         * instead.
+         *
+         * The backfill uses SQLite's `lower()`, which folds ASCII only, where
+         * the scanner writes Kotlin's fuller `lowercase()`. That is not a
+         * regression: the LIKE it replaces folded ASCII only too. A non-ASCII
+         * title written by the backfill simply keeps matching exactly as well
+         * as it did before, and gets the fuller key on the next rescan.
+         *
+         * As with 11→12, the column type and index name must match what Room
+         * generates for the annotations on LocalTrackEntity, or validation
+         * fails on open and fallbackToDestructiveMigration wipes the library.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `titleSearchKey` TEXT")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_local_tracks_titleSearchKey` " +
+                        "ON `local_tracks` (`titleSearchKey`)"
+                )
+                db.execSQL("UPDATE `local_tracks` SET `titleSearchKey` = lower(`title`)")
             }
         }
     }

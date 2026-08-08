@@ -39,7 +39,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.AutoEqMeasurement
 import tf.monochrome.android.domain.model.Headphone
@@ -78,12 +78,12 @@ fun HeadphoneSelectScreen(
     onDismiss: () -> Unit,
     channel: EqChannel = EqChannel.LEFT,
 ) {
-    val availableHeadphones by viewModel.availableHeadphones.collectAsState()
-    val uploadedHeadphones by viewModel.uploadedHeadphones.collectAsState()
-    val headphonesLoading by viewModel.headphonesLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val selectedRig by viewModel.selectedRig.collectAsState()
-    val availableRigs by viewModel.availableRigs.collectAsState()
+    val availableHeadphones by viewModel.availableHeadphones.collectAsStateWithLifecycle()
+    val uploadedHeadphones by viewModel.uploadedHeadphones.collectAsStateWithLifecycle()
+    val headphonesLoading by viewModel.headphonesLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val selectedRig by viewModel.selectedRig.collectAsStateWithLifecycle()
+    val availableRigs by viewModel.availableRigs.collectAsStateWithLifecycle()
 
     var localSearchQuery by remember { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<Headphone?>(null) }
