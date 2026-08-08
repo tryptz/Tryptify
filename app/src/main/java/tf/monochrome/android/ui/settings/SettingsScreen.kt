@@ -120,7 +120,10 @@ import tf.monochrome.android.ui.theme.themeDisplayNames
 
 // "Radio" is appended after "About" so existing hardcoded tab indices
 // ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
-private val settingsTabs = listOf("Appearance", "Interface", "Scrobbling", "Audio", "Equalizer", "Library", "Downloads", "Instances", "System", "Radio", "About")
+// Ordered by how often they're reached for, not by how the code grew:
+// the look of the app, then how it sounds, then what it plays, then the
+// plumbing. "Interface" is gone — merged into Appearance, see AppearanceTab.
+private val settingsTabs = listOf("Appearance", "Audio", "Equalizer", "Library", "Downloads", "Instances", "Scrobbling", "Radio", "System", "About")
 
 /** One selectable step in the Appearance › Font Size picker. */
 private data class FontScalePreset(val label: String, val scale: Float)
@@ -211,17 +214,16 @@ fun SettingsScreen(
         ) { page ->
             tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
                 when (page) {
-                    0 -> AppearanceTab(viewModel)
-                    1 -> InterfaceTab(viewModel, navController)
-                    2 -> ScrobblingTab(viewModel)
-                    3 -> AudioTab(viewModel, navController)
-                    4 -> EqualizerTab(navController)
-                    5 -> LibrarySettingsTab(viewModel)
-                    6 -> DownloadsTab(viewModel)
-                    7 -> InstancesTab(viewModel)
+                    0 -> AppearanceTab(viewModel, navController)
+                    1 -> AudioTab(viewModel, navController)
+                    2 -> EqualizerTab(navController)
+                    3 -> LibrarySettingsTab(viewModel)
+                    4 -> DownloadsTab(viewModel)
+                    5 -> InstancesTab(viewModel)
+                    6 -> ScrobblingTab(viewModel)
+                    7 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
                     8 -> SystemTab(viewModel, navController)
-                    9 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                    10 -> AboutTab(viewModel)
+                    9 -> AboutTab(viewModel)
                 }
             }
         }
@@ -378,8 +380,25 @@ private fun EqualizerTab(navController: NavController, eqViewModel: EqViewModel 
 }
 
 // ─── Tab 1: Appearance ─────────────────────────────────────────────────
+//
+// Appearance and Interface used to be two tabs, and the split never held up:
+// "Interface" ended up as the place a setting went when no tab obviously owned
+// it — theme and typography on one page, then the fonts' own display toggles,
+// the now-playing look, the visualizer and the graphics settings on another.
+// They are one page now, in reading order from the app-wide look down to the
+// individual surfaces. The one group that genuinely belonged elsewhere,
+// Playback, moved to Audio.
 @Composable
-private fun AppearanceTab(viewModel: SettingsViewModel) {
+private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavController) {
+    SettingsTabContent {
+        AppearanceControls(viewModel)
+        Spacer(modifier = Modifier.height(16.dp))
+        InterfaceControls(viewModel, navController)
+    }
+}
+
+@Composable
+private fun AppearanceControls(viewModel: SettingsViewModel) {
     val themeName by viewModel.theme.collectAsState()
     val dynamicColors by viewModel.dynamicColors.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
@@ -397,7 +416,6 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
         uri?.let { viewModel.importFont(it) }
     }
 
-    SettingsTabContent {
         SettingsGroupHeader("Theme")
         SettingItem(title = "Color Theme", subtitle = themeDisplayNames[themeName] ?: themeName, onClick = { showThemeDropdown = true })
         DropdownMenu(expanded = showThemeDropdown, onDismissRequest = { showThemeDropdown = false }) {
@@ -538,15 +556,11 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
                 }
             }
         }
-    }
+    
 }
 
-// ─── Tab 2: Interface ──────────────────────────────────────────────────
 @Composable
-private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavController) {
-    val gapless by viewModel.gaplessPlayback.collectAsState()
-    val crossfade by viewModel.crossfadeDuration.collectAsState()
-    val gaplessNoResample by viewModel.gaplessNoResample.collectAsState()
+private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavController) {
     val explicit by viewModel.showExplicitBadges.collectAsState()
     val confirmQueue by viewModel.confirmClearQueue.collectAsState()
     val sensitivity by viewModel.visualizerSensitivity.collectAsState()
@@ -583,52 +597,6 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
         viewModel.prepareVisualizerEngine()
     }
 
-    SettingsTabContent {
-        SettingsGroupHeader("Playback")
-        SettingSwitchItem(
-            title = "Gapless Playback",
-            subtitle = "Remove silence between tracks",
-            checked = gapless,
-            onCheckedChange = { viewModel.setGaplessPlayback(it) }
-        )
-
-        SettingSwitchItem(
-            title = "Never Resample Between Tracks",
-            subtitle = "A track at a different sample rate starts after a brief gap " +
-                "instead of being resampled to match, keeping output bit-perfect. " +
-                "Turn off to keep every transition seamless and let the system resample.",
-            checked = gaplessNoResample,
-            onCheckedChange = { viewModel.setGaplessNoResample(it) }
-        )
-
-        // Sits under the gapless toggle because the two decide the same thing:
-        // what happens between one track and the next. They're also mutually
-        // exclusive in effect — any blend above 0s overlaps the tracks, so the
-        // gapless hand-off steps aside for it.
-        Text(
-            text = if (crossfade == 0) "Blend Between Tracks: Gapless" else "Blend Between Tracks: ${crossfade}s",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = if (crossfade == 0) {
-                "At zero, tracks run straight into each other with no gap. " +
-                    "Add time to overlap them instead."
-            } else {
-                "The outgoing track fades out while the next fades in over ${crossfade}s."
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Slider(
-            value = crossfade.toFloat(),
-            onValueChange = { viewModel.setCrossfadeDuration(it.toInt()) },
-            valueRange = 0f..12f,
-            steps = 11,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Display")
         SettingSwitchItem(
             title = "Show Explicit Badges",
@@ -961,7 +929,7 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             checked = confirmQueue,
             onCheckedChange = { viewModel.setConfirmClearQueue(it) }
         )
-    }
+    
 }
 
 /**
@@ -1104,6 +1072,13 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
 // ─── Tab 4: Audio ──────────────────────────────────────────────────────
 @Composable
 private fun AudioTab(viewModel: SettingsViewModel, navController: NavController) {
+    // Moved here from "Interface". What happens between one track and the next
+    // is an audio decision, not an interface one — it sat under Interface only
+    // because that tab had become the place settings went when no tab obviously
+    // owned them.
+    val gapless by viewModel.gaplessPlayback.collectAsState()
+    val crossfade by viewModel.crossfadeDuration.collectAsState()
+    val gaplessNoResample by viewModel.gaplessNoResample.collectAsState()
     val wifiQuality by viewModel.wifiQuality.collectAsState()
     val cellularQuality by viewModel.cellularQuality.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
@@ -1132,6 +1107,51 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     }
 
     SettingsTabContent {
+        SettingsGroupHeader("Playback")
+        SettingSwitchItem(
+            title = "Gapless Playback",
+            subtitle = "Remove silence between tracks",
+            checked = gapless,
+            onCheckedChange = { viewModel.setGaplessPlayback(it) }
+        )
+
+        SettingSwitchItem(
+            title = "Never Resample Between Tracks",
+            subtitle = "A track at a different sample rate starts after a brief gap " +
+                "instead of being resampled to match, keeping output bit-perfect. " +
+                "Turn off to keep every transition seamless and let the system resample.",
+            checked = gaplessNoResample,
+            onCheckedChange = { viewModel.setGaplessNoResample(it) }
+        )
+
+        // Sits under the gapless toggle because the two decide the same thing:
+        // what happens between one track and the next. They're also mutually
+        // exclusive in effect — any blend above 0s overlaps the tracks, so the
+        // gapless hand-off steps aside for it.
+        Text(
+            text = if (crossfade == 0) "Blend Between Tracks: Gapless" else "Blend Between Tracks: ${crossfade}s",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = if (crossfade == 0) {
+                "At zero, tracks run straight into each other with no gap. " +
+                    "Add time to overlap them instead."
+            } else {
+                "The outgoing track fades out while the next fades in over ${crossfade}s."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = crossfade.toFloat(),
+            onValueChange = { viewModel.setCrossfadeDuration(it.toInt()) },
+            valueRange = 0f..12f,
+            steps = 11,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("System-wide EQ")
         SettingSwitchItem(
             title = "System-wide AutoEQ",

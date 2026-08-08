@@ -695,4 +695,7 @@ private fun RecommendationCard(
 }
 
 /** Index of the About tab in Settings, where What's New lives. */
-private const val WHATS_NEW_SETTINGS_TAB = 10
+// Index of "About" in SettingsScreen.settingsTabs, which is where the What's
+// New panel lives. Moves whenever that list does — it dropped from 10 to 9 when
+// Interface was merged into Appearance.
+private const val WHATS_NEW_SETTINGS_TAB = 9
