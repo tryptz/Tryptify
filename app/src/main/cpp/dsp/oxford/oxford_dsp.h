@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "../util/oversampler.h"
+
 #include <atomic>
 #include <array>
 #include <algorithm>
@@ -210,6 +212,8 @@ public:
         std::atomic<bool>  clipZeroDb{  true  };
         std::atomic<bool>  bandSplit {  false };
         std::atomic<bool>  bypass    {  false };
+        // Anti-alias oversampling factor for the waveshaper: 1 (off), 2, or 4.
+        std::atomic<int>   oversampling{ 1 };
         // Output meter: updated by processor, read by UI
         std::atomic<float> peakL     {  0.0f };
         std::atomic<float> peakR     {  0.0f };
@@ -238,6 +242,10 @@ public:
         postGain_.snapTo(1.0f);
         effect_  .snapTo(1.0f);
         curve_   .snapTo(0.0f);
+
+        // Force the oversamplers to be re-prepared against the new rate on the
+        // next block, whatever factor is selected.
+        osFactorApplied_ = 0;
     }
 
     // In-place processing on planar float buffers.
@@ -254,6 +262,22 @@ public:
 
         const bool clip  = params.clipZeroDb.load(std::memory_order_relaxed);
         const bool split = params.bandSplit .load(std::memory_order_relaxed);
+
+        // The waveshaper is the only nonlinear stage here, and it is a 4th-order
+        // polynomial: a 10 kHz input at 44.1 kHz throws harmonics well past
+        // Nyquist, which fold back down into the audible band as inharmonic
+        // grit. Running just the shaper at 2x or 4x pushes those products above
+        // the anti-alias filter so they are removed on the way back down
+        // instead. Everything else in this processor — the gain smoothing, the
+        // Linkwitz-Riley band split, the dry delay — is linear and cannot
+        // alias, so it stays at the base rate and the FIR designs are untouched.
+        const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
+        if (osFactor != osFactorApplied_) {
+            for (int c = 0; c < 2; ++c) {
+                for (int b = 0; b < kOsBands; ++b) os_[c][b].prepare(sr_, osFactor);
+            }
+            osFactorApplied_ = osFactor;
+        }
 
         float pkL = 0.0f, pkR = 0.0f;
 
@@ -284,11 +308,14 @@ public:
                 float shaped;
                 if (split) {
                     const float mid = xd - lo - hi;
-                    shaped = waveshape(lo,  A, B, C, D)
-                           + waveshape(mid, A, B, C, D)
-                           + waveshape(hi,  A, B, C, D);
+                    // Each band is shaped independently, so each needs its own
+                    // oversampler state — sharing one would smear the filter
+                    // histories of three different signals together.
+                    shaped = shapeOs(c, kOsLow,  lo,  A, B, C, D, osFactor)
+                           + shapeOs(c, kOsMid,  mid, A, B, C, D, osFactor)
+                           + shapeOs(c, kOsHigh, hi,  A, B, C, D, osFactor);
                 } else {
-                    shaped = waveshape(xd, A, B, C, D);
+                    shaped = shapeOs(c, kOsFull, xd, A, B, C, D, osFactor);
                 }
 
                 float y = (dry * xd + wet * shaped) * post;
@@ -307,6 +334,41 @@ public:
     }
 
 private:
+    // Oversampler slots: one per (channel, shaping site). The band-split path
+    // shapes three signals per channel, the flat path one.
+    static constexpr int kOsFull = 0, kOsLow = 1, kOsMid = 2, kOsHigh = 3;
+    static constexpr int kOsBands = 4;
+    static constexpr int kMaxOsFactor = 4;
+
+    static inline int clampOsFactor(int f) noexcept {
+        return (f >= 4) ? 4 : (f >= 2 ? 2 : 1);
+    }
+
+    /**
+     * Waveshapes one sample, optionally at [factor] times the base rate.
+     *
+     * Sample-at-a-time rather than block-at-a-time so it drops into the
+     * existing per-sample loop with its smoothed coefficients, and so the
+     * high-rate scratch is a fixed four floats on the stack — the no-heap rule
+     * on the audio path holds.
+     */
+    inline float shapeOs(int c, int slot, float x,
+                         float A, float B, float C, float D, int factor) noexcept {
+        if (factor <= 1) return waveshape(x, A, B, C, D);
+        // ChannelOversampler cascades internally at 4x, so this stays a plain
+        // up / shape / down regardless of factor.
+        float up[kMaxOsFactor];
+        auto& os = os_[c][slot];
+        os.upsample(&x, up, 1);
+        for (int i = 0; i < factor; ++i) up[i] = waveshape(up[i], A, B, C, D);
+        float y = 0.0f;
+        os.downsample(up, &y, 1);
+        return y;
+    }
+
+    ChannelOversampler os_[2][kOsBands];
+    int osFactorApplied_ = 0;
+
     void updateMeters(float* const* buffers, int n) noexcept {
         float pkL = 0.0f, pkR = 0.0f;
         for (int i = 0; i < n; ++i) {
@@ -358,6 +420,8 @@ public:
         std::atomic<float> kneeDb     {   6.0f }; // [0, 24]
         std::atomic<float> makeupDb   {   0.0f }; // [-12, +24]
         std::atomic<bool>  bypass     { false };
+        // Anti-alias oversampling for the detector + gain stage: 1, 2 or 4.
+        std::atomic<int>   oversampling{ 1 };
         // Read-only from UI:
         std::atomic<float> gainReductionDb{ 0.0f };  // momentary GR, absolute value dB
         std::atomic<float> peakL          { 0.0f };
@@ -370,6 +434,7 @@ public:
         envDb_ = -120.0f;
         grSmoothDb_ = 0.0f;
         grCoef_ = std::exp(-1.0f / (0.030f * static_cast<float>(sr_)));  // 30 ms UI smoothing
+        osFactorApplied_ = 0;  // force a re-prepare against the new rate
     }
 
     void process(float* const* buffers, int numFrames) noexcept {
@@ -382,8 +447,29 @@ public:
         const float aMs      = std::max(0.05f, params.attackMs .load(std::memory_order_relaxed));
         const float rMs      = std::max(1.0f,  params.releaseMs.load(std::memory_order_relaxed));
 
-        const float aCoef = std::exp(-1.0f / (aMs * 0.001f * static_cast<float>(sr_)));
-        const float rCoef = std::exp(-1.0f / (rMs * 0.001f * static_cast<float>(sr_)));
+        // Aliasing here doesn't come from a waveshaper — it comes from the
+        // detector. Full-wave rectification makes the envelope ripple at twice
+        // the input frequency, and that ripple modulates the gain, throwing
+        // sidebands past Nyquist that fold back. Measured on a 9 kHz tone at
+        // 44.1 kHz, ratio 20:1, the artefact floor sat at -37 dBc and barely
+        // moved with attack time, which is the signature of ripple rather than
+        // envelope speed. Running the detector and the gain application at 2x
+        // or 4x puts the ripple and its sidebands below the new Nyquist so the
+        // decimation filter removes them instead.
+        const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
+        if (osFactor != osFactorApplied_) {
+            for (int c = 0; c < 2; ++c) os_[c].prepare(sr_, osFactor);
+            osRate_ = sr_ * osFactor;
+            // Attack, release and the meter smoothing are all times in ms, so
+            // their coefficients must be derived from the rate the loop
+            // actually runs at — otherwise turning oversampling on would make
+            // the compressor that many times faster.
+            grCoef_ = std::exp(-1.0f / (0.030f * static_cast<float>(osRate_)));
+            osFactorApplied_ = osFactor;
+        }
+
+        const float aCoef = std::exp(-1.0f / (aMs * 0.001f * static_cast<float>(osRate_)));
+        const float rCoef = std::exp(-1.0f / (rMs * 0.001f * static_cast<float>(osRate_)));
         const float makeupLin = dbToLin(mkupDb);
         const float halfKnee  = kneeDb * 0.5f;
         const float slope     = 1.0f - 1.0f / ratio;  // dB reduction per dB over threshold
@@ -391,9 +477,19 @@ public:
         float pkL = 0.0f, pkR = 0.0f;
 
         for (int n = 0; n < numFrames; ++n) {
+            float upL[kMaxOsFactor], upR[kMaxOsFactor];
+            if (osFactor > 1) {
+                os_[0].upsample(&buffers[0][n], upL, 1);
+                if (nCh_ > 1) os_[1].upsample(&buffers[1][n], upR, 1);
+            } else {
+                upL[0] = buffers[0][n];
+                if (nCh_ > 1) upR[0] = buffers[1][n];
+            }
+
+            for (int k = 0; k < osFactor; ++k) {
             // Linked detection: max abs across channels
-            float peak = std::fabs(buffers[0][n]);
-            if (nCh_ > 1) peak = std::max(peak, std::fabs(buffers[1][n]));
+            float peak = std::fabs(upL[k]);
+            if (nCh_ > 1) peak = std::max(peak, std::fabs(upR[k]));
 
             const float inDb = (peak > 1e-9f) ? 20.0f * std::log10(peak) : -120.0f;
 
@@ -417,18 +513,27 @@ public:
             // 10^(-grDb/20) = exp(-grDb * ln(10)/20) = exp(-grDb * 0.11512925f)
             const float gainLin = std::exp(-grDb * 0.11512925f) * makeupLin;
 
-            for (int c = 0; c < nCh_; ++c) {
-                const float y = buffers[c][n] * gainLin;
-                buffers[c][n] = y;
-                const float ay = std::fabs(y);
-                if (c == 0) { if (ay > pkL) pkL = ay; }
-                else        { if (ay > pkR) pkR = ay; }
-            }
+            upL[k] *= gainLin;
+            if (nCh_ > 1) upR[k] *= gainLin;
 
             // Per-sample UI-smoothed GR: asymmetric — attack fast (follow increases),
             // release slow (linger on the meter so user can read it)
             if (grDb > grSmoothDb_) grSmoothDb_ = grDb;
             else                    grSmoothDb_ = grDb + (grSmoothDb_ - grDb) * grCoef_;
+            }
+
+            if (osFactor > 1) {
+                os_[0].downsample(upL, &buffers[0][n], 1);
+                if (nCh_ > 1) os_[1].downsample(upR, &buffers[1][n], 1);
+            } else {
+                buffers[0][n] = upL[0];
+                if (nCh_ > 1) buffers[1][n] = upR[0];
+            }
+
+            // Meters read the delivered output, after decimation.
+            const float ayL = std::fabs(buffers[0][n]);
+            if (ayL > pkL) pkL = ayL;
+            if (nCh_ > 1) { const float ayR = std::fabs(buffers[1][n]); if (ayR > pkR) pkR = ayR; }
         }
 
         params.gainReductionDb.store(grSmoothDb_, std::memory_order_relaxed);
@@ -437,6 +542,16 @@ public:
     }
 
 private:
+    static constexpr int kMaxOsFactor = 4;
+
+    static inline int clampOsFactor(int f) noexcept {
+        return (f >= 4) ? 4 : (f >= 2 ? 2 : 1);
+    }
+
+    ChannelOversampler os_[2];
+    int    osFactorApplied_{0};
+    double osRate_{48000.0};
+
     double sr_{48000.0};
     int    nCh_{2};
     float  envDb_{-120.0f};

@@ -1,12 +1,14 @@
 package tf.monochrome.android.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +66,7 @@ fun ClickableArtists(
                 // instead — TalkBack then announces it as an activatable link.
                 modifier = if (isLink) {
                     Modifier
+                        .linkHitBox()
                         .clickable { onArtistClick(artist) }
                         .buttonSemantics(label = artist.name)
                 } else Modifier,
@@ -113,6 +116,7 @@ fun TrackArtistAlbumLine(
                 overflow = TextOverflow.Ellipsis,
                 modifier = if (albumLinkable) {
                     Modifier
+                        .linkHitBox()
                         .clickable { onAlbumClick() }
                         .buttonSemantics(label = albumTitle)
                 } else Modifier,
@@ -120,3 +124,19 @@ fun TrackArtistAlbumLine(
         }
     }
 }
+
+/**
+ * Shrinks an inline link's touch target to slightly *inside* its own glyphs.
+ *
+ * These links sit in the middle of a song row, right where people tap to play,
+ * so a tap that merely grazes the artist or album text used to navigate away
+ * instead. Padding applied *before* `clickable` insets the hit box rather than
+ * growing it, so a near-miss falls through to the row and plays the track,
+ * while a deliberate tap on the text still navigates.
+ *
+ * This intentionally goes the opposite way to the usual 48dp minimum-target
+ * guidance: the row behind it is already a large, correct target, and the
+ * failure being fixed is over-triggering, not under-triggering. Both
+ * destinations also remain available from the track's long-press menu.
+ */
+private fun Modifier.linkHitBox(): Modifier = padding(horizontal = 3.dp, vertical = 4.dp)

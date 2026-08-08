@@ -49,6 +49,9 @@ class LibraryRepository @Inject constructor(
     private val playSessionManager: PlaySessionManager,
     private val unifiedTrackRegistry: UnifiedTrackRegistry,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
+    private val downloadManager: tf.monochrome.android.data.downloads.DownloadManager,
+    private val localTrackLocator: tf.monochrome.android.player.LocalTrackLocator,
 ) {
     private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // ignoreUnknownKeys lets older serialized rows survive forward-compatible
@@ -73,6 +76,41 @@ class LibraryRepository @Inject constructor(
             favoriteDao.deleteFavoriteTrack(track.id)
         } else {
             favoriteDao.insertFavoriteTrack(track.toFavoriteEntity())
+            autoDownloadOnLike(track)
+        }
+    }
+
+    /**
+     * "Automatically download liked songs": queue this song if the setting is
+     * on and it isn't already on the device.
+     *
+     * Hangs off the like itself rather than off the setting, which is the whole
+     * safety property — the toggle never looks at songs liked before it was
+     * switched on, so flipping it can't enqueue a whole Liked Songs library's
+     * worth of workers in one go. Downloads then arrive at the rate the user
+     * actually likes things.
+     *
+     * Runs detached and swallows its own failures: liking a song must succeed
+     * even when the download can't be queued.
+     */
+    private fun autoDownloadOnLike(track: Track) {
+        syncScope.launch {
+            runCatching {
+                if (!preferences.autoDownloadLikedSongs.first()) return@launch
+                if (downloadDao.isDownloaded(track.id)) return@launch
+                // Already playable from disk — a scanned library file, a previous
+                // download under another catalogue's id — so there's nothing to fetch.
+                if (unifiedTrackRegistry[track.id]?.source is PlaybackSource.LocalFile) return@launch
+                val onDisk = localTrackLocator.findLocalSource(
+                    title = track.title,
+                    artist = track.displayArtist,
+                    albumTitle = track.album?.title,
+                    durationSeconds = track.duration,
+                    catalogTrackId = track.id,
+                )
+                if (onDisk != null) return@launch
+                downloadManager.downloadTrack(track)
+            }
         }
     }
 

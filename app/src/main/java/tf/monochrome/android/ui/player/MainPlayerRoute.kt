@@ -69,6 +69,7 @@ import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
+import tf.monochrome.android.ui.theme.ColorBlend
 import java.util.Locale
 
 /**
@@ -88,8 +89,12 @@ fun MainPlayerRoute(
     val currentIndex by playerViewModel.currentIndex.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
     val isBuffering by playerViewModel.isBuffering.collectAsState()
-    val positionMs by playerViewModel.positionMs.collectAsState()
-    val durationMs by playerViewModel.durationMs.collectAsState()
+    // Held as State, never read with `.value` in this composable: the play head
+    // ticks four times a second, and reading it here recomposed the entire
+    // player — hero, glass, artwork and all — for a number only the scrubber
+    // and the progress ring consume. They read it themselves, further down.
+    val positionState = playerViewModel.positionMs.collectAsState()
+    val durationState = playerViewModel.durationMs.collectAsState()
     val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsState()
     val repeatMode by playerViewModel.repeatMode.collectAsState()
     val isLiked by playerViewModel.isCurrentTrackLiked.collectAsState()
@@ -193,19 +198,30 @@ fun MainPlayerRoute(
     } else {
         AlbumColors(dominant = themeAccent, vibrant = themeAccent)
     }
+    // Background wash and every accent that reads `vibrant` — hero ring,
+    // spectrum, glass tint — cross over together, over the "Blend Between
+    // Tracks" length. Both used to run on fixed tweens (1800ms and 1300ms),
+    // which meant the player finished repainting while a 6s blend was still
+    // half the previous track. Linear for the same reason the palette is: it
+    // is pacing an audio crossfade, not decorating a tap.
+    val blendSeconds by playerViewModel.crossfadeDuration.collectAsState()
+    val colorBlendMs = ColorBlend.millisFor(blendSeconds)
+    // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
+    val userTrackChanges by playerViewModel.userTrackChanges.collectAsState()
     val animatedDominant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.dominant,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1800),
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = colorBlendMs,
+            easing = androidx.compose.animation.core.LinearEasing,
+        ),
         label = "playerBackground",
     )
-    // Vibrant tweens alongside dominant so the whole palette crossfades to the
-    // next track rather than the background easing while every accent that
-    // reads `vibrant` — hero ring, spectrum, glass tint — snaps on track change.
-    // Shorter than the background's 800ms: accents sit on top of the art, and
-    // at 800ms they visibly lag the cover that has already swiped in.
     val animatedVibrant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.vibrant,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1300),
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = colorBlendMs,
+            easing = androidx.compose.animation.core.LinearEasing,
+        ),
         label = "playerAccent",
     )
     val blendedColors = AlbumColors(animatedDominant, animatedVibrant)
@@ -270,9 +286,6 @@ fun MainPlayerRoute(
         isThxSpatialAudio = currentUnified?.isThxSpatialAudio ?: currentTrack?.isThxSpatialAudio ?: false,
         isPlaying = isPlaying,
         isBuffering = isBuffering,
-        positionMs = positionMs,
-        durationMs = durationMs,
-        progress = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
         isLiked = isLiked,
         playbackSpeed = playbackSpeed,
         shuffleEnabled = shuffleEnabled,
@@ -286,6 +299,7 @@ fun MainPlayerRoute(
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
         albumColors = blendedColors,
+        colorBlendMs = colorBlendMs,
         visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER,
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
@@ -354,6 +368,8 @@ fun MainPlayerRoute(
         MainPlayerScreen(
             miniGlass = miniGlass,
             state = state,
+            positionState = positionState,
+            durationState = durationState,
             isFullscreen = isFullscreenActive,
             formatTime = playerViewModel::formatTime,
             onToggleLike = playerViewModel::toggleLikeCurrentTrack,
@@ -542,8 +558,13 @@ fun MainPlayerRoute(
                             isFullscreen = isFullscreenActive,
                             track = currentTrack,
                             isPlaying = isPlaying,
-                            progress = state.progress,
+                            progress = {
+                                val d = durationState.value
+                                if (d > 0) (positionState.value.toFloat() / d).coerceIn(0f, 1f) else 0f
+                            },
                             albumColors = blendedColors,
+                            blendMillis = colorBlendMs,
+                            userTrackChanges = userTrackChanges,
                             visualizerSensitivity = visualizerSensitivity,
                             visualizerBrightness = visualizerBrightness,
                             visualizerEngineStatus = visualizerEngineStatus,

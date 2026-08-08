@@ -22,7 +22,6 @@ import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
-import tf.monochrome.android.domain.model.ReplayGainMode
 import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.radio.RadioPlannerWeights
@@ -33,7 +32,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 /** Which catalog(s) drive search and discovery surfaces. BOTH runs TIDAL + Qobuz
  *  + Apple Music; the *_ONLY modes restrict to a single catalog. */
-enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY, APPLE_ONLY }
+enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
 
 /**
  * Format asked of the Apple wrapper. These are the wrapper's own format codes,
@@ -70,9 +69,6 @@ class PreferencesManager @Inject constructor(
         private val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         private val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
 
-        // ReplayGain
-        private val REPLAY_GAIN_MODE = stringPreferencesKey("replay_gain_mode")
-        private val REPLAY_GAIN_PREAMP = doublePreferencesKey("replay_gain_preamp")
 
         // Player state
         private val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
@@ -135,6 +131,13 @@ class PreferencesManager @Inject constructor(
 
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
+        private val GAPLESS_NO_RESAMPLE = booleanPreferencesKey("gapless_no_resample")
+        private val WHATS_NEW_SEEN_VERSION = intPreferencesKey("whats_new_seen_version")
+        private val WHATS_NEW_NEVER_SHOW = booleanPreferencesKey("whats_new_never_show")
+        private val UPDATE_LAST_CHECKED_AT = longPreferencesKey("update_last_checked_at")
+        private val UPDATE_LATEST_VERSION = stringPreferencesKey("update_latest_version")
+        private val UPDATE_LATEST_URL = stringPreferencesKey("update_latest_url")
+        private val UPDATE_DISMISSED_VERSION = stringPreferencesKey("update_dismissed_version")
         private val SHOW_EXPLICIT_BADGES = booleanPreferencesKey("show_explicit_badges")
         private val CONFIRM_CLEAR_QUEUE = booleanPreferencesKey("confirm_clear_queue")
 
@@ -169,6 +172,7 @@ class PreferencesManager @Inject constructor(
         private val ROMAJI_LYRICS = booleanPreferencesKey("romaji_lyrics")
         private val LYRICS_WORD_PROVIDER = stringPreferencesKey("lyrics_word_provider")
         private val DOWNLOAD_LYRICS = booleanPreferencesKey("download_lyrics")
+        private val AUTO_DOWNLOAD_LIKED = booleanPreferencesKey("auto_download_liked")
         private val NOW_PLAYING_VIEW_MODE = stringPreferencesKey("now_playing_view_mode")
         private val VISUALIZER_ENGINE_ENABLED = booleanPreferencesKey("visualizer_engine_enabled")
         private val VISUALIZER_AUTO_SHUFFLE = booleanPreferencesKey("visualizer_auto_shuffle")
@@ -269,6 +273,7 @@ class PreferencesManager @Inject constructor(
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
         private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
+        private val DOWNLOAD_QUEUE_JSON = stringPreferencesKey("download_queue_json")
         private val USB_BIT_PERFECT_ENABLED = booleanPreferencesKey("usb_bit_perfect_enabled")
         private val USB_EXCLUSIVE_BIT_PERFECT_ENABLED =
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
@@ -314,12 +319,12 @@ class PreferencesManager @Inject constructor(
         // device — and a newly added key defaults to "not synced" until it's
         // deliberately added here.
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
-            WIFI_QUALITY, CELLULAR_QUALITY, REPLAY_GAIN_MODE, REPLAY_GAIN_PREAMP,
+            WIFI_QUALITY, CELLULAR_QUALITY,
             THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
-            GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
+            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
-            DOWNLOAD_QUALITY, DOWNLOAD_LYRICS,
+            DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
@@ -367,23 +372,6 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setCellularQuality(quality: AudioQuality) {
         dataStore.edit { it[CELLULAR_QUALITY] = quality.name }
-    }
-
-    // ReplayGain
-    val replayGainMode: Flow<ReplayGainMode> = dataStore.data.map { prefs ->
-        prefs[REPLAY_GAIN_MODE]?.let { ReplayGainMode.valueOf(it) } ?: ReplayGainMode.OFF
-    }
-
-    val replayGainPreamp: Flow<Double> = dataStore.data.map { prefs ->
-        prefs[REPLAY_GAIN_PREAMP] ?: 0.0
-    }
-
-    suspend fun setReplayGainMode(mode: ReplayGainMode) {
-        dataStore.edit { it[REPLAY_GAIN_MODE] = mode.name }
-    }
-
-    suspend fun setReplayGainPreamp(preamp: Double) {
-        dataStore.edit { it[REPLAY_GAIN_PREAMP] = preamp }
     }
 
     // Player state
@@ -603,6 +591,10 @@ class PreferencesManager @Inject constructor(
      * the setting only governs which catalogs feed search results.
      */
     val sourceMode: Flow<SourceMode> = dataStore.data.map { prefs ->
+        // A stored "APPLE_ONLY" from before Apple was dropped no longer names a
+        // constant, so valueOf throws, getOrNull swallows it and it reads as
+        // BOTH — which is what anyone left on it should get, since neither the
+        // picker nor search can represent Apple any more.
         prefs[SOURCE_MODE]?.let { runCatching { SourceMode.valueOf(it) }.getOrNull() }
             ?: SourceMode.BOTH
     }
@@ -627,6 +619,65 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[GAPLESS_PLAYBACK] = enabled }
     }
 
+    /**
+     * Refuse to resample across a gapless transition. On by default.
+     *
+     * A track that plays at a different sample rate forces the output to be
+     * torn down and rebuilt, which is the very gap gapless removes. The only
+     * way round it is to resample everything to one fixed rate — exactly what
+     * the bit-perfect USB path exists not to do — so by default that one
+     * transition takes the gap, which is what every bit-perfect player does.
+     * Turn this off to keep the hand-off seamless and let the system resample.
+     */
+    val gaplessNoResample: Flow<Boolean> = dataStore.data.map { it[GAPLESS_NO_RESAMPLE] ?: true }
+
+    /** versionCode whose "What's New" the user has already seen. 0 = none. */
+    val whatsNewSeenVersion: Flow<Int> = dataStore.data.map { it[WHATS_NEW_SEEN_VERSION] ?: 0 }
+
+    /** Set once the user asks never to be told about updates again. */
+    val whatsNewNeverShow: Flow<Boolean> = dataStore.data.map { it[WHATS_NEW_NEVER_SHOW] ?: false }
+
+    suspend fun setGaplessNoResample(enabled: Boolean) {
+        dataStore.edit { it[GAPLESS_NO_RESAMPLE] = enabled }
+    }
+
+    suspend fun setWhatsNewSeenVersion(versionCode: Int) {
+        dataStore.edit { it[WHATS_NEW_SEEN_VERSION] = versionCode }
+    }
+
+    // --- Update availability (GitHub Releases) ---
+    //
+    // Device-local only, and deliberately not in SETTINGS_SYNC_KEYS: these
+    // describe what *this* install has checked and dismissed, and syncing them
+    // would hide an update on a device that hasn't been offered it yet.
+
+    val updateLastCheckedAt: Flow<Long> = dataStore.data.map { it[UPDATE_LAST_CHECKED_AT] ?: 0L }
+    val updateLatestVersion: Flow<String?> = dataStore.data.map { it[UPDATE_LATEST_VERSION] }
+    val updateLatestUrl: Flow<String?> = dataStore.data.map { it[UPDATE_LATEST_URL] }
+
+    /** Version the user has waved away; the bar stays gone until a newer one. */
+    val updateDismissedVersion: Flow<String?> = dataStore.data.map { it[UPDATE_DISMISSED_VERSION] }
+
+    suspend fun setUpdateLastCheckedAt(atMs: Long) {
+        dataStore.edit { it[UPDATE_LAST_CHECKED_AT] = atMs }
+    }
+
+    suspend fun setUpdateLatestVersion(version: String) {
+        dataStore.edit { it[UPDATE_LATEST_VERSION] = version }
+    }
+
+    suspend fun setUpdateLatestUrl(url: String) {
+        dataStore.edit { it[UPDATE_LATEST_URL] = url }
+    }
+
+    suspend fun setUpdateDismissedVersion(version: String) {
+        dataStore.edit { it[UPDATE_DISMISSED_VERSION] = version }
+    }
+
+    suspend fun setWhatsNewNeverShow(enabled: Boolean) {
+        dataStore.edit { it[WHATS_NEW_NEVER_SHOW] = enabled }
+    }
+
     val showExplicitBadges: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[SHOW_EXPLICIT_BADGES] ?: true
     }
@@ -647,6 +698,17 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setNormalizationEnabled(enabled: Boolean) {
         dataStore.edit { it[NORMALIZATION_ENABLED] = enabled }
+    }
+
+    /**
+     * The pending download queue, serialized. Persisted so a queue of any size
+     * outlives the process that made it — a fifty-track album should not need
+     * re-requesting because the app was swapped out mid-download.
+     */
+    val downloadQueueJson: Flow<String?> = dataStore.data.map { it[DOWNLOAD_QUEUE_JSON] }
+
+    suspend fun setDownloadQueueJson(json: String) {
+        dataStore.edit { it[DOWNLOAD_QUEUE_JSON] = json }
     }
 
     val crossfadeDuration: Flow<Int> = dataStore.data.map { prefs ->
@@ -777,6 +839,15 @@ class PreferencesManager @Inject constructor(
             ?: LyricsWordProvider.BOTH
     }
     val downloadLyrics: Flow<Boolean> = dataStore.data.map { it[DOWNLOAD_LYRICS] ?: false }
+
+    /**
+     * Download a song as it's liked. Off by default, and deliberately
+     * forward-only: turning it on downloads nothing that is already liked.
+     * Sweeping an existing Liked Songs list would enqueue thousands of workers
+     * at once, which is exactly the stampede that takes the app down — new
+     * likes arrive one at a time and stay within what WorkManager expects.
+     */
+    val autoDownloadLikedSongs: Flow<Boolean> = dataStore.data.map { it[AUTO_DOWNLOAD_LIKED] ?: false }
     val visualizerEngineEnabled: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_ENGINE_ENABLED] ?: true }
     val visualizerAutoShuffle: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_AUTO_SHUFFLE] ?: true }
     val visualizerPresetId: Flow<String?> = dataStore.data.map { it[VISUALIZER_PRESET_ID] }
@@ -813,6 +884,9 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setDownloadLyrics(enabled: Boolean) {
         dataStore.edit { it[DOWNLOAD_LYRICS] = enabled }
+    }
+    suspend fun setAutoDownloadLikedSongs(enabled: Boolean) {
+        dataStore.edit { it[AUTO_DOWNLOAD_LIKED] = enabled }
     }
     suspend fun setVisualizerEngineEnabled(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_ENGINE_ENABLED] = enabled }

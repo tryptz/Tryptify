@@ -41,6 +41,14 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks WHERE musicbrainzTrack = :mbId LIMIT 1")
     suspend fun findByMusicBrainzId(mbId: String): LocalTrackEntity?
 
+    // Title-prefix shortlist for "play the on-device copy instead of streaming".
+    // The pattern is the version-stripped title plus '%', so both directions
+    // match ("Song" finds "Song (Remastered)" and vice versa); the caller does
+    // the real title/artist/duration comparison in Kotlin. Capped because a
+    // one-word title can otherwise shortlist a big slice of the library.
+    @Query("SELECT * FROM local_tracks WHERE title LIKE :titlePattern ESCAPE '\\' LIMIT 200")
+    suspend fun findByTitlePattern(titlePattern: String): List<LocalTrackEntity>
+
     @Query("SELECT COUNT(*) FROM local_tracks")
     suspend fun getTrackCount(): Int
 

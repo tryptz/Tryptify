@@ -63,6 +63,13 @@ class LocalMediaRepository @Inject constructor(
     suspend fun findByIsrc(isrc: String): UnifiedTrack? =
         localMediaDao.findByIsrc(isrc)?.toUnifiedTrack()
 
+    suspend fun findByMusicBrainzId(mbId: String): UnifiedTrack? =
+        localMediaDao.findByMusicBrainzId(mbId)?.toUnifiedTrack()
+
+    /** Title-prefix shortlist for cross-source matching — see [LocalMediaDao.findByTitlePattern]. */
+    suspend fun findByTitlePattern(titlePattern: String): List<UnifiedTrack> =
+        localMediaDao.findByTitlePattern(titlePattern).map { it.toUnifiedTrack() }
+
     // ── Albums ──────────────────────────────────────────────────────
 
     fun getAllAlbums(): Flow<List<UnifiedAlbum>> =

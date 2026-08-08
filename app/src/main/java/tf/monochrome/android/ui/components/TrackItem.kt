@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.data.downloads.DownloadStatus
 import tf.monochrome.android.data.downloads.TrackDownloadState
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.usecase.uiArtistRefs
@@ -53,6 +54,7 @@ fun TrackItem(
     onAlbumClick: (() -> Unit)? = null,
     onArtistClick: ((Long) -> Unit)? = null,
     downloadState: TrackDownloadState? = null,
+    isDownloaded: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false
 ) {
@@ -100,19 +102,17 @@ fun TrackItem(
         }
 
         if (showCover) {
-            val coverModifier = if (effectiveOnAlbumClick != null) {
-                Modifier.clickable { effectiveOnAlbumClick() }
-            } else {
-                Modifier
-            }
-            androidx.compose.foundation.layout.Box(modifier = coverModifier) {
-                CoverImage(
-                    url = track.coverUrl,
-                    contentDescription = track.title,
-                    size = MonoDimens.coverList,
-                    cornerRadius = MonoDimens.radiusSm
-                )
-            }
+            // The artwork plays the track: it's the largest target in the row
+            // and the one people aim at to start a song. It used to open the
+            // album instead, which made a big, obvious-looking play target do
+            // something else entirely. Album and artist are still one long-press
+            // away, in the track's context menu.
+            CoverImage(
+                url = track.coverUrl,
+                contentDescription = track.title,
+                size = MonoDimens.coverList,
+                cornerRadius = MonoDimens.radiusSm
+            )
             Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
         }
 
@@ -178,7 +178,13 @@ fun TrackItem(
                         overflow = TextOverflow.Ellipsis,
                         // weight(fill=false) so a long album title ellipsizes and
                         // shares the row instead of squeezing the artist to zero.
-                        modifier = Modifier.weight(1f, fill = false).clickable(onClick = effectiveOnAlbumClick)
+                        // Inset before clickable so the hit box lands inside
+                        // the glyphs: a near-miss plays the track instead of
+                        // navigating. See ClickableArtists.linkHitBox.
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .padding(horizontal = 3.dp, vertical = 4.dp)
+                            .clickable(onClick = effectiveOnAlbumClick)
                     )
                 } else if (track.album != null) {
                     Text(
@@ -203,12 +209,19 @@ fun TrackItem(
             }
         }
 
-        if (downloadState != null) {
+        // In-flight state wins while a download is running; once it settles the
+        // row falls back to the persistent "on this device" badge, so the mark
+        // doesn't vanish the moment the transfer finishes.
+        val liveDownload = downloadState?.takeIf { it.status != DownloadStatus.IDLE }
+        if (liveDownload != null) {
             Spacer(modifier = Modifier.width(4.dp))
             DownloadIndicator(
-                state = downloadState,
+                state = liveDownload,
                 size = 18f
             )
+        } else if (isDownloaded) {
+            Spacer(modifier = Modifier.width(4.dp))
+            DownloadedBadge(size = 18f)
         }
 
         if (showDuration) {

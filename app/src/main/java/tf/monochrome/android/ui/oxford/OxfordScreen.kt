@@ -640,6 +640,29 @@ fun InflatorScreen(
                             onClick = { effect.setEffectIn(!state.effectIn) },
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        // Anti-alias oversampling for the waveshaper. Cycles
+                        // 1x -> 2x -> 4x -> 1x; labelled with what it does
+                        // rather than the bare factor, since "OS 1x" means
+                        // nothing without the context.
+                        OxfordButton(
+                            label = when (state.oversampling) {
+                                4 -> "OVERSAMPLE 4x"
+                                2 -> "OVERSAMPLE 2x"
+                                else -> "OVERSAMPLE OFF"
+                            },
+                            active = state.oversampling > 1,
+                            activeColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            onClick = {
+                                effect.setOversampling(
+                                    when (state.oversampling) {
+                                        1 -> 2
+                                        2 -> 4
+                                        else -> 1
+                                    }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
             }
@@ -787,13 +810,35 @@ fun CompressorScreen(
                 }
                 Spacer(Modifier.height(10.dp))
                 tf.monochrome.android.devedit.DevEditable("compressor_effect_in_button", Modifier.fillMaxWidth()) {
-                    OxfordButton(
-                        label = "EFFECT IN",
-                        active = !state.bypass,
-                        activeColor = MaterialTheme.colorScheme.primary,
-                        onClick = { effect.setBypass(!state.bypass) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OxfordButton(
+                            label = "EFFECT IN",
+                            active = !state.bypass,
+                            activeColor = MaterialTheme.colorScheme.primary,
+                            onClick = { effect.setBypass(!state.bypass) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        // Same control as the Inflator's: cycles OFF -> 2x -> 4x.
+                        OxfordButton(
+                            label = when (state.oversampling) {
+                                4 -> "OVERSAMPLE 4x"
+                                2 -> "OVERSAMPLE 2x"
+                                else -> "OVERSAMPLE OFF"
+                            },
+                            active = state.oversampling > 1,
+                            activeColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            onClick = {
+                                effect.setOversampling(
+                                    when (state.oversampling) {
+                                        1 -> 2
+                                        2 -> 4
+                                        else -> 1
+                                    }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }

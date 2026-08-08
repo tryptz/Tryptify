@@ -77,6 +77,7 @@ fun PlaylistScreen(
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val playlists by playerViewModel.playlists.collectAsState()
     val activeDownloads by playerViewModel.activeDownloads.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
 
     var showMenu by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -365,6 +366,7 @@ fun PlaylistScreen(
                             { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                         },
                         downloadState = activeDownloads[track.id],
+                        isDownloaded = track.id in downloadedTrackIds,
                         selectionMode = selection.active,
                         selected = track.id in selection.selectedIds
                     )

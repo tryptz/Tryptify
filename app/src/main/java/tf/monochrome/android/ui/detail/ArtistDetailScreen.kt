@@ -77,6 +77,7 @@ fun ArtistDetailScreen(
         }
     }
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
     val playlists by playerViewModel.playlists.collectAsState()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
@@ -270,7 +271,7 @@ fun ArtistDetailScreen(
                         item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = "Top Tracks") } }
                         val visibleTracks =
                             if (showAllTopTracks) detail.topTracks else detail.topTracks.take(5)
-                        items(visibleTracks) { track ->
+                        items(visibleTracks, key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
@@ -285,6 +286,7 @@ fun ArtistDetailScreen(
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )
@@ -307,7 +309,7 @@ fun ArtistDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(detail.albums) { album ->
+                                items(detail.albums, key = { it.id }) { album ->
                                     AlbumItem(
                                         album = album,
                                         onClick = {
@@ -327,7 +329,7 @@ fun ArtistDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(epSingles) { album ->
+                                items(epSingles, key = { it.id }) { album ->
                                     AlbumItem(
                                         album = album,
                                         onClick = {
@@ -349,7 +351,7 @@ fun ArtistDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(detail.unreleasedTracks) { track ->
+                                items(detail.unreleasedTracks, key = { it.id }) { track ->
                                     ArtistGridTrackItem(
                                         track = track,
                                         onClick = {
@@ -368,7 +370,7 @@ fun ArtistDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(detail.similarArtists) { artist ->
+                                items(detail.similarArtists, key = { it.id }) { artist ->
                                     ArtistItem(
                                         artist = artist,
                                         onClick = {

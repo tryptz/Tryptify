@@ -8,6 +8,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
+import tf.monochrome.android.data.cache.QobuzStreamUri
 import tf.monochrome.android.data.cache.QobuzStreamCacheManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AudioQuality
@@ -41,6 +42,7 @@ class StreamResolver @Inject constructor(
     private val repository: MusicRepository,
     private val qobuzCache: QobuzStreamCacheManager,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val localTrackLocator: LocalTrackLocator,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -52,6 +54,33 @@ class StreamResolver @Inject constructor(
     // stream couldn't be resolved — callers must skip instead of feeding an
     // empty MediaItem to ExoPlayer.
     suspend fun resolveMediaItem(track: Track): Pair<MediaItem?, TrackStream?> {
+        // On-device copy wins over the stream, whichever screen queued this.
+        localFor(
+            title = track.title,
+            artist = track.displayArtist,
+            albumTitle = track.album?.title,
+            durationSeconds = track.duration,
+            // DownloadManager keys downloads by Track.id, not by appleId.
+            catalogTrackId = track.id,
+        )?.let { local ->
+            return Pair(buildFileMediaItem(track, localUri(local.filePath)), null)
+        }
+
+        // Qobuz is its own catalogue, not a TIDAL fallback. Its track ids live
+        // in a separate namespace, so handing one to TIDAL's /track/ endpoint
+        // either 404s or — worse — streams a *different* recording under this
+        // track's title and artwork, with nothing downstream able to tell.
+        //
+        // PlayerViewModel already re-routes these before calling in, but it is
+        // not the only caller: PlaybackService reaches this method for every
+        // natural track-end advance, notification/lock-screen skip, playback
+        // resumption and next-track preload, and it has no such check. Guarding
+        // here covers all of them at once — the same guard HiFiApiClient's
+        // getLyrics already applies for the same reason.
+        if (qobuzIdRegistry.isQobuzTrack(track.id)) {
+            return Pair(qobuzCachedMediaItem(track), null)
+        }
+
         val streamResult = repository.getTrackStream(track.id)
         val trackStream = streamResult.getOrNull()
 
@@ -83,10 +112,70 @@ class StreamResolver @Inject constructor(
         return Pair(fallback, trackStream)
     }
 
+    /**
+     * Pre-warm what can *usefully* be pre-warmed for an upcoming queue entry.
+     *
+     * Only work whose result outlives the call is done here. Qobuz parks the
+     * whole file on disk and the on-device lookup is memoised, so both make the
+     * eventual play instant. A TIDAL or Apple stream URL is deliberately *not*
+     * fetched: it's short-lived, so by the time the track comes round minutes
+     * later it would have to be fetched again — the old preload did exactly
+     * that and threw the answer away, spending a request (and connection
+     * contention) at the precise moment the current track was trying to start.
+     *
+     * Returns whether this track can also be *pre-queued* — handed to
+     * ExoPlayer's playlist now for gapless playback. That's true of exactly the
+     * sources warmed here, because they're the ones that resolve to a URI which
+     * is still valid minutes later; see [GaplessEligibility].
+     */
+    suspend fun warmUpcoming(track: Track): Boolean = runCatching {
+        val local = localFor(
+            title = track.title,
+            artist = track.displayArtist,
+            albumTitle = track.album?.title,
+            durationSeconds = track.duration,
+            catalogTrackId = track.id,
+        )
+        if (local != null) return@runCatching true
+        if (qobuzIdRegistry.isQobuzTrack(track.id)) {
+            // Kicks the download off and returns; it keeps filling the
+            // cache on the manager's own scope, so by the time this track
+            // is reached it is already there.
+            qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS)
+            return@runCatching true
+        }
+        false
+    }.getOrDefault(false)
+
     // New method for UnifiedTrack
     @OptIn(UnstableApi::class)
     suspend fun resolveUnifiedTrack(track: UnifiedTrack): ResolvedMedia {
-        return when (val source = track.source) {
+        val source = track.source
+
+        // Prefer the on-device copy over any remote source. This sits in the
+        // resolver rather than in a screen so it holds for every entry point —
+        // search results, album and artist pages, playlists, radio, the queue
+        // sheet and notification skips all land here.
+        if (source !is PlaybackSource.LocalFile) {
+            localFor(
+                title = track.title,
+                artist = track.artistName,
+                albumTitle = track.albumTitle,
+                durationSeconds = track.durationSeconds,
+                catalogTrackId = when (source) {
+                    is PlaybackSource.HiFiApi -> source.tidalId
+                    is PlaybackSource.QobuzCached -> source.qobuzId
+                    is PlaybackSource.AppleCached -> source.appleId
+                    else -> null
+                },
+                isrc = track.isrc,
+                musicBrainzTrackId = track.musicBrainzTrackId,
+            )?.let { local ->
+                return resolveLocalFile(track, local)
+            }
+        }
+
+        return when (source) {
             is PlaybackSource.LocalFile -> resolveLocalFile(track, source)
             is PlaybackSource.CollectionDirect -> resolveCollectionDirect(track, source)
             is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source)
@@ -140,7 +229,10 @@ class StreamResolver @Inject constructor(
         track: UnifiedTrack,
         source: PlaybackSource.QobuzCached,
     ): ResolvedMedia {
-        val cachedFile = qobuzCache.getOrFetch(source.qobuzId, source.preferredQuality)
+        // Starts the download and returns once the headers are in; the player
+        // reads the cache file as it fills. Null still means "can't play this"
+        // (Qobuz unconfigured, or the request failed outright).
+        val started = qobuzCache.openPartial(source.qobuzId, source.preferredQuality) != null
 
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -153,34 +245,106 @@ class StreamResolver @Inject constructor(
 
         val mediaItem = MediaItem.Builder()
             .setMediaId(track.id)
-            .apply { cachedFile?.let { setUri(Uri.fromFile(it)) } }
+            .apply {
+                if (started) {
+                    setUri(QobuzStreamUri.build(source.qobuzId, source.preferredQuality))
+                }
+            }
             .setMediaMetadata(metadata)
             .build()
 
         return ResolvedMedia(
             mediaItem = mediaItem,
-            isLocalFile = cachedFile != null,
-            isPlayable = cachedFile != null,
+            isLocalFile = true,
+            isPlayable = started,
         )
     }
+
+    /**
+     * On-device copy of a song that would otherwise stream, or null.
+     *
+     * Thin wrapper over [LocalTrackLocator] so both resolver entry points ask
+     * the same question the same way.
+     */
+    private suspend fun localFor(
+        title: String,
+        artist: String,
+        albumTitle: String?,
+        durationSeconds: Int,
+        catalogTrackId: Long?,
+        isrc: String? = null,
+        musicBrainzTrackId: String? = null,
+    ): PlaybackSource.LocalFile? = localTrackLocator.findLocalSource(
+        title = title,
+        artist = artist,
+        albumTitle = albumTitle,
+        durationSeconds = durationSeconds,
+        catalogTrackId = catalogTrackId,
+        isrc = isrc,
+        musicBrainzTrackId = musicBrainzTrackId,
+    )
+
+    /**
+     * A legacy [Track] played from Qobuz — fetched into the cache directory on
+     * first play, then played off disk, exactly like [resolveQobuzCached] does
+     * for the [UnifiedTrack] path. LOSSLESS matches the default that
+     * PlaybackSource.QobuzCached carries.
+     *
+     * Null when Qobuz isn't configured or the fetch fails; callers already
+     * treat a null MediaItem as "skip this track", which is the right outcome —
+     * far better than quietly serving someone else's recording from TIDAL.
+     */
+    private suspend fun qobuzCachedMediaItem(track: Track): MediaItem? {
+        val started = runCatching { qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS) }
+            .getOrNull() ?: return null
+        return buildFileMediaItem(
+            track,
+            QobuzStreamUri.build(track.id, AudioQuality.LOSSLESS).toUri(),
+        ).takeIf { started.failure == null }
+    }
+
+    /**
+     * A legacy [Track] pointed at a file on disk. The metadata stays the
+     * catalogue's — same title, same artwork — so swapping the stream for the
+     * file is invisible in the player; only the loading spinner disappears.
+     */
+    private fun buildFileMediaItem(track: Track, uri: Uri): MediaItem {
+        val artworkUri = track.album?.cover?.let { cover -> buildCoverUrl(cover, 640).toUri() }
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.displayArtist)
+            .setAlbumTitle(track.album?.title)
+            .setArtworkUri(artworkUri)
+            .setTrackNumber(track.trackNumber)
+            .setDiscNumber(track.volumeNumber)
+            .build()
+
+        return MediaItem.Builder()
+            .setMediaId(track.id.toString())
+            .setUri(uri)
+            .setMediaMetadata(metadata)
+            .build()
+    }
+
+    // TrackDownloader stores filePath either as an absolute filesystem path
+    // (internal storage) or as a content:// URI string (when the user picked a
+    // SAF folder). Wrapping a content:// path with File(...) + Uri.fromFile
+    // produces a malformed file:// URI that ExoPlayer can't open and
+    // DefaultMediaSourceFactory NPEs on. Detect the scheme and route
+    // accordingly.
+    private fun localUri(filePath: String): Uri =
+        if (filePath.startsWith("content://") || filePath.startsWith("file://")) {
+            filePath.toUri()
+        } else {
+            Uri.fromFile(File(filePath))
+        }
 
     private fun resolveLocalFile(
         track: UnifiedTrack,
         source: PlaybackSource.LocalFile
     ): ResolvedMedia {
-        // DownloadWorker stores filePath either as an absolute filesystem path
-        // (internal storage) or as a content:// URI string (when the user
-        // picked a SAF folder). Wrapping a content:// path with File(...) +
-        // Uri.fromFile produces a malformed file:// URI that ExoPlayer can't
-        // open and DefaultMediaSourceFactory NPEs on. Detect the scheme and
-        // route accordingly.
-        val uri = if (source.filePath.startsWith("content://") ||
-            source.filePath.startsWith("file://")
-        ) {
-            source.filePath.toUri()
-        } else {
-            Uri.fromFile(File(source.filePath))
-        }
+        val uri = localUri(source.filePath)
 
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -342,7 +506,7 @@ class StreamResolver @Inject constructor(
             qobuzIdRegistry.registerArtistAlias(tidalArtistId, qobuzArtistId)
         }
 
-        val file = runCatching { qobuzCache.getOrFetch(match.trackId, AudioQuality.LOSSLESS) }
+        runCatching { qobuzCache.openPartial(match.trackId, AudioQuality.LOSSLESS) }
             .getOrNull() ?: return null
 
         val metadata = MediaMetadata.Builder()
@@ -356,7 +520,7 @@ class StreamResolver @Inject constructor(
 
         return MediaItem.Builder()
             .setMediaId(mediaId)
-            .setUri(Uri.fromFile(file))
+            .setUri(QobuzStreamUri.build(match.trackId, AudioQuality.LOSSLESS).toUri())
             .setMediaMetadata(metadata)
             .build()
     }

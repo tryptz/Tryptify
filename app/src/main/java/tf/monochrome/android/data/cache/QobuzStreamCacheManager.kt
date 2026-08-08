@@ -5,32 +5,40 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.contentLength
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.domain.model.AudioQuality
 import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Qobuz playback cache.
  *
- * Pre-fetches the full audio file via HiFiApiClient.getQobuzDownloadUrl on the
- * first request for a (trackId, quality) pair, writes it atomically into the
- * app cache directory, and serves the same File on subsequent requests so
- * ExoPlayer can play from local disk. Cache is bounded by total size with
- * mtime-LRU eviction.
+ * Downloads the audio file for a (trackId, quality) pair into the app cache
+ * directory and keeps it there, so a second play is instant and works offline.
+ * Bounded by total size with mtime-LRU eviction.
  *
- * Why pre-fetch instead of progressive streaming: the URL the backend returns
- * is HMAC-signed with a time-bounded `etsp` parameter, so a long-running
- * progressive read can race the signature window. Downloading the whole file
- * up front is more reliable, and the second play is instant since it serves
- * from disk.
+ * The download is readable while it runs: [openPartial] returns as soon as the
+ * response headers are in, and playback reads the growing file behind the
+ * writer. Waiting for the complete file — which is what this used to do — put
+ * seconds of silence in front of every Qobuz track.
+ *
+ * The signed URL is still fetched once and read once, top to bottom, so the
+ * time-bounded `etsp` signature is never re-presented; that was the original
+ * reason for pre-fetching, and streaming the single response preserves it. What
+ * changes is only that the bytes are handed to the player as they land instead
+ * of after the last one.
  */
 @Singleton
 class QobuzStreamCacheManager @Inject constructor(
@@ -47,82 +55,137 @@ class QobuzStreamCacheManager @Inject constructor(
     private val locks = HashMap<String, Mutex>()
     private val locksMutex = Mutex()
 
+    // Downloads in flight, so a second reader of the same track rides along
+    // with the first instead of starting its own.
+    private val inFlight = HashMap<String, PartialStream>()
+
+    // Downloads outlive the caller on purpose: skipping a track part-way
+    // through still leaves a complete file in the cache for next time.
+    private val downloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     /**
-     * Returns the local cache file for [qobuzId] at [quality], fetching it
-     * over the network on first request. Returns null when the Qobuz instance
-     * isn't configured or the network fetch fails — callers should treat null
-     * as "playback unavailable" and surface an error.
+     * Begin — or join — the download for [qobuzId] at [quality] and return a
+     * handle that can be read while it is still being written.
      *
-     * Suspends until the file is fully written; expect this to take seconds
-     * for typical FLAC payloads. Caller should drive this from the IO
-     * dispatcher (we already withContext(IO) internally for the file work).
+     * Returns once the response headers are in, not once the file is complete,
+     * so the caller can start playing on the first bytes. Two callers asking
+     * for the same track share one download. Returns null when the Qobuz
+     * instance isn't configured or the request fails outright — callers should
+     * treat null as "playback unavailable".
+     *
+     * The download itself runs on this singleton's own scope, so it keeps
+     * filling the cache even if the caller goes away: a track that was skipped
+     * part-way through is still there, complete, next time.
      */
-    suspend fun getOrFetch(qobuzId: Long, quality: AudioQuality): File? = withContext(Dispatchers.IO) {
+    suspend fun openPartial(qobuzId: Long, quality: AudioQuality): PartialStream? {
         val key = cacheKey(qobuzId, quality)
         val target = File(cacheDir, "$key.bin")
+
         if (isComplete(target)) {
-            // Touch for LRU; ignore failures, mtime is just a hint.
             target.setLastModified(System.currentTimeMillis())
-            return@withContext target
+            return completedStream(target)
         }
 
         val lock = locksMutex.withLock { locks.getOrPut(key) { Mutex() } }
-        try {
-            lock.withLock {
-                // Re-check inside the lock — another caller may have completed
-                // the fetch while we were waiting.
-                if (isComplete(target)) {
-                    target.setLastModified(System.currentTimeMillis())
-                    return@withLock target
-                }
-                fetchInto(qobuzId, quality, target)
+        return lock.withLock {
+            // Re-check under the lock: another caller may have finished, or may
+            // already have a download in flight we should ride along with.
+            if (isComplete(target)) {
+                target.setLastModified(System.currentTimeMillis())
+                return@withLock completedStream(target)
             }
-        } finally {
-            locksMutex.withLock { locks.remove(key) }
+            inFlight[key]?.takeIf { it.failure == null && !it.isCancelled }
+                ?.let { return@withLock it }
+
+            val url = withContext(Dispatchers.IO) {
+                runCatching { apiClient.getQobuzDownloadUrl(qobuzId, quality) }.getOrNull()
+            } ?: return@withLock null
+
+            withContext(Dispatchers.IO) { evictIfNeeded() }
+            val part = File(cacheDir, "$key.bin.part").also { if (it.exists()) it.delete() }
+            val stream = PartialStream(part)
+            inFlight[key] = stream
+            downloadScope.launch { download(url, stream, target, key) }
+            stream
         }
     }
 
-    private suspend fun fetchInto(qobuzId: Long, quality: AudioQuality, target: File): File? {
-        val url = apiClient.getQobuzDownloadUrl(qobuzId, quality) ?: return null
-        evictIfNeeded()
-
-        val temp = File(cacheDir, "${target.name}.tmp").also { if (it.exists()) it.delete() }
-        return try {
+    /**
+     * Fetches [url] into [stream]'s part file, publishing progress as it goes,
+     * and installs it at [target] when every byte has landed.
+     */
+    private suspend fun download(url: String, stream: PartialStream, target: File, key: String) {
+        val part = stream.file
+        try {
             // prepareGet + execute is the STREAMING request shape. A plain
             // httpClient.get() in Ktor 3 saves the entire response body into
             // a byte array before handing it over (SavedCall) — for a full
             // FLAC that's a 30-60 MB heap allocation, which OOM-crashed the
             // app on devices already near the 256 MB art heap limit.
-            val fetched = httpClient.prepareGet(url).execute { response ->
-                if (!response.status.isSuccess()) return@execute false
-                val channel = response.bodyAsChannel()
+            httpClient.prepareGet(url).execute { response ->
+                if (!response.status.isSuccess()) {
+                    throw IOException("Qobuz fetch failed: ${response.status}")
+                }
+                response.contentLength()?.takeIf { it > 0 }?.let { stream.setTotalBytes(it) }
+
                 val buffer = ByteArray(BUFFER_BYTES)
-                temp.outputStream().use { out ->
+                var written = 0L
+                part.outputStream().use { out ->
+                    val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead) {
                         val read = channel.readAvailable(buffer)
                         if (read <= 0) break
                         out.write(buffer, 0, read)
+                        written += read
+                        // Flush before publishing: a reader must never be told
+                        // about bytes that are still sitting in the stream's
+                        // buffer and would read back as a short file.
+                        out.flush()
+                        stream.publish(written)
                     }
                 }
-                true
-            }
-            if (!fetched) {
-                temp.delete()
-                return null
-            }
-            // Atomic install. If rename fails (e.g. cross-mount), fall back to
-            // a streamed copy — never a whole-file byte array.
-            if (!temp.renameTo(target)) {
-                temp.inputStream().use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
+
+                // Atomic install. If rename fails (e.g. cross-mount), fall back
+                // to a streamed copy — never a whole-file byte array. Readers
+                // hold descriptors on the part file, which stay valid either
+                // way; the copy path just leaves the part file until cleanup.
+                val installed = if (part.renameTo(target)) {
+                    target
+                } else {
+                    part.inputStream().use { input ->
+                        target.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    target
                 }
-                temp.delete()
+                installed.setLastModified(System.currentTimeMillis())
+                stream.complete(written, installed)
             }
-            target.setLastModified(System.currentTimeMillis())
-            target
-        } catch (_: Exception) {
-            temp.delete()
-            null
+        } catch (e: Exception) {
+            part.delete()
+            stream.fail(e as? IOException ?: IOException(e))
+        } finally {
+            locksMutex.withLock {
+                if (inFlight[key] === stream) inFlight.remove(key)
+                locks.remove(key)
+            }
+        }
+    }
+
+    private fun completedStream(target: File): PartialStream =
+        PartialStream(target).apply { complete(target.length(), target) }
+
+    /**
+     * Returns the local cache file for [qobuzId] at [quality], fetching it over
+     * the network on first request and suspending until every byte is on disk.
+     *
+     * Playback does not use this — it streams via [openPartial]. This is for
+     * the callers that genuinely need a whole file: handing the audio to
+     * another app via the share sheet, and download-on-demand.
+     */
+    suspend fun getOrFetch(qobuzId: Long, quality: AudioQuality): File? {
+        val stream = openPartial(qobuzId, quality) ?: return null
+        return withContext(Dispatchers.IO) {
+            runCatching { stream.awaitCompletion() }.getOrNull()
         }
     }
 

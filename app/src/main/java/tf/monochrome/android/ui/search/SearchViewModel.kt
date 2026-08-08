@@ -25,7 +25,6 @@ import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
-import tf.monochrome.android.domain.usecase.toAppleUnifiedTrack
 import tf.monochrome.android.domain.usecase.toQobuzUnifiedTrack
 import tf.monochrome.android.domain.usecase.toUnifiedTrack
 
@@ -83,7 +82,6 @@ class SearchViewModel @Inject constructor(
         ALL("All", null),
         TIDAL("TIDAL", SourceType.API),
         QOBUZ("Qobuz", SourceType.QOBUZ),
-        APPLE("Apple Music", SourceType.APPLE),
         LOCAL("Local", SourceType.LOCAL),
         COLLECTION("Collection", SourceType.COLLECTION)
     }
@@ -102,9 +100,16 @@ class SearchViewModel @Inject constructor(
         var tidalEnd: Boolean = false
         var qobuzEnd: Boolean = false
         @Volatile var inFlight: Boolean = false
-        fun reset() { nextOffset = 0; qobuzOffset = 0; tidalEnd = false; qobuzEnd = false; inFlight = false }
+        fun reset() {
+            nextOffset = 0; qobuzOffset = 0
+            tidalEnd = false; qobuzEnd = false
+            inFlight = false
+        }
         fun done(): Boolean = tidalEnd && qobuzEnd
     }
+
+    /** Which catalogue a fetched page came from, so tracks map to the right id space. */
+    private enum class PageSource { TIDAL, QOBUZ }
 
     private val tracksPage = PageState()
     private val albumsPage = PageState()
@@ -310,17 +315,13 @@ class SearchViewModel @Inject constructor(
         // TIDAL, Qobuz, and the local/collection library all run in parallel.
         // Qobuz failures (instance unset, network error, schema mismatch) are
         // swallowed so the existing TIDAL flow keeps working unchanged.
-        // Apple Music runs as a third parallel catalog (BOTH or APPLE_ONLY),
-        // captured out-of-band since coroutineScope returns only a Triple.
-        var appleResultHolder: Result<Result<tf.monochrome.android.domain.model.SearchResult>>? = null
         val (searchResult, qobuzResult, unifiedResultsResult) = coroutineScope {
             // Source mode (Settings → Instances → Source) gates which
             // catalogs we fan out to. *_ONLY modes restrict to one catalog;
-            // BOTH (default) runs TIDAL + Qobuz + Apple Music.
+            // BOTH (default) runs TIDAL + Qobuz.
             val sourceMode = preferences.sourceMode.first()
             val apiDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY ||
-                    sourceMode == tf.monochrome.android.data.preferences.SourceMode.APPLE_ONLY) {
+                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY) {
                     runCatching {
                         Result.failure<tf.monochrome.android.domain.model.SearchResult>(
                             IllegalStateException("TIDAL disabled by source mode")
@@ -331,8 +332,7 @@ class SearchViewModel @Inject constructor(
                 }
             }
             val qobuzDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY ||
-                    sourceMode == tf.monochrome.android.data.preferences.SourceMode.APPLE_ONLY) {
+                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY) {
                     null
                 } else {
                     withTimeoutOrNull(QOBUZ_BUDGET_MS) {
@@ -340,26 +340,13 @@ class SearchViewModel @Inject constructor(
                     }
                 }
             }
-            val appleDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY ||
-                    sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY) {
-                    null
-                } else {
-                    withTimeoutOrNull(QOBUZ_BUDGET_MS) {
-                        runCatching { repository.searchApple(trimmedQuery) }
-                    }
-                }
-            }
             val libraryDeferred = async { runCatching { unifiedLibrarySearch.search(trimmedQuery).first() } }
-            appleResultHolder = appleDeferred.await()
             Triple(apiDeferred.await(), qobuzDeferred.await(), libraryDeferred.await())
         }
         val unifiedResults = unifiedResultsResult.getOrNull()
-        val appleResult = appleResultHolder
 
         val qobuzAvailable = qobuzResult?.isSuccess == true
-        val appleAvailable = appleResult?.isSuccess == true
-        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable && !appleAvailable) {
+        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable) {
             // Every backend failed (offline / all instances down). Distinguish
             // this from a successful-but-empty search so the UI can offer a
             // retry instead of a flat "No results found".
@@ -378,10 +365,6 @@ class SearchViewModel @Inject constructor(
         val qobuzTracks = qobuzSearch?.tracks?.map { it.toQobuzUnifiedTrack() } ?: emptyList()
         val qobuzAlbums = qobuzSearch?.albums ?: emptyList()
         val qobuzArtists = qobuzSearch?.artists ?: emptyList()
-        val appleSearch = appleResult?.getOrNull()?.getOrNull()
-        val appleTracks = appleSearch?.tracks?.map { it.toAppleUnifiedTrack() } ?: emptyList()
-        val appleAlbums = appleSearch?.albums ?: emptyList()
-        val appleArtists = appleSearch?.artists ?: emptyList()
         // Qobuz album clicks are now wired through QobuzIdRegistry +
         // AlbumDetailViewModel's Qobuz-first lookup. Artist clicks still fall
         // through to the TIDAL artist endpoint until /api/get-artist's
@@ -395,15 +378,15 @@ class SearchViewModel @Inject constructor(
                 query = trimmedQuery,
                 tracks = localAndCollectionTracks +
                     result.tracks.map { it.toUnifiedTrack() } +
-                    qobuzTracks + appleTracks
+                    qobuzTracks
             )
             _allAlbums.value = scoreItems(
                 trimmedQuery,
-                (result.albums + qobuzAlbums + appleAlbums).distinctBy { it.id },
+                (result.albums + qobuzAlbums).distinctBy { it.id },
             ) { listOf(it.title, it.displayArtist) }
             _allArtists.value = scoreItems(
                 trimmedQuery,
-                (result.artists + qobuzArtists + appleArtists).distinctBy { it.id },
+                (result.artists + qobuzArtists).distinctBy { it.id },
             ) { listOf(it.name) }
             _allPlaylists.value = scoreItems(trimmedQuery, result.playlists) {
                 listOfNotNull(it.title, it.creator?.name, it.description)
@@ -421,12 +404,15 @@ class SearchViewModel @Inject constructor(
             // doesn't feel broken when the public TIDAL pool is unreachable.
             _allTracks.value = scoreTracks(
                 query = trimmedQuery,
-                tracks = localAndCollectionTracks + qobuzTracks + appleTracks
+                tracks = localAndCollectionTracks + qobuzTracks
             )
-            _allAlbums.value = scoreItems(trimmedQuery, (qobuzAlbums + appleAlbums).distinctBy { it.id }) { listOf(it.title, it.displayArtist) }
-            _allArtists.value = scoreItems(trimmedQuery, (qobuzArtists + appleArtists).distinctBy { it.id }) { listOf(it.name) }
+            _allAlbums.value = scoreItems(trimmedQuery, qobuzAlbums.distinctBy { it.id }) { listOf(it.title, it.displayArtist) }
+            _allArtists.value = scoreItems(trimmedQuery, qobuzArtists.distinctBy { it.id }) { listOf(it.name) }
             _allPlaylists.value = emptyList()
             // TIDAL failed → mark its end on every type so loadMore won't retry.
+            // This is also the path a QOBUZ_ONLY search takes: the TIDAL
+            // deferred returns a failure rather than being skipped, so tidalEnd
+            // lands here and paging never asks TIDAL for a page 2.
             tracksPage.tidalEnd = true; albumsPage.tidalEnd = true
             artistsPage.tidalEnd = true; playlistsPage.tidalEnd = true
             seedPageEnd(tracksPage,    /*tidal=*/0, qobuzTracks.size,  qobuzAvailable)
@@ -438,9 +424,9 @@ class SearchViewModel @Inject constructor(
         _isSearching.value = false
     }
 
-    // Seed paging state from the initial page. Both TIDAL and Qobuz now
-    // paginate from loadMore: TIDAL by a PAGE_SIZE offset, Qobuz by the number
-    // of items already shown for this type (one combined envelope per call).
+    // Seed paging state from the initial page. Both catalogues paginate from
+    // loadMore: TIDAL by a PAGE_SIZE offset, Qobuz by the number of items
+    // already shown for this type (one combined envelope per call).
     private fun seedPageEnd(state: PageState, tidalCount: Int, qobuzCount: Int, qobuzAvailable: Boolean) {
         if (tidalCount < PAGE_SIZE) state.tidalEnd = true
         state.qobuzEnd = !qobuzAvailable || qobuzCount == 0
@@ -485,7 +471,7 @@ class SearchViewModel @Inject constructor(
                     if (gen != searchGeneration) return@launch
                     if (tidalItems.size < PAGE_SIZE) state.tidalEnd = true
                     state.nextOffset = offset + PAGE_SIZE
-                    appendPage(type, tidalItems, isQobuz = false, q = q)
+                    appendPage(type, tidalItems, PageSource.TIDAL, q = q)
                 }
 
                 // --- Qobuz page (one combined envelope; offset = items shown). ---
@@ -504,7 +490,7 @@ class SearchViewModel @Inject constructor(
                         SearchPageType.PLAYLISTS -> emptyList()
                     }
                     state.qobuzOffset += qItems.size
-                    appendPage(type, qItems, isQobuz = true, q = q)
+                    appendPage(type, qItems, PageSource.QOBUZ, q = q)
                     if (qItems.isEmpty() || currentCountFor(type) == before) state.qobuzEnd = true
                 } else if (type == SearchPageType.PLAYLISTS) {
                     state.qobuzEnd = true
@@ -546,13 +532,19 @@ class SearchViewModel @Inject constructor(
     // already shown. The whole list used to be re-scored on every page, which
     // reshuffled items the user had already scrolled past; keeping existing
     // order and only ranking the fresh tail fixes that.
-    private fun appendPage(type: SearchPageType, items: List<Any>, isQobuz: Boolean, q: String) {
+    private fun appendPage(type: SearchPageType, items: List<Any>, source: PageSource, q: String) {
         if (items.isEmpty()) return
         when (type) {
             SearchPageType.TRACKS -> {
                 @Suppress("UNCHECKED_CAST")
                 val mapped = (items as List<Track>).map {
-                    if (isQobuz) it.toQobuzUnifiedTrack() else it.toUnifiedTrack()
+                    // The id spaces don't overlap — a Qobuz id read as TIDAL's
+                    // resolves to a different recording — so the catalogue a
+                    // page came from decides the conversion.
+                    when (source) {
+                        PageSource.QOBUZ -> it.toQobuzUnifiedTrack()
+                        PageSource.TIDAL -> it.toUnifiedTrack()
+                    }
                 }
                 val existing = _allTracks.value
                 val seen = existing.mapTo(HashSet()) { it.id }

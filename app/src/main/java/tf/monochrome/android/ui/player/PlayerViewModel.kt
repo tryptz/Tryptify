@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -28,6 +29,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
@@ -145,11 +148,12 @@ class PlayerViewModel @Inject constructor(
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
-    val progress: StateFlow<Float>
-        get() = MutableStateFlow(
-            if (_durationMs.value > 0) _positionMs.value.toFloat() / _durationMs.value.toFloat()
-            else 0f
-        ).asStateFlow()
+    // No `progress` flow here on purpose. There was one, and it was a getter
+    // that allocated a fresh MutableStateFlow on every read, seeded from the
+    // position at that instant and then never updated again — a StateFlow that
+    // could not change. Nothing consumed it (both call sites compute the
+    // fraction themselves from position and duration), so it was pure garbage
+    // per access.
 
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
@@ -184,6 +188,17 @@ class PlayerViewModel @Inject constructor(
     // makes everything static, not just the app-wide theme.
     val dynamicColors: StateFlow<Boolean> = preferences.dynamicColors
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // "Blend Between Tracks", in seconds. The player reads it to pace its
+    // colour crossfade against the audio one rather than a fixed tween.
+    val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // Counts playback changes the UI asked for (see resolveAndPlay). Only
+    // meaningful as "did this move since the last track change" — the artwork
+    // uses it to tell a skip from a song ending. Not a count of anything a
+    // user would recognise, so nothing should display it.
+    private val _userTrackChanges = MutableStateFlow(0)
+    val userTrackChanges: StateFlow<Int> = _userTrackChanges.asStateFlow()
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.playerGlass
@@ -335,6 +350,24 @@ class PlayerViewModel @Inject constructor(
     // can resolve unified tracks too. Don't redeclare here.
 
 
+    /**
+     * Live download state by track id.
+     *
+     * Declared HERE, above the init block that writes it, and that is not
+     * cosmetic. Kotlin runs property initialisers and init blocks in source
+     * order, and viewModelScope's dispatcher is Dispatchers.Main.immediate — so
+     * a `launch` from init that is already on the main thread starts its body
+     * *synchronously, inside the constructor*. Collecting a StateFlow there
+     * delivers its current value on the spot, and the assignment lands before
+     * a property declared further down has been initialised: a null receiver
+     * and a crash on app start, every time, on the first frame.
+     *
+     * It survived only because the download flow used to be LiveData-backed and
+     * so could not emit synchronously. Making it a StateFlow exposed it.
+     */
+    private val _activeDownloads = MutableStateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>>(emptyMap())
+    val activeDownloads: StateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>> = _activeDownloads.asStateFlow()
+
     init {
         connectToService()
         startPositionPolling()
@@ -466,12 +499,19 @@ class PlayerViewModel @Inject constructor(
     private fun startPositionPolling() {
         viewModelScope.launch {
             while (isActive) {
-                mediaController?.let { mc ->
-                    if (mc.isPlaying) {
-                        _positionMs.value = mc.currentPosition.coerceAtLeast(0)
-                        _durationMs.value = mc.duration.coerceAtLeast(0)
-                    }
+                val mc = mediaController
+                if (mc == null || !mc.isPlaying) {
+                    // Nothing is moving, so there is nothing to read. This used
+                    // to tick four times a second regardless — for the whole
+                    // life of the ViewModel, paused or not, controller or not —
+                    // to copy the same number onto itself. Wait for playback
+                    // instead; seekTo and syncState already publish the position
+                    // directly when it changes while paused.
+                    _isPlaying.first { it }
+                    continue
                 }
+                _positionMs.value = mc.currentPosition.coerceAtLeast(0)
+                _durationMs.value = mc.duration.coerceAtLeast(0)
                 delay(250) // 4 updates/sec for smooth progress
             }
         }
@@ -818,6 +858,13 @@ class PlayerViewModel @Inject constructor(
 
     private fun resolveAndPlay() {
         val track = queueManager.currentTrack.value ?: return
+        // Every playback change the UI asks for funnels through here — taps,
+        // transport skips, queue jumps, a removed current track. The player's
+        // own end-of-track advance happens inside PlaybackService and never
+        // does, which is what lets the artwork tell "you skipped" from "the
+        // song ended" and pick a matching transition length. Bumped before the
+        // resolve so it is already recorded when the track change lands.
+        _userTrackChanges.value++
         viewModelScope.launch {
             try {
                 // Resolution priority:
@@ -845,12 +892,16 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mediaController?.let { mc ->
-                        mc.setMediaItem(resolved.mediaItem)
-                        mc.prepare()
-                        mc.play()
+                    val mc = awaitMediaController()
+                    if (mc == null) {
+                        handleResolveFailure()
+                        return@launch
                     }
+                    mc.setMediaItem(resolved.mediaItem)
+                    mc.prepare()
+                    mc.play()
                     onResolveSucceeded()
+                    warmUpcoming()
                 } else {
                     // Legacy API path
                     val (mediaItem, _) = streamResolver.resolveMediaItem(track)
@@ -858,15 +909,61 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mediaController?.let { mc ->
-                        mc.setMediaItem(mediaItem)
-                        mc.prepare()
-                        mc.play()
+                    val mc = awaitMediaController()
+                    if (mc == null) {
+                        handleResolveFailure()
+                        return@launch
                     }
+                    mc.setMediaItem(mediaItem)
+                    mc.prepare()
+                    mc.play()
                     onResolveSucceeded()
+                    warmUpcoming()
                 }
             } catch (_: Exception) {
                 handleResolveFailure()
+            }
+        }
+    }
+
+    /**
+     * The connected controller, waiting briefly for the connection if the tap
+     * beat it.
+     *
+     * `mediaController` is assigned asynchronously from [connectToService], so
+     * a song tapped in the first moments after the app opens used to resolve
+     * fully and then hit a null controller inside a `?.let` — the play was
+     * dropped on the floor, and the code still reported success, so nothing
+     * retried and no error surfaced. The user just saw a tap do nothing and had
+     * to tap again. By the time a resolve finishes the connection is normally
+     * long since up, so this almost always returns immediately.
+     */
+    private suspend fun awaitMediaController(): MediaController? {
+        mediaController?.let { return it }
+        val future = controllerFuture ?: return null
+        return withTimeoutOrNull(CONTROLLER_CONNECT_TIMEOUT_MS) {
+            suspendCancellableCoroutine { cont ->
+                future.addListener(
+                    { cont.resume(runCatching { future.get() }.getOrNull()) { _, _, _ -> } },
+                    MoreExecutors.directExecutor(),
+                )
+            }
+        }
+    }
+
+    /**
+     * Warm the next couple of queue entries once playback is under way, so a
+     * skip doesn't start from cold. Only the service used to do this, which
+     * left every UI-initiated play unwarmed. Detached — it must never hold up
+     * the track that's already playing.
+     */
+    private fun warmUpcoming() {
+        viewModelScope.launch {
+            val queue = queueManager.currentQueue
+            val currentIdx = queueManager.currentQueueIndex
+            for (i in 1..2) {
+                val nextIdx = currentIdx + i
+                if (nextIdx < queue.size) streamResolver.warmUpcoming(queue[nextIdx])
             }
         }
     }
@@ -927,8 +1024,15 @@ class PlayerViewModel @Inject constructor(
 
     // --- Downloads ---
 
-    private val _activeDownloads = MutableStateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>>(emptyMap())
-    val activeDownloads: StateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>> = _activeDownloads.asStateFlow()
+    /**
+     * Ids of every track with a downloaded copy on disk. Drives the persistent
+     * "downloaded" badge on song rows — unlike [activeDownloads] this outlives
+     * the transfer and survives a restart.
+     */
+    val downloadedTrackIds: StateFlow<Set<Long>> =
+        libraryRepository.getDownloadedTracks()
+            .map { downloads -> downloads.mapTo(mutableSetOf()) { it.id } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     // Live download state for whichever track is currently playing — drives
     // the player's download button visual feedback (queued/downloading arc,
@@ -1069,5 +1173,13 @@ class PlayerViewModel @Inject constructor(
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         return "%d:%02d".format(minutes, seconds)
+    }
+
+    private companion object {
+        // Only ever waited on for a tap that beat the session connection, which
+        // in practice resolves in well under a second. The bound is here so a
+        // service that never comes up surfaces as a playback error rather than
+        // a coroutine parked forever.
+        const val CONTROLLER_CONNECT_TIMEOUT_MS = 5_000L
     }
 }

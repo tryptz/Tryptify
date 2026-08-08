@@ -55,6 +55,17 @@ Java_tf_monochrome_android_audio_dsp_oxford_InflatorNative_nativeSetParams(
     p->params.bypass    .store(bypass     == JNI_TRUE);
 }
 
+// Anti-alias oversampling for the waveshaper: 1 (off), 2, or 4. Separate from
+// nativeSetParams because it's an independent atomic the audio thread picks up
+// on its next block, and keeping it out of the params push avoids reshuffling
+// that signature.
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_oxford_InflatorNative_nativeSetOversampling(
+        JNIEnv*, jclass, jlong h, jint factor) {
+    auto* p = asPtr<InflatorProcessor>(h);
+    p->params.oversampling.store(factor);
+}
+
 // Packed: top 32 bits peakL, low 32 bits peakR (raw float bits).
 extern "C" JNIEXPORT jlong JNICALL
 Java_tf_monochrome_android_audio_dsp_oxford_InflatorNative_nativeReadMeters(
@@ -130,6 +141,13 @@ Java_tf_monochrome_android_audio_dsp_oxford_CompressorNative_nativeSetParams(
     p->params.kneeDb     .store(kneeDb);
     p->params.makeupDb   .store(makeupDb);
     p->params.bypass     .store(bypass == JNI_TRUE);
+}
+
+// Anti-alias oversampling for the detector + gain stage: 1, 2 or 4.
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_oxford_CompressorNative_nativeSetOversampling(
+        JNIEnv*, jclass, jlong h, jint factor) {
+    asPtr<CompressorProcessor>(h)->params.oversampling.store(factor);
 }
 
 extern "C" JNIEXPORT jfloat JNICALL

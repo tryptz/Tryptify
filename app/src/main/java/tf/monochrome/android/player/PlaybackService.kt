@@ -42,7 +42,6 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.scrobbling.ScrobblingService
 import tf.monochrome.android.domain.model.EqBand
-import tf.monochrome.android.domain.model.ReplayGainValues
 import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
@@ -55,7 +54,6 @@ class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var streamResolver: StreamResolver
-    @Inject lateinit var replayGainProcessor: ReplayGainProcessor
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
@@ -63,11 +61,17 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var mixBusProcessor: MixBusProcessor
+    // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
+    // whatever these are set to right now.
+    @Inject lateinit var inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect
+    @Inject lateinit var compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect
+    @Inject lateinit var crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect
     @Inject lateinit var dspManager: DspEngineManager
     @Inject lateinit var autoEqProcessor: AutoEqProcessor
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
+    @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -86,12 +90,28 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     private fun buildAtmosTapFactory() =
         tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
-            DefaultMediaSourceFactory(this), atmosFrameBuffer)
+            DefaultMediaSourceFactory(buildDataSourceFactory()), atmosFrameBuffer)
+
+    /**
+     * Everything DefaultDataSource handles (file / content / asset / http),
+     * plus the `qobuz://` scheme, which plays a Qobuz track out of the cache
+     * file while it is still downloading instead of waiting for the last byte.
+     */
+    @OptIn(UnstableApi::class)
+    private fun buildDataSourceFactory(): androidx.media3.datasource.DataSource.Factory {
+        val default = androidx.media3.datasource.DefaultDataSource.Factory(this)
+        val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
+        return androidx.media3.datasource.DataSource.Factory {
+            tf.monochrome.android.data.cache.SchemeRoutingDataSource(
+                default.createDataSource(),
+                qobuz.createDataSource(),
+            )
+        }
+    }
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var currentReplayGain: ReplayGainValues? = null
 
     // Last track the ProjectM preset was advanced for — so a real track change
     // (skip, previous, pick a new song) rolls the visualizer to a fresh preset
@@ -119,16 +139,23 @@ class PlaybackService : MediaSessionService() {
         // Tuned for hi-fi streaming: buffer 30 s minimum and 120 s cap so a
         // brief cell-signal dip mid-track doesn't rebuffer, and the 48 kHz
         // Opus / FLAC / ALAC tail has room without starving the audio
-        // thread. Playback starts after 2.5 s of buffered audio (down from
-        // the 5 s default) so tapping play feels immediate on a warm cache;
-        // rebuffer after an underrun waits for 5 s so we don't churn. See
-        // androidx.media3.exoplayer.DefaultLoadControl defaults — this
-        // widens the ceiling by 2-3× to absorb hi-bitrate streams.
+        // thread. See androidx.media3.exoplayer.DefaultLoadControl defaults —
+        // this widens the ceiling by 2-3× to absorb hi-bitrate streams.
+        //
+        // bufferForPlaybackMs is what the listener actually feels: nothing is
+        // heard until that much media is buffered, on every start and every
+        // skip. It used to sit at 2_500, described as "down from the 5 s
+        // default" — but DEFAULT_BUFFER_FOR_PLAYBACK_MS *is* 2500, so the
+        // start-up threshold had never been lowered at all. 750 ms is enough
+        // for the decoder to keep ahead on a local file or a warm stream, and
+        // it comes straight off time-to-first-sound. The post-underrun
+        // threshold stays at 5 s, so a genuinely struggling connection still
+        // refills properly instead of churning.
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 /* minBufferMs */ 30_000,
                 /* maxBufferMs */ 120_000,
-                /* bufferForPlaybackMs */ 2_500,
+                /* bufferForPlaybackMs */ 750,
                 /* bufferForPlaybackAfterRebufferMs */ 5_000,
             )
             .setPrioritizeTimeOverSizeThresholds(true)
@@ -170,6 +197,8 @@ class PlaybackService : MediaSessionService() {
             // updatePeriodMillis=0 (no polling), so it only refreshes when the
             // service pushes an update on a real playback change.
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Also what wakes the blend watcher — see startCrossfadeWatcher.
+                playingSignal.value = isPlaying
                 refreshNowPlayingWidget()
             }
 
@@ -189,7 +218,8 @@ class PlaybackService : MediaSessionService() {
                         onTrackEnded()
                     }
                     Player.STATE_READY -> {
-                        applyReplayGain()
+                        consecutivePlayerErrors = 0
+                        applyVolume()
                         applyPlaybackSpeed()
                         applyEq()
                         applyParametricEq()
@@ -200,7 +230,90 @@ class PlaybackService : MediaSessionService() {
                 }
             }
 
+            /**
+             * Pre-queuing a track means the player can now fail on an item the
+             * service never explicitly started — a Qobuz fetch that 404s, a
+             * file deleted since it was queued. Without a handler that stops
+             * playback dead with no recovery, so drop the window and retry the
+             * position QueueManager points at (the gapless hand-off has already
+             * advanced it). Once the retries are spent the track is given up on
+             * and the queue moves along, so a bad item can't trap it.
+             *
+             * The retries are spaced out, and this is the whole point of them.
+             * Retrying in the same breath meant a track that was merely slow —
+             * a cold stream, a signal dip on the hand-off — hit the identical
+             * not-ready condition on the retry, and the second failure moved on
+             * within milliseconds of the first. With nothing to slow it down
+             * that walked the queue at a few hundred ms a track. A real fetch
+             * needs a moment before it counts as failed.
+             */
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                dropGaplessNext()
+                val attempt = consecutivePlayerErrors++
+                if (attempt >= MAX_CONSECUTIVE_PLAYER_ERRORS) {
+                    consecutivePlayerErrors = 0
+                    onTrackEnded()
+                    return
+                }
+                // Backs off further each time, so a stream that needs a second
+                // gets one and a genuinely dead item still fails promptly.
+                val backoffMs = PLAYER_ERROR_RETRY_DELAY_MS * (attempt + 1)
+                val target = queueManager.currentTrack.value?.id
+                playerErrorRecovery?.cancel()
+                playerErrorRecovery = serviceScope.launch {
+                    kotlinx.coroutines.delay(backoffMs)
+                    // A skip, a new queue or a sleep timer during the wait owns
+                    // the player now — retrying would yank it back.
+                    if (queueManager.currentTrack.value?.id != target) return@launch
+                    playQueue()
+                }
+            }
+
+            /**
+             * Recovers a start that audio focus refused.
+             *
+             * Only the refusal that lands within [FOCUS_RETRY_WINDOW_MS] of the
+             * service's own play() request is retried — that's the request
+             * failing, not the user starting a podcast halfway through a song,
+             * which arrives later and with a different reason. Bounded retries,
+             * and any successful start clears the counter, so this can never
+             * turn into the app fighting another for the audio device.
+             */
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (playWhenReady) {
+                    autoPlayRetries = 0
+                    return
+                }
+                if (reason != Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) return
+                if (System.currentTimeMillis() - playRequestedAt > FOCUS_RETRY_WINDOW_MS) return
+                if (autoPlayRetries >= MAX_AUTO_PLAY_RETRIES) return
+
+                autoPlayRetries++
+                serviceScope.launch {
+                    kotlinx.coroutines.delay(FOCUS_RETRY_DELAY_MS)
+                    if (!player.playWhenReady) startPlayback()
+                }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // A gapless hand-off: the player moved to the item we
+                // pre-queued, so it advanced the queue for us. Bring
+                // QueueManager into line *without* re-resolving — calling
+                // playQueue() here would tear down the very hand-off that just
+                // happened and reintroduce the gap.
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
+                    player.currentMediaItemIndex > 0
+                ) {
+                    queueManager.next()
+                    trimPlayedItems()
+                    // There is no STATE_READY between gapless items, so the
+                    // volume is re-asserted here — it's the only hook the
+                    // hand-off gives us.
+                    applyVolume()
+                    serviceScope.launch { preloadNextTracks() }
+                }
+                syncGaplessNext()
+
                 if (mediaItem != null && reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
                     val trackId = mediaItem.mediaId.toLongOrNull()
                     if (trackId != null) {
@@ -296,6 +409,53 @@ class PlaybackService : MediaSessionService() {
         // the in-app AutoEQ processor whenever the system-wide effect isn't the one
         // handling this app's audio, so tone works independent of the system-wide
         // toggle (and without double-processing when it IS on).
+        // Gapless playback. The setting was wired to the Settings screen but
+        // never read here, so the toggle did nothing at all; this is what makes
+        // it live. Flipping it off drops any pre-queued item immediately rather
+        // than waiting for the next transition.
+        serviceScope.launch {
+            preferences.gaplessPlayback.collect { enabled ->
+                gaplessEnabled = enabled
+                syncGaplessNext()
+            }
+        }
+        serviceScope.launch {
+            preferences.gaplessNoResample.collect { noResample ->
+                gaplessNoResample = noResample
+                syncGaplessNext()
+            }
+        }
+
+        // Mirrored here purely to seed a blend's own DSP chain. DspEngineManager
+        // pushes both of these into the injected MixBusProcessor singleton, but
+        // a chain copy is built outside its reach and would otherwise start at
+        // the 1024 default with the mixer on regardless of what the user set.
+        serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
+        serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
+
+        // Blend length. Any non-zero value takes over from the gapless window,
+        // so re-derive that whenever it changes.
+        serviceScope.launch {
+            preferences.crossfadeDuration.collect { seconds ->
+                crossfadeMs = seconds.coerceAtLeast(0) * 1_000L
+                if (crossfadeMs == 0L) crossfade.cancel()
+                syncGaplessNext()
+            }
+        }
+        startCrossfadeWatcher()
+
+        // Anything that reorders, extends or truncates the queue — drag to
+        // reorder, play-next, clear-upcoming, a shuffle or repeat-mode change —
+        // can invalidate what we pre-queued. Re-deriving the window on every
+        // queue emission is cheap (it no-ops when already correct) and means no
+        // individual mutation has to remember to tell us.
+        serviceScope.launch {
+            kotlinx.coroutines.flow.combine(
+                queueManager.queue,
+                queueManager.repeatMode,
+            ) { _, _ -> Unit }.collect { syncGaplessNext() }
+        }
+
         serviceScope.launch {
             // Seven sources exceeds combine's typed overloads (max 5), so this
             // uses the vararg form and casts each slot back out by position.
@@ -500,7 +660,9 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    @OptIn(UnstableApi::class)
     override fun onDestroy() {
+        crossfade.release()
         mediaSession?.run {
             player.release()
             release()
@@ -514,7 +676,6 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             try {
                 val (mediaItem, trackStream) = streamResolver.resolveMediaItem(track)
-                currentReplayGain = trackStream?.replayGain
 
                 if (mediaItem == null) {
                     // Stream URL couldn't be resolved (offline / API error /
@@ -527,7 +688,7 @@ class PlaybackService : MediaSessionService() {
 
                 player.setMediaItem(mediaItem)
                 player.prepare()
-                player.play()
+                startPlayback()
 
                 libraryRepository.addToHistory(track)
             } catch (e: Exception) {
@@ -550,20 +711,18 @@ class PlaybackService : MediaSessionService() {
                 val unifiedTrack = unifiedTrackRegistry[currentTrack.id]
                 if (unifiedTrack != null) {
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
-                    currentReplayGain = resolved.trackStream?.replayGain
                     if (!resolved.isPlayable) {
                         onTrackEnded()
                         return@launch
                     }
                     player.setMediaItem(resolved.mediaItem)
                     player.prepare()
-                    player.play()
+                    startPlayback()
                     libraryRepository.addToHistory(currentTrack, unifiedTrack)
                     return@launch
                 }
 
                 val (mediaItem, trackStream) = streamResolver.resolveMediaItem(currentTrack)
-                currentReplayGain = trackStream?.replayGain
 
                 if (mediaItem == null) {
                     onTrackEnded()
@@ -594,19 +753,30 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 player.prepare()
-                player.play()
+                startPlayback()
 
                 libraryRepository.addToHistory(currentTrack)
 
                 // Preload next tracks
                 preloadNextTracks()
+                // setMediaItem/setMediaSource above replaced the whole playlist,
+                // so any previously pre-queued item is already gone; rebuild the
+                // window for the track we just started.
+                syncGaplessNext()
             } catch (e: Exception) {
                 onTrackEnded()
             }
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun skipToNext() {
+        crossfade.cancel()
+        // An explicit skip takes the normal resolve path rather than the
+        // pre-queued item: playQueue() replaces the playlist outright, which
+        // also discards the window. Dropping it up front keeps the player from
+        // briefly auto-advancing into it if the track ends mid-skip.
+        dropGaplessNext()
         val nextTrack = queueManager.next()
         if (nextTrack != null) {
             playQueue()
@@ -615,12 +785,15 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun skipToPrevious() {
         // If more than 3 seconds in, restart current track
         if (player.currentPosition > 3000) {
             player.seekTo(0)
             return
         }
+        crossfade.cancel()
+        dropGaplessNext()
         val prevTrack = queueManager.previous()
         if (prevTrack != null) {
             playQueue()
@@ -635,7 +808,7 @@ class PlaybackService : MediaSessionService() {
         if (player.isPlaying) {
             player.pause()
         } else {
-            player.play()
+            startPlayback()
         }
     }
 
@@ -658,31 +831,394 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private fun applyReplayGain() {
+    // Volume has two independent inputs — the user slider and the crossfade
+    // ramp — and both would otherwise want to own player.volume outright.
+    // They're kept apart here: [baseVolume] is the level the track should play
+    // at, [crossfadeGain] is where the blend has got to, and only [pushVolume]
+    // multiplies them onto the player. Without this, a STATE_READY landing in
+    // the middle of a blend reset the ramp to full and the incoming track
+    // slammed in at once.
+    @Volatile private var baseVolume = 1f
+    @Volatile private var crossfadeGain = 1f
+
+    private fun pushVolume() {
+        val effective = baseVolume * crossfadeGain
+        player.volume = effective
+        // Mirror to the libusb bypass path. Player.volume runs
+        // inside DefaultAudioSink which we skip when bypass is
+        // hot, so without this line the volume slider and the blend
+        // ramp only apply on the AudioFlinger fallback.
+        bypassVolumeController.setVolume(effective)
+    }
+
+    private fun applyVolume() {
         serviceScope.launch {
-            val volume = preferences.volume.first().toFloat()
-            val adjustedVolume = replayGainProcessor.calculateVolume(volume, currentReplayGain)
-            player.volume = adjustedVolume
-            // Mirror to the libusb bypass path. Player.volume runs
-            // inside DefaultAudioSink which we skip when bypass is
-            // hot, so without this line the slider + ReplayGain
-            // attenuation only applies on the AudioFlinger fallback.
-            bypassVolumeController.setVolume(adjustedVolume)
+            baseVolume = preferences.volume.first().toFloat()
+            pushVolume()
         }
     }
 
+    // --- Blending between tracks ------------------------------------------
+    //
+    // One slider governs the whole transition: at 0s tracks butt up against
+    // each other with no gap (the pre-queued window below), and any value above
+    // that overlaps them instead. The two are mutually exclusive by
+    // construction — an overlap needs the next track started *early*, which is
+    // the opposite of handing it to the player to follow on seamlessly — so a
+    // non-zero blend switches the gapless window off.
+
+    @Volatile private var crossfadeMs = 0L
+
+    /**
+     * Mirrors [player]'s playing state as something suspendable. Player.Listener
+     * is a callback, and the blend watcher needs to *wait* for playback rather
+     * than poll for it.
+     */
+    private val playingSignal = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    // Live copies of the two DSP settings a blend's chain has to be told about;
+    // defaults match PreferencesManager's until the collectors above land.
+    @Volatile private var dspBlockSize = 1024
+    @Volatile private var dspEnabled = false
+
+    // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
+    // out here is itself an opt-in usage that an @OptIn on the property doesn't
+    // cover, so lint flags the declaration even when every call site is clean.
+    private val crossfade by lazy { buildCrossfadeController() }
+
+    /**
+     * The settings last pushed to the live chain, kept so a blend's copy can be
+     * seeded with exactly what is playing rather than re-deriving it from
+     * preferences and risking the two drifting apart.
+     */
+    private data class AppliedEq(
+        val bandsL: List<EqBand>,
+        val bandsR: List<EqBand>,
+        val preamp: Float,
+        val enabled: Boolean,
+    ) {
+        companion object {
+            val NONE = AppliedEq(emptyList(), emptyList(), 0f, false)
+        }
+    }
+
+    @Volatile private var lastAutoEq = AppliedEq.NONE
+    @Volatile private var lastParametricEq = AppliedEq.NONE
+
+    /**
+     * A second processing chain for a blend's outgoing tail, carrying the same
+     * DSP graph and EQ curves as the track that is already playing. Released
+     * with the blend, which destroys its native engine — see [DspChain].
+     */
+    @OptIn(UnstableApi::class)
+    private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
+        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy()
+        val autoEq = lastAutoEq
+        val paramEq = lastParametricEq
+        chain.seedFrom(
+            dspStateJson = runCatching { dspManager.getStateJson() }.getOrNull(),
+            autoEqBandsL = autoEq.bandsL,
+            autoEqBandsR = autoEq.bandsR,
+            autoEqPreamp = autoEq.preamp,
+            autoEqEnabled = autoEq.enabled,
+            parametricBands = paramEq.bandsL,
+            parametricPreamp = paramEq.preamp,
+            parametricEnabled = paramEq.enabled,
+            // Straight off the live singletons — whatever is playing right now.
+            inflatorState = inflatorEffect.state.value,
+            compressorState = compressorEffect.state.value,
+            crossfeedState = crossfeedEffect.state.value,
+            blockSize = dspBlockSize,
+            dspEnabled = dspEnabled,
+        )
+        // The copy's native engine only exists once ExoPlayer configures it
+        // with a format, which is after the blend has started.
+        chain.observeEngine(serviceScope)
+        return chain
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun buildCrossfadeController(): CrossfadeController =
+        CrossfadeController(
+            context = this,
+            scope = serviceScope,
+            dataSourceFactory = buildDataSourceFactory(),
+            dspChainFactory = ::buildSeededDspChain,
+        ) { gain ->
+            crossfadeGain = gain
+            pushVolume()
+        }
+
+    /**
+     * Whether a blend can run right now.
+     *
+     * The exclusive libusb path is the hard stop: it claims the USB device for
+     * one stream, and the tail player uses the ordinary Android sink, so during
+     * a blend its audio would come out of a different device entirely. Skipping
+     * the blend is the honest outcome — bit-perfect output is the reason
+     * someone plugs in that DAC, and a gap is a smaller price than the tail
+     * playing out of the phone speaker.
+     */
+    private fun canCrossfade(): Boolean =
+        crossfadeMs > 0L && !libusbDriver.isStreaming.value
+
+    /**
+     * Hands the tail of the current track to the secondary player and starts
+     * the next one on the main player, overlapping the two.
+     */
+    @OptIn(UnstableApi::class)
+    private fun beginCrossfade() {
+        val item = player.currentMediaItem ?: return
+        val outgoing = queueManager.currentTrack.value
+        val started = crossfade.start(
+            item = item,
+            fromPositionMs = player.currentPosition,
+            durationMs = crossfadeMs,
+            tailVolume = baseVolume,
+            // The incoming track is resolved and buffered from scratch below;
+            // until the main player is genuinely sounding, there is nothing to
+            // fade in and the blend waits.
+            incomingReady = { player.playbackState == Player.STATE_READY && player.isPlaying },
+        )
+        if (!started) return // Fall through to the ordinary end-of-track path.
+
+        // The outgoing track never reaches STATE_ENDED on the main player now —
+        // we pre-empt it — so scrobble here instead, exactly as that handler
+        // would have.
+        outgoing?.let { serviceScope.launch { scrobblingService.scrobbleTrack(it) } }
+
+        // Start the incoming track silent; the ramp brings it up.
+        crossfadeGain = 0f
+        onTrackEnded()
+    }
+
+    /**
+     * Watches the play head so a blend can begin before the track runs out.
+     *
+     * There is no callback for "the playhead reached duration - blend", so this
+     * has to poll — but only when there is something to poll for. The comment
+     * here used to claim it ran "only while a blend length is actually set" and
+     * it did nothing of the sort: the loop ticked four times a second for the
+     * life of the service, and since the default blend is zero, the overwhelmingly
+     * common case was waking ~345,000 times a day to evaluate `canCrossfade()`
+     * as false. It now parks on the preference and on playback, so a gapless
+     * user costs nothing and a blending one costs a few comparisons a second
+     * while a track is actually running.
+     */
+    @OptIn(UnstableApi::class)
+    private fun startCrossfadeWatcher() {
+        serviceScope.launch {
+            while (true) {
+                // Suspends until a blend length is set; wakes on the next
+                // preference change rather than on a timer.
+                if (crossfadeMs == 0L) {
+                    preferences.crossfadeDuration.first { it > 0 }
+                    continue
+                }
+                if (!player.isPlaying) {
+                    playingSignal.first { it }
+                    continue
+                }
+                kotlinx.coroutines.delay(CROSSFADE_POLL_MS)
+                if (!canCrossfade() || crossfade.isRunning) continue
+                if (!player.isPlaying) continue
+                if (queueManager.peekNext() == null) continue
+                if (CrossfadeRamp.shouldStart(
+                        positionMs = player.currentPosition,
+                        durationMs = player.duration,
+                        crossfadeMs = crossfadeMs,
+                    )
+                ) {
+                    beginCrossfade()
+                }
+            }
+        }
+    }
+
+    // --- Gapless playback -------------------------------------------------
+    //
+    // ExoPlayer can only play one track into the next without a gap if it holds
+    // both: the second decoder has to be running before the first track ends.
+    // This app otherwise keeps exactly one item in the player and re-resolves
+    // on every transition, because a TIDAL stream URL queued minutes ahead
+    // would have aged out by the time it was used (see QueueForwardingPlayer).
+    //
+    // So the player's playlist is kept as a two-item window — [current] or
+    // [current, next] — and `next` is only added when it resolves to a URI that
+    // survives the wait: an on-device file, or a qobuz:// URI whose resolution
+    // is deferred to open time. QueueManager stays the source of truth for
+    // queue position; the window is a cache in front of it, re-derived from
+    // scratch by [syncGaplessNext] whenever anything moves, so it cannot drift.
+
+    @Volatile private var gaplessEnabled = false
+    @Volatile private var gaplessNoResample = true
+
+    private var consecutivePlayerErrors = 0
+    private var playerErrorRecovery: kotlinx.coroutines.Job? = null
+
+    private companion object {
+        /** Retries a failing position before moving past it. */
+        const val MAX_CONSECUTIVE_PLAYER_ERRORS = 2
+
+        /**
+         * Grace given to a failing position before it's retried, multiplied by
+         * the attempt number — so a track gets ~1.2s and then ~2.4s to come
+         * good, and is only abandoned after ~3.6s of genuinely not loading.
+         */
+        const val PLAYER_ERROR_RETRY_DELAY_MS = 1_200L
+
+        /**
+         * How soon after the service asks to play a refusal still counts as
+         * "the start-up focus request lost", rather than the user genuinely
+         * handing audio to something else mid-track.
+         */
+        const val FOCUS_RETRY_WINDOW_MS = 1_500L
+        const val FOCUS_RETRY_DELAY_MS = 400L
+        const val MAX_AUTO_PLAY_RETRIES = 2
+
+        /** How often the play head is checked against the blend threshold. */
+        const val CROSSFADE_POLL_MS = 250L
+    }
+
+    /** When the service last asked the player to start, for the check above. */
+    @Volatile private var playRequestedAt = 0L
+    private var autoPlayRetries = 0
+
+    /**
+     * Starts playback, remembering when we asked.
+     *
+     * Media3 requests audio focus on the way into play(). If that request is
+     * refused it flips playWhenReady straight back off, and nothing here used
+     * to notice — the track just sat loaded and paused at 0:00 until the user
+     * pressed play. The refusal is most likely right after a slow load, when
+     * the gap between tracks is longest, which is why it showed up on tracks
+     * being heard for the first time.
+     */
+    private fun startPlayback() {
+        playRequestedAt = System.currentTimeMillis()
+        player.play()
+    }
+
+    /**
+     * Removes everything the player has already finished, so the current item
+     * is always index 0 and the window is easy to reason about.
+     */
+    private fun trimPlayedItems() {
+        while (player.currentMediaItemIndex > 0) {
+            player.removeMediaItem(0)
+        }
+    }
+
+    /** Drops the pre-queued item, if any. Never touches what's playing. */
+    private fun dropGaplessNext() {
+        while (player.mediaItemCount > player.currentMediaItemIndex + 1) {
+            player.removeMediaItem(player.mediaItemCount - 1)
+        }
+    }
+
+    /**
+     * Makes the player's second slot match whatever QueueManager says plays
+     * next — adding, replacing or removing it as needed.
+     *
+     * Idempotent and safe to call from anywhere: it re-reads the queue rather
+     * than tracking deltas, so a reorder, a shuffle toggle, a repeat-mode
+     * change or a fresh queue all converge to the right thing.
+     */
+    private fun syncGaplessNext() {
+        if (player.mediaItemCount == 0) return
+
+        val next = queueManager.peekNext()
+        // A non-zero blend overlaps the tracks instead, which needs the next
+        // one started early rather than queued to follow on.
+        if (!gaplessEnabled || crossfadeMs > 0L || next == null) {
+            dropGaplessNext()
+            return
+        }
+
+        val wantedId = next.id.toString()
+        val queuedIndex = player.currentMediaItemIndex + 1
+        if (player.mediaItemCount > queuedIndex &&
+            player.getMediaItemAt(queuedIndex).mediaId == wantedId
+        ) {
+            return // Already correct.
+        }
+        dropGaplessNext()
+
+        serviceScope.launch {
+            // Only pre-queue sources whose URI outlives the wait. This also
+            // warms them, so the hand-off has bytes ready.
+            if (!streamResolver.warmUpcoming(next)) return@launch
+
+            if (!sampleRatesMatch(next)) return@launch
+
+            val item = resolveGaplessItem(next) ?: return@launch
+
+            // The queue can move while we resolve — re-check before committing,
+            // otherwise we'd append a track that is no longer next.
+            if (!gaplessEnabled) return@launch
+            if (queueManager.peekNext()?.id != next.id) return@launch
+            if (player.mediaItemCount != player.currentMediaItemIndex + 1) return@launch
+
+            player.addMediaItem(item)
+        }
+    }
+
+    /**
+     * Whether [next] plays at the same sample rate as what is playing now.
+     *
+     * A rate change forces DefaultAudioSink to tear down and rebuild its
+     * AudioTrack, which is the gap gapless exists to remove — so pre-queuing
+     * across one buys nothing and hides a hand-off that cannot be seamless.
+     * That transition falls back to the ordinary per-track path instead.
+     *
+     * Taking the gap is what a bit-perfect player is supposed to do: the only
+     * way to avoid it is to resample everything to one fixed rate, which is
+     * exactly what this app's USB path exists not to do. Set a blend time if
+     * you'd rather cover the transition than hear it.
+     *
+     * Unknown rates pass. Refusing on missing metadata would disable gapless
+     * for every catalogue track that doesn't report a rate, and the fallback if
+     * the guess is wrong is just the reconfigure we were trying to avoid.
+     */
+    @OptIn(UnstableApi::class)
+    private fun sampleRatesMatch(next: tf.monochrome.android.domain.model.Track): Boolean {
+        // Toggle off: the user would rather the hand-off stayed seamless and
+        // let the system resample, so a rate change is no longer a reason to
+        // skip pre-queuing.
+        if (!gaplessNoResample) return true
+        val current = player.audioFormat?.sampleRate?.takeIf { it > 0 } ?: return true
+        val upcoming = unifiedTrackRegistry[next.id]?.sampleRate?.takeIf { it > 0 } ?: return true
+        return current == upcoming
+    }
+
+    /**
+     * Resolves [track] to a MediaItem that may be pre-queued, or null when it
+     * resolves to something that can't be (a time-limited stream URL, an
+     * inline DASH manifest, or nothing playable at all).
+     */
+    private suspend fun resolveGaplessItem(track: tf.monochrome.android.domain.model.Track): MediaItem? {
+        val unified = unifiedTrackRegistry[track.id]
+        val item = if (unified != null) {
+            streamResolver.resolveUnifiedTrack(unified).takeIf { it.isPlayable }?.mediaItem
+        } else {
+            streamResolver.resolveMediaItem(track).first
+        } ?: return null
+
+        val uri = item.localConfiguration?.uri?.toString()
+        return item.takeIf { GaplessEligibility.isStableUri(uri) }
+    }
+
     private suspend fun preloadNextTracks() {
-        // Preload metadata for next 2 tracks to reduce latency
+        // Warm the next 2 tracks so a skip doesn't start cold. Only durable
+        // work is done — see StreamResolver.warmUpcoming; a full resolve here
+        // fetched short-lived stream URLs and discarded them, which cost a
+        // request at the worst possible moment and bought nothing.
         val queue = queueManager.currentQueue
         val currentIdx = queueManager.currentQueueIndex
         for (i in 1..2) {
             val nextIdx = currentIdx + i
             if (nextIdx < queue.size) {
-                try {
-                    streamResolver.resolveMediaItem(queue[nextIdx])
-                } catch (_: Exception) {
-                    // Preload failure is non-critical
-                }
+                streamResolver.warmUpcoming(queue[nextIdx])
             }
         }
     }
@@ -743,6 +1279,7 @@ class PlaybackService : MediaSessionService() {
         try {
             if (cfg.systemWide) {
                 autoEqProcessor.applyBands(emptyList(), 0f, false)
+                lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
                 return
             }
             val json = Json { ignoreUnknownKeys = true }
@@ -764,6 +1301,7 @@ class PlaybackService : MediaSessionService() {
             val preamp = if (cfg.enabled) cfg.preamp else 0.0
             val active = bandsL.any { it.enabled } || bandsR.any { it.enabled }
             autoEqProcessor.applyBands(bandsL, bandsR, preamp.toFloat(), active)
+            lastAutoEq = AppliedEq(bandsL, bandsR, preamp.toFloat(), active)
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }
@@ -795,6 +1333,7 @@ class PlaybackService : MediaSessionService() {
                 emptyList()
             }
             parametricEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
+            lastParametricEq = AppliedEq(bands, bands, preamp.toFloat(), enabled)
         } catch (_: Exception) { }
     }
 

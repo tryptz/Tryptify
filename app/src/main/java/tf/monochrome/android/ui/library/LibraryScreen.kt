@@ -110,6 +110,7 @@ fun LibraryScreen(
     val playlists by viewModel.playlists.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val activeDownloads by playerViewModel.activeDownloads.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
 
     val sectionScope = rememberCoroutineScope()
     val currentSectionId = sections.getOrElse(sectionPager.currentPage) { LOCAL_SECTION }
@@ -353,7 +354,7 @@ fun LibraryScreen(
                 ) {
                     if (recentTracks.isNotEmpty()) {
                         item { SectionHeader(title = "Recently Played") }
-                        items(recentTracks.take(5)) { track ->
+                        items(recentTracks.take(5), key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
@@ -369,6 +370,7 @@ fun LibraryScreen(
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )
@@ -377,7 +379,7 @@ fun LibraryScreen(
 
                     if (favoriteTracks.isNotEmpty()) {
                         item { SectionHeader(title = "Liked Songs") }
-                        items(favoriteTracks.take(5)) { track ->
+                        items(favoriteTracks.take(5), key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -393,6 +395,7 @@ fun LibraryScreen(
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )
@@ -464,7 +467,7 @@ fun LibraryScreen(
                     if (playlists.isEmpty()) {
                         item { EmptyState("Create a playlist to organize your music.") }
                     } else {
-                        items(playlists) { playlist ->
+                        items(playlists, key = { it.id }) { playlist ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -522,7 +525,7 @@ fun LibraryScreen(
                                 }
                             }
                         }
-                        items(favoriteTracks) { track ->
+                        items(favoriteTracks, key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -538,6 +541,7 @@ fun LibraryScreen(
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )
@@ -547,7 +551,7 @@ fun LibraryScreen(
                     if (favoriteAlbums.isNotEmpty()) {
                         item { Spacer(modifier = Modifier.height(8.dp)) }
                         item { SectionHeader(title = "Liked Albums") }
-                        items(favoriteAlbums) { album ->
+                        items(favoriteAlbums, key = { it.id }) { album ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -562,7 +566,7 @@ fun LibraryScreen(
                     if (favoriteArtists.isNotEmpty()) {
                         item { Spacer(modifier = Modifier.height(8.dp)) }
                         item { SectionHeader(title = "Liked Artists") }
-                        items(favoriteArtists) { artist ->
+                        items(favoriteArtists, key = { it.id }) { artist ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

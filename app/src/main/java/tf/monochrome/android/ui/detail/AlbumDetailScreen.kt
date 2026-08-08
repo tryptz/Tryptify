@@ -60,6 +60,7 @@ fun AlbumDetailScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
     val playlists by playerViewModel.playlists.collectAsState()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
@@ -274,6 +275,7 @@ fun AlbumDetailScreen(
                             onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                             showCover = false,
                             trackNumber = track.trackNumber ?: (index + 1),
+                            isDownloaded = track.id in downloadedTrackIds,
                             selectionMode = selection.active,
                             selected = track.id in selection.selectedIds
                         )

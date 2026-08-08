@@ -255,10 +255,6 @@ enum class RepeatMode {
     OFF, ONE, ALL
 }
 
-enum class ReplayGainMode {
-    OFF, TRACK, ALBUM
-}
-
 enum class NowPlayingViewMode(val displayName: String) {
     COVER_ART("Cover Art"),
     LYRICS("Lyrics"),

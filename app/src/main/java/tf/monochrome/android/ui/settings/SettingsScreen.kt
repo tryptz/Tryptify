@@ -221,7 +221,7 @@ fun SettingsScreen(
                     7 -> InstancesTab(viewModel)
                     8 -> SystemTab(viewModel, navController)
                     9 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                    10 -> AboutTab()
+                    10 -> AboutTab(viewModel)
                 }
             }
         }
@@ -545,6 +545,8 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
 @Composable
 private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavController) {
     val gapless by viewModel.gaplessPlayback.collectAsState()
+    val crossfade by viewModel.crossfadeDuration.collectAsState()
+    val gaplessNoResample by viewModel.gaplessNoResample.collectAsState()
     val explicit by viewModel.showExplicitBadges.collectAsState()
     val confirmQueue by viewModel.confirmClearQueue.collectAsState()
     val sensitivity by viewModel.visualizerSensitivity.collectAsState()
@@ -588,6 +590,42 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             subtitle = "Remove silence between tracks",
             checked = gapless,
             onCheckedChange = { viewModel.setGaplessPlayback(it) }
+        )
+
+        SettingSwitchItem(
+            title = "Never Resample Between Tracks",
+            subtitle = "A track at a different sample rate starts after a brief gap " +
+                "instead of being resampled to match, keeping output bit-perfect. " +
+                "Turn off to keep every transition seamless and let the system resample.",
+            checked = gaplessNoResample,
+            onCheckedChange = { viewModel.setGaplessNoResample(it) }
+        )
+
+        // Sits under the gapless toggle because the two decide the same thing:
+        // what happens between one track and the next. They're also mutually
+        // exclusive in effect — any blend above 0s overlaps the tracks, so the
+        // gapless hand-off steps aside for it.
+        Text(
+            text = if (crossfade == 0) "Blend Between Tracks: Gapless" else "Blend Between Tracks: ${crossfade}s",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = if (crossfade == 0) {
+                "At zero, tracks run straight into each other with no gap. " +
+                    "Add time to overlap them instead."
+            } else {
+                "The outgoing track fades out while the next fades in over ${crossfade}s."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = crossfade.toFloat(),
+            onValueChange = { viewModel.setCrossfadeDuration(it.toInt()) },
+            valueRange = 0f..12f,
+            steps = 11,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1068,7 +1106,6 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
 private fun AudioTab(viewModel: SettingsViewModel, navController: NavController) {
     val wifiQuality by viewModel.wifiQuality.collectAsState()
     val cellularQuality by viewModel.cellularQuality.collectAsState()
-    val crossfade by viewModel.crossfadeDuration.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val preservePitch by viewModel.preservePitch.collectAsState()
     val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsState()
@@ -1161,17 +1198,6 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
         Spacer(modifier = Modifier.height(8.dp))
         DebugScreenRecorderRow()
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Crossfade: ${crossfade}s", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text("Blend between tracks", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(
-            value = crossfade.toFloat(),
-            onValueChange = { viewModel.setCrossfadeDuration(it.toInt()) },
-            valueRange = 0f..12f,
-            steps = 11,
-            modifier = Modifier.fillMaxWidth()
-        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Playback Speed")
@@ -1767,15 +1793,9 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 private fun InstancesTab(viewModel: SettingsViewModel) {
     val customEndpoint by viewModel.customEndpoint.collectAsState()
     val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsState()
-    val appleEndpoint by viewModel.appleEndpoint.collectAsState()
     val sourceMode by viewModel.sourceMode.collectAsState()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
-    var appleInput by remember(appleEndpoint) { mutableStateOf(appleEndpoint ?: "") }
-    val appleWrapperUrl by viewModel.appleWrapperUrl.collectAsState()
-    val appleWrapperSecret by viewModel.appleWrapperSecret.collectAsState()
-    var appleWrapperInput by remember(appleWrapperUrl) { mutableStateOf(appleWrapperUrl ?: "") }
-    var appleSecretInput by remember(appleWrapperSecret) { mutableStateOf(appleWrapperSecret ?: "") }
 
     SettingsTabContent {
         // Source mode picker — controls which catalogs feed search/discovery.
@@ -1798,7 +1818,6 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                 tf.monochrome.android.data.preferences.SourceMode.BOTH to "Both",
                 tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY to "TIDAL only",
                 tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY to "Qobuz only",
-                tf.monochrome.android.data.preferences.SourceMode.APPLE_ONLY to "Apple only",
             )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 sourceOptions.forEachIndexed { index, (mode, label) ->
@@ -1908,200 +1927,6 @@ private fun InstancesTab(viewModel: SettingsViewModel) {
                         }
                     }
             )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Apple Music URL",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "TrypT HiFi server exposing /api/apple/* (Dolby Atmos + ALAC). Defaults to the Qobuz URL if left blank.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            val latestAppleInput = rememberUpdatedState(appleInput)
-            val latestAppleSaved = rememberUpdatedState(appleEndpoint)
-            OutlinedTextField(
-                value = appleInput,
-                onValueChange = { appleInput = it },
-                placeholder = {
-                    Text(
-                        "Apple instance",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    viewModel.setAppleEndpoint(latestAppleInput.value.trim().ifBlank { null })
-                }),
-                modifier = Modifier
-                    .widthIn(max = 240.dp)
-                    .onFocusChanged { focusState ->
-                        if (!focusState.isFocused) {
-                            val trimmed = latestAppleInput.value.trim().ifBlank { null }
-                            if (trimmed != latestAppleSaved.value) {
-                                viewModel.setAppleEndpoint(trimmed)
-                            }
-                        }
-                    }
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Apple Wrapper (Tailscale)",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Address of the home decrypt agent on your tailnet. When set, Apple decrypts + streams straight from your PC over Tailscale — no cloud.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            val latestWrapperInput = rememberUpdatedState(appleWrapperInput)
-            val latestWrapperSaved = rememberUpdatedState(appleWrapperUrl)
-            OutlinedTextField(
-                value = appleWrapperInput,
-                onValueChange = { appleWrapperInput = it },
-                placeholder = { Text("agent address", style = MaterialTheme.typography.bodyMedium) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    viewModel.setAppleWrapperUrl(latestWrapperInput.value.trim().ifBlank { null })
-                }),
-                modifier = Modifier
-                    .widthIn(max = 240.dp)
-                    .onFocusChanged { focusState ->
-                        if (!focusState.isFocused) {
-                            val trimmed = latestWrapperInput.value.trim().ifBlank { null }
-                            if (trimmed != latestWrapperSaved.value) {
-                                viewModel.setAppleWrapperUrl(trimmed)
-                            }
-                        }
-                    }
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Apple Wrapper secret",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Matches the agent's AGENT_SECRET.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            val latestSecretInput = rememberUpdatedState(appleSecretInput)
-            val latestSecretSaved = rememberUpdatedState(appleWrapperSecret)
-            OutlinedTextField(
-                value = appleSecretInput,
-                onValueChange = { appleSecretInput = it },
-                placeholder = { Text("agent secret", style = MaterialTheme.typography.bodyMedium) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    viewModel.setAppleWrapperSecret(latestSecretInput.value.trim().ifBlank { null })
-                }),
-                modifier = Modifier
-                    .widthIn(max = 240.dp)
-                    .onFocusChanged { focusState ->
-                        if (!focusState.isFocused) {
-                            val trimmed = latestSecretInput.value.trim().ifBlank { null }
-                            if (trimmed != latestSecretSaved.value) {
-                                viewModel.setAppleWrapperSecret(trimmed)
-                            }
-                        }
-                    }
-            )
-        }
-
-        // --- Apple audio format ---------------------------------------------
-        // Apple's format ladder is its own; it does not map onto the
-        // Qobuz/TIDAL download tier, so it is chosen separately here.
-        val appleQuality by viewModel.appleQuality.collectAsState()
-        val appleAtmos by viewModel.appleAtmosPreferred.collectAsState()
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Apple Music format",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Prefer Dolby Atmos",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "Download the spatial master when a track has one. " +
-                        "Tracks without an Atmos version fall back to the format below.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = appleAtmos,
-                onCheckedChange = { viewModel.setAppleAtmosPreferred(it) },
-            )
-        }
-
-        tf.monochrome.android.data.preferences.AppleQuality.entries.forEach { option ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { viewModel.setAppleQuality(option) }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = appleQuality == option,
-                    onClick = { viewModel.setAppleQuality(option) },
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = option.label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = option.summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
         }
     }
 }
@@ -2482,9 +2307,18 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 
 // ─── Tab 9: About ──────────────────────────────────────────────────────
 @Composable
-private fun AboutTab() {
+private fun AboutTab(viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    // Reaching the panel counts as having read it, however the user got here.
+    LaunchedEffect(Unit) { viewModel.markWhatsNewSeen() }
     SettingsTabContent {
+        WhatsNewPanel()
+        SettingItem(
+            title = "Check for updates",
+            subtitle = "Look on GitHub for a newer release now",
+            onClick = { viewModel.checkForUpdatesNow() },
+        )
+        Spacer(modifier = Modifier.height(24.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -2620,12 +2454,35 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
     val minTrackDuration by viewModel.minTrackDuration.collectAsState()
     val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsState()
     val libraryTabOrder by viewModel.libraryTabOrder.collectAsState()
+    val autoDownloadLiked by viewModel.autoDownloadLikedSongs.collectAsState()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        item {
+            Text(
+                "Liked Songs",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+
+        item {
+            SettingSwitchItem(
+                title = "Auto-Download Liked Songs",
+                subtitle = "Keep a copy of every song you like from now on. " +
+                    "Songs you liked earlier are left alone — turning this on " +
+                    "never starts a bulk download.",
+                checked = autoDownloadLiked,
+                onCheckedChange = { viewModel.setAutoDownloadLikedSongs(it) }
+            )
+        }
+
+        item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+
         item {
             Text(
                 "Local Media Scanning",
@@ -2780,6 +2637,42 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * "What's New" — the user-facing summary of each release, newest first.
+ *
+ * Lives at the top of About because that's where the update notice sends
+ * people, and it's the first thing worth reading when you've just updated.
+ */
+@Composable
+private fun WhatsNewPanel() {
+    val releases = WhatsNew.releases
+    if (releases.isEmpty()) return
+
+    SettingsGroupHeader("What's New")
+    releases.forEach { release ->
+        Text(
+            text = "Version ${release.versionName}",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+        )
+        release.entries.forEach { entry ->
+            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                Text(
+                    text = entry.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = entry.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

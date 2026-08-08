@@ -276,8 +276,8 @@ class MixBusProcessor @Inject constructor(
         // and must run regardless of the mixer DSP toggle. The toggle controls
         // mix bus bypass in the C++ engine, not a blanket wet/dry switch here.
         //
-        // Chunk the buffer into user-selected DSP block sizes (128 / 256 /
-        // 512 / 1024 / 2048). The native engine processes whatever frame
+        // Chunk the buffer into the user-selected DSP block size (see
+        // PreferencesManager.DSP_BLOCK_SIZES). The native engine processes whatever frame
         // count we hand it in one shot; chunking lets us bound per-call
         // worst-case latency, keep FFT-driven plugins inside their tuned
         // window size, and gives a knob users can move when CPU pressure

@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.downloads.DownloadStatus
 import tf.monochrome.android.data.downloads.TrackDownloadState
@@ -225,6 +227,45 @@ private fun CompletedIndicator(
 
         // Check mark
         drawCheckMark(accentColor, scaledSize, scale)
+    }
+}
+
+/**
+ * "This song is on the device" badge — a ring with a down arrow in it.
+ *
+ * Distinct from [DownloadIndicator], which reflects *in-flight* WorkManager
+ * state and goes back to drawing nothing the moment a download finishes. This
+ * one is driven by the downloads table, so it survives the app restarting and
+ * keeps marking the row for as long as the file is there.
+ */
+@Composable
+fun DownloadedBadge(
+    modifier: Modifier = Modifier,
+    size: Float = 18f,
+    tint: Color = MaterialTheme.colorScheme.primary,
+) {
+    Canvas(
+        modifier = modifier
+            .size(size.dp)
+            .semantics { contentDescription = "Downloaded" }
+    ) {
+        val strokeWidth = this.size.width * 0.1f
+        val padding = strokeWidth
+
+        // Soft fill so the badge reads at a glance against album art.
+        drawCircle(color = tint.copy(alpha = 0.15f), radius = this.size.width / 2f)
+
+        drawArc(
+            color = tint,
+            startAngle = -90f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = Offset(padding, padding),
+            size = Size(this.size.width - padding * 2, this.size.height - padding * 2),
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        )
+
+        drawDownArrow(tint, this.size)
     }
 }
 

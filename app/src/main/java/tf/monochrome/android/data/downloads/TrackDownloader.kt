@@ -1,25 +1,12 @@
 package tf.monochrome.android.data.downloads
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.ServiceInfo
 import android.net.Uri
-import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import java.util.Locale
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
-import androidx.hilt.work.HiltWorker
-import androidx.work.CoroutineWorker
-import androidx.work.ForegroundInfo
-import androidx.work.WorkerParameters
-import androidx.work.workDataOf
-import tf.monochrome.android.R
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.prepareGet
@@ -34,66 +21,63 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioQuality
 import kotlinx.coroutines.flow.first
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
-@HiltWorker
-class DownloadWorker @AssistedInject constructor(
-    @Assisted private val context: Context,
-    @Assisted params: WorkerParameters,
+/**
+ * Downloads one track: resolves a stream URL, streams it to disk, tags it,
+ * saves lyrics and artwork, and records it in the database.
+ *
+ * This was the body of a `CoroutineWorker`, one instance per track. It is a
+ * plain injectable now so [DownloadQueueWorker] can run several at a time under
+ * one job and one notification — see [DownloadQueue] for why one job per track
+ * was the wrong shape.
+ */
+@Singleton
+class TrackDownloader @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val apiClient: HiFiApiClient,
     private val lrcLibClient: tf.monochrome.android.data.api.LrcLibClient,
     private val httpClient: HttpClient,
     private val preferences: PreferencesManager,
     private val downloadDao: DownloadDao,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
-) : CoroutineWorker(context, params) {
+    private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
+) {
 
-    companion object {
-        const val KEY_TRACK_ID = "track_id"
-        const val KEY_APPLE_ID = "apple_id"
-        const val KEY_TRACK_TITLE = "track_title"
-        const val KEY_ARTIST_NAME = "artist_name"
-        const val KEY_ALBUM_TITLE = "album_title"
-        const val KEY_ALBUM_COVER = "album_cover"
-        const val KEY_DURATION = "duration"
-        const val KEY_VERSION = "version"
-        const val KEY_IS_THX = "is_thx_spatial_audio"
-        const val KEY_PROGRESS = "progress"
-        private const val TAG = "DownloadWorker"
-        private const val CHANNEL_ID = "downloads"
-        // Per-track offset so two concurrent downloads don't overwrite each
-        // other's notification (WorkManager posts one per foreground worker).
-        private const val NOTIFICATION_ID_BASE = 8100
+    /** What became of one attempt. */
+    enum class Outcome {
+        SUCCESS,
+        /** Failed in a way another attempt might survive — a dropped connection. */
+        RETRYABLE,
+        /** Failed for a reason retrying cannot fix — no instance, 404, wrong catalogue. */
+        PERMANENT,
     }
 
-    override suspend fun doWork(): Result {
-        val trackId = inputData.getLong(KEY_TRACK_ID, -1L)
-        if (trackId == -1L) return Result.failure()
+    private companion object {
+        const val TAG = "TrackDownloader"
+    }
 
-        // Promote to a foreground service for the duration of the transfer.
-        // Expedited scheduling (see DownloadManager) gets the job *started*
-        // promptly, but on API 31+ an expedited job is only guaranteed a short
-        // slice of runtime — a 60 MB FLAC over a slow link outlives it. Running
-        // in the foreground also stops OEM battery managers (OxygenOS et al)
-        // from freezing the transfer the moment the user leaves the app.
-        // Best-effort: Android 14+ refuses a background FGS start, and a
-        // download that merely loses its notification is better than one that
-        // fails outright.
-        runCatching {
-            setForeground(buildForegroundInfo(inputData.getString(KEY_TRACK_TITLE) ?: "Track", trackId))
-        }
-
-        val trackTitle = inputData.getString(KEY_TRACK_TITLE) ?: "Unknown"
-        val artistName = inputData.getString(KEY_ARTIST_NAME) ?: "Unknown Artist"
-        val albumTitle = inputData.getString(KEY_ALBUM_TITLE)
-        val albumCover = inputData.getString(KEY_ALBUM_COVER)
-        val duration = inputData.getInt(KEY_DURATION, 0)
-        val version = inputData.getString(KEY_VERSION)
-        val isThxSpatialAudio = inputData.getBoolean(KEY_IS_THX, false)
-        // Apple identity travels separately from the track id. The explicit
-        // KEY_APPLE_ID (set at enqueue from Track.appleId) is authoritative;
-        // the registry lookup remains only as a fallback for work that was
-        // enqueued before the key existed.
-        val explicitAppleId = inputData.getLong(KEY_APPLE_ID, -1L).takeIf { it > 0L }
+    /**
+     * Runs one download to completion, reporting 0..1 through [onProgress].
+     *
+     * Cancellation propagates as it would anywhere else — the caller's scope
+     * cancelling mid-transfer throws out of the read loop and the temp file is
+     * cleaned up in the finally below.
+     */
+    suspend fun download(item: DownloadItem, onProgress: (Float) -> Unit): Outcome {
+        val trackId = item.trackId
+        val trackTitle = item.title
+        val artistName = item.artistName
+        val albumTitle = item.albumTitle
+        val albumCover = item.albumCover
+        val duration = item.duration
+        val version = item.version
+        val isThxSpatialAudio = item.isThxSpatialAudio
+        // Apple identity travels separately from the track id. The id captured
+        // at enqueue is authoritative; the registry lookup remains only as a
+        // fallback for queue entries written before the field existed.
+        val explicitAppleId = item.appleId.takeIf { it > 0L }
         val isApple = explicitAppleId != null || qobuzIdRegistry.isAppleTrack(trackId)
         val appleId = explicitAppleId ?: trackId
 
@@ -119,13 +103,22 @@ class DownloadWorker @AssistedInject constructor(
                 Log.i(TAG, "\"$trackTitle\" is Apple (adamId=$appleId) - routing to the wrapper only")
                 apiClient.getAppleStreamUrl(appleId, quality, atmos = isThxSpatialAudio) ?: run {
                     Log.w(TAG, "wrapper could not serve Apple adamId=$appleId (\"$trackTitle\", q=$quality, atmos=$isThxSpatialAudio) - not falling back to another catalog")
-                    return Result.failure()
+                    return Outcome.PERMANENT
                 }
             } else {
                 val native = runCatching {
                     apiClient.getTrackStream(trackId, quality, forDownload = true).streamUrl
                 }.getOrNull()
                 native ?: run {
+                    // A Qobuz pick is Qobuz-only, on the same principle as the
+                    // Apple branch above: the metadata bridge matches by title
+                    // and artist, so it can hand back a different master or
+                    // version than the one chosen in search. If Qobuz can't
+                    // serve it, the download fails and says so.
+                    if (qobuzIdRegistry.isQobuzTrack(trackId)) {
+                        Log.w(TAG, "Qobuz could not serve \"$trackTitle\" (id=$trackId, q=$quality) - not falling back to another catalog")
+                        return Outcome.PERMANENT
+                    }
                     val bridged = apiClient.findAppleIdFor(
                         trackId = trackId,
                         title = trackTitle,
@@ -134,13 +127,13 @@ class DownloadWorker @AssistedInject constructor(
                     )
                     if (bridged == null) {
                         Log.w(TAG, "no stream url for \"$trackTitle\" (id=$trackId, q=$quality) and no Apple match")
-                        return Result.failure()
+                        return Outcome.PERMANENT
                     }
                     Log.i(TAG, "bridged \"$trackTitle\" (id=$trackId) to Apple adamId=$bridged")
                     usedApple = true
                     apiClient.getAppleStreamUrl(bridged, quality, atmos = isThxSpatialAudio) ?: run {
                         Log.w(TAG, "Apple bridge found adamId=$bridged but no stream url for \"$trackTitle\"")
-                        return Result.failure()
+                        return Outcome.PERMANENT
                     }
                 }
             }
@@ -151,7 +144,7 @@ class DownloadWorker @AssistedInject constructor(
             // channel is even read — 30-60 MB per FLAC — and the previous
             // ByteArrayOutputStream added a second full copy. Together they
             // OOM-crashed devices near the 256 MB art heap limit.
-            setProgress(workDataOf(KEY_PROGRESS to 0.05f))
+            onProgress(0.05f)
             val tempAudio = File.createTempFile("dl_audio", ".dl", context.cacheDir)
             try {
             val fetched = httpClient.prepareGet(streamUrl).execute { response ->
@@ -167,8 +160,7 @@ class DownloadWorker @AssistedInject constructor(
                         out.write(buffer, 0, read)
                         totalRead += read
                         if (contentLength > 0) {
-                            val progress = (totalRead.toFloat() / contentLength).coerceIn(0.05f, 0.95f)
-                            setProgress(workDataOf(KEY_PROGRESS to progress))
+                            onProgress((totalRead.toFloat() / contentLength).coerceIn(0.05f, 0.95f))
                         }
                     }
                 }
@@ -185,7 +177,7 @@ class DownloadWorker @AssistedInject constructor(
                 }
                 true
             }
-            if (!fetched) return Result.failure()
+            if (!fetched) return Outcome.RETRYABLE
 
             // Detect what the backend actually delivered (not just what was
             // requested): the download instance can downgrade HI_RES→LOSSLESS,
@@ -345,8 +337,11 @@ class DownloadWorker @AssistedInject constructor(
                     isThxSpatialAudio = isThxSpatialAudio
                 )
             )
+            // A new file is on disk — let the player stop streaming this song.
+            localLibraryRevision.bump()
 
-            Result.success()
+            onProgress(1f)
+            Outcome.SUCCESS
             } finally {
                 tempAudio.delete()
             }
@@ -359,63 +354,17 @@ class DownloadWorker @AssistedInject constructor(
             // A missing endpoint is a setup problem retries can't fix — fail
             // now so the row flips to "Failed" instead of faking three more
             // minutes of "Queued".
-            val giveUp = runAttemptCount >= 3 ||
-                e is tf.monochrome.android.data.api.NoInstancesConfiguredException
+            // A missing endpoint is a setup problem no retry can fix; anything
+            // else gets another go from the queue, which counts the attempts.
+            val permanent = e is tf.monochrome.android.data.api.NoInstancesConfiguredException
             Log.w(
                 TAG,
-                "download failed for \"$trackTitle\" (id=$trackId, apple=$isApple, " +
-                    "attempt=${runAttemptCount + 1}) — ${if (giveUp) "giving up" else "retrying"}",
+                "download failed for \"$trackTitle\" (id=$trackId, apple=$isApple) — " +
+                    if (permanent) "not retryable" else "will retry",
                 e,
             )
-            if (giveUp) Result.failure() else Result.retry()
+            if (permanent) Outcome.PERMANENT else Outcome.RETRYABLE
         }
-    }
-
-    /**
-     * Required for expedited work below API 31, where WorkManager satisfies an
-     * expedited request by running the worker as a foreground service and needs
-     * a notification up front. On API 31+ this is unused at schedule time — the
-     * job runs as a JobScheduler expedited job — but [doWork] still calls
-     * [setForeground] with the same notification once the transfer starts.
-     */
-    override suspend fun getForegroundInfo(): ForegroundInfo =
-        buildForegroundInfo(
-            inputData.getString(KEY_TRACK_TITLE) ?: "Track",
-            inputData.getLong(KEY_TRACK_ID, 0L),
-        )
-
-    private fun buildForegroundInfo(title: String, trackId: Long): ForegroundInfo {
-        createChannel()
-        val notification: Notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Downloading")
-            .setContentText(title)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setProgress(0, 0, true)
-            .build()
-        val id = NOTIFICATION_ID_BASE + (kotlin.math.abs(trackId) % 1000).toInt()
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(id, notification)
-        }
-    }
-
-    private fun createChannel() {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                "Downloads",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Progress of track downloads."
-                setShowBadge(false)
-                enableVibration(false)
-                setSound(null, null)
-            },
-        )
     }
 
     /**

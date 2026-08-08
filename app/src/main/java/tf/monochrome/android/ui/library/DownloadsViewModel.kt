@@ -112,7 +112,7 @@ class DownloadsViewModel @Inject constructor(
         val children = tree.listFiles().filter { it.isFile && it.canRead() }
 
         // Folder-level art (cover.jpg / folder.png / albumart.webp). The
-        // DownloadWorker drops one of these alongside the audio so the system
+        // TrackDownloader drops one of these alongside the audio so the system
         // MediaScanner picks it up. We match by stem so any of the four
         // common names work.
         val folderArtUri = children
@@ -164,7 +164,7 @@ class DownloadsViewModel @Inject constructor(
         name: String,
         coverUri: String?,
     ): DownloadedTrackEntity {
-        // Filename convention written by DownloadWorker is
+        // Filename convention written by TrackDownloader is
         // "<artist> - <title>.<ext>" — try to recover the split, fall
         // back to the bare name.
         val withoutExt = name.substringBeforeLast('.', name)
@@ -236,7 +236,7 @@ class DownloadsViewModel @Inject constructor(
 
     companion object {
         const val SINGLES_LABEL = "Singles"
-        // Lower-case extensions DownloadWorker may produce + the formats
+        // Lower-case extensions TrackDownloader may produce + the formats
         // users typically sideload. Mime-type sniff still wins; this list
         // catches files SAF reports without a type (common on some
         // providers).
@@ -244,7 +244,7 @@ class DownloadsViewModel @Inject constructor(
             "flac", "alac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "wma",
         )
         // Common folder-level cover filenames (see also Android's MediaScanner
-        // and most desktop tag editors). The DownloadWorker writes "cover.jpg".
+        // and most desktop tag editors). TrackDownloader writes "cover.jpg".
         private val COVER_STEMS = setOf("cover", "folder", "albumart", "album")
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }
