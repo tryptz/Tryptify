@@ -43,6 +43,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,7 +63,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.UserProfile
@@ -76,12 +76,12 @@ fun ProfileScreen(
     navController: NavController,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
-    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
-    val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
-    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
-    val successMessage by viewModel.successMessage.collectAsStateWithLifecycle()
-    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
-    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val userProfile by viewModel.userProfile.collectAsState()
+    val isSigningIn by viewModel.isSigningIn.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val successMessage by viewModel.successMessage.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 

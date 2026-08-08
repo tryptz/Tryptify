@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -34,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import tf.monochrome.android.domain.model.LyricLine
 import tf.monochrome.android.domain.model.Lyrics
@@ -112,7 +112,7 @@ private fun SyncedLyrics(
     positionMs: StateFlow<Long>,
     onSeekTo: (Long) -> Unit
 ) {
-    val position by positionMs.collectAsStateWithLifecycle()
+    val position by positionMs.collectAsState()
     // Bluetooth sync delay (tunable in the Player Visuals Studio): audio lands later
     // than the reported position over Bluetooth, so rewind the clock we match
     // lyrics against to keep them in step with what's heard.

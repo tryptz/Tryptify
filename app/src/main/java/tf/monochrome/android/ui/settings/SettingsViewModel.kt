@@ -288,14 +288,8 @@ class SettingsViewModel @Inject constructor(
     val cacheSize: StateFlow<String> = _cacheSize.asStateFlow()
 
     // --- Font Library ---
-    // Imported fonts, from filesDir/custom_fonts. The ten that ship in the APK
-    // are a separate, constant list (BundledFonts.ALL) — they can be selected
-    // but not deleted, so they don't belong in mutable state.
     private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
     val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
-
-    val bundledFonts: List<tf.monochrome.android.ui.theme.BundledFont> =
-        tf.monochrome.android.ui.theme.BundledFonts.ALL
 
     init {
         loadInstances()
@@ -366,13 +360,6 @@ class SettingsViewModel @Inject constructor(
     fun selectFont(file: File) {
         viewModelScope.launch {
             preferences.setCustomFontUri(file.absolutePath)
-        }
-    }
-
-    /** Select one of the fonts that ships in the APK. */
-    fun selectBundledFont(font: tf.monochrome.android.ui.theme.BundledFont) {
-        viewModelScope.launch {
-            preferences.setCustomFontUri(tf.monochrome.android.ui.theme.BundledFonts.idOf(font))
         }
     }
 

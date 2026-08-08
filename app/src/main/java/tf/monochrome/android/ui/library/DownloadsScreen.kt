@@ -23,7 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,15 +47,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
-import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.TrackSelectionBar
-import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.player.PlayerViewModel
 
@@ -64,9 +62,9 @@ fun DownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
 ) {
-    val downloadedTracks by viewModel.downloadedTracks.collectAsStateWithLifecycle()
-    val albumGroups by viewModel.albumGroups.collectAsStateWithLifecycle()
-    val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
+    val downloadedTracks by viewModel.downloadedTracks.collectAsState()
+    val albumGroups by viewModel.albumGroups.collectAsState()
+    val playlists by playerViewModel.playlists.collectAsState()
 
     // Surface delete failures (e.g. a sideloaded file the provider won't remove)
     // instead of silently leaving the row behind.
@@ -79,14 +77,6 @@ fun DownloadsScreen(
 
     val selection = rememberTrackSelectionState<Long>()
     BackHandler(enabled = selection.active) { selection.clear() }
-
-    var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
-    UnifiedTrackContextMenuHost(
-        track = menuTrack,
-        onDismissRequest = { menuTrack = null },
-        navController = navController,
-        playerViewModel = playerViewModel,
-    )
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -243,7 +233,7 @@ fun DownloadsScreen(
                     }
                 },
                 onLongClick = { selection.toggle(track.id) },
-                onMoreClick = { menuTrack = track.toUnifiedTrack() },
+                onShare = { playerViewModel.shareDownloadedTrack(track) },
                 selectionMode = selection.active,
                 selected = track.id in selection.selectedIds,
             )
@@ -294,7 +284,7 @@ private fun DownloadedTrackRow(
     track: DownloadedTrackEntity,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onMoreClick: () -> Unit,
+    onShare: () -> Unit,
     selectionMode: Boolean,
     selected: Boolean,
 ) {
@@ -339,14 +329,12 @@ private fun DownloadedTrackRow(
             )
         }
         // Deletion is intentionally not a per-row button anymore — long-press
-        // to select, then delete from the selection bar. Share used to be the
-        // row's only action; it now lives in the ⋮ sheet alongside play next,
-        // add to playlist and go to album, which this screen had none of.
+        // to select, then delete from the selection bar.
         if (!selectionMode) {
-            IconButton(onClick = onMoreClick) {
+            IconButton(onClick = onShare) {
                 Icon(
-                    Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    Icons.Default.Share,
+                    contentDescription = "Share Download",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

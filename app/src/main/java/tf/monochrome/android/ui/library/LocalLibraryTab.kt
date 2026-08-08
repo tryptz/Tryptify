@@ -11,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,7 +39,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
@@ -66,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -90,12 +89,10 @@ import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
-import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
-import tf.monochrome.android.ui.player.PlayerViewModel
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -111,22 +108,21 @@ fun LocalLibraryTab(
     onGenreClick: (String) -> Unit,
     onFolderClick: (String) -> Unit,
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
-    navController: NavController,
-    playerViewModel: PlayerViewModel
+    navController: NavController
 ) {
-    val localTracks by viewModel.localTracks.collectAsStateWithLifecycle()
-    val sortedTracks by viewModel.sortedTracks.collectAsStateWithLifecycle()
-    val sortedAlbums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
-    val sortedArtists by viewModel.sortedArtists.collectAsStateWithLifecycle()
-    val songSort by viewModel.songSort.collectAsStateWithLifecycle()
-    val albumSort by viewModel.albumSort.collectAsStateWithLifecycle()
-    val artistSort by viewModel.artistSort.collectAsStateWithLifecycle()
-    val localGenres by viewModel.localGenres.collectAsStateWithLifecycle()
-    val rootFolders by viewModel.displayRootFolders.collectAsStateWithLifecycle()
-    val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
-    val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
-    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val localTracks by viewModel.localTracks.collectAsState()
+    val sortedTracks by viewModel.sortedTracks.collectAsState()
+    val sortedAlbums by viewModel.sortedAlbums.collectAsState()
+    val sortedArtists by viewModel.sortedArtists.collectAsState()
+    val songSort by viewModel.songSort.collectAsState()
+    val albumSort by viewModel.albumSort.collectAsState()
+    val artistSort by viewModel.artistSort.collectAsState()
+    val localGenres by viewModel.localGenres.collectAsState()
+    val rootFolders by viewModel.displayRootFolders.collectAsState()
+    val scanProgress by viewModel.scanProgress.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
 
     val subTabs = listOf("Albums", "Artists", "Songs", "Genres", "Folders")
     // Sub-tabs are swipeable pages. The tab row above them is a selector onto
@@ -183,14 +179,6 @@ fun LocalLibraryTab(
             viewModel.startFullScan()
         }
     }
-
-    var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
-    UnifiedTrackContextMenuHost(
-        track = menuTrack,
-        onDismissRequest = { menuTrack = null },
-        navController = navController,
-        playerViewModel = playerViewModel,
-    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Permission gate — block UI only until READ_MEDIA_AUDIO is granted
@@ -266,12 +254,7 @@ fun LocalLibraryTab(
 
         // Show search results when query is active
         if (showSearch && searchQuery.isNotBlank()) {
-            SongList(
-                tracks = searchResults,
-                onTrackClick = onTrackClick,
-                onMoreClick = { menuTrack = it },
-                navController = navController,
-            )
+            SongList(tracks = searchResults, onTrackClick = onTrackClick, navController = navController)
             return@Column
         }
 
@@ -358,12 +341,7 @@ fun LocalLibraryTab(
             when (page) {
                 0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
                 1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
-                2 -> SongList(
-                    tracks = sortedTracks,
-                    onTrackClick = onTrackClick,
-                    onMoreClick = { menuTrack = it },
-                    navController = navController,
-                )
+                2 -> SongList(tracks = sortedTracks, onTrackClick = onTrackClick, navController = navController)
                 3 -> GenreList(
                     genres = genrePairs,
                     onGenreClick = onGenreClick
@@ -671,7 +649,6 @@ fun ArtistList(
 fun SongList(
     tracks: List<UnifiedTrack>,
     onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
-    onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController
 ) {
     LazyColumn(
@@ -747,17 +724,6 @@ fun SongList(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    IconButton(
-                        onClick = { onMoreClick(track) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = "More options",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                 }
             }
         }

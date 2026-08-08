@@ -22,12 +22,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.ui.onboarding.FolderEntry
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
@@ -41,8 +41,8 @@ import tf.monochrome.android.ui.theme.MonoDimens
 @Composable
 fun FoldersStep(viewModel: OnboardingViewModel) {
     val context = LocalContext.current
-    val folders by viewModel.folders.collectAsStateWithLifecycle()
-    val folderError by viewModel.folderError.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsState()
+    val folderError by viewModel.folderError.collectAsState()
 
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()

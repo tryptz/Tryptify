@@ -13,10 +13,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -27,10 +27,10 @@ fun DoneStep(
     viewModel: OnboardingViewModel,
     onStartListening: () -> Unit,
 ) {
-    val folders by viewModel.folders.collectAsStateWithLifecycle()
-    val downloadUri by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
-    val spotifyConnected by viewModel.spotifyConnected.collectAsStateWithLifecycle()
-    val bitPerfect by viewModel.usbBitPerfectEnabled.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsState()
+    val downloadUri by viewModel.downloadFolderUri.collectAsState()
+    val spotifyConnected by viewModel.spotifyConnected.collectAsState()
+    val bitPerfect by viewModel.usbBitPerfectEnabled.collectAsState()
 
     val trackTotal = folders.mapNotNull { it.trackCount }.sum()
 

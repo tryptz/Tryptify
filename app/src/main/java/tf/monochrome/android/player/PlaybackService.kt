@@ -312,10 +312,6 @@ class PlaybackService : MediaSessionService() {
                     applyVolume()
                     serviceScope.launch { preloadNextTracks() }
                 }
-                // The window advanced, so the memo below is about the track
-                // that just played. A repeat-one queue would otherwise keep the
-                // same key and never re-evaluate.
-                lastGaplessAttempt = null
                 syncGaplessNext()
 
                 if (mediaItem != null && reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
@@ -1057,19 +1053,6 @@ class PlaybackService : MediaSessionService() {
     @Volatile private var gaplessEnabled = false
     @Volatile private var gaplessNoResample = true
 
-    /**
-     * What [syncGaplessNext] last evaluated, so an unchanged situation is not
-     * evaluated again. Keyed on everything the decision depends on.
-     */
-    private data class GaplessAttempt(
-        val trackId: Long,
-        val enabled: Boolean,
-        val crossfadeMs: Long,
-        val noResample: Boolean,
-    )
-    @Volatile private var lastGaplessAttempt: GaplessAttempt? = null
-    private var gaplessJob: kotlinx.coroutines.Job? = null
-
     private var consecutivePlayerErrors = 0
     private var playerErrorRecovery: kotlinx.coroutines.Job? = null
 
@@ -1159,28 +1142,9 @@ class PlaybackService : MediaSessionService() {
         ) {
             return // Already correct.
         }
-        // Don't re-run the expensive half for a situation already decided.
-        //
-        // Most next tracks cannot be pre-queued at all — a TIDAL or Apple URL
-        // ages out, so warmUpcoming answers false. But it only answers that
-        // after running the full local-library match for the track: catalogue
-        // id, then ISRC, then MusicBrainz, then a metadata comparison, each a
-        // database round trip. For Qobuz it instead re-enters openPartial().
-        // Neither result changes until the track or the settings do, and this
-        // function is called from six places — one of them every emission of
-        // the queue flow. So a queue that couldn't be pre-queued was paying for
-        // a full library search over and over while gapless was on, which is
-        // exactly when it was least affordable.
-        val attempt = GaplessAttempt(next.id, gaplessEnabled, crossfadeMs, gaplessNoResample)
-        if (lastGaplessAttempt == attempt) return
-        lastGaplessAttempt = attempt
-
         dropGaplessNext()
 
-        // One attempt in flight at a time. Without this a burst of queue
-        // emissions started a warm for each, all racing to append.
-        gaplessJob?.cancel()
-        gaplessJob = serviceScope.launch {
+        serviceScope.launch {
             // Only pre-queue sources whose URI outlives the wait. This also
             // warms them, so the hand-off has bytes ready.
             if (!streamResolver.warmUpcoming(next)) return@launch

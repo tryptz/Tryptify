@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.player.PlayerViewModel
 
@@ -20,21 +20,21 @@ fun SearchScreen(
     playerViewModel: PlayerViewModel,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
-    val query by viewModel.query.collectAsStateWithLifecycle()
-    val tracks by viewModel.tracks.collectAsStateWithLifecycle()
-    val albums by viewModel.albums.collectAsStateWithLifecycle()
-    val artists by viewModel.artists.collectAsStateWithLifecycle()
-    val playlistResults by viewModel.playlists.collectAsStateWithLifecycle()
-    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
-    val selectedType by viewModel.selectedType.collectAsStateWithLifecycle()
-    val selectedSource by viewModel.selectedSource.collectAsStateWithLifecycle()
-    val showSourceFilter by viewModel.showSourceFilter.collectAsStateWithLifecycle()
-    val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
-    val endReached by viewModel.endReached.collectAsStateWithLifecycle()
-    val searchError by viewModel.searchError.collectAsStateWithLifecycle()
-    val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
-    val libraryPlaylists by playerViewModel.playlists.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsState()
+    val tracks by viewModel.tracks.collectAsState()
+    val albums by viewModel.albums.collectAsState()
+    val artists by viewModel.artists.collectAsState()
+    val playlistResults by viewModel.playlists.collectAsState()
+    val isSearching by viewModel.isSearching.collectAsState()
+    val selectedType by viewModel.selectedType.collectAsState()
+    val selectedSource by viewModel.selectedSource.collectAsState()
+    val showSourceFilter by viewModel.showSourceFilter.collectAsState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val endReached by viewModel.endReached.collectAsState()
+    val searchError by viewModel.searchError.collectAsState()
+    val searchHistory by viewModel.searchHistory.collectAsState()
+    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val libraryPlaylists by playerViewModel.playlists.collectAsState()
 
     Column(
         modifier = Modifier

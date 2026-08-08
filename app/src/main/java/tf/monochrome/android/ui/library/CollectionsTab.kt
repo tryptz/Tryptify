@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,8 +51,8 @@ fun CollectionsTab(
     viewModel: LocalLibraryViewModel,
     onCollectionClick: (String) -> Unit
 ) {
-    val collections by viewModel.collections.collectAsStateWithLifecycle()
-    val importResult by viewModel.importResult.collectAsStateWithLifecycle()
+    val collections by viewModel.collections.collectAsState()
+    val importResult by viewModel.importResult.collectAsState()
     var showImportDialog by remember { mutableStateOf(false) }
 
     if (showImportDialog) {

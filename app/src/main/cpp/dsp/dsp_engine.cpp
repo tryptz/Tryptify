@@ -500,20 +500,10 @@ int DspEngine::addPlugin(int busIndex, int slotIndex, int pluginType) {
 void DspEngine::removePlugin(int busIndex, int slotIndex) {
     if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
     Bus& bus = buses_[busIndex];
+    if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
 
-    // Outlives the critical section on purpose: ~SnapinProcessor frees delay
-    // lines and reverb tanks, and process() blocks on chainMutex_ for the whole
-    // mix, so running a destructor under the lock is time the real-time thread
-    // spends waiting on free(). Move the slot out, release, then destroy here.
-    std::unique_ptr<SnapinProcessor> retired;
-    {
-        std::lock_guard<std::mutex> lock(chainMutex_);
-        // Bounds re-checked inside the lock — the size read outside it could
-        // race a concurrent add/remove from another UI action.
-        if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
-        retired = std::move(bus.plugins[slotIndex]);
-        bus.plugins.erase(bus.plugins.begin() + slotIndex);
-    }
+    std::lock_guard<std::mutex> lock(chainMutex_);
+    bus.plugins.erase(bus.plugins.begin() + slotIndex);
     LOGD("Removed plugin from bus %d slot %d", busIndex, slotIndex);
 }
 
@@ -702,34 +692,17 @@ void DspEngine::loadStateJson(const std::string& json) {
     // Simple parser — handles the format produced by getStateJson()
     // For robustness, a proper JSON library could be used, but we keep
     // dependencies minimal in the native DSP module.
-    //
-    // THREADING: process() holds chainMutex_ for the whole mix, so anything
-    // this function does under that lock is time the real-time thread spends
-    // blocked. Parsing a preset means destroying up to TOTAL_BUSES *
-    // MAX_PLUGINS_PER_BUS processors, running an allocating string parse, and
-    // constructing + prepareOS-ing a whole new set — which is milliseconds, and
-    // at small block sizes that is a dropout, from a normal-priority thread
-    // holding a lock the audio thread needs (a textbook priority inversion).
-    //
-    // So: build everything into `staged` with the lock NOT held, then take it
-    // only to swap the finished chains in. The critical section becomes a
-    // handful of pointer swaps and atomic stores with no allocation in it, and
-    // the displaced processors are destroyed after the lock is released,
-    // because `staged` still owns them when it goes out of scope.
-    std::vector<std::unique_ptr<SnapinProcessor>> staged[TOTAL_BUSES];
 
-    // Bus parameters land here first for the same reason — applied under the
-    // lock alongside the chain so a preset never lands half-applied.
-    struct StagedBus {
-        float gainDb = 0.0f;
-        float pan = 0.0f;
-        bool muted = false;
-        bool soloed = false;
-        bool inputEnabled = false;
-    };
-    StagedBus stagedBus[TOTAL_BUSES];
+    std::lock_guard<std::mutex> lock(chainMutex_);
+
+    // Clear all buses
     for (int b = 0; b < TOTAL_BUSES; b++) {
-        stagedBus[b].inputEnabled = (b == 0);
+        buses_[b].plugins.clear();
+        buses_[b].gainDb.store(0.0f, std::memory_order_relaxed);
+        buses_[b].pan.store(0.0f, std::memory_order_relaxed);
+        buses_[b].muted.store(false, std::memory_order_relaxed);
+        buses_[b].soloed.store(false, std::memory_order_relaxed);
+        buses_[b].inputEnabled.store(b == 0, std::memory_order_relaxed);
     }
 
     // Minimal JSON parsing
@@ -757,33 +730,30 @@ void DspEngine::loadStateJson(const std::string& json) {
         if (busStart == std::string::npos) break;
 
         pos = busStart + 8;
-        // Same clamping + NaN filtering setBusGain/setBusPan apply to live
-        // edits, inlined here because the staged value is not stored yet.
-        stagedBus[busIdx].gainDb =
-            std::max(-60.0f, std::min(12.0f, finiteOr(readFloat(pos), 0.0f)));
+        // Route through setBusGain/setBusPan so clamping + NaN filtering match live edits.
+        setBusGain(busIdx, readFloat(pos));
 
         size_t panPos = json.find("\"pan\":", pos);
         if (panPos != std::string::npos) {
-            stagedBus[busIdx].pan =
-                std::max(-1.0f, std::min(1.0f, finiteOr(readFloat(panPos + 6), 0.0f)));
+            setBusPan(busIdx, readFloat(panPos + 6));
             pos = panPos + 6;
         }
 
         size_t mutedPos = json.find("\"muted\":", pos);
         if (mutedPos != std::string::npos) {
-            stagedBus[busIdx].muted = readBool(mutedPos + 8);
+            buses_[busIdx].muted.store(readBool(mutedPos + 8), std::memory_order_relaxed);
             pos = mutedPos + 8;
         }
 
         size_t soloedPos = json.find("\"soloed\":", pos);
         if (soloedPos != std::string::npos) {
-            stagedBus[busIdx].soloed = readBool(soloedPos + 9);
+            buses_[busIdx].soloed.store(readBool(soloedPos + 9), std::memory_order_relaxed);
             pos = soloedPos + 9;
         }
 
         size_t inputEnabledPos = json.find("\"inputEnabled\":", pos);
         if (inputEnabledPos != std::string::npos && inputEnabledPos < json.find("\"plugins\":", pos)) {
-            stagedBus[busIdx].inputEnabled = readBool(inputEnabledPos + 15);
+            buses_[busIdx].inputEnabled.store(readBool(inputEnabledPos + 15), std::memory_order_relaxed);
             pos = inputEnabledPos + 15;
         }
 
@@ -843,7 +813,7 @@ void DspEngine::loadStateJson(const std::string& json) {
                         }
                     }
 
-                    staged[busIdx].push_back(std::unique_ptr<SnapinProcessor>(proc));
+                    buses_[busIdx].plugins.push_back(std::unique_ptr<SnapinProcessor>(proc));
                 }
 
                 // Advance past this plugin object
@@ -856,24 +826,5 @@ void DspEngine::loadStateJson(const std::string& json) {
         busIdx++;
     }
 
-    // Everything above ran with the lock NOT held. Publish it in one short,
-    // allocation-free critical section: swap each finished chain in and store
-    // the bus parameters. vector::swap only exchanges the internal pointers,
-    // so nothing here can allocate or free.
-    {
-        std::lock_guard<std::mutex> lock(chainMutex_);
-        for (int b = 0; b < TOTAL_BUSES; b++) {
-            buses_[b].plugins.swap(staged[b]);
-            buses_[b].gainDb.store(stagedBus[b].gainDb, std::memory_order_relaxed);
-            buses_[b].pan.store(stagedBus[b].pan, std::memory_order_relaxed);
-            buses_[b].muted.store(stagedBus[b].muted, std::memory_order_relaxed);
-            buses_[b].soloed.store(stagedBus[b].soloed, std::memory_order_relaxed);
-            buses_[b].inputEnabled.store(stagedBus[b].inputEnabled, std::memory_order_relaxed);
-        }
-    }
-
-    // `staged` now holds the processors the preset displaced. They are freed
-    // here, at scope exit, with the lock already released — so the audio thread
-    // never waits on a destructor.
     LOGD("Loaded state JSON, %d buses parsed", busIdx);
 }

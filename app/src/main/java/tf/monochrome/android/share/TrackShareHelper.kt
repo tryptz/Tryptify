@@ -86,27 +86,6 @@ class TrackShareHelper @Inject constructor(
         return launchShare(uri, entity.title, mimeFor(entity.filePath))
     }
 
-    /**
-     * Share a file we already hold the path (or content URI) for — the local
-     * library case. [shareTrack] can't serve it: it looks for a download row
-     * and then a Qobuz cache entry, finds neither for a scanned file, and
-     * falls through to *fetching* the track from the Qobuz instance.
-     */
-    fun shareLocalPath(pathOrUri: String, title: String): Boolean {
-        val uri = runCatching {
-            when {
-                pathOrUri.startsWith("content://") || pathOrUri.startsWith("file://") ->
-                    pathOrUri.toUri()
-                else -> {
-                    val file = File(pathOrUri)
-                    if (!file.exists()) return false
-                    FileProvider.getUriForFile(context, fileProviderAuthority(), file)
-                }
-            }
-        }.getOrNull() ?: return false
-        return launchShare(uri, title, mimeFor(pathOrUri))
-    }
-
     private fun downloadedTrackUri(entity: DownloadedTrackEntity): Uri? {
         return runCatching {
             when {

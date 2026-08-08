@@ -26,7 +26,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.audio.eq.AutoEqEngine
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
@@ -53,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,29 +84,29 @@ fun EqualizerScreen(
     navController: NavController,
     viewModel: EqViewModel = hiltViewModel()
 ) {
-    val eqEnabled by viewModel.eqEnabled.collectAsStateWithLifecycle()
-    val toneControls by viewModel.toneControls.collectAsStateWithLifecycle()
-    val currentBands by viewModel.currentBands.collectAsStateWithLifecycle()
-    val currentPreamp by viewModel.currentPreamp.collectAsStateWithLifecycle()
-    val autoPreamp by viewModel.autoPreamp.collectAsStateWithLifecycle()
-    val availableTargets by viewModel.availableTargets.collectAsStateWithLifecycle()
-    val selectedTarget by viewModel.selectedTarget.collectAsStateWithLifecycle()
-    val activePreset by viewModel.activePreset.collectAsStateWithLifecycle()
-    val allPresets by viewModel.allPresets.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
-    val isCalculating by viewModel.isCalculating.collectAsStateWithLifecycle()
-    val originalMeasurement by viewModel.originalMeasurement.collectAsStateWithLifecycle()
-    val selectedHeadphone by viewModel.selectedHeadphone.collectAsStateWithLifecycle()
-    val stereoMode by viewModel.stereoMode.collectAsStateWithLifecycle()
-    val currentBandsR by viewModel.currentBandsR.collectAsStateWithLifecycle()
-    val originalMeasurementR by viewModel.originalMeasurementR.collectAsStateWithLifecycle()
-    val editChannel by viewModel.editChannel.collectAsStateWithLifecycle()
-    val measurementLabelL by viewModel.measurementLabelL.collectAsStateWithLifecycle()
-    val measurementLabelR by viewModel.measurementLabelR.collectAsStateWithLifecycle()
-    val measurementSampleL by viewModel.measurementSampleL.collectAsStateWithLifecycle()
-    val measurementSampleR by viewModel.measurementSampleR.collectAsStateWithLifecycle()
-    val smoothing by viewModel.smoothing.collectAsStateWithLifecycle()
-    val algorithm by viewModel.algorithm.collectAsStateWithLifecycle()
+    val eqEnabled by viewModel.eqEnabled.collectAsState()
+    val toneControls by viewModel.toneControls.collectAsState()
+    val currentBands by viewModel.currentBands.collectAsState()
+    val currentPreamp by viewModel.currentPreamp.collectAsState()
+    val autoPreamp by viewModel.autoPreamp.collectAsState()
+    val availableTargets by viewModel.availableTargets.collectAsState()
+    val selectedTarget by viewModel.selectedTarget.collectAsState()
+    val activePreset by viewModel.activePreset.collectAsState()
+    val allPresets by viewModel.allPresets.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val isCalculating by viewModel.isCalculating.collectAsState()
+    val originalMeasurement by viewModel.originalMeasurement.collectAsState()
+    val selectedHeadphone by viewModel.selectedHeadphone.collectAsState()
+    val stereoMode by viewModel.stereoMode.collectAsState()
+    val currentBandsR by viewModel.currentBandsR.collectAsState()
+    val originalMeasurementR by viewModel.originalMeasurementR.collectAsState()
+    val editChannel by viewModel.editChannel.collectAsState()
+    val measurementLabelL by viewModel.measurementLabelL.collectAsState()
+    val measurementLabelR by viewModel.measurementLabelR.collectAsState()
+    val measurementSampleL by viewModel.measurementSampleL.collectAsState()
+    val measurementSampleR by viewModel.measurementSampleR.collectAsState()
+    val smoothing by viewModel.smoothing.collectAsState()
+    val algorithm by viewModel.algorithm.collectAsState()
 
     // Which ear the graph, band list and export operate on. Off-stereo this is
     // always the left/mono channel, so everything below reduces to the old UI.
@@ -115,10 +115,10 @@ fun EqualizerScreen(
     val activeMeasurement =
         if (editRight) originalMeasurementR.ifEmpty { originalMeasurement }
         else originalMeasurement
-    val bandCount by viewModel.bandCount.collectAsStateWithLifecycle()
-    val maxFrequency by viewModel.maxFrequency.collectAsStateWithLifecycle()
-    val availableHeadphones by viewModel.availableHeadphones.collectAsStateWithLifecycle()
-    val showTutorial by viewModel.showTutorial.collectAsStateWithLifecycle()
+    val bandCount by viewModel.bandCount.collectAsState()
+    val maxFrequency by viewModel.maxFrequency.collectAsState()
+    val availableHeadphones by viewModel.availableHeadphones.collectAsState()
+    val showTutorial by viewModel.showTutorial.collectAsState()
 
     // rememberSaveable for dialog visibility + typed input so a background
     // process death (e.g. while a SAF picker is up) doesn't drop a half-filled

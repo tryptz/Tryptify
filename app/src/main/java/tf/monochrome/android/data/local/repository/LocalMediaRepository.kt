@@ -1,8 +1,6 @@
 package tf.monochrome.android.data.local.repository
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import tf.monochrome.android.data.local.db.LocalAlbumEntity
 import tf.monochrome.android.data.local.db.LocalArtistEntity
@@ -46,27 +44,21 @@ class LocalMediaRepository @Inject constructor(
 
     fun getAllTracks(): Flow<List<UnifiedTrack>> =
         localMediaDao.getAllTracks().map { tracks -> tracks.map { it.toUnifiedTrack() } }
-            .flowOn(Dispatchers.Default)
 
     fun searchTracks(query: String): Flow<List<UnifiedTrack>> =
         localMediaDao.searchTracks("%$query%").map { tracks -> tracks.map { it.toUnifiedTrack() } }
-            .flowOn(Dispatchers.Default)
 
     fun getTracksByAlbum(albumId: Long): Flow<List<UnifiedTrack>> =
         localMediaDao.getTracksByAlbum(albumId).map { tracks -> tracks.map { it.toUnifiedTrack() } }
-            .flowOn(Dispatchers.Default)
 
     fun getTracksByArtist(artistId: Long): Flow<List<UnifiedTrack>> =
         localMediaDao.getTracksByArtist(artistId).map { tracks -> tracks.map { it.toUnifiedTrack() } }
-            .flowOn(Dispatchers.Default)
 
     fun getTracksByGenre(genre: String): Flow<List<UnifiedTrack>> =
         localMediaDao.getTracksByGenre(genre).map { tracks -> tracks.map { it.toUnifiedTrack() } }
-            .flowOn(Dispatchers.Default)
 
     fun getTracksInFolder(folderPath: String): Flow<List<UnifiedTrack>> =
         localMediaDao.getTracksInFolder(folderPath).map { tracks -> tracks.map { it.toUnifiedTrack() } }
-            .flowOn(Dispatchers.Default)
 
     suspend fun findByIsrc(isrc: String): UnifiedTrack? =
         localMediaDao.findByIsrc(isrc)?.toUnifiedTrack()
@@ -78,19 +70,13 @@ class LocalMediaRepository @Inject constructor(
     suspend fun findByTitlePattern(titlePattern: String): List<UnifiedTrack> =
         localMediaDao.findByTitlePattern(titlePattern).map { it.toUnifiedTrack() }
 
-    /** Indexed title-prefix shortlist — see [LocalMediaDao.findByTitlePrefix]. */
-    suspend fun findByTitlePrefix(start: String, endExclusive: String): List<UnifiedTrack> =
-        localMediaDao.findByTitlePrefix(start, endExclusive).map { it.toUnifiedTrack() }
-
     // ── Albums ──────────────────────────────────────────────────────
 
     fun getAllAlbums(): Flow<List<UnifiedAlbum>> =
         localMediaDao.getAllAlbums().map { albums -> albums.map { it.toUnifiedAlbum() } }
-            .flowOn(Dispatchers.Default)
 
     fun getAlbumsByArtist(artistName: String): Flow<List<UnifiedAlbum>> =
         localMediaDao.getAlbumsByArtist(artistName).map { albums -> albums.map { it.toUnifiedAlbum() } }
-            .flowOn(Dispatchers.Default)
 
     suspend fun getAlbumById(albumId: Long): UnifiedAlbum? =
         localMediaDao.getAlbumById(albumId)?.toUnifiedAlbum()
@@ -99,7 +85,6 @@ class LocalMediaRepository @Inject constructor(
 
     fun getAllArtists(): Flow<List<UnifiedArtist>> =
         localMediaDao.getAllArtists().map { artists -> artists.map { it.toUnifiedArtist() } }
-            .flowOn(Dispatchers.Default)
 
     suspend fun getArtistById(artistId: Long): UnifiedArtist? =
         localMediaDao.getArtistById(artistId)?.toUnifiedArtist()
@@ -124,21 +109,8 @@ class LocalMediaRepository @Inject constructor(
     // ── Conversions ─────────────────────────────────────────────────
 
     companion object {
-        /**
-         * Codec name → enum, without the exception.
-         *
-         * This used to be `try { AudioCodec.valueOf(codec) } catch { UNKNOWN }`,
-         * and `valueOf` signals a miss by *throwing* — so every row whose codec
-         * string wasn't an exact enum name built a JVM exception and captured a
-         * stack trace. Per row, on every emission of a whole-library flow. One
-         * odd file was enough to make listing the library allocate thousands of
-         * throwaway stack traces.
-         */
-        private val CODECS_BY_NAME: Map<String, AudioCodec> =
-            AudioCodec.entries.associateBy { it.name }
-
         fun LocalTrackEntity.toUnifiedTrack(): UnifiedTrack {
-            val codec = CODECS_BY_NAME[codec] ?: AudioCodec.UNKNOWN
+            val codec = try { AudioCodec.valueOf(codec) } catch (_: Exception) { AudioCodec.UNKNOWN }
             return UnifiedTrack(
                 id = "local_$id",
                 title = displayTitle,

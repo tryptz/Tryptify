@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,7 +23,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,9 +31,9 @@ fun ListeningStatsScreen(
     onBack: () -> Unit,
     viewModel: ListeningStatsViewModel = hiltViewModel()
 ) {
-    val topArtists by viewModel.topArtists.collectAsStateWithLifecycle()
-    val topAlbums by viewModel.topAlbums.collectAsStateWithLifecycle()
-    val totalPlays by viewModel.totalPlays.collectAsStateWithLifecycle()
+    val topArtists by viewModel.topArtists.collectAsState()
+    val topAlbums by viewModel.topAlbums.collectAsState()
+    val totalPlays by viewModel.totalPlays.collectAsState()
 
     Scaffold(
         topBar = {

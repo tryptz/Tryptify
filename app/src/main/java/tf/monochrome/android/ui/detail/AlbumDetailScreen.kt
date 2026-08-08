@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,7 +37,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CoverImage
@@ -45,11 +45,6 @@ import tf.monochrome.android.ui.components.ErrorScreen
 import tf.monochrome.android.ui.components.LoadingScreen
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
-import tf.monochrome.android.ui.components.TrackListToolbar
-import tf.monochrome.android.ui.components.TrackOrder
-import tf.monochrome.android.ui.components.TrackSort
-import tf.monochrome.android.ui.components.TrackSortSaver
-import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -61,12 +56,12 @@ fun AlbumDetailScreen(
     playerViewModel: PlayerViewModel,
     viewModel: AlbumDetailViewModel = hiltViewModel()
 ) {
-    val albumDetail by viewModel.albumDetail.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
-    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
-    val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
+    val albumDetail by viewModel.albumDetail.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
+    val playlists by playerViewModel.playlists.collectAsState()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
     var showAddToPlaylistForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
@@ -75,13 +70,6 @@ fun AlbumDetailScreen(
 
     val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<Long>()
     androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
-
-    // How this album is being looked at right now — not anything about the
-    // album, so it lives here rather than in the ViewModel.
-    var listQuery by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
-    var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
-        androidx.compose.runtime.mutableStateOf(TrackSort())
-    }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -167,18 +155,12 @@ fun AlbumDetailScreen(
             )
             albumDetail != null -> {
                 val detail = albumDetail ?: return
-                // Every action on this screen works off the visible list: with
-                // a filter applied, tapping row three has to queue what's on
-                // screen, and "play all" has to mean what's on screen.
-                val visibleTracks = androidx.compose.runtime.remember(detail.tracks, listQuery, listSort) {
-                    detail.tracks.applySearchAndSort(listQuery, listSort)
-                }
                 androidx.compose.animation.AnimatedVisibility(visible = selection.active) {
                     tf.monochrome.android.ui.components.TrackSelectionBar(
                         selectedCount = selection.count,
                         onClose = { selection.clear() },
                         onAddToQueue = {
-                            playerViewModel.addToQueue(visibleTracks.filter { it.id in selection.selectedIds })
+                            playerViewModel.addToQueue(detail.tracks.filter { it.id in selection.selectedIds })
                             selection.clear()
                         },
                         onAddToPlaylist = { showAddToPlaylistForSelection = true }
@@ -234,7 +216,7 @@ fun AlbumDetailScreen(
                             tf.monochrome.android.devedit.DevEditable("album_action_row") {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 FilledIconButton(
-                                    onClick = { playerViewModel.playAll(visibleTracks) },
+                                    onClick = { playerViewModel.playAll(detail.tracks) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.primary
@@ -247,7 +229,7 @@ fun AlbumDetailScreen(
                                     )
                                 }
                                 FilledIconButton(
-                                    onClick = { playerViewModel.shufflePlay(visibleTracks) },
+                                    onClick = { playerViewModel.shufflePlay(detail.tracks) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -279,30 +261,14 @@ fun AlbumDetailScreen(
                         }
                     }
 
-                    item {
-                        TrackListToolbar(
-                            query = listQuery,
-                            onQueryChange = { listQuery = it },
-                            sort = listSort,
-                            onSortChange = { listSort = it },
-                            // No "Album": every row here is from the same one.
-                            orders = listOf(
-                                TrackOrder.ORIGINAL,
-                                TrackOrder.TITLE,
-                                TrackOrder.ARTIST,
-                                TrackOrder.DURATION,
-                            ),
-                        )
-                    }
-
-                    itemsIndexed(visibleTracks) { index, track ->
+                    itemsIndexed(detail.tracks) { index, track ->
                         TrackItem(
                             track = track,
                             isLiked = favoriteTrackIds.contains(track.id),
                             onLikeClick = { playerViewModel.toggleFavorite(track) },
                             onClick = {
                                 if (selection.active) selection.toggle(track.id)
-                                else playerViewModel.playTrack(track, visibleTracks)
+                                else playerViewModel.playTrack(track, detail.tracks)
                             },
                             onLongClick = { selection.toggle(track.id) },
                             onMoreClick = { showContextMenuForTrack = track },

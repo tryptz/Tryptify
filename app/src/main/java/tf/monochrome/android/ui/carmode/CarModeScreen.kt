@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.player.PlayerViewModel
 
@@ -49,11 +49,11 @@ fun CarModeScreen(
     playerViewModel: PlayerViewModel = hiltViewModel(),
     viewModel: CarModeViewModel = hiltViewModel()
 ) {
-    val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
+    val currentTrack by playerViewModel.currentTrack.collectAsState()
+    val isPlaying by playerViewModel.isPlaying.collectAsState()
 
-    val eqBands by viewModel.eqBands.collectAsStateWithLifecycle()
-    val bandCount by viewModel.bandCount.collectAsStateWithLifecycle()
+    val eqBands by viewModel.eqBands.collectAsState()
+    val bandCount by viewModel.bandCount.collectAsState()
 
     var showEqSettings by remember { mutableStateOf(false) }
 

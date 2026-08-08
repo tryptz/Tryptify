@@ -243,11 +243,6 @@ class MediaScanner @Inject constructor(
             fileSizeBytes = audioFile.sizeBytes,
             lastModified = audioFile.dateModified,
             title = tags.title,
-            // Folded copy of the title that the on-device-copy lookup range
-            // scans. Kept in lock-step with `title` here so it can never go
-            // stale for a scanned row.
-            titleSearchKey = tags.title
-                ?.let { tf.monochrome.android.player.LocalTrackMatching.searchKey(it) },
             artist = tags.artist,
             albumArtist = tags.albumArtist,
             album = tags.album,
