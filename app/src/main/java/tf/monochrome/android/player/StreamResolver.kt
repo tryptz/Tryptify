@@ -122,25 +122,30 @@ class StreamResolver @Inject constructor(
      * later it would have to be fetched again — the old preload did exactly
      * that and threw the answer away, spending a request (and connection
      * contention) at the precise moment the current track was trying to start.
+     *
+     * Returns whether this track can also be *pre-queued* — handed to
+     * ExoPlayer's playlist now for gapless playback. That's true of exactly the
+     * sources warmed here, because they're the ones that resolve to a URI which
+     * is still valid minutes later; see [GaplessEligibility].
      */
-    suspend fun warmUpcoming(track: Track) {
-        runCatching {
-            val local = localFor(
-                title = track.title,
-                artist = track.displayArtist,
-                albumTitle = track.album?.title,
-                durationSeconds = track.duration,
-                catalogTrackId = track.id,
-            )
-            if (local != null) return@runCatching
-            if (qobuzIdRegistry.isQobuzTrack(track.id)) {
-                // Kicks the download off and returns; it keeps filling the
-                // cache on the manager's own scope, so by the time this track
-                // is reached it is already there.
-                qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS)
-            }
+    suspend fun warmUpcoming(track: Track): Boolean = runCatching {
+        val local = localFor(
+            title = track.title,
+            artist = track.displayArtist,
+            albumTitle = track.album?.title,
+            durationSeconds = track.duration,
+            catalogTrackId = track.id,
+        )
+        if (local != null) return@runCatching true
+        if (qobuzIdRegistry.isQobuzTrack(track.id)) {
+            // Kicks the download off and returns; it keeps filling the
+            // cache on the manager's own scope, so by the time this track
+            // is reached it is already there.
+            qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS)
+            return@runCatching true
         }
-    }
+        false
+    }.getOrDefault(false)
 
     // New method for UnifiedTrack
     @OptIn(UnstableApi::class)

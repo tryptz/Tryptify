@@ -159,6 +159,25 @@ class QueueManager @Inject constructor() {
         updateCurrentTrack()
     }
 
+    /**
+     * The track [next] would move to, without moving to it.
+     *
+     * Used to decide what to pre-queue for gapless playback. Deliberately null
+     * under [RepeatMode.ONE]: the current track repeats, so there is no next
+     * track to hand the player, and pre-queuing one would jump the queue.
+     * Shuffle needs no special handling — it reorders the queue in place, so
+     * the following index really is what plays next.
+     */
+    fun peekNext(): Track? {
+        val queue = _queue.value
+        if (queue.isEmpty()) return null
+        return when (_repeatMode.value) {
+            RepeatMode.ONE -> null
+            RepeatMode.ALL -> queue.getOrNull((_currentIndex.value + 1) % queue.size)
+            RepeatMode.OFF -> queue.getOrNull(_currentIndex.value + 1)
+        }
+    }
+
     fun next(): Track? {
         val queue = _queue.value
         if (queue.isEmpty()) return null

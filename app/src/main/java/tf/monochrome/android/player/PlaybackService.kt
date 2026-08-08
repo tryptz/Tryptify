@@ -214,6 +214,7 @@ class PlaybackService : MediaSessionService() {
                         onTrackEnded()
                     }
                     Player.STATE_READY -> {
+                        consecutivePlayerErrors = 0
                         applyReplayGain()
                         applyPlaybackSpeed()
                         applyEq()
@@ -225,7 +226,47 @@ class PlaybackService : MediaSessionService() {
                 }
             }
 
+            /**
+             * Pre-queuing a track means the player can now fail on an item the
+             * service never explicitly started — a Qobuz fetch that 404s, a
+             * file deleted since it was queued. Without a handler that stops
+             * playback dead with no recovery, so drop the window and retry the
+             * position QueueManager points at (the gapless hand-off has already
+             * advanced it). A second failure in a row gives up on that track
+             * and moves on, so a bad item can't trap the queue.
+             */
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                dropGaplessNext()
+                if (consecutivePlayerErrors++ < MAX_CONSECUTIVE_PLAYER_ERRORS) {
+                    playQueue()
+                } else {
+                    consecutivePlayerErrors = 0
+                    onTrackEnded()
+                }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // A gapless hand-off: the player moved to the item we
+                // pre-queued, so it advanced the queue for us. Bring
+                // QueueManager into line *without* re-resolving — calling
+                // playQueue() here would tear down the very hand-off that just
+                // happened and reintroduce the gap.
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
+                    player.currentMediaItemIndex > 0
+                ) {
+                    queueManager.next()
+                    trimPlayedItems()
+                    // Each pre-queued source carries no stream-level ReplayGain
+                    // (they're local files and Qobuz cache reads), and there is
+                    // no STATE_READY between gapless items to re-apply on, so
+                    // reset it here rather than letting the previous track's
+                    // gain leak into this one.
+                    currentReplayGain = null
+                    applyReplayGain()
+                    serviceScope.launch { preloadNextTracks() }
+                }
+                syncGaplessNext()
+
                 if (mediaItem != null && reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
                     val trackId = mediaItem.mediaId.toLongOrNull()
                     if (trackId != null) {
@@ -321,6 +362,29 @@ class PlaybackService : MediaSessionService() {
         // the in-app AutoEQ processor whenever the system-wide effect isn't the one
         // handling this app's audio, so tone works independent of the system-wide
         // toggle (and without double-processing when it IS on).
+        // Gapless playback. The setting was wired to the Settings screen but
+        // never read here, so the toggle did nothing at all; this is what makes
+        // it live. Flipping it off drops any pre-queued item immediately rather
+        // than waiting for the next transition.
+        serviceScope.launch {
+            preferences.gaplessPlayback.collect { enabled ->
+                gaplessEnabled = enabled
+                syncGaplessNext()
+            }
+        }
+
+        // Anything that reorders, extends or truncates the queue — drag to
+        // reorder, play-next, clear-upcoming, a shuffle or repeat-mode change —
+        // can invalidate what we pre-queued. Re-deriving the window on every
+        // queue emission is cheap (it no-ops when already correct) and means no
+        // individual mutation has to remember to tell us.
+        serviceScope.launch {
+            kotlinx.coroutines.flow.combine(
+                queueManager.queue,
+                queueManager.repeatMode,
+            ) { _, _ -> Unit }.collect { syncGaplessNext() }
+        }
+
         serviceScope.launch {
             // Seven sources exceeds combine's typed overloads (max 5), so this
             // uses the vararg form and casts each slot back out by position.
@@ -625,6 +689,10 @@ class PlaybackService : MediaSessionService() {
 
                 // Preload next tracks
                 preloadNextTracks()
+                // setMediaItem/setMediaSource above replaced the whole playlist,
+                // so any previously pre-queued item is already gone; rebuild the
+                // window for the track we just started.
+                syncGaplessNext()
             } catch (e: Exception) {
                 onTrackEnded()
             }
@@ -632,6 +700,11 @@ class PlaybackService : MediaSessionService() {
     }
 
     fun skipToNext() {
+        // An explicit skip takes the normal resolve path rather than the
+        // pre-queued item: playQueue() replaces the playlist outright, which
+        // also discards the window. Dropping it up front keeps the player from
+        // briefly auto-advancing into it if the track ends mid-skip.
+        dropGaplessNext()
         val nextTrack = queueManager.next()
         if (nextTrack != null) {
             playQueue()
@@ -646,6 +719,7 @@ class PlaybackService : MediaSessionService() {
             player.seekTo(0)
             return
         }
+        dropGaplessNext()
         val prevTrack = queueManager.previous()
         if (prevTrack != null) {
             playQueue()
@@ -694,6 +768,107 @@ class PlaybackService : MediaSessionService() {
             // attenuation only applies on the AudioFlinger fallback.
             bypassVolumeController.setVolume(adjustedVolume)
         }
+    }
+
+    // --- Gapless playback -------------------------------------------------
+    //
+    // ExoPlayer can only play one track into the next without a gap if it holds
+    // both: the second decoder has to be running before the first track ends.
+    // This app otherwise keeps exactly one item in the player and re-resolves
+    // on every transition, because a TIDAL stream URL queued minutes ahead
+    // would have aged out by the time it was used (see QueueForwardingPlayer).
+    //
+    // So the player's playlist is kept as a two-item window — [current] or
+    // [current, next] — and `next` is only added when it resolves to a URI that
+    // survives the wait: an on-device file, or a qobuz:// URI whose resolution
+    // is deferred to open time. QueueManager stays the source of truth for
+    // queue position; the window is a cache in front of it, re-derived from
+    // scratch by [syncGaplessNext] whenever anything moves, so it cannot drift.
+
+    @Volatile private var gaplessEnabled = false
+
+    private var consecutivePlayerErrors = 0
+
+    private companion object {
+        /** Retries a failing position once before moving past it. */
+        const val MAX_CONSECUTIVE_PLAYER_ERRORS = 1
+    }
+
+    /**
+     * Removes everything the player has already finished, so the current item
+     * is always index 0 and the window is easy to reason about.
+     */
+    private fun trimPlayedItems() {
+        while (player.currentMediaItemIndex > 0) {
+            player.removeMediaItem(0)
+        }
+    }
+
+    /** Drops the pre-queued item, if any. Never touches what's playing. */
+    private fun dropGaplessNext() {
+        while (player.mediaItemCount > player.currentMediaItemIndex + 1) {
+            player.removeMediaItem(player.mediaItemCount - 1)
+        }
+    }
+
+    /**
+     * Makes the player's second slot match whatever QueueManager says plays
+     * next — adding, replacing or removing it as needed.
+     *
+     * Idempotent and safe to call from anywhere: it re-reads the queue rather
+     * than tracking deltas, so a reorder, a shuffle toggle, a repeat-mode
+     * change or a fresh queue all converge to the right thing.
+     */
+    private fun syncGaplessNext() {
+        if (player.mediaItemCount == 0) return
+
+        val next = queueManager.peekNext()
+        if (!gaplessEnabled || next == null) {
+            dropGaplessNext()
+            return
+        }
+
+        val wantedId = next.id.toString()
+        val queuedIndex = player.currentMediaItemIndex + 1
+        if (player.mediaItemCount > queuedIndex &&
+            player.getMediaItemAt(queuedIndex).mediaId == wantedId
+        ) {
+            return // Already correct.
+        }
+        dropGaplessNext()
+
+        serviceScope.launch {
+            // Only pre-queue sources whose URI outlives the wait. This also
+            // warms them, so the hand-off has bytes ready.
+            if (!streamResolver.warmUpcoming(next)) return@launch
+
+            val item = resolveGaplessItem(next) ?: return@launch
+
+            // The queue can move while we resolve — re-check before committing,
+            // otherwise we'd append a track that is no longer next.
+            if (!gaplessEnabled) return@launch
+            if (queueManager.peekNext()?.id != next.id) return@launch
+            if (player.mediaItemCount != player.currentMediaItemIndex + 1) return@launch
+
+            player.addMediaItem(item)
+        }
+    }
+
+    /**
+     * Resolves [track] to a MediaItem that may be pre-queued, or null when it
+     * resolves to something that can't be (a time-limited stream URL, an
+     * inline DASH manifest, or nothing playable at all).
+     */
+    private suspend fun resolveGaplessItem(track: tf.monochrome.android.domain.model.Track): MediaItem? {
+        val unified = unifiedTrackRegistry[track.id]
+        val item = if (unified != null) {
+            streamResolver.resolveUnifiedTrack(unified).takeIf { it.isPlayable }?.mediaItem
+        } else {
+            streamResolver.resolveMediaItem(track).first
+        } ?: return null
+
+        val uri = item.localConfiguration?.uri?.toString()
+        return item.takeIf { GaplessEligibility.isStableUri(uri) }
     }
 
     private suspend fun preloadNextTracks() {
