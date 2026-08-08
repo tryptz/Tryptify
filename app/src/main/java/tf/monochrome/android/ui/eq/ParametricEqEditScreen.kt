@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +47,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.FilterType
@@ -58,11 +58,11 @@ fun ParametricEqEditScreen(
     navController: NavController,
     viewModel: ParametricEqViewModel = hiltViewModel()
 ) {
-    val currentBands by viewModel.currentBands.collectAsStateWithLifecycle()
-    val currentPreamp by viewModel.currentPreamp.collectAsStateWithLifecycle()
-    val selectedBandId by viewModel.selectedBandId.collectAsStateWithLifecycle()
-    val spectrumBins by viewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
-    val fftSize by viewModel.fftSize.collectAsStateWithLifecycle()
+    val currentBands by viewModel.currentBands.collectAsState()
+    val currentPreamp by viewModel.currentPreamp.collectAsState()
+    val selectedBandId by viewModel.selectedBandId.collectAsState()
+    val spectrumBins by viewModel.spectrumAnalyzer.spectrumBins.collectAsState()
+    val fftSize by viewModel.fftSize.collectAsState()
 
     val analyzer = viewModel.spectrumAnalyzer
     DisposableEffect(Unit) {

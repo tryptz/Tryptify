@@ -634,17 +634,6 @@ class PlayerViewModel @Inject constructor(
         queueManager.addNextInQueue(track)
     }
 
-    /**
-     * Play-next for a UnifiedTrack. Registers the source first — same reason
-     * [addUnifiedToQueue] does — so a local file queued from the local library
-     * still resolves to its file rather than being looked up as a catalog id.
-     */
-    fun playNextUnified(track: UnifiedTrack) {
-        val legacy = track.toLegacyTrack()
-        unifiedTrackRegistry.put(legacy.id, track)
-        queueManager.addNextInQueue(legacy)
-    }
-
     // --- Queue editing ---
 
     /**
@@ -1137,23 +1126,6 @@ class PlayerViewModel @Inject constructor(
     fun shareDownloadedTrack(entity: tf.monochrome.android.data.db.entity.DownloadedTrackEntity) {
         trackShareHelper.shareDownloadedTrack(entity)
     }
-
-    /**
-     * Share the file behind a UnifiedTrack. A local track shares the scanned
-     * file straight away; anything else goes through the normal resolve path.
-     */
-    fun shareUnifiedTrack(track: UnifiedTrack) {
-        val local = track.source as? tf.monochrome.android.domain.model.PlaybackSource.LocalFile
-        if (local != null) {
-            trackShareHelper.shareLocalPath(local.filePath, track.title)
-            return
-        }
-        shareTrack(track.toLegacyTrack())
-    }
-
-    /** True when this UnifiedTrack is a file already on disk. */
-    fun isLocalUnified(track: UnifiedTrack): Boolean =
-        track.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile
 
     private fun observeTrackDownload(trackId: Long) {
         viewModelScope.launch {

@@ -208,47 +208,6 @@ class LocalTrackMatchingTest {
     }
 
     @Test
-    fun `titlePrefix range covers exactly the titles LIKE would have matched`() {
-        val p = LocalTrackMatching.titlePrefix("Song")!!
-        // Folded, so the stored key (also folded) compares case-insensitively
-        // the way the old LIKE did.
-        assertEquals("song", p.start)
-        // Half-open: everything starting with "song" sorts below the bump, and
-        // the next distinct prefix sorts at or above it.
-        assertTrue(LocalTrackMatching.searchKey("Song") >= p.start)
-        assertTrue(LocalTrackMatching.searchKey("Song") < p.endExclusive)
-        assertTrue(LocalTrackMatching.searchKey("Song (Remastered)") < p.endExclusive)
-        assertTrue(LocalTrackMatching.searchKey("SONG II") < p.endExclusive)
-        assertFalse(LocalTrackMatching.searchKey("Sonic") < p.endExclusive &&
-            LocalTrackMatching.searchKey("Sonic") >= p.start)
-        assertFalse(LocalTrackMatching.searchKey("Sonz") >= p.start &&
-            LocalTrackMatching.searchKey("Sonz") < p.endExclusive)
-    }
-
-    @Test
-    fun `titlePrefix treats LIKE wildcards as literal`() {
-        // No escaping needed on the range path: % and _ are ordinary
-        // characters, unlike in the LIKE pattern.
-        val p = LocalTrackMatching.titlePrefix("100% Endurance")!!
-        assertEquals("100% endurance", p.start)
-        assertTrue(LocalTrackMatching.searchKey("100% Endurance") >= p.start)
-        assertTrue(LocalTrackMatching.searchKey("100% Endurance") < p.endExclusive)
-        // A literal-% title must NOT be matched by some other title that LIKE
-        // would have wildcarded into.
-        assertFalse(LocalTrackMatching.searchKey("100 Endurance") >= p.start &&
-            LocalTrackMatching.searchKey("100 Endurance") < p.endExclusive)
-    }
-
-    @Test
-    fun `titlePrefix strips version decoration like titlePattern does`() {
-        // Both shortlists must start from the same base title, or the two
-        // paths would disagree about what is a candidate.
-        val p = LocalTrackMatching.titlePrefix("Song — 2011 Remaster")!!
-        assertEquals("song", p.start)
-        assertNull(LocalTrackMatching.titlePrefix("   "))
-    }
-
-    @Test
     fun `durationsAgree only tolerates small differences`() {
         assertTrue(LocalTrackMatching.durationsAgree(200, 203))
         assertTrue(LocalTrackMatching.durationsAgree(0, 203))

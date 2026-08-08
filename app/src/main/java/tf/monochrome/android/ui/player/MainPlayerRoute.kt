@@ -8,7 +8,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,6 +43,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,56 +82,56 @@ fun MainPlayerRoute(
     navController: NavController,
     playerViewModel: PlayerViewModel,
 ) {
-    val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val miniGlass by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
-    val currentUnified by playerViewModel.currentUnifiedTrack.collectAsStateWithLifecycle()
-    val queue by playerViewModel.queue.collectAsStateWithLifecycle()
-    val currentIndex by playerViewModel.currentIndex.collectAsStateWithLifecycle()
-    val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
-    val isBuffering by playerViewModel.isBuffering.collectAsStateWithLifecycle()
+    val currentTrack by playerViewModel.currentTrack.collectAsState()
+    val miniGlass by playerViewModel.miniPlayerGlass.collectAsState()
+    val currentUnified by playerViewModel.currentUnifiedTrack.collectAsState()
+    val queue by playerViewModel.queue.collectAsState()
+    val currentIndex by playerViewModel.currentIndex.collectAsState()
+    val isPlaying by playerViewModel.isPlaying.collectAsState()
+    val isBuffering by playerViewModel.isBuffering.collectAsState()
     // Held as State, never read with `.value` in this composable: the play head
     // ticks four times a second, and reading it here recomposed the entire
     // player — hero, glass, artwork and all — for a number only the scrubber
     // and the progress ring consume. They read it themselves, further down.
-    val positionState = playerViewModel.positionMs.collectAsStateWithLifecycle()
-    val durationState = playerViewModel.durationMs.collectAsStateWithLifecycle()
-    val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsStateWithLifecycle()
-    val repeatMode by playerViewModel.repeatMode.collectAsStateWithLifecycle()
-    val isLiked by playerViewModel.isCurrentTrackLiked.collectAsStateWithLifecycle()
-    val downloadState by playerViewModel.currentTrackDownloadState.collectAsStateWithLifecycle()
-    val isDownloadedRemote by playerViewModel.isCurrentTrackDownloaded.collectAsStateWithLifecycle()
-    val isLocalTrack by playerViewModel.isCurrentTrackLocal.collectAsStateWithLifecycle()
+    val positionState = playerViewModel.positionMs.collectAsState()
+    val durationState = playerViewModel.durationMs.collectAsState()
+    val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsState()
+    val repeatMode by playerViewModel.repeatMode.collectAsState()
+    val isLiked by playerViewModel.isCurrentTrackLiked.collectAsState()
+    val downloadState by playerViewModel.currentTrackDownloadState.collectAsState()
+    val isDownloadedRemote by playerViewModel.isCurrentTrackDownloaded.collectAsState()
+    val isLocalTrack by playerViewModel.isCurrentTrackLocal.collectAsState()
     // A local file is already on disk — show it as on-device rather than
     // offering a download that would try to fetch it from the catalog.
     val isDownloaded = isDownloadedRemote || isLocalTrack
-    val lyrics by playerViewModel.currentLyrics.collectAsStateWithLifecycle()
-    val isLyricsLoading by playerViewModel.isLyricsLoading.collectAsStateWithLifecycle()
-    val viewMode by playerViewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
-    val blurredBackground by playerViewModel.playerBlurredBackground.collectAsStateWithLifecycle()
-    val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
-    val preservePitch by playerViewModel.preservePitch.collectAsStateWithLifecycle()
-    val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
-    val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
-    val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsStateWithLifecycle()
-    val autoEqEnabled by playerViewModel.autoEqEnabled.collectAsStateWithLifecycle()
-    val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsStateWithLifecycle()
-    val toneControls by playerViewModel.toneControls.collectAsStateWithLifecycle()
+    val lyrics by playerViewModel.currentLyrics.collectAsState()
+    val isLyricsLoading by playerViewModel.isLyricsLoading.collectAsState()
+    val viewMode by playerViewModel.nowPlayingViewMode.collectAsState()
+    val blurredBackground by playerViewModel.playerBlurredBackground.collectAsState()
+    val playbackSpeed by playerViewModel.playbackSpeed.collectAsState()
+    val preservePitch by playerViewModel.preservePitch.collectAsState()
+    val compressorEnabled by playerViewModel.compressorEnabled.collectAsState()
+    val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsState()
+    val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsState()
+    val autoEqEnabled by playerViewModel.autoEqEnabled.collectAsState()
+    val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsState()
+    val toneControls by playerViewModel.toneControls.collectAsState()
 
-    val visualizerSensitivity by playerViewModel.visualizerSensitivity.collectAsStateWithLifecycle()
-    val visualizerBrightness by playerViewModel.visualizerBrightness.collectAsStateWithLifecycle()
-    val visualizerFullscreen by playerViewModel.visualizerFullscreen.collectAsStateWithLifecycle()
-    val visualizerTouchWaveform by playerViewModel.visualizerTouchWaveform.collectAsStateWithLifecycle()
-    val visualizerShowFps by playerViewModel.visualizerShowFps.collectAsStateWithLifecycle()
-    val visualizerEngineStatus by playerViewModel.visualizerEngineStatus.collectAsStateWithLifecycle()
-    val visualizerEngineEnabled by playerViewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
-    val visualizerAutoShuffle by playerViewModel.visualizerAutoShuffle.collectAsStateWithLifecycle()
-    val currentVisualizerPreset by playerViewModel.currentVisualizerPreset.collectAsStateWithLifecycle()
-    val visualizerPresets by playerViewModel.visualizerPresets.collectAsStateWithLifecycle()
-    val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
-    val visualizerCompact by playerViewModel.visualizerCompact.collectAsStateWithLifecycle()
-    val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
-    val spectrumAnalyzerEnabled by playerViewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
-    val spectrumShowOnNowPlaying by playerViewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
+    val visualizerSensitivity by playerViewModel.visualizerSensitivity.collectAsState()
+    val visualizerBrightness by playerViewModel.visualizerBrightness.collectAsState()
+    val visualizerFullscreen by playerViewModel.visualizerFullscreen.collectAsState()
+    val visualizerTouchWaveform by playerViewModel.visualizerTouchWaveform.collectAsState()
+    val visualizerShowFps by playerViewModel.visualizerShowFps.collectAsState()
+    val visualizerEngineStatus by playerViewModel.visualizerEngineStatus.collectAsState()
+    val visualizerEngineEnabled by playerViewModel.visualizerEngineEnabled.collectAsState()
+    val visualizerAutoShuffle by playerViewModel.visualizerAutoShuffle.collectAsState()
+    val currentVisualizerPreset by playerViewModel.currentVisualizerPreset.collectAsState()
+    val visualizerPresets by playerViewModel.visualizerPresets.collectAsState()
+    val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsState()
+    val visualizerCompact by playerViewModel.visualizerCompact.collectAsState()
+    val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsState()
+    val spectrumAnalyzerEnabled by playerViewModel.spectrumAnalyzerEnabled.collectAsState()
+    val spectrumShowOnNowPlaying by playerViewModel.spectrumShowOnNowPlaying.collectAsState()
     val showNpSpectrum = spectrumAnalyzerEnabled && spectrumShowOnNowPlaying
 
     if (showNpSpectrum) {
@@ -154,8 +154,8 @@ fun MainPlayerRoute(
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
     // Sleep timer lives in PlayerViewModel (shared, nav-host-scoped) so the
     // countdown keeps running when this destination leaves composition.
-    val sleepMinutes by playerViewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
-    val sleepRemainingMs by playerViewModel.sleepTimerRemainingMs.collectAsStateWithLifecycle()
+    val sleepMinutes by playerViewModel.sleepTimerMinutes.collectAsState()
+    val sleepRemainingMs by playerViewModel.sleepTimerRemainingMs.collectAsState()
 
     // Expanded lyrics: the SAME hero lyric surface grows to full-bleed while
     // MainPlayerScreen collapses the player chrome — no separate overlay.
@@ -172,7 +172,7 @@ fun MainPlayerRoute(
 
     // Surface stream-resolution failures (offline / dead instance) that the
     // ViewModel now reports instead of silently looping.
-    val playbackError by playerViewModel.playbackError.collectAsStateWithLifecycle()
+    val playbackError by playerViewModel.playbackError.collectAsState()
     val playbackErrorContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(playbackError) {
         playbackError?.let {
@@ -181,10 +181,10 @@ fun MainPlayerRoute(
         }
     }
 
-    val lyricsFx by playerViewModel.lyricsFx.collectAsStateWithLifecycle()
-    val playerGlass by playerViewModel.playerGlass.collectAsStateWithLifecycle()
-    val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsStateWithLifecycle()
-    val dynamicColors by playerViewModel.dynamicColors.collectAsStateWithLifecycle()
+    val lyricsFx by playerViewModel.lyricsFx.collectAsState()
+    val playerGlass by playerViewModel.playerGlass.collectAsState()
+    val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsState()
+    val dynamicColors by playerViewModel.dynamicColors.collectAsState()
 
     val extractedColors = rememberAlbumColors(currentTrack?.coverUrl)
     // Player tint follows album art only when BOTH the master "Dynamic Colors"
@@ -204,10 +204,10 @@ fun MainPlayerRoute(
     // which meant the player finished repainting while a 6s blend was still
     // half the previous track. Linear for the same reason the palette is: it
     // is pacing an audio crossfade, not decorating a tap.
-    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
+    val blendSeconds by playerViewModel.crossfadeDuration.collectAsState()
     val colorBlendMs = ColorBlend.millisFor(blendSeconds)
     // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
-    val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
+    val userTrackChanges by playerViewModel.userTrackChanges.collectAsState()
     val animatedDominant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.dominant,
         animationSpec = androidx.compose.animation.core.tween(

@@ -153,12 +153,6 @@ class SpectrumAnalyzerTap @Inject constructor(
             var twiddleSin = buildTwiddleSin(currentSize)
             var smoothed = FloatArray(OUTPUT_BINS)
             var binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
-            // Per-frame magnitude scratch. Purely intermediate — it is folded
-            // into `smoothed` and never escapes this coroutine — so it is held
-            // and refilled rather than allocated every frame. (The published
-            // `out` array below cannot get the same treatment: consumers keep
-            // the reference off the StateFlow, so that one must stay fresh.)
-            val magnitudes = FloatArray(OUTPUT_BINS)
 
             while (isActive) {
                 // Re-allocate work arrays if size changed
@@ -190,13 +184,8 @@ class SpectrumAnalyzerTap @Inject constructor(
 
                 fft(real, imag, twiddleCos, twiddleSin)
 
-                // Compute magnitudes for target log-frequency bins.
-                // Zeroed first because the loop below `continue`s past
-                // out-of-range bins without writing them, and a reused buffer
-                // would otherwise carry the previous frame's value forward and
-                // let the pink-tilt below accumulate on it.
-                val newBins = magnitudes
-                java.util.Arrays.fill(newBins, 0f)
+                // Compute magnitudes for target log-frequency bins
+                val newBins = FloatArray(OUTPUT_BINS)
                 for (b in 0 until OUTPUT_BINS) {
                     val fftBin = binMap[b]
                     if (fftBin <= 0 || fftBin >= n / 2) continue

@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.ui.onboarding.steps.AudioOutputStep
 import tf.monochrome.android.ui.onboarding.steps.DoneStep
 import tf.monochrome.android.ui.onboarding.steps.DownloadLocationStep
@@ -63,7 +63,7 @@ fun OnboardingScreen(
     onFinished: (postRoute: String?) -> Unit,
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
-    val step by viewModel.step.collectAsStateWithLifecycle()
+    val step by viewModel.step.collectAsState()
 
     BackHandler(enabled = step != OnboardingStep.WELCOME) { viewModel.back() }
 

@@ -3,7 +3,6 @@ package tf.monochrome.android.player
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.domain.model.UnifiedTrack
 import java.text.Normalizer
-import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -93,39 +92,6 @@ internal object LocalTrackMatching {
             .replace("%", "\\%")
             .replace("_", "\\_")
         return "$escaped%"
-    }
-
-    /**
-     * The value stored in `local_tracks.titleSearchKey`: the raw title, folded
-     * to lower case. Written at scan time so the prefix lookup below can be an
-     * indexed range scan instead of a full-table `LIKE`.
-     */
-    fun searchKey(title: String): String = title.trim().lowercase(Locale.ROOT)
-
-    /** Half-open key range `[start, endExclusive)` — see [titlePrefix]. */
-    data class TitlePrefix(val start: String, val endExclusive: String)
-
-    /**
-     * Indexed equivalent of [titlePattern].
-     *
-     * `title LIKE 'song%'` cannot use an index here: SQLite's LIKE is
-     * case-insensitive by default, and it will only apply the LIKE
-     * optimisation when the column is indexed with NOCASE collation — which
-     * would mean rebuilding the table. A half-open range over a pre-folded
-     * column uses an ordinary BINARY index instead, with no collation
-     * subtleties and no LIKE escaping (`%`, `_` and `\` are all literal).
-     *
-     * Null when there is nothing usable to search on, or in the degenerate
-     * case of a title ending in [Char.MAX_VALUE], where no upper bound exists;
-     * callers fall back to the unindexed path rather than silently matching
-     * nothing.
-     */
-    fun titlePrefix(title: String): TitlePrefix? {
-        val base = baseTitle(title).trim().lowercase(Locale.ROOT)
-        if (base.isBlank()) return null
-        val last = base.last()
-        if (last == Char.MAX_VALUE) return null
-        return TitlePrefix(start = base, endExclusive = base.dropLast(1) + (last + 1))
     }
 
     /**

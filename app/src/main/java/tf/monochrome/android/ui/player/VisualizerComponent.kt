@@ -24,6 +24,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -45,7 +46,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -115,7 +115,7 @@ fun VisualizerComponent(
     val intensity = (sensitivity / 100f).coerceIn(0.18f, 1f)
     val alpha = (brightness / 100f).coerceIn(0.25f, 1f)
     
-    val currentFps by repository?.currentFps?.collectAsStateWithLifecycle(initialValue = 0) ?: remember { mutableIntStateOf(0) }
+    val currentFps by repository?.currentFps?.collectAsState(initial = 0) ?: remember { mutableIntStateOf(0) }
 
     Box(
         modifier = modifier

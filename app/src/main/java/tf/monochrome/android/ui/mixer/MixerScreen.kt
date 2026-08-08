@@ -48,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.withFrameNanos
@@ -70,7 +71,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -136,14 +136,14 @@ fun MixerScreen(
         }
     }
 
-    val enabled by viewModel.enabled.collectAsStateWithLifecycle()
-    val buses by viewModel.buses.collectAsStateWithLifecycle()
-    val selectedBusIndex by viewModel.selectedBusIndex.collectAsStateWithLifecycle()
-    val showPluginPicker by viewModel.showPluginPicker.collectAsStateWithLifecycle()
-    val editingPlugin by viewModel.editingPlugin.collectAsStateWithLifecycle()
-    val presets by viewModel.presets.collectAsStateWithLifecycle()
-    val currentPresetName by viewModel.currentPresetName.collectAsStateWithLifecycle()
-    val channelDynamicColor by viewModel.channelDynamicColor.collectAsStateWithLifecycle()
+    val enabled by viewModel.enabled.collectAsState()
+    val buses by viewModel.buses.collectAsState()
+    val selectedBusIndex by viewModel.selectedBusIndex.collectAsState()
+    val showPluginPicker by viewModel.showPluginPicker.collectAsState()
+    val editingPlugin by viewModel.editingPlugin.collectAsState()
+    val presets by viewModel.presets.collectAsState()
+    val currentPresetName by viewModel.currentPresetName.collectAsState()
+    val channelDynamicColor by viewModel.channelDynamicColor.collectAsState()
 
     val selectedBus = buses.getOrNull(selectedBusIndex)
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -302,7 +302,7 @@ fun MixerScreen(
                     }
                 }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    val fxTap by viewModel.fxTap.collectAsStateWithLifecycle()
+                    val fxTap by viewModel.fxTap.collectAsState()
                     tf.monochrome.android.ui.mixer.fxchain.FxChainPage(
                         buses = buses,
                         selectedBusIndex = selectedBusIndex,
@@ -602,7 +602,7 @@ private fun ChannelStripRow(
     onSelectBus: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val busLevels by viewModel.busLevels.collectAsStateWithLifecycle()
+    val busLevels by viewModel.busLevels.collectAsState()
     LazyRow(
         modifier = modifier.fillMaxHeight(),
         contentPadding = PaddingValues(horizontal = MonoDimens.spacingMd, vertical = 12.dp),

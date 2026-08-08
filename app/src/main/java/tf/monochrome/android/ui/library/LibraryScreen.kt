@@ -37,12 +37,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,11 +59,7 @@ import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
-import tf.monochrome.android.ui.components.TrackListToolbar
 import tf.monochrome.android.ui.components.TrackSelectionBar
-import tf.monochrome.android.ui.components.TrackSort
-import tf.monochrome.android.ui.components.TrackSortSaver
-import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
@@ -107,14 +103,14 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
 ) {
-    val favoriteTracks by viewModel.favoriteTracks.collectAsStateWithLifecycle()
-    val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
-    val favoriteAlbums by viewModel.favoriteAlbums.collectAsStateWithLifecycle()
-    val favoriteArtists by viewModel.favoriteArtists.collectAsStateWithLifecycle()
-    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
-    val activeDownloads by playerViewModel.activeDownloads.collectAsStateWithLifecycle()
-    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+    val favoriteTracks by viewModel.favoriteTracks.collectAsState()
+    val recentTracks by viewModel.recentTracks.collectAsState()
+    val favoriteAlbums by viewModel.favoriteAlbums.collectAsState()
+    val favoriteArtists by viewModel.favoriteArtists.collectAsState()
+    val playlists by viewModel.playlists.collectAsState()
+    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val activeDownloads by playerViewModel.activeDownloads.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
 
     val sectionScope = rememberCoroutineScope()
     val currentSectionId = sections.getOrElse(sectionPager.currentPage) { LOCAL_SECTION }
@@ -131,14 +127,6 @@ fun LibraryScreen(
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
-
-    // How the Liked Songs list is being looked at right now. Screen-local
-    // rather than ViewModel state: it describes the view, not the library.
-    var likedQuery by rememberSaveable { mutableStateOf("") }
-    var likedSort by rememberSaveable(stateSaver = TrackSortSaver) { mutableStateOf(TrackSort()) }
-    val visibleFavorites = remember(favoriteTracks, likedQuery, likedSort) {
-        favoriteTracks.applySearchAndSort(likedQuery, likedSort)
-    }
 
     val selection = rememberTrackSelectionState<Long>()
     // Back out of a menu section returns to the local library rather than
@@ -189,7 +177,7 @@ fun LibraryScreen(
 
     // Surface CSV import outcome — previously importProgress was never
     // collected, so a malformed CSV produced no error and no playlist.
-    val importProgressState = viewModel.importProgress.collectAsStateWithLifecycle()
+    val importProgressState = viewModel.importProgress.collectAsState()
     val importMsgContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(importProgressState.value) {
         when (val p = importProgressState.value) {
@@ -398,7 +386,7 @@ fun LibraryScreen(
                                 onLikeClick = { playerViewModel.toggleFavorite(track) },
                                 onClick = {
                                     if (selection.active) selection.toggle(track.id)
-                                    else playerViewModel.playTrack(track, visibleFavorites)
+                                    else playerViewModel.playTrack(track, favoriteTracks)
                                 },
                                 onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
@@ -446,8 +434,7 @@ fun LibraryScreen(
                     onShuffleAll = { tracks ->
                         playerViewModel.shufflePlayUnified(tracks)
                     },
-                    navController = navController,
-                    playerViewModel = playerViewModel
+                    navController = navController
                 )
 
             "playlists" ->
@@ -529,7 +516,7 @@ fun LibraryScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 SectionHeader(title = "Liked Songs")
-                                IconButton(onClick = { playerViewModel.downloadAllTracks(visibleFavorites) }) {
+                                IconButton(onClick = { playerViewModel.downloadAllTracks(favoriteTracks) }) {
                                     Icon(
                                         Icons.Default.Download,
                                         contentDescription = "Download All",
@@ -538,17 +525,7 @@ fun LibraryScreen(
                                 }
                             }
                         }
-                        item {
-                            // Full key set: liked songs span every album and
-                            // artist, unlike a single album's track list.
-                            TrackListToolbar(
-                                query = likedQuery,
-                                onQueryChange = { likedQuery = it },
-                                sort = likedSort,
-                                onSortChange = { likedSort = it },
-                            )
-                        }
-                        items(visibleFavorites, key = { it.id }) { track ->
+                        items(favoriteTracks, key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,

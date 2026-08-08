@@ -54,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,7 +76,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import android.content.Context
@@ -366,12 +366,12 @@ fun LyricsFxStudioScreen(
     navController: NavController,
     viewModel: LyricsFxStudioViewModel = hiltViewModel(),
 ) {
-    val fx by viewModel.fx.collectAsStateWithLifecycle()
-    val fonts by viewModel.availableFonts.collectAsStateWithLifecycle()
-    val currentLyrics by viewModel.currentLyrics.collectAsStateWithLifecycle()
-    val customPresets by viewModel.customPresets.collectAsStateWithLifecycle()
-    val playerGlass by viewModel.playerGlass.collectAsStateWithLifecycle()
-    val miniPlayerGlass by viewModel.miniPlayerGlass.collectAsStateWithLifecycle()
+    val fx by viewModel.fx.collectAsState()
+    val fonts by viewModel.availableFonts.collectAsState()
+    val currentLyrics by viewModel.currentLyrics.collectAsState()
+    val customPresets by viewModel.customPresets.collectAsState()
+    val playerGlass by viewModel.playerGlass.collectAsState()
+    val miniPlayerGlass by viewModel.miniPlayerGlass.collectAsState()
     val context = LocalContext.current
 
     // Which studio tab: 0 = Lyrics, 1 = Player Glass, 2 = Mini Player.
@@ -411,7 +411,7 @@ fun LyricsFxStudioScreen(
         if (selectedTab == 1 || selectedTab == 2) {
             // Both glass tabs share the same controls, preview, and theme pool;
             // only which settings blob they edit differs.
-            val customGlassPresets by viewModel.customPlayerGlassPresets.collectAsStateWithLifecycle()
+            val customGlassPresets by viewModel.customPlayerGlassPresets.collectAsState()
             if (selectedTab == 1) {
                 PlayerGlassTab(
                     glass = playerGlass,

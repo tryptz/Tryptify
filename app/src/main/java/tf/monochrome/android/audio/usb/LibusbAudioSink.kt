@@ -84,11 +84,6 @@ class LibusbAudioSink(
     // straight to libusb with no copy, no allocation, no rounding.
     private var gainScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
 
-    // Same deal for the direct-buffer copy the JNI side requires: the driver
-    // reads via GetDirectBufferAddress, so a non-direct upstream buffer has to
-    // be copied. Held and grown rather than reallocated per audio buffer.
-    private var copyScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
-
     // Bit depth is per-stream; cache so the gain path doesn't have
     // to recompute pcmBitsFromEncoding on every handleBuffer.
     private var outBitsPerSample: Int = 0
@@ -496,22 +491,14 @@ class LibusbAudioSink(
         return gainScratch
     }
 
-    // Grow-and-reuse, like ensureGainScratch above — this used to
-    // allocateDirect() on every call, i.e. ~50 times a second whenever the
-    // upstream buffer wasn't already direct. allocateDirect zeroes its memory
-    // and registers a cleaner, so it is a poor fit for a per-buffer path.
     private fun copyIntoScratch(buffer: ByteBuffer): ByteBuffer {
-        val needBytes = buffer.remaining()
-        if (copyScratch.capacity() < needBytes) {
-            copyScratch = ByteBuffer.allocateDirect(needBytes)
-                .order(ByteOrder.nativeOrder())
-        }
-        copyScratch.clear()
+        val scratch = ByteBuffer.allocateDirect(buffer.remaining())
+            .order(ByteOrder.nativeOrder())
         val mark = buffer.position()
-        copyScratch.put(buffer)
+        scratch.put(buffer)
         buffer.position(mark)  // restore — handleBuffer will advance below
-        copyScratch.flip()
-        return copyScratch
+        scratch.flip()
+        return scratch
     }
 
     private fun pcmBitsFromEncoding(encoding: Int): Int = when (encoding) {

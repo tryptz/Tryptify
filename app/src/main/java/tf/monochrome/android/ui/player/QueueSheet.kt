@@ -38,6 +38,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,7 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -87,12 +87,12 @@ fun QueueSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val queue by playerViewModel.queue.collectAsStateWithLifecycle()
-    val currentIndex by playerViewModel.currentIndex.collectAsStateWithLifecycle()
-    val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
-    val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsStateWithLifecycle()
-    val radioStatusMessage by playerViewModel.radioStatusMessage.collectAsStateWithLifecycle()
+    val queue by playerViewModel.queue.collectAsState()
+    val currentIndex by playerViewModel.currentIndex.collectAsState()
+    val currentTrack by playerViewModel.currentTrack.collectAsState()
+    val isRadioActive by playerViewModel.isRadioActive.collectAsState()
+    val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsState()
+    val radioStatusMessage by playerViewModel.radioStatusMessage.collectAsState()
 
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIndices by remember { mutableStateOf(setOf<Int>()) }

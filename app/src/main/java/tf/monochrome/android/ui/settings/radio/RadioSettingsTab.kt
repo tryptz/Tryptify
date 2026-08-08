@@ -20,6 +20,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +34,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.radio.PLANNER_WEIGHT_MAX
 import tf.monochrome.android.radio.PLANNER_WEIGHT_MIN
 
@@ -43,12 +43,12 @@ import tf.monochrome.android.radio.PLANNER_WEIGHT_MIN
  */
 @Composable
 fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
-    val weights by viewModel.weights.collectAsStateWithLifecycle()
-    val plannerEnabled by viewModel.plannerEnabled.collectAsStateWithLifecycle()
-    val plannerUrl by viewModel.plannerUrl.collectAsStateWithLifecycle()
-    val plannerApiKey by viewModel.plannerApiKey.collectAsStateWithLifecycle()
-    val connectionStatus by viewModel.connectionStatus.collectAsStateWithLifecycle()
-    val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+    val weights by viewModel.weights.collectAsState()
+    val plannerEnabled by viewModel.plannerEnabled.collectAsState()
+    val plannerUrl by viewModel.plannerUrl.collectAsState()
+    val plannerApiKey by viewModel.plannerApiKey.collectAsState()
+    val connectionStatus by viewModel.connectionStatus.collectAsState()
+    val isTesting by viewModel.isTesting.collectAsState()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

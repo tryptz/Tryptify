@@ -3,7 +3,6 @@ package tf.monochrome.android.ui.mixer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -191,14 +190,7 @@ class MixerViewModel @Inject constructor(
     }
 
     fun loadPreset(preset: MixPreset) {
-        // Off the main thread: loadStateJson parses the preset and builds a
-        // whole plugin set on the calling thread. The engine no longer holds
-        // the audio lock while it does that, but it is still milliseconds of
-        // allocation, and running it inline from a tap blocked the UI for the
-        // duration -- long enough to drop frames on a full five-bus preset.
-        viewModelScope.launch(Dispatchers.Default) {
-            dspManager.loadStateJson(preset.stateJson)
-        }
+        dspManager.loadStateJson(preset.stateJson)
         _currentPresetName.value = preset.name
     }
 
