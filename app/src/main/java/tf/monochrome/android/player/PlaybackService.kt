@@ -834,12 +834,58 @@ class PlaybackService : MediaSessionService() {
     // cover, so lint flags the declaration even when every call site is clean.
     private val crossfade by lazy { buildCrossfadeController() }
 
+    /**
+     * The settings last pushed to the live chain, kept so a blend's copy can be
+     * seeded with exactly what is playing rather than re-deriving it from
+     * preferences and risking the two drifting apart.
+     */
+    private data class AppliedEq(
+        val bandsL: List<EqBand>,
+        val bandsR: List<EqBand>,
+        val preamp: Float,
+        val enabled: Boolean,
+    ) {
+        companion object {
+            val NONE = AppliedEq(emptyList(), emptyList(), 0f, false)
+        }
+    }
+
+    @Volatile private var lastAutoEq = AppliedEq.NONE
+    @Volatile private var lastParametricEq = AppliedEq.NONE
+
+    /**
+     * A second processing chain for a blend's outgoing tail, carrying the same
+     * DSP graph and EQ curves as the track that is already playing. Released
+     * with the blend, which destroys its native engine — see [DspChain].
+     */
+    @OptIn(UnstableApi::class)
+    private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
+        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy()
+        val autoEq = lastAutoEq
+        val paramEq = lastParametricEq
+        chain.seedFrom(
+            dspStateJson = runCatching { dspManager.getStateJson() }.getOrNull(),
+            autoEqBandsL = autoEq.bandsL,
+            autoEqBandsR = autoEq.bandsR,
+            autoEqPreamp = autoEq.preamp,
+            autoEqEnabled = autoEq.enabled,
+            parametricBands = paramEq.bandsL,
+            parametricPreamp = paramEq.preamp,
+            parametricEnabled = paramEq.enabled,
+        )
+        // The copy's native engine only exists once ExoPlayer configures it
+        // with a format, which is after the blend has started.
+        chain.observeEngine(serviceScope)
+        return chain
+    }
+
     @OptIn(UnstableApi::class)
     private fun buildCrossfadeController(): CrossfadeController =
         CrossfadeController(
             context = this,
             scope = serviceScope,
             dataSourceFactory = buildDataSourceFactory(),
+            dspChainFactory = ::buildSeededDspChain,
         ) { gain ->
             crossfadeGain = gain
             pushVolume()
@@ -1114,6 +1160,7 @@ class PlaybackService : MediaSessionService() {
         try {
             if (cfg.systemWide) {
                 autoEqProcessor.applyBands(emptyList(), 0f, false)
+                lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
                 return
             }
             val json = Json { ignoreUnknownKeys = true }
@@ -1135,6 +1182,7 @@ class PlaybackService : MediaSessionService() {
             val preamp = if (cfg.enabled) cfg.preamp else 0.0
             val active = bandsL.any { it.enabled } || bandsR.any { it.enabled }
             autoEqProcessor.applyBands(bandsL, bandsR, preamp.toFloat(), active)
+            lastAutoEq = AppliedEq(bandsL, bandsR, preamp.toFloat(), active)
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }
@@ -1166,6 +1214,7 @@ class PlaybackService : MediaSessionService() {
                 emptyList()
             }
             parametricEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
+            lastParametricEq = AppliedEq(bands, bands, preamp.toFloat(), enabled)
         } catch (_: Exception) { }
     }
 
