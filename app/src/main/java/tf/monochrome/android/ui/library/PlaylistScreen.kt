@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,6 +59,10 @@ import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.TrackContextMenu
+import tf.monochrome.android.ui.components.TrackListToolbar
+import tf.monochrome.android.ui.components.TrackSort
+import tf.monochrome.android.ui.components.TrackSortSaver
+import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.components.TrackSelectionBar
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
@@ -87,6 +92,15 @@ fun PlaylistScreen(
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
 
+    // Search text and order live here, not in the ViewModel: they describe how
+    // this screen is being looked at right now, not anything about the playlist.
+    var listQuery by rememberSaveable { mutableStateOf("") }
+    var listSort by rememberSaveable(stateSaver = TrackSortSaver) {
+        mutableStateOf(TrackSort())
+    }
+    val visibleTracks = remember(tracks, listQuery, listSort) {
+        tracks.applySearchAndSort(listQuery, listSort)
+    }
     val selection = rememberTrackSelectionState<Long>()
     BackHandler(enabled = selection.active) { selection.clear() }
 
@@ -340,6 +354,17 @@ fun PlaylistScreen(
                 }
             }
 
+            if (tracks.isNotEmpty()) {
+                item {
+                    TrackListToolbar(
+                        query = listQuery,
+                        onQueryChange = { listQuery = it },
+                        sort = listSort,
+                        onSortChange = { listSort = it },
+                    )
+                }
+            }
+
             if (tracks.isEmpty()) {
                 item {
                     Text(
@@ -349,15 +374,24 @@ fun PlaylistScreen(
                         modifier = Modifier.padding(24.dp)
                     )
                 }
+            } else if (visibleTracks.isEmpty()) {
+                item {
+                    Text(
+                        text = "No tracks match \"$listQuery\".",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(24.dp)
+                    )
+                }
             } else {
-                items(tracks, key = { it.id }) { track ->
+                items(visibleTracks, key = { it.id }) { track ->
                     TrackItem(
                         track = track,
                         isLiked = favoriteTrackIds.contains(track.id),
                         onLikeClick = { playerViewModel.toggleFavorite(track) },
                         onClick = {
                             if (selection.active) selection.toggle(track.id)
-                            else playerViewModel.playTrack(track, tracks)
+                            else playerViewModel.playTrack(track, visibleTracks)
                         },
                         onLongClick = { selection.toggle(track.id) },
                         onMoreClick = { showContextMenuForTrack = track },
