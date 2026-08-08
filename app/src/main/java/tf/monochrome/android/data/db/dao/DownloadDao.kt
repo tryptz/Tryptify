@@ -34,6 +34,9 @@ interface DownloadDao {
     @Query("DELETE FROM downloaded_tracks WHERE id = :trackId")
     suspend fun deleteDownloadedTrack(trackId: Long)
 
+    @Query("SELECT COUNT(*) FROM downloaded_tracks")
+    suspend fun getDownloadCount(): Int
+
     @Query("SELECT SUM(sizeBytes) FROM downloaded_tracks")
     fun getTotalDownloadSize(): Flow<Long?>
 
