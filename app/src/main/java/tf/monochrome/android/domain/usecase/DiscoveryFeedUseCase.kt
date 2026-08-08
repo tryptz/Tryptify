@@ -8,6 +8,7 @@ import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
+import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
 import javax.inject.Inject
@@ -37,30 +38,49 @@ class DiscoveryFeedUseCase @Inject constructor(
      * The personalized feed: new releases and neighbouring artists derived from
      * what the listener actually plays, followed by curated genre shelves.
      *
-     * @param maxArtists how many seed artists to build personalized shelves from
+     * [adventure] decides the mix rather than just relabelling it. At the
+     * familiar end most of the budget goes to new releases from artists already
+     * in the library; at the adventurous end it shifts to neighbouring artists
+     * and whole genres. See [DiscoveryAdventure.shelfMix].
+     *
+     * @param adventure 0..1, the Discover knob
      * @param itemsPerShelf cap on each shelf's card count
-     * @param genreShelves how many curated shelves to append
+     * @param rotation offset into the curated seeds, so "show me something
+     *   else" deals a different hand without reshuffling on every visit
      */
     suspend fun build(
-        maxArtists: Int = 4,
+        adventure: Float = DiscoveryAdventure.DEFAULT,
         itemsPerShelf: Int = 12,
-        genreShelves: Int = 4,
+        rotation: Int = 0,
     ): List<DiscoveryShelf> = coroutineScope {
-        val seedArtists = library.getSeedArtistNames(maxArtists)
+        val mix = DiscoveryAdventure.shelfMix(adventure)
+        // Ask for as many seed artists as the widest of the two artist-derived
+        // bands needs; one lookup feeds both.
+        val seedArtists = library.getSeedArtistNames(maxOf(mix.familiar, mix.explore))
 
         // Every shelf is fetched concurrently and each carries its own timeout,
         // so one slow artist delays its own shelf and nothing else.
-        val personalized = seedArtists.map { name ->
+        val personalized = seedArtists.take(mix.familiar).map { name ->
             async { newReleaseShelf(name, itemsPerShelf) }
         }
-        val neighbours = seedArtists.take(2).map { name ->
+        // Rotated relative to the familiar band so the same artist isn't
+        // usually both "new from X" and "because you play X" in one feed.
+        val neighbours = seedArtists.rotated(mix.familiar).take(mix.explore).map { name ->
             async { similarArtistShelf(name, itemsPerShelf) }
         }
-        val curated = seeds.seeds().shuffledStable(seedArtists.size).take(genreShelves).map { seed ->
-            async { genreShelf(seed, itemsPerShelf) }
-        }
+        val curated = seeds.seeds().rotated(rotation + seedArtists.size)
+            .take(mix.genre)
+            .map { seed -> async { genreShelf(seed, itemsPerShelf) } }
 
-        (personalized + neighbours + curated).mapNotNull { it.await() }
+        // Interleaved rather than concatenated: three familiar shelves in a row
+        // followed by three genre shelves reads as two separate pages stapled
+        // together. Alternating keeps something known next to something new all
+        // the way down, which is the whole point of the knob.
+        interleave(
+            personalized.mapNotNull { it.await() },
+            neighbours.mapNotNull { it.await() },
+            curated.mapNotNull { it.await() },
+        )
     }
 
     /**
@@ -201,14 +221,34 @@ class DiscoveryFeedUseCase @Inject constructor(
     }
 
     /**
-     * Rotates the curated seeds by a caller-supplied offset instead of
-     * shuffling. The feed is rebuilt on every visit, and a real shuffle would
-     * deal a different genre every time the user came back — motion where the
-     * listener expects a place. Rotating gives variety between listeners with
-     * different libraries while staying put for any one of them.
+     * Rotates a list by a caller-supplied offset instead of shuffling.
+     *
+     * The feed is rebuilt whenever the knob moves, and a real shuffle would
+     * deal a different genre every time — motion where the listener expects a
+     * place. Rotating gives variety between listeners, and between explicit
+     * "show me something else" taps, while staying put otherwise.
      */
-    private fun <T> List<T>.shuffledStable(offset: Int): List<T> =
-        if (isEmpty()) this else List(size) { this[(it + offset) % size] }
+    private fun <T> List<T>.rotated(offset: Int): List<T> =
+        if (isEmpty()) this
+        else List(size) { this[((it + offset) % size + size) % size] }
+
+    /**
+     * Round-robins the bands together, longest-first within each round, so the
+     * feed alternates known and unknown instead of serving each band as a block.
+     */
+    private fun interleave(vararg bands: List<DiscoveryShelf>): List<DiscoveryShelf> {
+        val out = ArrayList<DiscoveryShelf>(bands.sumOf { it.size })
+        var i = 0
+        while (out.size < bands.sumOf { it.size }) {
+            var addedThisRound = false
+            for (band in bands) {
+                band.getOrNull(i)?.let { out.add(it); addedThisRound = true }
+            }
+            if (!addedThisRound) break
+            i++
+        }
+        return out
+    }
 
     /** Lenient match so search albums credited to the seed artist are kept. */
     private fun String.matchesArtist(name: String): Boolean {

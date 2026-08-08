@@ -79,6 +79,7 @@ import tf.monochrome.android.ui.eq.ParametricEqEditScreen
 import tf.monochrome.android.ui.eq.ParametricEqScreen
 import tf.monochrome.android.ui.discover.DiscoverScreen
 import tf.monochrome.android.ui.discover.DiscoverShelfScreen
+import tf.monochrome.android.ui.discover.DiscoveryFlowScreen
 import tf.monochrome.android.ui.home.HomeScreen
 import tf.monochrome.android.ui.mixer.MixerScreen
 import tf.monochrome.android.ui.library.LibraryScreen
@@ -105,6 +106,7 @@ sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Search : Screen("search")
     data object Discover : Screen("discover")
+    data object DiscoveryFlow : Screen("discover/flow")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
     }
@@ -210,6 +212,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val showMiniPlayer = currentTrack != null
         && currentDestination?.route != Screen.NowPlaying.route
         && currentDestination?.route != Screen.Mixer.route
+        // Flow is full-bleed and already shows the playing track as the page
+        // you're on; a mini player would be a second copy of it over the top.
+        && currentDestination?.route != Screen.DiscoveryFlow.route
 
     // Pager state for the main tabs
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabRoutes.size })
@@ -286,7 +291,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // isn't hidden behind the floating mini player. Main tabs (pager)
         // handle their own bottom contentPadding already.
         val miniPlayerReserve = 72.dp
-        val detailBottomInset = navBarHeight + if (showMiniPlayer) miniPlayerReserve else 0.dp
+        // Flow is deliberately edge-to-edge — full-bleed artwork behind the
+        // system bars — and pads itself, so it opts out of the shared inset
+        // rather than being letterboxed above the nav bar and padded twice.
+        val fullBleedRoute = currentDestination?.route == Screen.DiscoveryFlow.route
+        val detailBottomInset = when {
+            fullBleedRoute -> 0.dp
+            else -> navBarHeight + if (showMiniPlayer) miniPlayerReserve else 0.dp
+        }
 
         // One SaveableStateHolder keeps each tab's subtree state (selected
         // Library sub-tab, LazyColumn scroll offsets, text field input, etc.)
@@ -348,6 +360,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 // Tab stubs – content is rendered by the pager above
                 composable(Screen.Home.route) { }
                 composable(Screen.Discover.route) { }
+                composable(Screen.DiscoveryFlow.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("discover_flow") {
+                        DiscoveryFlowScreen(
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
+                    }
+                }
                 composable(Screen.Library.route) { }
 
                 composable(

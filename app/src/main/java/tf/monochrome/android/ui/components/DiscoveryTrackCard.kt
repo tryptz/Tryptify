@@ -39,11 +39,15 @@ fun DiscoveryTrackCard(
     track: UnifiedTrack,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // Hold for the full action sheet — queue, playlist, radio from here, go to
+    // the artist. Tapping plays, which is the common case; everything else a
+    // listener wants to do with a recommendation lives behind the hold.
+    onLongClick: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier
             .width(MonoDimens.coverCard)
-            .bounceClick(onClick = onClick)
+            .bounceCombinedClick(onLongClick = onLongClick, onClick = onClick)
             .liquidGlass(shape = MonoDimens.shapeMd),
         shape = MonoDimens.shapeMd,
         color = Color.Transparent,

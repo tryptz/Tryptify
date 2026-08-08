@@ -21,6 +21,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.AudioQuality
+import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
@@ -149,6 +150,11 @@ class PreferencesManager @Inject constructor(
         // long day out or a GPU whose driver hates the AGSL glass shader.
         // LOW_PERFORMANCE_MODE is a convenience master: it has no independent
         // effect, it just reads/writes the three real switches together.
+        // Discover's "familiar ↔ adventurous" knob, 0..1. Synced: unlike the
+        // performance switches this is taste, not hardware, and it should
+        // follow the listener between devices.
+        private val DISCOVERY_ADVENTURE = floatPreferencesKey("discovery_adventure")
+
         private val LOW_PERFORMANCE_MODE = booleanPreferencesKey("low_performance_mode")
         private val DISABLE_ANIMATIONS = booleanPreferencesKey("disable_animations")
         private val LEGACY_PLAYER = booleanPreferencesKey("legacy_player")
@@ -376,6 +382,7 @@ class PreferencesManager @Inject constructor(
             RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
             RADIO_WEIGHT_MOOD_CONTINUITY, RADIO_WEIGHT_ERA_CONSISTENCY,
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
+            DISCOVERY_ADVENTURE,
         )
         private val SETTINGS_SYNC_KEY_NAMES: Set<String> = SETTINGS_SYNC_KEYS.map { it.name }.toSet()
     }
@@ -1696,6 +1703,24 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setAppRenderResolution(shortSide: Int) {
         dataStore.edit { it[APP_RENDER_RESOLUTION] = shortSide }
+    }
+
+    // --- Discover ---
+    val discoveryAdventure: Flow<Float> = dataStore.data.map {
+        DiscoveryAdventure.clamp(it[DISCOVERY_ADVENTURE] ?: DiscoveryAdventure.DEFAULT)
+    }
+
+    /**
+     * Move the knob, and move the three planner weights that mean the same
+     * thing with it — so a station started from Discover behaves like the feed
+     * it came from. The other eleven weights are left exactly as the user set
+     * them in Settings › Radio.
+     */
+    suspend fun setDiscoveryAdventure(value: Float) {
+        val clamped = DiscoveryAdventure.clamp(value)
+        val weights = DiscoveryAdventure.toPlannerWeights(radioPlannerWeights.first(), clamped)
+        dataStore.edit { it[DISCOVERY_ADVENTURE] = clamped }
+        setRadioPlannerWeights(weights)
     }
 
     // --- Low performance mode ---

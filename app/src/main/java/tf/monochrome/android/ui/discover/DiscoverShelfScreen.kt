@@ -22,12 +22,19 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import tf.monochrome.android.domain.model.DiscoveryItem
+import tf.monochrome.android.ui.components.AddToPlaylistSheet
+import tf.monochrome.android.ui.components.TrackSelectionBar
+import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -48,9 +55,20 @@ fun DiscoverShelfScreen(
     playerViewModel: PlayerViewModel,
     viewModel: DiscoverViewModel = rememberDiscoverViewModel(),
 ) {
-    val shelves by viewModel.shelves.collectAsStateWithLifecycle()
+    val shelves by viewModel.visibleShelves.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val shelf = shelves.firstOrNull { it.id == shelfId }
+
+    // Multi-select belongs here rather than on the shelf carousel: this is a
+    // vertical grid, which is the shape the app's existing selection bar and
+    // selection state were built for, and where picking six things out of
+    // twenty is actually comfortable.
+    val selection = rememberTrackSelectionState<String>()
+    var showAddToPlaylist by remember { mutableStateOf(false) }
+    val selectedTracks = shelf?.items.orEmpty()
+        .filterIsInstance<DiscoveryItem.TrackItem>()
+        .filter { it.key in selection.selectedIds }
+        .map { it.track }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -72,6 +90,18 @@ fun DiscoverShelfScreen(
             )
         }
 
+        if (selection.active) {
+            TrackSelectionBar(
+                selectedCount = selection.count,
+                onClose = { selection.clear() },
+                onAddToQueue = {
+                    playerViewModel.addUnifiedToQueue(selectedTracks)
+                    selection.clear()
+                },
+                onAddToPlaylist = { showAddToPlaylist = true },
+            )
+        }
+
         when {
             shelf != null -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(MonoDimens.coverCard),
@@ -81,11 +111,19 @@ fun DiscoverShelfScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(shelf.items, key = { it.key }) { item ->
+                    val selectable = item is DiscoveryItem.TrackItem
                     DiscoveryCard(
                         item = item,
+                        selected = item.key in selection.selectedIds,
                         onClick = {
-                            openDiscoveryItem(navController, playerViewModel, shelf, item)
+                            // Once a selection is running, a tap extends it
+                            // rather than playing — otherwise the gesture that
+                            // starts selecting and the one that leaves the
+                            // screen are the same gesture.
+                            if (selection.active && selectable) selection.toggle(item.key)
+                            else openDiscoveryItem(navController, playerViewModel, shelf, item)
                         },
+                        onLongClick = { if (selectable) selection.toggle(item.key) },
                     )
                 }
             }
@@ -104,5 +142,30 @@ fun DiscoverShelfScreen(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             )
         }
+    }
+
+    if (showAddToPlaylist) {
+        val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
+        AddToPlaylistSheet(
+            playlists = playlists,
+            onDismiss = { showAddToPlaylist = false },
+            onPlaylistSelected = { playlist ->
+                selectedTracks.forEach {
+                    playerViewModel.addTrackToPlaylist(playlist.id, it.toLegacyTrack())
+                }
+                showAddToPlaylist = false
+                selection.clear()
+            },
+            onCreateNew = {
+                playerViewModel.createPlaylist(
+                    name = shelf?.title ?: "Discover",
+                    description = null,
+                    initialTracks = selectedTracks.map { it.toLegacyTrack() },
+                )
+                showAddToPlaylist = false
+                selection.clear()
+            },
+            title = "Add " + selection.count + " to playlist",
+        )
     }
 }
