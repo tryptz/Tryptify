@@ -590,8 +590,12 @@ class PreferencesManager @Inject constructor(
      * the setting only governs which catalogs feed search results.
      */
     val sourceMode: Flow<SourceMode> = dataStore.data.map { prefs ->
-        prefs[SOURCE_MODE]?.let { runCatching { SourceMode.valueOf(it) }.getOrNull() }
-            ?: SourceMode.BOTH
+        val stored = prefs[SOURCE_MODE]?.let { runCatching { SourceMode.valueOf(it) }.getOrNull() }
+        // "Apple only" is no longer offered in Settings. Anyone left holding it
+        // would have an unreachable state: the picker would show nothing
+        // selected while search stayed Apple-only, with no way to tell why or
+        // get out of it. Reading it as BOTH is the only honest resolution.
+        if (stored == null || stored == SourceMode.APPLE_ONLY) SourceMode.BOTH else stored
     }
 
     suspend fun setSourceMode(mode: SourceMode) {
