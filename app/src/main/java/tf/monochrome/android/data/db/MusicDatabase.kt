@@ -68,7 +68,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -134,6 +134,32 @@ abstract class MusicDatabase : RoomDatabase() {
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE eq_presets ADD COLUMN bandsRJson TEXT")
+            }
+        }
+
+        /**
+         * Composite index behind the library's main query, which is
+         * `SELECT * FROM local_tracks ORDER BY albumArtist, album, discNumber,
+         * trackNumber`. Only `albumArtist` and `album` were indexed, and never
+         * together, so SQLite could not satisfy the ordering from an index and
+         * built a temporary B-tree over the whole table on every emission —
+         * which Room re-fires on every write to `local_tracks`, i.e. once per
+         * 500-row batch during a scan.
+         *
+         * The index name MUST match what Room generates from the @Index
+         * annotation on LocalTrackEntity (`index_<table>_<col>_<col>…`), or
+         * Room's schema validation fails on open and — because the builder
+         * carries fallbackToDestructiveMigration — silently drops the user's
+         * library. Verified against Room's own generated CREATE INDEX output
+         * for this table.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "`index_local_tracks_albumArtist_album_discNumber_trackNumber` " +
+                        "ON `local_tracks` (`albumArtist`, `album`, `discNumber`, `trackNumber`)"
+                )
             }
         }
     }

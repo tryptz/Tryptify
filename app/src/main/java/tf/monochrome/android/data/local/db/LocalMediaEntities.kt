@@ -18,7 +18,11 @@ import androidx.room.PrimaryKey
         Index("musicbrainzTrack"),
         Index("musicbrainzAlbum"),
         Index("albumId"),
-        Index("artistId")
+        Index("artistId"),
+        // Covers the library's default ordering end-to-end (see
+        // MusicDatabase.MIGRATION_11_12) so the main list query streams in
+        // index order instead of sorting the whole table into a temp B-tree.
+        Index(value = ["albumArtist", "album", "discNumber", "trackNumber"])
     ]
 )
 data class LocalTrackEntity(
