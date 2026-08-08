@@ -1060,6 +1060,8 @@ class PlaybackService : MediaSessionService() {
             // warms them, so the hand-off has bytes ready.
             if (!streamResolver.warmUpcoming(next)) return@launch
 
+            if (!sampleRatesMatch(next)) return@launch
+
             val item = resolveGaplessItem(next) ?: return@launch
 
             // The queue can move while we resolve — re-check before committing,
@@ -1070,6 +1072,29 @@ class PlaybackService : MediaSessionService() {
 
             player.addMediaItem(item)
         }
+    }
+
+    /**
+     * Whether [next] plays at the same sample rate as what is playing now.
+     *
+     * A rate change forces DefaultAudioSink to tear down and rebuild its
+     * AudioTrack, which is the gap gapless exists to remove — so pre-queuing
+     * across one buys nothing and hides a hand-off that cannot be seamless.
+     * That transition falls back to the ordinary per-track path instead.
+     *
+     * Taking the gap is what a bit-perfect player is supposed to do: the only
+     * way to avoid it is to resample everything to one fixed rate, which is
+     * exactly what this app's USB path exists not to do. Set a blend time if
+     * you'd rather cover the transition than hear it.
+     *
+     * Unknown rates pass. Refusing on missing metadata would disable gapless
+     * for every catalogue track that doesn't report a rate, and the fallback if
+     * the guess is wrong is just the reconfigure we were trying to avoid.
+     */
+    private fun sampleRatesMatch(next: tf.monochrome.android.domain.model.Track): Boolean {
+        val current = player.audioFormat?.sampleRate?.takeIf { it > 0 } ?: return true
+        val upcoming = unifiedTrackRegistry[next.id]?.sampleRate?.takeIf { it > 0 } ?: return true
+        return current == upcoming
     }
 
     /**

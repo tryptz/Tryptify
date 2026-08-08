@@ -640,6 +640,29 @@ fun InflatorScreen(
                             onClick = { effect.setEffectIn(!state.effectIn) },
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        // Anti-alias oversampling for the waveshaper. Cycles
+                        // 1x -> 2x -> 4x -> 1x; labelled with what it does
+                        // rather than the bare factor, since "OS 1x" means
+                        // nothing without the context.
+                        OxfordButton(
+                            label = when (state.oversampling) {
+                                4 -> "OVERSAMPLE 4x"
+                                2 -> "OVERSAMPLE 2x"
+                                else -> "OVERSAMPLE OFF"
+                            },
+                            active = state.oversampling > 1,
+                            activeColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            onClick = {
+                                effect.setOversampling(
+                                    when (state.oversampling) {
+                                        1 -> 2
+                                        2 -> 4
+                                        else -> 1
+                                    }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
             }

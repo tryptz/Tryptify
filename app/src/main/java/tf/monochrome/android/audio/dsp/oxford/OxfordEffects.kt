@@ -32,6 +32,7 @@ internal object InflatorNative {
         inputDb: Float, outputDb: Float, effect: Float, curve: Float,
         clipZeroDb: Boolean, bandSplit: Boolean, bypass: Boolean,
     )
+    external fun nativeSetOversampling(handle: Long, factor: Int)
     external fun nativeProcess(handle: Long, buffer: ByteBuffer, frames: Int, channels: Int)
     external fun nativeProcessArrays(handle: Long, l: FloatArray, r: FloatArray, frames: Int)
     external fun nativeReadMeters(handle: Long): Long
@@ -63,6 +64,17 @@ data class InflatorState(
     val clipZeroDb: Boolean = true,
     val bandSplit:  Boolean = false,
     val effectIn:   Boolean = false,   // UI "Effect In" — false == bypass, off by default
+    /**
+     * Anti-alias oversampling for the waveshaper: 1 (off), 2 or 4.
+     *
+     * The transfer function is a 4th-order polynomial, so it generates
+     * harmonics several times the input frequency. At 44.1 kHz anything above
+     * roughly 5 kHz throws products past Nyquist that fold back down as
+     * inharmonic grit. Off by default to keep the shipping CPU cost where it
+     * was; 2x clears the audible band for most material and 4x covers the top
+     * octave at 44.1 kHz.
+     */
+    val oversampling: Int = 1,
 )
 
 /**
@@ -260,6 +272,14 @@ class InflatorEffect @Inject constructor() {
     fun setBandSplit(on: Boolean)   = update { it.copy(bandSplit  = on) }
     fun setEffectIn(on: Boolean)    = update { it.copy(effectIn   = on) }
 
+    /**
+     * Anti-alias oversampling for the waveshaper: 1 (off), 2 or 4. Anything
+     * else snaps down to the nearest supported factor.
+     */
+    fun setOversampling(factor: Int) = update {
+        it.copy(oversampling = if (factor >= 4) 4 else if (factor >= 2) 2 else 1)
+    }
+
     /** Apply a factory preset atomically (single native push). */
     fun applyPreset(preset: InflatorPreset) = update { preset.state }
 
@@ -276,6 +296,7 @@ class InflatorEffect @Inject constructor() {
             s.inputDb, s.outputDb, s.effectPct / 100f, s.curve,
             s.clipZeroDb, s.bandSplit, bypass = !s.effectIn,
         )
+        InflatorNative.nativeSetOversampling(h, s.oversampling)
     }
 }
 

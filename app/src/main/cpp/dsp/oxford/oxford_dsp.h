@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "../util/oversampler.h"
+
 #include <atomic>
 #include <array>
 #include <algorithm>
@@ -210,6 +212,8 @@ public:
         std::atomic<bool>  clipZeroDb{  true  };
         std::atomic<bool>  bandSplit {  false };
         std::atomic<bool>  bypass    {  false };
+        // Anti-alias oversampling factor for the waveshaper: 1 (off), 2, or 4.
+        std::atomic<int>   oversampling{ 1 };
         // Output meter: updated by processor, read by UI
         std::atomic<float> peakL     {  0.0f };
         std::atomic<float> peakR     {  0.0f };
@@ -238,6 +242,10 @@ public:
         postGain_.snapTo(1.0f);
         effect_  .snapTo(1.0f);
         curve_   .snapTo(0.0f);
+
+        // Force the oversamplers to be re-prepared against the new rate on the
+        // next block, whatever factor is selected.
+        osFactorApplied_ = 0;
     }
 
     // In-place processing on planar float buffers.
@@ -254,6 +262,31 @@ public:
 
         const bool clip  = params.clipZeroDb.load(std::memory_order_relaxed);
         const bool split = params.bandSplit .load(std::memory_order_relaxed);
+
+        // The waveshaper is the only nonlinear stage here, and it is a 4th-order
+        // polynomial: a 10 kHz input at 44.1 kHz throws harmonics well past
+        // Nyquist, which fold back down into the audible band as inharmonic
+        // grit. Running just the shaper at 2x or 4x pushes those products above
+        // the anti-alias filter so they are removed on the way back down
+        // instead. Everything else in this processor — the gain smoothing, the
+        // Linkwitz-Riley band split, the dry delay — is linear and cannot
+        // alias, so it stays at the base rate and the FIR designs are untouched.
+        const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
+        if (osFactor != osFactorApplied_) {
+            // 4x runs as two cascaded 2x stages rather than one 4x zero-stuff.
+            // The shared oversampler's anti-image filter is an 8th-order
+            // Butterworth, which is gentle: at a single 4x step it leaves enough
+            // of the zero-stuffing images for the waveshaper to fold them back
+            // down, and measured worse than 2x. Cascading halves the job each
+            // stage has to do, so each filter only ever spans one octave.
+            for (int c = 0; c < 2; ++c) {
+                for (int b = 0; b < kOsBands; ++b) {
+                    os_[c][b].prepare(sr_, osFactor > 1 ? 2 : 1);
+                    os2_[c][b].prepare(sr_ * 2.0, osFactor >= 4 ? 2 : 1);
+                }
+            }
+            osFactorApplied_ = osFactor;
+        }
 
         float pkL = 0.0f, pkR = 0.0f;
 
@@ -284,11 +317,14 @@ public:
                 float shaped;
                 if (split) {
                     const float mid = xd - lo - hi;
-                    shaped = waveshape(lo,  A, B, C, D)
-                           + waveshape(mid, A, B, C, D)
-                           + waveshape(hi,  A, B, C, D);
+                    // Each band is shaped independently, so each needs its own
+                    // oversampler state — sharing one would smear the filter
+                    // histories of three different signals together.
+                    shaped = shapeOs(c, kOsLow,  lo,  A, B, C, D, osFactor)
+                           + shapeOs(c, kOsMid,  mid, A, B, C, D, osFactor)
+                           + shapeOs(c, kOsHigh, hi,  A, B, C, D, osFactor);
                 } else {
-                    shaped = waveshape(xd, A, B, C, D);
+                    shaped = shapeOs(c, kOsFull, xd, A, B, C, D, osFactor);
                 }
 
                 float y = (dry * xd + wet * shaped) * post;
@@ -307,6 +343,51 @@ public:
     }
 
 private:
+    // Oversampler slots: one per (channel, shaping site). The band-split path
+    // shapes three signals per channel, the flat path one.
+    static constexpr int kOsFull = 0, kOsLow = 1, kOsMid = 2, kOsHigh = 3;
+    static constexpr int kOsBands = 4;
+    static constexpr int kMaxOsFactor = 4;
+
+    static inline int clampOsFactor(int f) noexcept {
+        return (f >= 4) ? 4 : (f >= 2 ? 2 : 1);
+    }
+
+    /**
+     * Waveshapes one sample, optionally at [factor] times the base rate.
+     *
+     * Sample-at-a-time rather than block-at-a-time so it drops into the
+     * existing per-sample loop with its smoothed coefficients, and so the
+     * high-rate scratch is a fixed four floats on the stack — the no-heap rule
+     * on the audio path holds.
+     */
+    inline float shapeOs(int c, int slot, float x,
+                         float A, float B, float C, float D, int factor) noexcept {
+        if (factor <= 1) return waveshape(x, A, B, C, D);
+
+        float up[2];
+        os_[c][slot].upsample(&x, up, 1);
+        for (int i = 0; i < 2; ++i) {
+            if (factor >= 4) {
+                // Second 2x stage, so the shaper runs at 4x the base rate.
+                float up2[2];
+                os2_[c][slot].upsample(&up[i], up2, 1);
+                up2[0] = waveshape(up2[0], A, B, C, D);
+                up2[1] = waveshape(up2[1], A, B, C, D);
+                os2_[c][slot].downsample(up2, &up[i], 1);
+            } else {
+                up[i] = waveshape(up[i], A, B, C, D);
+            }
+        }
+        float y = 0.0f;
+        os_[c][slot].downsample(up, &y, 1);
+        return y;
+    }
+
+    ChannelOversampler os_[2][kOsBands];
+    ChannelOversampler os2_[2][kOsBands];
+    int osFactorApplied_ = 0;
+
     void updateMeters(float* const* buffers, int n) noexcept {
         float pkL = 0.0f, pkR = 0.0f;
         for (int i = 0; i < n; ++i) {
