@@ -75,6 +75,11 @@ class CrossfadeController(
         fromPositionMs: Long,
         durationMs: Long,
         tailVolume: Float,
+        /**
+         * Whether the incoming track is actually sounding yet. The blend waits
+         * on this before it starts moving — see the hold in [start].
+         */
+        incomingReady: () -> Boolean = { true },
     ): Boolean {
         cancel()
         val chain = runCatching { dspChainFactory() }.getOrNull() ?: return false
@@ -93,9 +98,29 @@ class CrossfadeController(
             player.play()
 
             rampJob = scope.launch {
+                // Hold at "tail only" until the incoming track is actually
+                // sounding. The ramp used to start on a wall clock the instant
+                // the hand-off began, so a track that took a second to resolve
+                // and buffer had the outgoing one fading into a hole — the
+                // blend was over before the next track made any sound, which
+                // reads as the player rushing past it.
+                //
+                // Capped at half the blend: the tail only holds `durationMs` of
+                // audio, so waiting forever would run it out and leave a hard
+                // stop instead of a fade. Half is the point past which a fade
+                // is worth more than a wait.
+                val maxHoldMs = minOf(durationMs / 2, MAX_HOLD_MS)
+                var held = 0L
+                while (isActive && held < maxHoldMs && !incomingReady()) {
+                    delay(TICK_MS)
+                    held += TICK_MS
+                }
+                // Whatever the wait cost comes off the ramp, not off the end of
+                // the outgoing track — the blend still lands on its last sample.
+                val rampMs = (durationMs - held).coerceAtLeast(TICK_MS)
                 var elapsed = 0L
-                while (isActive && elapsed < durationMs) {
-                    val progress = CrossfadeRamp.progress(elapsed, durationMs)
+                while (isActive && elapsed < rampMs) {
+                    val progress = CrossfadeRamp.progress(elapsed, rampMs)
                     player.volume = tailVolume * CrossfadeRamp.fadeOut(progress)
                     onIncomingGain(CrossfadeRamp.fadeIn(progress))
                     delay(TICK_MS)
@@ -170,5 +195,11 @@ class CrossfadeController(
     private companion object {
         /** ~25 updates a second: smooth to the ear, negligible to the CPU. */
         const val TICK_MS = 40L
+
+        /**
+         * Ceiling on the wait for the incoming track, regardless of blend
+         * length. Past this it isn't loading slowly, it isn't loading.
+         */
+        const val MAX_HOLD_MS = 3_000L
     }
 }

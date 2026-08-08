@@ -66,6 +66,7 @@ import tf.monochrome.android.ui.components.MiniPlayer
 import tf.monochrome.android.ui.components.SwipeToLibraryHint
 import tf.monochrome.android.ui.components.SwipeHintPillHeight
 import tf.monochrome.android.ui.components.swipeHintPillWidth
+import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.detail.AlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
@@ -172,6 +173,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val isPlaying by playerViewModel.isPlaying.collectAsState()
     // Mini-player glass settings (its own blob; Studio › Mini Player tab).
     val miniPlayerGlass by playerViewModel.miniPlayerGlass.collectAsState()
+
+    // The mini player's cover changes track at the same speed its album tint
+    // does — both come off "Blend Between Tracks" — and tells a skip from a
+    // song ending the same way the full player does.
+    val blendSeconds by playerViewModel.crossfadeDuration.collectAsState()
+    val miniBlendMs = ColorBlend.millisFor(blendSeconds)
+    val userTrackChanges by playerViewModel.userTrackChanges.collectAsState()
 
     // Position/duration tick every 250 ms. Keep them as State<Long> and read
     // only inside the draw-scope progress lambda below — reading `.value` here
@@ -631,7 +639,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 onSkipPreviousClick = { playerViewModel.skipToPrevious() },
                                 onClick = { navController.navigate(Screen.NowPlaying.route) },
                                 modifier = Modifier.padding(horizontal = 16.dp),
-                                hazeState = hazeState
+                                hazeState = hazeState,
+                                blendMillis = miniBlendMs,
+                                userTrackChanges = userTrackChanges,
                             )
                         }
                     }
@@ -666,7 +676,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             // renders as a solid bar behind the mini player.
                             // Null skips the frost layer — the glass slab
                             // floats clean over the screen's own content.
-                            hazeState = null
+                            hazeState = null,
+                            blendMillis = miniBlendMs,
+                            userTrackChanges = userTrackChanges,
                         )
                     }
                 }

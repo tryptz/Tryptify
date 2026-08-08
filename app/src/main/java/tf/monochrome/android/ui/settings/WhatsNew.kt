@@ -77,9 +77,17 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     title = "The player changes colour at the speed the music does",
-                    body = "The background wash, the accents and the blurred artwork now cross " +
-                        "over the next track across your blend time instead of on a fixed timer, " +
-                        "so nothing repaints while the previous song is still playing.",
+                    body = "The background, the accents, the blurred backdrop and the album art " +
+                        "itself now cross into the next track across your blend time, so nothing " +
+                        "repaints while the previous song is still playing. Skip by hand and it " +
+                        "still changes at once.",
+                ),
+                WhatsNewEntry(
+                    title = "A slow track is no longer skipped past",
+                    body = "A song that took a moment to load could be given up on within " +
+                        "milliseconds and the queue would run on through it. It now gets a few " +
+                        "seconds to come good, and a blend waits for it rather than fading the " +
+                        "previous song out into silence.",
                 ),
                 WhatsNewEntry(
                     title = "Tap the artwork to play",

@@ -234,16 +234,36 @@ class PlaybackService : MediaSessionService() {
              * file deleted since it was queued. Without a handler that stops
              * playback dead with no recovery, so drop the window and retry the
              * position QueueManager points at (the gapless hand-off has already
-             * advanced it). A second failure in a row gives up on that track
-             * and moves on, so a bad item can't trap the queue.
+             * advanced it). Once the retries are spent the track is given up on
+             * and the queue moves along, so a bad item can't trap it.
+             *
+             * The retries are spaced out, and this is the whole point of them.
+             * Retrying in the same breath meant a track that was merely slow —
+             * a cold stream, a signal dip on the hand-off — hit the identical
+             * not-ready condition on the retry, and the second failure moved on
+             * within milliseconds of the first. With nothing to slow it down
+             * that walked the queue at a few hundred ms a track. A real fetch
+             * needs a moment before it counts as failed.
              */
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 dropGaplessNext()
-                if (consecutivePlayerErrors++ < MAX_CONSECUTIVE_PLAYER_ERRORS) {
-                    playQueue()
-                } else {
+                val attempt = consecutivePlayerErrors++
+                if (attempt >= MAX_CONSECUTIVE_PLAYER_ERRORS) {
                     consecutivePlayerErrors = 0
                     onTrackEnded()
+                    return
+                }
+                // Backs off further each time, so a stream that needs a second
+                // gets one and a genuinely dead item still fails promptly.
+                val backoffMs = PLAYER_ERROR_RETRY_DELAY_MS * (attempt + 1)
+                val target = queueManager.currentTrack.value?.id
+                playerErrorRecovery?.cancel()
+                playerErrorRecovery = serviceScope.launch {
+                    kotlinx.coroutines.delay(backoffMs)
+                    // A skip, a new queue or a sleep timer during the wait owns
+                    // the player now — retrying would yank it back.
+                    if (queueManager.currentTrack.value?.id != target) return@launch
+                    playQueue()
                 }
             }
 
@@ -932,6 +952,10 @@ class PlaybackService : MediaSessionService() {
             fromPositionMs = player.currentPosition,
             durationMs = crossfadeMs,
             tailVolume = baseVolume,
+            // The incoming track is resolved and buffered from scratch below;
+            // until the main player is genuinely sounding, there is nothing to
+            // fade in and the blend waits.
+            incomingReady = { player.playbackState == Player.STATE_READY && player.isPlaying },
         )
         if (!started) return // Fall through to the ordinary end-of-track path.
 
@@ -989,10 +1013,18 @@ class PlaybackService : MediaSessionService() {
     @Volatile private var gaplessNoResample = true
 
     private var consecutivePlayerErrors = 0
+    private var playerErrorRecovery: kotlinx.coroutines.Job? = null
 
     private companion object {
-        /** Retries a failing position once before moving past it. */
-        const val MAX_CONSECUTIVE_PLAYER_ERRORS = 1
+        /** Retries a failing position before moving past it. */
+        const val MAX_CONSECUTIVE_PLAYER_ERRORS = 2
+
+        /**
+         * Grace given to a failing position before it's retried, multiplied by
+         * the attempt number — so a track gets ~1.2s and then ~2.4s to come
+         * good, and is only abandoned after ~3.6s of genuinely not loading.
+         */
+        const val PLAYER_ERROR_RETRY_DELAY_MS = 1_200L
 
         /**
          * How soon after the service asks to play a refusal still counts as

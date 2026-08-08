@@ -202,6 +202,8 @@ fun MainPlayerRoute(
     // is pacing an audio crossfade, not decorating a tap.
     val blendSeconds by playerViewModel.crossfadeDuration.collectAsState()
     val colorBlendMs = ColorBlend.millisFor(blendSeconds)
+    // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
+    val userTrackChanges by playerViewModel.userTrackChanges.collectAsState()
     val animatedDominant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.dominant,
         animationSpec = androidx.compose.animation.core.tween(
@@ -555,6 +557,8 @@ fun MainPlayerRoute(
                             isPlaying = isPlaying,
                             progress = state.progress,
                             albumColors = blendedColors,
+                            blendMillis = colorBlendMs,
+                            userTrackChanges = userTrackChanges,
                             visualizerSensitivity = visualizerSensitivity,
                             visualizerBrightness = visualizerBrightness,
                             visualizerEngineStatus = visualizerEngineStatus,

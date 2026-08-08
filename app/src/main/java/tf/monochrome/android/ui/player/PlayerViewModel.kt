@@ -190,6 +190,13 @@ class PlayerViewModel @Inject constructor(
     // colour crossfade against the audio one rather than a fixed tween.
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // Counts playback changes the UI asked for (see resolveAndPlay). Only
+    // meaningful as "did this move since the last track change" — the artwork
+    // uses it to tell a skip from a song ending. Not a count of anything a
+    // user would recognise, so nothing should display it.
+    private val _userTrackChanges = MutableStateFlow(0)
+    val userTrackChanges: StateFlow<Int> = _userTrackChanges.asStateFlow()
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.playerGlass
@@ -824,6 +831,13 @@ class PlayerViewModel @Inject constructor(
 
     private fun resolveAndPlay() {
         val track = queueManager.currentTrack.value ?: return
+        // Every playback change the UI asks for funnels through here — taps,
+        // transport skips, queue jumps, a removed current track. The player's
+        // own end-of-track advance happens inside PlaybackService and never
+        // does, which is what lets the artwork tell "you skipped" from "the
+        // song ended" and pick a matching transition length. Bumped before the
+        // resolve so it is already recorded when the track change lands.
+        _userTrackChanges.value++
         viewModelScope.launch {
             try {
                 // Resolution priority:

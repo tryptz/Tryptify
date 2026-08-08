@@ -65,6 +65,8 @@ import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.R
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
+import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.abs
@@ -87,7 +89,12 @@ fun MiniPlayer(
     onSkipPreviousClick: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    hazeState: HazeState? = null
+    hazeState: HazeState? = null,
+    // The bar's tint already crosses over at the blend length (it reads the
+    // album palette); the cover has to move with it or the two disagree for
+    // the length of every transition. See MorphingCoverArt.
+    blendMillis: Int = MANUAL_MORPH_MS,
+    userTrackChanges: Int = 0,
 ) {
     if (track == null) return
 
@@ -137,7 +144,7 @@ fun MiniPlayer(
                 .clickable(interactionSource = null, indication = null, onClick = onClick)
                 .then(swipeGestures)
         ) {
-            MiniPlayerContent(track, progressProvider) {
+            MiniPlayerContent(track, progressProvider, blendMillis, userTrackChanges) {
                 IconButton(onClick = onPlayPauseClick) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -289,7 +296,7 @@ fun MiniPlayer(
         // Transparent content overlay: progress, cover, text, and the two tap
         // targets sitting exactly over the punched holes (same trailing cells).
         // No ripple indication — the glass press-bulge is the feedback.
-        MiniPlayerContent(track, progressProvider) {
+        MiniPlayerContent(track, progressProvider, blendMillis, userTrackChanges) {
             Box(
                 modifier = Modifier
                     .size(MiniControlCell)
@@ -323,6 +330,8 @@ fun MiniPlayer(
 private fun MiniPlayerContent(
     track: Track,
     progressProvider: () -> Float,
+    blendMillis: Int,
+    userTrackChanges: Int,
     controls: @Composable () -> Unit,
 ) {
     Column {
@@ -338,11 +347,14 @@ private fun MiniPlayerContent(
             modifier = Modifier.padding(horizontal = MonoDimens.spacingMd, vertical = MonoDimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CoverImage(
-                url = track.coverUrl,
+            MorphingCoverArt(
+                trackKey = track.id,
+                coverUrl = track.coverUrl,
                 contentDescription = track.title,
-                size = MonoDimens.coverMini,
-                cornerRadius = MonoDimens.radiusSm
+                blendMillis = blendMillis,
+                userTrackChanges = userTrackChanges,
+                modifier = Modifier.size(MonoDimens.coverMini),
+                shape = RoundedCornerShape(MonoDimens.radiusSm),
             )
             Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
             Column(modifier = Modifier.weight(1f)) {

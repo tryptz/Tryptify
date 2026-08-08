@@ -73,7 +73,6 @@ import kotlinx.coroutines.delay
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
-import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 
@@ -94,6 +93,10 @@ fun PlayerHero(
     isPlaying: Boolean,
     progress: Float,
     albumColors: AlbumColors,
+    // How long the artwork takes to change track, and whether the change was
+    // asked for. See [MorphingCoverArt].
+    blendMillis: Int = MANUAL_MORPH_MS,
+    userTrackChanges: Int = 0,
     visualizerSensitivity: Int,
     visualizerBrightness: Int,
     visualizerEngineStatus: VisualizerEngineStatus,
@@ -161,6 +164,8 @@ fun PlayerHero(
                 track = track,
                 progress = progress,
                 accent = albumColors.vibrant,
+                blendMillis = blendMillis,
+                userTrackChanges = userTrackChanges,
                 onEnterVisualizer = onEnterVisualizer,
             )
             else -> SquareArtHero(
@@ -170,6 +175,8 @@ fun PlayerHero(
                 spectrumColor = spectrumColor,
                 showSpectrum = showSpectrum,
                 onToggleShowSpectrum = onToggleShowSpectrum,
+                blendMillis = blendMillis,
+                userTrackChanges = userTrackChanges,
                 onEnterVisualizer = onEnterVisualizer,
             )
         }
@@ -184,6 +191,8 @@ private fun SquareArtHero(
     spectrumColor: Color,
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
+    blendMillis: Int,
+    userTrackChanges: Int,
     onEnterVisualizer: () -> Unit,
 ) {
     Surface(
@@ -207,6 +216,8 @@ private fun SquareArtHero(
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             quality = track?.audioQuality,
+            blendMillis = blendMillis,
+            userTrackChanges = userTrackChanges,
             onEnterVisualizer = onEnterVisualizer,
         )
     }
@@ -217,6 +228,8 @@ private fun CircularProgressHero(
     track: Track?,
     progress: Float,
     accent: Color,
+    blendMillis: Int,
+    userTrackChanges: Int,
     onEnterVisualizer: () -> Unit,
 ) {
     Box(
@@ -234,10 +247,14 @@ private fun CircularProgressHero(
                     onClick = onEnterVisualizer,
                 ),
         ) {
-            CoverImage(
-                url = track?.coverUrl,
+            MorphingCoverArt(
+                trackKey = track?.id,
+                coverUrl = track?.coverUrl,
                 contentDescription = track?.title ?: "Album Art",
-                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                blendMillis = blendMillis,
+                userTrackChanges = userTrackChanges,
+                modifier = Modifier.fillMaxSize(),
+                shape = CircleShape,
             )
         }
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -547,6 +564,8 @@ private fun HeroCoverArt(
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     quality: String? = null,
+    blendMillis: Int = MANUAL_MORPH_MS,
+    userTrackChanges: Int = 0,
     onEnterVisualizer: (() -> Unit)? = null,
 ) {
     val spectrumEnabled = showSpectrum
@@ -580,11 +599,13 @@ private fun HeroCoverArt(
                 indication = null,
             ) { showControls() }
     ) {
-        CoverImage(
-            url = track?.coverUrl,
+        MorphingCoverArt(
+            trackKey = track?.id,
+            coverUrl = track?.coverUrl,
             contentDescription = track?.title ?: "Album Art",
+            blendMillis = blendMillis,
+            userTrackChanges = userTrackChanges,
             modifier = Modifier.fillMaxSize(),
-            cornerRadius = 0.dp,
         )
 
         Box(

@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
@@ -179,7 +180,13 @@ internal fun GlassProgressTube(
         val baseHalf = 2.6.dp.toPx()                          // thin tube half-thickness
         val bulgeHalf = 7.dp.toPx() + 5.dp.toPx() * bulge     // dot half-thickness
         val sigma = 26.dp.toPx()                              // bulge half-width
-        val inset = bulgeHalf                                 // keep the dot on-screen
+        // Inset by the bulge's HALF-WIDTH, not its half-thickness. Insetting by
+        // the thickness only kept the dot's core on screen — the raised-cosine
+        // skirt around it still ran off the left edge, so at 0:00 the bubble was
+        // sliced flat by x=0 instead of closing. At sigma the bump reaches zero
+        // exactly at the edge, so the bubble is always whole at both ends.
+        // Bounded so a narrow bar can't inset away most of its own travel.
+        val inset = minOf(sigma, w / 4f)
         val thumbX = inset + frac * (w - 2f * inset)
 
         // Raised-cosine (sine-wave) contour: fat at the dot, thin along the tube.
@@ -189,16 +196,25 @@ internal fun GlassProgressTube(
             return baseHalf + (bulgeHalf - baseHalf) * bump
         }
 
+        // The contour runs between the cap centres; the caps themselves are
+        // added as circles below, so the tube ends round off instead of being
+        // squared away by the canvas edge the way the bubble was.
+        val tubeStart = baseHalf
+        val tubeEnd = w - baseHalf
         val path = Path()
         val step = 3f
-        path.moveTo(0f, cy - halfAt(0f))
-        var x = step
-        while (x < w) { path.lineTo(x, cy - halfAt(x)); x += step }
-        path.lineTo(w, cy - halfAt(w))
-        x = w - step
-        while (x > 0f) { path.lineTo(x, cy + halfAt(x)); x -= step }
-        path.lineTo(0f, cy + halfAt(0f))
+        path.moveTo(tubeStart, cy - halfAt(tubeStart))
+        var x = tubeStart + step
+        while (x < tubeEnd) { path.lineTo(x, cy - halfAt(x)); x += step }
+        path.lineTo(tubeEnd, cy - halfAt(tubeEnd))
+        x = tubeEnd - step
+        while (x > tubeStart) { path.lineTo(x, cy + halfAt(x)); x -= step }
+        path.lineTo(tubeStart, cy + halfAt(tubeStart))
         path.close()
+        // Same winding direction, so these union with the contour rather than
+        // punching holes in it.
+        path.addOval(Rect(center = Offset(tubeStart, cy), radius = baseHalf))
+        path.addOval(Rect(center = Offset(tubeEnd, cy), radius = baseHalf))
 
         // Inactive glass tube.
         drawPath(path, color = Color.White.copy(alpha = 0.22f))
