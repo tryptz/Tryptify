@@ -2083,163 +2083,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        SettingsGroupHeader("Playlist Import")
-        val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
-        val spotifyConnected by spotifyViewModel.isConnected.collectAsState()
-        val spotifyUserName by spotifyViewModel.userName.collectAsState()
-        val spotifyConnecting by spotifyViewModel.isConnecting.collectAsState()
-        val spotifyAuthError by spotifyViewModel.authError.collectAsState()
-        val importProgress by spotifyViewModel.importProgress.collectAsState()
-        val isImporting by spotifyViewModel.isImporting.collectAsState()
-        var showSpotifyPicker by remember { mutableStateOf(false) }
-        var importUrl by remember { mutableStateOf("") }
-
-        val onImportResult: (Boolean, String) -> Unit = { success, msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-            if (success) importUrl = ""
-        }
-
-        if (spotifyConnected) {
-            SettingItem(
-                title = "Spotify",
-                subtitle = "Connected as ${spotifyUserName ?: "…"}",
-                onClick = {}
-            )
-            OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
-                Text("Disconnect Spotify")
-            }
-        } else {
-            Text(
-                "Connect your Spotify account to import playlists directly. " +
-                    "Note: only Spotify accounts allowlisted for this app can connect while it is in Development mode.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Button(
-                onClick = { spotifyViewModel.connect(context) },
-                enabled = !spotifyConnecting
-            ) {
-                Text(if (spotifyConnecting) "Connecting…" else "Connect Spotify")
-            }
-        }
-        spotifyAuthError?.let { error ->
-            Text(
-                error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        androidx.compose.material3.OutlinedTextField(
-            value = importUrl,
-            onValueChange = { importUrl = it },
-            label = { Text("Spotify playlist URL") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = spotifyConnected,
-            supportingText = if (!spotifyConnected) {
-                { Text("Connect Spotify above to enable URL import") }
-            } else null
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { spotifyViewModel.importByUrl(context, importUrl, onResult = onImportResult) },
-                enabled = spotifyConnected && importUrl.isNotBlank() && !isImporting
-            ) {
-                Text("Import Playlist")
-            }
-            OutlinedButton(
-                onClick = {
-                    spotifyViewModel.loadMyPlaylists()
-                    showSpotifyPicker = true
-                },
-                enabled = spotifyConnected && !isImporting
-            ) {
-                Text("Browse My Playlists")
-            }
-        }
-
-        when (val progress = importProgress) {
-            is tf.monochrome.android.data.import_.ImportProgress.Fetching -> {
-                Spacer(modifier = Modifier.height(8.dp))
-                androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text(
-                    "Fetching playlist from ${progress.source}…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            is tf.monochrome.android.data.import_.ImportProgress.Matching -> {
-                Spacer(modifier = Modifier.height(8.dp))
-                androidx.compose.material3.LinearProgressIndicator(
-                    progress = { progress.current.toFloat() / progress.total.coerceAtLeast(1) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "Matching ${progress.current}/${progress.total} — ${progress.matched} found",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            is tf.monochrome.android.data.import_.ImportProgress.Done -> {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Imported ${progress.matched} of ${progress.total} tracks into '${progress.playlistName}'",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (progress.unmatched.isNotEmpty()) {
-                    var showUnmatched by remember { mutableStateOf(false) }
-                    TextButton(onClick = { showUnmatched = !showUnmatched }) {
-                        Text(if (showUnmatched) "Hide unmatched tracks" else "Show ${progress.unmatched.size} unmatched tracks")
-                    }
-                    if (showUnmatched) {
-                        progress.unmatched.forEach { line ->
-                            Text(
-                                line,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-            is tf.monochrome.android.data.import_.ImportProgress.Failed -> {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    progress.message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            tf.monochrome.android.data.import_.ImportProgress.Idle -> {}
-        }
-
-        if (showSpotifyPicker) {
-            val spotifyPlaylists by spotifyViewModel.myPlaylists.collectAsState()
-            val playlistsLoading by spotifyViewModel.playlistsLoading.collectAsState()
-            val playlistsError by spotifyViewModel.playlistsError.collectAsState()
-            tf.monochrome.android.ui.components.SpotifyPlaylistPickerDialog(
-                playlists = spotifyPlaylists,
-                isLoading = playlistsLoading,
-                error = playlistsError,
-                onPick = { playlistId, name, strict ->
-                    showSpotifyPicker = false
-                    spotifyViewModel.importPlaylist(context, playlistId, name, strict, onImportResult)
-                },
-                onPickLikedSongs = { strict ->
-                    showSpotifyPicker = false
-                    spotifyViewModel.importLikedSongs(context, strict, onImportResult)
-                },
-                onDismiss = { showSpotifyPicker = false }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
         SettingsGroupHeader("Backup & Restore")
         Text(
             "Export or import your library and history as a JSON file",
@@ -2677,6 +2520,13 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
                 }
             }
         }
+
+        // Moved off System, where it sat between the app sign-in and the
+        // backup controls. Importing playlists builds your library, so it
+        // lives with the library. Wrapped in one item{} because this tab is a
+        // LazyColumn rather than SettingsTabContent — a second scrollable
+        // inside it would throw at measure time.
+        item { PlaylistImportSection() }
     }
 }
 
@@ -2714,4 +2564,170 @@ private fun WhatsNewPanel() {
             }
         }
     }
+}
+
+/**
+ * Import playlists from a connected Spotify account.
+ *
+ * Was a group on the System tab, between the app sign-in and the backup
+ * controls. It produces playlists, so it belongs with the library — and
+ * System is now only cache, data, performance, backup and diagnostics.
+ */
+@Composable
+private fun PlaylistImportSection() {
+        SettingsGroupHeader("Playlist Import")
+        val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
+        val spotifyConnected by spotifyViewModel.isConnected.collectAsState()
+        val spotifyUserName by spotifyViewModel.userName.collectAsState()
+        val spotifyConnecting by spotifyViewModel.isConnecting.collectAsState()
+        val spotifyAuthError by spotifyViewModel.authError.collectAsState()
+        val importProgress by spotifyViewModel.importProgress.collectAsState()
+        val isImporting by spotifyViewModel.isImporting.collectAsState()
+        var showSpotifyPicker by remember { mutableStateOf(false) }
+        var importUrl by remember { mutableStateOf("") }
+
+        val onImportResult: (Boolean, String) -> Unit = { success, msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+            if (success) importUrl = ""
+        }
+
+        if (spotifyConnected) {
+            SettingItem(
+                title = "Spotify",
+                subtitle = "Connected as ${spotifyUserName ?: "…"}",
+                onClick = {}
+            )
+            OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
+                Text("Disconnect Spotify")
+            }
+        } else {
+            Text(
+                "Connect your Spotify account to import playlists directly. " +
+                    "Note: only Spotify accounts allowlisted for this app can connect while it is in Development mode.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Button(
+                onClick = { spotifyViewModel.connect(context) },
+                enabled = !spotifyConnecting
+            ) {
+                Text(if (spotifyConnecting) "Connecting…" else "Connect Spotify")
+            }
+        }
+        spotifyAuthError?.let { error ->
+            Text(
+                error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        androidx.compose.material3.OutlinedTextField(
+            value = importUrl,
+            onValueChange = { importUrl = it },
+            label = { Text("Spotify playlist URL") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = spotifyConnected,
+            supportingText = if (!spotifyConnected) {
+                { Text("Connect Spotify above to enable URL import") }
+            } else null
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { spotifyViewModel.importByUrl(context, importUrl, onResult = onImportResult) },
+                enabled = spotifyConnected && importUrl.isNotBlank() && !isImporting
+            ) {
+                Text("Import Playlist")
+            }
+            OutlinedButton(
+                onClick = {
+                    spotifyViewModel.loadMyPlaylists()
+                    showSpotifyPicker = true
+                },
+                enabled = spotifyConnected && !isImporting
+            ) {
+                Text("Browse My Playlists")
+            }
+        }
+
+        when (val progress = importProgress) {
+            is tf.monochrome.android.data.import_.ImportProgress.Fetching -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Fetching playlist from ${progress.source}…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            is tf.monochrome.android.data.import_.ImportProgress.Matching -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { progress.current.toFloat() / progress.total.coerceAtLeast(1) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Matching ${progress.current}/${progress.total} — ${progress.matched} found",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            is tf.monochrome.android.data.import_.ImportProgress.Done -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Imported ${progress.matched} of ${progress.total} tracks into '${progress.playlistName}'",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (progress.unmatched.isNotEmpty()) {
+                    var showUnmatched by remember { mutableStateOf(false) }
+                    TextButton(onClick = { showUnmatched = !showUnmatched }) {
+                        Text(if (showUnmatched) "Hide unmatched tracks" else "Show ${progress.unmatched.size} unmatched tracks")
+                    }
+                    if (showUnmatched) {
+                        progress.unmatched.forEach { line ->
+                            Text(
+                                line,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            is tf.monochrome.android.data.import_.ImportProgress.Failed -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    progress.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            tf.monochrome.android.data.import_.ImportProgress.Idle -> {}
+        }
+
+        if (showSpotifyPicker) {
+            val spotifyPlaylists by spotifyViewModel.myPlaylists.collectAsState()
+            val playlistsLoading by spotifyViewModel.playlistsLoading.collectAsState()
+            val playlistsError by spotifyViewModel.playlistsError.collectAsState()
+            tf.monochrome.android.ui.components.SpotifyPlaylistPickerDialog(
+                playlists = spotifyPlaylists,
+                isLoading = playlistsLoading,
+                error = playlistsError,
+                onPick = { playlistId, name, strict ->
+                    showSpotifyPicker = false
+                    spotifyViewModel.importPlaylist(context, playlistId, name, strict, onImportResult)
+                },
+                onPickLikedSongs = { strict ->
+                    showSpotifyPicker = false
+                    spotifyViewModel.importLikedSongs(context, strict, onImportResult)
+                },
+                onDismiss = { showSpotifyPicker = false }
+            )
+        }
 }
