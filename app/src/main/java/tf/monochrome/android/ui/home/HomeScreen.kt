@@ -259,7 +259,7 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Tryptify",
+                        text = "Tryptify Line In",
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )

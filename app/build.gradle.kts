@@ -49,11 +49,27 @@ android {
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "tf.monotrypt.android"
+        // Tryptify Line In — the stereo-input build, deliberately a separate app
+        // so it installs and runs alongside stable Tryptify rather than
+        // replacing it. Android keys installs on applicationId, so this one
+        // line is what makes the two coexist; the manifest's
+        // ${applicationId}.fileprovider / .androidx-startup authorities follow
+        // it automatically, which matters because duplicate provider
+        // authorities block installation outright.
+        //
+        // Consequence: this branch can no longer produce a stock Tryptify
+        // build, and merging it as-is would re-identify the real app (existing
+        // installs would see a second app appear, with the original orphaned
+        // alongside its library and settings). Revert this commit — or convert
+        // it to a product flavour — before merging to main.
+        applicationId = "tf.monotrypt.android.linein"
         minSdk = 26
         targetSdk = 36
+        // versionCode is held at the upstream value: with a distinct
+        // applicationId the two apps have independent version lines, so this
+        // records which release Line In was cut from.
         versionCode = 183
-        versionName = "1.8.3"
+        versionName = "1.8.3-linein"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

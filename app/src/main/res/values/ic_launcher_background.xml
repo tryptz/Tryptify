@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#000000</color>
+    <!-- Deep teal rather than the stock black, so Line In is distinguishable
+         from stable Tryptify at a glance in the launcher — the two ship the
+         same foreground vector and near-identical labels. Tuned to the cyan
+         used for the LINE routing indicator and the mixer's input card. -->
+    <color name="ic_launcher_background">#0B2B3A</color>
 </resources>

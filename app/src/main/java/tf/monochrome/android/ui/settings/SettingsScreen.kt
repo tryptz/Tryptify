@@ -2738,7 +2738,7 @@ private fun AboutTab() {
 
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "Tryptify version ${BuildConfig.VERSION_NAME} · 2026",
+                text = "Tryptify Line In version ${BuildConfig.VERSION_NAME} · 2026",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )

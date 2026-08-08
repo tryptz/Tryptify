@@ -46,7 +46,7 @@ fun WelcomeStep(
                 modifier = Modifier.size(72.dp)
             )
             Text(
-                text = "Tryptify",
+                text = "Tryptify Line In",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = MonoDimens.spacingLg)
