@@ -186,6 +186,10 @@ class PlayerViewModel @Inject constructor(
     // makes everything static, not just the app-wide theme.
     val dynamicColors: StateFlow<Boolean> = preferences.dynamicColors
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // "Blend Between Tracks", in seconds. The player reads it to pace its
+    // colour crossfade against the audio one rather than a fixed tween.
+    val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.playerGlass

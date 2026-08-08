@@ -44,6 +44,7 @@ import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.ui.navigation.MonochromeNavHost
 import tf.monochrome.android.ui.onboarding.OnboardingScreen
 import tf.monochrome.android.ui.theme.MonochromeTheme
+import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.ui.theme.rememberDynamicPalette
 import java.io.File
 import javax.inject.Inject
@@ -150,9 +151,14 @@ class MainActivity : ComponentActivity() {
             val customFontPath by preferences.customFontUri.collectAsState(initial = null)
             val dynamicColorsEnabled by preferences.dynamicColors.collectAsState(initial = false)
             val currentTrack by queueManager.currentTrack.collectAsState()
+            // The album palette crosses over at the speed the audio does, so a
+            // blended transition doesn't have the colours land on the new track
+            // while the old one is still playing.
+            val blendSeconds by preferences.crossfadeDuration.collectAsState(initial = 0)
             val dynamicPalette by rememberDynamicPalette(
                 coverUrl = currentTrack?.coverUrl,
-                enabled = dynamicColorsEnabled
+                enabled = dynamicColorsEnabled,
+                blendMillis = ColorBlend.millisFor(blendSeconds),
             )
 
             val customFontFamily = remember(customFontPath) {

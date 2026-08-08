@@ -116,6 +116,13 @@ data class MainPlayerUiState(
     val sleepTimerActive: Boolean = false,
     val queueLabel: String,
     val albumColors: AlbumColors,
+    /**
+     * How long the backdrop takes to change track, in ms — [albumColors] is
+     * already mid-blend by the time it arrives here, and the blurred artwork
+     * has to move at the same speed or the two disagree for the length of the
+     * transition. See `ColorBlend`.
+     */
+    val colorBlendMs: Int = tf.monochrome.android.ui.theme.ColorBlend.GAPLESS_MS,
     val visualizerActive: Boolean,
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,
@@ -270,6 +277,7 @@ fun MainPlayerScreen(
             PlayerBlurredArtBackground(
                 coverUrl = state.track?.coverUrl,
                 albumColors = state.albumColors,
+                blendMillis = state.colorBlendMs,
                 alpha = { blurBgAlpha },
             )
         }
@@ -289,6 +297,7 @@ fun MainPlayerScreen(
             LyricsBackdropStain(
                 coverUrl = state.track?.coverUrl,
                 albumColors = state.albumColors,
+                blendMillis = state.colorBlendMs,
                 alpha = { stainAlpha },
             )
         }

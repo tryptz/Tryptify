@@ -194,25 +194,16 @@ internal fun LyricsHeroPanel(
 internal fun PlayerBlurredArtBackground(
     coverUrl: String?,
     albumColors: AlbumColors,
+    blendMillis: Int,
     alpha: () -> Float = { 1f },
 ) {
     Box(modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha() }) {
-        if (!coverUrl.isNullOrBlank()) {
-            SubcomposeAsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(coverUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                // Crop = fill the whole rectangle (stretch to cover), so a square
-                // cover blooms across the full portrait screen.
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(64.dp)
-                    .dithered(),
-            )
-        }
+        BlurredCoverLayer(
+            coverUrl = coverUrl,
+            blendMillis = blendMillis,
+            blurRadius = 64.dp,
+            modifier = Modifier.fillMaxSize(),
+        )
         // Album-tinted legibility scrim, Apple-Music style: a deep, moody
         // darkening across the whole background so the stretched art reads as a
         // dim backdrop, not a bright wallpaper. The middle keeps a *darkened*
@@ -245,6 +236,7 @@ internal fun PlayerBlurredArtBackground(
 internal fun LyricsBackdropStain(
     coverUrl: String?,
     albumColors: AlbumColors,
+    blendMillis: Int,
     alpha: () -> Float,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -254,21 +246,14 @@ internal fun LyricsBackdropStain(
                 .graphicsLayer { this.alpha = alpha() }
                 .background(Color.Black)
         )
-        if (!coverUrl.isNullOrBlank()) {
-            SubcomposeAsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(coverUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .dithered()
-                    .blur(40.dp)
-                    .graphicsLayer { this.alpha = 0.55f * alpha() },
-            )
-        }
+        BlurredCoverLayer(
+            coverUrl = coverUrl,
+            blendMillis = blendMillis,
+            blurRadius = 40.dp,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { this.alpha = 0.55f * alpha() },
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()

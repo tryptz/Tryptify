@@ -2,12 +2,17 @@ package tf.monochrome.android.ui.theme
 
 import android.content.Context
 import android.graphics.Bitmap
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
 import coil3.SingletonImageLoader
@@ -31,6 +36,22 @@ data class DynamicPalette(
     val secondary: Color,
     val onSecondary: Color
 )
+
+/**
+ * Every slot interpolated at once, so a palette moves as one thing.
+ *
+ * Mixing per-slot animations would let primary arrive before onPrimary and put
+ * text at the wrong contrast against its own background for a beat — visible
+ * on a cover whose vibrant swatch is light and whose muted one is dark.
+ */
+internal fun lerp(start: DynamicPalette, stop: DynamicPalette, fraction: Float): DynamicPalette =
+    DynamicPalette(
+        primary = lerp(start.primary, stop.primary, fraction),
+        onPrimary = lerp(start.onPrimary, stop.onPrimary, fraction),
+        primaryContainer = lerp(start.primaryContainer, stop.primaryContainer, fraction),
+        secondary = lerp(start.secondary, stop.secondary, fraction),
+        onSecondary = lerp(start.onSecondary, stop.onSecondary, fraction),
+    )
 
 /**
  * Extracts a [DynamicPalette] from a cover image URL off the main thread.
@@ -104,14 +125,70 @@ object DynamicColorExtractor {
 /**
  * Composable helper: returns the dynamic palette for the given cover URL,
  * or null while loading / when extraction fails / when disabled.
+ *
+ * The result crosses over [blendMillis] rather than switching, so the mini
+ * player, full player and lyrics change colour at the speed the audio changes
+ * track. See [ColorBlend] for where that number comes from.
  */
 @Composable
-fun rememberDynamicPalette(coverUrl: String?, enabled: Boolean): State<DynamicPalette?> {
+fun rememberDynamicPalette(
+    coverUrl: String?,
+    enabled: Boolean,
+    blendMillis: Int = ColorBlend.GAPLESS_MS,
+): State<DynamicPalette?> {
     val context = LocalContext.current
-    val state = remember { mutableStateOf<DynamicPalette?>(null) }
+    val target = remember { mutableStateOf<DynamicPalette?>(null) }
     LaunchedEffect(coverUrl, enabled) {
-        state.value = if (!enabled) null
+        target.value = if (!enabled) null
         else DynamicColorExtractor.extract(context, coverUrl)
     }
-    return state
+    return rememberBlendedPalette(target.value, blendMillis)
+}
+
+/**
+ * Eases [target] in from whatever is currently showing.
+ *
+ * Only a palette-to-palette change is worth animating. Appearing (extraction
+ * finished, Dynamic Colours switched on) and disappearing (switched off,
+ * playback stopped) are handled by snapping, because the other end of the fade
+ * is the user's plain theme and easing into it reads as a glitch rather than a
+ * transition.
+ *
+ * A change mid-fade starts from where the blend actually got to, not from the
+ * palette it was heading for — skipping through a queue must not step backwards
+ * through colours that were never fully on screen.
+ */
+@Composable
+private fun rememberBlendedPalette(
+    target: DynamicPalette?,
+    blendMillis: Int,
+): State<DynamicPalette?> {
+    val progress = remember { Animatable(1f) }
+    val from = remember { mutableStateOf(target) }
+    val to = remember { mutableStateOf(target) }
+
+    LaunchedEffect(target) {
+        if (target == to.value) return@LaunchedEffect
+        val showing = blend(from.value, to.value, progress.value)
+        if (showing == null || target == null || blendMillis <= 0) {
+            from.value = target
+            to.value = target
+            progress.snapTo(1f)
+            return@LaunchedEffect
+        }
+        from.value = showing
+        to.value = target
+        progress.snapTo(0f)
+        // Linear, unlike the rest of the app's tweens: this one is pacing an
+        // equal-power audio crossfade, and an eased colour would sit ahead of
+        // the sound in the middle of every transition.
+        progress.animateTo(1f, tween(durationMillis = blendMillis, easing = LinearEasing))
+    }
+
+    return remember { derivedStateOf { blend(from.value, to.value, progress.value) } }
+}
+
+private fun blend(from: DynamicPalette?, to: DynamicPalette?, fraction: Float): DynamicPalette? {
+    if (from == null || to == null) return to
+    return lerp(from, to, fraction)
 }

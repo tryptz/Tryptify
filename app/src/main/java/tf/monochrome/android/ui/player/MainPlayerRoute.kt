@@ -69,6 +69,7 @@ import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
+import tf.monochrome.android.ui.theme.ColorBlend
 import java.util.Locale
 
 /**
@@ -193,19 +194,28 @@ fun MainPlayerRoute(
     } else {
         AlbumColors(dominant = themeAccent, vibrant = themeAccent)
     }
+    // Background wash and every accent that reads `vibrant` — hero ring,
+    // spectrum, glass tint — cross over together, over the "Blend Between
+    // Tracks" length. Both used to run on fixed tweens (1800ms and 1300ms),
+    // which meant the player finished repainting while a 6s blend was still
+    // half the previous track. Linear for the same reason the palette is: it
+    // is pacing an audio crossfade, not decorating a tap.
+    val blendSeconds by playerViewModel.crossfadeDuration.collectAsState()
+    val colorBlendMs = ColorBlend.millisFor(blendSeconds)
     val animatedDominant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.dominant,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1800),
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = colorBlendMs,
+            easing = androidx.compose.animation.core.LinearEasing,
+        ),
         label = "playerBackground",
     )
-    // Vibrant tweens alongside dominant so the whole palette crossfades to the
-    // next track rather than the background easing while every accent that
-    // reads `vibrant` — hero ring, spectrum, glass tint — snaps on track change.
-    // Shorter than the background's 800ms: accents sit on top of the art, and
-    // at 800ms they visibly lag the cover that has already swiped in.
     val animatedVibrant by androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.vibrant,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1300),
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = colorBlendMs,
+            easing = androidx.compose.animation.core.LinearEasing,
+        ),
         label = "playerAccent",
     )
     val blendedColors = AlbumColors(animatedDominant, animatedVibrant)
@@ -286,6 +296,7 @@ fun MainPlayerRoute(
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
         albumColors = blendedColors,
+        colorBlendMs = colorBlendMs,
         visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER,
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,

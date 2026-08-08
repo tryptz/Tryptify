@@ -74,7 +74,13 @@ data class AlbumColors(val dominant: Color, val vibrant: Color)
 @Composable
 fun rememberAlbumColors(imageUrl: String?): AlbumColors {
     val context = LocalContext.current
-    var colors by remember(imageUrl) {
+    // Deliberately not keyed on imageUrl: keying it reset the colours to these
+    // neutral defaults the instant the track changed, so the player crossfaded
+    // old → grey → new and showed a grey wash in the middle of every
+    // transition. Holding the previous track's colours until the next ones are
+    // extracted makes it a single move, and means a cover that fails to decode
+    // leaves the player looking like the last one that worked rather than grey.
+    var colors by remember {
         mutableStateOf(AlbumColors(Color(0xFF1B1B1B), Color(0xFF7EB6FF)))
     }
 

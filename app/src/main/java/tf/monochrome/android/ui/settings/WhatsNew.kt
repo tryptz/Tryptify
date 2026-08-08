@@ -76,6 +76,12 @@ object WhatsNew {
                         "cleaner on bright material.",
                 ),
                 WhatsNewEntry(
+                    title = "The player changes colour at the speed the music does",
+                    body = "The background wash, the accents and the blurred artwork now cross " +
+                        "over the next track across your blend time instead of on a fixed timer, " +
+                        "so nothing repaints while the previous song is still playing.",
+                ),
+                WhatsNewEntry(
                     title = "Tap the artwork to play",
                     body = "Album art in a song row plays the song instead of opening the album, " +
                         "and the artist and album links are harder to hit by accident.",
