@@ -620,6 +620,7 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    @OptIn(UnstableApi::class)
     override fun onDestroy() {
         crossfade.release()
         mediaSession?.run {
@@ -728,6 +729,7 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun skipToNext() {
         crossfade.cancel()
         // An explicit skip takes the normal resolve path rather than the
@@ -743,6 +745,7 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun skipToPrevious() {
         // If more than 3 seconds in, restart current track
         if (player.currentPosition > 3000) {
@@ -826,7 +829,13 @@ class PlaybackService : MediaSessionService() {
 
     @Volatile private var crossfadeMs = 0L
 
-    private val crossfade: CrossfadeController by lazy {
+    // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
+    // out here is itself an opt-in usage that an @OptIn on the property doesn't
+    // cover, so lint flags the declaration even when every call site is clean.
+    private val crossfade by lazy { buildCrossfadeController() }
+
+    @OptIn(UnstableApi::class)
+    private fun buildCrossfadeController(): CrossfadeController =
         CrossfadeController(
             context = this,
             scope = serviceScope,
@@ -835,7 +844,6 @@ class PlaybackService : MediaSessionService() {
             crossfadeGain = gain
             pushVolume()
         }
-    }
 
     /**
      * Whether a blend can run right now.
@@ -854,6 +862,7 @@ class PlaybackService : MediaSessionService() {
      * Hands the tail of the current track to the secondary player and starts
      * the next one on the main player, overlapping the two.
      */
+    @OptIn(UnstableApi::class)
     private fun beginCrossfade() {
         val item = player.currentMediaItem ?: return
         val outgoing = queueManager.currentTrack.value
@@ -880,6 +889,7 @@ class PlaybackService : MediaSessionService() {
      * Cheap enough to poll: a few comparisons a second, and only while a blend
      * length is actually set.
      */
+    @OptIn(UnstableApi::class)
     private fun startCrossfadeWatcher() {
         serviceScope.launch {
             while (true) {
