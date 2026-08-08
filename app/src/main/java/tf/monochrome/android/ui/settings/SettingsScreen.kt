@@ -1153,7 +1153,11 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         Spacer(modifier = Modifier.height(8.dp))
         UsbBitPerfectToggle(viewModel)
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Stereo Input")
+        StereoInputSettings(viewModel)
+
+        Spacer(modifier = Modifier.height(16.dp))
         MultichannelDownmixToggle(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -1433,6 +1437,215 @@ private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
             )
         }
     }
+}
+
+/**
+ * Stereo line input: the master switch, the capture device, the channel mode,
+ * and a status card that says what actually opened.
+ *
+ * The start/stop control deliberately lives on the Mixer screen instead —
+ * starting the input is a performance action taken next to the routing it
+ * feeds, whereas this is the setup that precedes it.
+ */
+@Composable
+private fun StereoInputSettings(viewModel: SettingsViewModel) {
+    val enabled by viewModel.stereoInputEnabled.collectAsState()
+    val active by viewModel.stereoInputActive.collectAsState()
+    val status by viewModel.stereoInputStatus.collectAsState()
+    val failure by viewModel.stereoInputError.collectAsState()
+    val format by viewModel.stereoInputFormat.collectAsState()
+    val devices by viewModel.stereoInputDevices.collectAsState()
+    val selectedId by viewModel.stereoInputSelectedDeviceId.collectAsState()
+    val channelMode by viewModel.stereoInputChannelMode.collectAsState()
+
+    var deviceMenuOpen by remember { mutableStateOf(false) }
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) viewModel.setStereoInputEnabled(true) }
+
+    SettingSwitchItem(
+        title = "Stereo input",
+        subtitle = "Feed an external stereo signal — USB interface, USB DAC input, " +
+            "or the headset jack — into the DSP mixer. Start it and pick each bus's " +
+            "source on the Mixer screen.",
+        checked = enabled,
+        onCheckedChange = { want ->
+            // Capture needs RECORD_AUDIO; ask at the moment the feature is
+            // switched on rather than at first launch.
+            if (want && !viewModel.hasRecordAudioPermission()) {
+                permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            } else {
+                viewModel.setStereoInputEnabled(want)
+            }
+        },
+    )
+
+    if (!enabled) return
+
+    val selectedDevice = devices.firstOrNull { it.id == selectedId }
+    SettingItem(
+        title = "Input device",
+        subtitle = when {
+            devices.isEmpty() -> "No audio inputs detected"
+            selectedDevice == null -> "Automatic — uses the best input available"
+            else -> viewModel.describeStereoInputDevice(selectedDevice) + " · " +
+                viewModel.describeStereoInputCapabilities(selectedDevice)
+        },
+        onClick = { deviceMenuOpen = true },
+    )
+    DropdownMenu(expanded = deviceMenuOpen, onDismissRequest = { deviceMenuOpen = false }) {
+        DropdownMenuItem(
+            text = { Text("Automatic") },
+            onClick = { viewModel.selectStereoInputDevice(null); deviceMenuOpen = false },
+        )
+        devices.forEach { device ->
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(viewModel.describeStereoInputDevice(device))
+                        Text(
+                            text = viewModel.describeStereoInputCapabilities(device) +
+                                if (viewModel.isStereoInputFeedbackRisk(device))
+                                    " · can feed back through the speaker" else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                onClick = { viewModel.selectStereoInputDevice(device.id); deviceMenuOpen = false },
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        tf.monochrome.android.audio.input.StereoInputChannelMode.entries.forEach { entry ->
+            FilterChip(
+                selected = channelMode == entry,
+                onClick = { viewModel.setStereoInputChannelMode(entry) },
+                label = { Text(entry.label) },
+            )
+        }
+    }
+    Text(
+        text = channelMode.blurb,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(modifier = Modifier.height(4.dp))
+    StereoInputDiagnosticsCard(
+        active = active,
+        status = status,
+        failure = failure,
+        format = format,
+        counters = viewModel.stereoInputCounters(),
+    )
+}
+
+/**
+ * What the input is actually doing, in the same spirit as the USB bypass card:
+ * the negotiated stream on success, a specific cause on failure, and the ring
+ * counters — which are the only way to tell a dropout from clock drift.
+ */
+@Composable
+private fun StereoInputDiagnosticsCard(
+    active: Boolean,
+    status: tf.monochrome.android.audio.input.StereoInputStatus,
+    failure: tf.monochrome.android.audio.input.StereoInputFailure?,
+    format: tf.monochrome.android.audio.input.StereoInputFormat?,
+    counters: Triple<Long, Long, Long>,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "Status",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = stereoInputStatusText(active, status, format),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (failure != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = stereoInputFailureText(failure),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            val (underruns, overruns, trims) = counters
+            if (underruns > 0 || overruns > 0 || trims > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Buffer: $underruns underrun(s) · $overruns overrun(s) · " +
+                        "$trims frame(s) trimmed for clock drift",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Monitoring delay follows the DSP block size above — pick a smaller " +
+                    "block if the input feels laggy, a larger one if it crackles.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun stereoInputStatusText(
+    active: Boolean,
+    status: tf.monochrome.android.audio.input.StereoInputStatus,
+    format: tf.monochrome.android.audio.input.StereoInputFormat?,
+): String = when {
+    !active -> "Idle — start the input from the Mixer screen."
+    status == tf.monochrome.android.audio.input.StereoInputStatus.Running && format != null ->
+        "Capturing at ${format.sampleRate} Hz, " +
+            (if (format.isStereo) "stereo" else "mono (duplicated to both channels)") +
+            ", ${audioSourceLabel(format.audioSource)}."
+    status == tf.monochrome.android.audio.input.StereoInputStatus.Starting -> "Opening the input device…"
+    status == tf.monochrome.android.audio.input.StereoInputStatus.NoDevice ->
+        "No usable audio input is connected."
+    status == tf.monochrome.android.audio.input.StereoInputStatus.PermissionRequired ->
+        "Microphone permission is required to open an audio input."
+    status == tf.monochrome.android.audio.input.StereoInputStatus.Error -> "Capture stopped."
+    else -> "Idle."
+}
+
+/** The capture source matters for sound quality, so name it rather than hide it. */
+private fun audioSourceLabel(source: Int): String = when (source) {
+    android.media.MediaRecorder.AudioSource.UNPROCESSED -> "unprocessed (no AGC or noise suppression)"
+    android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION ->
+        "voice-recognition source (device has no unprocessed input)"
+    else -> "default source"
+}
+
+private fun stereoInputFailureText(
+    failure: tf.monochrome.android.audio.input.StereoInputFailure,
+): String = when (failure) {
+    tf.monochrome.android.audio.input.StereoInputFailure.PermissionDenied ->
+        "Microphone permission was denied — grant it in system settings to use an audio input."
+    tf.monochrome.android.audio.input.StereoInputFailure.DeviceLost ->
+        "The selected input disappeared. Reconnect it or pick another device."
+    tf.monochrome.android.audio.input.StereoInputFailure.UnsupportedFormat ->
+        "This device won't capture at the playback sample rate. Try the other channel mode."
+    tf.monochrome.android.audio.input.StereoInputFailure.InitFailed ->
+        "The audio input could not be opened at this format."
+    tf.monochrome.android.audio.input.StereoInputFailure.StartFailed ->
+        "The audio input is busy — another app may be recording."
+    tf.monochrome.android.audio.input.StereoInputFailure.ReadFailed ->
+        "Capture stopped unexpectedly. Reconnect the device and start again."
 }
 
 /**

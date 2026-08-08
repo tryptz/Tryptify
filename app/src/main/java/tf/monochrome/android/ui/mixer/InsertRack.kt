@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.model.BusConfig
+import tf.monochrome.android.audio.dsp.model.BusInputSource
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -73,7 +75,8 @@ fun InsertRack(
     onPluginRemove: (busIndex: Int, slotIndex: Int) -> Unit,
     onParameterChange: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
     onPluginDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit = { _, _, _ -> },
-    onBusInputToggle: (busIndex: Int, enabled: Boolean) -> Unit = { _, _ -> },
+    onBusInputCycle: (busIndex: Int) -> Unit = { },
+    onCloneBus: (sourceIndex: Int, targetIndex: Int) -> Unit = { _, _ -> },
     onDismissEditor: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -107,6 +110,50 @@ fun InsertRack(
                 overflow   = TextOverflow.Ellipsis,
                 modifier   = Modifier.weight(1f)
             )
+            // Clone this strip onto another bus — the fastest way to build a
+            // parallel chain, e.g. the same line input through two different
+            // treatments blended at the master. Master has no peers to copy to.
+            if (bus != null && !bus.isMaster) {
+                var cloneMenuOpen by remember { mutableStateOf(false) }
+                val cloneTargets = allBuses.filter { !it.isMaster && it.index != busIndex }
+                Box {
+                    IconButton(
+                        onClick  = { cloneMenuOpen = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = "Clone this bus to another",
+                            tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = cloneMenuOpen,
+                        onDismissRequest = { cloneMenuOpen = false }
+                    ) {
+                        cloneTargets.forEach { target ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Clone to ${target.name}")
+                                        Text(
+                                            text = if (target.plugins.isEmpty()) "Empty"
+                                            else "Replaces ${target.plugins.size} effect(s)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    onCloneBus(busIndex, target.index)
+                                    cloneMenuOpen = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
             IconButton(
                 onClick  = onClose,
                 modifier = Modifier.size(28.dp)
@@ -190,6 +237,10 @@ fun InsertRack(
                 )
                 val mixBuses = allBuses.filter { !it.isMaster }
                 mixBuses.forEach { mixBus ->
+                    // Each row cycles OFF -> PLAY -> LINE -> BOTH, so a bus can
+                    // be pointed at the track, the hardware stereo input, or
+                    // both, without leaving the strip.
+                    val sourceColor = busInputSourceColor(mixBus.inputEnabled, mixBus.inputSource)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -197,7 +248,7 @@ fun InsertRack(
                                 shape = MonoDimens.shapeSm,
                                 tintAlpha = if (mixBus.inputEnabled) 0.15f else 0.06f
                             )
-                            .clickable { onBusInputToggle(mixBus.index, !mixBus.inputEnabled) }
+                            .clickable { onBusInputCycle(mixBus.index) }
                             .padding(horizontal = MonoDimens.spacingSm, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -211,8 +262,8 @@ fun InsertRack(
                                     .size(8.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (mixBus.inputEnabled) Color(0xFF4CAF50)
-                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                                        sourceColor
+                                            ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
                                     )
                             )
                             Text(
@@ -225,12 +276,12 @@ fun InsertRack(
                             )
                         }
                         Text(
-                            text = if (mixBus.inputEnabled) "ON" else "OFF",
+                            text = if (mixBus.inputEnabled) mixBus.inputSource.label.uppercase() else "OFF",
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (mixBus.inputEnabled) Color(0xFF4CAF50)
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            color = sourceColor
+                                ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
                     }
                 }
@@ -479,5 +530,21 @@ private fun InlinePluginEditor(
         }
 
         Spacer(modifier = Modifier.height(4.dp))
+    }
+}
+
+/**
+ * Indicator colour for a bus's input routing, or null when the bus is off.
+ *
+ * Green keeps its established meaning (this bus is carrying the track); cyan
+ * marks the hardware line input and amber the two summed, so a glance down the
+ * rack shows where each signal is going.
+ */
+internal fun busInputSourceColor(enabled: Boolean, source: BusInputSource): Color? {
+    if (!enabled) return null
+    return when (source) {
+        BusInputSource.Playback -> Color(0xFF4CAF50)
+        BusInputSource.LineIn -> Color(0xFF29B6F6)
+        BusInputSource.Both -> Color(0xFFFFB300)
     }
 }

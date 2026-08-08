@@ -425,6 +425,12 @@ fun MixerScreen(
                         )
                     }
 
+                    // Hardware stereo input. Sits with the preset bar rather
+                    // than in the strip row because it feeds every bus, not one.
+                    tf.monochrome.android.devedit.DevEditable("stereo_input_card", Modifier.fillMaxWidth()) {
+                        StereoInputCard(viewModel = viewModel)
+                    }
+
                     // Pull-down handle — tap or swipe down to open the DSP canvas
                     Box(
                         modifier = Modifier
@@ -486,9 +492,8 @@ fun MixerScreen(
                                 onPluginDryWet = { busIdx, slotIdx, dw ->
                                     viewModel.setPluginDryWet(busIdx, slotIdx, dw)
                                 },
-                                onBusInputToggle = { busIdx, enabled ->
-                                    viewModel.setBusInputEnabled(busIdx, enabled)
-                                },
+                                onBusInputCycle = { busIdx -> viewModel.cycleBusInput(busIdx) },
+                                onCloneBus = { src, dst -> viewModel.cloneBus(src, dst) },
                                 onDismissEditor = { viewModel.dismissPluginEditor() },
                                 onClose = { showInsertRack = false }
                             )

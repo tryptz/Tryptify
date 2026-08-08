@@ -22,6 +22,7 @@ class MixBusProcessor @Inject constructor(
     private val inflator: InflatorEffect,
     private val compressor: CompressorEffect,
     private val crossfeed: CrossfeedEffect,
+    private val lineIn: LineInSource,
 ) : AudioProcessor {
 
     private var enginePtr: Long = 0L
@@ -46,6 +47,12 @@ class MixBusProcessor @Inject constructor(
     private var chunkScratchOutL = FloatArray(0)
     private var chunkScratchOutR = FloatArray(0)
 
+    // Line-in block handed to the native engine as its aux input pair. Sized
+    // with the main scratch (a chunk is never larger than one queueInput's
+    // frame count) and refilled per chunk from the capture ring.
+    private var auxScratchL = FloatArray(0)
+    private var auxScratchR = FloatArray(0)
+
     // TPDF dither state for PCM16 output (triangular probability density function)
     private var ditherState: Long = 1L
 
@@ -58,10 +65,14 @@ class MixBusProcessor @Inject constructor(
     // constructors re-allocate FFT tables etc. — audible as a gap between
     // tracks of different sample rates (44.1k → 48k is the common case).
     private external fun nativeReconfigure(enginePtr: Long, sampleRate: Int, maxBlockSize: Int)
+    // auxL/auxR carry the captured line-in for this block, or null when no
+    // hardware input is engaged — the overwhelmingly common case. The engine
+    // treats a null pair as "line-in-routed buses are silent".
     private external fun nativeProcess(
         enginePtr: Long,
         inputL: FloatArray, inputR: FloatArray,
         outputL: FloatArray, outputR: FloatArray,
+        auxL: FloatArray?, auxR: FloatArray?,
         numFrames: Int
     )
 
@@ -78,6 +89,8 @@ class MixBusProcessor @Inject constructor(
     // Per-plugin oversampling factor: 1 (off), 2, or 4
     external fun nativeSetPluginOversampling(enginePtr: Long, busIndex: Int, slotIndex: Int, factor: Int)
     external fun nativeSetBusInputEnabled(enginePtr: Long, busIndex: Int, enabled: Boolean)
+    // Which signal the bus reads: 0 playback, 1 line-in, 2 both (see BusInputSource).
+    external fun nativeSetBusInputSource(enginePtr: Long, busIndex: Int, source: Int)
     external fun nativeGetBusLevels(enginePtr: Long, outLevels: FloatArray)
     // Per-plugin tap meters for one bus: [slot0_inDb, slot0_outDb, ...] (dB, floor -60)
     external fun nativeGetPluginMeters(enginePtr: Long, busIndex: Int, outMeters: FloatArray)
@@ -101,6 +114,15 @@ class MixBusProcessor @Inject constructor(
     }
 
     fun getEnginePtr(): Long = enginePtr
+
+    /**
+     * Sample rate the pipeline is currently configured at, or 0 before the
+     * first configure. The line-in carrier uses this so its silent stream comes
+     * in at the rate the chain is already running, avoiding a needless
+     * reconfigure — and capture then opens at that same rate.
+     */
+    fun currentSampleRate(): Int =
+        if (inputFormat != AudioFormat.NOT_SET) inputFormat.sampleRate else 0
 
     /** Bypass mix bus plugins (0-3) in the C++ engine. Master bus (AutoEQ) still runs. */
     fun setMixBypassed(bypassed: Boolean) {
@@ -191,7 +213,12 @@ class MixBusProcessor @Inject constructor(
         // True bypass — when the user has the DSP mixer off we don't even
         // touch the audio thread's float scratch arrays. Same as the
         // no-engine pass-through below.
-        if (bypassed || enginePtr == 0L) {
+        // True bypass short-circuits the engine entirely, which would also
+        // silence line-in — so it yields while a capture stream is engaged.
+        // The mixer's own "off" state still applies: it reaches the engine as
+        // nativeSetMixBypassed, which skips the plugin chains but keeps the
+        // bus routing, so line-in stays audible, just unprocessed.
+        if ((bypassed && !lineIn.engaged) || enginePtr == 0L) {
             val size = inputBuffer.remaining()
             // Nothing to forward — leave outputBuffer as-is so getOutput
             // returns whatever it returned last time (or EMPTY_BUFFER on
@@ -233,6 +260,8 @@ class MixBusProcessor @Inject constructor(
             scratchInR = FloatArray(numFrames)
             scratchOutL = FloatArray(numFrames)
             scratchOutR = FloatArray(numFrames)
+            auxScratchL = FloatArray(numFrames)
+            auxScratchR = FloatArray(numFrames)
         }
 
         // Deinterleave input to L/R float arrays. Using index-based getShort /
@@ -292,13 +321,25 @@ class MixBusProcessor @Inject constructor(
             chunkScratchOutR = FloatArray(chunk)
         }
 
+        // Read the engaged flag once for the whole buffer: it is written by the
+        // capture control thread and flipping mid-buffer would hand the engine
+        // an aux pair for some chunks and not others.
+        val lineInEngaged = lineIn.engaged
+
         var processed = 0
         while (processed < numFrames) {
             val n = minOf(chunk, numFrames - processed)
+            // One line-in block per DSP chunk keeps capture and playback
+            // advancing at the same rate — pulling per queueInput instead
+            // would desync the two whenever ExoPlayer's buffer spans several
+            // chunks.
+            val hasAux = lineInEngaged && lineIn.readBlock(auxScratchL, auxScratchR, n)
+            val auxL = if (hasAux) auxScratchL else null
+            val auxR = if (hasAux) auxScratchR else null
             if (needChunkScratch) {
                 System.arraycopy(scratchInL, processed, chunkScratchInL, 0, n)
                 System.arraycopy(scratchInR, processed, chunkScratchInR, 0, n)
-                nativeProcess(enginePtr, chunkScratchInL, chunkScratchInR, chunkScratchOutL, chunkScratchOutR, n)
+                nativeProcess(enginePtr, chunkScratchInL, chunkScratchInR, chunkScratchOutL, chunkScratchOutR, auxL, auxR, n)
                 inflator.processArrays(chunkScratchOutL, chunkScratchOutR, n)
                 compressor.processArrays(chunkScratchOutL, chunkScratchOutR, n)
                 crossfeed.processArrays(chunkScratchOutL, chunkScratchOutR, n)
@@ -306,7 +347,7 @@ class MixBusProcessor @Inject constructor(
                 System.arraycopy(chunkScratchOutR, 0, scratchOutR, processed, n)
             } else {
                 // Single-shot fast path: ExoPlayer's buffer fits in one chunk.
-                nativeProcess(enginePtr, scratchInL, scratchInR, scratchOutL, scratchOutR, n)
+                nativeProcess(enginePtr, scratchInL, scratchInR, scratchOutL, scratchOutR, auxL, auxR, n)
                 inflator.processArrays(scratchOutL, scratchOutR, n)
                 compressor.processArrays(scratchOutL, scratchOutR, n)
                 crossfeed.processArrays(scratchOutL, scratchOutR, n)
@@ -392,6 +433,11 @@ class MixBusProcessor @Inject constructor(
             inflator.prepare(inputFormat.sampleRate.toDouble(), 2)
             compressor.prepare(inputFormat.sampleRate.toDouble(), 2)
             crossfeed.prepare(inputFormat.sampleRate.toDouble())
+
+            // Capture follows the playback clock so line-in stays sample-aligned
+            // with the track. Cheap and asynchronous on the input side — it must
+            // be, since this runs on the renderer thread.
+            lineIn.onPlaybackFormat(inputFormat.sampleRate)
 
             // Signal ready (false→true transition ensures StateFlow emits)
             _engineReady.value = false

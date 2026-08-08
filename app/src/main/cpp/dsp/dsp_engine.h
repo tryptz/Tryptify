@@ -16,6 +16,18 @@ static constexpr int MAX_PLUGINS_PER_BUS = 16;
 // ~43 ms at 48 kHz — enough history for the FX-chain scope displays.
 static constexpr int WAVE_TAP_SIZE = 2048;
 
+// Which signal a mix bus reads. The engine takes two stereo inputs: the
+// playback stream decoded by ExoPlayer, and an optional line-in pair captured
+// from a hardware input (USB interface / USB DAC capture terminal / headset
+// jack). Each bus picks independently, so the same line-in can feed several
+// buses with different plugin chains and be blended back at the master.
+enum BusInputSource : int {
+    BUS_SRC_PLAYBACK = 0,
+    BUS_SRC_LINE_IN  = 1,
+    BUS_SRC_BOTH     = 2,
+};
+static constexpr int BUS_SRC_MAX = BUS_SRC_BOTH;
+
 struct Bus {
     std::vector<std::unique_ptr<SnapinProcessor>> plugins;
 
@@ -25,6 +37,7 @@ struct Bus {
     std::atomic<bool> muted{false};
     std::atomic<bool> soloed{false};
     std::atomic<bool> inputEnabled{false};
+    std::atomic<int> inputSource{BUS_SRC_PLAYBACK};
 
     // Smoothed gain values (audio thread only)
     float smoothGainL = 1.0f;
@@ -69,8 +82,16 @@ public:
     // same chainMutex_ the audio thread does during process().
     void reconfigure(int sampleRate, int maxBlockSize);
 
-    // Audio processing — called from audio thread
+    // Audio processing — called from audio thread.
+    //
+    // `left`/`right` are the playback stream and are processed in place: the
+    // master sum is written back over them. `auxLeft`/`auxRight` carry the
+    // captured line-in for the same block and are read-only; pass nullptr when
+    // no input is engaged, in which case buses routed to line-in fall silent
+    // rather than dereferencing null.
     void process(float* left, float* right, int numFrames);
+    void process(float* left, float* right,
+                 const float* auxLeft, const float* auxRight, int numFrames);
 
     // Bus control — simple writes, safe for cross-thread
     void setBusGain(int busIndex, float gainDb);
@@ -89,6 +110,9 @@ public:
     // plugin at baseRate × factor (resets its state, like a rate change).
     void setPluginOversampling(int busIndex, int slotIndex, int factor);
     void setBusInputEnabled(int busIndex, bool enabled);
+    // Clamped to [BUS_SRC_PLAYBACK, BUS_SRC_MAX]; out-of-range values fall back
+    // to playback rather than reaching the audio thread.
+    void setBusInputSource(int busIndex, int source);
     void setMixBypassed(bool bypassed);
 
     // Metering — returns levels in dB

@@ -69,6 +69,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
+    @Inject lateinit var stereoInputController: tf.monochrome.android.audio.input.StereoInputController
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
     // Atmos: the sample tap preserves raw E-AC-3 frames (which carry the JOC/OAMD
@@ -243,6 +244,16 @@ class PlaybackService : MediaSessionService() {
                 .collect { preferred ->
                     runCatching { player.setPreferredAudioDevice(preferred) }
                 }
+        }
+
+        // Live-mode line-in. The DSP chain lives inside DefaultAudioSink and
+        // only runs while the renderer is pumping, so Live mode needs
+        // *something* playing — StereoInputController asks for a silent carrier
+        // and the captured audio joins further down, inside MixBusProcessor.
+        serviceScope.launch {
+            stereoInputController.carrierRequest.collect { deviceLabel ->
+                if (deviceLabel != null) startLineInCarrier(deviceLabel) else stopLineInCarrier()
+            }
         }
 
         // Wrap the ExoPlayer so Media3's notification + lock-screen surface
@@ -537,8 +548,16 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * Resolve the queue's current track and play it.
+     *
+     * [startPositionMs] exists for the line-in carrier: leaving Live mode has
+     * to put the interrupted track back where it was, and the position has to
+     * be applied at setMediaItem time — resolution is asynchronous, so a
+     * seekTo() from the caller would land before the item does.
+     */
     @OptIn(UnstableApi::class)
-    fun playQueue() {
+    fun playQueue(startPositionMs: Long = 0L) {
         val currentTrack = queueManager.currentTrack.value ?: return
         serviceScope.launch {
             try {
@@ -555,7 +574,7 @@ class PlaybackService : MediaSessionService() {
                         onTrackEnded()
                         return@launch
                     }
-                    player.setMediaItem(resolved.mediaItem)
+                    player.setMediaItem(resolved.mediaItem, startPositionMs)
                     player.prepare()
                     player.play()
                     libraryRepository.addToHistory(currentTrack, unifiedTrack)
@@ -588,9 +607,9 @@ class PlaybackService : MediaSessionService() {
                     // These sources are built directly and so bypass the player's
                     // MediaSource.Factory — wrap them with the Atmos tap too, or
                     // streamed E-AC-3 would lose its JOC/OAMD side-data.
-                    player.setMediaSource(atmosTapFactory.wrap(source))
+                    player.setMediaSource(atmosTapFactory.wrap(source), startPositionMs)
                 } else {
-                    player.setMediaItem(mediaItem)
+                    player.setMediaItem(mediaItem, startPositionMs)
                 }
 
                 player.prepare()
@@ -606,7 +625,66 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    // ── Line-in carrier (Live mode) ─────────────────────────────────────
+
+    /** Used only before the pipeline has ever configured — no track played yet. */
+    private val CARRIER_FALLBACK_RATE = 48000
+
+    /** True while the player is rendering the silent line-in carrier. */
+    private var lineInCarrierActive = false
+    private var carrierResumePositionMs = 0L
+    private var carrierResumeWasPlaying = false
+
+    /**
+     * Take the player over with an endless silent stream so the DSP chain keeps
+     * running with no track loaded. Whatever was playing is remembered and put
+     * back by [stopLineInCarrier].
+     */
+    @OptIn(UnstableApi::class)
+    private fun startLineInCarrier(deviceLabel: String) {
+        if (lineInCarrierActive) return
+        carrierResumeWasPlaying = player.isPlaying
+        carrierResumePositionMs = player.currentPosition.coerceAtLeast(0L)
+        lineInCarrierActive = true
+
+        // Rate matters: the carrier's format is what MixBusProcessor configures
+        // to, and capture is then opened at that same rate.
+        val rate = mixBusProcessor.currentSampleRate().takeIf { it > 0 } ?: CARRIER_FALLBACK_RATE
+        val source = ProgressiveMediaSource.Factory(
+            tf.monochrome.android.audio.input.LiveInputDataSource.Factory(rate),
+            tf.monochrome.android.audio.input.LiveInputDataSource.extractorsFactory(),
+        ).createMediaSource(
+            tf.monochrome.android.audio.input.LiveInputDataSource.mediaItem(deviceLabel)
+        )
+        // Wrapped like the other hand-built sources so the Atmos tap stays in
+        // the graph; it is inert on 16-bit PCM but the pipeline expects it.
+        player.setMediaSource(atmosTapFactory.wrap(source))
+        player.prepare()
+        player.play()
+    }
+
+    /**
+     * Hand the player back. The queue was never touched, so the interrupted
+     * track is re-resolved through the normal path and restored to its old
+     * position — playing again only if it was playing when line-in took over.
+     */
+    private fun stopLineInCarrier() {
+        if (!lineInCarrierActive) return
+        lineInCarrierActive = false
+        player.stop()
+        player.clearMediaItems()
+        if (carrierResumeWasPlaying && queueManager.currentTrack.value != null) {
+            playQueue(carrierResumePositionMs)
+        }
+        carrierResumePositionMs = 0L
+        carrierResumeWasPlaying = false
+    }
+
     fun skipToNext() {
+        // Next / previous have no meaning against a live input, and acting on
+        // them would silently swap the carrier out for a track. Notification
+        // and lock-screen taps both land here.
+        if (lineInCarrierActive) return
         val nextTrack = queueManager.next()
         if (nextTrack != null) {
             playQueue()
@@ -616,6 +694,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     fun skipToPrevious() {
+        if (lineInCarrierActive) return
         // If more than 3 seconds in, restart current track
         if (player.currentPosition > 3000) {
             player.seekTo(0)
@@ -628,6 +707,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     fun seekTo(positionMs: Long) {
+        // The carrier is silence with a nominal 3-hour length; seeking inside
+        // it does nothing useful and only desyncs the progress bar.
+        if (lineInCarrierActive) return
         player.seekTo(positionMs)
     }
 

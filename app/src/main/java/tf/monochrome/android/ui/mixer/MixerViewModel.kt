@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.mixer
 
+import android.media.AudioDeviceInfo
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,9 +14,15 @@ import kotlinx.serialization.json.Json
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.audio.dsp.model.BusConfig
+import tf.monochrome.android.audio.dsp.model.BusInputSource
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.audio.dsp.model.MixPreset
 import tf.monochrome.android.audio.dsp.model.MixPresetFile
+import tf.monochrome.android.audio.input.StereoInputController
+import tf.monochrome.android.audio.input.StereoInputEngine
+import tf.monochrome.android.audio.input.StereoInputFormat
+import tf.monochrome.android.audio.input.StereoInputMode
+import tf.monochrome.android.audio.input.StereoInputStatus
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.MixPresetRepository
 import javax.inject.Inject
@@ -24,12 +31,42 @@ import javax.inject.Inject
 class MixerViewModel @Inject constructor(
     private val dspManager: DspEngineManager,
     private val presetRepository: MixPresetRepository,
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val stereoInput: StereoInputController,
+    private val stereoInputEngine: StereoInputEngine,
 ) : ViewModel() {
 
     val enabled: StateFlow<Boolean> = dspManager.enabled
     val buses: StateFlow<List<BusConfig>> = dspManager.buses
     val busLevels: StateFlow<List<BusLevels>> = dspManager.busLevels
+
+    // ── Stereo input ────────────────────────────────────────────────────
+
+    val inputEnabled: StateFlow<Boolean> = stereoInput.enabled
+    val inputActive: StateFlow<Boolean> = stereoInput.active
+    val inputMode: StateFlow<StereoInputMode> = stereoInput.mode
+    val inputStatus: StateFlow<StereoInputStatus> = stereoInput.status
+    val inputFormat: StateFlow<StereoInputFormat?> = stereoInput.activeFormat
+    val inputDevices: StateFlow<List<AudioDeviceInfo>> = stereoInputEngine.devices
+    val inputSelectedDeviceId: StateFlow<Int?> = stereoInputEngine.selectedDeviceId
+    val inputPeakL: StateFlow<Float> = stereoInputEngine.peakL
+    val inputPeakR: StateFlow<Float> = stereoInputEngine.peakR
+
+    val inputTrimDb: StateFlow<Float> = preferencesManager.stereoInputTrimDb
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0f)
+
+    fun describeInputDevice(device: AudioDeviceInfo): String = stereoInputEngine.describe(device)
+    fun describeInputCapabilities(device: AudioDeviceInfo): String =
+        stereoInputEngine.describeCapabilities(device)
+    fun isInputFeedbackRisk(device: AudioDeviceInfo): Boolean =
+        stereoInputEngine.isFeedbackRisk(device)
+    fun hasRecordPermission(): Boolean = stereoInputEngine.hasPermission()
+
+    fun toggleStereoInput() = stereoInput.toggle()
+    fun setStereoInputEnabled(enabled: Boolean) = stereoInput.setEnabled(enabled)
+    fun setStereoInputMode(mode: StereoInputMode) = stereoInput.setMode(mode)
+    fun selectInputDevice(deviceId: Int?) = stereoInput.selectDevice(deviceId)
+    fun setInputTrimDb(db: Float) = stereoInput.setTrimDb(db)
 
     // Live audio tap (per-plugin meters + scope waveform) for the FX chain.
     val fxTap = dspManager.fxTap
@@ -82,7 +119,34 @@ class MixerViewModel @Inject constructor(
 
     fun setBusGain(busIndex: Int, gainDb: Float) = dspManager.setBusGain(busIndex, gainDb)
     fun setBusPan(busIndex: Int, pan: Float) = dspManager.setBusPan(busIndex, pan)
-    fun setBusInputEnabled(busIndex: Int, enabled: Boolean) = dspManager.setBusInputEnabled(busIndex, enabled)
+    fun setBusInputSource(busIndex: Int, source: BusInputSource) =
+        dspManager.setBusInputSource(busIndex, source)
+
+    /**
+     * Advance a bus through OFF → PLAY → LINE → BOTH → OFF.
+     *
+     * The strip's input pad is a single tap target, so routing rides on the
+     * same control that used to be a plain on/off: "off" stays the disabled
+     * state and the three live positions are the input sources.
+     */
+    fun cycleBusInput(busIndex: Int) {
+        val bus = buses.value.getOrNull(busIndex) ?: return
+        when {
+            !bus.inputEnabled -> {
+                dspManager.setBusInputSource(busIndex, BusInputSource.Playback)
+                dspManager.setBusInputEnabled(busIndex, true)
+            }
+            bus.inputSource == BusInputSource.Playback ->
+                dspManager.setBusInputSource(busIndex, BusInputSource.LineIn)
+            bus.inputSource == BusInputSource.LineIn ->
+                dspManager.setBusInputSource(busIndex, BusInputSource.Both)
+            else -> dspManager.setBusInputEnabled(busIndex, false)
+        }
+    }
+
+    /** Copy a bus's whole chain, gain, pan and routing onto another bus. */
+    fun cloneBus(sourceIndex: Int, targetIndex: Int) =
+        dspManager.cloneBus(sourceIndex, targetIndex)
 
     fun toggleMute(busIndex: Int) {
         val bus = buses.value.getOrNull(busIndex) ?: return

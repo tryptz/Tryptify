@@ -45,6 +45,7 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeProcess(
     JNIEnv* env, jobject /*thiz*/, jlong enginePtr,
     jfloatArray inputL, jfloatArray inputR,
     jfloatArray outputL, jfloatArray outputR,
+    jfloatArray auxL, jfloatArray auxR,
     jint numFrames) {
     auto* engine = getEngine(enginePtr);
     if (!engine || numFrames <= 0) return;
@@ -62,12 +63,31 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeProcess(
         return;
     }
 
+    // Line-in pair. Null whenever no hardware input is engaged, which is the
+    // common case — the engine then treats line-in-routed buses as silent.
+    // Both arrays must be present and long enough or we drop the pair entirely
+    // rather than hand the audio thread a short buffer.
+    float* axL = nullptr;
+    float* axR = nullptr;
+    if (auxL != nullptr && auxR != nullptr &&
+        env->GetArrayLength(auxL) >= numFrames &&
+        env->GetArrayLength(auxR) >= numFrames) {
+        axL = env->GetFloatArrayElements(auxL, nullptr);
+        axR = env->GetFloatArrayElements(auxR, nullptr);
+        if (!axL || !axR) {
+            if (axL) { env->ReleaseFloatArrayElements(auxL, axL, JNI_ABORT); axL = nullptr; }
+            if (axR) { env->ReleaseFloatArrayElements(auxR, axR, JNI_ABORT); axR = nullptr; }
+        }
+    }
+
     // Copy input to output buffers, then process in-place
     std::copy(inL, inL + numFrames, outL);
     std::copy(inR, inR + numFrames, outR);
 
-    engine->process(outL, outR, numFrames);
+    engine->process(outL, outR, axL, axR, numFrames);
 
+    if (axL) env->ReleaseFloatArrayElements(auxL, axL, JNI_ABORT);
+    if (axR) env->ReleaseFloatArrayElements(auxR, axR, JNI_ABORT);
     env->ReleaseFloatArrayElements(inputL, inL, JNI_ABORT);
     env->ReleaseFloatArrayElements(inputR, inR, JNI_ABORT);
     env->ReleaseFloatArrayElements(outputL, outL, 0);  // commit changes
@@ -153,6 +173,14 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetBusInputEnabled(
     jint busIndex, jboolean enabled) {
     auto* engine = getEngine(enginePtr);
     if (engine) engine->setBusInputEnabled(busIndex, enabled);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetBusInputSource(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr,
+    jint busIndex, jint source) {
+    auto* engine = getEngine(enginePtr);
+    if (engine) engine->setBusInputSource(busIndex, source);
 }
 
 extern "C" JNIEXPORT void JNICALL

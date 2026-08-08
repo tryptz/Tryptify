@@ -238,8 +238,18 @@ static inline void writeWaveSilence(Bus& bus, int numFrames) {
 }
 
 void DspEngine::process(float* left, float* right, int numFrames) {
+    process(left, right, nullptr, nullptr, numFrames);
+}
+
+void DspEngine::process(float* left, float* right,
+                        const float* auxLeft, const float* auxRight,
+                        int numFrames) {
     // Flush denormals to zero — prevents 10-100x CPU spikes in feedback tails
     enableFlushToZero();
+
+    // A half-connected aux pair would be a caller bug; treat it as absent so a
+    // bad JNI call can't read one channel off a null pointer.
+    const bool hasAux = (auxLeft != nullptr && auxRight != nullptr);
 
     // Clear sum buffers
     std::fill(sumL_.begin(), sumL_.begin() + numFrames, 0.0f);
@@ -262,8 +272,18 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         float busGainDb = mixBypass ? 0.0f : bus.gainDb.load(std::memory_order_relaxed);
         float busPan = mixBypass ? 0.0f : bus.pan.load(std::memory_order_relaxed);
 
+        int busSource = bus.inputSource.load(std::memory_order_relaxed);
+        if (busSource < BUS_SRC_PLAYBACK || busSource > BUS_SRC_MAX) {
+            busSource = BUS_SRC_PLAYBACK;
+        }
+
+        // A bus routed to line-in with nothing captured has no signal at all —
+        // treat it exactly like a disabled bus so its meters and scope decay
+        // instead of freezing.
+        bool busHasSignal = (busSource == BUS_SRC_PLAYBACK) || hasAux;
+
         // Skip if no input, muted, or (solo mode active and this bus not soloed)
-        if (!busInputEnabled || busMuted || (hasSolo && !busSoloed)) {
+        if (!busInputEnabled || !busHasSignal || busMuted || (hasSolo && !busSoloed)) {
             bus.peakL.store(0.0f, std::memory_order_relaxed);
             bus.peakR.store(0.0f, std::memory_order_relaxed);
             zeroSlotMeters(bus);
@@ -271,9 +291,19 @@ void DspEngine::process(float* left, float* right, int numFrames) {
             continue;
         }
 
-        // Copy input to bus scratch buffer
-        std::copy(left, left + numFrames, busL_.data());
-        std::copy(right, right + numFrames, busR_.data());
+        // Copy the selected input into the bus scratch buffer
+        if (busSource == BUS_SRC_LINE_IN) {
+            std::copy(auxLeft, auxLeft + numFrames, busL_.data());
+            std::copy(auxRight, auxRight + numFrames, busR_.data());
+        } else if (busSource == BUS_SRC_BOTH && hasAux) {
+            for (int i = 0; i < numFrames; i++) {
+                busL_[i] = left[i] + auxLeft[i];
+                busR_[i] = right[i] + auxRight[i];
+            }
+        } else {
+            std::copy(left, left + numFrames, busL_.data());
+            std::copy(right, right + numFrames, busR_.data());
+        }
 
         // Run plugin chain with dry/wet blending (skip when mixer DSP is bypassed)
         if (mixBypass) {
@@ -545,6 +575,12 @@ void DspEngine::setBusInputEnabled(int busIndex, bool enabled) {
     buses_[busIndex].inputEnabled.store(enabled, std::memory_order_relaxed);
 }
 
+void DspEngine::setBusInputSource(int busIndex, int source) {
+    if (busIndex < 0 || busIndex >= NUM_MIX_BUSES) return;  // Only mix buses, not master
+    if (source < BUS_SRC_PLAYBACK || source > BUS_SRC_MAX) source = BUS_SRC_PLAYBACK;
+    buses_[busIndex].inputSource.store(source, std::memory_order_relaxed);
+}
+
 void DspEngine::setMixBypassed(bool bypassed) {
     mixBypassed_.store(bypassed, std::memory_order_relaxed);
 }
@@ -667,6 +703,7 @@ std::string DspEngine::getStateJson() const {
            << ",\"muted\":" << (bus.muted.load(std::memory_order_relaxed) ? "true" : "false")
            << ",\"soloed\":" << (bus.soloed.load(std::memory_order_relaxed) ? "true" : "false")
            << ",\"inputEnabled\":" << (bus.inputEnabled.load(std::memory_order_relaxed) ? "true" : "false")
+           << ",\"inputSource\":" << bus.inputSource.load(std::memory_order_relaxed)
            << ",\"plugins\":[";
         for (int p = 0; p < static_cast<int>(bus.plugins.size()); p++) {
             if (p > 0) ss << ",";
@@ -703,6 +740,7 @@ void DspEngine::loadStateJson(const std::string& json) {
         buses_[b].muted.store(false, std::memory_order_relaxed);
         buses_[b].soloed.store(false, std::memory_order_relaxed);
         buses_[b].inputEnabled.store(b == 0, std::memory_order_relaxed);
+        buses_[b].inputSource.store(BUS_SRC_PLAYBACK, std::memory_order_relaxed);
     }
 
     // Minimal JSON parsing
@@ -755,6 +793,23 @@ void DspEngine::loadStateJson(const std::string& json) {
         if (inputEnabledPos != std::string::npos && inputEnabledPos < json.find("\"plugins\":", pos)) {
             buses_[busIdx].inputEnabled.store(readBool(inputEnabledPos + 15), std::memory_order_relaxed);
             pos = inputEnabledPos + 15;
+        }
+
+        // Added after the field order above was already shipping, so state
+        // written by older builds has no "inputSource". The same in-bus guard
+        // used for inputEnabled keeps the search from running on into the next
+        // bus object, which is what makes the field optional: absent → the
+        // BUS_SRC_PLAYBACK default set in the clear loop above.
+        size_t inputSourcePos = json.find("\"inputSource\":", pos);
+        if (inputSourcePos != std::string::npos && inputSourcePos < json.find("\"plugins\":", pos)) {
+            // Single digit by construction (0..2). Read it directly rather than
+            // through readFloat/std::stof, which throws on a malformed value —
+            // and an exception here would unwind straight out through JNI.
+            size_t v = inputSourcePos + 14;
+            int src = (v < json.size() && json[v] >= '0' && json[v] <= '9')
+                ? (json[v] - '0') : BUS_SRC_PLAYBACK;
+            setBusInputSource(busIdx, src);
+            pos = v;
         }
 
         // Parse plugins array

@@ -274,6 +274,15 @@ class PreferencesManager @Inject constructor(
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
         private val MULTICHANNEL_DOWNMIX_ENABLED =
             booleanPreferencesKey("multichannel_downmix_enabled")
+
+        // Stereo line input. STEREO_INPUT_DEVICE_ID is an AudioDeviceInfo id —
+        // meaningless on any other handset, and deliberately not in
+        // SETTINGS_SYNC_KEYS for that reason.
+        private val STEREO_INPUT_ENABLED = booleanPreferencesKey("stereo_input_enabled")
+        private val STEREO_INPUT_DEVICE_ID = intPreferencesKey("stereo_input_device_id")
+        private val STEREO_INPUT_MODE = stringPreferencesKey("stereo_input_mode")
+        private val STEREO_INPUT_TRIM_DB = floatPreferencesKey("stereo_input_trim_db")
+        private val STEREO_INPUT_CHANNEL_MODE = stringPreferencesKey("stereo_input_channel_mode")
         // Powers of two mirroring the user-facing chip row in Settings.
         // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
         // both together if you add another step.
@@ -318,6 +327,8 @@ class PreferencesManager @Inject constructor(
             THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
+            STEREO_INPUT_ENABLED, STEREO_INPUT_MODE, STEREO_INPUT_TRIM_DB,
+            STEREO_INPUT_CHANNEL_MODE,
             PLAYBACK_SPEED, PRESERVE_PITCH,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
@@ -1265,6 +1276,56 @@ class PreferencesManager @Inject constructor(
         dataStore.data.map { it[MULTICHANNEL_DOWNMIX_ENABLED] ?: true }
     suspend fun setMultichannelDownmixEnabled(enabled: Boolean) {
         dataStore.edit { it[MULTICHANNEL_DOWNMIX_ENABLED] = enabled }
+    }
+
+    /**
+     * Master switch for the stereo line input. Off means no `AudioRecord` is
+     * ever opened and RECORD_AUDIO is never exercised, regardless of what the
+     * mixer's bus routing says.
+     */
+    val stereoInputEnabled: Flow<Boolean> =
+        dataStore.data.map { it[STEREO_INPUT_ENABLED] ?: false }
+    suspend fun setStereoInputEnabled(enabled: Boolean) {
+        dataStore.edit { it[STEREO_INPUT_ENABLED] = enabled }
+    }
+
+    /**
+     * Preferred capture device, as an `AudioDeviceInfo.id`. Null means "take the
+     * highest-priority input that is plugged in", which is what most people
+     * want — plug the interface in and it is simply used.
+     *
+     * Note the ids are assigned by the platform per boot and per attach, so a
+     * remembered id can go stale; [StereoInputEngine] falls back rather than
+     * failing when the id no longer resolves.
+     */
+    val stereoInputDeviceId: Flow<Int?> =
+        dataStore.data.map { it[STEREO_INPUT_DEVICE_ID] }
+    suspend fun setStereoInputDeviceId(deviceId: Int?) {
+        dataStore.edit {
+            if (deviceId == null) it.remove(STEREO_INPUT_DEVICE_ID)
+            else it[STEREO_INPUT_DEVICE_ID] = deviceId
+        }
+    }
+
+    /** "live" (input replaces playback) or "mix" (input alongside the track). */
+    val stereoInputMode: Flow<String> =
+        dataStore.data.map { it[STEREO_INPUT_MODE] ?: "live" }
+    suspend fun setStereoInputMode(mode: String) {
+        dataStore.edit { it[STEREO_INPUT_MODE] = mode }
+    }
+
+    /** Input trim in dB, applied as the capture ring is drained. */
+    val stereoInputTrimDb: Flow<Float> =
+        dataStore.data.map { it[STEREO_INPUT_TRIM_DB] ?: 0f }
+    suspend fun setStereoInputTrimDb(db: Float) {
+        dataStore.edit { it[STEREO_INPUT_TRIM_DB] = db }
+    }
+
+    /** "Stereo" or "Mono" — see StereoInputChannelMode. */
+    val stereoInputChannelMode: Flow<String> =
+        dataStore.data.map { it[STEREO_INPUT_CHANNEL_MODE] ?: "Stereo" }
+    suspend fun setStereoInputChannelMode(mode: String) {
+        dataStore.edit { it[STEREO_INPUT_CHANNEL_MODE] = mode }
     }
 
     // --- Library / Local Media ---

@@ -52,6 +52,8 @@ class SettingsViewModel @Inject constructor(
     private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
+    private val stereoInputEngine: tf.monochrome.android.audio.input.StereoInputEngine,
+    private val stereoInputController: tf.monochrome.android.audio.input.StereoInputController,
     private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
@@ -168,6 +170,37 @@ class SettingsViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val multichannelDownmixEnabled: StateFlow<Boolean> = preferences.multichannelDownmixEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    // --- Stereo line input ---
+    val stereoInputEnabled: StateFlow<Boolean> = stereoInputController.enabled
+    val stereoInputActive: StateFlow<Boolean> = stereoInputController.active
+    val stereoInputStatus = stereoInputController.status
+    val stereoInputError = stereoInputController.lastError
+    val stereoInputFormat = stereoInputController.activeFormat
+    val stereoInputDevices = stereoInputEngine.devices
+    val stereoInputSelectedDeviceId = stereoInputEngine.selectedDeviceId
+    val stereoInputChannelMode = stereoInputEngine.channelMode
+
+    fun setStereoInputEnabled(enabled: Boolean) = stereoInputController.setEnabled(enabled)
+    fun selectStereoInputDevice(deviceId: Int?) = stereoInputController.selectDevice(deviceId)
+    fun setStereoInputChannelMode(
+        mode: tf.monochrome.android.audio.input.StereoInputChannelMode,
+    ) = stereoInputController.setChannelMode(mode)
+
+    fun describeStereoInputDevice(device: android.media.AudioDeviceInfo): String =
+        stereoInputEngine.describe(device)
+    fun describeStereoInputCapabilities(device: android.media.AudioDeviceInfo): String =
+        stereoInputEngine.describeCapabilities(device)
+    fun isStereoInputFeedbackRisk(device: android.media.AudioDeviceInfo): Boolean =
+        stereoInputEngine.isFeedbackRisk(device)
+    fun hasRecordAudioPermission(): Boolean = stereoInputEngine.hasPermission()
+
+    /** Ring health, for the diagnostics card: underruns / overruns / drift trims. */
+    fun stereoInputCounters(): Triple<Long, Long, Long> = Triple(
+        stereoInputEngine.underruns,
+        stereoInputEngine.overruns,
+        stereoInputEngine.driftTrims,
+    )
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 

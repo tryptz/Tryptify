@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.audio.dsp.model.BusConfig
+import tf.monochrome.android.audio.dsp.model.BusInputSource
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
@@ -149,6 +150,19 @@ class DspEngineManager @Inject constructor(
     companion object {
         private const val TOTAL_BUSES = 5
 
+        /**
+         * The plugin chain [cloneBus] will rebuild on the target, capped at
+         * what a bus can physically hold.
+         *
+         * Split out from [cloneBus] so the interesting half — slot order,
+         * parameter carry-over, the plugin cap — is a pure function testable
+         * without JNI or a live engine.
+         */
+        fun planClone(source: BusConfig): List<PluginInstance> =
+            source.plugins
+                .take(MAX_PLUGINS_PER_BUS)
+                .mapIndexed { index, plugin -> plugin.copy(slotIndex = index) }
+
         // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
         const val MAX_PLUGINS_PER_BUS = 16
 
@@ -167,12 +181,72 @@ class DspEngineManager @Inject constructor(
         const val MAX_PAN = 1f
         const val MIN_DRY_WET = 0f
         const val MAX_DRY_WET = 1f
-    }
 
-    private fun sanitizeParam(value: Float): Float {
-        // Plugin parameter ranges vary per processor; the native side clamps to its own range.
-        // Here we only reject NaN/Inf so they never reach the native atomics or StateFlow.
-        return if (value.isFinite()) value else 0f
+        private val defaultBusNames = listOf("Bus 1", "Bus 2", "Bus 3", "Bus 4", "Master")
+
+            /**
+             * Plugin parameter ranges vary per processor and the native side clamps
+             * to its own range; here we only reject NaN/Inf so they never reach the
+             * native atomics or the StateFlow.
+             */
+            internal fun sanitizeParam(value: Float): Float =
+                if (value.isFinite()) value else 0f
+
+            /**
+             * Rebuild the Kotlin-side bus list from the engine's state JSON.
+             *
+             * Lives on the companion (rather than as an instance method) so the
+             * parse — including how it defaults fields that older saved state
+             * predates — is testable without a live native engine.
+             */
+            internal fun parseBusConfigsFromJson(json: String): List<BusConfig> {
+            return try {
+                val jsonParser = Json { ignoreUnknownKeys = true }
+                val root = jsonParser.parseToJsonElement(json).jsonObject
+                val busesArray = root["buses"]?.jsonArray ?: return BusConfig.defaultBuses()
+
+                busesArray.mapIndexed { index, element ->
+                    val obj = element.jsonObject
+                    val plugins = obj["plugins"]?.jsonArray?.mapIndexed { slotIdx, plugEl ->
+                        val plugObj = plugEl.jsonObject
+                        val typeOrd = plugObj["type"]?.jsonPrimitive?.int ?: 0
+                        val bypassed = plugObj["bypassed"]?.jsonPrimitive?.boolean ?: false
+                        val dryWet = (plugObj["dryWet"]?.jsonPrimitive?.float ?: 1f)
+                            .let { if (it.isFinite()) it else 1f }
+                            .coerceIn(MIN_DRY_WET, MAX_DRY_WET)
+                        val params = plugObj["params"]?.jsonArray
+                            ?.mapIndexed { pi, pv -> pi to sanitizeParam(pv.jsonPrimitive.float) }
+                            ?.toMap() ?: emptyMap()
+                        val os = when (plugObj["os"]?.jsonPrimitive?.int ?: 1) {
+                            4 -> 4; 2 -> 2; else -> 1
+                        }
+                        PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params, os)
+                    } ?: emptyList()
+
+                    val rawGain = obj["gain"]?.jsonPrimitive?.float ?: 0f
+                    val rawPan = obj["pan"]?.jsonPrimitive?.float ?: 0f
+                    BusConfig(
+                        index = index,
+                        name = defaultBusNames.getOrElse(index) { "Bus ${index + 1}" },
+                        gainDb = (if (rawGain.isFinite()) rawGain else 0f)
+                            .coerceIn(MIN_BUS_GAIN_DB, MAX_BUS_GAIN_DB),
+                        pan = (if (rawPan.isFinite()) rawPan else 0f).coerceIn(MIN_PAN, MAX_PAN),
+                        muted = obj["muted"]?.jsonPrimitive?.boolean ?: false,
+                        soloed = obj["soloed"]?.jsonPrimitive?.boolean ?: false,
+                        inputEnabled = obj["inputEnabled"]?.jsonPrimitive?.boolean ?: (index == 0),
+                        // Absent in state written before line-in existed — those
+                        // buses were all reading playback, which is the default.
+                        inputSource = BusInputSource.fromOrdinal(
+                            obj["inputSource"]?.jsonPrimitive?.int ?: 0
+                        ),
+                        plugins = plugins
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w("DspEngineManager", "Failed to parse DSP state JSON, using defaults", e)
+                BusConfig.defaultBuses()
+            }
+        }
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -224,6 +298,22 @@ class DspEngineManager @Inject constructor(
         val ptr = processor.getEnginePtr()
         if (ptr != 0L) processor.nativeSetBusInputEnabled(ptr, busIndex, enabled)
         updateBus(busIndex) { it.copy(inputEnabled = enabled) }
+        requestSave()
+    }
+
+    /**
+     * Route a mix bus to the playback stream, the hardware line input, or both.
+     *
+     * Buses pick independently, which is what makes "send the same line input
+     * through three different chains and blend them at the master" a routing
+     * choice rather than a feature. Master (index 4) has no input selector — it
+     * always sums the mix buses.
+     */
+    fun setBusInputSource(busIndex: Int, source: BusInputSource) {
+        if (busIndex !in 0 until TOTAL_BUSES - 1) return
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L) processor.nativeSetBusInputSource(ptr, busIndex, source.ordinal)
+        updateBus(busIndex) { it.copy(inputSource = source) }
         requestSave()
     }
 
@@ -342,6 +432,54 @@ class DspEngineManager @Inject constructor(
         requestSave()
     }
 
+    // ── Bus cloning ─────────────────────────────────────────────────────
+
+    /**
+     * Copy a mix bus onto another: its whole plugin chain (types, order,
+     * parameters, bypass, dry/wet, oversampling) plus gain, pan and input
+     * routing. The target's existing chain is cleared first.
+     *
+     * Deliberately built out of the same public setters the UI uses rather than
+     * a native fast path — nothing new touches the real-time thread, and the
+     * resulting state is identical to what a user clicking through the same
+     * edits would produce. Master is neither a valid source nor target; it has
+     * no input of its own to copy.
+     */
+    fun cloneBus(sourceIndex: Int, targetIndex: Int) {
+        if (sourceIndex == targetIndex) return
+        val mixBusRange = 0 until TOTAL_BUSES - 1
+        if (sourceIndex !in mixBusRange || targetIndex !in mixBusRange) return
+
+        val buses = _buses.value
+        val source = buses.firstOrNull { it.index == sourceIndex } ?: return
+        val target = buses.firstOrNull { it.index == targetIndex } ?: return
+
+        // Clear back-to-front so each removal leaves the lower slots' indices
+        // untouched — removePlugin re-indexes everything above the hole.
+        for (slot in target.plugins.indices.reversed()) {
+            removePlugin(targetIndex, slot)
+        }
+
+        for (plugin in planClone(source)) {
+            val type = SnapinType.entries.getOrNull(plugin.typeOrdinal) ?: continue
+            val slot = addPlugin(targetIndex, plugin.slotIndex, type)
+            if (slot < 0) continue  // native refused (chain full) — skip the rest of this one
+            plugin.parameters.forEach { (paramIndex, value) ->
+                setParameter(targetIndex, slot, paramIndex, value)
+            }
+            setPluginDryWet(targetIndex, slot, plugin.dryWet)
+            setPluginOversampling(targetIndex, slot, plugin.oversampling)
+            // Bypass last: setting it before the parameters land would leave a
+            // window where a bypassed plugin swallows the writes.
+            setPluginBypassed(targetIndex, slot, plugin.bypassed)
+        }
+
+        setBusGain(targetIndex, source.gainDb)
+        setBusPan(targetIndex, source.pan)
+        setBusInputSource(targetIndex, source.inputSource)
+        setBusInputEnabled(targetIndex, source.inputEnabled)
+    }
+
     // ── Plugin state reset (for gapless track transitions) ───────────────
 
     fun resetPluginState() {
@@ -372,49 +510,4 @@ class DspEngineManager @Inject constructor(
         }
     }
 
-    private val defaultBusNames = listOf("Bus 1", "Bus 2", "Bus 3", "Bus 4", "Master")
-
-    private fun parseBusConfigsFromJson(json: String): List<BusConfig> {
-        return try {
-            val jsonParser = Json { ignoreUnknownKeys = true }
-            val root = jsonParser.parseToJsonElement(json).jsonObject
-            val busesArray = root["buses"]?.jsonArray ?: return BusConfig.defaultBuses()
-
-            busesArray.mapIndexed { index, element ->
-                val obj = element.jsonObject
-                val plugins = obj["plugins"]?.jsonArray?.mapIndexed { slotIdx, plugEl ->
-                    val plugObj = plugEl.jsonObject
-                    val typeOrd = plugObj["type"]?.jsonPrimitive?.int ?: 0
-                    val bypassed = plugObj["bypassed"]?.jsonPrimitive?.boolean ?: false
-                    val dryWet = (plugObj["dryWet"]?.jsonPrimitive?.float ?: 1f)
-                        .let { if (it.isFinite()) it else 1f }
-                        .coerceIn(MIN_DRY_WET, MAX_DRY_WET)
-                    val params = plugObj["params"]?.jsonArray
-                        ?.mapIndexed { pi, pv -> pi to sanitizeParam(pv.jsonPrimitive.float) }
-                        ?.toMap() ?: emptyMap()
-                    val os = when (plugObj["os"]?.jsonPrimitive?.int ?: 1) {
-                        4 -> 4; 2 -> 2; else -> 1
-                    }
-                    PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params, os)
-                } ?: emptyList()
-
-                val rawGain = obj["gain"]?.jsonPrimitive?.float ?: 0f
-                val rawPan = obj["pan"]?.jsonPrimitive?.float ?: 0f
-                BusConfig(
-                    index = index,
-                    name = defaultBusNames.getOrElse(index) { "Bus ${index + 1}" },
-                    gainDb = (if (rawGain.isFinite()) rawGain else 0f)
-                        .coerceIn(MIN_BUS_GAIN_DB, MAX_BUS_GAIN_DB),
-                    pan = (if (rawPan.isFinite()) rawPan else 0f).coerceIn(MIN_PAN, MAX_PAN),
-                    muted = obj["muted"]?.jsonPrimitive?.boolean ?: false,
-                    soloed = obj["soloed"]?.jsonPrimitive?.boolean ?: false,
-                    inputEnabled = obj["inputEnabled"]?.jsonPrimitive?.boolean ?: (index == 0),
-                    plugins = plugins
-                )
-            }
-        } catch (e: Exception) {
-            Log.w("DspEngineManager", "Failed to parse DSP state JSON, using defaults", e)
-            BusConfig.defaultBuses()
-        }
-    }
 }

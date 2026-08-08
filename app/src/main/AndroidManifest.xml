@@ -37,12 +37,25 @@
          version. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- Debug screen recorder (Settings > Spatial Audio). RECORD_AUDIO is
-         needed by AudioPlaybackCapture to record the app's OWN media output
-         digitally in stereo — no microphone is ever opened; requested at
-         runtime only when the user starts a debug recording. -->
+    <!-- RECORD_AUDIO covers two unrelated features, both opt-in and both
+         requested at runtime:
+
+         1. Stereo Input (Mixer > Input). Captures an external stereo signal —
+            a USB audio interface, a USB DAC's capture terminal, a USB-C
+            dongle, or the headset jack — and feeds it to the DSP mixer as a
+            second input. This one DOES open a capture device; on the built-in
+            mic it is literally a microphone, which is why the input picker
+            lists that last and warns about feedback.
+         2. Debug screen recorder (Settings > Spatial Audio). Uses
+            AudioPlaybackCapture to record the app's OWN media output digitally
+            in stereo; no microphone is opened on that path. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Android 14+ requires a microphone-typed foreground service for capture
+         to survive the app leaving the foreground. Without it, Stereo Input
+         goes silent the moment the screen blanks — which is precisely when
+         someone monitoring a turntable or an interface wants it running. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- USB host mode — required to enumerate and route to USB Audio Class
          DACs. Marked not-required so the app still installs on tablets / TVs
@@ -109,10 +122,14 @@
         </activity>
 
         <!-- Media Playback Service -->
+        <!-- microphone is declared alongside mediaPlayback for Stereo Input;
+             the service only ever promotes with the mediaPlayback type, and
+             the microphone type is what keeps an active capture alive in the
+             background on Android 14+. -->
         <service
             android:name=".player.PlaybackService"
             android:exported="true"
-            android:foregroundServiceType="mediaPlayback"
+            android:foregroundServiceType="mediaPlayback|microphone"
             tools:ignore="ExportedService">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
