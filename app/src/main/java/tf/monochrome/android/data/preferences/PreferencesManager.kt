@@ -32,7 +32,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 /** Which catalog(s) drive search and discovery surfaces. BOTH runs TIDAL + Qobuz
  *  + Apple Music; the *_ONLY modes restrict to a single catalog. */
-enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY, APPLE_ONLY }
+enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
 
 /**
  * Format asked of the Apple wrapper. These are the wrapper's own format codes,
@@ -590,12 +590,12 @@ class PreferencesManager @Inject constructor(
      * the setting only governs which catalogs feed search results.
      */
     val sourceMode: Flow<SourceMode> = dataStore.data.map { prefs ->
-        val stored = prefs[SOURCE_MODE]?.let { runCatching { SourceMode.valueOf(it) }.getOrNull() }
-        // "Apple only" is no longer offered in Settings. Anyone left holding it
-        // would have an unreachable state: the picker would show nothing
-        // selected while search stayed Apple-only, with no way to tell why or
-        // get out of it. Reading it as BOTH is the only honest resolution.
-        if (stored == null || stored == SourceMode.APPLE_ONLY) SourceMode.BOTH else stored
+        // A stored "APPLE_ONLY" from before Apple was dropped no longer names a
+        // constant, so valueOf throws, getOrNull swallows it and it reads as
+        // BOTH — which is what anyone left on it should get, since neither the
+        // picker nor search can represent Apple any more.
+        prefs[SOURCE_MODE]?.let { runCatching { SourceMode.valueOf(it) }.getOrNull() }
+            ?: SourceMode.BOTH
     }
 
     suspend fun setSourceMode(mode: SourceMode) {
