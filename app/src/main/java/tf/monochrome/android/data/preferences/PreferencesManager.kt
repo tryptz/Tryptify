@@ -169,6 +169,7 @@ class PreferencesManager @Inject constructor(
         private val ROMAJI_LYRICS = booleanPreferencesKey("romaji_lyrics")
         private val LYRICS_WORD_PROVIDER = stringPreferencesKey("lyrics_word_provider")
         private val DOWNLOAD_LYRICS = booleanPreferencesKey("download_lyrics")
+        private val AUTO_DOWNLOAD_LIKED = booleanPreferencesKey("auto_download_liked")
         private val NOW_PLAYING_VIEW_MODE = stringPreferencesKey("now_playing_view_mode")
         private val VISUALIZER_ENGINE_ENABLED = booleanPreferencesKey("visualizer_engine_enabled")
         private val VISUALIZER_AUTO_SHUFFLE = booleanPreferencesKey("visualizer_auto_shuffle")
@@ -319,7 +320,7 @@ class PreferencesManager @Inject constructor(
             GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
-            DOWNLOAD_QUALITY, DOWNLOAD_LYRICS,
+            DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
@@ -777,6 +778,15 @@ class PreferencesManager @Inject constructor(
             ?: LyricsWordProvider.BOTH
     }
     val downloadLyrics: Flow<Boolean> = dataStore.data.map { it[DOWNLOAD_LYRICS] ?: false }
+
+    /**
+     * Download a song as it's liked. Off by default, and deliberately
+     * forward-only: turning it on downloads nothing that is already liked.
+     * Sweeping an existing Liked Songs list would enqueue thousands of workers
+     * at once, which is exactly the stampede that takes the app down — new
+     * likes arrive one at a time and stay within what WorkManager expects.
+     */
+    val autoDownloadLikedSongs: Flow<Boolean> = dataStore.data.map { it[AUTO_DOWNLOAD_LIKED] ?: false }
     val visualizerEngineEnabled: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_ENGINE_ENABLED] ?: true }
     val visualizerAutoShuffle: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_AUTO_SHUFFLE] ?: true }
     val visualizerPresetId: Flow<String?> = dataStore.data.map { it[VISUALIZER_PRESET_ID] }
@@ -813,6 +823,9 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setDownloadLyrics(enabled: Boolean) {
         dataStore.edit { it[DOWNLOAD_LYRICS] = enabled }
+    }
+    suspend fun setAutoDownloadLikedSongs(enabled: Boolean) {
+        dataStore.edit { it[AUTO_DOWNLOAD_LIKED] = enabled }
     }
     suspend fun setVisualizerEngineEnabled(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_ENGINE_ENABLED] = enabled }

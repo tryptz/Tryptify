@@ -110,6 +110,7 @@ fun LibraryScreen(
     val playlists by viewModel.playlists.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val activeDownloads by playerViewModel.activeDownloads.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
 
     val sectionScope = rememberCoroutineScope()
     val currentSectionId = sections.getOrElse(sectionPager.currentPage) { LOCAL_SECTION }
@@ -369,6 +370,7 @@ fun LibraryScreen(
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )
@@ -393,6 +395,7 @@ fun LibraryScreen(
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )
@@ -538,6 +541,7 @@ fun LibraryScreen(
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )

@@ -930,6 +930,16 @@ class PlayerViewModel @Inject constructor(
     private val _activeDownloads = MutableStateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>>(emptyMap())
     val activeDownloads: StateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>> = _activeDownloads.asStateFlow()
 
+    /**
+     * Ids of every track with a downloaded copy on disk. Drives the persistent
+     * "downloaded" badge on song rows — unlike [activeDownloads] this outlives
+     * the transfer and survives a restart.
+     */
+    val downloadedTrackIds: StateFlow<Set<Long>> =
+        libraryRepository.getDownloadedTracks()
+            .map { downloads -> downloads.mapTo(mutableSetOf()) { it.id } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     // Live download state for whichever track is currently playing — drives
     // the player's download button visual feedback (queued/downloading arc,
     // completed checkmark, failed indicator).

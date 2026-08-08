@@ -229,6 +229,7 @@ fun SearchResultsContent(
     searchError: Boolean = false,
     onRetry: () -> Unit = {},
 ) {
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
@@ -467,6 +468,7 @@ fun SearchResultsContent(
                                 track.sourceType == SourceType.QOBUZ) {
                                 { showContextMenuForTrack = track.toLegacyTrack() }
                             } else null,
+                            isDownloaded = track.toLegacyTrack().id in downloadedTrackIds,
                             selectionMode = selection.active,
                             selected = track.id in selection.selectedIds
                         )
@@ -618,6 +620,7 @@ private fun UnifiedSearchTrackItem(
     onAlbumClick: () -> Unit,
     onMoreClick: (() -> Unit)?,
     onLongClick: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false
 ) {
@@ -705,6 +708,10 @@ private fun UnifiedSearchTrackItem(
                         tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+            if (isDownloaded) {
+                tf.monochrome.android.ui.components.DownloadedBadge(size = 18f)
+                Spacer(modifier = Modifier.width(4.dp))
             }
             Text(
                 text = legacyTrack.formattedDuration,

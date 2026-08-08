@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.data.downloads.DownloadStatus
 import tf.monochrome.android.data.downloads.TrackDownloadState
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.usecase.uiArtistRefs
@@ -53,6 +54,7 @@ fun TrackItem(
     onAlbumClick: (() -> Unit)? = null,
     onArtistClick: ((Long) -> Unit)? = null,
     downloadState: TrackDownloadState? = null,
+    isDownloaded: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false
 ) {
@@ -203,12 +205,19 @@ fun TrackItem(
             }
         }
 
-        if (downloadState != null) {
+        // In-flight state wins while a download is running; once it settles the
+        // row falls back to the persistent "on this device" badge, so the mark
+        // doesn't vanish the moment the transfer finishes.
+        val liveDownload = downloadState?.takeIf { it.status != DownloadStatus.IDLE }
+        if (liveDownload != null) {
             Spacer(modifier = Modifier.width(4.dp))
             DownloadIndicator(
-                state = downloadState,
+                state = liveDownload,
                 size = 18f
             )
+        } else if (isDownloaded) {
+            Spacer(modifier = Modifier.width(4.dp))
+            DownloadedBadge(size = 18f)
         }
 
         if (showDuration) {

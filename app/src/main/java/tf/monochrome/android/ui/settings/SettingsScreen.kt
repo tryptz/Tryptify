@@ -2620,12 +2620,35 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
     val minTrackDuration by viewModel.minTrackDuration.collectAsState()
     val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsState()
     val libraryTabOrder by viewModel.libraryTabOrder.collectAsState()
+    val autoDownloadLiked by viewModel.autoDownloadLikedSongs.collectAsState()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        item {
+            Text(
+                "Liked Songs",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+
+        item {
+            SettingSwitchItem(
+                title = "Auto-Download Liked Songs",
+                subtitle = "Keep a copy of every song you like from now on. " +
+                    "Songs you liked earlier are left alone — turning this on " +
+                    "never starts a bulk download.",
+                checked = autoDownloadLiked,
+                onCheckedChange = { viewModel.setAutoDownloadLikedSongs(it) }
+            )
+        }
+
+        item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+
         item {
             Text(
                 "Local Media Scanning",

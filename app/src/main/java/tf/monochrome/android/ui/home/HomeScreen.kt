@@ -108,6 +108,7 @@ fun HomeScreen(
     val discoveryRows by viewModel.discoveryRows.collectAsState()
     val favoritesRow by viewModel.favoritesRow.collectAsState()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
     val libraryPlaylists by playerViewModel.playlists.collectAsState()
 
     // Search state
@@ -453,6 +454,7 @@ fun HomeScreen(
                             onAlbumClick = track.album?.id?.let { albumId ->
                                 { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                             },
+                            isDownloaded = track.id in downloadedTrackIds,
                             selectionMode = selection.active,
                             selected = track.id in selection.selectedIds
                         )

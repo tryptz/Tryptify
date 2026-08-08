@@ -77,6 +77,7 @@ fun ArtistDetailScreen(
         }
     }
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
     val playlists by playerViewModel.playlists.collectAsState()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
@@ -285,6 +286,7 @@ fun ArtistDetailScreen(
                                 onAlbumClick = track.album?.id?.let { albumId ->
                                     { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
+                                isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds
                             )

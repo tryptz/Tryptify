@@ -487,6 +487,15 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30_000L)
     val backgroundScanInterval: StateFlow<String> = preferences.backgroundScanInterval
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "daily")
+    val autoDownloadLikedSongs: StateFlow<Boolean> = preferences.autoDownloadLikedSongs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // Only flips the flag. Downloading happens when a song is liked, so
+    // switching this on can't sweep an existing Liked Songs list — see
+    // LibraryRepository.autoDownloadOnLike.
+    fun setAutoDownloadLikedSongs(enabled: Boolean) {
+        viewModelScope.launch { preferences.setAutoDownloadLikedSongs(enabled) }
+    }
 
     fun setScanOnAppOpen(enabled: Boolean) { viewModelScope.launch { preferences.setScanOnAppOpen(enabled) } }
     fun setMinTrackDuration(durationMs: Long) { viewModelScope.launch { preferences.setMinTrackDurationMs(durationMs) } }

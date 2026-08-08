@@ -45,6 +45,7 @@ class DownloadWorker @AssistedInject constructor(
     private val preferences: PreferencesManager,
     private val downloadDao: DownloadDao,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
+    private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -345,6 +346,8 @@ class DownloadWorker @AssistedInject constructor(
                     isThxSpatialAudio = isThxSpatialAudio
                 )
             )
+            // A new file is on disk — let the player stop streaming this song.
+            localLibraryRevision.bump()
 
             Result.success()
             } finally {

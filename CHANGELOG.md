@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Local copies always play first** — tapping a song anywhere in the app (search, an album or artist page, a playlist, radio, the queue, a lock-screen skip) now plays the file on your device instead of streaming it, whenever you have one. Both stores count: the scanned library and your downloads. Matching is ISRC/MusicBrainz-first and otherwise needs the title, an artist credit and the runtime to line up, so a live take or a different edit is never substituted for the recording you asked for. The decision is cached per song, so skipping around a queue costs nothing.
+- **Auto-download liked songs** — a toggle at the top of Settings → Library. With it on, liking a song downloads it. It is forward-only by design: turning it on never touches songs you liked earlier, so it can't kick off a bulk download of an existing Liked Songs list. Songs already on the device are skipped.
+- **Downloaded badge** — song rows show a ring with a down arrow when the track is on the device. Unlike the in-flight progress indicator this one persists across restarts, and it appears in Library, playlists, album and artist pages, Home and search.
+
 ## [1.8.1] — Apple Music
 
 > Covers everything since 1.7.2, including the unpublished 1.8.0 bump (versionCode 180 → 181).

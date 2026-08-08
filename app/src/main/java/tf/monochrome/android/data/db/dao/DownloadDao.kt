@@ -22,6 +22,12 @@ interface DownloadDao {
     @Query("SELECT EXISTS(SELECT 1 FROM downloaded_tracks WHERE id = :trackId)")
     fun isDownloadedFlow(trackId: Long): Flow<Boolean>
 
+    // Title-prefix shortlist so a track downloaded from one catalog can be
+    // found when the same song is opened from another (ids don't cross
+    // namespaces). The caller does the title/artist/duration comparison.
+    @Query("SELECT * FROM downloaded_tracks WHERE title LIKE :titlePattern ESCAPE '\\' LIMIT 200")
+    suspend fun findByTitlePattern(titlePattern: String): List<DownloadedTrackEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownloadedTrack(track: DownloadedTrackEntity)
 

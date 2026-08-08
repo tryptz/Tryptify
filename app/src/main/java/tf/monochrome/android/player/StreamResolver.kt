@@ -41,6 +41,7 @@ class StreamResolver @Inject constructor(
     private val repository: MusicRepository,
     private val qobuzCache: QobuzStreamCacheManager,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val localTrackLocator: LocalTrackLocator,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -52,6 +53,18 @@ class StreamResolver @Inject constructor(
     // stream couldn't be resolved — callers must skip instead of feeding an
     // empty MediaItem to ExoPlayer.
     suspend fun resolveMediaItem(track: Track): Pair<MediaItem?, TrackStream?> {
+        // On-device copy wins over the stream, whichever screen queued this.
+        localFor(
+            title = track.title,
+            artist = track.displayArtist,
+            albumTitle = track.album?.title,
+            durationSeconds = track.duration,
+            // DownloadManager keys downloads by Track.id, not by appleId.
+            catalogTrackId = track.id,
+        )?.let { local ->
+            return Pair(buildLocalMediaItem(track, local), null)
+        }
+
         val streamResult = repository.getTrackStream(track.id)
         val trackStream = streamResult.getOrNull()
 
@@ -86,7 +99,32 @@ class StreamResolver @Inject constructor(
     // New method for UnifiedTrack
     @OptIn(UnstableApi::class)
     suspend fun resolveUnifiedTrack(track: UnifiedTrack): ResolvedMedia {
-        return when (val source = track.source) {
+        val source = track.source
+
+        // Prefer the on-device copy over any remote source. This sits in the
+        // resolver rather than in a screen so it holds for every entry point —
+        // search results, album and artist pages, playlists, radio, the queue
+        // sheet and notification skips all land here.
+        if (source !is PlaybackSource.LocalFile) {
+            localFor(
+                title = track.title,
+                artist = track.artistName,
+                albumTitle = track.albumTitle,
+                durationSeconds = track.durationSeconds,
+                catalogTrackId = when (source) {
+                    is PlaybackSource.HiFiApi -> source.tidalId
+                    is PlaybackSource.QobuzCached -> source.qobuzId
+                    is PlaybackSource.AppleCached -> source.appleId
+                    else -> null
+                },
+                isrc = track.isrc,
+                musicBrainzTrackId = track.musicBrainzTrackId,
+            )?.let { local ->
+                return resolveLocalFile(track, local)
+            }
+        }
+
+        return when (source) {
             is PlaybackSource.LocalFile -> resolveLocalFile(track, source)
             is PlaybackSource.CollectionDirect -> resolveCollectionDirect(track, source)
             is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source)
@@ -164,23 +202,74 @@ class StreamResolver @Inject constructor(
         )
     }
 
+    /**
+     * On-device copy of a song that would otherwise stream, or null.
+     *
+     * Thin wrapper over [LocalTrackLocator] so both resolver entry points ask
+     * the same question the same way.
+     */
+    private suspend fun localFor(
+        title: String,
+        artist: String,
+        albumTitle: String?,
+        durationSeconds: Int,
+        catalogTrackId: Long?,
+        isrc: String? = null,
+        musicBrainzTrackId: String? = null,
+    ): PlaybackSource.LocalFile? = localTrackLocator.findLocalSource(
+        title = title,
+        artist = artist,
+        albumTitle = albumTitle,
+        durationSeconds = durationSeconds,
+        catalogTrackId = catalogTrackId,
+        isrc = isrc,
+        musicBrainzTrackId = musicBrainzTrackId,
+    )
+
+    /**
+     * A legacy [Track] pointed at its on-device file. The metadata stays the
+     * catalogue's — same title, same artwork — so swapping the stream for the
+     * file is invisible in the player; only the loading spinner disappears.
+     */
+    private fun buildLocalMediaItem(track: Track, source: PlaybackSource.LocalFile): MediaItem {
+        val uri = localUri(source.filePath)
+
+        val artworkUri = track.album?.cover?.let { cover -> buildCoverUrl(cover, 640).toUri() }
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.displayArtist)
+            .setAlbumTitle(track.album?.title)
+            .setArtworkUri(artworkUri)
+            .setTrackNumber(track.trackNumber)
+            .setDiscNumber(track.volumeNumber)
+            .build()
+
+        return MediaItem.Builder()
+            .setMediaId(track.id.toString())
+            .setUri(uri)
+            .setMediaMetadata(metadata)
+            .build()
+    }
+
+    // DownloadWorker stores filePath either as an absolute filesystem path
+    // (internal storage) or as a content:// URI string (when the user picked a
+    // SAF folder). Wrapping a content:// path with File(...) + Uri.fromFile
+    // produces a malformed file:// URI that ExoPlayer can't open and
+    // DefaultMediaSourceFactory NPEs on. Detect the scheme and route
+    // accordingly.
+    private fun localUri(filePath: String): Uri =
+        if (filePath.startsWith("content://") || filePath.startsWith("file://")) {
+            filePath.toUri()
+        } else {
+            Uri.fromFile(File(filePath))
+        }
+
     private fun resolveLocalFile(
         track: UnifiedTrack,
         source: PlaybackSource.LocalFile
     ): ResolvedMedia {
-        // DownloadWorker stores filePath either as an absolute filesystem path
-        // (internal storage) or as a content:// URI string (when the user
-        // picked a SAF folder). Wrapping a content:// path with File(...) +
-        // Uri.fromFile produces a malformed file:// URI that ExoPlayer can't
-        // open and DefaultMediaSourceFactory NPEs on. Detect the scheme and
-        // route accordingly.
-        val uri = if (source.filePath.startsWith("content://") ||
-            source.filePath.startsWith("file://")
-        ) {
-            source.filePath.toUri()
-        } else {
-            Uri.fromFile(File(source.filePath))
-        }
+        val uri = localUri(source.filePath)
 
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)

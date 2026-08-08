@@ -41,7 +41,8 @@ class MediaScanner @Inject constructor(
     private val tagReader: TagReader,
     private val localMediaDao: LocalMediaDao,
     private val musicDatabase: tf.monochrome.android.data.db.MusicDatabase,
-    private val preferences: PreferencesManager
+    private val preferences: PreferencesManager,
+    private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision
 ) {
 
     fun fullScan(
@@ -435,6 +436,9 @@ class MediaScanner @Inject constructor(
                 totalSizeBytes = 0
             )
         )
+        // Every scan ends here, so this is the one place that has to tell the
+        // rest of the app "what's on disk just changed" — see LocalLibraryRevision.
+        localLibraryRevision.bump()
     }
 
     private fun qualityScore(track: LocalTrackEntity): Int {
