@@ -216,7 +216,7 @@ fun SettingsScreen(
                 when (page) {
                     0 -> AppearanceTab(viewModel, navController)
                     1 -> AudioTab(viewModel, navController)
-                    2 -> EqualizerTab(navController)
+                    2 -> EqualizerTab(navController, viewModel)
                     3 -> LibrarySettingsTab(viewModel)
                     4 -> DownloadsTab(viewModel)
                     5 -> InstancesTab(viewModel)
@@ -232,7 +232,15 @@ fun SettingsScreen(
 
 // ─── Tab 4: Equalizer ──────────────────────────────────────────────────
 @Composable
-private fun EqualizerTab(navController: NavController, eqViewModel: EqViewModel = hiltViewModel()) {
+private fun EqualizerTab(
+    navController: NavController,
+    viewModel: SettingsViewModel,
+    eqViewModel: EqViewModel = hiltViewModel(),
+) {
+    // Was a lone group on the Audio tab, one tab away from every other EQ
+    // control. Whether the curve applies to the whole device is a question
+    // about the equalizer, so it is asked here.
+    val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsState()
     val eqEnabled by eqViewModel.eqEnabled.collectAsState()
     val selectedTarget by eqViewModel.selectedTarget.collectAsState()
     val selectedHeadphone by eqViewModel.selectedHeadphone.collectAsState()
@@ -242,6 +250,12 @@ private fun EqualizerTab(navController: NavController, eqViewModel: EqViewModel 
 
     SettingsTabContent {
         SettingsGroupHeader("Equalizer")
+        SettingSwitchItem(
+            title = "System-wide AutoEQ",
+            subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
+            checked = systemWideAutoEq,
+            onCheckedChange = viewModel::setSystemWideAutoEq,
+        )
         SettingSwitchItem(
             title = "Enable Equalizer",
             subtitle = "Apply EQ processing to playback",
@@ -1027,7 +1041,6 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val cellularQuality by viewModel.cellularQuality.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val preservePitch by viewModel.preservePitch.collectAsState()
-    val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsState()
     var showWifiDropdown by remember { mutableStateOf(false) }
     var showCellularDropdown by remember { mutableStateOf(false) }
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
@@ -1093,15 +1106,6 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             valueRange = 0f..12f,
             steps = 11,
             modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("System-wide EQ")
-        SettingSwitchItem(
-            title = "System-wide AutoEQ",
-            subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
-            checked = systemWideAutoEq,
-            onCheckedChange = viewModel::setSystemWideAutoEq,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
