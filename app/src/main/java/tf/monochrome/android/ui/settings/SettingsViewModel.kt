@@ -216,6 +216,14 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val appRenderResolution: StateFlow<Int> = preferences.appRenderResolution
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val lowPerformanceMode: StateFlow<Boolean> = preferences.lowPerformanceMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val disableAnimations: StateFlow<Boolean> = preferences.disableAnimations
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val legacyPlayer: StateFlow<Boolean> = preferences.legacyPlayer
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val disableLiquidGlass: StateFlow<Boolean> = preferences.disableLiquidGlass
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
     val visualizerEngineEnabled: StateFlow<Boolean> = preferences.visualizerEngineEnabled
@@ -464,6 +472,13 @@ class SettingsViewModel @Inject constructor(
     fun setPlayerBlurredBackground(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerBlurredBackground(enabled) } }
     fun setAppTargetFps(fps: Int) { viewModelScope.launch { preferences.setAppTargetFps(fps) } }
     fun setAppRenderResolution(shortSide: Int) { viewModelScope.launch { preferences.setAppRenderResolution(shortSide) } }
+    // The master writes all three; each of the three re-derives the master.
+    // Both directions are single DataStore transactions, so the four switches
+    // are never briefly inconsistent on screen.
+    fun setLowPerformanceMode(enabled: Boolean) { viewModelScope.launch { preferences.setLowPerformanceMode(enabled) } }
+    fun setDisableAnimations(enabled: Boolean) { viewModelScope.launch { preferences.setDisableAnimations(enabled) } }
+    fun setLegacyPlayer(enabled: Boolean) { viewModelScope.launch { preferences.setLegacyPlayer(enabled) } }
+    fun setDisableLiquidGlass(enabled: Boolean) { viewModelScope.launch { preferences.setDisableLiquidGlass(enabled) } }
     fun setVisualizerVsyncEnabled(value: Boolean) { viewModelScope.launch { preferences.setVisualizerVsyncEnabled(value) } }
     fun setVisualizerShowFps(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerShowFps(enabled) } }
     fun setVisualizerFullscreen(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerFullscreen(enabled) } }

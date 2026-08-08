@@ -1,0 +1,10 @@
+[
+  { "label": "Focus", "query": "deep focus instrumental" },
+  { "label": "Late night", "query": "late night ambient downtempo" },
+  { "label": "Workout", "query": "high energy workout" },
+  { "label": "Chill", "query": "chill relaxing" },
+  { "label": "Party", "query": "party dance hits" },
+  { "label": "Commute", "query": "upbeat indie pop" },
+  { "label": "Wind down", "query": "acoustic calm evening" },
+  { "label": "Deep cuts", "query": "underground b-sides" }
+]

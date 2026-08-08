@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.ui.theme.goToPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -143,6 +144,8 @@ fun LibraryScreen(
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
 
     val sectionScope = rememberCoroutineScope()
+    // Tab changes slide normally; with "Disable animations" on they jump.
+    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
     val currentSectionId = sections.getOrElse(sectionPager.currentPage) { LOCAL_SECTION }
 
     // The overflow menu survives as a shortcut past the swipe — Downloads sits
@@ -172,7 +175,7 @@ fun LibraryScreen(
     // purpose: the dispatcher serves the LAST-composed enabled callback first,
     // so an active selection still wins the first back press.
     BackHandler(enabled = sectionPager.currentPage != 0) {
-        sectionScope.launch { sectionPager.animateScrollToPage(0) }
+        sectionScope.launch { sectionPager.goToPage(0, animateTabs) }
     }
     BackHandler(enabled = selection.active) { selection.clear() }
     // Lists (and delete semantics) differ per section — drop any selection on switch.
@@ -294,7 +297,7 @@ fun LibraryScreen(
                     // has no entry in the menu, so this is the way back to it.
                     if (currentSectionId != LOCAL_SECTION) {
                         IconButton(onClick = {
-                            sectionScope.launch { sectionPager.animateScrollToPage(0) }
+                            sectionScope.launch { sectionPager.goToPage(0, animateTabs) }
                         }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
@@ -326,7 +329,7 @@ fun LibraryScreen(
                                         val page = sections.indexOf(id)
                                         if (page >= 0) {
                                             sectionScope.launch {
-                                                sectionPager.animateScrollToPage(page)
+                                                sectionPager.goToPage(page, animateTabs)
                                             }
                                         }
                                         sectionMenuOpen = false

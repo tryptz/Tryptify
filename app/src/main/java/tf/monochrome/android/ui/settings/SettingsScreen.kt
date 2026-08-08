@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.ui.theme.goToPage
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.widget.Toast
@@ -168,6 +169,8 @@ fun SettingsScreen(
         pageCount = { settingsTabs.size },
     )
     val settingsScope = rememberCoroutineScope()
+    // Tab changes slide normally; with "Disable animations" on they jump.
+    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
     val selectedTab = settingsPager.currentPage
 
     // Toast one-shot ViewModel messages (font import, backup import, …) from
@@ -206,7 +209,7 @@ fun SettingsScreen(
             itemsIndexed(settingsTabs) { index, tab ->
                 FilterChip(
                     selected = selectedTab == index,
-                    onClick = { settingsScope.launch { settingsPager.animateScrollToPage(index) } },
+                    onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
                     label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -2321,6 +2324,42 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         // business — the visualizer's own GPU settings stay with the visualizer.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Performance")
+
+        // Low performance mode. The master owns nothing of its own — it writes
+        // the three switches below it, and they write it back — so the row is
+        // a shortcut, not a fourth piece of state that can drift.
+        val lowPerformanceMode by viewModel.lowPerformanceMode.collectAsStateWithLifecycle()
+        val disableAnimations by viewModel.disableAnimations.collectAsStateWithLifecycle()
+        val legacyPlayer by viewModel.legacyPlayer.collectAsStateWithLifecycle()
+        val disableLiquidGlass by viewModel.disableLiquidGlass.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = "Low performance mode",
+            subtitle = "Turns off animations, the liquid glass effect and the new player design in one go. Saves battery and helps on older or slower devices.",
+            checked = lowPerformanceMode,
+            onCheckedChange = { viewModel.setLowPerformanceMode(it) }
+        )
+        Column(modifier = Modifier.padding(start = 16.dp)) {
+            SettingSwitchItem(
+                title = "Disable animations",
+                subtitle = "No transitions, bounces, glass motion or colour blends anywhere in the app.",
+                checked = disableAnimations,
+                onCheckedChange = { viewModel.setDisableAnimations(it) }
+            )
+            SettingSwitchItem(
+                title = "Legacy player",
+                subtitle = "Use the flat player design from before liquid glass.",
+                checked = legacyPlayer,
+                onCheckedChange = { viewModel.setLegacyPlayer(it) }
+            )
+            SettingSwitchItem(
+                title = "Remove liquid glass",
+                subtitle = "Flat, opaque surfaces instead of blurred, refractive glass throughout the app.",
+                checked = disableLiquidGlass,
+                onCheckedChange = { viewModel.setDisableLiquidGlass(it) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         val appFps by viewModel.appTargetFps.collectAsStateWithLifecycle()
         val appResolution by viewModel.appRenderResolution.collectAsStateWithLifecycle()
         // App-wide frame rate and panel resolution, applied by selecting a

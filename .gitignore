@@ -89,6 +89,7 @@ old_HomeViewModel.kt
 !monochrome-library-2026-03-23.json
 !app/src/main/assets/devedit_default_layout.json
 !app/src/main/assets/qobuz_recommendations.json
+!app/src/main/assets/discovery_moods.json
 # The bundled font library. Caught by the blanket *.ttf and *.txt rules above,
 # but these ship in the APK — and the licence file has to travel with the fonts
 # it covers, so it is not optional.

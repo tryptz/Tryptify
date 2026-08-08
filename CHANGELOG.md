@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+#### Low performance mode
+- **Settings › System › Performance gains a low performance mode** — one master switch plus the three switches it writes, so it can be taken all at once or picked apart. The app already sorted devices into low/mid/high tiers at startup and quietly trimmed effects on the weak ones, but that judgement was the app's alone: a flagship on a long day out, or a GPU whose driver dislikes the glass shader, had no say. Now it does. The three settings are deliberately **not** synced to your account — like frame rate and resolution, this is per-device tuning, and a phone that needs the glass off shouldn't turn it off on your tablet.
+- **Disable animations** — everything that moves on its own stops. The glass frame clock is the big one: it drives a callback every single frame for as long as the player or the mini player is on screen, and the mini player is mounted app-wide, so this reaches every tab. With it, the press-bounce on every card and list row, the album-colour cross-fade between tracks, the pulsing download and stats and Atmos-map indicators, the visualizer's drifting shell, the bass-reactive lyric god rays (which also releases the FFT analyser stake, so the spectrum tap stops running for them), and the slide on every tab change. Gestures are untouched — a drag still follows your finger, it just doesn't spring on release.
+- **Remove liquid glass** — flat, opaque surfaces everywhere instead of blurred, refractive ones. Both glass systems go: the Haze-backed glassmorphism on list rows, cards, the mini player, the nav pill and the audio-tools sheet, and the AGSL shader on the player chrome, the lyric glyphs and the panels — along with the gravity sensor that lit it, the dither pass and the FXAA pass. The Play Radio button, whose glass is hand-rolled rather than shared, gets a flat accent fill in the same shape. Your Player Visuals Studio settings are kept, not reset; the Studio says so at the top of its tabs rather than looking broken.
+- **Legacy player** — the player as it was before liquid glass, recovered from the pre-glass source rather than approximated: a plain Material 3 slider for the scrubber, filled icon buttons for transport, and the swipe-up audio-tools panel. It takes the same state and the same top bar and hero as the current player, so lyrics, the queue, the visualizer, ±10 s, seek and the artwork all keep working, and it has picked up the effects the player has grown since — crossfeed and AutoEQ join compressor and inflator in its panel. It also composes with the glass switch: on its own it keeps its original frosted chrome, and with glass off it goes flat.
+
+#### Discover
+- **Discovery is its own tab, between Home and Library** — it used to be a header and a couple of rows buried in the middle of Home's scroll, competing with what you were doing right now. Home is now the immediate stuff (start a station, pick up a recent track, search) and Discover is where you go to look for something new.
+- **Shelves say why they're there** — "Because you play Aphex Twin", "Their latest release (2026) — you play Boards of Canada", "Popular in jazz". A recommendation you can't account for is one you have no reason to trust, and the same twelve records read completely differently with a line above them explaining where they came from.
+- **Shelves can hold albums and artists, not just tracks** — the old feed could only render a track carousel, so an "artists like this" recommendation had to be flattened into songs. Albums and artists now use the same cards the rest of the app does.
+- **The similar-artist graph is finally visible** — every radio station already expands through Qobuz's neighbouring-artist data, and none of it was ever shown to you. It's a shelf now.
+- **Personalized and curated shelves coexist** — the old feed showed genre rows *only* to people with no listening history at all, so an established listener never saw anything outside their own orbit and a new one never saw anything else.
+- **A mood and genre rail** — Focus, Late night, Workout, Chill, Party, Commute and the genre seeds, pinned above the feed so it stays reachable once you're several shelves down. Picking one rebuilds the page around it. The problem this solves isn't a thin catalogue, it's not knowing where to start.
+- **A featured card at the top**, built from an artist you keep coming back to, playing through the existing radio station — so it inherits the generating/active/stop states and the queue refill.
+- **"See All" works** — the affordance existed on every section header in the app and had never once been passed a destination. Shelves stay short, and the rest of one is a tap away in a full grid.
+- **A horizontal flick on a row no longer flips you to another tab** — a long-standing bug on the discovery rows, which never swallowed their leftover horizontal scroll the way the search rows do.
+- **Home stops paying for rows it doesn't show** — the curated genre search fired one Qobuz request per seed on every visit to Home, for rows only the (unreachable) search screen rendered.
+
+### Fixed
+- **Discovery cards look like the rest of the app** — the recommendation card was hard-coded to its own dimensions instead of the shared cover tokens, and had no glass, no press feedback and no quality badges, so a row of tracks visibly didn't belong next to a row of albums.
+
 ## [1.8.4]
 
 ### Fixed

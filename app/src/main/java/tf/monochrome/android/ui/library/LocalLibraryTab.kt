@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.ui.theme.goToPage
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -135,6 +136,8 @@ fun LocalLibraryTab(
     // view, which is what un-clips "Folders" when you swipe onto it.
     val subTabPager = rememberPagerState(pageCount = { subTabs.size })
     val subTabScope = rememberCoroutineScope()
+    // Tab changes slide normally; with "Disable animations" on they jump.
+    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
     val selectedSubTab = subTabPager.currentPage
     var showSearch by remember { mutableStateOf(false) }
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -288,7 +291,7 @@ fun LocalLibraryTab(
             subTabs.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedSubTab == index,
-                    onClick = { subTabScope.launch { subTabPager.animateScrollToPage(index) } },
+                    onClick = { subTabScope.launch { subTabPager.goToPage(index, animateTabs) } },
                     text = { Text(title, style = MaterialTheme.typography.bodySmall) }
                 )
             }

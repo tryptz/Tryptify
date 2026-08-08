@@ -33,7 +33,6 @@ class SearchViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val unifiedLibrarySearch: SearchUnifiedLibraryUseCase,
     private val preferences: PreferencesManager,
-    private val seedsRepository: tf.monochrome.android.data.repository.RecommendationSeedsRepository,
 ) : ViewModel() {
 
     /**
@@ -63,12 +62,7 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_LOCAL = 90
         private const val SOURCE_BOOST_COLLECTION = 70
         private const val SOURCE_BOOST_API = 50
-        // Tracks shown per curated recommendation row in the search empty state.
-        private const val RECOMMENDATION_ROW_SIZE = 12
     }
-
-    /** A curated recommendation row shown in the search empty state. */
-    data class RecommendationRow(val label: String, val tracks: List<UnifiedTrack>)
 
     enum class SearchTypeFilter(val label: String) {
         ALL("All"),
@@ -174,46 +168,11 @@ class SearchViewModel @Inject constructor(
     val searchHistory: StateFlow<List<String>> = preferences.searchHistory
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    // Curated Qobuz recommendations shown before the user types anything.
-    private val _recommendations = MutableStateFlow<List<RecommendationRow>>(emptyList())
-    val recommendations: StateFlow<List<RecommendationRow>> = _recommendations.asStateFlow()
-    private val _recommendationsLoading = MutableStateFlow(false)
-    val recommendationsLoading: StateFlow<Boolean> = _recommendationsLoading.asStateFlow()
-    private var recommendationsJob: Job? = null
-
-    init { loadRecommendations() }
-
-    /**
-     * Fill the curated recommendation rows from Qobuz (one search per seed,
-     * in parallel). Runs once and caches; a no-op when Qobuz is disabled
-     * (source mode TIDAL_ONLY) or unconfigured (searchQobuz returns empty).
-     */
-    fun loadRecommendations() {
-        if (_recommendations.value.isNotEmpty() || recommendationsJob?.isActive == true) return
-        recommendationsJob = viewModelScope.launch {
-            if (preferences.sourceMode.first() == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY) {
-                return@launch
-            }
-            _recommendationsLoading.value = true
-            try {
-                val seeds = seedsRepository.seeds()
-                val rows = coroutineScope {
-                    seeds.map { seed ->
-                        async {
-                            val tracks = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
-                                runCatching { repository.searchQobuz(seed.query) }.getOrNull()?.getOrNull()
-                            }?.tracks?.take(RECOMMENDATION_ROW_SIZE)?.map { it.toQobuzUnifiedTrack() }
-                                ?: emptyList()
-                            RecommendationRow(seed.label, tracks)
-                        }
-                    }.map { it.await() }
-                }.filter { it.tracks.isNotEmpty() }
-                _recommendations.value = rows
-            } finally {
-                _recommendationsLoading.value = false
-            }
-        }
-    }
+    // The curated genre rows that used to fill the search empty state moved to
+    // the Discover tab (DiscoveryFeedUseCase). They are not loaded here any
+    // more: this ViewModel is created by HomeScreen for its search bar, so
+    // keeping them would fire one Qobuz search per genre seed on every visit to
+    // Home for rows nothing renders.
 
     val tracks: StateFlow<List<UnifiedTrack>> = combine(
         _allTracks,

@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import tf.monochrome.android.ui.theme.goToPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -76,6 +77,8 @@ import tf.monochrome.android.ui.detail.LocalGenreDetailScreen
 import tf.monochrome.android.ui.eq.EqualizerScreen
 import tf.monochrome.android.ui.eq.ParametricEqEditScreen
 import tf.monochrome.android.ui.eq.ParametricEqScreen
+import tf.monochrome.android.ui.discover.DiscoverScreen
+import tf.monochrome.android.ui.discover.DiscoverShelfScreen
 import tf.monochrome.android.ui.home.HomeScreen
 import tf.monochrome.android.ui.mixer.MixerScreen
 import tf.monochrome.android.ui.library.LibraryScreen
@@ -101,6 +104,10 @@ import tf.monochrome.android.ui.oxford.OxfordViewModel
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Search : Screen("search")
+    data object Discover : Screen("discover")
+    data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
+        fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
+    }
     data object Library : Screen("library")
     data object AlbumDetail : Screen("album/{albumId}") {
         fun createRoute(albumId: Long) = "album/$albumId"
@@ -158,8 +165,11 @@ data class BottomNavItem(
     val unselectedIcon: ImageVector
 )
 
-// The two main tab screens, in pager order
-private val tabRoutes = listOf(Screen.Home.route, Screen.Library.route)
+// The three main tab screens, in pager order. Discover sits between Home and
+// Library because it is the browsing step between "what am I doing now" and
+// "what do I already own".
+private val tabRoutes =
+    listOf(Screen.Home.route, Screen.Discover.route, Screen.Library.route)
 
 @Composable
 fun MonochromeNavHost(initialRoute: String? = null) {
@@ -178,7 +188,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // does — both come off "Blend Between Tracks" — and tells a skip from a
     // song ending the same way the full player does.
     val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
-    val miniBlendMs = ColorBlend.millisFor(blendSeconds)
+    val miniBlendMs = tf.monochrome.android.ui.theme.motionMillis(ColorBlend.millisFor(blendSeconds))
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
 
     // Position/duration tick every 250 ms. Keep them as State<Long> and read
@@ -201,9 +211,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         && currentDestination?.route != Screen.NowPlaying.route
         && currentDestination?.route != Screen.Mixer.route
 
-    // Pager state for the two main tabs
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
+    // Pager state for the main tabs
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabRoutes.size })
     val scope = rememberCoroutineScope()
+    // Tab changes slide normally; with "Disable animations" on they jump.
+    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
 
     // Library's own section pager lives up here rather than inside LibraryScreen
     // so the top-bar indicator can count and track every page in the app — Home
@@ -249,7 +261,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // NavController to Home while the pager stayed on Library — visually nothing
     // happened, and the next back exited the app with Library still on screen.
     BackHandler(enabled = isOnMainTab && pagerState.currentPage != 0) {
-        scope.launch { pagerState.animateScrollToPage(0) }
+        scope.launch { pagerState.goToPage(0, animateTabs) }
     }
 
     val themeBackground = MaterialTheme.colorScheme.background
@@ -304,7 +316,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             0 -> tf.monochrome.android.devedit.DevEditScreen("home") {
                                 HomeScreen(navController = navController, playerViewModel = playerViewModel)
                             }
-                            1 -> tf.monochrome.android.devedit.DevEditScreen("library") {
+                            1 -> tf.monochrome.android.devedit.DevEditScreen("discover") {
+                                DiscoverScreen(
+                                    navController = navController,
+                                    playerViewModel = playerViewModel,
+                                )
+                            }
+                            2 -> tf.monochrome.android.devedit.DevEditScreen("library") {
                                 LibraryScreen(
                                     navController = navController,
                                     playerViewModel = playerViewModel,
@@ -329,7 +347,21 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             ) {
                 // Tab stubs – content is rendered by the pager above
                 composable(Screen.Home.route) { }
+                composable(Screen.Discover.route) { }
                 composable(Screen.Library.route) { }
+
+                composable(
+                    route = Screen.DiscoverShelf.route,
+                    arguments = listOf(navArgument("shelfId") { type = NavType.StringType })
+                ) { entry ->
+                    tf.monochrome.android.devedit.DevEditScreen("discover_shelf") {
+                        DiscoverShelfScreen(
+                            shelfId = entry.arguments?.getString("shelfId").orEmpty(),
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
+                    }
+                }
 
                 composable(
                     route = Screen.AlbumDetail.route,
@@ -569,40 +601,49 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             CompositionLocalProvider(
                 tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
             ) {
+                // Home, Discover, then one slot per Library section.
+                val libraryPage = tabRoutes.lastIndex
+                val indicatorPages = libraryPage + librarySectionIds.size
                 SwipeToLibraryHint(
-                    // Home, then one slot per Library section.
-                    pageCount = 1 + librarySectionIds.size,
+                    pageCount = indicatorPages,
                     progressProvider = {
-                        // Flattens the two nested pagers onto one axis: Home is
-                        // 0, the local library 1, each further section 2, 3, …
-                        // Multiplying by the outer position keeps it continuous
-                        // across the Home↔Library crossing instead of jumping
-                        // when Library was left on a later section.
+                        // Flattens the two nested pagers onto one axis: Home 0,
+                        // Discover 1, the local library 2, each further section
+                        // 3, 4, … The inner pager only contributes once the
+                        // outer one is on Library, and it is faded in by how far
+                        // that crossing has got, so the worm stays continuous
+                        // through the swipe instead of jumping when Library was
+                        // left on a later section.
                         val outer = pagerState.currentPage + pagerState.currentPageOffsetFraction
                         val inner = librarySectionPager.currentPage +
                             librarySectionPager.currentPageOffsetFraction
-                        outer * (1f + inner)
+                        outer + inner * (outer - (libraryPage - 1)).coerceIn(0f, 1f)
                     },
                     // Tap walks forward one page and wraps at the end. Both
                     // pagers animate, so the worm plays the same way it does
                     // under a finger.
                     onClick = {
                         scope.launch {
-                            if (pagerState.currentPage == 0) {
-                                librarySectionPager.scrollToPage(0)
-                                pagerState.animateScrollToPage(1)
-                            } else {
-                                val next = librarySectionPager.currentPage + 1
-                                if (next < librarySectionIds.size) {
-                                    librarySectionPager.animateScrollToPage(next)
-                                } else {
-                                    pagerState.animateScrollToPage(0)
+                            when {
+                                pagerState.currentPage < libraryPage -> {
+                                    if (pagerState.currentPage + 1 == libraryPage) {
+                                        librarySectionPager.scrollToPage(0)
+                                    }
+                                    pagerState.goToPage(pagerState.currentPage + 1, animateTabs)
                                 }
+                                librarySectionPager.currentPage + 1 < librarySectionIds.size ->
+                                    librarySectionPager.goToPage(
+                                        librarySectionPager.currentPage + 1,
+                                        animateTabs,
+                                    )
+                                else -> pagerState.goToPage(0, animateTabs)
                             }
                         }
                     },
                     onClickLabel = when {
-                        pagerState.currentPage == 0 -> "Open Library"
+                        pagerState.currentPage < libraryPage ->
+                            "Open " + (tabRoutes.getOrNull(pagerState.currentPage + 1)
+                                ?.replaceFirstChar { it.uppercase() } ?: "next tab")
                         librarySectionPager.currentPage + 1 < librarySectionIds.size ->
                             "Open " + (LIBRARY_SECTION_NAMES[
                                 librarySectionIds[librarySectionPager.currentPage + 1]
@@ -616,7 +657,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         // 64.dp tall, so this drops the pill onto its centre.
                         .padding(top = statusBarHeight + (64.dp - SwipeHintPillHeight) / 2)
                         .size(
-                            width = swipeHintPillWidth(1 + librarySectionIds.size),
+                            width = swipeHintPillWidth(indicatorPages),
                             height = SwipeHintPillHeight,
                         ),
                 )

@@ -88,15 +88,14 @@ private fun QueuedIndicator(
     size: Float,
     accentColor: Color
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "queued")
-    val alpha by infiniteTransition.animateFloat(
+    // Holds at the bright end when animations are off, so a queued download is
+    // still obviously there — just not breathing.
+    val alpha by tf.monochrome.android.ui.theme.rememberMotionFloat(
         initialValue = 0.3f,
         targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "queuedPulse"
+        durationMillis = 800,
+        label = "queuedPulse",
+        still = 0.8f,
     )
 
     Canvas(modifier = modifier.size(size.dp)) {
@@ -131,16 +130,14 @@ private fun DownloadingIndicator(
         label = "downloadProgress"
     )
 
-    // Subtle glow pulse while downloading
-    val infiniteTransition = rememberInfiniteTransition(label = "downloading")
-    val glowAlpha by infiniteTransition.animateFloat(
+    // Subtle glow pulse while downloading — purely decorative, so it goes to
+    // nothing rather than freezing half-lit.
+    val glowAlpha by tf.monochrome.android.ui.theme.rememberMotionFloat(
         initialValue = 0f,
         targetValue = 0.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "downloadGlow"
+        durationMillis = 1200,
+        label = "downloadGlow",
+        still = 0f,
     )
 
     Canvas(modifier = modifier.size(size.dp)) {

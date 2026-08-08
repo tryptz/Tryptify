@@ -626,14 +626,12 @@ private fun SpeakerLayoutMap(
     val outline = MaterialTheme.colorScheme.outline
     val heightTint = MaterialTheme.colorScheme.tertiary
 
-    val pulse by rememberInfiniteTransition(label = "map-pulse").animateFloat(
+    val pulse by tf.monochrome.android.ui.theme.rememberMotionFloat(
         initialValue = 0.55f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulse",
+        durationMillis = 1600,
+        label = "map-pulse",
+        still = 1f,
     )
 
     Box(modifier = modifier) {

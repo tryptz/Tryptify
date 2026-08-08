@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,17 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import tf.monochrome.android.domain.model.UnifiedArtistRef
-import tf.monochrome.android.domain.model.UnifiedTrack
-import tf.monochrome.android.ui.components.ClickableArtists
-import tf.monochrome.android.ui.components.CoverImage
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -88,7 +79,6 @@ import tf.monochrome.android.ui.search.SearchQueryField
 import tf.monochrome.android.ui.search.SearchHistoryContent
 import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
-import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,8 +98,6 @@ fun HomeScreen(
     }
     val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val discoveryRows by viewModel.discoveryRows.collectAsStateWithLifecycle()
-    val favoritesRow by viewModel.favoritesRow.collectAsStateWithLifecycle()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val libraryPlaylists by playerViewModel.playlists.collectAsStateWithLifecycle()
@@ -144,7 +132,6 @@ fun HomeScreen(
     val endReached by searchViewModel.endReached.collectAsStateWithLifecycle()
     val searchError by searchViewModel.searchError.collectAsStateWithLifecycle()
     val searchHistory by searchViewModel.searchHistory.collectAsStateWithLifecycle()
-    val recommendations by searchViewModel.recommendations.collectAsStateWithLifecycle()
     val hasSearchResults = searchQuery.isNotBlank()
 
     // Search reveals on demand; radio is the resting primary action.
@@ -352,7 +339,7 @@ fun HomeScreen(
         // queue topped up.
         if (!searchOpen && !hasSearchResults) {
             tf.monochrome.android.devedit.DevEditable("home_play_radio", Modifier.fillMaxWidth()) {
-                PlayRadioButton(
+                tf.monochrome.android.ui.components.PlayRadioButton(
                     isActive = isRadioActive,
                     isGenerating = isRadioGenerating,
                     onClick = {
@@ -464,39 +451,10 @@ fun HomeScreen(
                     }
                 }
 
-                // Personalized discovery feed: "From your favorites" first, then
-                // "New from <artist>" rows. Falls back to the static genre seeds
-                // only when the user has no taste data (new user / Qobuz empty).
-                val personalizedRows = listOfNotNull(favoritesRow) + discoveryRows
-                if (personalizedRows.isNotEmpty()) {
-                    item { SectionHeader(title = "Discover") }
-                    items(personalizedRows, key = { it.label }) { row ->
-                        DiscoveryRowSection(
-                            label = row.label,
-                            tracks = row.tracks,
-                            onPlay = { track -> playerViewModel.playUnifiedTrack(track, row.tracks) },
-                            onArtistClick = { artist ->
-                                artist.id?.let { artistId ->
-                                    navController.navigate(Screen.ArtistDetail.createRoute(artistId))
-                                }
-                            }
-                        )
-                    }
-                } else if (recommendations.isNotEmpty()) {
-                    item { SectionHeader(title = "Recommended") }
-                    items(recommendations, key = { it.label }) { row ->
-                        DiscoveryRowSection(
-                            label = row.label,
-                            tracks = row.tracks,
-                            onPlay = { track -> playerViewModel.playUnifiedTrack(track, row.tracks) },
-                            onArtistClick = { artist ->
-                                artist.id?.let { artistId ->
-                                    navController.navigate(Screen.ArtistDetail.createRoute(artistId))
-                                }
-                            }
-                        )
-                    }
-                }
+                // Discovery moved out to its own tab. Home is now what the user
+                // is doing right now — start a station, pick a recent track,
+                // search — and Discover is where they go to look for something
+                // new. Two jobs that were competing for one scroll.
                 if (recentTracks.isNotEmpty()) {
                     item {
                         SectionHeader(title = "Recently Played")
@@ -536,165 +494,6 @@ fun HomeScreen(
     }
 }
 
-
-@Composable
-private fun PlayRadioButton(
-    isActive: Boolean,
-    isGenerating: Boolean,
-    onClick: () -> Unit,
-) {
-    val accent = if (isActive) MaterialTheme.colorScheme.primaryContainer
-    else MaterialTheme.colorScheme.primary
-    val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
-    // Specular highlight is white glass on dark themes; a touch of black keeps the
-    // "wet glass" read on light ones without washing the accent out.
-    val specular = if (isDark) Color.White else Color.White.copy(alpha = 0.6f)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            // Under shadow: a soft, accent-tinted drop shadow so the pill floats
-            // above the list. clip=false lets the shadow spill past the shape.
-            .shadow(
-                elevation = 12.dp,
-                shape = MonoDimens.shapePill,
-                clip = false,
-                ambientColor = accent,
-                spotColor = accent,
-            )
-            .clip(MonoDimens.shapePill)
-            // Liquid glass: translucent accent fill with a top-lit vertical sheen
-            // (brighter at the top edge, deeper toward the bottom) — the base
-            // "body" of the glass.
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        accent.copy(alpha = 0.94f),
-                        accent.copy(alpha = 0.70f),
-                    )
-                )
-            )
-            // Specular sweep: a bright highlight across the top third that fades
-            // out, giving the pill its glossy, refractive wet-glass surface.
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        specular.copy(alpha = 0.30f),
-                        Color.Transparent,
-                    )
-                )
-            )
-            // Specular rim: a luminous edge, brightest along the top, that reads
-            // as light catching the glass border.
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        specular.copy(alpha = 0.55f),
-                        specular.copy(alpha = 0.08f),
-                    )
-                ),
-                shape = MonoDimens.shapePill,
-            )
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        val contentColor =
-            if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onPrimary
-        if (isGenerating) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp,
-                color = contentColor
-            )
-        } else {
-            Icon(
-                if (isActive) Icons.Default.GraphicEq else Icons.Default.Podcasts,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = when {
-                isGenerating -> "Finding similar tracks…"
-                isActive -> "Radio on — tap to stop"
-                else -> "Play Radio"
-            },
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = contentColor
-        )
-    }
-}
-
-
-@androidx.compose.runtime.Composable
-private fun DiscoveryRowSection(
-    label: String,
-    tracks: List<UnifiedTrack>,
-    onPlay: (UnifiedTrack) -> Unit,
-    onArtistClick: (UnifiedArtistRef) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 6.dp)
-        )
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(tracks, key = { it.id }) { track ->
-                RecommendationCard(
-                    track = track,
-                    onPlay = { onPlay(track) },
-                    onArtistClick = onArtistClick
-                )
-            }
-        }
-    }
-}
-
-
-@androidx.compose.runtime.Composable
-private fun RecommendationCard(
-    track: UnifiedTrack,
-    onPlay: () -> Unit,
-    onArtistClick: (UnifiedArtistRef) -> Unit
-) {
-    Column(modifier = Modifier.width(140.dp).padding(4.dp)) {
-        // Artwork (and title) play the track; each credited artist name navigates
-        // to that artist's page (supports multiple featured artists per track).
-        CoverImage(
-            url = track.artworkUri,
-            contentDescription = track.title,
-            size = 132.dp,
-            cornerRadius = MonoDimens.radiusSm,
-            modifier = Modifier.clickable(onClick = onPlay)
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = track.title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clickable(onClick = onPlay)
-        )
-        ClickableArtists(
-            artists = track.artists,
-            fallbackName = track.artistName,
-            onArtistClick = onArtistClick,
-        )
-    }
-}
 
 // The About tab index used to be written down here as a literal and silently
 // broke every time Settings was reordered. SETTINGS_TAB_ABOUT is derived from

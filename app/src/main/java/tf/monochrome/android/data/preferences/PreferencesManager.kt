@@ -24,6 +24,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
+import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
@@ -142,6 +143,16 @@ class PreferencesManager @Inject constructor(
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
         private val APP_TARGET_FPS = intPreferencesKey("app_target_fps")
         private val APP_RENDER_RESOLUTION = intPreferencesKey("app_render_resolution")
+
+        // Low performance mode. The automatic DeviceTier already trims effects on
+        // weak hardware; these are the user's own override, for a flagship on a
+        // long day out or a GPU whose driver hates the AGSL glass shader.
+        // LOW_PERFORMANCE_MODE is a convenience master: it has no independent
+        // effect, it just reads/writes the three real switches together.
+        private val LOW_PERFORMANCE_MODE = booleanPreferencesKey("low_performance_mode")
+        private val DISABLE_ANIMATIONS = booleanPreferencesKey("disable_animations")
+        private val LEGACY_PLAYER = booleanPreferencesKey("legacy_player")
+        private val DISABLE_LIQUID_GLASS = booleanPreferencesKey("disable_liquid_glass")
 
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
@@ -1685,6 +1696,64 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setAppRenderResolution(shortSide: Int) {
         dataStore.edit { it[APP_RENDER_RESOLUTION] = shortSide }
+    }
+
+    // --- Low performance mode ---
+    // Deliberately NOT in SETTINGS_SYNC_KEYS: like frame rate and resolution
+    // this is per-device tuning. A phone that needs the glass off shouldn't
+    // turn it off on the user's tablet too.
+    val disableAnimations: Flow<Boolean> = dataStore.data.map { it[DISABLE_ANIMATIONS] ?: false }
+    val legacyPlayer: Flow<Boolean> = dataStore.data.map { it[LEGACY_PLAYER] ?: false }
+    val disableLiquidGlass: Flow<Boolean> = dataStore.data.map { it[DISABLE_LIQUID_GLASS] ?: false }
+
+    /**
+     * The master switch. It owns no state of its own that the three below don't
+     * already carry — it is stored only so the row can be read back without
+     * recomputing, and it is kept true exactly while all three are true.
+     */
+    val lowPerformanceMode: Flow<Boolean> = dataStore.data.map { it[LOW_PERFORMANCE_MODE] ?: false }
+
+    /** Everything the UI layer needs to know, as one value. */
+    val lowPerformanceSettings: Flow<LowPerformanceSettings> = dataStore.data.map { prefs ->
+        LowPerformanceSettings(
+            disableAnimations = prefs[DISABLE_ANIMATIONS] ?: false,
+            legacyPlayer = prefs[LEGACY_PLAYER] ?: false,
+            disableLiquidGlass = prefs[DISABLE_LIQUID_GLASS] ?: false,
+        )
+    }
+
+    suspend fun setLowPerformanceMode(enabled: Boolean) {
+        dataStore.edit {
+            it[LOW_PERFORMANCE_MODE] = enabled
+            it[DISABLE_ANIMATIONS] = enabled
+            it[LEGACY_PLAYER] = enabled
+            it[DISABLE_LIQUID_GLASS] = enabled
+        }
+    }
+
+    suspend fun setDisableAnimations(enabled: Boolean) =
+        editLowPerformanceFlag(DISABLE_ANIMATIONS, enabled)
+
+    suspend fun setLegacyPlayer(enabled: Boolean) =
+        editLowPerformanceFlag(LEGACY_PLAYER, enabled)
+
+    suspend fun setDisableLiquidGlass(enabled: Boolean) =
+        editLowPerformanceFlag(DISABLE_LIQUID_GLASS, enabled)
+
+    // Writing one of the three re-derives the master in the same transaction, so
+    // the master switch can never disagree with the rows underneath it.
+    private suspend fun editLowPerformanceFlag(
+        key: Preferences.Key<Boolean>,
+        enabled: Boolean,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[key] = enabled
+            prefs[LOW_PERFORMANCE_MODE] = LowPerformanceSettings(
+                disableAnimations = prefs[DISABLE_ANIMATIONS] ?: false,
+                legacyPlayer = prefs[LEGACY_PLAYER] ?: false,
+                disableLiquidGlass = prefs[DISABLE_LIQUID_GLASS] ?: false,
+            ).allEnabled
+        }
     }
 
     // --- Clear all prefs (System) ---
