@@ -453,7 +453,9 @@ fun HomeScreen(
                             onOpen = {
                                 settingsViewModel.markWhatsNewSeen()
                                 navController.navigate(
-                                    Screen.Settings.createRoute(WHATS_NEW_SETTINGS_TAB)
+                                    Screen.Settings.createRoute(
+                                        tf.monochrome.android.ui.settings.SETTINGS_TAB_ABOUT
+                                    )
                                 )
                             },
                             onDismiss = { settingsViewModel.markWhatsNewSeen() },
@@ -694,8 +696,6 @@ private fun RecommendationCard(
     }
 }
 
-/** Index of the About tab in Settings, where What's New lives. */
-// Index of "About" in SettingsScreen.settingsTabs, which is where the What's
-// New panel lives. Moves whenever that list does — it dropped from 10 to 9 when
-// Interface was merged into Appearance.
-private const val WHATS_NEW_SETTINGS_TAB = 9
+// The About tab index used to be written down here as a literal and silently
+// broke every time Settings was reordered. SETTINGS_TAB_ABOUT is derived from
+// the tab list itself, so there is nothing left to keep in sync.

@@ -118,12 +118,24 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 
-// "Radio" is appended after "About" so existing hardcoded tab indices
-// ("settings?tab=4" for Equalizer, "settings?tab=7" for Instances) stay valid.
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
-// plumbing. "Interface" is gone — merged into Appearance, see AppearanceTab.
-private val settingsTabs = listOf("Appearance", "Audio", "Equalizer", "Library", "Downloads", "Instances", "Scrobbling", "Radio", "System", "About")
+// plumbing. "Interface" is gone — merged into Appearance, see AppearanceTab —
+// and "Instances" + "Scrobbling" are gone, merged into Connections along with
+// System's old "Account & Sync" group, so every account lives in one place.
+//
+// Positions are NOT stable across releases. Anything that needs to open a
+// specific tab must go through a named constant derived from this list (see
+// SETTINGS_TAB_ABOUT), never a literal — a hardcoded index has silently broken
+// twice now, once per reorder.
+private val settingsTabs = listOf("Appearance", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+
+/**
+ * Index of the About tab, where the What's New panel lives. Derived from
+ * [settingsTabs] rather than written down, so reordering the tabs can't leave a
+ * caller pointing at the wrong page.
+ */
+val SETTINGS_TAB_ABOUT: Int = settingsTabs.indexOf("About")
 
 /** One selectable step in the Appearance › Font Size picker. */
 private data class FontScalePreset(val label: String, val scale: Float)
@@ -182,7 +194,7 @@ fun SettingsScreen(
         )
 
         // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
-        // scroll the selected chip into view — swiping out to Radio (11th of 11)
+        // scroll the selected chip into view — swiping out to About (last of nine)
         // would otherwise leave the highlighted chip off-screen behind you.
         val chipRow = rememberLazyListState()
         LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
@@ -209,7 +221,7 @@ fun SettingsScreen(
             state = settingsPager,
             modifier = Modifier.fillMaxWidth().weight(1f),
             // Each tab is a full settings form; keeping neighbours composed
-            // would mean building all 11 of them up front.
+            // would mean building all nine of them up front.
             beyondViewportPageCount = 0,
         ) { page ->
             tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
@@ -219,11 +231,10 @@ fun SettingsScreen(
                     2 -> EqualizerTab(navController, viewModel)
                     3 -> LibrarySettingsTab(viewModel)
                     4 -> DownloadsTab(viewModel)
-                    5 -> InstancesTab(viewModel)
-                    6 -> ScrobblingTab(viewModel)
-                    7 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                    8 -> SystemTab(viewModel, navController)
-                    9 -> AboutTab(viewModel)
+                    5 -> ConnectionsTab(viewModel)
+                    6 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                    7 -> SystemTab(viewModel, navController)
+                    8 -> AboutTab(viewModel)
                 }
             }
         }
@@ -929,8 +940,16 @@ private fun IntSettingSlider(
 }
 
 // ─── Tab 3: Scrobbling ─────────────────────────────────────────────────
+/**
+ * Last.fm + ListenBrainz rows, unwrapped from any scroll container so
+ * [ConnectionsTab] can compose them alongside the other account groups —
+ * [SettingsTabContent] is a LazyColumn and two of those cannot nest.
+ *
+ * Depends on nothing but [viewModel]: the two dialogs below own all of their
+ * own state, so this block is safe to place anywhere.
+ */
 @Composable
-private fun ScrobblingTab(viewModel: SettingsViewModel) {
+private fun ScrobblingControls(viewModel: SettingsViewModel) {
     val lastFmEnabled by viewModel.lastFmEnabled.collectAsState()
     val lastFmUsername by viewModel.lastFmUsername.collectAsState()
     val lbEnabled by viewModel.listenBrainzEnabled.collectAsState()
@@ -999,30 +1018,28 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
         )
     }
 
-    SettingsTabContent {
-        SettingsGroupHeader("Last.fm")
-        SettingItem(
-            title = "Last.fm",
-            subtitle = if (lastFmEnabled) "Connected as ${lastFmUsername ?: "user"}" else "Not connected",
-            onClick = { showLastFmDialog = true }
-        )
-        if (lastFmEnabled) {
-            TextButton(onClick = { viewModel.clearLastFmSession() }) {
-                Text("Disconnect", color = MaterialTheme.colorScheme.error)
-            }
+    SettingsGroupHeader("Last.fm")
+    SettingItem(
+        title = "Last.fm",
+        subtitle = if (lastFmEnabled) "Connected as ${lastFmUsername ?: "user"}" else "Not connected",
+        onClick = { showLastFmDialog = true }
+    )
+    if (lastFmEnabled) {
+        TextButton(onClick = { viewModel.clearLastFmSession() }) {
+            Text("Disconnect", color = MaterialTheme.colorScheme.error)
         }
+    }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("ListenBrainz")
-        SettingItem(
-            title = "ListenBrainz",
-            subtitle = if (lbEnabled) "Connected" else "Not connected",
-            onClick = { showLbDialog = true }
-        )
-        if (lbEnabled) {
-            TextButton(onClick = { viewModel.clearListenBrainzToken() }) {
-                Text("Disconnect", color = MaterialTheme.colorScheme.error)
-            }
+    Spacer(modifier = Modifier.height(16.dp))
+    SettingsGroupHeader("ListenBrainz")
+    SettingItem(
+        title = "ListenBrainz",
+        subtitle = if (lbEnabled) "Connected" else "Not connected",
+        onClick = { showLbDialog = true }
+    )
+    if (lbEnabled) {
+        TextButton(onClick = { viewModel.clearListenBrainzToken() }) {
+            Text("Disconnect", color = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -1746,7 +1763,10 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Storage")
+        // Not "Storage" — System has a group by that name for the cache, and
+        // two identically-titled headers in different tabs read as the same
+        // setting reachable from two places. This one is about the files.
+        SettingsGroupHeader("Downloaded Files")
         OutlinedButton(
             onClick = { showClearDialog = true },
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
@@ -1758,146 +1778,280 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
     }
 }
 
-// ─── Tab 6: Instances ──────────────────────────────────────────────────
+// ─── Tab 6: Connections ────────────────────────────────────────────────
+/**
+ * Every account and endpoint in one place: which catalogs to search, the
+ * self-hosted server URLs behind them, the two scrobblers, the Spotify link
+ * that Library's playlist import rides on, and the app sign-in that syncs
+ * favourites across devices.
+ *
+ * Replaces the old Instances and Scrobbling tabs and absorbs System's
+ * "Account & Sync" group. Each section is a `...Controls` function rather than
+ * a tab of its own, because [SettingsTabContent] is a LazyColumn and nesting
+ * two of them throws on measure — so exactly one wrapper lives here.
+ */
 @Composable
-private fun InstancesTab(viewModel: SettingsViewModel) {
+private fun ConnectionsTab(viewModel: SettingsViewModel) {
+    SettingsTabContent {
+        CatalogControls(viewModel)
+        Spacer(modifier = Modifier.height(20.dp))
+        ScrobblingControls(viewModel)
+        Spacer(modifier = Modifier.height(20.dp))
+        SpotifyAccountControls()
+        Spacer(modifier = Modifier.height(20.dp))
+        AccountControls(viewModel)
+    }
+}
+
+/**
+ * Spotify connect / disconnect. Only the account link lives here — the import
+ * UI it feeds stays on Library, next to the playlists it creates. Both read the
+ * same [SpotifyImportViewModel]: `hiltViewModel()` resolves against the Settings
+ * NavBackStackEntry, which is shared by every tab, so connecting here is
+ * immediately visible to the importer there.
+ */
+@Composable
+private fun SpotifyAccountControls() {
+    val context = LocalContext.current
+    val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
+    val connected by spotifyViewModel.isConnected.collectAsState()
+    val userName by spotifyViewModel.userName.collectAsState()
+    val connecting by spotifyViewModel.isConnecting.collectAsState()
+    val authError by spotifyViewModel.authError.collectAsState()
+
+    SettingsGroupHeader("Spotify")
+    if (connected) {
+        SettingItem(
+            title = "Spotify",
+            subtitle = "Connected as ${userName ?: "…"}",
+        )
+        OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
+            Text("Disconnect Spotify")
+        }
+    } else {
+        Text(
+            "Connect your Spotify account to import playlists from Library. "
+                + "Note: only Spotify accounts allowlisted for this app can "
+                + "connect while it is in Development mode.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Button(
+            onClick = { spotifyViewModel.connect(context) },
+            enabled = !connecting
+        ) {
+            Text(if (connecting) "Connecting…" else "Connect Spotify")
+        }
+    }
+    authError?.let { error ->
+        Text(
+            error,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+/**
+ * App sign-in, moved off System — it is an account, and every other account is
+ * here now. Owns its own confirm dialog, so it depends on nothing but
+ * [viewModel].
+ */
+@Composable
+private fun AccountControls(viewModel: SettingsViewModel) {
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val userEmail by viewModel.userEmail.collectAsState()
+
+    var showSignOutDialog by remember { mutableStateOf(false) }
+    if (showSignOutDialog) {
+        AlertDialog(
+            onDismissRequest = { showSignOutDialog = false },
+            title = { Text("Sign out?") },
+            text = { Text("You'll stop syncing favorites and playlists across devices until you sign back in.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSignOutDialog = false
+                    viewModel.logout()
+                }) { Text("Sign Out", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSignOutDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    SettingsGroupHeader("Account")
+    if (isLoggedIn) {
+        SettingItem(
+            title = "Signed in as",
+            subtitle = userEmail ?: "Unknown",
+        )
+        OutlinedButton(onClick = { showSignOutDialog = true }) {
+            Text("Sign Out")
+        }
+    } else {
+        Text(
+            "Sign in to sync favorites and playlists across devices.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Text(
+            "Use the Account page to sign in with Google or email.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Catalog picker + the self-hosted server URLs, unwrapped from any scroll
+ * container so [ConnectionsTab] can stack it with the scrobbler, Spotify and
+ * account groups — [SettingsTabContent] is a LazyColumn and two cannot nest.
+ *
+ * Depends on nothing but [viewModel]; both text fields own their own state.
+ */
+@Composable
+private fun CatalogControls(viewModel: SettingsViewModel) {
     val customEndpoint by viewModel.customEndpoint.collectAsState()
     val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsState()
     val sourceMode by viewModel.sourceMode.collectAsState()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
 
-    SettingsTabContent {
-        // Source mode picker — controls which catalogs feed search/discovery.
-        // Plays/downloads still follow the per-track PlaybackSource so a
-        // download you triggered earlier keeps working regardless of this
-        // setting.
-        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    SettingsGroupHeader("Catalog Source")
+    // Source mode picker — controls which catalogs feed search/discovery.
+    // Plays/downloads still follow the per-track PlaybackSource so a
+    // download you triggered earlier keeps working regardless of this
+    // setting.
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            text = "Catalog source",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Which catalogs power Search and Browse.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        val sourceOptions = listOf(
+            tf.monochrome.android.data.preferences.SourceMode.BOTH to "Both",
+            tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY to "TIDAL only",
+            tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY to "Qobuz only",
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            sourceOptions.forEachIndexed { index, (mode, label) ->
+                SegmentedButton(
+                    selected = sourceMode == mode,
+                    onClick = { viewModel.setSourceMode(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index, sourceOptions.size),
+                ) {
+                    Text(label)
+                }
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(20.dp))
+    SettingsGroupHeader("Servers")
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Catalog source",
+                text = "Tidal HiFi URL",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Which catalogs power Search and Browse.",
+                text = "Your own Tidal HiFi server — used for search, browse, and streaming.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            val sourceOptions = listOf(
-                tf.monochrome.android.data.preferences.SourceMode.BOTH to "Both",
-                tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY to "TIDAL only",
-                tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY to "Qobuz only",
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                sourceOptions.forEachIndexed { index, (mode, label) ->
-                    SegmentedButton(
-                        selected = sourceMode == mode,
-                        onClick = { viewModel.setSourceMode(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index, sourceOptions.size),
-                    ) {
-                        Text(label)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        // Snapshot the latest input/saved value into stable holders so the
+        // onFocusChanged closure captured by the OutlinedTextField doesn't
+        // need to re-allocate on every keystroke recomposition.
+        val latestInput = rememberUpdatedState(customInput)
+        val latestSaved = rememberUpdatedState(customEndpoint)
+        OutlinedTextField(
+            value = customInput,
+            onValueChange = { customInput = it },
+            placeholder = {
+                Text(
+                    "API endpoint",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                viewModel.setCustomEndpoint(latestInput.value.trim().ifBlank { null })
+            }),
+            modifier = Modifier
+                .widthIn(max = 240.dp)
+                .onFocusChanged { focusState ->
+                    if (!focusState.isFocused) {
+                        val trimmed = latestInput.value.trim().ifBlank { null }
+                        if (trimmed != latestSaved.value) {
+                            viewModel.setCustomEndpoint(trimmed)
+                        }
                     }
                 }
-            }
-        }
+        )
+    }
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Tidal HiFi URL",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Your own Tidal HiFi server — used for search, browse, and streaming.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            // Snapshot the latest input/saved value into stable holders so the
-            // onFocusChanged closure captured by the OutlinedTextField doesn't
-            // need to re-allocate on every keystroke recomposition.
-            val latestInput = rememberUpdatedState(customInput)
-            val latestSaved = rememberUpdatedState(customEndpoint)
-            OutlinedTextField(
-                value = customInput,
-                onValueChange = { customInput = it },
-                placeholder = {
-                    Text(
-                        "API endpoint",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    viewModel.setCustomEndpoint(latestInput.value.trim().ifBlank { null })
-                }),
-                modifier = Modifier
-                    .widthIn(max = 240.dp)
-                    .onFocusChanged { focusState ->
-                        if (!focusState.isFocused) {
-                            val trimmed = latestInput.value.trim().ifBlank { null }
-                            if (trimmed != latestSaved.value) {
-                                viewModel.setCustomEndpoint(trimmed)
-                            }
-                        }
-                    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Qobuz URL",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Used for downloads. Honored whenever set, independent of Dev Mode.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+        Spacer(modifier = Modifier.width(12.dp))
+        val latestQobuzInput = rememberUpdatedState(qobuzInput)
+        val latestQobuzSaved = rememberUpdatedState(qobuzEndpoint)
+        OutlinedTextField(
+            value = qobuzInput,
+            onValueChange = { qobuzInput = it },
+            placeholder = {
                 Text(
-                    text = "Qobuz URL",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    "Qobuz instance",
+                    style = MaterialTheme.typography.bodyMedium
                 )
-                Text(
-                    text = "Used for downloads. Honored whenever set, independent of Dev Mode.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            val latestQobuzInput = rememberUpdatedState(qobuzInput)
-            val latestQobuzSaved = rememberUpdatedState(qobuzEndpoint)
-            OutlinedTextField(
-                value = qobuzInput,
-                onValueChange = { qobuzInput = it },
-                placeholder = {
-                    Text(
-                        "Qobuz instance",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    viewModel.setQobuzEndpoint(latestQobuzInput.value.trim().ifBlank { null })
-                }),
-                modifier = Modifier
-                    .widthIn(max = 240.dp)
-                    .onFocusChanged { focusState ->
-                        if (!focusState.isFocused) {
-                            val trimmed = latestQobuzInput.value.trim().ifBlank { null }
-                            if (trimmed != latestQobuzSaved.value) {
-                                viewModel.setQobuzEndpoint(trimmed)
-                            }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                viewModel.setQobuzEndpoint(latestQobuzInput.value.trim().ifBlank { null })
+            }),
+            modifier = Modifier
+                .widthIn(max = 240.dp)
+                .onFocusChanged { focusState ->
+                    if (!focusState.isFocused) {
+                        val trimmed = latestQobuzInput.value.trim().ifBlank { null }
+                        if (trimmed != latestQobuzSaved.value) {
+                            viewModel.setQobuzEndpoint(trimmed)
                         }
                     }
-            )
-        }
+                }
+        )
     }
 }
 
@@ -2039,50 +2193,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        SettingsGroupHeader("Account & Sync")
-        val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-        val userEmail by viewModel.userEmail.collectAsState()
-
-        var showSignOutDialog by remember { mutableStateOf(false) }
-        if (showSignOutDialog) {
-            AlertDialog(
-                onDismissRequest = { showSignOutDialog = false },
-                title = { Text("Sign out?") },
-                text = { Text("You'll stop syncing favorites and playlists across devices until you sign back in.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showSignOutDialog = false
-                        viewModel.logout()
-                    }) { Text("Sign Out", color = MaterialTheme.colorScheme.error) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showSignOutDialog = false }) { Text("Cancel") }
-                }
-            )
-        }
-        if (isLoggedIn) {
-            SettingItem(
-                title = "Signed in as",
-                subtitle = userEmail ?: "Unknown",
-            )
-            OutlinedButton(onClick = { showSignOutDialog = true }) {
-                Text("Sign Out")
-            }
-        } else {
-            Text(
-                "Sign in to sync favorites and playlists across devices.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Text(
-                "Use the Account page to sign in with Google or email.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
         SettingsGroupHeader("Backup & Restore")
         Text(
             "Export or import your library and history as a JSON file",
@@ -2193,13 +2303,17 @@ private fun AboutTab(viewModel: SettingsViewModel) {
     // Reaching the panel counts as having read it, however the user got here.
     LaunchedEffect(Unit) { viewModel.markWhatsNewSeen() }
     SettingsTabContent {
+        // WhatsNewPanel supplies its own "What's New" header.
         WhatsNewPanel()
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Updates")
         SettingItem(
             title = "Check for updates",
             subtitle = "Look on GitHub for a newer release now",
             onClick = { viewModel.checkForUpdatesNow() },
         )
         Spacer(modifier = Modifier.height(24.dp))
+        SettingsGroupHeader("About Tryptify")
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -2582,8 +2696,6 @@ private fun PlaylistImportSection() {
         val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
         val spotifyConnected by spotifyViewModel.isConnected.collectAsState()
         val spotifyUserName by spotifyViewModel.userName.collectAsState()
-        val spotifyConnecting by spotifyViewModel.isConnecting.collectAsState()
-        val spotifyAuthError by spotifyViewModel.authError.collectAsState()
         val importProgress by spotifyViewModel.importProgress.collectAsState()
         val isImporting by spotifyViewModel.isImporting.collectAsState()
         var showSpotifyPicker by remember { mutableStateOf(false) }
@@ -2594,38 +2706,20 @@ private fun PlaylistImportSection() {
             if (success) importUrl = ""
         }
 
-        if (spotifyConnected) {
-            SettingItem(
-                title = "Spotify",
-                subtitle = "Connected as ${spotifyUserName ?: "…"}",
-                onClick = {}
-            )
-            OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
-                Text("Disconnect Spotify")
-            }
-        } else {
-            Text(
-                "Connect your Spotify account to import playlists directly. " +
-                    "Note: only Spotify accounts allowlisted for this app can connect while it is in Development mode.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Button(
-                onClick = { spotifyViewModel.connect(context) },
-                enabled = !spotifyConnecting
-            ) {
-                Text(if (spotifyConnecting) "Connecting…" else "Connect Spotify")
-            }
-        }
-        spotifyAuthError?.let { error ->
-            Text(
-                error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
+        // Connect / disconnect lives on the Connections tab with every other
+        // account; this section keeps only the import it feeds. Both read the
+        // same SpotifyImportViewModel, so linking there lights this up without
+        // leaving Settings.
+        Text(
+            if (spotifyConnected) {
+                "Connected as ${spotifyUserName ?: "…"} — paste a playlist link, or pick from your library."
+            } else {
+                "Connect Spotify on the Connections tab to import your playlists."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
         androidx.compose.material3.OutlinedTextField(
@@ -2636,7 +2730,7 @@ private fun PlaylistImportSection() {
             singleLine = true,
             enabled = spotifyConnected,
             supportingText = if (!spotifyConnected) {
-                { Text("Connect Spotify above to enable URL import") }
+                { Text("Connect Spotify on the Connections tab to enable URL import") }
             } else null
         )
         Spacer(modifier = Modifier.height(8.dp))
