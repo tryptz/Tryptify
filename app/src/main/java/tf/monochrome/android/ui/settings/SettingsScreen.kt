@@ -585,8 +585,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val spectrumBins by viewModel.spectrumBins.collectAsState()
     val playerDynamicColor by viewModel.playerDynamicColor.collectAsState()
     val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsState()
-    val appFps by viewModel.appTargetFps.collectAsState()
-    val appResolution by viewModel.appRenderResolution.collectAsState()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
     var showTextureDropdown by remember { mutableStateOf(false) }
     var showPresetDropdown by remember { mutableStateOf(false) }
@@ -642,60 +640,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
                         Text(mode.displayName)
                     }
                 }
-            }
-        }
-
-        // App-wide frame rate and panel resolution, applied by selecting a
-        // matching display mode in MainActivity. Resolution options only list
-        // classes the panel can reach; a request maps to the nearest mode.
-        var showFpsDropdown by remember { mutableStateOf(false) }
-        SettingItem(
-            title = "Frame Rate",
-            subtitle = "Whole app: " + if (appFps == 0) "Unlocked (display max)" else "${appFps}fps",
-            onClick = { showFpsDropdown = true }
-        )
-        DropdownMenu(expanded = showFpsDropdown, onDismissRequest = { showFpsDropdown = false }) {
-            listOf(0, 60, 120).forEach { fps ->
-                DropdownMenuItem(
-                    text = { Text(if (fps == 0) "Unlocked" else "${fps}fps") },
-                    onClick = { viewModel.setAppTargetFps(fps); showFpsDropdown = false }
-                )
-            }
-        }
-
-        val context = LocalContext.current
-        var showResDropdown by remember { mutableStateOf(false) }
-        val nativeShortSide = remember {
-            val modes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                context.display?.supportedModes
-            } else null
-            modes?.maxOfOrNull { minOf(it.physicalWidth, it.physicalHeight) }
-                ?: minOf(
-                    context.resources.displayMetrics.widthPixels,
-                    context.resources.displayMetrics.heightPixels,
-                )
-        }
-        val resolutionOptions = remember(nativeShortSide) {
-            listOf(0) + listOf(720, 1080, 1440, 2160).filter { it <= nativeShortSide }
-        }
-        fun resolutionLabel(shortSide: Int) = when {
-            shortSide == 0 -> "Native"
-            shortSide >= 2160 -> "4K (2160p)"
-            shortSide >= 1440 -> "2K (1440p)"
-            shortSide >= 1080 -> "1080p"
-            else -> "720p"
-        }
-        SettingItem(
-            title = "Resolution",
-            subtitle = "Whole app: ${resolutionLabel(appResolution)} — nearest panel mode is used",
-            onClick = { showResDropdown = true }
-        )
-        DropdownMenu(expanded = showResDropdown, onDismissRequest = { showResDropdown = false }) {
-            resolutionOptions.forEach { shortSide ->
-                DropdownMenuItem(
-                    text = { Text(resolutionLabel(shortSide)) },
-                    onClick = { viewModel.setAppRenderResolution(shortSide); showResDropdown = false }
-                )
             }
         }
 
@@ -827,7 +771,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Graphics")
+        SettingsGroupHeader("Visualizer Graphics")
         
         SettingItem(
             title = "Texture Size",
@@ -1204,7 +1148,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             onClick = { navController.navigate(Screen.AtmosRenderer.route) },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        // Everything below used to sit under "Spatial Audio" too, which only
+        // ever described the Atmos row above it. The DSP block size, the USB
+        // routing and the downmix are what leaves the engine and how — their
+        // own group.
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Output")
         DspBlockSizeSelector(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -1215,9 +1164,6 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
         Spacer(modifier = Modifier.height(8.dp))
         ChannelDetectorCard(viewModel)
-
-        Spacer(modifier = Modifier.height(8.dp))
-        DebugScreenRecorderRow()
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Playback Speed")
@@ -2316,12 +2262,80 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+        // Frame rate and resolution are whole-app settings and were sitting in
+        // Appearance under a "Display" header, next to the explicit-badge
+        // toggle. They cost battery and heat, which makes them System's
+        // business — the visualizer's own GPU settings stay with the visualizer.
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Performance")
+        val appFps by viewModel.appTargetFps.collectAsState()
+        val appResolution by viewModel.appRenderResolution.collectAsState()
+        // App-wide frame rate and panel resolution, applied by selecting a
+        // matching display mode in MainActivity. Resolution options only list
+        // classes the panel can reach; a request maps to the nearest mode.
+        var showFpsDropdown by remember { mutableStateOf(false) }
+        SettingItem(
+            title = "Frame Rate",
+            subtitle = "Whole app: " + if (appFps == 0) "Unlocked (display max)" else "${appFps}fps",
+            onClick = { showFpsDropdown = true }
+        )
+        DropdownMenu(expanded = showFpsDropdown, onDismissRequest = { showFpsDropdown = false }) {
+            listOf(0, 60, 120).forEach { fps ->
+                DropdownMenuItem(
+                    text = { Text(if (fps == 0) "Unlocked" else "${fps}fps") },
+                    onClick = { viewModel.setAppTargetFps(fps); showFpsDropdown = false }
+                )
+            }
+        }
+
+        val context = LocalContext.current
+        var showResDropdown by remember { mutableStateOf(false) }
+        val nativeShortSide = remember {
+            val modes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                context.display?.supportedModes
+            } else null
+            modes?.maxOfOrNull { minOf(it.physicalWidth, it.physicalHeight) }
+                ?: minOf(
+                    context.resources.displayMetrics.widthPixels,
+                    context.resources.displayMetrics.heightPixels,
+                )
+        }
+        val resolutionOptions = remember(nativeShortSide) {
+            listOf(0) + listOf(720, 1080, 1440, 2160).filter { it <= nativeShortSide }
+        }
+        fun resolutionLabel(shortSide: Int) = when {
+            shortSide == 0 -> "Native"
+            shortSide >= 2160 -> "4K (2160p)"
+            shortSide >= 1440 -> "2K (1440p)"
+            shortSide >= 1080 -> "1080p"
+            else -> "720p"
+        }
+        SettingItem(
+            title = "Resolution",
+            subtitle = "Whole app: ${resolutionLabel(appResolution)} — nearest panel mode is used",
+            onClick = { showResDropdown = true }
+        )
+        DropdownMenu(expanded = showResDropdown, onDismissRequest = { showResDropdown = false }) {
+            resolutionOptions.forEach { shortSide ->
+                DropdownMenuItem(
+                    text = { Text(resolutionLabel(shortSide)) },
+                    onClick = { viewModel.setAppRenderResolution(shortSide); showResDropdown = false }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Diagnostics")
         SettingItem(
             title = "View debug log",
             subtitle = "Live logcat stream for this process — copy or export as a file for bug reports",
             onClick = { navController.navigate(Screen.DebugLog.route) },
         )
+
+        // Moved from Audio, where it had ended up under the "Spatial Audio"
+        // header. A screen recorder is a diagnostic, not an audio setting.
+        Spacer(modifier = Modifier.height(8.dp))
+        DebugScreenRecorderRow()
     }
 }
 
