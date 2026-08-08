@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+- **A song tapped right after opening the app no longer does nothing** — the tap resolved fully and was then dropped because the playback session hadn't finished connecting, while still being recorded as a success, so nothing retried and no error appeared. It now waits briefly for the connection.
+- **Qobuz tracks are never resolved against TIDAL or Apple Music** — Qobuz is its own catalogue, but only the first track of a Qobuz album was routed to it. Every following track, and every notification or lock-screen skip, went through TIDAL with a Qobuz id, which either fails or plays a different recording entirely under the right title and artwork. Downloads had the same problem in reverse, silently substituting an Apple Music match when Qobuz came up empty.
+
 ### Added
 - **Local copies always play first** — tapping a song anywhere in the app (search, an album or artist page, a playlist, radio, the queue, a lock-screen skip) now plays the file on your device instead of streaming it, whenever you have one. Both stores count: the scanned library and your downloads. Matching is ISRC/MusicBrainz-first and otherwise needs the title, an artist credit and the runtime to line up, so a live take or a different edit is never substituted for the recording you asked for. The decision is cached per song, so skipping around a queue costs nothing.
 - **Auto-download liked songs** — a toggle at the top of Settings → Library. With it on, liking a song downloads it. It is forward-only by design: turning it on never touches songs you liked earlier, so it can't kick off a bulk download of an existing Liked Songs list. Songs already on the device are skipped.
+- **Faster song start** — playback now begins after 750 ms of buffered audio instead of 2.5 s, on every start and every skip. The old value was described in the code as lowered from the default; it was in fact exactly the Media3 default, so the start-up threshold had never been reduced at all. The post-underrun threshold is unchanged, so a struggling connection still refills properly.
 - **Downloaded badge** — song rows show a ring with a down arrow when the track is on the device. Unlike the in-flight progress indicator this one persists across restarts, and it appears in Library, playlists, album and artist pages, Home and search.
 
 ## [1.8.1] — Apple Music

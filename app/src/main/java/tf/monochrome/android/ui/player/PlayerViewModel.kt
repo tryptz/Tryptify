@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
@@ -845,12 +847,16 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mediaController?.let { mc ->
-                        mc.setMediaItem(resolved.mediaItem)
-                        mc.prepare()
-                        mc.play()
+                    val mc = awaitMediaController()
+                    if (mc == null) {
+                        handleResolveFailure()
+                        return@launch
                     }
+                    mc.setMediaItem(resolved.mediaItem)
+                    mc.prepare()
+                    mc.play()
                     onResolveSucceeded()
+                    warmUpcoming()
                 } else {
                     // Legacy API path
                     val (mediaItem, _) = streamResolver.resolveMediaItem(track)
@@ -858,15 +864,61 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mediaController?.let { mc ->
-                        mc.setMediaItem(mediaItem)
-                        mc.prepare()
-                        mc.play()
+                    val mc = awaitMediaController()
+                    if (mc == null) {
+                        handleResolveFailure()
+                        return@launch
                     }
+                    mc.setMediaItem(mediaItem)
+                    mc.prepare()
+                    mc.play()
                     onResolveSucceeded()
+                    warmUpcoming()
                 }
             } catch (_: Exception) {
                 handleResolveFailure()
+            }
+        }
+    }
+
+    /**
+     * The connected controller, waiting briefly for the connection if the tap
+     * beat it.
+     *
+     * `mediaController` is assigned asynchronously from [connectToService], so
+     * a song tapped in the first moments after the app opens used to resolve
+     * fully and then hit a null controller inside a `?.let` — the play was
+     * dropped on the floor, and the code still reported success, so nothing
+     * retried and no error surfaced. The user just saw a tap do nothing and had
+     * to tap again. By the time a resolve finishes the connection is normally
+     * long since up, so this almost always returns immediately.
+     */
+    private suspend fun awaitMediaController(): MediaController? {
+        mediaController?.let { return it }
+        val future = controllerFuture ?: return null
+        return withTimeoutOrNull(CONTROLLER_CONNECT_TIMEOUT_MS) {
+            suspendCancellableCoroutine { cont ->
+                future.addListener(
+                    { cont.resume(runCatching { future.get() }.getOrNull()) { _, _, _ -> } },
+                    MoreExecutors.directExecutor(),
+                )
+            }
+        }
+    }
+
+    /**
+     * Warm the next couple of queue entries once playback is under way, so a
+     * skip doesn't start from cold. Only the service used to do this, which
+     * left every UI-initiated play unwarmed. Detached — it must never hold up
+     * the track that's already playing.
+     */
+    private fun warmUpcoming() {
+        viewModelScope.launch {
+            val queue = queueManager.currentQueue
+            val currentIdx = queueManager.currentQueueIndex
+            for (i in 1..2) {
+                val nextIdx = currentIdx + i
+                if (nextIdx < queue.size) streamResolver.warmUpcoming(queue[nextIdx])
             }
         }
     }
@@ -1079,5 +1131,13 @@ class PlayerViewModel @Inject constructor(
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         return "%d:%02d".format(minutes, seconds)
+    }
+
+    private companion object {
+        // Only ever waited on for a tap that beat the session connection, which
+        // in practice resolves in well under a second. The bound is here so a
+        // service that never comes up surfaces as a playback error rather than
+        // a coroutine parked forever.
+        const val CONTROLLER_CONNECT_TIMEOUT_MS = 5_000L
     }
 }

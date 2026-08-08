@@ -111,6 +111,33 @@ class StreamResolver @Inject constructor(
         return Pair(fallback, trackStream)
     }
 
+    /**
+     * Pre-warm what can *usefully* be pre-warmed for an upcoming queue entry.
+     *
+     * Only work whose result outlives the call is done here. Qobuz parks the
+     * whole file on disk and the on-device lookup is memoised, so both make the
+     * eventual play instant. A TIDAL or Apple stream URL is deliberately *not*
+     * fetched: it's short-lived, so by the time the track comes round minutes
+     * later it would have to be fetched again — the old preload did exactly
+     * that and threw the answer away, spending a request (and connection
+     * contention) at the precise moment the current track was trying to start.
+     */
+    suspend fun warmUpcoming(track: Track) {
+        runCatching {
+            val local = localFor(
+                title = track.title,
+                artist = track.displayArtist,
+                albumTitle = track.album?.title,
+                durationSeconds = track.duration,
+                catalogTrackId = track.id,
+            )
+            if (local != null) return@runCatching
+            if (qobuzIdRegistry.isQobuzTrack(track.id)) {
+                qobuzCache.getOrFetch(track.id, AudioQuality.LOSSLESS)
+            }
+        }
+    }
+
     // New method for UnifiedTrack
     @OptIn(UnstableApi::class)
     suspend fun resolveUnifiedTrack(track: UnifiedTrack): ResolvedMedia {

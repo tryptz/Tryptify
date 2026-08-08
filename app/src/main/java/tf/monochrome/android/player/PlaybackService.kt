@@ -119,16 +119,23 @@ class PlaybackService : MediaSessionService() {
         // Tuned for hi-fi streaming: buffer 30 s minimum and 120 s cap so a
         // brief cell-signal dip mid-track doesn't rebuffer, and the 48 kHz
         // Opus / FLAC / ALAC tail has room without starving the audio
-        // thread. Playback starts after 2.5 s of buffered audio (down from
-        // the 5 s default) so tapping play feels immediate on a warm cache;
-        // rebuffer after an underrun waits for 5 s so we don't churn. See
-        // androidx.media3.exoplayer.DefaultLoadControl defaults — this
-        // widens the ceiling by 2-3× to absorb hi-bitrate streams.
+        // thread. See androidx.media3.exoplayer.DefaultLoadControl defaults —
+        // this widens the ceiling by 2-3× to absorb hi-bitrate streams.
+        //
+        // bufferForPlaybackMs is what the listener actually feels: nothing is
+        // heard until that much media is buffered, on every start and every
+        // skip. It used to sit at 2_500, described as "down from the 5 s
+        // default" — but DEFAULT_BUFFER_FOR_PLAYBACK_MS *is* 2500, so the
+        // start-up threshold had never been lowered at all. 750 ms is enough
+        // for the decoder to keep ahead on a local file or a warm stream, and
+        // it comes straight off time-to-first-sound. The post-underrun
+        // threshold stays at 5 s, so a genuinely struggling connection still
+        // refills properly instead of churning.
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 /* minBufferMs */ 30_000,
                 /* maxBufferMs */ 120_000,
-                /* bufferForPlaybackMs */ 2_500,
+                /* bufferForPlaybackMs */ 750,
                 /* bufferForPlaybackAfterRebufferMs */ 5_000,
             )
             .setPrioritizeTimeOverSizeThresholds(true)
@@ -672,17 +679,16 @@ class PlaybackService : MediaSessionService() {
     }
 
     private suspend fun preloadNextTracks() {
-        // Preload metadata for next 2 tracks to reduce latency
+        // Warm the next 2 tracks so a skip doesn't start cold. Only durable
+        // work is done — see StreamResolver.warmUpcoming; a full resolve here
+        // fetched short-lived stream URLs and discarded them, which cost a
+        // request at the worst possible moment and bought nothing.
         val queue = queueManager.currentQueue
         val currentIdx = queueManager.currentQueueIndex
         for (i in 1..2) {
             val nextIdx = currentIdx + i
             if (nextIdx < queue.size) {
-                try {
-                    streamResolver.resolveMediaItem(queue[nextIdx])
-                } catch (_: Exception) {
-                    // Preload failure is non-critical
-                }
+                streamResolver.warmUpcoming(queue[nextIdx])
             }
         }
     }
