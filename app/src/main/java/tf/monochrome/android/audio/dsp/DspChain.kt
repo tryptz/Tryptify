@@ -36,6 +36,11 @@ class DspChain private constructor(
     val mixBus: MixBusProcessor,
     val autoEq: AutoEqProcessor,
     val parametricEq: ParametricEqProcessor,
+    // Held here because MixBusProcessor keeps them private, and this chain is
+    // the thing that made them — no need to widen that API to seed a copy.
+    val inflator: InflatorEffect,
+    val compressor: CompressorEffect,
+    val crossfeed: CrossfeedEffect,
 ) {
     /**
      * In the same order as the main player's chain, minus the taps. The Atmos
@@ -64,10 +69,23 @@ class DspChain private constructor(
         parametricBands: List<tf.monochrome.android.domain.model.EqBand>,
         parametricPreamp: Float,
         parametricEnabled: Boolean,
+        inflatorState: tf.monochrome.android.audio.dsp.oxford.InflatorState,
+        compressorState: tf.monochrome.android.audio.dsp.oxford.CompressorState,
+        crossfeedState: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedState,
     ) {
         pendingDspState = dspStateJson?.takeIf { it.isNotBlank() && it != "{}" }
         autoEq.applyBands(autoEqBandsL, autoEqBandsR, autoEqPreamp, autoEqEnabled)
         parametricEq.applyBands(parametricBands, parametricPreamp, parametricEnabled)
+
+        // The Oxford chain hangs off MixBusProcessor rather than the native
+        // engine, so it isn't covered by the state JSON above. Without this the
+        // outgoing tail of every blend played with the Inflator, Compressor and
+        // Crossfeed at their defaults — the user's whole post-chain dropping
+        // out for the length of the transition, oversampling included. Each
+        // update{} pushes the full state natively in one call.
+        inflator.update { inflatorState }
+        compressor.update { compressorState }
+        crossfeed.update { crossfeedState }
     }
 
     private var pendingDspState: String? = null
@@ -105,6 +123,9 @@ class DspChain private constructor(
         engineReadyJob?.cancel()
         engineReadyJob = null
         processors.forEach { runCatching { it.reset() } }
+        // These hold native handles of their own, outside the mix engine.
+        runCatching { inflator.release() }
+        runCatching { compressor.release() }
         pendingDspState = null
     }
 
@@ -114,16 +135,20 @@ class DspChain private constructor(
          * injected: Hilt hands out the singletons the main player uses, and the
          * entire point here is to *not* get those.
          */
-        fun createCopy(): DspChain = DspChain(
-            channelDetector = ChannelDetectorProcessor(),
-            downmix = DownmixProcessor(),
-            mixBus = MixBusProcessor(
-                inflator = InflatorEffect(),
-                compressor = CompressorEffect(),
-                crossfeed = CrossfeedEffect(),
-            ),
-            autoEq = AutoEqProcessor(),
-            parametricEq = ParametricEqProcessor(),
-        )
+        fun createCopy(): DspChain {
+            val inflator = InflatorEffect()
+            val compressor = CompressorEffect()
+            val crossfeed = CrossfeedEffect()
+            return DspChain(
+                channelDetector = ChannelDetectorProcessor(),
+                downmix = DownmixProcessor(),
+                mixBus = MixBusProcessor(inflator, compressor, crossfeed),
+                autoEq = AutoEqProcessor(),
+                parametricEq = ParametricEqProcessor(),
+                inflator = inflator,
+                compressor = compressor,
+                crossfeed = crossfeed,
+            )
+        }
     }
 }

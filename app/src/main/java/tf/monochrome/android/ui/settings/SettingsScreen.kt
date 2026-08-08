@@ -2514,6 +2514,11 @@ private fun AboutTab(viewModel: SettingsViewModel) {
     LaunchedEffect(Unit) { viewModel.markWhatsNewSeen() }
     SettingsTabContent {
         WhatsNewPanel()
+        SettingItem(
+            title = "Check for updates",
+            subtitle = "Look on GitHub for a newer release now",
+            onClick = { viewModel.checkForUpdatesNow() },
+        )
         Spacer(modifier = Modifier.height(24.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),

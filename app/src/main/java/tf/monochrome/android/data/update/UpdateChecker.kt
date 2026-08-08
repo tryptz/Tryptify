@@ -102,9 +102,13 @@ class UpdateChecker @Inject constructor(
 
 
     private companion object {
+        // Same shape as HeadphoneAutoEqApi: the repo appears once.
+        const val REPO_OWNER = "tryptz"
+        const val REPO_NAME = "Tryptify"
         const val LATEST_RELEASE_URL =
-            "https://api.github.com/repos/tryptz/Tryptify/releases/latest"
-        const val RELEASES_PAGE_URL = "https://github.com/tryptz/Tryptify/releases/latest"
+            "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+        const val RELEASES_PAGE_URL =
+            "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest"
         const val CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
     }
 }

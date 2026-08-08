@@ -10,8 +10,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// Versatile distortion/saturation with 6 waveshaper types, 2x oversampling,
-// post-distortion tone control, envelope-following drive, and stereo spread.
+// Versatile distortion/saturation with 6 waveshaper types, post-distortion
+// tone control, envelope-following drive, and stereo spread. Anti-aliasing
+// comes from the per-snapin oversampling wrapper in SnapinProcessor.
 class DistortionProcessor : public SnapinProcessor {
 public:
     enum Params {
@@ -75,14 +76,17 @@ public:
             float wetL = dryL * driveL + bias_;
             float wetR = dryR * driveR + bias_;
 
-            // 2x oversampling: duplicate, shape, average pairs
-            float wetL1 = waveshape(wetL);
-            float wetL2 = waveshape(wetL * 0.95f + wetL1 * 0.05f);
-            wetL = (wetL1 + wetL2) * 0.5f;
-
-            float wetR1 = waveshape(wetR);
-            float wetR2 = waveshape(wetR * 0.95f + wetR1 * 0.05f);
-            wetR = (wetR1 + wetR2) * 0.5f;
+            // Anti-aliasing is the per-snapin oversampling wrapper's job
+            // (SnapinProcessor::processOS, Off/2x/4x from the FX chain UI),
+            // which actually raises the rate through a filter pair. What used
+            // to sit here — shape the sample, shape it again with 5% of the
+            // first result mixed in, average the two — was labelled "2x
+            // oversampling" but never changed the rate, so it could not remove
+            // an alias product; all it did was soften the transfer function
+            // away from the curve the user picked, and it kept doing that
+            // inside the real oversampler when that was switched on.
+            wetL = waveshape(wetL);
+            wetR = waveshape(wetR);
 
             // DC blocker
             wetL = dcL_.process(wetL);

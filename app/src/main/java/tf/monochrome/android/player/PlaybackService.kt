@@ -61,6 +61,11 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var mixBusProcessor: MixBusProcessor
+    // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
+    // whatever these are set to right now.
+    @Inject lateinit var inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect
+    @Inject lateinit var compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect
+    @Inject lateinit var crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect
     @Inject lateinit var dspManager: DspEngineManager
     @Inject lateinit var autoEqProcessor: AutoEqProcessor
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
@@ -878,6 +883,10 @@ class PlaybackService : MediaSessionService() {
             parametricBands = paramEq.bandsL,
             parametricPreamp = paramEq.preamp,
             parametricEnabled = paramEq.enabled,
+            // Straight off the live singletons — whatever is playing right now.
+            inflatorState = inflatorEffect.state.value,
+            compressorState = compressorEffect.state.value,
+            crossfeedState = crossfeedEffect.state.value,
         )
         // The copy's native engine only exists once ExoPlayer configures it
         // with a format, which is after the blend has started.

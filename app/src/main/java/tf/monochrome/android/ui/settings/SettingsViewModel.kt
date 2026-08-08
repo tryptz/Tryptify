@@ -540,6 +540,23 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The About screen's "Check for updates" — forces a network check and says
+     * what it found, since a silent no-op is a poor answer to a button press.
+     */
+    fun checkForUpdatesNow() {
+        viewModelScope.launch {
+            val found = runCatching {
+                updateChecker.check(force = true, nowMs = System.currentTimeMillis())
+            }.getOrNull()
+            _availableUpdate.value = found
+            _messages.tryEmit(
+                if (found != null) "Version ${found.versionName} is available"
+                else "You're on the latest version"
+            )
+        }
+    }
+
     /** Hide the bar for this release only. */
     fun dismissUpdate() {
         val version = _availableUpdate.value?.versionName ?: return

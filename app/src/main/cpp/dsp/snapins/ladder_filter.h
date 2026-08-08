@@ -19,8 +19,11 @@ public:
     void prepare(double sampleRate, int maxBlockSize) override {
         sampleRate_ = sampleRate;
         maxBlockSize_ = maxBlockSize;
-        osL_.prepare(maxBlockSize);
-        osR_.prepare(maxBlockSize);
+        // Internal 2x. The cutoff mapping below is tuned around it
+        // (g = tan(wc * 0.25), "half because 2x OS"), so the factor stays at 2
+        // and the per-snapin wrapper stacks on top for anyone wanting more.
+        osL_.prepare(sampleRate, 2);
+        osR_.prepare(sampleRate, 2);
         for (int s = 0; s < 4; s++) {
             stageL_[s] = 0.0f;
             stageR_[s] = 0.0f;
@@ -40,10 +43,21 @@ public:
         float driveLin = saturate_ ? std::pow(10.0f, driveDb_ / 20.0f) : 1.0f;
 
         for (int i = 0; i < numFrames; i++) {
-            // Process at 2x internally for better behavior near Nyquist
+            // Process at 2x internally for better behaviour near Nyquist.
+            // This used to zero-stuff by hand — feed the sample, then feed a
+            // literal zero — and keep the second sub-step, with no filter on
+            // either side. Zero-stuffing without an anti-image filter injects a
+            // mirror image that the per-stage tanh then folds back down, and
+            // decimating without an anti-alias filter folds whatever the
+            // resonance generated above Nyquist straight into the band. The
+            // osL_/osR_ members were already here for this and simply never
+            // called. Now they are.
+            float upL[2], upR[2];
+            osL_.upsample(&left[i], upL, 1);
+            osR_.upsample(&right[i], upR, 1);
             for (int os = 0; os < 2; os++) {
-                float inL = (os == 0) ? left[i] : 0.0f;
-                float inR = (os == 0) ? right[i] : 0.0f;
+                float inL = upL[os];
+                float inR = upR[os];
 
                 inL *= driveLin;
                 inR *= driveLin;
@@ -92,10 +106,12 @@ public:
 
                 feedbackL_ = stageL_[3];
                 feedbackR_ = stageR_[3];
-            }
 
-            left[i] = stageL_[3];
-            right[i] = stageR_[3];
+                upL[os] = stageL_[3];
+                upR[os] = stageR_[3];
+            }
+            osL_.downsample(upL, &left[i], 1);
+            osR_.downsample(upR, &right[i], 1);
         }
     }
 
@@ -147,5 +163,5 @@ private:
     float stageL_[4] = {};
     float stageR_[4] = {};
     float feedbackL_ = 0.0f, feedbackR_ = 0.0f;
-    Oversampler osL_, osR_;
+    ChannelOversampler osL_, osR_;
 };

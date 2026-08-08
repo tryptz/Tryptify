@@ -143,6 +143,13 @@ Java_tf_monochrome_android_audio_dsp_oxford_CompressorNative_nativeSetParams(
     p->params.bypass     .store(bypass == JNI_TRUE);
 }
 
+// Anti-alias oversampling for the detector + gain stage: 1, 2 or 4.
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_oxford_CompressorNative_nativeSetOversampling(
+        JNIEnv*, jclass, jlong h, jint factor) {
+    asPtr<CompressorProcessor>(h)->params.oversampling.store(factor);
+}
+
 extern "C" JNIEXPORT jfloat JNICALL
 Java_tf_monochrome_android_audio_dsp_oxford_CompressorNative_nativeGainReductionDb(
         JNIEnv*, jclass, jlong h) {
