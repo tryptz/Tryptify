@@ -514,74 +514,156 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Custom font import matching Font Library requirements
+        // Font Library. Collapsed by default: with ten bundled faces plus
+        // anything imported it is the longest thing on this tab, and it is not
+        // what most people opened Appearance for. The header carries the active
+        // font's name so the section still answers "what am I using?" shut.
+        var fontLibraryExpanded by rememberSaveable { mutableStateOf(false) }
+        val activeFontName = tf.monochrome.android.ui.theme.BundledFonts
+            .displayNameOf(customFontUri) ?: "Inter (default)"
+
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Text(
-                "Font Library",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { fontLibraryExpanded = !fontLibraryExpanded }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Font Library",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        activeFontName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = if (fontLibraryExpanded) Icons.Default.KeyboardArrowUp
+                        else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (fontLibraryExpanded) "Collapse font library"
+                        else "Expand font library",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
-            if (availableFonts.isNotEmpty()) {
-                availableFonts.forEach { file ->
-                    val isSelected = file.absolutePath == customFontUri
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.selectFont(file) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            modifier = Modifier.size(20.dp)
+            if (fontLibraryExpanded) {
+                // The built-in default, so switching back is a pick like any
+                // other rather than a separate "Reset" the user has to find.
+                FontRow(
+                    name = "Inter",
+                    note = "The default. Neutral UI grotesque.",
+                    selected = customFontUri == null,
+                    onSelect = { viewModel.resetDefaultFont() },
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Included",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                )
+                viewModel.bundledFonts.forEach { font ->
+                    val id = tf.monochrome.android.ui.theme.BundledFonts.idOf(font)
+                    FontRow(
+                        name = font.displayName,
+                        note = font.note,
+                        selected = customFontUri == id,
+                        onSelect = { viewModel.selectBundledFont(font) },
+                    )
+                }
+
+                if (availableFonts.isNotEmpty()) {
+                    Text(
+                        "Imported",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    )
+                    availableFonts.forEach { file ->
+                        FontRow(
+                            name = file.nameWithoutExtension,
+                            note = null,
+                            selected = file.absolutePath == customFontUri,
+                            onSelect = { viewModel.selectFont(file) },
+                            onDelete = { viewModel.removeFont(file) },
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(
-                            file.nameWithoutExtension,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { viewModel.removeFont(file) }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                        }
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Add Font")
-                    }
-                    if (customFontUri != null) {
-                        OutlinedButton(
-                            onClick = { viewModel.resetDefaultFont() },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Reset")
-                        }
-                    }
-                }
-            } else {
                 OutlinedButton(
-                    onClick = { fontPickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")) },
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = {
+                        fontPickerLauncher.launch(
+                            arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 ) {
-                    Text("Import Custom Font (.ttf / .otf)")
+                    Text("Import a font (.ttf / .otf)")
                 }
             }
         }
     
+}
+
+/**
+ * One row in the Font Library — the default, a bundled face, or an import.
+ * [onDelete] is only passed for imports; bundled fonts live in the APK and
+ * have nothing to delete.
+ */
+@Composable
+private fun FontRow(
+    name: String,
+    note: String?,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Default.Check,
+            contentDescription = null,
+            tint = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+            )
+            if (note != null) {
+                Text(
+                    note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (onDelete != null) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete $name",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
 }
 
 @Composable

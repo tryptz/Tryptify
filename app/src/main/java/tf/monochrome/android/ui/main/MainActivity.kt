@@ -28,9 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -46,7 +43,6 @@ import tf.monochrome.android.ui.onboarding.OnboardingScreen
 import tf.monochrome.android.ui.theme.MonochromeTheme
 import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.ui.theme.rememberDynamicPalette
-import java.io.File
 import javax.inject.Inject
 import tf.monochrome.android.audio.eq.FrequencyTargets
 import tf.monochrome.android.performance.LocalPerformanceProfile
@@ -161,21 +157,12 @@ class MainActivity : ComponentActivity() {
                 blendMillis = ColorBlend.millisFor(blendSeconds),
             )
 
-            val customFontFamily = remember(customFontPath) {
-                customFontPath?.let { path ->
-                    val file = File(path)
-                    if (file.exists()) {
-                        try {
-                            FontFamily(
-                                Font(file, FontWeight.Light),
-                                Font(file, FontWeight.Normal),
-                                Font(file, FontWeight.Medium),
-                                Font(file, FontWeight.SemiBold),
-                                Font(file, FontWeight.Bold)
-                            )
-                        } catch (_: Exception) { null }
-                    } else null
-                }
+            // Handles both a bundled `asset:` font and an imported file path —
+            // see loadAppFontFamily. Keyed on the id so switching fonts in
+            // Settings re-reads immediately.
+            val fontLoadContext = androidx.compose.ui.platform.LocalContext.current
+            val customFontFamily = remember(customFontPath, fontLoadContext) {
+                tf.monochrome.android.ui.theme.loadAppFontFamily(fontLoadContext, customFontPath)
             }
 
             CompositionLocalProvider(
