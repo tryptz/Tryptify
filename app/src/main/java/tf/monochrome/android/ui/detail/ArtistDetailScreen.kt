@@ -55,6 +55,11 @@ import tf.monochrome.android.ui.components.LoadingScreen
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
+import tf.monochrome.android.ui.components.TrackListToolbar
+import tf.monochrome.android.ui.components.TrackOrder
+import tf.monochrome.android.ui.components.TrackSort
+import tf.monochrome.android.ui.components.TrackSortSaver
+import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -84,6 +89,13 @@ fun ArtistDetailScreen(
     var showAddToPlaylistForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
     var showCreatePlaylistDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showAllTopTracks by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    // Applies to the Top Tracks list. Top Tracks arrives in a popularity order
+    // someone else decided, so ORIGINAL stays the default.
+    var listQuery by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
+        androidx.compose.runtime.mutableStateOf(TrackSort())
+    }
     var showAddToPlaylistForSelection by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<Long>()
@@ -269,8 +281,27 @@ fun ArtistDetailScreen(
 
                     if (detail.topTracks.isNotEmpty()) {
                         item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = "Top Tracks") } }
+                        item {
+                            TrackListToolbar(
+                                query = listQuery,
+                                onQueryChange = { listQuery = it },
+                                sort = listSort,
+                                onSortChange = { listSort = it },
+                                // No "Artist": it's this artist on every row.
+                                orders = listOf(
+                                    TrackOrder.ORIGINAL,
+                                    TrackOrder.TITLE,
+                                    TrackOrder.ALBUM,
+                                    TrackOrder.DURATION,
+                                ),
+                            )
+                        }
+                        val orderedTopTracks = detail.topTracks.applySearchAndSort(listQuery, listSort)
+                        // Collapsed still shows five, but of the filtered list —
+                        // searching a collapsed section has to be able to surface
+                        // a track that wasn't in the first five.
                         val visibleTracks =
-                            if (showAllTopTracks) detail.topTracks else detail.topTracks.take(5)
+                            if (showAllTopTracks) orderedTopTracks else orderedTopTracks.take(5)
                         items(visibleTracks, key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
@@ -278,7 +309,7 @@ fun ArtistDetailScreen(
                                 onLikeClick = { playerViewModel.toggleFavorite(track) },
                                 onClick = {
                                     if (selection.active) selection.toggle(track.id)
-                                    else playerViewModel.playTrack(track, detail.topTracks)
+                                    else playerViewModel.playTrack(track, orderedTopTracks)
                                 },
                                 onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
@@ -291,11 +322,11 @@ fun ArtistDetailScreen(
                                 selected = track.id in selection.selectedIds
                             )
                         }
-                        if (detail.topTracks.size > 5) {
+                        if (orderedTopTracks.size > 5) {
                             item {
                                 ShowAllTracksRow(
                                     expanded = showAllTopTracks,
-                                    totalCount = detail.topTracks.size,
+                                    totalCount = orderedTopTracks.size,
                                     onToggle = { showAllTopTracks = !showAllTopTracks },
                                 )
                             }
