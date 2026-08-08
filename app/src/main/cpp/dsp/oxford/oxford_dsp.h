@@ -273,17 +273,8 @@ public:
         // alias, so it stays at the base rate and the FIR designs are untouched.
         const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
         if (osFactor != osFactorApplied_) {
-            // 4x runs as two cascaded 2x stages rather than one 4x zero-stuff.
-            // The shared oversampler's anti-image filter is an 8th-order
-            // Butterworth, which is gentle: at a single 4x step it leaves enough
-            // of the zero-stuffing images for the waveshaper to fold them back
-            // down, and measured worse than 2x. Cascading halves the job each
-            // stage has to do, so each filter only ever spans one octave.
             for (int c = 0; c < 2; ++c) {
-                for (int b = 0; b < kOsBands; ++b) {
-                    os_[c][b].prepare(sr_, osFactor > 1 ? 2 : 1);
-                    os2_[c][b].prepare(sr_ * 2.0, osFactor >= 4 ? 2 : 1);
-                }
+                for (int b = 0; b < kOsBands; ++b) os_[c][b].prepare(sr_, osFactor);
             }
             osFactorApplied_ = osFactor;
         }
@@ -364,28 +355,18 @@ private:
     inline float shapeOs(int c, int slot, float x,
                          float A, float B, float C, float D, int factor) noexcept {
         if (factor <= 1) return waveshape(x, A, B, C, D);
-
-        float up[2];
-        os_[c][slot].upsample(&x, up, 1);
-        for (int i = 0; i < 2; ++i) {
-            if (factor >= 4) {
-                // Second 2x stage, so the shaper runs at 4x the base rate.
-                float up2[2];
-                os2_[c][slot].upsample(&up[i], up2, 1);
-                up2[0] = waveshape(up2[0], A, B, C, D);
-                up2[1] = waveshape(up2[1], A, B, C, D);
-                os2_[c][slot].downsample(up2, &up[i], 1);
-            } else {
-                up[i] = waveshape(up[i], A, B, C, D);
-            }
-        }
+        // ChannelOversampler cascades internally at 4x, so this stays a plain
+        // up / shape / down regardless of factor.
+        float up[kMaxOsFactor];
+        auto& os = os_[c][slot];
+        os.upsample(&x, up, 1);
+        for (int i = 0; i < factor; ++i) up[i] = waveshape(up[i], A, B, C, D);
         float y = 0.0f;
-        os_[c][slot].downsample(up, &y, 1);
+        os.downsample(up, &y, 1);
         return y;
     }
 
     ChannelOversampler os_[2][kOsBands];
-    ChannelOversampler os2_[2][kOsBands];
     int osFactorApplied_ = 0;
 
     void updateMeters(float* const* buffers, int n) noexcept {
