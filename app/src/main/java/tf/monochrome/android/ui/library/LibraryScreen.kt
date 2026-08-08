@@ -95,6 +95,32 @@ internal val LIBRARY_SECTION_NAMES = mapOf(
 internal fun librarySections(order: List<String>): List<String> =
     listOf(LOCAL_SECTION) + order.filter { it != LOCAL_SECTION && it in LIBRARY_SECTION_NAMES }
 
+/**
+ * Lazy list keys for Library's two mixed pages.
+ *
+ * A key has to be unique across the whole `LazyColumn`, not just within the
+ * `items()` call it came from, and Compose throws rather than recovering when
+ * two collide. Both of these pages stack several `items()` blocks into one
+ * list, and a bare `it.id` is unique in neither of them:
+ *
+ * - Favorites lists tracks, then albums, then artists. All three ids are
+ *   `Long` from separate catalogue namespaces, so a liked track and a liked
+ *   album sharing a number is coincidence, not corruption — and it crashed
+ *   the page for anyone who happened to hold both.
+ * - Overview shows recently played above liked songs, and a song you like and
+ *   have just played is in both lists by construction.
+ *
+ * Tagging by the row's kind makes the key unique by shape rather than by
+ * luck. They're `String`, which a lazy list can save and restore.
+ */
+internal object LibraryKeys {
+    fun track(id: Long) = "track:$id"
+    fun album(id: Long) = "album:$id"
+    fun artist(id: Long) = "artist:$id"
+    fun recent(id: Long) = "recent:$id"
+    fun liked(id: Long) = "liked:$id"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
@@ -366,7 +392,7 @@ fun LibraryScreen(
                 ) {
                     if (recentTracks.isNotEmpty()) {
                         item { SectionHeader(title = "Recently Played") }
-                        items(recentTracks.take(5), key = { it.id }) { track ->
+                        items(recentTracks.take(5), key = { LibraryKeys.recent(it.id) }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
@@ -391,7 +417,7 @@ fun LibraryScreen(
 
                     if (favoriteTracks.isNotEmpty()) {
                         item { SectionHeader(title = "Liked Songs") }
-                        items(favoriteTracks.take(5), key = { it.id }) { track ->
+                        items(favoriteTracks.take(5), key = { LibraryKeys.liked(it.id) }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -548,7 +574,7 @@ fun LibraryScreen(
                                 onSortChange = { likedSort = it },
                             )
                         }
-                        items(visibleFavorites, key = { it.id }) { track ->
+                        items(visibleFavorites, key = { LibraryKeys.track(it.id) }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -574,7 +600,7 @@ fun LibraryScreen(
                     if (favoriteAlbums.isNotEmpty()) {
                         item { Spacer(modifier = Modifier.height(8.dp)) }
                         item { SectionHeader(title = "Liked Albums") }
-                        items(favoriteAlbums, key = { it.id }) { album ->
+                        items(favoriteAlbums, key = { LibraryKeys.album(it.id) }) { album ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -589,7 +615,7 @@ fun LibraryScreen(
                     if (favoriteArtists.isNotEmpty()) {
                         item { Spacer(modifier = Modifier.height(8.dp)) }
                         item { SectionHeader(title = "Liked Artists") }
-                        items(favoriteArtists, key = { it.id }) { artist ->
+                        items(favoriteArtists, key = { LibraryKeys.artist(it.id) }) { artist ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
