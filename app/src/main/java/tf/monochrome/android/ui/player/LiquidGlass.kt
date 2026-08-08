@@ -76,21 +76,40 @@ internal val LocalPlayerBackdrop = androidx.compose.runtime.compositionLocalOf {
 private var frameClockEpochNanos = -1L
 
 /**
+ * The single state object every glass surface animates from.
+ *
+ * It used to be one `mutableFloatStateOf` *per call site*, and there are six of
+ * them — the lyric glass, the panel, the player chrome, two per-letter lyric
+ * paths and the Studio preview. With the player open, six independent state
+ * objects were each written every frame, so one frame dirtied six separate
+ * invalidation scopes even though all six held the identical number.
+ *
+ * Sharing one holder makes that one write and one scope. The per-surface
+ * `withFrameNanos` loops stay (they are a single Choreographer callback list,
+ * and they all compute the same value, so the redundant writes are equal-valued
+ * and Compose's structural-equality policy drops them for free).
+ *
+ * Deliberately NOT gated on `surfaceMotion`: the default is 0.53 and every
+ * shipped theme animates, so a "no motion" gate would essentially never fire.
+ * The glass is a continuously-animated effect by design.
+ */
+private val frameClockSeconds = mutableFloatStateOf(0f)
+
+/**
  * Per-frame clock in seconds on a shared app-wide timeline. Read it from draw
  * or layout lambdas (graphicsLayer, drawBehind) so animation never recomposes.
  */
 @Composable
 internal fun rememberFrameSeconds(): State<Float> {
-    val timeSec = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         while (true) {
             withFrameNanos { now ->
                 if (frameClockEpochNanos < 0L) frameClockEpochNanos = now
-                timeSec.floatValue = (now - frameClockEpochNanos) / 1_000_000_000f
+                frameClockSeconds.floatValue = (now - frameClockEpochNanos) / 1_000_000_000f
             }
         }
     }
-    return timeSec
+    return frameClockSeconds
 }
 
 /**

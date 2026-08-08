@@ -14,6 +14,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -49,6 +50,19 @@ enum class AppleQuality(val code: String, val label: String, val summary: String
  * Which word-level lyrics provider(s) to use when TIDAL has no synced lyrics.
  * BOTH tries NetEase first, then Kugou — each is the other's fallback.
  */
+/**
+ * The raw preference values [PreferencesManager.lyricsFx] reads, snapshotted so
+ * the flow can dedupe on them before deserializing. Exists purely so a write to
+ * an unrelated preference doesn't re-parse the Lyrics FX blob.
+ */
+private data class LyricsFxRaw(
+    val json: String?,
+    val rotation: Float?,
+    val waveSpeed: Float?,
+    val shadowDepth: Float?,
+    val bassReact: Float?,
+)
+
 enum class LyricsWordProvider(val displayName: String) {
     NETEASE_ONLY("NetEase"),
     KUGOU_ONLY("Kugou"),
@@ -780,11 +794,14 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Search ---
-    val searchHistory: Flow<List<String>> = dataStore.data.map { prefs ->
-        prefs[SEARCH_HISTORY_JSON]?.let { raw ->
-            runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
-        } ?: emptyList()
-    }
+    val searchHistory: Flow<List<String>> = dataStore.data
+        .map { it[SEARCH_HISTORY_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw?.let { s ->
+                runCatching { json.decodeFromString<List<String>>(s) }.getOrDefault(emptyList())
+            } ?: emptyList()
+        }
 
     suspend fun addSearchHistoryQuery(query: String) {
         val normalizedQuery = query.trim()
@@ -1118,12 +1135,15 @@ class PreferencesManager @Inject constructor(
     }
 
     /** Bass/treble tone shelves for the system-wide effect (after AutoEQ). */
-    val systemToneControls: Flow<ToneControls> = dataStore.data.map { prefs ->
-        prefs[SYSTEM_TONE_CONTROLS_JSON]?.let { jsonStr ->
-            runCatching { json.decodeFromString<ToneControls>(jsonStr).clamped() }
-                .getOrDefault(ToneControls.DEFAULT)
-        } ?: ToneControls.DEFAULT
-    }
+    val systemToneControls: Flow<ToneControls> = dataStore.data
+        .map { it[SYSTEM_TONE_CONTROLS_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw?.let { jsonStr ->
+                runCatching { json.decodeFromString<ToneControls>(jsonStr).clamped() }
+                    .getOrDefault(ToneControls.DEFAULT)
+            } ?: ToneControls.DEFAULT
+        }
 
     suspend fun setSystemToneControls(controls: ToneControls) {
         dataStore.edit {
@@ -1357,10 +1377,13 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[EXCLUDED_PATHS_JSON] = pathsJson }
     }
 
-    val userFolderRoots: Flow<Set<String>> = dataStore.data.map { prefs ->
-        val raw = prefs[USER_FOLDER_ROOTS_JSON] ?: return@map emptySet()
-        runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
-    }
+    val userFolderRoots: Flow<Set<String>> = dataStore.data
+        .map { it[USER_FOLDER_ROOTS_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            if (raw == null) emptySet()
+            else runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
+        }
 
     suspend fun addUserFolderRoot(path: String) {
         dataStore.edit { prefs ->
@@ -1475,17 +1498,32 @@ class PreferencesManager @Inject constructor(
      * ever used the old four sliders fall back to those legacy keys so their
      * tuned look carries over the first time the Studio opens.
      */
-    val lyricsFx: Flow<LyricsFxSettings> = dataStore.data.map { prefs ->
-        prefs[LYRICS_FX_JSON]
-            ?.let { raw -> runCatching { json.decodeFromString<LyricsFxSettings>(raw) }.getOrNull() }
-            ?.clamped()
-            ?: LyricsFxSettings(
-                rotationDegrees = prefs[LYRICS_3D_ROTATION] ?: 12f,
-                waveSpeed = prefs[LYRICS_3D_WAVE_SPEED] ?: 1f,
-                shadowDepth = prefs[LYRICS_3D_SHADOW_DEPTH] ?: 0.7f,
-                bassReact = prefs[LYRICS_BASS_REACT] ?: 0.8f,
-            ).clamped()
-    }
+    val lyricsFx: Flow<LyricsFxSettings> = dataStore.data
+        // Select the keys this flow actually depends on, dedupe, and only then
+        // deserialize. DataStore emits the WHOLE Preferences snapshot on every
+        // write, so without this the JSON below was re-parsed every time any
+        // unrelated setting anywhere in the app changed.
+        .map { prefs ->
+            LyricsFxRaw(
+                json = prefs[LYRICS_FX_JSON],
+                rotation = prefs[LYRICS_3D_ROTATION],
+                waveSpeed = prefs[LYRICS_3D_WAVE_SPEED],
+                shadowDepth = prefs[LYRICS_3D_SHADOW_DEPTH],
+                bassReact = prefs[LYRICS_BASS_REACT],
+            )
+        }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw.json
+                ?.let { s -> runCatching { json.decodeFromString<LyricsFxSettings>(s) }.getOrNull() }
+                ?.clamped()
+                ?: LyricsFxSettings(
+                    rotationDegrees = raw.rotation ?: 12f,
+                    waveSpeed = raw.waveSpeed ?: 1f,
+                    shadowDepth = raw.shadowDepth ?: 0.7f,
+                    bassReact = raw.bassReact ?: 0.8f,
+                ).clamped()
+        }
 
     suspend fun setLyricsFx(settings: LyricsFxSettings) {
         val clamped = settings.clamped()
@@ -1494,52 +1532,64 @@ class PreferencesManager @Inject constructor(
 
     /** User-saved Lyrics FX presets (empty until the user saves one). */
     val customLyricsFxPresets: Flow<List<tf.monochrome.android.domain.model.LyricsFxPreset>> =
-        dataStore.data.map { prefs ->
-            prefs[LYRICS_FX_CUSTOM_PRESETS_JSON]
-                ?.let { raw ->
-                    runCatching {
-                        json.decodeFromString<List<tf.monochrome.android.domain.model.LyricsFxPreset>>(raw)
-                    }.getOrNull()
-                }
-                ?.map { it.copy(settings = it.settings.clamped()) }
-                ?: emptyList()
-        }
+        dataStore.data
+            .map { it[LYRICS_FX_CUSTOM_PRESETS_JSON] }
+            .distinctUntilChanged()
+            .map { raw ->
+                raw
+                    ?.let { s ->
+                        runCatching {
+                            json.decodeFromString<List<tf.monochrome.android.domain.model.LyricsFxPreset>>(s)
+                        }.getOrNull()
+                    }
+                    ?.map { it.copy(settings = it.settings.clamped()) }
+                    ?: emptyList()
+            }
 
     suspend fun setCustomLyricsFxPresets(presets: List<tf.monochrome.android.domain.model.LyricsFxPreset>) {
         dataStore.edit { it[LYRICS_FX_CUSTOM_PRESETS_JSON] = json.encodeToString(presets) }
     }
 
     /** Player-chrome (transport button) liquid-glass settings. */
-    val playerGlass: Flow<tf.monochrome.android.domain.model.PlayerGlassSettings> = dataStore.data.map { prefs ->
-        prefs[PLAYER_GLASS_JSON]
-            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(raw) }.getOrNull() }
-            ?.clamped()
-            ?: tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT
-    }
+    val playerGlass: Flow<tf.monochrome.android.domain.model.PlayerGlassSettings> = dataStore.data
+        .map { it[PLAYER_GLASS_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(s) }.getOrNull() }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT
+        }
 
     suspend fun setPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
         dataStore.edit { it[PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     /** Mini-player glass settings (its own blob, same shape as [playerGlass]). */
-    val miniPlayerGlass: Flow<tf.monochrome.android.domain.model.PlayerGlassSettings> = dataStore.data.map { prefs ->
-        prefs[MINI_PLAYER_GLASS_JSON]
-            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(raw) }.getOrNull() }
-            ?.clamped()
-            ?: tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT
-    }
+    val miniPlayerGlass: Flow<tf.monochrome.android.domain.model.PlayerGlassSettings> = dataStore.data
+        .map { it[MINI_PLAYER_GLASS_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(s) }.getOrNull() }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT
+        }
 
     suspend fun setMiniPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
         dataStore.edit { it[MINI_PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     /** Atmos renderer profile (mode / target layout / HRTF profile id). */
-    val rendererProfile: Flow<tf.monochrome.android.domain.model.RendererProfile> = dataStore.data.map { prefs ->
-        prefs[RENDERER_PROFILE_JSON]
-            ?.let { raw -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(raw) }.getOrNull() }
-            ?.clamped()
-            ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
-    }
+    val rendererProfile: Flow<tf.monochrome.android.domain.model.RendererProfile> = dataStore.data
+        .map { it[RENDERER_PROFILE_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(s) }.getOrNull() }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
+        }
 
     suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
         dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
@@ -1547,16 +1597,19 @@ class PreferencesManager @Inject constructor(
 
     /** User-saved Player Glass themes (empty until the user saves one). */
     val customPlayerGlassPresets: Flow<List<tf.monochrome.android.domain.model.PlayerGlassPreset>> =
-        dataStore.data.map { prefs ->
-            prefs[PLAYER_GLASS_CUSTOM_PRESETS_JSON]
-                ?.let { raw ->
-                    runCatching {
-                        json.decodeFromString<List<tf.monochrome.android.domain.model.PlayerGlassPreset>>(raw)
-                    }.getOrNull()
-                }
-                ?.map { it.copy(settings = it.settings.clamped()) }
-                ?: emptyList()
-        }
+        dataStore.data
+            .map { it[PLAYER_GLASS_CUSTOM_PRESETS_JSON] }
+            .distinctUntilChanged()
+            .map { raw ->
+                raw
+                    ?.let { s ->
+                        runCatching {
+                            json.decodeFromString<List<tf.monochrome.android.domain.model.PlayerGlassPreset>>(s)
+                        }.getOrNull()
+                    }
+                    ?.map { it.copy(settings = it.settings.clamped()) }
+                    ?: emptyList()
+            }
 
     suspend fun setCustomPlayerGlassPresets(presets: List<tf.monochrome.android.domain.model.PlayerGlassPreset>) {
         dataStore.edit { it[PLAYER_GLASS_CUSTOM_PRESETS_JSON] = json.encodeToString(presets) }
