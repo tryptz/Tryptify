@@ -940,8 +940,19 @@ class HiFiApiClient @Inject constructor(
                     replayGain = ReplayGainValues()
                 )
             }
-            // Qobuz unset or upstream returned nothing — fall through to the
-            // existing TIDAL streaming path so the user still gets bytes.
+            // Qobuz unset or upstream returned nothing. Falling through to
+            // TIDAL is only valid for a TIDAL id — see the check below.
+        }
+
+        // Qobuz ids are not TIDAL ids. Querying /track/ with one either 404s or
+        // returns a different recording entirely, which then gets written to
+        // disk under this track's tags. Fail loudly instead; callers already
+        // handle a failed stream lookup, and the Apple branch of DownloadWorker
+        // refuses cross-catalog substitution for exactly this reason.
+        if (qobuzIdRegistry.isQobuzTrack(trackId)) {
+            throw IllegalStateException(
+                "Track $trackId is a Qobuz track; refusing to resolve it against TIDAL"
+            )
         }
 
         val body = fetchWithRetry(

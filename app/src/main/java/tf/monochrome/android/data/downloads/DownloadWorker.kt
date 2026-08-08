@@ -127,6 +127,15 @@ class DownloadWorker @AssistedInject constructor(
                     apiClient.getTrackStream(trackId, quality, forDownload = true).streamUrl
                 }.getOrNull()
                 native ?: run {
+                    // A Qobuz pick is Qobuz-only, on the same principle as the
+                    // Apple branch above: the metadata bridge matches by title
+                    // and artist, so it can hand back a different master or
+                    // version than the one chosen in search. If Qobuz can't
+                    // serve it, the download fails and says so.
+                    if (qobuzIdRegistry.isQobuzTrack(trackId)) {
+                        Log.w(TAG, "Qobuz could not serve \"$trackTitle\" (id=$trackId, q=$quality) - not falling back to another catalog")
+                        return Result.failure()
+                    }
                     val bridged = apiClient.findAppleIdFor(
                         trackId = trackId,
                         title = trackTitle,

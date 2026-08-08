@@ -62,7 +62,22 @@ class StreamResolver @Inject constructor(
             // DownloadManager keys downloads by Track.id, not by appleId.
             catalogTrackId = track.id,
         )?.let { local ->
-            return Pair(buildLocalMediaItem(track, local), null)
+            return Pair(buildFileMediaItem(track, localUri(local.filePath)), null)
+        }
+
+        // Qobuz is its own catalogue, not a TIDAL fallback. Its track ids live
+        // in a separate namespace, so handing one to TIDAL's /track/ endpoint
+        // either 404s or — worse — streams a *different* recording under this
+        // track's title and artwork, with nothing downstream able to tell.
+        //
+        // PlayerViewModel already re-routes these before calling in, but it is
+        // not the only caller: PlaybackService reaches this method for every
+        // natural track-end advance, notification/lock-screen skip, playback
+        // resumption and next-track preload, and it has no such check. Guarding
+        // here covers all of them at once — the same guard HiFiApiClient's
+        // getLyrics already applies for the same reason.
+        if (qobuzIdRegistry.isQobuzTrack(track.id)) {
+            return Pair(qobuzCachedMediaItem(track), null)
         }
 
         val streamResult = repository.getTrackStream(track.id)
@@ -227,13 +242,27 @@ class StreamResolver @Inject constructor(
     )
 
     /**
-     * A legacy [Track] pointed at its on-device file. The metadata stays the
+     * A legacy [Track] played from Qobuz — fetched into the cache directory on
+     * first play, then played off disk, exactly like [resolveQobuzCached] does
+     * for the [UnifiedTrack] path. LOSSLESS matches the default that
+     * PlaybackSource.QobuzCached carries.
+     *
+     * Null when Qobuz isn't configured or the fetch fails; callers already
+     * treat a null MediaItem as "skip this track", which is the right outcome —
+     * far better than quietly serving someone else's recording from TIDAL.
+     */
+    private suspend fun qobuzCachedMediaItem(track: Track): MediaItem? {
+        val file = runCatching { qobuzCache.getOrFetch(track.id, AudioQuality.LOSSLESS) }
+            .getOrNull() ?: return null
+        return buildFileMediaItem(track, Uri.fromFile(file))
+    }
+
+    /**
+     * A legacy [Track] pointed at a file on disk. The metadata stays the
      * catalogue's — same title, same artwork — so swapping the stream for the
      * file is invisible in the player; only the loading spinner disappears.
      */
-    private fun buildLocalMediaItem(track: Track, source: PlaybackSource.LocalFile): MediaItem {
-        val uri = localUri(source.filePath)
-
+    private fun buildFileMediaItem(track: Track, uri: Uri): MediaItem {
         val artworkUri = track.album?.cover?.let { cover -> buildCoverUrl(cover, 640).toUri() }
 
         val metadata = MediaMetadata.Builder()
