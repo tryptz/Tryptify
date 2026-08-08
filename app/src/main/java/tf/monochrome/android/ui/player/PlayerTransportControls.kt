@@ -76,8 +76,12 @@ fun PlayerTransportControls(
 
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed by interactionSource.collectIsPressedAsState()
+        // Press feedback follows "Disable animations" the same way every card
+        // in the app does — this button just carries its own spring instead of
+        // going through Modifier.bounceClick.
+        val stillPress = tf.monochrome.android.ui.theme.reduceMotion()
         val scale by animateFloatAsState(
-            targetValue = if (isPressed) 0.92f else 1f,
+            targetValue = if (isPressed && !stillPress) 0.92f else 1f,
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
             label = "playScale",
         )

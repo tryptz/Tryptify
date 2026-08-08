@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -116,11 +117,19 @@ class DiscoverViewModel @Inject constructor(
                 // Duplicate keys crash Compose, so the last line of defence is
                 // here, where the whole feed is in one place.
                 _shelves.value = built.distinctBy { it.id }
+            } catch (cancelled: CancellationException) {
+                // A newer chip took over. Rethrow rather than swallow, and in
+                // particular do NOT clear the loading flag on the way out —
+                // that belongs to the build that replaced this one.
+                throw cancelled
             } catch (_: Exception) {
                 // An unreachable instance shows the empty state, not a crash.
-            } finally {
-                _loading.value = false
             }
+            // Deliberately not a `finally`: cancellation runs that too, so a
+            // fast second tap had the outgoing build clear the flag out from
+            // under the incoming one, and the feed showed "nothing came back"
+            // while it was still fetching.
+            _loading.value = false
         }
     }
 

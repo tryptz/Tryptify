@@ -57,8 +57,13 @@ fun LegacyPlayerTransportControls(
 
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed by interactionSource.collectIsPressedAsState()
+        // This button has its own press spring rather than going through
+        // Modifier.bounceClick, so "Disable animations" has to be honoured here
+        // too — otherwise the one control the user presses most is the one thing
+        // in the app still bouncing.
+        val reduceMotion = tf.monochrome.android.ui.theme.reduceMotion()
         val scale by animateFloatAsState(
-            targetValue = if (isPressed) 0.92f else 1f,
+            targetValue = if (isPressed && !reduceMotion) 0.92f else 1f,
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
             label = "playScale",
         )
