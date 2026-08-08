@@ -5,7 +5,11 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.Artist
+import tf.monochrome.android.domain.model.AudioCodec
+import tf.monochrome.android.domain.model.PlaybackSource
+import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.domain.model.UnifiedTrack
 
 class TrackListOrderTest {
 
@@ -114,5 +118,77 @@ class TrackListOrderTest {
     fun `an unknown saved order falls back to original rather than throwing`() {
         val order = runCatching { TrackOrder.valueOf("REMOVED_KEY") }.getOrDefault(TrackOrder.ORIGINAL)
         assertEquals(TrackOrder.ORIGINAL, order)
+    }
+
+    // ─── UnifiedTrack variants ─────────────────────────────────────────
+    //
+    // Separate functions rather than overloads (both erase to the same JVM
+    // signature), so they need their own coverage — a divergence between the
+    // two would show up as one screen sorting differently to the next.
+
+    private fun unified(id: String, title: String, artist: String, album: String?, seconds: Int) =
+        UnifiedTrack(
+            id = id,
+            title = title,
+            durationSeconds = seconds,
+            artistName = artist,
+            albumTitle = album,
+            source = PlaybackSource.LocalFile(
+                filePath = "/music/$id.flac",
+                codec = AudioCodec.FLAC,
+                sampleRate = 44_100,
+                bitDepth = 16,
+            ),
+            sourceType = SourceType.LOCAL,
+        )
+
+    private val unifiedList = listOf(
+        unified("a", "Zebra", "abba", "Rings", 300),
+        unified("b", "apple", "Zappa", "Anthem", 120),
+        unified("c", "Mango", "Miles", "Rings", 200),
+    )
+
+    @Test
+    fun `unified original order is the list as given`() {
+        assertSame(unifiedList, unifiedList.applyUnifiedSort(TrackSort(TrackOrder.ORIGINAL)))
+        assertEquals(
+            listOf("c", "b", "a"),
+            unifiedList.applyUnifiedSort(TrackSort(TrackOrder.ORIGINAL, ascending = false)).map { it.id },
+        )
+    }
+
+    @Test
+    fun `unified sorts match the Track ordering for the same data`() {
+        // The two implementations must agree, or the same album reads in one
+        // order on the catalogue screen and another on the local one.
+        for (order in listOf(TrackOrder.TITLE, TrackOrder.ARTIST, TrackOrder.ALBUM, TrackOrder.DURATION)) {
+            val byTrack = list.applySort(TrackSort(order)).map { it.title }
+            val byUnified = unifiedList.applyUnifiedSort(TrackSort(order)).map { it.title }
+            assertEquals("order $order", byTrack, byUnified)
+        }
+    }
+
+    @Test
+    fun `unified query matches title artist and album`() {
+        assertEquals(listOf("b"), unifiedList.applyUnifiedQuery("zappa").map { it.id })
+        assertEquals(listOf("a", "c"), unifiedList.applyUnifiedQuery("rings").map { it.id })
+        assertEquals(listOf("a"), unifiedList.applyUnifiedQuery("zebra").map { it.id })
+    }
+
+    @Test
+    fun `unified blank query returns the same list instance`() {
+        assertSame(unifiedList, unifiedList.applyUnifiedQuery("   "))
+    }
+
+    @Test
+    fun `unified null album sorts as empty rather than throwing`() {
+        val withNull = unifiedList + unified("d", "Nil", "Nobody", null, 90)
+        assertEquals("d", withNull.applyUnifiedSort(TrackSort(TrackOrder.ALBUM)).first().id)
+    }
+
+    @Test
+    fun `unified search then sort filters before ordering`() {
+        val result = unifiedList.applyUnifiedSearchAndSort("rings", TrackSort(TrackOrder.TITLE))
+        assertEquals(listOf("c", "a"), result.map { it.id })
     }
 }

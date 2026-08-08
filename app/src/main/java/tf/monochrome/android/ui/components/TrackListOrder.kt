@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.components
 
 import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.domain.model.UnifiedTrack
 
 /**
  * Ways a list of catalogue [Track]s can be ordered.
@@ -76,6 +77,48 @@ fun List<Track>.applyQuery(query: String): List<Track> {
 /** Search then sort, in that order — sorting a filtered list is the cheaper way round. */
 fun List<Track>.applySearchAndSort(query: String, sort: TrackSort): List<Track> =
     applyQuery(query).applySort(sort)
+
+// ─── The same three operations for UnifiedTrack ────────────────────────
+//
+// The local detail screens (album, artist, genre, folders) hold UnifiedTrack,
+// not Track, and converting a whole list to legacy tracks just to sort it
+// would allocate a copy per keystroke and lose the local ids on the way back.
+//
+// These deliberately do *not* overload the names above: an extension on
+// List<T> compiles to a static method taking a List, so both erase to the same
+// JVM signature and the second one would fail to compile.
+//
+// LibrarySort still exists and still owns the local library tab's own sort —
+// its keys (date modified, file type) only mean something for a file on disk,
+// and folding them in here would put dead entries in a catalogue list's menu.
+
+fun List<UnifiedTrack>.applyUnifiedSort(sort: TrackSort): List<UnifiedTrack> {
+    if (sort.order == TrackOrder.ORIGINAL) {
+        return if (sort.ascending) this else asReversed()
+    }
+    val comparator: Comparator<UnifiedTrack> = when (sort.order) {
+        TrackOrder.TITLE -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        TrackOrder.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistName }
+        TrackOrder.ALBUM -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.albumTitle.orEmpty() }
+        TrackOrder.DURATION -> compareBy { it.durationSeconds }
+        TrackOrder.ORIGINAL -> return this
+    }
+    val full = comparator.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+    return if (sort.ascending) sortedWith(full) else sortedWith(full.reversed())
+}
+
+fun List<UnifiedTrack>.applyUnifiedQuery(query: String): List<UnifiedTrack> {
+    val q = query.trim()
+    if (q.isEmpty()) return this
+    return filter { track ->
+        track.title.contains(q, ignoreCase = true) ||
+            track.artistName.contains(q, ignoreCase = true) ||
+            track.albumTitle?.contains(q, ignoreCase = true) == true
+    }
+}
+
+fun List<UnifiedTrack>.applyUnifiedSearchAndSort(query: String, sort: TrackSort): List<UnifiedTrack> =
+    applyUnifiedQuery(query).applyUnifiedSort(sort)
 
 /**
  * Saves a [TrackSort] across configuration changes and process death.

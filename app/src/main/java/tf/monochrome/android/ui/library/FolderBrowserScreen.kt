@@ -45,7 +45,11 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
+import tf.monochrome.android.ui.components.TrackListToolbar
+import tf.monochrome.android.ui.components.TrackSort
+import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
+import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -65,6 +69,14 @@ fun FolderBrowserScreen(
     val tracks by viewModel.getTracksInFolder(folderPath).collectAsStateWithLifecycle()
 
     val displayName = folderPath.substringAfterLast('/')
+
+    var listQuery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
+        mutableStateOf(TrackSort())
+    }
+    val visibleTracks = remember(tracks, listQuery, listSort) {
+        tracks.applyUnifiedSearchAndSort(listQuery, listSort)
+    }
 
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
     UnifiedTrackContextMenuHost(
@@ -101,8 +113,8 @@ fun FolderBrowserScreen(
                 }
             },
             actions = {
-                if (tracks.isNotEmpty()) {
-                    IconButton(onClick = { onPlayAll(tracks) }) {
+                if (visibleTracks.isNotEmpty()) {
+                    IconButton(onClick = { onPlayAll(visibleTracks) }) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Play All")
                     }
                 }
@@ -149,11 +161,21 @@ fun FolderBrowserScreen(
             }
 
             // Tracks in this folder
-            items(tracks, key = { it.id }) { track ->
+            if (tracks.isNotEmpty()) {
+                item {
+                    TrackListToolbar(
+                        query = listQuery,
+                        onQueryChange = { listQuery = it },
+                        sort = listSort,
+                        onSortChange = { listSort = it },
+                    )
+                }
+            }
+            items(visibleTracks, key = { it.id }) { track ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onPlayTrack(track, tracks) }
+                        .clickable { onPlayTrack(track, visibleTracks) }
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

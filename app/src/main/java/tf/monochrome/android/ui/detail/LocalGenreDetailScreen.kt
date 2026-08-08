@@ -51,7 +51,11 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
+import tf.monochrome.android.ui.components.TrackListToolbar
+import tf.monochrome.android.ui.components.TrackSort
+import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
+import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -75,6 +79,14 @@ fun LocalGenreDetailScreen(
         tracks.sortedWith(
             compareBy({ it.artistName }, { it.albumTitle ?: "" }, { it.discNumber ?: 1 }, { it.trackNumber ?: 0 })
         )
+    }
+
+    var listQuery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
+        mutableStateOf(TrackSort())
+    }
+    val visibleTracks = remember(sortedTracks, listQuery, listSort) {
+        sortedTracks.applyUnifiedSearchAndSort(listQuery, listSort)
     }
 
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
@@ -132,14 +144,14 @@ fun LocalGenreDetailScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${sortedTracks.size} tracks",
+                        text = "${visibleTracks.size} tracks",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         FilledIconButton(
-                            onClick = { if (sortedTracks.isNotEmpty()) onPlayAll(sortedTracks) },
+                            onClick = { if (visibleTracks.isNotEmpty()) onPlayAll(visibleTracks) },
                             modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primary
@@ -152,7 +164,7 @@ fun LocalGenreDetailScreen(
                             )
                         }
                         FilledIconButton(
-                            onClick = { if (sortedTracks.isNotEmpty()) onShuffleAll(sortedTracks) },
+                            onClick = { if (visibleTracks.isNotEmpty()) onShuffleAll(visibleTracks) },
                             modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -169,11 +181,23 @@ fun LocalGenreDetailScreen(
                 }
             }
 
+            // Gated on the unfiltered list, not the visible one: a search that
+            // matches nothing must still leave the toolbar on screen to clear it.
             if (sortedTracks.isNotEmpty()) {
-                items(sortedTracks, key = { it.id }) { track ->
+                // A genre spans every artist and album, so every key groups
+                // something real — the default set applies unchanged.
+                item {
+                    TrackListToolbar(
+                        query = listQuery,
+                        onQueryChange = { listQuery = it },
+                        sort = listSort,
+                        onSortChange = { listSort = it },
+                    )
+                }
+                items(visibleTracks, key = { it.id }) { track ->
                     GenreTrackRow(
                         track = track,
-                        onClick = { onPlayTrack(track, sortedTracks) },
+                        onClick = { onPlayTrack(track, visibleTracks) },
                         onAddToQueue = { onAddToQueue(track) },
                         onMoreClick = { menuTrack = track },
                         navController = navController

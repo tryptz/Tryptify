@@ -64,7 +64,12 @@ import androidx.compose.foundation.clickable
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.isNavigableAlbumId
 import tf.monochrome.android.ui.navigation.openAlbum
+import tf.monochrome.android.ui.components.TrackListToolbar
+import tf.monochrome.android.ui.components.TrackOrder
+import tf.monochrome.android.ui.components.TrackSort
+import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
+import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -89,6 +94,14 @@ fun LocalArtistDetailScreen(
         tracks.sortedWith(
             compareBy({ it.albumTitle ?: "" }, { it.discNumber ?: 1 }, { it.trackNumber ?: 0 })
         )
+    }
+
+    var listQuery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
+        mutableStateOf(TrackSort())
+    }
+    val visibleTracks = remember(sortedTracks, listQuery, listSort) {
+        sortedTracks.applyUnifiedSearchAndSort(listQuery, listSort)
     }
 
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
@@ -169,7 +182,7 @@ fun LocalArtistDetailScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 FilledIconButton(
-                                    onClick = { if (tracks.isNotEmpty()) onPlayAll(tracks) },
+                                    onClick = { if (visibleTracks.isNotEmpty()) onPlayAll(visibleTracks) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.primary
@@ -182,7 +195,7 @@ fun LocalArtistDetailScreen(
                                     )
                                 }
                                 FilledIconButton(
-                                    onClick = { if (tracks.isNotEmpty()) onShuffleAll(tracks) },
+                                    onClick = { if (visibleTracks.isNotEmpty()) onShuffleAll(visibleTracks) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -225,10 +238,25 @@ fun LocalArtistDetailScreen(
                     // All tracks
                     if (sortedTracks.isNotEmpty()) {
                         item { tf.monochrome.android.devedit.DevEditable("artist_tracks_header", Modifier.fillMaxWidth()) { SectionHeader(title = "All Tracks") } }
-                        items(sortedTracks, key = { it.id }) { track ->
+                        item {
+                            TrackListToolbar(
+                                query = listQuery,
+                                onQueryChange = { listQuery = it },
+                                sort = listSort,
+                                onSortChange = { listSort = it },
+                                // No "Artist": it's this artist on every row.
+                                orders = listOf(
+                                    TrackOrder.ORIGINAL,
+                                    TrackOrder.TITLE,
+                                    TrackOrder.ALBUM,
+                                    TrackOrder.DURATION,
+                                ),
+                            )
+                        }
+                        items(visibleTracks, key = { it.id }) { track ->
                             ArtistTrackRow(
                                 track = track,
-                                onClick = { onPlayTrack(track, sortedTracks) },
+                                onClick = { onPlayTrack(track, visibleTracks) },
                                 onAddToQueue = { onAddToQueue(track) },
                                 onMoreClick = { menuTrack = track },
                                 navController = navController
