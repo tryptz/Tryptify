@@ -245,6 +245,32 @@ class PlaybackService : MediaSessionService() {
                 }
             }
 
+            /**
+             * Recovers a start that audio focus refused.
+             *
+             * Only the refusal that lands within [FOCUS_RETRY_WINDOW_MS] of the
+             * service's own play() request is retried — that's the request
+             * failing, not the user starting a podcast halfway through a song,
+             * which arrives later and with a different reason. Bounded retries,
+             * and any successful start clears the counter, so this can never
+             * turn into the app fighting another for the audio device.
+             */
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (playWhenReady) {
+                    autoPlayRetries = 0
+                    return
+                }
+                if (reason != Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) return
+                if (System.currentTimeMillis() - playRequestedAt > FOCUS_RETRY_WINDOW_MS) return
+                if (autoPlayRetries >= MAX_AUTO_PLAY_RETRIES) return
+
+                autoPlayRetries++
+                serviceScope.launch {
+                    kotlinx.coroutines.delay(FOCUS_RETRY_DELAY_MS)
+                    if (!player.playWhenReady) startPlayback()
+                }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 // A gapless hand-off: the player moved to the item we
                 // pre-queued, so it advanced the queue for us. Bring
@@ -616,7 +642,7 @@ class PlaybackService : MediaSessionService() {
 
                 player.setMediaItem(mediaItem)
                 player.prepare()
-                player.play()
+                startPlayback()
 
                 libraryRepository.addToHistory(track)
             } catch (e: Exception) {
@@ -646,7 +672,7 @@ class PlaybackService : MediaSessionService() {
                     }
                     player.setMediaItem(resolved.mediaItem)
                     player.prepare()
-                    player.play()
+                    startPlayback()
                     libraryRepository.addToHistory(currentTrack, unifiedTrack)
                     return@launch
                 }
@@ -683,7 +709,7 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 player.prepare()
-                player.play()
+                startPlayback()
 
                 libraryRepository.addToHistory(currentTrack)
 
@@ -734,7 +760,7 @@ class PlaybackService : MediaSessionService() {
         if (player.isPlaying) {
             player.pause()
         } else {
-            player.play()
+            startPlayback()
         }
     }
 
@@ -792,6 +818,34 @@ class PlaybackService : MediaSessionService() {
     private companion object {
         /** Retries a failing position once before moving past it. */
         const val MAX_CONSECUTIVE_PLAYER_ERRORS = 1
+
+        /**
+         * How soon after the service asks to play a refusal still counts as
+         * "the start-up focus request lost", rather than the user genuinely
+         * handing audio to something else mid-track.
+         */
+        const val FOCUS_RETRY_WINDOW_MS = 1_500L
+        const val FOCUS_RETRY_DELAY_MS = 400L
+        const val MAX_AUTO_PLAY_RETRIES = 2
+    }
+
+    /** When the service last asked the player to start, for the check above. */
+    @Volatile private var playRequestedAt = 0L
+    private var autoPlayRetries = 0
+
+    /**
+     * Starts playback, remembering when we asked.
+     *
+     * Media3 requests audio focus on the way into play(). If that request is
+     * refused it flips playWhenReady straight back off, and nothing here used
+     * to notice — the track just sat loaded and paused at 0:00 until the user
+     * pressed play. The refusal is most likely right after a slow load, when
+     * the gap between tracks is longest, which is why it showed up on tracks
+     * being heard for the first time.
+     */
+    private fun startPlayback() {
+        playRequestedAt = System.currentTimeMillis()
+        player.play()
     }
 
     /**

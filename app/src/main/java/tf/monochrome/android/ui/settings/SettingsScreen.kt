@@ -545,6 +545,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
 @Composable
 private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavController) {
     val gapless by viewModel.gaplessPlayback.collectAsState()
+    val crossfade by viewModel.crossfadeDuration.collectAsState()
     val explicit by viewModel.showExplicitBadges.collectAsState()
     val confirmQueue by viewModel.confirmClearQueue.collectAsState()
     val sensitivity by viewModel.visualizerSensitivity.collectAsState()
@@ -588,6 +589,32 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             subtitle = "Remove silence between tracks",
             checked = gapless,
             onCheckedChange = { viewModel.setGaplessPlayback(it) }
+        )
+
+        // Sits under the gapless toggle because the two decide the same thing:
+        // what happens between one track and the next. They're also mutually
+        // exclusive in effect — any blend above 0s overlaps the tracks, so the
+        // gapless hand-off steps aside for it.
+        Text(
+            text = if (crossfade == 0) "Blend Between Tracks: Off" else "Blend Between Tracks: ${crossfade}s",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = if (crossfade == 0) {
+                "Overlap the end of one track with the start of the next."
+            } else {
+                "The outgoing track fades out while the next fades in over ${crossfade}s."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = crossfade.toFloat(),
+            onValueChange = { viewModel.setCrossfadeDuration(it.toInt()) },
+            valueRange = 0f..12f,
+            steps = 11,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1068,7 +1095,6 @@ private fun ScrobblingTab(viewModel: SettingsViewModel) {
 private fun AudioTab(viewModel: SettingsViewModel, navController: NavController) {
     val wifiQuality by viewModel.wifiQuality.collectAsState()
     val cellularQuality by viewModel.cellularQuality.collectAsState()
-    val crossfade by viewModel.crossfadeDuration.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val preservePitch by viewModel.preservePitch.collectAsState()
     val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsState()
@@ -1161,17 +1187,6 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
         Spacer(modifier = Modifier.height(8.dp))
         DebugScreenRecorderRow()
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Crossfade: ${crossfade}s", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text("Blend between tracks", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(
-            value = crossfade.toFloat(),
-            onValueChange = { viewModel.setCrossfadeDuration(it.toInt()) },
-            valueRange = 0f..12f,
-            steps = 11,
-            modifier = Modifier.fillMaxWidth()
-        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Playback Speed")

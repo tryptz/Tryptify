@@ -102,19 +102,17 @@ fun TrackItem(
         }
 
         if (showCover) {
-            val coverModifier = if (effectiveOnAlbumClick != null) {
-                Modifier.clickable { effectiveOnAlbumClick() }
-            } else {
-                Modifier
-            }
-            androidx.compose.foundation.layout.Box(modifier = coverModifier) {
-                CoverImage(
-                    url = track.coverUrl,
-                    contentDescription = track.title,
-                    size = MonoDimens.coverList,
-                    cornerRadius = MonoDimens.radiusSm
-                )
-            }
+            // The artwork plays the track: it's the largest target in the row
+            // and the one people aim at to start a song. It used to open the
+            // album instead, which made a big, obvious-looking play target do
+            // something else entirely. Album and artist are still one long-press
+            // away, in the track's context menu.
+            CoverImage(
+                url = track.coverUrl,
+                contentDescription = track.title,
+                size = MonoDimens.coverList,
+                cornerRadius = MonoDimens.radiusSm
+            )
             Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
         }
 
@@ -180,7 +178,13 @@ fun TrackItem(
                         overflow = TextOverflow.Ellipsis,
                         // weight(fill=false) so a long album title ellipsizes and
                         // shares the row instead of squeezing the artist to zero.
-                        modifier = Modifier.weight(1f, fill = false).clickable(onClick = effectiveOnAlbumClick)
+                        // Inset before clickable so the hit box lands inside
+                        // the glyphs: a near-miss plays the track instead of
+                        // navigating. See ClickableArtists.linkHitBox.
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .padding(horizontal = 3.dp, vertical = 4.dp)
+                            .clickable(onClick = effectiveOnAlbumClick)
                     )
                 } else if (track.album != null) {
                     Text(
