@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -2547,129 +2546,97 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
     val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsStateWithLifecycle()
     val libraryTabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        item {
+    // Every other tab wraps in SettingsTabContent; this one rolled its own
+    // LazyColumn and its own section headings, so its groups sat at a
+    // different indent and size to the rest of Settings. Normalised: one
+    // wrapper, SettingsGroupHeader throughout — which also gives the rows
+    // stable DevEdit ids like everywhere else.
+    SettingsTabContent {
+        SettingsGroupHeader("Local Media Scanning")
+        SettingSwitchItem(
+            title = "Scan on App Open",
+            subtitle = "Automatically scan for new music when the app opens",
+            checked = scanOnAppOpen,
+            onCheckedChange = { viewModel.setScanOnAppOpen(it) }
+        )
+
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
             Text(
-                "Local Media Scanning",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 8.dp)
+                "Minimum Track Duration",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "Skip files shorter than ${minTrackDuration / 1000} seconds",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Slider(
+                value = minTrackDuration.toFloat(),
+                onValueChange = { viewModel.setMinTrackDuration(it.toLong()) },
+                valueRange = 0f..120_000f,
+                steps = 11,
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
-        item {
-            SettingSwitchItem(
-                title = "Scan on App Open",
-                subtitle = "Automatically scan for new music when the app opens",
-                checked = scanOnAppOpen,
-                onCheckedChange = { viewModel.setScanOnAppOpen(it) }
+        var expanded by remember { mutableStateOf(false) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(vertical = 12.dp)
+        ) {
+            Text(
+                "Background Scan Interval",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
-        }
-
-        item {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    "Minimum Track Duration",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Skip files shorter than ${minTrackDuration / 1000} seconds",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Slider(
-                    value = minTrackDuration.toFloat(),
-                    onValueChange = { viewModel.setMinTrackDuration(it.toLong()) },
-                    valueRange = 0f..120_000f,
-                    steps = 11,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        item {
-            var expanded by remember { mutableStateOf(false) }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = true }
-                    .padding(vertical = 12.dp)
-            ) {
-                Text(
-                    "Background Scan Interval",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    backgroundScanInterval.replaceFirstChar { it.titlecase(Locale.getDefault()) },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    listOf("never", "hourly", "daily").forEach { interval ->
-                        DropdownMenuItem(
-                            text = { Text(interval.replaceFirstChar { it.titlecase(Locale.getDefault()) }) },
-                            onClick = {
-                                viewModel.setBackgroundScanInterval(interval)
-                                expanded = false
-                            }
-                        )
-                    }
+            Text(
+                backgroundScanInterval.replaceFirstChar { it.titlecase(Locale.getDefault()) },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                listOf("never", "hourly", "daily").forEach { interval ->
+                    DropdownMenuItem(
+                        text = { Text(interval.replaceFirstChar { it.titlecase(Locale.getDefault()) }) },
+                        onClick = {
+                            viewModel.setBackgroundScanInterval(interval)
+                            expanded = false
+                        }
+                    )
                 }
             }
         }
 
-        item {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        }
-
-        item {
-            val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
-            val scanContext = LocalContext.current
-            OutlinedButton(
-                onClick = {
-                    viewModel.rescanLibrary()
-                    android.widget.Toast.makeText(scanContext, "Scanning library…", android.widget.Toast.LENGTH_SHORT).show()
-                },
-                enabled = !isScanning,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isScanning) "Scanning…" else "Rescan Library Now")
-            }
+        Spacer(modifier = Modifier.height(8.dp))
+        val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
+        val scanContext = LocalContext.current
+        OutlinedButton(
+            onClick = {
+                viewModel.rescanLibrary()
+                android.widget.Toast.makeText(scanContext, "Scanning library…", android.widget.Toast.LENGTH_SHORT).show()
+            },
+            enabled = !isScanning,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(if (isScanning) "Scanning…" else "Rescan Library Now")
         }
 
         if (libraryTabOrder.isNotEmpty()) {
-            item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            }
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsGroupHeader("Library Tab Order")
+            Text(
+                "Reorder the tabs shown in the Library screen",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
 
-            item {
-                Text(
-                    "Library Tab Order",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-
-            item {
-                Text(
-                    "Reorder the tabs shown in the Library screen",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
-
-            items(libraryTabOrder.size) { index ->
-                val sectionId = libraryTabOrder[index]
+            libraryTabOrder.forEachIndexed { index, sectionId ->
                 val displayName = sectionId.replaceFirstChar { it.titlecase(Locale.getDefault()) }
                 Row(
                     modifier = Modifier
@@ -2711,10 +2678,9 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
 
         // Moved off System, where it sat between the app sign-in and the
         // backup controls. Importing playlists builds your library, so it
-        // lives with the library. Wrapped in one item{} because this tab is a
-        // LazyColumn rather than SettingsTabContent — a second scrollable
-        // inside it would throw at measure time.
-        item { PlaylistImportSection() }
+        // lives with the library.
+        Spacer(modifier = Modifier.height(16.dp))
+        PlaylistImportSection()
     }
 }
 
