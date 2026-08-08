@@ -72,10 +72,30 @@ class DspChain private constructor(
         inflatorState: tf.monochrome.android.audio.dsp.oxford.InflatorState,
         compressorState: tf.monochrome.android.audio.dsp.oxford.CompressorState,
         crossfeedState: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedState,
+        blockSize: Int,
+        dspEnabled: Boolean,
     ) {
         pendingDspState = dspStateJson?.takeIf { it.isNotBlank() && it != "{}" }
         autoEq.applyBands(autoEqBandsL, autoEqBandsR, autoEqPreamp, autoEqEnabled)
         parametricEq.applyBands(parametricBands, parametricPreamp, parametricEnabled)
+
+        // A fresh MixBusProcessor starts at its 1024 default and nothing else
+        // pushes the setting into it — DspEngineManager only ever holds the one
+        // injected singleton. So the tail of every blend processed at 1024 no
+        // matter what the user had chosen, which is the whole point of the
+        // setting: someone who moved it to 128 for latency, or to 8192 because
+        // their device chokes otherwise, got neither for the length of a
+        // transition. Safe before the engine exists — queueInput reads the
+        // field directly, and the native scratch is allocated at MAX_BLOCK_SIZE
+        // regardless.
+        mixBus.setBlockSize(blockSize)
+
+        // Same story for the master DSP toggle. Off means off, including for a
+        // blend: without this the tail would run the mix buses the user had
+        // switched off, so a transition would briefly reintroduce their whole
+        // plugin chain. The engine-side half of it has to wait for the engine.
+        mixBus.setBypassed(!dspEnabled)
+        pendingMixBypassed = !dspEnabled
 
         // The Oxford chain hangs off MixBusProcessor rather than the native
         // engine, so it isn't covered by the state JSON above. Without this the
@@ -89,6 +109,7 @@ class DspChain private constructor(
     }
 
     private var pendingDspState: String? = null
+    private var pendingMixBypassed: Boolean? = null
     private var engineReadyJob: kotlinx.coroutines.Job? = null
 
     /**
@@ -108,11 +129,18 @@ class DspChain private constructor(
      * exists; a no-op otherwise, and a no-op after it has been applied.
      */
     fun applyPendingDspState() {
-        val json = pendingDspState ?: return
         val ptr = mixBus.getEnginePtr()
         if (ptr == 0L) return
-        runCatching { mixBus.nativeLoadStateJson(ptr, json) }
-        pendingDspState = null
+        pendingDspState?.let { json ->
+            runCatching { mixBus.nativeLoadStateJson(ptr, json) }
+            pendingDspState = null
+        }
+        // Not carried in the state JSON — the native engine keeps mixBypassed_
+        // as its own atomic, defaulting to false on a fresh instance.
+        pendingMixBypassed?.let { bypassed ->
+            runCatching { mixBus.setMixBypassed(bypassed) }
+            pendingMixBypassed = null
+        }
     }
 
     /**
@@ -127,6 +155,7 @@ class DspChain private constructor(
         runCatching { inflator.release() }
         runCatching { compressor.release() }
         pendingDspState = null
+        pendingMixBypassed = null
     }
 
     companion object {

@@ -424,6 +424,13 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        // Mirrored here purely to seed a blend's own DSP chain. DspEngineManager
+        // pushes both of these into the injected MixBusProcessor singleton, but
+        // a chain copy is built outside its reach and would otherwise start at
+        // the 1024 default with the mixer on regardless of what the user set.
+        serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
+        serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
+
         // Blend length. Any non-zero value takes over from the gapless window,
         // so re-derive that whenever it changes.
         serviceScope.launch {
@@ -860,6 +867,11 @@ class PlaybackService : MediaSessionService() {
 
     @Volatile private var crossfadeMs = 0L
 
+    // Live copies of the two DSP settings a blend's chain has to be told about;
+    // defaults match PreferencesManager's until the collectors above land.
+    @Volatile private var dspBlockSize = 1024
+    @Volatile private var dspEnabled = false
+
     // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
     // out here is itself an opt-in usage that an @OptIn on the property doesn't
     // cover, so lint flags the declaration even when every call site is clean.
@@ -907,6 +919,8 @@ class PlaybackService : MediaSessionService() {
             inflatorState = inflatorEffect.state.value,
             compressorState = compressorEffect.state.value,
             crossfeedState = crossfeedEffect.state.value,
+            blockSize = dspBlockSize,
+            dspEnabled = dspEnabled,
         )
         // The copy's native engine only exists once ExoPlayer configures it
         // with a format, which is after the blend has started.
