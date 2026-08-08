@@ -15,13 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import coil3.SingletonImageLoader
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.request.allowHardware
-import coil3.toBitmap
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import tf.monochrome.android.ui.theme.DynamicColorExtractor
 
 /**
  * Visual design tokens for the redesigned main player. Keeping sizes, corner
@@ -86,33 +80,18 @@ fun rememberAlbumColors(imageUrl: String?): AlbumColors {
 
     LaunchedEffect(imageUrl) {
         if (imageUrl.isNullOrBlank()) return@LaunchedEffect
-        // Decode the cover at a usable size (a 1dp image yields an empty bitmap
-        // and Palette returns null swatches → everything falls back to defaults).
-        // Palette needs a pixel-readable (software) bitmap, hence allowHardware(false).
-        val bitmap = try {
-            val request = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .allowHardware(false)
-                .size(256, 256)
-                .build()
-            val result = SingletonImageLoader.get(context).execute(request)
-            (result as? SuccessResult)?.image?.toBitmap()
-        } catch (_: Exception) {
-            null
-        } ?: return@LaunchedEffect
-        val extracted = withContext(Dispatchers.Default) {
-            val palette = androidx.palette.graphics.Palette.from(bitmap).generate()
-            val dominant = palette.dominantSwatch?.let { Color(it.rgb) }
-                ?: palette.vibrantSwatch?.let { Color(it.rgb) }
-                ?: palette.mutedSwatch?.let { Color(it.rgb) }
-            val vibrant = palette.vibrantSwatch?.let { Color(it.rgb) }
-                ?: palette.lightVibrantSwatch?.let { Color(it.rgb) }
-                ?: palette.lightMutedSwatch?.let { Color(it.rgb) }
-                ?: palette.dominantSwatch?.let { Color(it.rgb) }
-            if (dominant == null && vibrant == null) null
-            else AlbumColors(dominant ?: Color(0xFF1B1B1B), vibrant ?: dominant ?: Color(0xFF7EB6FF))
-        }
-        if (extracted != null) colors = extracted
+        // Shares DynamicColorExtractor's single Palette pass and its cache. This
+        // used to decode the bitmap and run Palette a second time for the same
+        // URL — the theme's extractor had already done it on every track change
+        // — so the two could also disagree about what a cover looks like.
+        val extracted = DynamicColorExtractor.extract(context, imageUrl) ?: return@LaunchedEffect
+        val dominant = extracted.dominant
+        val vibrant = extracted.vibrant
+        if (dominant == null && vibrant == null) return@LaunchedEffect
+        colors = AlbumColors(
+            dominant = dominant ?: Color(0xFF1B1B1B),
+            vibrant = vibrant ?: dominant ?: Color(0xFF7EB6FF),
+        )
     }
 
     return colors

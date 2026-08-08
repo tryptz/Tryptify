@@ -99,12 +99,21 @@ class SearchViewModel @Inject constructor(
     private class PageState {
         var nextOffset: Int = 0
         var qobuzOffset: Int = 0
+        var appleOffset: Int = 0
         var tidalEnd: Boolean = false
         var qobuzEnd: Boolean = false
+        var appleEnd: Boolean = false
         @Volatile var inFlight: Boolean = false
-        fun reset() { nextOffset = 0; qobuzOffset = 0; tidalEnd = false; qobuzEnd = false; inFlight = false }
-        fun done(): Boolean = tidalEnd && qobuzEnd
+        fun reset() {
+            nextOffset = 0; qobuzOffset = 0; appleOffset = 0
+            tidalEnd = false; qobuzEnd = false; appleEnd = false
+            inFlight = false
+        }
+        fun done(): Boolean = tidalEnd && qobuzEnd && appleEnd
     }
+
+    /** Which catalogue a fetched page came from, so tracks map to the right id space. */
+    private enum class PageSource { TIDAL, QOBUZ, APPLE }
 
     private val tracksPage = PageState()
     private val albumsPage = PageState()
@@ -412,10 +421,10 @@ class SearchViewModel @Inject constructor(
             // Seed paging state from the initial page sizes. Backends that
             // ignore &offset=&limit= will return < PAGE_SIZE here and the
             // ViewModel will refuse further fetches for that type/source.
-            seedPageEnd(tracksPage,    result.tracks.size,    qobuzTracks.size,  qobuzAvailable)
-            seedPageEnd(albumsPage,    result.albums.size,    qobuzAlbums.size,  qobuzAvailable)
-            seedPageEnd(artistsPage,   result.artists.size,   qobuzArtists.size, qobuzAvailable)
-            seedPageEnd(playlistsPage, result.playlists.size, /*qobuz=*/0,       qobuzAvailable)
+            seedPageEnd(tracksPage,    result.tracks.size,    qobuzTracks.size,  qobuzAvailable, appleTracks.size,  appleAvailable)
+            seedPageEnd(albumsPage,    result.albums.size,    qobuzAlbums.size,  qobuzAvailable, appleAlbums.size,  appleAvailable)
+            seedPageEnd(artistsPage,   result.artists.size,   qobuzArtists.size, qobuzAvailable, appleArtists.size, appleAvailable)
+            seedPageEnd(playlistsPage, result.playlists.size, /*qobuz=*/0,       qobuzAvailable, /*apple=*/0,       appleAvailable)
         } else {
             // TIDAL is down — still surface Qobuz + local results so search
             // doesn't feel broken when the public TIDAL pool is unreachable.
@@ -427,24 +436,36 @@ class SearchViewModel @Inject constructor(
             _allArtists.value = scoreItems(trimmedQuery, (qobuzArtists + appleArtists).distinctBy { it.id }) { listOf(it.name) }
             _allPlaylists.value = emptyList()
             // TIDAL failed → mark its end on every type so loadMore won't retry.
+            // This is also the path a QOBUZ_ONLY / APPLE_ONLY search takes: the
+            // TIDAL deferred returns a failure rather than being skipped, so
+            // tidalEnd lands here and paging never asks TIDAL for a page 2.
             tracksPage.tidalEnd = true; albumsPage.tidalEnd = true
             artistsPage.tidalEnd = true; playlistsPage.tidalEnd = true
-            seedPageEnd(tracksPage,    /*tidal=*/0, qobuzTracks.size,  qobuzAvailable)
-            seedPageEnd(albumsPage,    /*tidal=*/0, qobuzAlbums.size,  qobuzAvailable)
-            seedPageEnd(artistsPage,   /*tidal=*/0, qobuzArtists.size, qobuzAvailable)
-            seedPageEnd(playlistsPage, /*tidal=*/0, /*qobuz=*/0,       qobuzAvailable)
+            seedPageEnd(tracksPage,    /*tidal=*/0, qobuzTracks.size,  qobuzAvailable, appleTracks.size,  appleAvailable)
+            seedPageEnd(albumsPage,    /*tidal=*/0, qobuzAlbums.size,  qobuzAvailable, appleAlbums.size,  appleAvailable)
+            seedPageEnd(artistsPage,   /*tidal=*/0, qobuzArtists.size, qobuzAvailable, appleArtists.size, appleAvailable)
+            seedPageEnd(playlistsPage, /*tidal=*/0, /*qobuz=*/0,       qobuzAvailable, /*apple=*/0,       appleAvailable)
         }
         _endReached.value = tracksPage.done() && albumsPage.done() && artistsPage.done() && playlistsPage.done()
         _isSearching.value = false
     }
 
-    // Seed paging state from the initial page. Both TIDAL and Qobuz now
-    // paginate from loadMore: TIDAL by a PAGE_SIZE offset, Qobuz by the number
+    // Seed paging state from the initial page. All three catalogues paginate
+    // from loadMore: TIDAL by a PAGE_SIZE offset, Qobuz and Apple by the number
     // of items already shown for this type (one combined envelope per call).
-    private fun seedPageEnd(state: PageState, tidalCount: Int, qobuzCount: Int, qobuzAvailable: Boolean) {
+    private fun seedPageEnd(
+        state: PageState,
+        tidalCount: Int,
+        qobuzCount: Int,
+        qobuzAvailable: Boolean,
+        appleCount: Int,
+        appleAvailable: Boolean,
+    ) {
         if (tidalCount < PAGE_SIZE) state.tidalEnd = true
         state.qobuzEnd = !qobuzAvailable || qobuzCount == 0
         state.qobuzOffset = qobuzCount
+        state.appleEnd = !appleAvailable || appleCount == 0
+        state.appleOffset = appleCount
         state.nextOffset = PAGE_SIZE
     }
 
@@ -485,7 +506,7 @@ class SearchViewModel @Inject constructor(
                     if (gen != searchGeneration) return@launch
                     if (tidalItems.size < PAGE_SIZE) state.tidalEnd = true
                     state.nextOffset = offset + PAGE_SIZE
-                    appendPage(type, tidalItems, isQobuz = false, q = q)
+                    appendPage(type, tidalItems, PageSource.TIDAL, q = q)
                 }
 
                 // --- Qobuz page (one combined envelope; offset = items shown). ---
@@ -504,10 +525,36 @@ class SearchViewModel @Inject constructor(
                         SearchPageType.PLAYLISTS -> emptyList()
                     }
                     state.qobuzOffset += qItems.size
-                    appendPage(type, qItems, isQobuz = true, q = q)
+                    appendPage(type, qItems, PageSource.QOBUZ, q = q)
                     if (qItems.isEmpty() || currentCountFor(type) == before) state.qobuzEnd = true
                 } else if (type == SearchPageType.PLAYLISTS) {
                     state.qobuzEnd = true
+                }
+
+                // --- Apple page (same shape as Qobuz). ---
+                // Apple was searched for page 1 and then never again: loadMore
+                // had no Apple branch at all, so scrolling dropped it from every
+                // page after the first. Under APPLE_ONLY it was worse — TIDAL
+                // and Qobuz are both marked ended at page 1 there, so `done()`
+                // was already true and infinite scroll fetched nothing ever
+                // again. Apple has no playlists, same as Qobuz.
+                if (!state.appleEnd && type != SearchPageType.PLAYLISTS) {
+                    val before = currentCountFor(type)
+                    val apple = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                        runCatching { repository.searchApple(q, state.appleOffset) }.getOrNull()?.getOrNull()
+                    }
+                    if (gen != searchGeneration) return@launch
+                    val aItems: List<Any> = when (type) {
+                        SearchPageType.TRACKS -> apple?.tracks ?: emptyList()
+                        SearchPageType.ALBUMS -> apple?.albums ?: emptyList()
+                        SearchPageType.ARTISTS -> apple?.artists ?: emptyList()
+                        SearchPageType.PLAYLISTS -> emptyList()
+                    }
+                    state.appleOffset += aItems.size
+                    appendPage(type, aItems, PageSource.APPLE, q = q)
+                    if (aItems.isEmpty() || currentCountFor(type) == before) state.appleEnd = true
+                } else if (type == SearchPageType.PLAYLISTS) {
+                    state.appleEnd = true
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // A cancelled page (query changed) must NOT mark paging ended —
@@ -518,6 +565,7 @@ class SearchViewModel @Inject constructor(
                 if (gen == searchGeneration) {
                     state.tidalEnd = true
                     state.qobuzEnd = true
+                    state.appleEnd = true
                 }
             } finally {
                 // Only touch shared paging flags / the job map if we're still the
@@ -546,13 +594,20 @@ class SearchViewModel @Inject constructor(
     // already shown. The whole list used to be re-scored on every page, which
     // reshuffled items the user had already scrolled past; keeping existing
     // order and only ranking the fresh tail fixes that.
-    private fun appendPage(type: SearchPageType, items: List<Any>, isQobuz: Boolean, q: String) {
+    private fun appendPage(type: SearchPageType, items: List<Any>, source: PageSource, q: String) {
         if (items.isEmpty()) return
         when (type) {
             SearchPageType.TRACKS -> {
                 @Suppress("UNCHECKED_CAST")
                 val mapped = (items as List<Track>).map {
-                    if (isQobuz) it.toQobuzUnifiedTrack() else it.toUnifiedTrack()
+                    // The id spaces don't overlap — a Qobuz id read as TIDAL's
+                    // resolves to a different recording — so the catalogue a
+                    // page came from decides the conversion.
+                    when (source) {
+                        PageSource.QOBUZ -> it.toQobuzUnifiedTrack()
+                        PageSource.APPLE -> it.toAppleUnifiedTrack()
+                        PageSource.TIDAL -> it.toUnifiedTrack()
+                    }
                 }
                 val existing = _allTracks.value
                 val seen = existing.mapTo(HashSet()) { it.id }

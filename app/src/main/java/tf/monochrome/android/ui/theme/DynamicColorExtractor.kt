@@ -54,25 +54,44 @@ internal fun lerp(start: DynamicPalette, stop: DynamicPalette, fraction: Float):
     )
 
 /**
- * Extracts a [DynamicPalette] from a cover image URL off the main thread.
+ * Everything the app reads off one cover, from one Palette pass.
+ *
+ * The theme slots and the player's wash colours want different swatches, but
+ * they want them from the same analysis. Two extractors used to decode the
+ * bitmap and run Palette separately for the same URL on every track change —
+ * both cached, so the cost was one extra pass per new cover, but it was also
+ * two sets of results that could disagree about what the cover looks like.
+ *
+ * Each field is independently nullable because their fallback chains differ: a
+ * cover with nothing but a muted swatch yields no [scheme] (the theme should
+ * keep the user's own colours rather than tint everything grey-brown) while
+ * still yielding a [dominant] for the player wash.
+ */
+data class CoverPalette(
+    val scheme: DynamicPalette?,
+    val dominant: Color?,
+    val vibrant: Color?,
+)
+
+/**
+ * Extracts a [CoverPalette] from a cover image URL off the main thread.
  *
  * Results are memoized in a bounded LruCache so repeated renders of the same
  * track don't re-run Palette, while a long listening session cycling through
  * hundreds of covers can't grow the map without limit. LruCache is internally
- * synchronized, which also covers concurrent extract() calls from multiple
- * composables.
+ * synchronized, which also covers concurrent calls from multiple composables.
  */
 object DynamicColorExtractor {
 
-    private val cache = android.util.LruCache<String, DynamicPalette>(128)
+    private val cache = android.util.LruCache<String, CoverPalette>(128)
 
-    suspend fun extract(context: Context, coverUrl: String?): DynamicPalette? {
+    suspend fun extract(context: Context, coverUrl: String?): CoverPalette? {
         if (coverUrl.isNullOrBlank()) return null
         cache.get(coverUrl)?.let { return it }
 
         val bitmap = loadBitmap(context, coverUrl) ?: return null
         val palette = withContext(Dispatchers.Default) {
-            Palette.from(bitmap).maximumColorCount(24).generate()
+            Palette.from(bitmap).maximumColorCount(MAX_COLOR_COUNT).generate()
         }
 
         // Prefer vibrant variants for the primary accent; fall back through
@@ -81,22 +100,38 @@ object DynamicColorExtractor {
             ?: palette.lightVibrantSwatch
             ?: palette.darkVibrantSwatch
             ?: palette.dominantSwatch
-            ?: return null
 
         val secondarySwatch = palette.mutedSwatch
             ?: palette.darkMutedSwatch
             ?: palette.lightMutedSwatch
             ?: primarySwatch
 
-        val dp = DynamicPalette(
-            primary = Color(primarySwatch.rgb),
-            onPrimary = Color(primarySwatch.bodyTextColor),
-            primaryContainer = Color(primarySwatch.rgb).copy(alpha = 0.18f),
-            secondary = Color(secondarySwatch.rgb),
-            onSecondary = Color(secondarySwatch.bodyTextColor)
-        )
-        cache.put(coverUrl, dp)
-        return dp
+        val scheme = primarySwatch?.let {
+            DynamicPalette(
+                primary = Color(it.rgb),
+                onPrimary = Color(it.bodyTextColor),
+                primaryContainer = Color(it.rgb).copy(alpha = 0.18f),
+                secondary = Color((secondarySwatch ?: it).rgb),
+                onSecondary = Color((secondarySwatch ?: it).bodyTextColor),
+            )
+        }
+
+        // The player's wash leads with the *dominant* colour, not the vibrant
+        // one — it fills the whole screen, so the most-present colour is the
+        // one that reads as "this album" rather than the loudest accent in it.
+        val dominant = (palette.dominantSwatch ?: palette.vibrantSwatch ?: palette.mutedSwatch)
+            ?.let { Color(it.rgb) }
+        val vibrant = (palette.vibrantSwatch
+            ?: palette.lightVibrantSwatch
+            ?: palette.lightMutedSwatch
+            ?: palette.dominantSwatch)
+            ?.let { Color(it.rgb) }
+
+        if (scheme == null && dominant == null && vibrant == null) return null
+
+        val result = CoverPalette(scheme = scheme, dominant = dominant, vibrant = vibrant)
+        cache.put(coverUrl, result)
+        return result
     }
 
     private suspend fun loadBitmap(context: Context, url: String): Bitmap? {
@@ -111,6 +146,10 @@ object DynamicColorExtractor {
                 .data(url)
                 // Palette needs pixel-readable (software) bitmaps.
                 .allowHardware(false)
+                // Big enough that Palette has real pixels to quantise (a
+                // thumbnail-sized decode returns empty swatches and everything
+                // falls back to defaults), small enough to decode cheaply.
+                .size(ANALYSIS_SIZE, ANALYSIS_SIZE)
                 .build()
             val result = loader.execute(request)
             if (result is SuccessResult) {
@@ -120,6 +159,9 @@ object DynamicColorExtractor {
             null
         }
     }
+
+    private const val MAX_COLOR_COUNT = 24
+    private const val ANALYSIS_SIZE = 256
 }
 
 /**
@@ -140,7 +182,7 @@ fun rememberDynamicPalette(
     val target = remember { mutableStateOf<DynamicPalette?>(null) }
     LaunchedEffect(coverUrl, enabled) {
         target.value = if (!enabled) null
-        else DynamicColorExtractor.extract(context, coverUrl)
+        else DynamicColorExtractor.extract(context, coverUrl)?.scheme
     }
     return rememberBlendedPalette(target.value, blendMillis)
 }
