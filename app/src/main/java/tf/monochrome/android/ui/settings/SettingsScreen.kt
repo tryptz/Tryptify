@@ -2575,6 +2575,9 @@ private fun WhatsNewPanel() {
  */
 @Composable
 private fun PlaylistImportSection() {
+        // SystemTab declared this once at the top and the block borrowed it;
+        // lifted out, the section has to own it.
+        val context = LocalContext.current
         SettingsGroupHeader("Playlist Import")
         val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
         val spotifyConnected by spotifyViewModel.isConnected.collectAsState()
