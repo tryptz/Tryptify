@@ -392,6 +392,12 @@ class PlaybackService : MediaSessionService() {
                 syncGaplessNext()
             }
         }
+        serviceScope.launch {
+            preferences.gaplessNoResample.collect { noResample ->
+                gaplessNoResample = noResample
+                syncGaplessNext()
+            }
+        }
 
         // Blend length. Any non-zero value takes over from the gapless window,
         // so re-derive that whenever it changes.
@@ -971,6 +977,7 @@ class PlaybackService : MediaSessionService() {
     // scratch by [syncGaplessNext] whenever anything moves, so it cannot drift.
 
     @Volatile private var gaplessEnabled = false
+    @Volatile private var gaplessNoResample = true
 
     private var consecutivePlayerErrors = 0
 
@@ -1091,7 +1098,12 @@ class PlaybackService : MediaSessionService() {
      * for every catalogue track that doesn't report a rate, and the fallback if
      * the guess is wrong is just the reconfigure we were trying to avoid.
      */
+    @OptIn(UnstableApi::class)
     private fun sampleRatesMatch(next: tf.monochrome.android.domain.model.Track): Boolean {
+        // Toggle off: the user would rather the hand-off stayed seamless and
+        // let the system resample, so a rate change is no longer a reason to
+        // skip pre-queuing.
+        if (!gaplessNoResample) return true
         val current = player.audioFormat?.sampleRate?.takeIf { it > 0 } ?: return true
         val upcoming = unifiedTrackRegistry[next.id]?.sampleRate?.takeIf { it > 0 } ?: return true
         return current == upcoming

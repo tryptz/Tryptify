@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.8.4]
 
 ### Fixed
 - **A track no longer loads and then sits paused** — Media3 asks for audio focus on the way into play, and a refused request silently flipped playback straight back off, leaving the track stopped at 0:00 until you pressed play. Refusal is likeliest right after a slow load, which is why it showed up on tracks being heard for the first time. A refusal at start-up is now retried; one arriving later in a track, when you've genuinely handed audio to another app, is still left alone.

@@ -56,6 +56,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -96,8 +97,10 @@ fun HomeScreen(
     playerViewModel: PlayerViewModel,
     viewModel: HomeViewModel = hiltViewModel(),
     searchViewModel: SearchViewModel = hiltViewModel(),
-    downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel()
+    downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel(),
+    settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel(),
 ) {
+    val homeContext = androidx.compose.ui.platform.LocalContext.current
     val activeDownloads by downloadCenter.active.collectAsState()
     val downloadProgress by downloadCenter.overallProgress.collectAsState()
     var showDownloadsMonitor by androidx.compose.runtime.remember {
@@ -110,6 +113,22 @@ fun HomeScreen(
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
     val libraryPlaylists by playerViewModel.playlists.collectAsState()
+
+    // Update notice. Reads straight off the settings store so opening About
+    // from anywhere — the bar, or the user's own navigation — clears it.
+    val whatsNewSeen by settingsViewModel.whatsNewSeenVersion.collectAsState()
+    val whatsNewNeverShow by settingsViewModel.whatsNewNeverShow.collectAsState()
+    val showWhatsNew = tf.monochrome.android.ui.settings.WhatsNew
+        .shouldNotify(whatsNewSeen, whatsNewNeverShow)
+    val whatsNewVersionName = tf.monochrome.android.ui.settings.WhatsNew
+        .current?.versionName.orEmpty()
+
+    // A release waiting on GitHub outranks the notes for the build already
+    // installed: "there's a newer version" is the more useful of the two, and
+    // showing both at once would be two bars saying almost the same thing.
+    val availableUpdate by settingsViewModel.availableUpdate.collectAsState()
+    val showUpdateBar by settingsViewModel.showUpdateBar.collectAsState()
+    LaunchedEffect(Unit) { settingsViewModel.refreshUpdateStatus() }
 
     // Search state
     val searchQuery by searchViewModel.query.collectAsState()
@@ -402,6 +421,47 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 160.dp)
             ) {
+                // One dismissible bar per release, at the top of the first
+                // screen the user lands on. Tapping it opens the notes in
+                // About; it never blocks anything.
+                val update = availableUpdate
+                if (showUpdateBar && update != null) {
+                    item(key = "update_bar") {
+                        tf.monochrome.android.ui.components.WhatsNewBar(
+                            title = "Version ${update.versionName} is available",
+                            subtitle = "Tap to see the release on GitHub",
+                            onOpen = {
+                                settingsViewModel.dismissUpdate()
+                                runCatching {
+                                    homeContext.startActivity(
+                                        android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(update.releaseUrl),
+                                        )
+                                    )
+                                }
+                            },
+                            onDismiss = { settingsViewModel.dismissUpdate() },
+                            onNeverShow = { settingsViewModel.neverShowWhatsNew() },
+                        )
+                    }
+                } else if (showWhatsNew) {
+                    item(key = "whats_new_bar") {
+                        tf.monochrome.android.ui.components.WhatsNewBar(
+                            title = "Updated to $whatsNewVersionName",
+                            subtitle = "See what's new",
+                            onOpen = {
+                                settingsViewModel.markWhatsNewSeen()
+                                navController.navigate(
+                                    Screen.Settings.createRoute(WHATS_NEW_SETTINGS_TAB)
+                                )
+                            },
+                            onDismiss = { settingsViewModel.markWhatsNewSeen() },
+                            onNeverShow = { settingsViewModel.neverShowWhatsNew() },
+                        )
+                    }
+                }
+
                 // Personalized discovery feed: "From your favorites" first, then
                 // "New from <artist>" rows. Falls back to the static genre seeds
                 // only when the user has no taste data (new user / Qobuz empty).
@@ -633,3 +693,6 @@ private fun RecommendationCard(
         )
     }
 }
+
+/** Index of the About tab in Settings, where What's New lives. */
+private const val WHATS_NEW_SETTINGS_TAB = 10

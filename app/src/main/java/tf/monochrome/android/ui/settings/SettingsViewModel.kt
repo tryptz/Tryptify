@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
@@ -55,6 +56,7 @@ class SettingsViewModel @Inject constructor(
     private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
+    private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -493,6 +495,74 @@ class SettingsViewModel @Inject constructor(
     // Only flips the flag. Downloading happens when a song is liked, so
     // switching this on can't sweep an existing Liked Songs list — see
     // LibraryRepository.autoDownloadOnLike.
+    val gaplessNoResample: StateFlow<Boolean> = preferences.gaplessNoResample
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    // --- What's New ---
+
+    val whatsNewSeenVersion: StateFlow<Int> = preferences.whatsNewSeenVersion
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WhatsNew.currentVersionCode)
+    val whatsNewNeverShow: StateFlow<Boolean> = preferences.whatsNewNeverShow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    // --- Update availability ---
+
+    private val _availableUpdate =
+        MutableStateFlow<tf.monochrome.android.data.update.AvailableUpdate?>(null)
+    val availableUpdate: StateFlow<tf.monochrome.android.data.update.AvailableUpdate?> =
+        _availableUpdate.asStateFlow()
+
+    private val updateDismissedVersion: StateFlow<String?> = preferences.updateDismissedVersion
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * True when GitHub has a release newer than this build that the user hasn't
+     * already waved away. Dismissal is per-version, so the bar comes back for
+     * the *next* release rather than being silenced forever by one tap.
+     */
+    val showUpdateBar: StateFlow<Boolean> =
+        combine(_availableUpdate, updateDismissedVersion, whatsNewNeverShow) { update, dismissed, never ->
+            when {
+                never -> false
+                update == null -> false
+                dismissed == null -> true
+                else -> tf.monochrome.android.data.update.AppVersion
+                    .isNewer(update.versionName, dismissed)
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Cheap on start: serves the cached answer unless a day has passed. */
+    fun refreshUpdateStatus(force: Boolean = false) {
+        viewModelScope.launch {
+            _availableUpdate.value = runCatching {
+                updateChecker.check(force = force, nowMs = System.currentTimeMillis())
+            }.getOrNull()
+        }
+    }
+
+    /** Hide the bar for this release only. */
+    fun dismissUpdate() {
+        val version = _availableUpdate.value?.versionName ?: return
+        viewModelScope.launch { preferences.setUpdateDismissedVersion(version) }
+    }
+
+    /** Records that the notes for this build have been read. */
+    fun markWhatsNewSeen() {
+        viewModelScope.launch { preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode) }
+    }
+
+    /** Dismiss forever — also marks the current build seen so nothing lingers. */
+    fun neverShowWhatsNew() {
+        viewModelScope.launch {
+            preferences.setWhatsNewNeverShow(true)
+            preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode)
+        }
+    }
+
+    fun setGaplessNoResample(enabled: Boolean) {
+        viewModelScope.launch { preferences.setGaplessNoResample(enabled) }
+    }
+
     fun setAutoDownloadLikedSongs(enabled: Boolean) {
         viewModelScope.launch { preferences.setAutoDownloadLikedSongs(enabled) }
     }

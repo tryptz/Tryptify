@@ -131,6 +131,13 @@ class PreferencesManager @Inject constructor(
 
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
+        private val GAPLESS_NO_RESAMPLE = booleanPreferencesKey("gapless_no_resample")
+        private val WHATS_NEW_SEEN_VERSION = intPreferencesKey("whats_new_seen_version")
+        private val WHATS_NEW_NEVER_SHOW = booleanPreferencesKey("whats_new_never_show")
+        private val UPDATE_LAST_CHECKED_AT = longPreferencesKey("update_last_checked_at")
+        private val UPDATE_LATEST_VERSION = stringPreferencesKey("update_latest_version")
+        private val UPDATE_LATEST_URL = stringPreferencesKey("update_latest_url")
+        private val UPDATE_DISMISSED_VERSION = stringPreferencesKey("update_dismissed_version")
         private val SHOW_EXPLICIT_BADGES = booleanPreferencesKey("show_explicit_badges")
         private val CONFIRM_CLEAR_QUEUE = booleanPreferencesKey("confirm_clear_queue")
 
@@ -313,7 +320,7 @@ class PreferencesManager @Inject constructor(
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY,
             THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
-            GAPLESS_PLAYBACK, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
+            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
@@ -605,6 +612,65 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setGaplessPlayback(enabled: Boolean) {
         dataStore.edit { it[GAPLESS_PLAYBACK] = enabled }
+    }
+
+    /**
+     * Refuse to resample across a gapless transition. On by default.
+     *
+     * A track that plays at a different sample rate forces the output to be
+     * torn down and rebuilt, which is the very gap gapless removes. The only
+     * way round it is to resample everything to one fixed rate — exactly what
+     * the bit-perfect USB path exists not to do — so by default that one
+     * transition takes the gap, which is what every bit-perfect player does.
+     * Turn this off to keep the hand-off seamless and let the system resample.
+     */
+    val gaplessNoResample: Flow<Boolean> = dataStore.data.map { it[GAPLESS_NO_RESAMPLE] ?: true }
+
+    /** versionCode whose "What's New" the user has already seen. 0 = none. */
+    val whatsNewSeenVersion: Flow<Int> = dataStore.data.map { it[WHATS_NEW_SEEN_VERSION] ?: 0 }
+
+    /** Set once the user asks never to be told about updates again. */
+    val whatsNewNeverShow: Flow<Boolean> = dataStore.data.map { it[WHATS_NEW_NEVER_SHOW] ?: false }
+
+    suspend fun setGaplessNoResample(enabled: Boolean) {
+        dataStore.edit { it[GAPLESS_NO_RESAMPLE] = enabled }
+    }
+
+    suspend fun setWhatsNewSeenVersion(versionCode: Int) {
+        dataStore.edit { it[WHATS_NEW_SEEN_VERSION] = versionCode }
+    }
+
+    // --- Update availability (GitHub Releases) ---
+    //
+    // Device-local only, and deliberately not in SETTINGS_SYNC_KEYS: these
+    // describe what *this* install has checked and dismissed, and syncing them
+    // would hide an update on a device that hasn't been offered it yet.
+
+    val updateLastCheckedAt: Flow<Long> = dataStore.data.map { it[UPDATE_LAST_CHECKED_AT] ?: 0L }
+    val updateLatestVersion: Flow<String?> = dataStore.data.map { it[UPDATE_LATEST_VERSION] }
+    val updateLatestUrl: Flow<String?> = dataStore.data.map { it[UPDATE_LATEST_URL] }
+
+    /** Version the user has waved away; the bar stays gone until a newer one. */
+    val updateDismissedVersion: Flow<String?> = dataStore.data.map { it[UPDATE_DISMISSED_VERSION] }
+
+    suspend fun setUpdateLastCheckedAt(atMs: Long) {
+        dataStore.edit { it[UPDATE_LAST_CHECKED_AT] = atMs }
+    }
+
+    suspend fun setUpdateLatestVersion(version: String) {
+        dataStore.edit { it[UPDATE_LATEST_VERSION] = version }
+    }
+
+    suspend fun setUpdateLatestUrl(url: String) {
+        dataStore.edit { it[UPDATE_LATEST_URL] = url }
+    }
+
+    suspend fun setUpdateDismissedVersion(version: String) {
+        dataStore.edit { it[UPDATE_DISMISSED_VERSION] = version }
+    }
+
+    suspend fun setWhatsNewNeverShow(enabled: Boolean) {
+        dataStore.edit { it[WHATS_NEW_NEVER_SHOW] = enabled }
     }
 
     val showExplicitBadges: Flow<Boolean> = dataStore.data.map { prefs ->

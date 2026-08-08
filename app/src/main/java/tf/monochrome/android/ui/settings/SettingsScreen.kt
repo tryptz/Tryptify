@@ -221,7 +221,7 @@ fun SettingsScreen(
                     7 -> InstancesTab(viewModel)
                     8 -> SystemTab(viewModel, navController)
                     9 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                    10 -> AboutTab()
+                    10 -> AboutTab(viewModel)
                 }
             }
         }
@@ -546,6 +546,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel) {
 private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavController) {
     val gapless by viewModel.gaplessPlayback.collectAsState()
     val crossfade by viewModel.crossfadeDuration.collectAsState()
+    val gaplessNoResample by viewModel.gaplessNoResample.collectAsState()
     val explicit by viewModel.showExplicitBadges.collectAsState()
     val confirmQueue by viewModel.confirmClearQueue.collectAsState()
     val sensitivity by viewModel.visualizerSensitivity.collectAsState()
@@ -589,6 +590,15 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
             subtitle = "Remove silence between tracks",
             checked = gapless,
             onCheckedChange = { viewModel.setGaplessPlayback(it) }
+        )
+
+        SettingSwitchItem(
+            title = "Never Resample Between Tracks",
+            subtitle = "A track at a different sample rate starts after a brief gap " +
+                "instead of being resampled to match, keeping output bit-perfect. " +
+                "Turn off to keep every transition seamless and let the system resample.",
+            checked = gaplessNoResample,
+            onCheckedChange = { viewModel.setGaplessNoResample(it) }
         )
 
         // Sits under the gapless toggle because the two decide the same thing:
@@ -2498,9 +2508,13 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 
 // ─── Tab 9: About ──────────────────────────────────────────────────────
 @Composable
-private fun AboutTab() {
+private fun AboutTab(viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    // Reaching the panel counts as having read it, however the user got here.
+    LaunchedEffect(Unit) { viewModel.markWhatsNewSeen() }
     SettingsTabContent {
+        WhatsNewPanel()
+        Spacer(modifier = Modifier.height(24.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -2819,6 +2833,42 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * "What's New" — the user-facing summary of each release, newest first.
+ *
+ * Lives at the top of About because that's where the update notice sends
+ * people, and it's the first thing worth reading when you've just updated.
+ */
+@Composable
+private fun WhatsNewPanel() {
+    val releases = WhatsNew.releases
+    if (releases.isEmpty()) return
+
+    SettingsGroupHeader("What's New")
+    releases.forEach { release ->
+        Text(
+            text = "Version ${release.versionName}",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+        )
+        release.entries.forEach { entry ->
+            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                Text(
+                    text = entry.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = entry.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
