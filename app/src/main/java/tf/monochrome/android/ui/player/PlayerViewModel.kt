@@ -350,6 +350,24 @@ class PlayerViewModel @Inject constructor(
     // can resolve unified tracks too. Don't redeclare here.
 
 
+    /**
+     * Live download state by track id.
+     *
+     * Declared HERE, above the init block that writes it, and that is not
+     * cosmetic. Kotlin runs property initialisers and init blocks in source
+     * order, and viewModelScope's dispatcher is Dispatchers.Main.immediate — so
+     * a `launch` from init that is already on the main thread starts its body
+     * *synchronously, inside the constructor*. Collecting a StateFlow there
+     * delivers its current value on the spot, and the assignment lands before
+     * a property declared further down has been initialised: a null receiver
+     * and a crash on app start, every time, on the first frame.
+     *
+     * It survived only because the download flow used to be LiveData-backed and
+     * so could not emit synchronously. Making it a StateFlow exposed it.
+     */
+    private val _activeDownloads = MutableStateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>>(emptyMap())
+    val activeDownloads: StateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>> = _activeDownloads.asStateFlow()
+
     init {
         connectToService()
         startPositionPolling()
@@ -1005,9 +1023,6 @@ class PlayerViewModel @Inject constructor(
     }
 
     // --- Downloads ---
-
-    private val _activeDownloads = MutableStateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>>(emptyMap())
-    val activeDownloads: StateFlow<Map<Long, tf.monochrome.android.data.downloads.TrackDownloadState>> = _activeDownloads.asStateFlow()
 
     /**
      * Ids of every track with a downloaded copy on disk. Drives the persistent
