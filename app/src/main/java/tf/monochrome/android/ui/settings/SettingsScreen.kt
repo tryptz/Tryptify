@@ -1801,6 +1801,21 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
     }
 
     SettingsTabContent {
+        // Moved off Library, which had it under a "Liked Songs" header of its
+        // own. Liking a song is a library action; downloading one is not, and
+        // every other download setting was already here.
+        SettingsGroupHeader("Automatic Downloads")
+        val autoDownloadLiked by viewModel.autoDownloadLikedSongs.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = "Auto-Download Liked Songs",
+            subtitle = "Keep a copy of every song you like from now on. " +
+                "Songs you liked earlier are left alone — turning this on " +
+                "never starts a bulk download.",
+            checked = autoDownloadLiked,
+            onCheckedChange = { viewModel.setAutoDownloadLikedSongs(it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Download Quality")
         SettingItem(title = "Quality", subtitle = downloadQuality.displayName, onClick = { showQualityDropdown = true })
         DropdownMenu(expanded = showQualityDropdown, onDismissRequest = { showQualityDropdown = false }) {
@@ -2531,35 +2546,12 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
     val minTrackDuration by viewModel.minTrackDuration.collectAsStateWithLifecycle()
     val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsStateWithLifecycle()
     val libraryTabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
-    val autoDownloadLiked by viewModel.autoDownloadLikedSongs.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        item {
-            Text(
-                "Liked Songs",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-        }
-
-        item {
-            SettingSwitchItem(
-                title = "Auto-Download Liked Songs",
-                subtitle = "Keep a copy of every song you like from now on. " +
-                    "Songs you liked earlier are left alone — turning this on " +
-                    "never starts a bulk download.",
-                checked = autoDownloadLiked,
-                onCheckedChange = { viewModel.setAutoDownloadLikedSongs(it) }
-            )
-        }
-
-        item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-
         item {
             Text(
                 "Local Media Scanning",
