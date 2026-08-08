@@ -8,6 +8,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
+import tf.monochrome.android.data.cache.QobuzStreamUri
 import tf.monochrome.android.data.cache.QobuzStreamCacheManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AudioQuality
@@ -133,7 +134,10 @@ class StreamResolver @Inject constructor(
             )
             if (local != null) return@runCatching
             if (qobuzIdRegistry.isQobuzTrack(track.id)) {
-                qobuzCache.getOrFetch(track.id, AudioQuality.LOSSLESS)
+                // Kicks the download off and returns; it keeps filling the
+                // cache on the manager's own scope, so by the time this track
+                // is reached it is already there.
+                qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS)
             }
         }
     }
@@ -220,7 +224,10 @@ class StreamResolver @Inject constructor(
         track: UnifiedTrack,
         source: PlaybackSource.QobuzCached,
     ): ResolvedMedia {
-        val cachedFile = qobuzCache.getOrFetch(source.qobuzId, source.preferredQuality)
+        // Starts the download and returns once the headers are in; the player
+        // reads the cache file as it fills. Null still means "can't play this"
+        // (Qobuz unconfigured, or the request failed outright).
+        val started = qobuzCache.openPartial(source.qobuzId, source.preferredQuality) != null
 
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -233,14 +240,18 @@ class StreamResolver @Inject constructor(
 
         val mediaItem = MediaItem.Builder()
             .setMediaId(track.id)
-            .apply { cachedFile?.let { setUri(Uri.fromFile(it)) } }
+            .apply {
+                if (started) {
+                    setUri(QobuzStreamUri.build(source.qobuzId, source.preferredQuality))
+                }
+            }
             .setMediaMetadata(metadata)
             .build()
 
         return ResolvedMedia(
             mediaItem = mediaItem,
-            isLocalFile = cachedFile != null,
-            isPlayable = cachedFile != null,
+            isLocalFile = true,
+            isPlayable = started,
         )
     }
 
@@ -279,9 +290,12 @@ class StreamResolver @Inject constructor(
      * far better than quietly serving someone else's recording from TIDAL.
      */
     private suspend fun qobuzCachedMediaItem(track: Track): MediaItem? {
-        val file = runCatching { qobuzCache.getOrFetch(track.id, AudioQuality.LOSSLESS) }
+        val started = runCatching { qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS) }
             .getOrNull() ?: return null
-        return buildFileMediaItem(track, Uri.fromFile(file))
+        return buildFileMediaItem(
+            track,
+            QobuzStreamUri.build(track.id, AudioQuality.LOSSLESS).toUri(),
+        ).takeIf { started.failure == null }
     }
 
     /**
@@ -487,7 +501,7 @@ class StreamResolver @Inject constructor(
             qobuzIdRegistry.registerArtistAlias(tidalArtistId, qobuzArtistId)
         }
 
-        val file = runCatching { qobuzCache.getOrFetch(match.trackId, AudioQuality.LOSSLESS) }
+        runCatching { qobuzCache.openPartial(match.trackId, AudioQuality.LOSSLESS) }
             .getOrNull() ?: return null
 
         val metadata = MediaMetadata.Builder()
@@ -501,7 +515,7 @@ class StreamResolver @Inject constructor(
 
         return MediaItem.Builder()
             .setMediaId(mediaId)
-            .setUri(Uri.fromFile(file))
+            .setUri(QobuzStreamUri.build(match.trackId, AudioQuality.LOSSLESS).toUri())
             .setMediaMetadata(metadata)
             .build()
     }

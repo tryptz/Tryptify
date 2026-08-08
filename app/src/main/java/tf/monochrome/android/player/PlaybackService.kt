@@ -68,6 +68,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
+    @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -86,7 +87,24 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     private fun buildAtmosTapFactory() =
         tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
-            DefaultMediaSourceFactory(this), atmosFrameBuffer)
+            DefaultMediaSourceFactory(buildDataSourceFactory()), atmosFrameBuffer)
+
+    /**
+     * Everything DefaultDataSource handles (file / content / asset / http),
+     * plus the `qobuz://` scheme, which plays a Qobuz track out of the cache
+     * file while it is still downloading instead of waiting for the last byte.
+     */
+    @OptIn(UnstableApi::class)
+    private fun buildDataSourceFactory(): androidx.media3.datasource.DataSource.Factory {
+        val default = androidx.media3.datasource.DefaultDataSource.Factory(this)
+        val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
+        return androidx.media3.datasource.DataSource.Factory {
+            tf.monochrome.android.data.cache.SchemeRoutingDataSource(
+                default.createDataSource(),
+                qobuz.createDataSource(),
+            )
+        }
+    }
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
