@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.domain.model.UnifiedArtistRef
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.ClickableArtists
@@ -57,7 +58,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -101,23 +101,23 @@ fun HomeScreen(
     settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel(),
 ) {
     val homeContext = androidx.compose.ui.platform.LocalContext.current
-    val activeDownloads by downloadCenter.active.collectAsState()
-    val downloadProgress by downloadCenter.overallProgress.collectAsState()
+    val activeDownloads by downloadCenter.active.collectAsStateWithLifecycle()
+    val downloadProgress by downloadCenter.overallProgress.collectAsStateWithLifecycle()
     var showDownloadsMonitor by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
-    val recentTracks by viewModel.recentTracks.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val discoveryRows by viewModel.discoveryRows.collectAsState()
-    val favoritesRow by viewModel.favoritesRow.collectAsState()
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
-    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
-    val libraryPlaylists by playerViewModel.playlists.collectAsState()
+    val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val discoveryRows by viewModel.discoveryRows.collectAsStateWithLifecycle()
+    val favoritesRow by viewModel.favoritesRow.collectAsStateWithLifecycle()
+    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+    val libraryPlaylists by playerViewModel.playlists.collectAsStateWithLifecycle()
 
     // Update notice. Reads straight off the settings store so opening About
     // from anywhere — the bar, or the user's own navigation — clears it.
-    val whatsNewSeen by settingsViewModel.whatsNewSeenVersion.collectAsState()
-    val whatsNewNeverShow by settingsViewModel.whatsNewNeverShow.collectAsState()
+    val whatsNewSeen by settingsViewModel.whatsNewSeenVersion.collectAsStateWithLifecycle()
+    val whatsNewNeverShow by settingsViewModel.whatsNewNeverShow.collectAsStateWithLifecycle()
     val showWhatsNew = tf.monochrome.android.ui.settings.WhatsNew
         .shouldNotify(whatsNewSeen, whatsNewNeverShow)
     val whatsNewVersionName = tf.monochrome.android.ui.settings.WhatsNew
@@ -126,25 +126,25 @@ fun HomeScreen(
     // A release waiting on GitHub outranks the notes for the build already
     // installed: "there's a newer version" is the more useful of the two, and
     // showing both at once would be two bars saying almost the same thing.
-    val availableUpdate by settingsViewModel.availableUpdate.collectAsState()
-    val showUpdateBar by settingsViewModel.showUpdateBar.collectAsState()
+    val availableUpdate by settingsViewModel.availableUpdate.collectAsStateWithLifecycle()
+    val showUpdateBar by settingsViewModel.showUpdateBar.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { settingsViewModel.refreshUpdateStatus() }
 
     // Search state
-    val searchQuery by searchViewModel.query.collectAsState()
-    val searchTracks by searchViewModel.tracks.collectAsState()
-    val searchAlbums by searchViewModel.albums.collectAsState()
-    val searchArtists by searchViewModel.artists.collectAsState()
-    val searchPlaylists by searchViewModel.playlists.collectAsState()
-    val isSearching by searchViewModel.isSearching.collectAsState()
-    val selectedType by searchViewModel.selectedType.collectAsState()
-    val selectedSource by searchViewModel.selectedSource.collectAsState()
-    val showSourceFilter by searchViewModel.showSourceFilter.collectAsState()
-    val isLoadingMore by searchViewModel.isLoadingMore.collectAsState()
-    val endReached by searchViewModel.endReached.collectAsState()
-    val searchError by searchViewModel.searchError.collectAsState()
-    val searchHistory by searchViewModel.searchHistory.collectAsState()
-    val recommendations by searchViewModel.recommendations.collectAsState()
+    val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
+    val searchTracks by searchViewModel.tracks.collectAsStateWithLifecycle()
+    val searchAlbums by searchViewModel.albums.collectAsStateWithLifecycle()
+    val searchArtists by searchViewModel.artists.collectAsStateWithLifecycle()
+    val searchPlaylists by searchViewModel.playlists.collectAsStateWithLifecycle()
+    val isSearching by searchViewModel.isSearching.collectAsStateWithLifecycle()
+    val selectedType by searchViewModel.selectedType.collectAsStateWithLifecycle()
+    val selectedSource by searchViewModel.selectedSource.collectAsStateWithLifecycle()
+    val showSourceFilter by searchViewModel.showSourceFilter.collectAsStateWithLifecycle()
+    val isLoadingMore by searchViewModel.isLoadingMore.collectAsStateWithLifecycle()
+    val endReached by searchViewModel.endReached.collectAsStateWithLifecycle()
+    val searchError by searchViewModel.searchError.collectAsStateWithLifecycle()
+    val searchHistory by searchViewModel.searchHistory.collectAsStateWithLifecycle()
+    val recommendations by searchViewModel.recommendations.collectAsStateWithLifecycle()
     val hasSearchResults = searchQuery.isNotBlank()
 
     // Search reveals on demand; radio is the resting primary action.
@@ -162,8 +162,8 @@ fun HomeScreen(
             runCatching { searchFocus.requestFocus() }
         }
     }
-    val isRadioActive by playerViewModel.isRadioActive.collectAsState()
-    val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsState()
+    val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
+    val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsStateWithLifecycle()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<Track?>(null)

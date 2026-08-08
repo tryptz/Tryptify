@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -169,24 +169,24 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
     val playerViewModel: PlayerViewModel = hiltViewModel()
 
-    val currentTrack by playerViewModel.currentTrack.collectAsState()
-    val isPlaying by playerViewModel.isPlaying.collectAsState()
+    val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
+    val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     // Mini-player glass settings (its own blob; Studio › Mini Player tab).
-    val miniPlayerGlass by playerViewModel.miniPlayerGlass.collectAsState()
+    val miniPlayerGlass by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     // The mini player's cover changes track at the same speed its album tint
     // does — both come off "Blend Between Tracks" — and tells a skip from a
     // song ending the same way the full player does.
-    val blendSeconds by playerViewModel.crossfadeDuration.collectAsState()
+    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val miniBlendMs = ColorBlend.millisFor(blendSeconds)
-    val userTrackChanges by playerViewModel.userTrackChanges.collectAsState()
+    val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
 
     // Position/duration tick every 250 ms. Keep them as State<Long> and read
     // only inside the draw-scope progress lambda below — reading `.value` here
     // would recompose the entire nav host (pager + HomeScreen + LibraryScreen)
     // four times a second.
-    val positionState = playerViewModel.positionMs.collectAsState()
-    val durationState = playerViewModel.durationMs.collectAsState()
+    val positionState = playerViewModel.positionMs.collectAsStateWithLifecycle()
+    val durationState = playerViewModel.durationMs.collectAsStateWithLifecycle()
     val progressProvider = remember(positionState, durationState) {
         {
             val d = durationState.value
@@ -209,7 +209,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // so the top-bar indicator can count and track every page in the app — Home
     // plus each Library section — instead of only the Home↔Library split.
     val settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel()
-    val libraryTabOrder by settingsViewModel.libraryTabOrder.collectAsState()
+    val libraryTabOrder by settingsViewModel.libraryTabOrder.collectAsStateWithLifecycle()
     val librarySectionIds = remember(libraryTabOrder) { librarySections(libraryTabOrder) }
     val librarySectionPager = rememberPagerState(pageCount = { librarySectionIds.size })
 
@@ -687,7 +687,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
         // ── Layer 3: Download progress pill + monitor (global chrome) ──
         val downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel()
-        val activeDownloads by downloadCenter.active.collectAsState()
+        val activeDownloads by downloadCenter.active.collectAsStateWithLifecycle()
         var pillHidden by rememberSaveable { mutableStateOf(false) }
         var showDownloadsMonitor by rememberSaveable { mutableStateOf(false) }
         // Re-show the pill whenever a fresh batch of downloads begins.

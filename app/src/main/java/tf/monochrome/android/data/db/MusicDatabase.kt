@@ -68,7 +68,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -160,6 +160,39 @@ abstract class MusicDatabase : RoomDatabase() {
                         "`index_local_tracks_albumArtist_album_discNumber_trackNumber` " +
                         "ON `local_tracks` (`albumArtist`, `album`, `discNumber`, `trackNumber`)"
                 )
+            }
+        }
+
+        /**
+         * Folded title column + index behind the "play the on-device copy"
+         * lookup, which shortlisted candidates with `title LIKE 'song%'`.
+         *
+         * That is a prefix pattern, so it looks indexable — but SQLite's LIKE
+         * is case-insensitive by default and it only applies the LIKE
+         * optimisation when the column carries NOCASE collation, which an
+         * existing BINARY column cannot gain without rebuilding the table. So
+         * every uncached resolution scanned all of local_tracks, on the path to
+         * starting playback. A pre-folded column range-scans an ordinary index
+         * instead.
+         *
+         * The backfill uses SQLite's `lower()`, which folds ASCII only, where
+         * the scanner writes Kotlin's fuller `lowercase()`. That is not a
+         * regression: the LIKE it replaces folded ASCII only too. A non-ASCII
+         * title written by the backfill simply keeps matching exactly as well
+         * as it did before, and gets the fuller key on the next rescan.
+         *
+         * As with 11→12, the column type and index name must match what Room
+         * generates for the annotations on LocalTrackEntity, or validation
+         * fails on open and fallbackToDestructiveMigration wipes the library.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `titleSearchKey` TEXT")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_local_tracks_titleSearchKey` " +
+                        "ON `local_tracks` (`titleSearchKey`)"
+                )
+                db.execSQL("UPDATE `local_tracks` SET `titleSearchKey` = lower(`title`)")
             }
         }
     }

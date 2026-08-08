@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.widget.Toast
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.BuildConfig
 import java.util.Locale
 import androidx.compose.foundation.Image
@@ -81,7 +82,6 @@ import tf.monochrome.android.domain.model.NowPlayingViewMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -251,12 +251,12 @@ private fun EqualizerTab(
     // Was a lone group on the Audio tab, one tab away from every other EQ
     // control. Whether the curve applies to the whole device is a question
     // about the equalizer, so it is asked here.
-    val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsState()
-    val eqEnabled by eqViewModel.eqEnabled.collectAsState()
-    val selectedTarget by eqViewModel.selectedTarget.collectAsState()
-    val selectedHeadphone by eqViewModel.selectedHeadphone.collectAsState()
-    val allPresets by eqViewModel.allPresets.collectAsState()
-    val activePreset by eqViewModel.activePreset.collectAsState()
+    val systemWideAutoEq by viewModel.systemWideAutoEqEnabled.collectAsStateWithLifecycle()
+    val eqEnabled by eqViewModel.eqEnabled.collectAsStateWithLifecycle()
+    val selectedTarget by eqViewModel.selectedTarget.collectAsStateWithLifecycle()
+    val selectedHeadphone by eqViewModel.selectedHeadphone.collectAsStateWithLifecycle()
+    val allPresets by eqViewModel.allPresets.collectAsStateWithLifecycle()
+    val activePreset by eqViewModel.activePreset.collectAsStateWithLifecycle()
     var presetToDelete by remember { mutableStateOf<EqPreset?>(null) }
 
     SettingsTabContent {
@@ -424,13 +424,13 @@ private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavContro
 
 @Composable
 private fun AppearanceControls(viewModel: SettingsViewModel) {
-    val themeName by viewModel.theme.collectAsState()
-    val dynamicColors by viewModel.dynamicColors.collectAsState()
-    val fontScale by viewModel.fontScale.collectAsState()
-    val customFontUri by viewModel.customFontUri.collectAsState()
-    val availableFonts by viewModel.availableFonts.collectAsState()
-    val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsState()
-    val glowBehindArt by viewModel.glowBehindArt.collectAsState()
+    val themeName by viewModel.theme.collectAsStateWithLifecycle()
+    val dynamicColors by viewModel.dynamicColors.collectAsStateWithLifecycle()
+    val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
+    val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
+    val availableFonts by viewModel.availableFonts.collectAsStateWithLifecycle()
+    val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsStateWithLifecycle()
+    val glowBehindArt by viewModel.glowBehindArt.collectAsStateWithLifecycle()
     var showThemeDropdown by remember { mutableStateOf(false) }
 
     // File picker for .ttf font import
@@ -586,30 +586,30 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
 
 @Composable
 private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavController) {
-    val explicit by viewModel.showExplicitBadges.collectAsState()
-    val confirmQueue by viewModel.confirmClearQueue.collectAsState()
-    val sensitivity by viewModel.visualizerSensitivity.collectAsState()
-    val brightness by viewModel.visualizerBrightness.collectAsState()
-    val engineEnabled by viewModel.visualizerEngineEnabled.collectAsState()
-    val autoShuffle by viewModel.visualizerAutoShuffle.collectAsState()
-    val presetId by viewModel.visualizerPresetId.collectAsState()
-    val rotationSeconds by viewModel.visualizerRotationSeconds.collectAsState()
-    val textureSize by viewModel.visualizerTextureSize.collectAsState()
-    val meshX by viewModel.visualizerMeshX.collectAsState()
-    val meshY by viewModel.visualizerMeshY.collectAsState()
-    val targetFps by viewModel.visualizerTargetFps.collectAsState()
-    val vsyncEnabled by viewModel.visualizerVsyncEnabled.collectAsState()
-    val showFps by viewModel.visualizerShowFps.collectAsState()
-    val fullscreen by viewModel.visualizerFullscreen.collectAsState()
-    val touchWaveform by viewModel.visualizerTouchWaveform.collectAsState()
-    val engineStatus by viewModel.visualizerEngineStatus.collectAsState()
-    val presets by viewModel.visualizerPresets.collectAsState()
-    val spectrumEnabled by viewModel.spectrumAnalyzerEnabled.collectAsState()
-    val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsState()
-    val spectrumFftSize by viewModel.spectrumFftSize.collectAsState()
-    val spectrumBins by viewModel.spectrumBins.collectAsState()
-    val playerDynamicColor by viewModel.playerDynamicColor.collectAsState()
-    val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsState()
+    val explicit by viewModel.showExplicitBadges.collectAsStateWithLifecycle()
+    val confirmQueue by viewModel.confirmClearQueue.collectAsStateWithLifecycle()
+    val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
+    val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
+    val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
+    val autoShuffle by viewModel.visualizerAutoShuffle.collectAsStateWithLifecycle()
+    val presetId by viewModel.visualizerPresetId.collectAsStateWithLifecycle()
+    val rotationSeconds by viewModel.visualizerRotationSeconds.collectAsStateWithLifecycle()
+    val textureSize by viewModel.visualizerTextureSize.collectAsStateWithLifecycle()
+    val meshX by viewModel.visualizerMeshX.collectAsStateWithLifecycle()
+    val meshY by viewModel.visualizerMeshY.collectAsStateWithLifecycle()
+    val targetFps by viewModel.visualizerTargetFps.collectAsStateWithLifecycle()
+    val vsyncEnabled by viewModel.visualizerVsyncEnabled.collectAsStateWithLifecycle()
+    val showFps by viewModel.visualizerShowFps.collectAsStateWithLifecycle()
+    val fullscreen by viewModel.visualizerFullscreen.collectAsStateWithLifecycle()
+    val touchWaveform by viewModel.visualizerTouchWaveform.collectAsStateWithLifecycle()
+    val engineStatus by viewModel.visualizerEngineStatus.collectAsStateWithLifecycle()
+    val presets by viewModel.visualizerPresets.collectAsStateWithLifecycle()
+    val spectrumEnabled by viewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
+    val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
+    val spectrumFftSize by viewModel.spectrumFftSize.collectAsStateWithLifecycle()
+    val spectrumBins by viewModel.spectrumBins.collectAsStateWithLifecycle()
+    val playerDynamicColor by viewModel.playerDynamicColor.collectAsStateWithLifecycle()
+    val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsStateWithLifecycle()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
     var showTextureDropdown by remember { mutableStateOf(false) }
     var showPresetDropdown by remember { mutableStateOf(false) }
@@ -627,7 +627,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             checked = explicit,
             onCheckedChange = { viewModel.setShowExplicitBadges(it) }
         )
-        val romaji by viewModel.romajiLyrics.collectAsState()
+        val romaji by viewModel.romajiLyrics.collectAsStateWithLifecycle()
         SettingSwitchItem(
             title = "Romaji Lyrics",
             subtitle = "Transliterate Japanese lyrics to Latin characters",
@@ -637,7 +637,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
 
         // Word-level lyrics provider — which karaoke-timing source(s) run when
         // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
-        val lyricsProvider by viewModel.lyricsWordProvider.collectAsState()
+        val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Text(
                 text = "Word-level lyrics provider",
@@ -670,7 +670,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Now Playing")
-        val viewMode by viewModel.nowPlayingViewMode.collectAsState()
+        val viewMode by viewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
         var showModeDropdown by remember { mutableStateOf(false) }
         SettingItem(
             title = "View Mode", 
@@ -950,10 +950,10 @@ private fun IntSettingSlider(
  */
 @Composable
 private fun ScrobblingControls(viewModel: SettingsViewModel) {
-    val lastFmEnabled by viewModel.lastFmEnabled.collectAsState()
-    val lastFmUsername by viewModel.lastFmUsername.collectAsState()
-    val lbEnabled by viewModel.listenBrainzEnabled.collectAsState()
-    val lbToken by viewModel.listenBrainzToken.collectAsState()
+    val lastFmEnabled by viewModel.lastFmEnabled.collectAsStateWithLifecycle()
+    val lastFmUsername by viewModel.lastFmUsername.collectAsStateWithLifecycle()
+    val lbEnabled by viewModel.listenBrainzEnabled.collectAsStateWithLifecycle()
+    val lbToken by viewModel.listenBrainzToken.collectAsStateWithLifecycle()
 
     var showLastFmDialog by rememberSaveable { mutableStateOf(false) }
     var showLbDialog by rememberSaveable { mutableStateOf(false) }
@@ -1051,13 +1051,13 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     // is an audio decision, not an interface one — it sat under Interface only
     // because that tab had become the place settings went when no tab obviously
     // owned them.
-    val gapless by viewModel.gaplessPlayback.collectAsState()
-    val crossfade by viewModel.crossfadeDuration.collectAsState()
-    val gaplessNoResample by viewModel.gaplessNoResample.collectAsState()
-    val wifiQuality by viewModel.wifiQuality.collectAsState()
-    val cellularQuality by viewModel.cellularQuality.collectAsState()
-    val playbackSpeed by viewModel.playbackSpeed.collectAsState()
-    val preservePitch by viewModel.preservePitch.collectAsState()
+    val gapless by viewModel.gaplessPlayback.collectAsStateWithLifecycle()
+    val crossfade by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
+    val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
+    val wifiQuality by viewModel.wifiQuality.collectAsStateWithLifecycle()
+    val cellularQuality by viewModel.cellularQuality.collectAsStateWithLifecycle()
+    val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
+    val preservePitch by viewModel.preservePitch.collectAsStateWithLifecycle()
     var showWifiDropdown by remember { mutableStateOf(false) }
     var showCellularDropdown by remember { mutableStateOf(false) }
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
@@ -1244,7 +1244,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
-    val current by viewModel.dspBlockSize.collectAsState()
+    val current by viewModel.dspBlockSize.collectAsStateWithLifecycle()
     Text(
         text = "DSP Block Size",
         style = MaterialTheme.typography.bodyLarge,
@@ -1283,7 +1283,7 @@ private fun formatBlockSize(size: Int): String = when {
  */
 @Composable
 private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
-    val enabled by viewModel.multichannelDownmixEnabled.collectAsState()
+    val enabled by viewModel.multichannelDownmixEnabled.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = "Downmix multichannel to stereo",
         subtitle = if (enabled) {
@@ -1307,8 +1307,8 @@ private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
 private fun DebugScreenRecorderRow() {
     if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
     val context = LocalContext.current
-    val recording by tf.monochrome.android.debug.DebugScreenRecordService.recording.collectAsState()
-    val lastSaved by tf.monochrome.android.debug.DebugScreenRecordService.lastSavedName.collectAsState()
+    val recording by tf.monochrome.android.debug.DebugScreenRecordService.recording.collectAsStateWithLifecycle()
+    val lastSaved by tf.monochrome.android.debug.DebugScreenRecordService.lastSavedName.collectAsStateWithLifecycle()
 
     val projectionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -1356,7 +1356,7 @@ private fun DebugScreenRecorderRow() {
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
-    val state by viewModel.channelDetectorState.collectAsState()
+    val state by viewModel.channelDetectorState.collectAsStateWithLifecycle()
     DisposableEffect(Unit) {
         viewModel.acquireChannelDetector()
         onDispose { viewModel.releaseChannelDetector() }
@@ -1455,8 +1455,8 @@ private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
  */
 @Composable
 private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
-    val enabled by viewModel.usbBitPerfectEnabled.collectAsState()
-    val deviceName by viewModel.usbOutputDeviceName.collectAsState()
+    val enabled by viewModel.usbBitPerfectEnabled.collectAsStateWithLifecycle()
+    val deviceName by viewModel.usbOutputDeviceName.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = "USB DAC bit-perfect routing",
         subtitle = when {
@@ -1468,11 +1468,11 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
         onCheckedChange = { viewModel.setUsbBitPerfectEnabled(it) },
     )
 
-    val exclusiveEnabled by viewModel.usbExclusiveBitPerfectEnabled.collectAsState()
-    val exclusiveStatus by viewModel.usbExclusiveStatus.collectAsState()
-    val diagnostics by viewModel.usbBypassDiagnostics.collectAsState()
-    val failure by viewModel.usbBypassFailure.collectAsState()
-    val supportedRates by viewModel.usbBypassSupportedRates.collectAsState()
+    val exclusiveEnabled by viewModel.usbExclusiveBitPerfectEnabled.collectAsStateWithLifecycle()
+    val exclusiveStatus by viewModel.usbExclusiveStatus.collectAsStateWithLifecycle()
+    val diagnostics by viewModel.usbBypassDiagnostics.collectAsStateWithLifecycle()
+    val failure by viewModel.usbBypassFailure.collectAsStateWithLifecycle()
+    val supportedRates by viewModel.usbBypassSupportedRates.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = "Exclusive USB DAC (bypass Android audio)",
         subtitle = exclusiveSubtitle(
@@ -1682,8 +1682,8 @@ private fun exclusiveSubtitle(
 // ─── Tab 6: Downloads ──────────────────────────────────────────────────
 @Composable
 private fun DownloadsTab(viewModel: SettingsViewModel) {
-    val downloadQuality by viewModel.downloadQuality.collectAsState()
-    val downloadFolder by viewModel.downloadFolderUri.collectAsState()
+    val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
+    val downloadFolder by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
     var showQualityDropdown by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -1727,7 +1727,7 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
             }
         }
 
-        val dlLyrics by viewModel.downloadLyrics.collectAsState()
+        val dlLyrics by viewModel.downloadLyrics.collectAsStateWithLifecycle()
         SettingSwitchItem(
             title = "Download Lyrics",
             subtitle = "Bundle .lrc files with downloaded tracks",
@@ -1814,10 +1814,10 @@ private fun ConnectionsTab(viewModel: SettingsViewModel) {
 private fun SpotifyAccountControls() {
     val context = LocalContext.current
     val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
-    val connected by spotifyViewModel.isConnected.collectAsState()
-    val userName by spotifyViewModel.userName.collectAsState()
-    val connecting by spotifyViewModel.isConnecting.collectAsState()
-    val authError by spotifyViewModel.authError.collectAsState()
+    val connected by spotifyViewModel.isConnected.collectAsStateWithLifecycle()
+    val userName by spotifyViewModel.userName.collectAsStateWithLifecycle()
+    val connecting by spotifyViewModel.isConnecting.collectAsStateWithLifecycle()
+    val authError by spotifyViewModel.authError.collectAsStateWithLifecycle()
 
     SettingsGroupHeader("Spotify")
     if (connected) {
@@ -1861,8 +1861,8 @@ private fun SpotifyAccountControls() {
  */
 @Composable
 private fun AccountControls(viewModel: SettingsViewModel) {
-    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-    val userEmail by viewModel.userEmail.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
+    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
 
     var showSignOutDialog by remember { mutableStateOf(false) }
     if (showSignOutDialog) {
@@ -1915,9 +1915,9 @@ private fun AccountControls(viewModel: SettingsViewModel) {
  */
 @Composable
 private fun CatalogControls(viewModel: SettingsViewModel) {
-    val customEndpoint by viewModel.customEndpoint.collectAsState()
-    val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsState()
-    val sourceMode by viewModel.sourceMode.collectAsState()
+    val customEndpoint by viewModel.customEndpoint.collectAsStateWithLifecycle()
+    val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsStateWithLifecycle()
+    val sourceMode by viewModel.sourceMode.collectAsStateWithLifecycle()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
 
@@ -2083,7 +2083,7 @@ private fun InstanceCard(url: String, version: String?) {
 // ─── Tab 7: System ─────────────────────────────────────────────────────
 @Composable
 private fun SystemTab(viewModel: SettingsViewModel, navController: NavController) {
-    val cacheSize by viewModel.cacheSize.collectAsState()
+    val cacheSize by viewModel.cacheSize.collectAsStateWithLifecycle()
     var showClearAllDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -2225,8 +2225,8 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         // business — the visualizer's own GPU settings stay with the visualizer.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Performance")
-        val appFps by viewModel.appTargetFps.collectAsState()
-        val appResolution by viewModel.appRenderResolution.collectAsState()
+        val appFps by viewModel.appTargetFps.collectAsStateWithLifecycle()
+        val appResolution by viewModel.appRenderResolution.collectAsStateWithLifecycle()
         // App-wide frame rate and panel resolution, applied by selecting a
         // matching display mode in MainActivity. Resolution options only list
         // classes the panel can reach; a request maps to the nearest mode.
@@ -2445,11 +2445,11 @@ fun SettingSwitchItem(title: String, subtitle: String, checked: Boolean, onCheck
 // ─── Tab 5: Library Settings ──────────────────────────────────────────
 @Composable
 private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
-    val scanOnAppOpen by viewModel.scanOnAppOpen.collectAsState()
-    val minTrackDuration by viewModel.minTrackDuration.collectAsState()
-    val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsState()
-    val libraryTabOrder by viewModel.libraryTabOrder.collectAsState()
-    val autoDownloadLiked by viewModel.autoDownloadLikedSongs.collectAsState()
+    val scanOnAppOpen by viewModel.scanOnAppOpen.collectAsStateWithLifecycle()
+    val minTrackDuration by viewModel.minTrackDuration.collectAsStateWithLifecycle()
+    val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsStateWithLifecycle()
+    val libraryTabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
+    val autoDownloadLiked by viewModel.autoDownloadLikedSongs.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -2555,7 +2555,7 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         }
 
         item {
-            val isScanning by viewModel.isScanning.collectAsState()
+            val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
             val scanContext = LocalContext.current
             OutlinedButton(
                 onClick = {
@@ -2694,10 +2694,10 @@ private fun PlaylistImportSection() {
         val context = LocalContext.current
         SettingsGroupHeader("Playlist Import")
         val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
-        val spotifyConnected by spotifyViewModel.isConnected.collectAsState()
-        val spotifyUserName by spotifyViewModel.userName.collectAsState()
-        val importProgress by spotifyViewModel.importProgress.collectAsState()
-        val isImporting by spotifyViewModel.isImporting.collectAsState()
+        val spotifyConnected by spotifyViewModel.isConnected.collectAsStateWithLifecycle()
+        val spotifyUserName by spotifyViewModel.userName.collectAsStateWithLifecycle()
+        val importProgress by spotifyViewModel.importProgress.collectAsStateWithLifecycle()
+        val isImporting by spotifyViewModel.isImporting.collectAsStateWithLifecycle()
         var showSpotifyPicker by remember { mutableStateOf(false) }
         var importUrl by remember { mutableStateOf("") }
 
@@ -2809,9 +2809,9 @@ private fun PlaylistImportSection() {
         }
 
         if (showSpotifyPicker) {
-            val spotifyPlaylists by spotifyViewModel.myPlaylists.collectAsState()
-            val playlistsLoading by spotifyViewModel.playlistsLoading.collectAsState()
-            val playlistsError by spotifyViewModel.playlistsError.collectAsState()
+            val spotifyPlaylists by spotifyViewModel.myPlaylists.collectAsStateWithLifecycle()
+            val playlistsLoading by spotifyViewModel.playlistsLoading.collectAsStateWithLifecycle()
+            val playlistsError by spotifyViewModel.playlistsError.collectAsStateWithLifecycle()
             tf.monochrome.android.ui.components.SpotifyPlaylistPickerDialog(
                 playlists = spotifyPlaylists,
                 isLoading = playlistsLoading,

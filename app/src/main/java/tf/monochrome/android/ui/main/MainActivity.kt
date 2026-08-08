@@ -22,7 +22,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +32,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.combine
@@ -139,22 +139,22 @@ class MainActivity : ComponentActivity() {
         setContentView(rootContainer)
 
         composeView.setContent {
-            val themeName by preferences.theme.collectAsState(initial = "monochrome_dark")
-            val storedFontScale by preferences.fontScale.collectAsState(initial = 1.0f)
-            val followSystemFontScale by preferences.fontScaleFollowSystem.collectAsState(initial = false)
+            val themeName by preferences.theme.collectAsStateWithLifecycle(initialValue = "monochrome_dark")
+            val storedFontScale by preferences.fontScale.collectAsStateWithLifecycle(initialValue = 1.0f)
+            val followSystemFontScale by preferences.fontScaleFollowSystem.collectAsStateWithLifecycle(initialValue = false)
             // "Follow system" hands typography over to the OS accessibility font
             // size. Configuration.fontScale already reflects the user's Display >
             // Font size setting, so no extra permission or listener is needed —
             // a config change recomposes this and the type updates live.
             val systemFontScale = androidx.compose.ui.platform.LocalConfiguration.current.fontScale
             val fontScale = if (followSystemFontScale) systemFontScale else storedFontScale
-            val customFontPath by preferences.customFontUri.collectAsState(initial = null)
-            val dynamicColorsEnabled by preferences.dynamicColors.collectAsState(initial = false)
-            val currentTrack by queueManager.currentTrack.collectAsState()
+            val customFontPath by preferences.customFontUri.collectAsStateWithLifecycle(initialValue = null)
+            val dynamicColorsEnabled by preferences.dynamicColors.collectAsStateWithLifecycle(initialValue = false)
+            val currentTrack by queueManager.currentTrack.collectAsStateWithLifecycle()
             // The album palette crosses over at the speed the audio does, so a
             // blended transition doesn't have the colours land on the new track
             // while the old one is still playing.
-            val blendSeconds by preferences.crossfadeDuration.collectAsState(initial = 0)
+            val blendSeconds by preferences.crossfadeDuration.collectAsStateWithLifecycle(initialValue = 0)
             val dynamicPalette by rememberDynamicPalette(
                 coverUrl = currentTrack?.coverUrl,
                 enabled = dynamicColorsEnabled,
@@ -214,7 +214,7 @@ class MainActivity : ComponentActivity() {
                         // Collected (not read once) so Settings flipping the
                         // flag back re-enters onboarding on the next frame.
                         val onboardingComplete by preferences.onboardingComplete
-                            .collectAsState(initial = null)
+                            .collectAsStateWithLifecycle(initialValue = null)
                         when (onboardingComplete) {
                             null -> Unit
                             false -> OnboardingScreen(

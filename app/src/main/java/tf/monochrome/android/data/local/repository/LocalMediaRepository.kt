@@ -78,6 +78,10 @@ class LocalMediaRepository @Inject constructor(
     suspend fun findByTitlePattern(titlePattern: String): List<UnifiedTrack> =
         localMediaDao.findByTitlePattern(titlePattern).map { it.toUnifiedTrack() }
 
+    /** Indexed title-prefix shortlist — see [LocalMediaDao.findByTitlePrefix]. */
+    suspend fun findByTitlePrefix(start: String, endExclusive: String): List<UnifiedTrack> =
+        localMediaDao.findByTitlePrefix(start, endExclusive).map { it.toUnifiedTrack() }
+
     // ── Albums ──────────────────────────────────────────────────────
 
     fun getAllAlbums(): Flow<List<UnifiedAlbum>> =

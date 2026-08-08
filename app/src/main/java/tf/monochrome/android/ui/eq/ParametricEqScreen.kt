@@ -36,7 +36,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.EqPreset
 import tf.monochrome.android.ui.components.bounceClick
@@ -62,13 +62,13 @@ fun ParametricEqScreen(
     navController: NavController,
     viewModel: ParametricEqViewModel = hiltViewModel()
 ) {
-    val enabled by viewModel.enabled.collectAsState()
-    val currentBands by viewModel.currentBands.collectAsState()
-    val currentPreamp by viewModel.currentPreamp.collectAsState()
-    val activePreset by viewModel.activePreset.collectAsState()
-    val allPresets by viewModel.allPresets.collectAsState()
-    val spectrumEnabled by viewModel.spectrumAnalyzerEnabled.collectAsState()
-    val spectrumBins by viewModel.spectrumAnalyzer.spectrumBins.collectAsState()
+    val enabled by viewModel.enabled.collectAsStateWithLifecycle()
+    val currentBands by viewModel.currentBands.collectAsStateWithLifecycle()
+    val currentPreamp by viewModel.currentPreamp.collectAsStateWithLifecycle()
+    val activePreset by viewModel.activePreset.collectAsStateWithLifecycle()
+    val allPresets by viewModel.allPresets.collectAsStateWithLifecycle()
+    val spectrumEnabled by viewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
+    val spectrumBins by viewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
 
     if (spectrumEnabled) {
         DisposableEffect(Unit) {
@@ -79,7 +79,7 @@ fun ParametricEqScreen(
 
     // Surface preset save/load/persist errors that the ViewModel reports but
     // no screen was collecting (silent failures / silent corrupted-load).
-    val eqError by viewModel.error.collectAsState()
+    val eqError by viewModel.error.collectAsStateWithLifecycle()
     val eqErrorContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(eqError) {
         eqError?.let {

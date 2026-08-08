@@ -42,7 +42,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -318,9 +318,9 @@ fun AtmosRendererScreen(
     navController: NavController,
     viewModel: AtmosRendererViewModel = hiltViewModel(),
 ) {
-    val profile by viewModel.profile.collectAsState()
-    val sofaPresets by viewModel.sofaPresets.collectAsState()
-    val detected by viewModel.channelState.collectAsState()
+    val profile by viewModel.profile.collectAsStateWithLifecycle()
+    val sofaPresets by viewModel.sofaPresets.collectAsStateWithLifecycle()
+    val detected by viewModel.channelState.collectAsStateWithLifecycle()
 
     // Re-sync on every (re-)entry: the HRTF database screen writes the profile
     // and adds preset files behind this ViewModel's back, and navigating back
@@ -380,7 +380,7 @@ fun AtmosRendererScreen(
 
             // ── Built-in test track ────────────────────────────────────────
             SectionHeader("Test Track")
-            val testStatus by viewModel.testTrackStatus.collectAsState()
+            val testStatus by viewModel.testTrackStatus.collectAsStateWithLifecycle()
             Text(
                 "A bundled E-AC-3 JOC channel check — a voice moving through the " +
                     "Atmos positions. Add it to your library to hear the renderer work.",
@@ -405,7 +405,7 @@ fun AtmosRendererScreen(
             // the fixed-matrix fold to stereo — lives here now. Same
             // preference as the toggle in Settings › Spatial Audio.
             SectionHeader("Downmix")
-            val downmixEnabled by viewModel.multichannelDownmixEnabled.collectAsState()
+            val downmixEnabled by viewModel.multichannelDownmixEnabled.collectAsStateWithLifecycle()
             SettingSwitchItem(
                 title = "Downmix multichannel to stereo",
                 subtitle = if (downmixEnabled) {
@@ -467,7 +467,7 @@ fun AtmosRendererScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 ) else {
-                    val sofaStatus by viewModel.sofaStatus.collectAsState()
+                    val sofaStatus by viewModel.sofaStatus.collectAsStateWithLifecycle()
                     val selectedName = java.io.File(profile.hrtfProfileId!!).name
                     val status = sofaStatus?.takeIf {
                         java.io.File(it.first).name == selectedName

@@ -49,6 +49,17 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks WHERE title LIKE :titlePattern ESCAPE '\\' LIMIT 200")
     suspend fun findByTitlePattern(titlePattern: String): List<LocalTrackEntity>
 
+    // Indexed form of the shortlist above: a half-open range over the folded
+    // titleSearchKey column, which SQLite can satisfy from
+    // index_local_tracks_titleSearchKey instead of scanning the table. LIKE
+    // cannot be used for that here — see MusicDatabase.MIGRATION_12_13. Same
+    // 200-row cap, for the same reason.
+    @Query(
+        "SELECT * FROM local_tracks " +
+            "WHERE titleSearchKey >= :start AND titleSearchKey < :endExclusive LIMIT 200"
+    )
+    suspend fun findByTitlePrefix(start: String, endExclusive: String): List<LocalTrackEntity>
+
     @Query("SELECT COUNT(*) FROM local_tracks")
     suspend fun getTrackCount(): Int
 

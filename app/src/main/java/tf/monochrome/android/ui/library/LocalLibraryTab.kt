@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,7 +65,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -110,19 +110,19 @@ fun LocalLibraryTab(
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
     navController: NavController
 ) {
-    val localTracks by viewModel.localTracks.collectAsState()
-    val sortedTracks by viewModel.sortedTracks.collectAsState()
-    val sortedAlbums by viewModel.sortedAlbums.collectAsState()
-    val sortedArtists by viewModel.sortedArtists.collectAsState()
-    val songSort by viewModel.songSort.collectAsState()
-    val albumSort by viewModel.albumSort.collectAsState()
-    val artistSort by viewModel.artistSort.collectAsState()
-    val localGenres by viewModel.localGenres.collectAsState()
-    val rootFolders by viewModel.displayRootFolders.collectAsState()
-    val scanProgress by viewModel.scanProgress.collectAsState()
-    val isScanning by viewModel.isScanning.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val searchResults by viewModel.searchResults.collectAsState()
+    val localTracks by viewModel.localTracks.collectAsStateWithLifecycle()
+    val sortedTracks by viewModel.sortedTracks.collectAsStateWithLifecycle()
+    val sortedAlbums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
+    val sortedArtists by viewModel.sortedArtists.collectAsStateWithLifecycle()
+    val songSort by viewModel.songSort.collectAsStateWithLifecycle()
+    val albumSort by viewModel.albumSort.collectAsStateWithLifecycle()
+    val artistSort by viewModel.artistSort.collectAsStateWithLifecycle()
+    val localGenres by viewModel.localGenres.collectAsStateWithLifecycle()
+    val rootFolders by viewModel.displayRootFolders.collectAsStateWithLifecycle()
+    val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
+    val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
 
     val subTabs = listOf("Albums", "Artists", "Songs", "Genres", "Folders")
     // Sub-tabs are swipeable pages. The tab row above them is a selector onto

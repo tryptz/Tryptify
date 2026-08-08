@@ -41,7 +41,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
@@ -77,12 +77,12 @@ fun PlaylistScreen(
     playerViewModel: PlayerViewModel,
     viewModel: PlaylistViewModel = hiltViewModel()
 ) {
-    val playlistInfo by viewModel.playlistInfo.collectAsState()
-    val tracks by viewModel.tracks.collectAsState()
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
-    val playlists by playerViewModel.playlists.collectAsState()
-    val activeDownloads by playerViewModel.activeDownloads.collectAsState()
-    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
+    val playlistInfo by viewModel.playlistInfo.collectAsStateWithLifecycle()
+    val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
+    val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
+    val activeDownloads by playerViewModel.activeDownloads.collectAsStateWithLifecycle()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
 
     var showMenu by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }

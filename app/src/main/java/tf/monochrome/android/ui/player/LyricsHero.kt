@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -59,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -356,7 +356,7 @@ internal fun SyncedLyricsView(
     accent: Color,
     onSeekTo: (Long) -> Unit,
 ) {
-    val position by positionMs.collectAsState()
+    val position by positionMs.collectAsStateWithLifecycle()
     // Bluetooth sync delay: the audio reaches the ears later than the reported
     // playback position, so lyrics run ahead. Rewinding the position we match
     // against by the delay pushes the whole lyric timeline back into step with

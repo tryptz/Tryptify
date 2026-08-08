@@ -33,7 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
@@ -62,9 +62,9 @@ fun DownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
 ) {
-    val downloadedTracks by viewModel.downloadedTracks.collectAsState()
-    val albumGroups by viewModel.albumGroups.collectAsState()
-    val playlists by playerViewModel.playlists.collectAsState()
+    val downloadedTracks by viewModel.downloadedTracks.collectAsStateWithLifecycle()
+    val albumGroups by viewModel.albumGroups.collectAsStateWithLifecycle()
+    val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
 
     // Surface delete failures (e.g. a sideloaded file the provider won't remove)
     // instead of silently leaving the row behind.

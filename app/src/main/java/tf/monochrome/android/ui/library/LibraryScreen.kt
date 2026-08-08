@@ -37,12 +37,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -103,14 +103,14 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
 ) {
-    val favoriteTracks by viewModel.favoriteTracks.collectAsState()
-    val recentTracks by viewModel.recentTracks.collectAsState()
-    val favoriteAlbums by viewModel.favoriteAlbums.collectAsState()
-    val favoriteArtists by viewModel.favoriteArtists.collectAsState()
-    val playlists by viewModel.playlists.collectAsState()
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
-    val activeDownloads by playerViewModel.activeDownloads.collectAsState()
-    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
+    val favoriteTracks by viewModel.favoriteTracks.collectAsStateWithLifecycle()
+    val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
+    val favoriteAlbums by viewModel.favoriteAlbums.collectAsStateWithLifecycle()
+    val favoriteArtists by viewModel.favoriteArtists.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
+    val activeDownloads by playerViewModel.activeDownloads.collectAsStateWithLifecycle()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
 
     val sectionScope = rememberCoroutineScope()
     val currentSectionId = sections.getOrElse(sectionPager.currentPage) { LOCAL_SECTION }
@@ -177,7 +177,7 @@ fun LibraryScreen(
 
     // Surface CSV import outcome — previously importProgress was never
     // collected, so a malformed CSV produced no error and no playlist.
-    val importProgressState = viewModel.importProgress.collectAsState()
+    val importProgressState = viewModel.importProgress.collectAsStateWithLifecycle()
     val importMsgContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(importProgressState.value) {
         when (val p = importProgressState.value) {

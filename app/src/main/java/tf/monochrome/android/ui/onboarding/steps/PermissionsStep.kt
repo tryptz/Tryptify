@@ -18,11 +18,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -41,7 +41,7 @@ import tf.monochrome.android.ui.theme.MonoDimens
 @Composable
 fun PermissionsStep(viewModel: OnboardingViewModel) {
     val context = LocalContext.current
-    val hasRequested by viewModel.hasRequestedMediaPermission.collectAsState()
+    val hasRequested by viewModel.hasRequestedMediaPermission.collectAsStateWithLifecycle()
 
     // Same permission set as the Library tab (LocalLibraryTab): audio is the
     // gate, images are best-effort for sidecar covers on 33+.

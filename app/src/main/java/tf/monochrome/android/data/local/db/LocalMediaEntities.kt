@@ -22,7 +22,9 @@ import androidx.room.PrimaryKey
         // Covers the library's default ordering end-to-end (see
         // MusicDatabase.MIGRATION_11_12) so the main list query streams in
         // index order instead of sorting the whole table into a temp B-tree.
-        Index(value = ["albumArtist", "album", "discNumber", "trackNumber"])
+        Index(value = ["albumArtist", "album", "discNumber", "trackNumber"]),
+        // Backs the "play the on-device copy" prefix lookup as a range scan.
+        Index("titleSearchKey")
     ]
 )
 data class LocalTrackEntity(
@@ -33,6 +35,16 @@ data class LocalTrackEntity(
 
     // Tag data (nullable - files may have partial/no tags)
     val title: String? = null,
+
+    /**
+     * [title] folded to lower case, written by the scanner via
+     * `LocalTrackMatching.searchKey`. Exists so the on-device-copy lookup can
+     * range-scan an index instead of running `title LIKE 'x%'` over the whole
+     * table — SQLite will not use a BINARY index for a case-insensitive LIKE.
+     * Null on rows written before the column existed and never rescanned; the
+     * lookup falls back to the LIKE path for those.
+     */
+    val titleSearchKey: String? = null,
     val artist: String? = null,
     val albumArtist: String? = null,
     val album: String? = null,

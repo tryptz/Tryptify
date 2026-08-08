@@ -33,7 +33,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.ui.components.AlbumItem
@@ -66,9 +66,9 @@ fun ArtistDetailScreen(
     playerViewModel: PlayerViewModel,
     viewModel: ArtistDetailViewModel = hiltViewModel()
 ) {
-    val artistDetail by viewModel.artistDetail.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
+    val artistDetail by viewModel.artistDetail.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
 
     val dlMsgContext = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -76,9 +76,9 @@ fun ArtistDetailScreen(
             android.widget.Toast.makeText(dlMsgContext, msg, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsState()
-    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsState()
-    val playlists by playerViewModel.playlists.collectAsState()
+    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
+    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+    val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
 
     var showContextMenuForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
     var showAddToPlaylistForTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tf.monochrome.android.domain.model.Track?>(null) }
@@ -183,7 +183,7 @@ fun ArtistDetailScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        val isDownloadingAll by viewModel.isDownloadingAll.collectAsState()
+        val isDownloadingAll by viewModel.isDownloadingAll.collectAsStateWithLifecycle()
         TopAppBar(
             title = {},
             navigationIcon = {
