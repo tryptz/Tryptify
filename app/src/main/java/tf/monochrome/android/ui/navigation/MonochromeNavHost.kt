@@ -760,7 +760,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             if (activeDownloads.isNotEmpty()) pillHidden = false
         }
         val onChromeScreen = currentDestination?.route != Screen.NowPlaying.route &&
-            currentDestination?.route != Screen.Mixer.route
+            currentDestination?.route != Screen.Mixer.route &&
+            // Flow is full-bleed: a floating pill would sit over the artwork
+            // and the action rail, which is exactly the chrome it does without.
+            !fullBleedRoute
         if (onChromeScreen && activeDownloads.isNotEmpty() && !pillHidden) {
             Box(
                 modifier = Modifier

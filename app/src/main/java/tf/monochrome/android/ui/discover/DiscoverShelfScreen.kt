@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +71,20 @@ fun DiscoverShelfScreen(
         .filter { it.key in selection.selectedIds }
         .map { it.track }
 
+    // The feed can rebuild behind this screen — a chip build finishing, the
+    // adventure slider being released, "show me something else" from a still
+    // composed Discover — and the new shelf holds different cards. The
+    // selection is a set of keys that no longer exist, so the bar would keep
+    // reporting a count while every action resolved to nothing: "Add 5 to
+    // playlist" adding zero and closing. Drop the selection when the cards it
+    // refers to go away.
+    val presentKeys = shelf?.items.orEmpty().map { it.key }.toSet()
+    LaunchedEffect(presentKeys) {
+        if (selection.active && selection.selectedIds.none { it in presentKeys }) {
+            selection.clear()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(shelf?.title ?: "Discover") },
@@ -92,7 +107,9 @@ fun DiscoverShelfScreen(
 
         if (selection.active) {
             TrackSelectionBar(
-                selectedCount = selection.count,
+                // Counted off the live shelf, not the id set, so the number
+                // always matches what the buttons will act on.
+                selectedCount = selectedTracks.size,
                 onClose = { selection.clear() },
                 onAddToQueue = {
                     playerViewModel.addUnifiedToQueue(selectedTracks)
@@ -165,7 +182,7 @@ fun DiscoverShelfScreen(
                 showAddToPlaylist = false
                 selection.clear()
             },
-            title = "Add " + selection.count + " to playlist",
+            title = "Add " + selectedTracks.size + " to playlist",
         )
     }
 }

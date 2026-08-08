@@ -101,6 +101,15 @@ class DiscoverViewModel @Inject constructor(
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
     /**
+     * Set only by [refresh]. The pull-to-refresh indicator reads this rather
+     * than [loading], which is also raised by the first build, by every chip
+     * tap and by releasing the adventure slider — a spinner that appears when
+     * you tapped something says the wrong thing about the gesture you made.
+     */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /**
      * The familiar ↔ adventurous knob. Read live so the caption tracks the
      * finger, but the feed is only rebuilt when the drag ends — see
      * [setAdventure] / [commitAdventure].
@@ -141,7 +150,10 @@ class DiscoverViewModel @Inject constructor(
                 .filterNot { it.id in hiddenShelves }
                 .map { shelf -> shelf.copy(items = shelf.items.filterNot { it.key in items }) }
                 .filter { it.items.isNotEmpty() }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            // Eagerly for the same reason as flowTracks below: a See All grid
+            // reached on a restored back stack would otherwise read the initial
+            // empty list and report the shelf missing.
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
      * Shelves fetched to keep the Flow feed going past the end of the page.
@@ -165,7 +177,11 @@ class DiscoverViewModel @Inject constructor(
                 .filterNot { it.key in dismissed }
                 .map { it.track }
                 .distinctBy { it.id }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            // Eagerly, not WhileSubscribed: nothing subscribes until the Flow
+            // screen composes, so a lazy share would hand it the initial empty
+            // list on its first frame and flash "nothing to flow through" over
+            // a feed that was already built. The data is in memory either way.
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** The reason line for a track, so the Flow feed can say why it's showing it. */
     fun reasonFor(track: UnifiedTrack): String? =
@@ -182,17 +198,33 @@ class DiscoverViewModel @Inject constructor(
      * same twelve records again".
      */
     fun extendFlow() {
-        if (extendJob?.isActive == true || chips.isEmpty()) return
+        if (extendJob?.isActive == true || chips.isEmpty() || flowExhausted) return
         extendJob = viewModelScope.launch {
             val seed = chips[(extendRotation++ % chips.size + chips.size) % chips.size]
-            runCatching { discoveryFeed.buildForQuery(seed.label, seed.query, SHELF_SIZE) }
-                .getOrDefault(emptyList())
-                .let { built ->
-                    val known = (_shelves.value + _flowExtra.value).map { it.id }.toSet()
-                    _flowExtra.value = _flowExtra.value + built.filterNot { it.id in known }
-                }
+            val built = try {
+                discoveryFeed.buildForQuery(seed.label, seed.query, SHELF_SIZE)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val known = (_shelves.value + _flowExtra.value).map { it.id }.toSet()
+            val fresh = built.filterNot { it.id in known }
+            _flowExtra.value = _flowExtra.value + fresh
+            // Every chip's shelves carry a fixed id, so once a full rotation
+            // adds nothing the well is dry. Without this the listener sitting
+            // near the end fires a 7-second Qobuz search on every settle, for
+            // ever, and never gets a card out of it.
+            if (fresh.isEmpty()) {
+                dryRounds++
+                if (dryRounds >= chips.size) flowExhausted = true
+            } else {
+                dryRounds = 0
+            }
         }
     }
+    private var dryRounds = 0
+    private var flowExhausted = false
 
     private var extendRotation = 0
 
@@ -205,7 +237,12 @@ class DiscoverViewModel @Inject constructor(
         selectChip(null)
     }
 
-    fun selectChip(label: String?) {
+    fun selectChip(label: String?) = rebuild(label = label)
+
+    private fun rebuild(
+        label: String? = _selectedChip.value,
+        adventure: Float? = null,
+    ) {
         _selectedChip.value = label
         feedJob?.cancel()
         feedJob = viewModelScope.launch {
@@ -215,7 +252,7 @@ class DiscoverViewModel @Inject constructor(
             _flowExtra.value = emptyList()
             try {
                 val built = if (label == null) {
-                    buildForYou()
+                    buildForYou(adventure)
                 } else {
                     val seed = chips.firstOrNull { it.label == label }
                     if (seed == null) emptyList()
@@ -241,10 +278,14 @@ class DiscoverViewModel @Inject constructor(
             // under the incoming one, and the feed showed "nothing came back"
             // while it was still fetching.
             _loading.value = false
+            _refreshing.value = false
         }
     }
 
-    fun refresh() = selectChip(_selectedChip.value)
+    fun refresh() {
+        _refreshing.value = true
+        selectChip(_selectedChip.value)
+    }
 
     /**
      * Deal a different hand. Rotates the seed offset and rebuilds, so the same
@@ -276,12 +317,27 @@ class DiscoverViewModel @Inject constructor(
     fun commitAdventure(value: Float) {
         val target = DiscoveryAdventure.clamp(value)
         _pendingAdventure.value = target
+        adventureCommit++
+        val token = adventureCommit
         viewModelScope.launch {
-            preferences.setDiscoveryAdventure(target)
-            _pendingAdventure.value = null
-            selectChip(_selectedChip.value)
+            // A DataStore write can fail (disk full, corrupt file). Left
+            // uncaught it escapes viewModelScope and takes the app down, and
+            // the knob would stay stuck at a value that was never stored.
+            runCatching { preferences.setDiscoveryAdventure(target) }
+            // Only the newest commit may clear the pending value. Without the
+            // token, a slow write finishing after the user has grabbed the
+            // slider again would snap the thumb and caption back mid-drag, and
+            // the next release would commit that restored value instead of
+            // where the finger actually is.
+            if (token == adventureCommit) _pendingAdventure.value = null
+            // Passed explicitly rather than re-read: `adventure` mirrors the
+            // DataStore flow through a StateFlow, and nothing orders that
+            // emission ahead of the rebuild reaching the value.
+            rebuild(adventure = target)
         }
     }
+
+    private var adventureCommit = 0
 
     /** Wave one card away. */
     fun dismissItem(key: String) {
@@ -302,7 +358,7 @@ class DiscoverViewModel @Inject constructor(
      * front. Favourites come from the local database rather than the network,
      * so the page has something real on it before any Qobuz call returns.
      */
-    private suspend fun buildForYou(): List<DiscoveryShelf> {
+    private suspend fun buildForYou(adventureOverride: Float? = null): List<DiscoveryShelf> {
         val favourites = libraryRepository.getFavoriteTracks().first()
             .take(SHELF_SIZE)
             .map { DiscoveryItem.TrackItem(it.toUnifiedTrackAuto(qobuzIdRegistry)) }
@@ -320,7 +376,7 @@ class DiscoverViewModel @Inject constructor(
         }
 
         return listOfNotNull(favouritesShelf) + discoveryFeed.build(
-            adventure = _pendingAdventure.value ?: adventure.value,
+            adventure = adventureOverride ?: _pendingAdventure.value ?: adventure.value,
             itemsPerShelf = SHELF_SIZE,
             rotation = rotation,
         )

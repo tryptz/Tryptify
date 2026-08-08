@@ -54,20 +54,26 @@ class DiscoveryFeedUseCase @Inject constructor(
         rotation: Int = 0,
     ): List<DiscoveryShelf> = coroutineScope {
         val mix = DiscoveryAdventure.shelfMix(adventure)
-        // Ask for as many seed artists as the widest of the two artist-derived
-        // bands needs; one lookup feeds both.
-        val seedArtists = library.getSeedArtistNames(maxOf(mix.familiar, mix.explore))
+        // Ask for enough seed artists to give the two artist-derived bands
+        // *disjoint* slices. Sizing this to the wider band and rotating instead
+        // doesn't work: with as many artists as the band is wide, a rotation by
+        // that width is a full cycle — the identity — so both bands started
+        // from the same artist and the feed carried "New from X" and "Because
+        // you play X" for the same X.
+        val seedArtists = library.getSeedArtistNames(mix.familiar + mix.explore)
 
         // Every shelf is fetched concurrently and each carries its own timeout,
         // so one slow artist delays its own shelf and nothing else.
         val personalized = seedArtists.take(mix.familiar).map { name ->
             async { newReleaseShelf(name, itemsPerShelf) }
         }
-        // Rotated relative to the familiar band so the same artist isn't
-        // usually both "new from X" and "because you play X" in one feed.
-        val neighbours = seedArtists.rotated(mix.familiar).take(mix.explore).map { name ->
-            async { similarArtistShelf(name, itemsPerShelf) }
-        }
+        // The slice after the familiar band. A short taste profile can't fill
+        // both — then the bands do overlap, which is the right trade: a
+        // listener with two artists on record should still get a feed.
+        val neighbours = seedArtists.drop(mix.familiar)
+            .ifEmpty { seedArtists }
+            .take(mix.explore)
+            .map { name -> async { similarArtistShelf(name, itemsPerShelf) } }
         val curated = seeds.seeds().rotated(rotation + seedArtists.size)
             .take(mix.genre)
             .map { seed -> async { genreShelf(seed, itemsPerShelf) } }

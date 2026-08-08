@@ -111,6 +111,28 @@ class DiscoveryAdventureTest {
     }
 
     @Test
+    fun `the two artist bands can be sliced without overlapping`() {
+        // The feed asks for familiar + explore seed artists and takes disjoint
+        // slices. Sizing the request to the wider band and rotating instead
+        // silently produced the identity — with N artists, rotating by N — so
+        // both bands started at the same artist and the page carried
+        // "New from X" and "Because you play X" for the same X.
+        for (step in 0..20) {
+            val mix = DiscoveryAdventure.shelfMix(step / 20f)
+            val seeds = List(mix.familiar + mix.explore) { "artist$it" }
+            val familiarBand = seeds.take(mix.familiar)
+            val exploreBand = seeds.drop(mix.familiar).take(mix.explore)
+
+            assertEquals(mix.familiar, familiarBand.size)
+            assertEquals(mix.explore, exploreBand.size)
+            assertTrue(
+                "bands overlapped at ${step / 20f}",
+                familiarBand.intersect(exploreBand.toSet()).isEmpty(),
+            )
+        }
+    }
+
+    @Test
     fun `every position has a caption`() {
         for (step in 0..20) {
             assertTrue(DiscoveryAdventure.label(step / 20f).isNotBlank())

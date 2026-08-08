@@ -96,6 +96,7 @@ fun DiscoverScreen(
     val selectedChip by viewModel.selectedChip.collectAsStateWithLifecycle()
     val hero by viewModel.hero.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val adventure by viewModel.adventureDisplay.collectAsStateWithLifecycle()
     val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
     val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsStateWithLifecycle()
@@ -137,7 +138,7 @@ fun DiscoverScreen(
         )
 
         PullToRefreshBox(
-            isRefreshing = loading,
+            isRefreshing = refreshing,
             onRefresh = { viewModel.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -179,7 +180,6 @@ fun DiscoverScreen(
                             else -> openDiscoveryItem(navController, playerViewModel, shelf, item)
                         }
                     },
-                    onItemDismiss = { item -> viewModel.dismissItem(item.key) },
                     onDismissShelf = { viewModel.dismissShelf(shelf.id) },
                     onQueueAll = {
                         playerViewModel.addUnifiedToQueue(
@@ -216,6 +216,8 @@ fun DiscoverScreen(
         onDismissRequest = { menuTrack = null },
         navController = navController,
         playerViewModel = playerViewModel,
+        onRemove = menuTrack?.let { held -> { viewModel.dismissItem("t:" + held.id) } },
+        removeLabel = "Not interested",
     )
 }
 
@@ -355,9 +357,14 @@ private fun AdventureControl(
  * an unlabelled row are the same twelve records; only one of them tells the
  * listener whether to trust it.
  *
- * Every card is also a target for the three things a listener wants to do with
- * a recommendation beyond taking it: hold it for the full action sheet, swipe
- * it up to wave it away, or dismiss the entire shelf from its header.
+ * Holding a card opens the full action sheet, which is also where "Not
+ * interested" lives, and the header dismisses the whole shelf.
+ *
+ * Waving a single card away is deliberately NOT a swipe. A card here sits
+ * inside a horizontally-scrolling row, inside a vertically-scrolling feed,
+ * inside the tab pager — all three axes are already spoken for, and a card
+ * that consumed vertical drags would eat the gesture that scrolls the feed.
+ * The action lives on the hold instead, where nothing competes for it.
  */
 @Composable
 private fun DiscoveryShelfRow(
@@ -365,7 +372,6 @@ private fun DiscoveryShelfRow(
     onSeeAll: () -> Unit,
     onItemClick: (DiscoveryItem) -> Unit,
     onItemLongClick: (DiscoveryItem) -> Unit,
-    onItemDismiss: (DiscoveryItem) -> Unit,
     onDismissShelf: () -> Unit,
     onQueueAll: () -> Unit,
 ) {
@@ -415,67 +421,15 @@ private fun DiscoveryShelfRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(shelf.items, key = { it.key }) { item ->
-                DismissibleCard(onDismiss = { onItemDismiss(item) }) {
-                    DiscoveryCard(
-                        item = item,
-                        onClick = { onItemClick(item) },
-                        onLongClick = { onItemLongClick(item) },
-                    )
-                }
+                DiscoveryCard(
+                    item = item,
+                    onClick = { onItemClick(item) },
+                    onLongClick = { onItemLongClick(item) },
+                )
             }
         }
         Spacer(modifier = Modifier.height(20.dp))
     }
-}
-
-/**
- * Swipe a card upward to wave it away.
- *
- * Vertical, not horizontal: the row it sits in already owns horizontal drags,
- * and the outer tab pager owns whatever the row doesn't. Up is the only axis
- * left that doesn't fight something else for the gesture.
- */
-@Composable
-private fun DismissibleCard(
-    onDismiss: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val offsetY = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    // A card is ~200dp tall; a third of that is a deliberate flick, not a
-    // wobble while scrolling the row.
-    val commitPx = with(LocalDensity.current) { 64.dp.toPx() }
-
-    Box(
-        modifier = Modifier
-            .graphicsLayer {
-                translationY = offsetY.value
-                alpha = 1f - (kotlin.math.abs(offsetY.value) / (commitPx * 3f)).coerceIn(0f, 0.85f)
-            }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, dy ->
-                        // Only upward travel accumulates; dragging down is the
-                        // outer list's scroll, not a dismissal.
-                        val next = (offsetY.value + dy).coerceAtMost(0f)
-                        if (next != offsetY.value) change.consume()
-                        scope.launch { offsetY.snapTo(next) }
-                    },
-                    onDragEnd = {
-                        if (offsetY.value < -commitPx) {
-                            scope.launch {
-                                offsetY.animateTo(-commitPx * 4f, tween(160))
-                                onDismiss()
-                                offsetY.snapTo(0f)
-                            }
-                        } else {
-                            scope.launch { offsetY.animateTo(0f, spring()) }
-                        }
-                    },
-                    onDragCancel = { scope.launch { offsetY.animateTo(0f, spring()) } },
-                )
-            },
-    ) { content() }
 }
 
 /** Renders whichever of the three card shapes this item is. */

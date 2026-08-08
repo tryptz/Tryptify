@@ -36,6 +36,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -49,7 +51,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import kotlinx.coroutines.flow.distinctUntilChanged
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
@@ -95,39 +96,59 @@ fun DiscoveryFlowScreen(
     val tracks by viewModel.flowTracks.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val favouriteIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
-    val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
     val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
 
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
 
-    if (tracks.isEmpty()) {
-        FlowEmptyState(loading = loading, onBack = { navController.popBackStack() })
-        return
-    }
-
+    // The pager and the "what have I already started" memory live outside the
+    // empty branch below, so a momentarily empty list — dismissing the last
+    // card, a rebuild landing — doesn't reset the position to page 0 or close
+    // an open action sheet.
     val pagerState = rememberPagerState(pageCount = { tracks.size })
+    var lastStartedId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Read live inside the collector instead of keying the effect on it. The
+    // list changes often — a top-up landing, a card dismissed — and restarting
+    // the effect on every change would re-emit the settled page and start it
+    // again. That is not hypothetical: once the player has advanced on its own
+    // (track ended, resolve failure, a headphone skip) the page on screen is no
+    // longer the playing track, so a restart would yank playback backwards to
+    // the visible card and restart it from 0:00.
+    val latestTracks by rememberUpdatedState(tracks)
 
     // Play on *settle*, not on currentPage: a fast flick through five cards
     // would otherwise start and abandon five tracks, hammering the player and
-    // leaving whichever request resolved last playing. distinctUntilChanged
-    // guards the recompose-with-same-page case.
-    LaunchedEffect(pagerState, tracks) {
+    // leaving whichever request resolved last playing.
+    LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
-            .distinctUntilChanged()
             .collect { page ->
-                val track = tracks.getOrNull(page) ?: return@collect
-                // The queue is the rest of the feed, so leaving the screen
-                // keeps playing forward instead of stopping dead. Compared on
-                // the legacy id because that is what the player deals in —
-                // matching the unified id against it would never hold, and the
-                // card you swiped back to would restart from zero.
-                if (currentTrack?.id != track.toLegacyTrack().id) {
-                    playerViewModel.playUnifiedTrack(track, tracks)
+                val current = latestTracks
+                val track = current.getOrNull(page) ?: return@collect
+                // Keyed on what this screen last *started*, not on what the
+                // player is currently playing: the player moves on by itself,
+                // and this feed should only take the wheel when the listener
+                // swipes to something new.
+                if (track.id != lastStartedId) {
+                    lastStartedId = track.id
+                    // The queue is the rest of the feed, so leaving the screen
+                    // keeps playing forward instead of stopping dead.
+                    playerViewModel.playUnifiedTrack(track, current)
                 }
                 // Fetch the next batch well before the end, so the feed never
                 // visibly runs out under the thumb.
-                if (page >= tracks.size - FLOW_PREFETCH_THRESHOLD) viewModel.extendFlow()
+                if (page >= current.size - FLOW_PREFETCH_THRESHOLD) viewModel.extendFlow()
             }
+    }
+
+    if (tracks.isEmpty()) {
+        FlowEmptyState(loading = loading, onBack = { navController.popBackStack() })
+        UnifiedTrackContextMenuHost(
+            track = menuTrack,
+            onDismissRequest = { menuTrack = null },
+            navController = navController,
+            playerViewModel = playerViewModel,
+        )
+        return
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
