@@ -75,7 +75,7 @@ data class QobuzTrackMatch(
 /**
  * No endpoint is configured for the pool a request needs. This is a setup
  * problem, not a transient one — retrying cannot fix it, so callers that would
- * otherwise back off (notably DownloadWorker) should fail immediately instead.
+ * otherwise back off (notably TrackDownloader) should fail immediately instead.
  */
 class NoInstancesConfiguredException : Exception("No API instances available")
 
@@ -947,7 +947,7 @@ class HiFiApiClient @Inject constructor(
         // Qobuz ids are not TIDAL ids. Querying /track/ with one either 404s or
         // returns a different recording entirely, which then gets written to
         // disk under this track's tags. Fail loudly instead; callers already
-        // handle a failed stream lookup, and the Apple branch of DownloadWorker
+        // handle a failed stream lookup, and the Apple branch of TrackDownloader
         // refuses cross-catalog substitution for exactly this reason.
         if (qobuzIdRegistry.isQobuzTrack(trackId)) {
             throw IllegalStateException(
@@ -1200,10 +1200,10 @@ class HiFiApiClient @Inject constructor(
     //   2. GET that returned URL  → audio bytes (FLAC for quality 6/7/27,
     //                                MP3 for 5)
     //
-    // Step 2 is just a regular byte download, which DownloadWorker already
+    // Step 2 is just a regular byte download, which TrackDownloader already
     // handles. So all we need to do is resolve step 1 and return the URL.
 
-    // Public entry point for callers (DownloadWorker via getTrackStream, the
+    // Public entry point for callers (TrackDownloader via getTrackStream, the
     // streaming cache manager, etc.) that need to resolve a Qobuz file URL
     // without the TIDAL fallthrough getTrackStream(forDownload=true) does.
     suspend fun getQobuzDownloadUrl(trackId: Long, quality: AudioQuality): String? =

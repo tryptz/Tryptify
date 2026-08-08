@@ -83,6 +83,12 @@ object WhatsNew {
                         "still changes at once.",
                 ),
                 WhatsNewEntry(
+                    title = "Download as many as you like",
+                    body = "Downloads are a proper queue now — send it fifty tracks and three " +
+                        "transfer at a time under one notification. Queueing more than one at " +
+                        "once used to be able to take the app down.",
+                ),
+                WhatsNewEntry(
                     title = "A slow track is no longer skipped past",
                     body = "A song that took a moment to load could be given up on within " +
                         "milliseconds and the queue would run on through it. It now gets a few " +

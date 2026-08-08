@@ -327,7 +327,7 @@ class StreamResolver @Inject constructor(
             .build()
     }
 
-    // DownloadWorker stores filePath either as an absolute filesystem path
+    // TrackDownloader stores filePath either as an absolute filesystem path
     // (internal storage) or as a content:// URI string (when the user picked a
     // SAF folder). Wrapping a content:// path with File(...) + Uri.fromFile
     // produces a malformed file:// URI that ExoPlayer can't open and

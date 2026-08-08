@@ -273,6 +273,7 @@ class PreferencesManager @Inject constructor(
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
         private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
+        private val DOWNLOAD_QUEUE_JSON = stringPreferencesKey("download_queue_json")
         private val USB_BIT_PERFECT_ENABLED = booleanPreferencesKey("usb_bit_perfect_enabled")
         private val USB_EXCLUSIVE_BIT_PERFECT_ENABLED =
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
@@ -697,6 +698,17 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setNormalizationEnabled(enabled: Boolean) {
         dataStore.edit { it[NORMALIZATION_ENABLED] = enabled }
+    }
+
+    /**
+     * The pending download queue, serialized. Persisted so a queue of any size
+     * outlives the process that made it — a fifty-track album should not need
+     * re-requesting because the app was swapped out mid-download.
+     */
+    val downloadQueueJson: Flow<String?> = dataStore.data.map { it[DOWNLOAD_QUEUE_JSON] }
+
+    suspend fun setDownloadQueueJson(json: String) {
+        dataStore.edit { it[DOWNLOAD_QUEUE_JSON] = json }
     }
 
     val crossfadeDuration: Flow<Int> = dataStore.data.map { prefs ->
