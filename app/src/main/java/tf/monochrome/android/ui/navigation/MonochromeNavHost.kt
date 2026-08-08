@@ -505,7 +505,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onAddToQueue = { track ->
                                 playerViewModel.addUnifiedToQueue(listOf(track))
-                            }
+                            },
+                            playerViewModel = playerViewModel
                         )
                     }
                 }
@@ -527,7 +528,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onAddToQueue = { track ->
                                 playerViewModel.addUnifiedToQueue(listOf(track))
-                            }
+                            },
+                            playerViewModel = playerViewModel
                         )
                     }
                 }
@@ -549,7 +551,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             },
                             onAddToQueue = { track ->
                                 playerViewModel.addUnifiedToQueue(listOf(track))
-                            }
+                            },
+                            playerViewModel = playerViewModel
                         )
                     }
                 }
