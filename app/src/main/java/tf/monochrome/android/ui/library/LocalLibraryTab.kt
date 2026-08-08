@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
@@ -89,10 +90,12 @@ import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
+import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
+import tf.monochrome.android.ui.player.PlayerViewModel
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -108,7 +111,8 @@ fun LocalLibraryTab(
     onGenreClick: (String) -> Unit,
     onFolderClick: (String) -> Unit,
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
-    navController: NavController
+    navController: NavController,
+    playerViewModel: PlayerViewModel
 ) {
     val localTracks by viewModel.localTracks.collectAsStateWithLifecycle()
     val sortedTracks by viewModel.sortedTracks.collectAsStateWithLifecycle()
@@ -179,6 +183,14 @@ fun LocalLibraryTab(
             viewModel.startFullScan()
         }
     }
+
+    var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
+    UnifiedTrackContextMenuHost(
+        track = menuTrack,
+        onDismissRequest = { menuTrack = null },
+        navController = navController,
+        playerViewModel = playerViewModel,
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Permission gate — block UI only until READ_MEDIA_AUDIO is granted
@@ -254,7 +266,12 @@ fun LocalLibraryTab(
 
         // Show search results when query is active
         if (showSearch && searchQuery.isNotBlank()) {
-            SongList(tracks = searchResults, onTrackClick = onTrackClick, navController = navController)
+            SongList(
+                tracks = searchResults,
+                onTrackClick = onTrackClick,
+                onMoreClick = { menuTrack = it },
+                navController = navController,
+            )
             return@Column
         }
 
@@ -341,7 +358,12 @@ fun LocalLibraryTab(
             when (page) {
                 0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
                 1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
-                2 -> SongList(tracks = sortedTracks, onTrackClick = onTrackClick, navController = navController)
+                2 -> SongList(
+                    tracks = sortedTracks,
+                    onTrackClick = onTrackClick,
+                    onMoreClick = { menuTrack = it },
+                    navController = navController,
+                )
                 3 -> GenreList(
                     genres = genrePairs,
                     onGenreClick = onGenreClick
@@ -649,6 +671,7 @@ fun ArtistList(
 fun SongList(
     tracks: List<UnifiedTrack>,
     onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
+    onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController
 ) {
     LazyColumn(
@@ -724,6 +747,17 @@ fun SongList(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    IconButton(
+                        onClick = { onMoreClick(track) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

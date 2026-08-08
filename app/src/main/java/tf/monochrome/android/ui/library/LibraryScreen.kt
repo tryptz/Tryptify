@@ -434,7 +434,8 @@ fun LibraryScreen(
                     onShuffleAll = { tracks ->
                         playerViewModel.shufflePlayUnified(tracks)
                     },
-                    navController = navController
+                    navController = navController,
+                    playerViewModel = playerViewModel
                 )
 
             "playlists" ->

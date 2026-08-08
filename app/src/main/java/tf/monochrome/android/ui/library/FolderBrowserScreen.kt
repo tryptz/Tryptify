@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,6 +29,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,8 +45,10 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
+import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
+import tf.monochrome.android.ui.player.PlayerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,12 +58,21 @@ fun FolderBrowserScreen(
     viewModel: LocalLibraryViewModel = hiltViewModel(),
     onPlayTrack: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onPlayAll: (List<UnifiedTrack>) -> Unit,
-    onAddToQueue: (UnifiedTrack) -> Unit
+    onAddToQueue: (UnifiedTrack) -> Unit,
+    playerViewModel: PlayerViewModel
 ) {
     val subfolders by viewModel.getSubfolders(folderPath).collectAsStateWithLifecycle()
     val tracks by viewModel.getTracksInFolder(folderPath).collectAsStateWithLifecycle()
 
     val displayName = folderPath.substringAfterLast('/')
+
+    var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
+    UnifiedTrackContextMenuHost(
+        track = menuTrack,
+        onDismissRequest = { menuTrack = null },
+        navController = navController,
+        playerViewModel = playerViewModel,
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -196,6 +211,17 @@ fun FolderBrowserScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.PlaylistAdd,
                             contentDescription = "Add to queue",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { menuTrack = track },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "More options",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
