@@ -399,6 +399,17 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        // Blend length. Any non-zero value takes over from the gapless window,
+        // so re-derive that whenever it changes.
+        serviceScope.launch {
+            preferences.crossfadeDuration.collect { seconds ->
+                crossfadeMs = seconds.coerceAtLeast(0) * 1_000L
+                if (crossfadeMs == 0L) crossfade.cancel()
+                syncGaplessNext()
+            }
+        }
+        startCrossfadeWatcher()
+
         // Anything that reorders, extends or truncates the queue — drag to
         // reorder, play-next, clear-upcoming, a shuffle or repeat-mode change —
         // can invalidate what we pre-queued. Re-deriving the window on every
@@ -616,6 +627,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        crossfade.release()
         mediaSession?.run {
             player.release()
             release()
@@ -726,6 +738,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     fun skipToNext() {
+        crossfade.cancel()
         // An explicit skip takes the normal resolve path rather than the
         // pre-queued item: playQueue() replaces the playlist outright, which
         // also discards the window. Dropping it up front keeps the player from
@@ -745,6 +758,7 @@ class PlaybackService : MediaSessionService() {
             player.seekTo(0)
             return
         }
+        crossfade.cancel()
         dropGaplessNext()
         val prevTrack = queueManager.previous()
         if (prevTrack != null) {
@@ -783,16 +797,115 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    // Volume has two independent inputs — the user slider with ReplayGain
+    // applied, and the crossfade ramp — and both used to want to own
+    // player.volume outright. They're kept apart here: [baseVolume] is the
+    // level the track should play at, [crossfadeGain] is where the blend has
+    // got to, and only [pushVolume] multiplies them onto the player. Without
+    // this, a STATE_READY in the middle of a blend reset the ramp to full and
+    // the incoming track slammed in at once.
+    @Volatile private var baseVolume = 1f
+    @Volatile private var crossfadeGain = 1f
+
+    private fun pushVolume() {
+        val effective = baseVolume * crossfadeGain
+        player.volume = effective
+        // Mirror to the libusb bypass path. Player.volume runs
+        // inside DefaultAudioSink which we skip when bypass is
+        // hot, so without this line the slider + ReplayGain
+        // attenuation only applies on the AudioFlinger fallback.
+        bypassVolumeController.setVolume(effective)
+    }
+
     private fun applyReplayGain() {
         serviceScope.launch {
             val volume = preferences.volume.first().toFloat()
-            val adjustedVolume = replayGainProcessor.calculateVolume(volume, currentReplayGain)
-            player.volume = adjustedVolume
-            // Mirror to the libusb bypass path. Player.volume runs
-            // inside DefaultAudioSink which we skip when bypass is
-            // hot, so without this line the slider + ReplayGain
-            // attenuation only applies on the AudioFlinger fallback.
-            bypassVolumeController.setVolume(adjustedVolume)
+            baseVolume = replayGainProcessor.calculateVolume(volume, currentReplayGain)
+            pushVolume()
+        }
+    }
+
+    // --- Blending between tracks ------------------------------------------
+    //
+    // One slider governs the whole transition: at 0s tracks butt up against
+    // each other with no gap (the pre-queued window below), and any value above
+    // that overlaps them instead. The two are mutually exclusive by
+    // construction — an overlap needs the next track started *early*, which is
+    // the opposite of handing it to the player to follow on seamlessly — so a
+    // non-zero blend switches the gapless window off.
+
+    @Volatile private var crossfadeMs = 0L
+
+    private val crossfade: CrossfadeController by lazy {
+        CrossfadeController(
+            context = this,
+            scope = serviceScope,
+            dataSourceFactory = buildDataSourceFactory(),
+        ) { gain ->
+            crossfadeGain = gain
+            pushVolume()
+        }
+    }
+
+    /**
+     * Whether a blend can run right now.
+     *
+     * The exclusive libusb path is the hard stop: it claims the USB device for
+     * one stream, and the tail player uses the ordinary Android sink, so during
+     * a blend its audio would come out of a different device entirely. Skipping
+     * the blend is the honest outcome — bit-perfect output is the reason
+     * someone plugs in that DAC, and a gap is a smaller price than the tail
+     * playing out of the phone speaker.
+     */
+    private fun canCrossfade(): Boolean =
+        crossfadeMs > 0L && !libusbDriver.isStreaming.value
+
+    /**
+     * Hands the tail of the current track to the secondary player and starts
+     * the next one on the main player, overlapping the two.
+     */
+    private fun beginCrossfade() {
+        val item = player.currentMediaItem ?: return
+        val outgoing = queueManager.currentTrack.value
+        val started = crossfade.start(
+            item = item,
+            fromPositionMs = player.currentPosition,
+            durationMs = crossfadeMs,
+            tailVolume = baseVolume,
+        )
+        if (!started) return // Fall through to the ordinary end-of-track path.
+
+        // The outgoing track never reaches STATE_ENDED on the main player now —
+        // we pre-empt it — so scrobble here instead, exactly as that handler
+        // would have.
+        outgoing?.let { serviceScope.launch { scrobblingService.scrobbleTrack(it) } }
+
+        // Start the incoming track silent; the ramp brings it up.
+        crossfadeGain = 0f
+        onTrackEnded()
+    }
+
+    /**
+     * Watches the play head so a blend can begin before the track runs out.
+     * Cheap enough to poll: a few comparisons a second, and only while a blend
+     * length is actually set.
+     */
+    private fun startCrossfadeWatcher() {
+        serviceScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(CROSSFADE_POLL_MS)
+                if (!canCrossfade() || crossfade.isRunning) continue
+                if (!player.isPlaying) continue
+                if (queueManager.peekNext() == null) continue
+                if (CrossfadeRamp.shouldStart(
+                        positionMs = player.currentPosition,
+                        durationMs = player.duration,
+                        crossfadeMs = crossfadeMs,
+                    )
+                ) {
+                    beginCrossfade()
+                }
+            }
         }
     }
 
@@ -827,6 +940,9 @@ class PlaybackService : MediaSessionService() {
         const val FOCUS_RETRY_WINDOW_MS = 1_500L
         const val FOCUS_RETRY_DELAY_MS = 400L
         const val MAX_AUTO_PLAY_RETRIES = 2
+
+        /** How often the play head is checked against the blend threshold. */
+        const val CROSSFADE_POLL_MS = 250L
     }
 
     /** When the service last asked the player to start, for the check above. */
@@ -877,7 +993,9 @@ class PlaybackService : MediaSessionService() {
         if (player.mediaItemCount == 0) return
 
         val next = queueManager.peekNext()
-        if (!gaplessEnabled || next == null) {
+        // A non-zero blend overlaps the tracks instead, which needs the next
+        // one started early rather than queued to follow on.
+        if (!gaplessEnabled || crossfadeMs > 0L || next == null) {
             dropGaplessNext()
             return
         }

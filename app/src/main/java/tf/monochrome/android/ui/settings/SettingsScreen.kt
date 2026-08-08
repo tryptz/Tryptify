@@ -596,13 +596,14 @@ private fun InterfaceTab(viewModel: SettingsViewModel, navController: NavControl
         // exclusive in effect — any blend above 0s overlaps the tracks, so the
         // gapless hand-off steps aside for it.
         Text(
-            text = if (crossfade == 0) "Blend Between Tracks: Off" else "Blend Between Tracks: ${crossfade}s",
+            text = if (crossfade == 0) "Blend Between Tracks: Gapless" else "Blend Between Tracks: ${crossfade}s",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = if (crossfade == 0) {
-                "Overlap the end of one track with the start of the next."
+                "At zero, tracks run straight into each other with no gap. " +
+                    "Add time to overlap them instead."
             } else {
                 "The outgoing track fades out while the next fades in over ${crossfade}s."
             },
