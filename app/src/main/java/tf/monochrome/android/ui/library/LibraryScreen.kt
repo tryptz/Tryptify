@@ -59,7 +59,11 @@ import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackContextMenu
 import tf.monochrome.android.ui.components.TrackItem
+import tf.monochrome.android.ui.components.TrackListToolbar
 import tf.monochrome.android.ui.components.TrackSelectionBar
+import tf.monochrome.android.ui.components.TrackSort
+import tf.monochrome.android.ui.components.TrackSortSaver
+import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
@@ -127,6 +131,14 @@ fun LibraryScreen(
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
+
+    // How the Liked Songs list is being looked at right now. Screen-local
+    // rather than ViewModel state: it describes the view, not the library.
+    var likedQuery by rememberSaveable { mutableStateOf("") }
+    var likedSort by rememberSaveable(stateSaver = TrackSortSaver) { mutableStateOf(TrackSort()) }
+    val visibleFavorites = remember(favoriteTracks, likedQuery, likedSort) {
+        favoriteTracks.applySearchAndSort(likedQuery, likedSort)
+    }
 
     val selection = rememberTrackSelectionState<Long>()
     // Back out of a menu section returns to the local library rather than
@@ -386,7 +398,7 @@ fun LibraryScreen(
                                 onLikeClick = { playerViewModel.toggleFavorite(track) },
                                 onClick = {
                                     if (selection.active) selection.toggle(track.id)
-                                    else playerViewModel.playTrack(track, favoriteTracks)
+                                    else playerViewModel.playTrack(track, visibleFavorites)
                                 },
                                 onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
@@ -517,7 +529,7 @@ fun LibraryScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 SectionHeader(title = "Liked Songs")
-                                IconButton(onClick = { playerViewModel.downloadAllTracks(favoriteTracks) }) {
+                                IconButton(onClick = { playerViewModel.downloadAllTracks(visibleFavorites) }) {
                                     Icon(
                                         Icons.Default.Download,
                                         contentDescription = "Download All",
@@ -526,7 +538,17 @@ fun LibraryScreen(
                                 }
                             }
                         }
-                        items(favoriteTracks, key = { it.id }) { track ->
+                        item {
+                            // Full key set: liked songs span every album and
+                            // artist, unlike a single album's track list.
+                            TrackListToolbar(
+                                query = likedQuery,
+                                onQueryChange = { likedQuery = it },
+                                sort = likedSort,
+                                onSortChange = { likedSort = it },
+                            )
+                        }
+                        items(visibleFavorites, key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
