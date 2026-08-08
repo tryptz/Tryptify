@@ -41,6 +41,12 @@ object WhatsNew {
                         "to re-stream from every screen but Downloads.",
                 ),
                 WhatsNewEntry(
+                    title = "Gapless playback actually works",
+                    body = "The toggle had never been connected to anything: it saved your " +
+                        "choice and nothing read it. The next track is now made ready while the " +
+                        "current one plays, so on-device files and Qobuz run straight on.",
+                ),
+                WhatsNewEntry(
                     title = "Blend between tracks",
                     body = "One slider in Settings decides what happens between songs. At zero " +
                         "they run straight into each other with no gap; add time and they " +
@@ -64,29 +70,10 @@ object WhatsNew {
                         "play, most often the first time you heard it. It now starts on its own.",
                 ),
                 WhatsNewEntry(
-                    title = "Auto-download liked songs",
-                    body = "Turn it on in Settings and every song you like from then on is saved " +
-                        "for offline. Songs you liked earlier are left alone, so switching it on " +
-                        "never kicks off a huge download.",
-                ),
-                WhatsNewEntry(
-                    title = "Inflator oversampling",
-                    body = "The Inflator can now run at 2x or 4x to keep its harmonics from " +
-                        "folding back into the audible band as grit. Measured about 30 dB " +
-                        "cleaner on bright material.",
-                ),
-                WhatsNewEntry(
-                    title = "The player changes colour at the speed the music does",
-                    body = "The background, the accents, the blurred backdrop and the album art " +
-                        "itself now cross into the next track across your blend time, so nothing " +
-                        "repaints while the previous song is still playing. Skip by hand and it " +
-                        "still changes at once.",
-                ),
-                WhatsNewEntry(
-                    title = "Download as many as you like",
-                    body = "Downloads are a proper queue now — send it fifty tracks and three " +
-                        "transfer at a time under one notification. Queueing more than one at " +
-                        "once used to be able to take the app down.",
+                    title = "A song tapped straight after opening the app plays",
+                    body = "Tap one before playback had finished connecting and nothing " +
+                        "happened at all — no sound, no error, nothing to retry. The tap now " +
+                        "waits the moment it needs instead of being dropped.",
                 ),
                 WhatsNewEntry(
                     title = "A slow track is no longer skipped past",
@@ -96,9 +83,90 @@ object WhatsNew {
                         "previous song out into silence.",
                 ),
                 WhatsNewEntry(
+                    title = "Download as many as you like",
+                    body = "Downloads are a proper queue now — send it fifty tracks and three " +
+                        "transfer at a time under one notification. Queueing more than one at " +
+                        "once used to be able to take the app down.",
+                ),
+                WhatsNewEntry(
+                    title = "You can see what's already downloaded",
+                    body = "Song rows show a ring with a down arrow when the track is on your " +
+                        "device, in Library, playlists, albums, artists, Home and search. " +
+                        "Unlike the progress spinner, it is still there after a restart.",
+                ),
+                WhatsNewEntry(
+                    title = "Auto-download liked songs",
+                    body = "Turn it on in Settings › Downloads and every song you like from " +
+                        "then on is saved for offline. Songs you liked earlier are left alone, " +
+                        "so switching it on never kicks off a huge download.",
+                ),
+                WhatsNewEntry(
+                    title = "Crossfeed for headphones",
+                    body = "A new toggle in the audio tools sheet sends a little of each " +
+                        "channel to the far ear, the way speakers do, softening hard-panned " +
+                        "old mixes. Long-press the row to set the speaker angle or pick a " +
+                        "classic network.",
+                ),
+                WhatsNewEntry(
+                    title = "Cleaner effects, and a louder ladder filter",
+                    body = "The Inflator and Compressor gain an Off / 2x / 4x anti-alias " +
+                        "control. The ladder filter is 25 dB cleaner and 6 dB louder — it had " +
+                        "been throwing away half its level — so old ladder presets may want " +
+                        "pulling down.",
+                ),
+                WhatsNewEntry(
+                    title = "ReplayGain is gone",
+                    body = "It never did anything: the mode had no control anywhere in the app, " +
+                        "so volume matching sat switched off on every track. It is removed " +
+                        "rather than left there looking functional. Nothing sounds different.",
+                ),
+                WhatsNewEntry(
+                    title = "Apple Music is off the menu",
+                    body = "Its settings, its onboarding card and its search results are gone, " +
+                        "and search now covers TIDAL and Qobuz. Apple tracks you have already " +
+                        "downloaded still play.",
+                ),
+                WhatsNewEntry(
+                    title = "Search and sort any list of tracks",
+                    body = "Playlists, album and artist pages, Liked Songs and every local " +
+                        "library screen share one toolbar. Play, shuffle, select and Download " +
+                        "All all follow what is on screen rather than what the filter hides.",
+                ),
+                WhatsNewEntry(
+                    title = "A track menu wherever there are tracks",
+                    body = "Local album, artist, genre, folder, Songs and Downloads rows gain " +
+                        "the menu they never had: play next, add to playlist, go to album or " +
+                        "artist, share the file.",
+                ),
+                WhatsNewEntry(
+                    title = "Ten fonts, built in",
+                    body = "The font library used to be empty until you found a .ttf yourself. " +
+                        "Ten typefaces now ship with the app, from Space Grotesk and Manrope to " +
+                        "JetBrains Mono, and the list folds away when you are not picking one.",
+                ),
+                WhatsNewEntry(
+                    title = "Settings you can find things in",
+                    body = "Instances, Scrobbling and Account merge into Connections, Appearance " +
+                        "and Interface become one tab, and Playback, Equalizer, Library and " +
+                        "Downloads each hold what belongs to them. Every tab looks the same now.",
+                ),
+                WhatsNewEntry(
+                    title = "The player changes colour at the speed the music does",
+                    body = "The background, the accents, the blurred backdrop and the album art " +
+                        "itself now cross into the next track across your blend time, so nothing " +
+                        "repaints while the previous song is still playing. Skip by hand and it " +
+                        "still changes at once.",
+                ),
+                WhatsNewEntry(
                     title = "Tap the artwork to play",
                     body = "Album art in a song row plays the song instead of opening the album, " +
                         "and the artist and album links are harder to hit by accident.",
+                ),
+                WhatsNewEntry(
+                    title = "Lighter to move around",
+                    body = "The player rebuilt itself four times a second for the clock alone, " +
+                        "long lists redrew from any change downwards, and screens kept working " +
+                        "in the background. Scrolling and navigation are smoother for it.",
                 ),
             ),
         ),
