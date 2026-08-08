@@ -161,10 +161,16 @@ fun MainPlayerRoute(
     // MainPlayerScreen collapses the player chrome — no separate overlay.
     // Synced-only: lyrics without timestamps never expand, and losing sync
     // (track change, unsynced source) or leaving lyrics mode collapses.
+    val legacyPlayer = tf.monochrome.android.performance.LocalLowPerformance.current.legacyPlayer
     var lyricsExpanded by rememberSaveable { mutableStateOf(false) }
-    val lyricsSynced = lyrics?.isSynced == true
-    LaunchedEffect(viewMode, lyricsSynced) {
-        if (viewMode != NowPlayingViewMode.LYRICS || !lyricsSynced) lyricsExpanded = false
+    // The legacy layout has no expanded-lyrics state — it never collapses its
+    // chrome — so expansion is disabled there rather than left to flip an
+    // invisible flag. Without this the hero still toggled it: nothing moved on
+    // screen, but the BackHandler below then swallowed a back press and the
+    // player wouldn't close.
+    val lyricsCanExpand = lyrics?.isSynced == true && !legacyPlayer
+    LaunchedEffect(viewMode, lyricsCanExpand) {
+        if (viewMode != NowPlayingViewMode.LYRICS || !lyricsCanExpand) lyricsExpanded = false
     }
     BackHandler(enabled = lyricsExpanded) { lyricsExpanded = false }
 
@@ -183,7 +189,6 @@ fun MainPlayerRoute(
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsStateWithLifecycle()
     val playerGlass by playerViewModel.playerGlass.collectAsStateWithLifecycle()
-    val legacyPlayer = tf.monochrome.android.performance.LocalLowPerformance.current.legacyPlayer
     val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsStateWithLifecycle()
     val dynamicColors by playerViewModel.dynamicColors.collectAsStateWithLifecycle()
 
@@ -322,7 +327,12 @@ fun MainPlayerRoute(
     // when the Studio toggle is on. Cover-art and lyrics views are mutually
     // exclusive, so both share ONE pulse / analyzer stake — never two FFT taps.
     val albumGlowOn = lyricsFx.glowBehindArt && lyricsFx.bassReact > 0.01f &&
-        viewMode == NowPlayingViewMode.COVER_ART
+        viewMode == NowPlayingViewMode.COVER_ART &&
+        // Only MainPlayerScreen is handed the fxUnderlay that draws this glow.
+        // Without the guard the legacy layout still staked the FFT tap and woke
+        // on every frame to compute a pulse nothing would ever draw — the exact
+        // cost the legacy player exists to avoid.
+        !legacyPlayer
     val beatOn = lyricsBeatOn || albumGlowOn
     val beatPulse: androidx.compose.runtime.State<Float>? =
         if (beatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
@@ -568,7 +578,7 @@ fun MainPlayerRoute(
                     // gap taps collapse.
                     onSeekTo = { timeMs ->
                         if (lyricsExpanded) playerViewModel.seekTo(timeMs)
-                        else if (lyricsSynced) lyricsExpanded = true
+                        else if (lyricsCanExpand) lyricsExpanded = true
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -576,7 +586,7 @@ fun MainPlayerRoute(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            enabled = lyricsSynced,
+                            enabled = lyricsCanExpand,
                         ) { lyricsExpanded = !lyricsExpanded },
                 )
             }

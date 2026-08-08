@@ -42,9 +42,12 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
     val owner = remember(context) {
         generateSequence(context) { (it as? ContextWrapper)?.baseContext }
             .filterIsInstance<ViewModelStoreOwner>()
-            .first()
+            .firstOrNull()
     }
-    return hiltViewModel(owner)
+    // firstOrNull, not first: a preview or test can be composed under a bare
+    // context with no Activity in the chain, and falling back to the ambient
+    // owner is a worse feed, not a crash.
+    return if (owner != null) hiltViewModel(owner) else hiltViewModel()
 }
 
 /** What the hero card at the top of Discover is offering. */

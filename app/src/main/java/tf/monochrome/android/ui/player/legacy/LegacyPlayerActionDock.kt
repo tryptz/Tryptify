@@ -73,8 +73,11 @@ private fun DockAction(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    // Own press spring rather than Modifier.bounceClick, so "Disable
+    // animations" has to be honoured here too.
+    val stillPress = tf.monochrome.android.ui.theme.reduceMotion()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
+        targetValue = if (isPressed && !stillPress) 0.92f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "dockActionScale",
     )

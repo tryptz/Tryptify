@@ -18,7 +18,9 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,6 +45,12 @@ fun LegacyPlayerProgress(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val dragged by interaction.collectIsDraggedAsState()
+    // Hold the live drag value: onValueChangeFinished(fraction) commits the
+    // composition-captured (stale) fraction, so a tap-to-seek snaps back.
+    // Material3 runs onValueChange and onValueChangeFinished inside the same
+    // pointer dispatch, with no recomposition between them, so the closure
+    // still holds the pre-tap value. The current player carries the same fix.
+    var latestSeek by remember { mutableFloatStateOf(fraction) }
     val thumbSize by animateDpAsState(
         targetValue = if (dragged) 18.dp else PlayerDesignTokens.ProgressThumbSize,
         label = "progressThumb",
@@ -56,8 +64,8 @@ fun LegacyPlayerProgress(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Slider(
             value = fraction.coerceIn(0f, 1f),
-            onValueChange = onSeek,
-            onValueChangeFinished = { onSeekFinished(fraction) },
+            onValueChange = { latestSeek = it; onSeek(it) },
+            onValueChangeFinished = { onSeekFinished(latestSeek) },
             modifier = Modifier.fillMaxWidth(),
             interactionSource = interaction,
             colors = colors,

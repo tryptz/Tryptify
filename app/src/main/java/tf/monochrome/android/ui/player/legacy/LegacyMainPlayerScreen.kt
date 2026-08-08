@@ -306,7 +306,10 @@ private fun LegacyProgressSection(
     var seekPosition by remember { mutableFloatStateOf(0f) }
 
     val durationMs = durationState.value
-    val positionMs = positionState.value
+    // Clamped to the track: at a boundary the play head can briefly read past
+    // the duration, and an unclamped label shows an elapsed time longer than
+    // the total.
+    val positionMs = positionState.value.coerceIn(0L, durationMs.coerceAtLeast(0L))
     val playedFraction = if (durationMs > 0L) positionMs.toFloat() / durationMs else 0f
     val displayFraction = if (isSeeking) seekPosition else playedFraction
     val displayPositionMs =
