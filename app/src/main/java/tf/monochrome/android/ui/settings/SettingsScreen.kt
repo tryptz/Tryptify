@@ -2918,7 +2918,20 @@ private fun WhatsNewPanel(highlight: Boolean) {
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
         )
+        // Sections are announced when they start, so consecutive entries under
+        // one heading print it once. Entries with no section carry straight on
+        // as the flat list they were.
+        var section: String? = null
         release.entries.forEach { entry ->
+            if (entry.section != null && entry.section != section) {
+                Text(
+                    text = entry.section,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                )
+            }
+            section = entry.section
             Column(modifier = Modifier.padding(vertical = 6.dp)) {
                 Text(
                     text = entry.title,
