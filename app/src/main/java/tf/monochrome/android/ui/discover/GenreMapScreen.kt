@@ -336,9 +336,16 @@ fun GenreMapScreen(
     val weightScale = remember(graph) { WeightScale(graph) }
 
 
+    // Measured rather than assumed: the bar's height moves with font scale and
+    // with the display cutout, and a hard-coded inset would be wrong on exactly
+    // the devices where the labels have least room.
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Genre map") },
+            // "Genre map" wrapped to two lines once the bar carried five
+            // actions, and a wrapped title crowds the first row of labels.
+            title = { Text("Genres") },
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -392,6 +399,7 @@ fun GenreMapScreen(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            modifier = Modifier.onSizeChanged { topBarHeightPx = it.height },
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -468,7 +476,15 @@ fun GenreMapScreen(
                     weighting = weighting,
                     weights = weightScale,
                     morph = morph.value,
-                    topInset = TIMELINE_AXIS_INSET * morph.value,
+                    // The map runs full-bleed under the transparent bar on
+                    // purpose, so its dots showing through are intended — but a
+                    // *name* under the bar is two pieces of text on top of each
+                    // other, which is just unreadable.
+                    topInset = maxOf(
+                        topBarHeightPx.toFloat(),
+                        TIMELINE_AXIS_INSET * morph.value,
+                    ),
+                    bottomInset = if (selected != null) panelBottomInset.toPx() + panelHeightPx else 0f,
                 )
             }
 
@@ -1620,6 +1636,7 @@ private fun DrawScope.drawMap(
     weights: WeightScale,
     morph: Float = 0f,
     topInset: Float = 0f,
+    bottomInset: Float = 0f,
 ) {
     val byId = nodes.associateBy { it.id }
 
@@ -1814,9 +1831,12 @@ private fun DrawScope.drawMap(
             // Off the side of the canvas is its own kind of collision: a name
             // sliced in half by the edge is worse than no name.
             if (box.left < 0f || box.right > size.width) continue
-            // The timeline reserves a strip for its year axis; a genre name
-            // drawn into it collides with a number rather than another name.
+            // Reserved strips: the app bar above, and the genre panel below
+            // when one is open. A label drawn into either is either sitting on
+            // other text or hidden behind a sheet — both are wasted ink, and
+            // the first is unreadable.
             if (box.top < topInset) continue
+            if (bottomInset > 0f && box.bottom > size.height - bottomInset) continue
             if (taken.any { android.graphics.RectF.intersects(it, box) }) continue
 
             taken.add(box)
