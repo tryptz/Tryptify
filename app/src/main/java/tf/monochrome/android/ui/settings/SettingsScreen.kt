@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
@@ -2016,7 +2017,19 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = tokenInput, onValueChange = { tokenInput = it },
-                        label = { Text("User token") }, modifier = Modifier.fillMaxWidth()
+                        label = { Text("User token") },
+                        // Replacing one is the common case, not entering the
+                        // first: tokens rotate on every password change, and
+                        // selecting seventy characters by hand to overwrite
+                        // them is a worse job than it looks.
+                        trailingIcon = {
+                            if (tokenInput.isNotEmpty()) {
+                                IconButton(onClick = { tokenInput = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear token")
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
