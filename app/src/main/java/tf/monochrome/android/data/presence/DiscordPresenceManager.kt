@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,13 +96,34 @@ class DiscordPresenceManager @Inject constructor(
 
     enum class Status { OFF, CONNECTING, CONNECTED, FAILED }
 
+    /**
+     * Every presence change, in the order it was asked for.
+     *
+     * [update] and [clear] used to be independent `launch`es, which meant the
+     * order they ran in was whatever the dispatcher felt like — and since the
+     * queue reads empty for a moment between tracks, "stop" and "start the next
+     * one" were racing on every single track change. One channel with one
+     * consumer makes the order the order they were called in, which is the only
+     * order that can be reasoned about.
+     */
+    private val commands = Channel<Command>(Channel.BUFFERED)
+
+    private var pendingHide: Job? = null
+
+    private sealed interface Command {
+        data class Show(val now: DiscordPresence.NowPlaying) : Command
+        data object Hide : Command
+        data object Blank : Command
+    }
+
     init {
+        scope.launch { for (command in commands) handle(command) }
         // Turning the switch off has to tear the socket down straight away —
         // otherwise the last activity sits on the profile indefinitely, since
         // Discord keeps a presence until the connection that set it goes away.
         scope.launch {
             preferences.discordPresenceEnabled.distinctUntilChanged().collect { on ->
-                if (!on) stop()
+                if (!on) shutdown()
             }
         }
     }
@@ -114,45 +136,92 @@ class DiscordPresenceManager @Inject constructor(
      * playback service on every track change and must stay cheap there.
      */
     fun update(now: DiscordPresence.NowPlaying) {
-        scope.launch {
-            if (!preferences.discordPresenceEnabled.first()) return@launch
-            val token = preferences.discordToken.first()
-            if (token.isBlank()) return@launch
+        commands.trySend(Command.Show(now))
+    }
 
-            if (lastSent?.sameAs(now) == true) return@launch
+    /**
+     * Nothing is playing.
+     *
+     * Deliberately not immediate. The queue reads empty for a moment between
+     * tracks, and treating that as "stopped" meant tearing the socket down and
+     * opening a new one for every song — Discord rate-limits reconnects far
+     * more tightly than presence updates, so a few tracks in it stops accepting
+     * the connection at all and the card vanishes. A gap only counts once it
+     * has lasted [HIDE_GRACE_MS]; anything shorter is a track change.
+     */
+    fun clear() {
+        commands.trySend(Command.Hide)
+    }
 
-            val appId = preferences.discordApplicationId.first().takeIf { it.isNotBlank() }
-            val resolved = now.copy(
-                artworkAsset = now.artworkAsset?.let { proxiedAsset(it, token, appId) },
-            )
-            val activity = DiscordPresence.activity(resolved, APP_NAME, appId)
-            lock.withLock {
-                lastSent = now
-                current = activity
-                val sender = send
-                if (sender == null) {
-                    connect(token)
-                } else {
-                    runCatching { sender(DiscordPresence.presenceFrame(activity)) }
-                        .onFailure { Log.w(TAG, "presence update failed", it) }
+    /** Playback is over for good: blank the card and drop the connection. */
+    fun shutdown() {
+        scope.launch { stop() }
+    }
+
+    private suspend fun handle(command: Command) {
+        when (command) {
+            is Command.Show -> {
+                pendingHide?.cancel()
+                pendingHide = null
+                show(command.now)
+            }
+            Command.Hide -> {
+                pendingHide?.cancel()
+                pendingHide = scope.launch {
+                    delay(HIDE_GRACE_MS)
+                    commands.send(Command.Blank)
                 }
+            }
+            Command.Blank -> stop()
+        }
+    }
+
+    private suspend fun show(now: DiscordPresence.NowPlaying) {
+        if (!preferences.discordPresenceEnabled.first()) return
+        val token = preferences.discordToken.first()
+        if (token.isBlank()) return
+        if (lastSent?.sameAs(now) == true) return
+
+        val appId = preferences.discordApplicationId.first().takeIf { it.isNotBlank() }
+        val resolved = now.copy(
+            artworkAsset = now.artworkAsset?.let { proxiedAsset(it, token, appId) },
+        )
+        val activity = DiscordPresence.activity(resolved, APP_NAME, appId)
+        lock.withLock {
+            lastSent = now
+            current = activity
+            val sender = send
+            if (sender == null) {
+                // A token Discord has already refused will be refused again,
+                // and trying once per track change is how a dead token turns
+                // into a rate limit on the account. Wait to be told the
+                // credentials changed — clearError() is that signal.
+                if (_status.value != Status.FAILED) connect(token)
+            } else {
+                runCatching { sender(DiscordPresence.presenceFrame(activity)) }
+                    .onFailure { Log.w(TAG, "presence update failed", it) }
             }
         }
     }
 
-    /** Playback has stopped: drop the activity and the socket with it. */
-    fun clear() {
-        scope.launch { stop() }
-    }
-
-    private suspend fun stop() = lock.withLock {
-        current = null
-        // Otherwise replaying the track that was up when playback stopped would
-        // be read as a repeat and never sent.
-        lastSent = null
-        val job = socketJob
-        socketJob = null
-        send = null
+    private suspend fun stop() {
+        val sender: (suspend (String) -> Unit)?
+        val job: Job?
+        lock.withLock {
+            current = null
+            // Otherwise replaying the track that was up when playback stopped
+            // would be read as a repeat and never sent.
+            lastSent = null
+            sender = send
+            job = socketJob
+            socketJob = null
+            send = null
+        }
+        // Blank the card before dropping the socket. Closing it clears the
+        // presence too, but not always promptly — Discord can hold a
+        // disconnected client's activity for a beat, which shows up as a song
+        // lingering after the music stopped.
+        sender?.let { runCatching { it(DiscordPresence.presenceFrame(null)) } }
         job?.cancelAndJoin()
         if (_status.value != Status.FAILED) _status.value = Status.OFF
     }
@@ -292,6 +361,9 @@ class DiscordPresenceManager @Inject constructor(
         const val API_BASE = "https://discord.com/api/v9"
         const val BASE_BACKOFF_MS = 2_000L
         const val MAX_BACKOFF_MS = 60_000L
+
+        /** How long a queue has to read empty before it counts as stopped. */
+        const val HIDE_GRACE_MS = 15_000L
         val json = Json { ignoreUnknownKeys = true; isLenient = true }
     }
 }

@@ -169,7 +169,13 @@ class SettingsViewModel @Inject constructor(
     val discordError: StateFlow<String?> = discordPresence.errorMessage
 
     fun setDiscordCredentials(token: String, applicationId: String) {
-        viewModelScope.launch { preferences.setDiscordCredentials(token, applicationId) }
+        viewModelScope.launch {
+            preferences.setDiscordCredentials(token, applicationId)
+            // New credentials are the answer to a refused connection, so they
+            // clear the refusal — otherwise the manager keeps refusing to
+            // retry a token that has just been replaced.
+            discordPresence.clearError()
+        }
     }
 
     fun setDiscordPresenceEnabled(enabled: Boolean) {

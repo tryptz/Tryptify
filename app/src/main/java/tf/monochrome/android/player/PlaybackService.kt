@@ -757,7 +757,9 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         // Discord holds a presence until the connection that set it closes, so
         // leaving without this parks the last track on the profile for good.
-        discordPresence.clear()
+        // shutdown(), not clear(): the service is going away now, so there is
+        // nothing for the between-tracks grace period to wait for.
+        discordPresence.shutdown()
         crossfade.release()
         mediaSession?.run {
             player.release()
