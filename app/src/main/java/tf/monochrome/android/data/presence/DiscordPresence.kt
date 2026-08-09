@@ -53,6 +53,9 @@ object DiscordPresence {
      */
     const val ACTIVITY_LISTENING = 2
 
+    /** How far the play head may drift before an update is worth sending. */
+    const val POSITION_TOLERANCE_MS = 2_000L
+
     /** What Discord should be told is playing. */
     data class NowPlaying(
         val title: String,
@@ -63,7 +66,25 @@ object DiscordPresence {
         val positionMs: Long,
         val durationMs: Long,
         val paused: Boolean,
-    )
+    ) {
+        /**
+         * Whether this says the same thing as [other], for dropping repeats.
+         *
+         * The position is compared with a tolerance rather than exactly: the
+         * three callbacks that push one song each read the play head a few
+         * hundred milliseconds apart, and a bar that is two seconds out is not
+         * a difference anyone can see — while a frame Discord counts against a
+         * rate limit is a real cost. A seek, which is the case that must never
+         * be swallowed, moves it far further than this.
+         */
+        fun sameAs(other: NowPlaying): Boolean =
+            title == other.title &&
+                artist == other.artist &&
+                album == other.album &&
+                paused == other.paused &&
+                durationMs == other.durationMs &&
+                kotlin.math.abs(positionMs - other.positionMs) < POSITION_TOLERANCE_MS
+    }
 
     /**
      * The activity object for a track.

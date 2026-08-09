@@ -187,4 +187,36 @@ class DiscordPresenceTest {
         val frame = DiscordPresence.presenceFrame(DiscordPresence.activity(playing(), "T", "1"))
         assertFalse(frame.contains("token"))
     }
+
+    @Test
+    fun `the same track at the same place is a repeat`() {
+        // Three callbacks push once per song — the queue moving, the player
+        // becoming ready, the play state settling — and they read the play head
+        // a few hundred milliseconds apart. Sending all three walks a held skip
+        // button straight through Discord's presence rate limit.
+        assertTrue(playing(positionMs = 30_000).sameAs(playing(positionMs = 30_400)))
+    }
+
+    @Test
+    fun `a seek is never mistaken for a repeat`() {
+        // The case that must survive the de-duplication: a seek moves the head
+        // far further than the tolerance, and swallowing it would leave the bar
+        // counting from where the track used to be.
+        assertFalse(playing(positionMs = 30_000).sameAs(playing(positionMs = 90_000)))
+    }
+
+    @Test
+    fun `a pause is never mistaken for a repeat`() {
+        // Pausing changes nothing but the flag, and dropping it would leave a
+        // bar advancing through music that stopped.
+        assertFalse(playing(paused = false).sameAs(playing(paused = true)))
+    }
+
+    @Test
+    fun `a different track is never a repeat, however close the play head`() {
+        assertFalse(playing(title = "One").sameAs(playing(title = "Two")))
+        assertFalse(playing(artist = "A").sameAs(playing(artist = "B")))
+        // Two tracks on one album, both at the top, differ only in length.
+        assertFalse(playing(durationMs = 210_000).sameAs(playing(durationMs = 240_000)))
+    }
 }

@@ -72,6 +72,18 @@ class DiscordPresenceManager @Inject constructor(
 
     @Volatile private var current: JsonObject? = null
 
+    /**
+     * The last state actually sent, for dropping repeats.
+     *
+     * Three things push a presence for one song — the queue moving, the player
+     * becoming ready, the play state settling — and holding a skip button walks
+     * through a queue faster than Discord's presence rate limit allows. Going
+     * over it doesn't return an error; Discord closes the connection, which
+     * costs a reconnect and looks to the listener like the card freezing. The
+     * repeats are genuinely redundant, so they are dropped rather than paced.
+     */
+    @Volatile private var lastSent: DiscordPresence.NowPlaying? = null
+
     /** Cache of artwork URL → Discord's proxied asset path, per process. */
     private val assetCache = HashMap<String, String>()
 
@@ -107,12 +119,15 @@ class DiscordPresenceManager @Inject constructor(
             val token = preferences.discordToken.first()
             if (token.isBlank()) return@launch
 
+            if (lastSent?.sameAs(now) == true) return@launch
+
             val appId = preferences.discordApplicationId.first().takeIf { it.isNotBlank() }
             val resolved = now.copy(
                 artworkAsset = now.artworkAsset?.let { proxiedAsset(it, token, appId) },
             )
             val activity = DiscordPresence.activity(resolved, APP_NAME, appId)
             lock.withLock {
+                lastSent = now
                 current = activity
                 val sender = send
                 if (sender == null) {
@@ -132,6 +147,9 @@ class DiscordPresenceManager @Inject constructor(
 
     private suspend fun stop() = lock.withLock {
         current = null
+        // Otherwise replaying the track that was up when playback stopped would
+        // be read as a repeat and never sent.
+        lastSent = null
         val job = socketJob
         socketJob = null
         send = null

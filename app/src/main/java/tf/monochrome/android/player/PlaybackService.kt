@@ -32,7 +32,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.audio.dsp.DspEngineManager
@@ -221,8 +220,7 @@ class PlaybackService : MediaSessionService() {
                 // A seek moves the play head without changing the track, and
                 // Discord is animating a bar from timestamps that just went
                 // stale — it would keep counting from where the track used to
-                // be. Only seeks: the automatic transitions are already covered
-                // by onMediaItemTransition.
+                // be. Only seeks: track changes come through the queue watcher.
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                     queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
                 }
@@ -241,6 +239,11 @@ class PlaybackService : MediaSessionService() {
                     }
                     Player.STATE_READY -> {
                         consecutivePlayerErrors = 0
+                        // The queue watcher pushes the presence as soon as the
+                        // track changes, which is before the player has the
+                        // item and therefore before its position means
+                        // anything. This is the correction, once it does.
+                        queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
                         applyVolume()
                         applyPlaybackSpeed()
                         applyEq()
@@ -350,7 +353,6 @@ class PlaybackService : MediaSessionService() {
                                 libraryRepository.addToHistory(track, unified)
                                 scrobblingService.updateNowPlaying(track)
                             }
-                            pushDiscordPresence(track)
                         }
                     }
                 }
@@ -471,18 +473,31 @@ class PlaybackService : MediaSessionService() {
         }
         startCrossfadeWatcher()
 
-        // The queue running dry has to take the Discord card down with it.
-        // Discord holds a presence until the connection that set it closes, so
-        // without this the last track of the night stays on the profile until
-        // the service is destroyed — which, for a foreground media service, can
-        // be hours. Watching the queue rather than a playback state catches
-        // every route to "nothing is playing": the end of the last track,
-        // clearing the queue, stopping by hand.
+        // The Discord card mirrors the queue's current track, and nothing else.
+        //
+        // It used to be pushed from onMediaItemTransition, which was wrong in a
+        // way that only showed up on a device: that handler ignores
+        // MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED, and the ordinary way
+        // this service starts a track is player.setMediaItem — a playlist
+        // change. So the card was set by the first track and then never again,
+        // and Discord happily animated its progress bar to the end of a song
+        // that had long since finished. Only the gapless hand-off, which
+        // pre-queues and transitions with REASON_AUTO, ever got through.
+        //
+        // currentTrack has no such gaps: every route to a new track moves it —
+        // playlist replacement, the gapless hand-off, a crossfade, a skip by
+        // hand — and it going null is every route to nothing playing at all.
+        // That last part matters as much as the first: Discord holds a presence
+        // until the connection that set it closes, so without it the final
+        // track of the night sits on the profile for as long as the service
+        // lives, which for a foreground media service is hours.
         serviceScope.launch {
             queueManager.currentTrack
-                .map { it == null }
-                .distinctUntilChanged()
-                .collect { empty -> if (empty) discordPresence.clear() }
+                .distinctUntilChanged { a, b -> a?.id == b?.id }
+                .collect { track ->
+                    if (track == null) discordPresence.clear()
+                    else pushDiscordPresence(track)
+                }
         }
 
         // Anything that reorders, extends or truncates the queue — drag to
@@ -704,14 +719,20 @@ class PlaybackService : MediaSessionService() {
     /**
      * Tell Discord what's playing, if the listener asked for that.
      *
-     * Reads the play head straight off the player rather than taking a position
-     * argument: this is called from a track change and from a pause, and in
-     * both cases "where are we now" is the player's answer, not the caller's.
-     * The manager is a no-op when the feature is off, which is the normal case
-     * — so this stays a cheap call on a hot path.
+     * The play head is only believed when the player is actually holding this
+     * track. The queue moves to the next song before the player is loaded with
+     * it, so asking then would hand Discord the *previous* track's position —
+     * and since the card's progress bar is drawn from a start timestamp, that
+     * is not a small error but a bar that opens part-filled and finishes early.
+     * Mismatched means the track is starting, which means zero; STATE_READY
+     * pushes again once the player agrees.
+     *
+     * The manager is a no-op when the feature is off, which is the normal case,
+     * so this stays a cheap call on a hot path.
      */
     private fun pushDiscordPresence(track: tf.monochrome.android.domain.model.Track) {
         val player = mediaSession?.player ?: return
+        val loaded = player.currentMediaItem?.mediaId == track.id.toString()
         discordPresence.update(
             tf.monochrome.android.data.presence.DiscordPresence.NowPlaying(
                 title = track.title,
@@ -720,11 +741,14 @@ class PlaybackService : MediaSessionService() {
                 artworkAsset = track.album?.cover?.let {
                     tf.monochrome.android.domain.model.buildCoverUrl(it, 640)
                 },
-                positionMs = player.currentPosition.coerceAtLeast(0L),
+                positionMs = if (loaded) player.currentPosition.coerceAtLeast(0L) else 0L,
                 // The player's duration is unset until the track is prepared;
                 // the catalogue's is in seconds and always there.
-                durationMs = player.duration.takeIf { it > 0 } ?: (track.duration * 1000L),
-                paused = !player.isPlaying,
+                durationMs = (player.duration.takeIf { loaded && it > 0 })
+                    ?: (track.duration * 1000L),
+                // A track the player hasn't reached yet is starting, not paused
+                // — reading isPlaying here would badge every new song "Paused".
+                paused = loaded && !player.isPlaying,
             ),
         )
     }
