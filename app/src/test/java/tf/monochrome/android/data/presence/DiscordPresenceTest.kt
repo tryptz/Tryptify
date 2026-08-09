@@ -219,4 +219,41 @@ class DiscordPresenceTest {
         // Two tracks on one album, both at the top, differ only in length.
         assertFalse(playing(durationMs = 210_000).sameAs(playing(durationMs = 240_000)))
     }
+
+    @Test
+    fun `a refused token is fatal, and named as the token`() {
+        // 4004 is how Discord actually says "no" to a bad token — it closes the
+        // socket rather than sending an opcode. A client that only watches
+        // opcodes reconnects forever and shows "connecting" the whole time,
+        // which is precisely the bug this exists to prevent.
+        val v = DiscordPresence.readClose(4004, "Authentication failed.")
+        assertTrue(v.fatal)
+        assertTrue(v.message, v.message.contains("token"))
+    }
+
+    @Test
+    fun `a rate limit is not fatal but is named`() {
+        // Retrying is right here, but silently — without the message the user
+        // sees an unexplained pause.
+        val v = DiscordPresence.readClose(4008, null)
+        assertFalse(v.fatal)
+        assertTrue(v.message, v.message.contains("4008"))
+    }
+
+    @Test
+    fun `an ordinary disconnect is retryable`() {
+        assertFalse(DiscordPresence.readClose(1006, null).fatal)
+        assertFalse(DiscordPresence.readClose(null, null).fatal)
+        assertFalse(DiscordPresence.readClose(4000, "Unknown error").fatal)
+    }
+
+    @Test
+    fun `every close verdict carries the code it came from`() {
+        // The number is what makes a report actionable; a message that drops it
+        // leaves nothing to look up.
+        for (code in listOf(4008, 4010, 4013, 1006)) {
+            assertTrue("$code missing from its message",
+                DiscordPresence.readClose(code, null).message.contains("$code"))
+        }
+    }
 }

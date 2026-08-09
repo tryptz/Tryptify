@@ -1,6 +1,7 @@
 package tf.monochrome.android.data.presence
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -139,9 +140,25 @@ object DiscordPresence {
             // Presented as the Android client, because that is what this is —
             // a phone holding a presence. Claiming a desktop client here would
             // put a desktop icon on a status coming from a phone.
+            //
+            // The fuller set matters more than it looks. A bot IDENTIFY is
+            // happy with three fields; the user gateway is stricter about what
+            // a client looks like, and a thin properties block is one of the
+            // ways a handshake gets closed with 4004 while the token itself is
+            // perfectly good.
             put("os", "Android")
             put("browser", "Discord Android")
             put("device", "android")
+            put("system_locale", "en-US")
+            put("client_version", CLIENT_VERSION)
+            put("release_channel", "googleRelease")
+            put("device_vendor_id", "")
+            put("browser_user_agent", "")
+            put("browser_version", "")
+            put("os_version", "")
+            put("client_build_number", CLIENT_BUILD)
+            put("client_event_source", JsonNull)
+            put("design_id", 0)
         }
         put("compress", false)
         put("presence", presenceData(activity))
@@ -196,6 +213,45 @@ object DiscordPresence {
         }
     }
 
+    /** Why the gateway hung up, and whether trying again could ever help. */
+    data class CloseVerdict(val fatal: Boolean, val message: String)
+
+    /**
+     * Read a websocket close code.
+     *
+     * This is the half of the protocol that is easy to forget exists, and
+     * forgetting it is expensive: **Discord refuses a bad token by closing the
+     * connection with 4004, not by sending an opcode**. A client that only
+     * watches for opcode 9 sees a rejected token as an ordinary disconnect,
+     * reconnects, gets closed again, and sits on "connecting" forever while
+     * hammering an endpoint that will never say yes. Every failure looks like a
+     * network blip.
+     *
+     * 4008 is the other one worth naming rather than retrying blind — it is the
+     * rate limit, and backing off is the only response to it.
+     */
+    fun readClose(code: Int?, reason: String?): CloseVerdict = when (code) {
+        4004 -> CloseVerdict(
+            fatal = true,
+            message = "Discord rejected the token (4004). It rotates whenever you " +
+                "change your password or log out everywhere — paste a fresh one.",
+        )
+        4010, 4011, 4012, 4013, 4014 -> CloseVerdict(
+            fatal = true,
+            message = "Discord refused this connection ($code)" +
+                reason?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty(),
+        )
+        4008 -> CloseVerdict(
+            fatal = false,
+            message = "Discord is rate limiting this account (4008). Waiting before retrying.",
+        )
+        null -> CloseVerdict(fatal = false, message = "Lost the connection to Discord. Retrying.")
+        else -> CloseVerdict(
+            fatal = false,
+            message = "Discord closed the connection ($code). Retrying.",
+        )
+    }
+
     /**
      * Every Discord activity string must be 2–128 characters. One character is
      * rejected, so a track called "4" would take the whole presence down with
@@ -211,6 +267,13 @@ object DiscordPresence {
             put("op", op)
             putJsonObject("d", data)
         }.toString()
+
+    /**
+     * The client Discord is told this is. Only ever compared for plausibility,
+     * never for accuracy — an obviously absent one reads as an unknown client.
+     */
+    private const val CLIENT_VERSION = "277.15 - rn"
+    private const val CLIENT_BUILD = 2938
 
     private const val DEFAULT_HEARTBEAT_MS = 41_250L
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }

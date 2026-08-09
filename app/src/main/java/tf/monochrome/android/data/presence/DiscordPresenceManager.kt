@@ -306,6 +306,20 @@ class DiscordPresenceManager @Inject constructor(
                         DiscordPresence.Frame.HeartbeatAck, DiscordPresence.Frame.Ignored -> Unit
                     }
                 }
+                // consumeEach returns when the socket closes, and the close
+                // code is the only thing that says whether trying again could
+                // ever work. Without reading it, a token Discord refuses with
+                // 4004 is indistinguishable from a tunnel — so the client
+                // reconnects forever and the status sits on "connecting".
+                val closed = session.closeReason.await()
+                val verdict = DiscordPresence.readClose(closed?.code?.toInt(), closed?.message)
+                Log.w(TAG, "gateway closed: ${closed?.code} ${closed?.message}")
+                if (verdict.fatal) {
+                    _status.value = Status.FAILED
+                    _errorMessage.value = verdict.message
+                } else if (!established) {
+                    _errorMessage.value = verdict.message
+                }
             } finally {
                 send = null
                 heartbeat?.cancel()
