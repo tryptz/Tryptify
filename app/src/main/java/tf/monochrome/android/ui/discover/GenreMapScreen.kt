@@ -805,6 +805,9 @@ private const val MAX_SCALE = 14f
 /** Leaves a little air around the map at scale 1 instead of running it to the bezel. */
 private const val FIT_MARGIN = 0.92f
 
+/** Breathing room around a label when testing it against its neighbours. */
+private const val LABEL_GAP = 3f
+
 /**
  * How close the camera gets when you select a genre.
  *
@@ -1386,25 +1389,53 @@ private fun DrawScope.drawMap(
         // Which names survive has to follow the same weighting as the dots —
         // labelling by depth while sizing by popularity would name a genre
         // nobody tags and leave the biggest dot on screen anonymous.
+        //
+        // The threshold only decides which labels are *offered*; collision
+        // decides which are drawn. A threshold alone cannot do this job at 771
+        // nodes, and tuning it was a choice between two failures: strict enough
+        // to keep the zoomed-in view legible left the whole-map view with three
+        // names on it, and loose enough to orient by named a hundred genres
+        // stacked into an unreadable smear. Offering generously and dropping
+        // whatever doesn't fit gives a view that stays legible at every zoom
+        // and fills the space it has.
         val labelCut = when {
             scale >= 5f -> 0f
-            scale >= 2.8f -> 0.30f
-            scale >= 1.5f -> 0.55f
-            else -> 0.95f
+            scale >= 2.8f -> 0.20f
+            scale >= 1.5f -> 0.40f
+            else -> 0.55f
         }
-        for (node in nodes) {
-            val named = if (weighting == MapWeight.DEPTH) {
-                node.ring <= labelThreshold
-            } else {
-                weights.prominence(node, weighting) >= labelCut
+        val taken = ArrayList<android.graphics.RectF>()
+        val candidates = nodes.asSequence()
+            .filter { node ->
+                if (weighting == MapWeight.DEPTH) node.ring <= labelThreshold
+                else weights.prominence(node, weighting) >= labelCut
             }
-            if (!named) continue
+            // Most prominent first, so when two names collide the one that
+            // survives is the one the weighting says matters more.
+            .sortedByDescending { weights.prominence(it, weighting) }
+
+        for (node in candidates) {
             val centre = positions[node.id] ?: continue
             if (!onScreen(centre)) continue
             val here = presence(node.id)
             if (here <= 0.01f) continue
+
+            val halfWidth = paint.measureText(node.name) / 2f
+            val baseline = centre.y - 14f
+            val box = android.graphics.RectF(
+                centre.x - halfWidth - LABEL_GAP,
+                baseline - labelSizePx - LABEL_GAP,
+                centre.x + halfWidth + LABEL_GAP,
+                baseline + LABEL_GAP,
+            )
+            // Off the side of the canvas is its own kind of collision: a name
+            // sliced in half by the edge is worse than no name.
+            if (box.left < 0f || box.right > size.width) continue
+            if (taken.any { android.graphics.RectF.intersects(it, box) }) continue
+
+            taken.add(box)
             paint.alpha = (baseAlpha * here).toInt()
-            drawText(node.name, centre.x, centre.y - 14f, paint)
+            drawText(node.name, centre.x, baseline, paint)
         }
     }
 }
