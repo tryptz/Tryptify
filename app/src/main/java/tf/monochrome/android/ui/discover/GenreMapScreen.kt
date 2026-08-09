@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.discover
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -14,7 +17,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CenterFocusStrong
@@ -30,14 +37,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -45,19 +56,31 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.GenreNode
+import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.theme.reduceMotion
+import kotlin.math.PI
 import kotlin.math.hypot
+import kotlin.math.sin
 
 /**
  * The genre map — all 355 genres as one picture you can move around in.
@@ -79,11 +102,16 @@ import kotlin.math.hypot
  * electronic is the biggest without being the whole picture: it holds half the
  * dataset but takes a third of the canvas.
  *
- * Two things a node does. Tapping plays it — the same path Flow uses, straight
- * into the real player and queue, because "quickly listen to each genre" is the
- * whole point. Tapping the panel's *Explore* hands the genre to Discover, which
- * rebuilds its feed around it and its neighbours. Long-pressing a branch
- * collapses it, so you can fold electronic away and actually see folk.
+ * Tapping a genre does two things at once: it opens the panel for it and flies
+ * the camera over to centre it, and it folds or unfolds whatever grows below it
+ * — the subtree scaling out of its parent, or shrinking back into it. So you can
+ * fold electronic away and actually see folk, and you can walk down into a
+ * family one tap at a time. The panel names the subgenres rather than counting
+ * them, and each of those is a tap to the next one.
+ *
+ * *Play* sends the genre straight into the real player and queue — the same path
+ * Flow uses, because "quickly listen to each genre" is the whole point. *Explore
+ * in Discover* hands it to the feed, which rebuilds around it and its neighbours.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,8 +127,13 @@ fun GenreMapScreen(
     // see is the whole thing, and folding is the exception.
     var collapsed by remember { mutableStateOf(setOf<String>()) }
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    // The fold currently playing out, if any. A collapse holds off on updating
+    // `collapsed` until the animation finishes — otherwise the subtree would be
+    // gone from the first frame and there'd be nothing left to shrink.
+    var fold by remember { mutableStateOf<Fold?>(null) }
+    var foldEpoch by remember { mutableIntStateOf(0) }
+
+    var camera by remember { mutableStateOf(Camera()) }
 
     // What's actually drawn: everything except the descendants of a collapsed
     // branch. Derived rather than stored so collapsing can't desync the two.
@@ -114,6 +147,96 @@ fun GenreMapScreen(
 
     val familyColors = remember(graph) { familyPalette(graph.allGenres.map { it.family }.distinct()) }
 
+    // Read at gesture time rather than captured, so the pointer handlers can be
+    // keyed on Unit. Keying them on the camera would rebuild both gesture
+    // detectors on every frame of a pan, a pinch or a camera flight — which
+    // drops the pointer stream mid-gesture.
+    val liveCamera = rememberUpdatedState(camera)
+    val liveVisible = rememberUpdatedState(visible)
+    val liveFold = rememberUpdatedState(fold)
+
+    // How much of the bottom the detail panel is covering, so a genre can be
+    // centred in the part of the map you can actually see.
+    //
+    // Seeded with an estimate rather than zero and deliberately not a key of the
+    // flight below: the panel only exists once something is selected, so a
+    // measured-only value would make the very first selection fly to the canvas
+    // centre and then fly again to correct itself.
+    var panelHeightPx by remember { mutableIntStateOf(with(density) { 230.dp.roundToPx() }) }
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val scope = rememberCoroutineScope()
+    // The in-flight camera move, so a touch can take the controls back off it.
+    var flight by remember { mutableStateOf<Job?>(null) }
+    var folding by remember { mutableStateOf<Job?>(null) }
+    val instant = reduceMotion()
+
+    // The map blurs itself behind the panel. A local haze source rather than the
+    // shared app one: the panel sits inside the same subtree, and pointing it at
+    // the app-wide state would have it sampling its own output.
+    val mapHaze = rememberHazeState()
+
+    fun focusOn(node: GenreNode) {
+        flight?.cancel()
+        if (canvasSize == IntSize.Zero) return
+        flight = scope.launch {
+            flyTo(node, canvasSize, panelHeightPx, bounds, camera, instant) { camera = it }
+        }
+    }
+
+    /** Unfold a genre's subtree, or fold it back, growing it out of the genre itself. */
+    fun toggleBranch(id: String) {
+        val subtree = descendantsOf(graph, id)
+        if (subtree.isEmpty()) return
+
+        // Cancelling a fold kills the coroutine before it can commit, so the
+        // interrupted one is settled here rather than left half-applied. Doing
+        // it before reading `collapsed` below is also what makes tapping twice
+        // mid-animation reverse the fold instead of restarting it.
+        folding?.cancel()
+        fold?.let { if (it.collapsing) collapsed = collapsed + it.rootId }
+        fold = null
+
+        val collapsing = id !in collapsed
+        if (!collapsing) collapsed = collapsed - id
+        if (instant) {
+            if (collapsing) collapsed = collapsed + id
+            return
+        }
+        // Seeded synchronously: `collapsed` has already changed, and a frame
+        // drawn before the coroutine's first dispatch would show the subtree
+        // at full size — the pop this exists to avoid.
+        foldEpoch += 1
+        val epoch = foldEpoch
+        fold = Fold(epoch, id, subtree, collapsing, if (collapsing) 1f else 0f)
+        folding = scope.launch {
+            animate(
+                initialValue = if (collapsing) 1f else 0f,
+                targetValue = if (collapsing) 0f else 1f,
+                animationSpec = tween(
+                    if (collapsing) FOLD_IN_MILLIS else FOLD_OUT_MILLIS,
+                    // Growing overshoots a little and settles back — the
+                    // difference between a subtree appearing and one unfurling.
+                    easing = if (collapsing) FoldInEasing else FoldOutEasing,
+                ),
+            ) { value, _ ->
+                fold?.takeIf { it.epoch == epoch }?.let { fold = it.copy(progress = value) }
+            }
+            if (fold?.epoch == epoch) {
+                if (collapsing) collapsed = collapsed + id
+                fold = null
+            }
+        }
+    }
+
+    // Selecting a genre — by tapping it, or by tapping a subgenre chip in the
+    // panel — flies the camera to it. Keyed on the id so re-selecting the same
+    // genre doesn't re-fly, and on the canvas size so a selection made before
+    // the first measurement still lands.
+    LaunchedEffect(selected?.id, canvasSize) {
+        selected?.let { focusOn(it) }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Genre map") },
@@ -123,13 +246,22 @@ fun GenreMapScreen(
                 }
             },
             actions = {
-                IconButton(onClick = { collapsed = graph.roots.map { it.id }.toSet() }) {
+                // These set every branch at once, so they cancel any single fold
+                // in flight — letting it commit afterwards would re-fold one
+                // branch a moment after you asked for all of them.
+                IconButton(onClick = {
+                    folding?.cancel(); fold = null
+                    collapsed = graph.roots.map { it.id }.toSet()
+                }) {
                     Icon(Icons.Default.UnfoldLess, contentDescription = "Collapse everything")
                 }
-                IconButton(onClick = { collapsed = emptySet() }) {
+                IconButton(onClick = {
+                    folding?.cancel(); fold = null
+                    collapsed = emptySet()
+                }) {
                     Icon(Icons.Default.UnfoldMore, contentDescription = "Expand everything")
                 }
-                IconButton(onClick = { scale = 1f; offset = Offset.Zero }) {
+                IconButton(onClick = { flight?.cancel(); camera = Camera() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Recentre")
                 }
             },
@@ -143,60 +275,67 @@ fun GenreMapScreen(
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
+                    .hazeSource(mapHaze)
+                    .onSizeChanged { canvasSize = it }
                     .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            // Clamped so the map can't be flicked into empty
-                            // space or zoomed past the point where labels stop
-                            // being legible.
-                            scale = (scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
-                            offset += pan
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            // Touching the map takes it back from any camera
+                            // move in progress — being dragged around while
+                            // you're trying to steer is the worst kind of
+                            // animation.
+                            flight?.cancel()
+                            camera = liveCamera.value.zoomedAt(centroid, pan, zoom, size, bounds)
                         }
                     }
-                    .pointerInput(visible, scale, offset) {
-                        detectTapGestures(
-                            onTap = { point ->
-                                hitTest(point, visible, size.width, size.height, bounds, scale, offset)
-                                    ?.let { viewModel.selectOnMap(it.id) }
-                            },
-                            onLongPress = { point ->
-                                hitTest(point, visible, size.width, size.height, bounds, scale, offset)
-                                    ?.let { node ->
-                                        // Only a branch can collapse; folding a
-                                        // leaf would do nothing and feel broken.
-                                        if (graph.children(node.id).isNotEmpty()) {
-                                            collapsed = if (node.id in collapsed) collapsed - node.id
-                                            else collapsed + node.id
-                                        }
-                                    }
-                            },
-                        )
+                    .pointerInput(Unit) {
+                        detectTapGestures { point ->
+                            val hit = hitTest(
+                                point, liveVisible.value, size.width, size.height,
+                                bounds, liveCamera.value, liveFold.value,
+                            ) ?: return@detectTapGestures
+                            viewModel.selectOnMap(hit.id)
+                            toggleBranch(hit.id)
+                        }
                     },
             ) {
                 drawMap(
                     nodes = visible,
-                    positions = positionsFor(visible, size.width, size.height, bounds, scale, offset),
+                    positions = positionsFor(visible, size.width, size.height, bounds, camera, fold),
                     collapsed = collapsed,
                     selectedId = selected?.id,
+                    fold = fold,
                     familyColors = familyColors,
                     edgeColor = edgeColor,
                     labelColor = onSurface,
                     labelSizePx = labelPx,
-                    scale = scale,
+                    scale = camera.scale,
                 )
             }
 
             selected?.let { node ->
+                val related = remember(graph, node.id) { relatedTo(graph, node) }
                 GenreCard(
                     node = node,
-                    childCount = graph.children(node.id).size,
+                    related = related,
                     familyName = graph.family(node.family)?.name ?: node.family,
+                    familyColor = familyColors[node.family] ?: MaterialTheme.colorScheme.primary,
+                    hazeState = mapHaze,
                     onPlay = { viewModel.playGenre(node.id, playerViewModel) },
                     onExplore = {
                         viewModel.selectGenre(node.id)
                         navController.popBackStack()
                     },
+                    onRelated = { child ->
+                        // A subgenre under a folded branch is not on the map, so
+                        // flying to it would land on nothing. Unfold on the way —
+                        // through the same animation, not by snapping it open.
+                        if (node.id in collapsed) toggleBranch(node.id)
+                        viewModel.selectOnMap(child.id)
+                    },
                     onDismiss = { viewModel.selectOnMap(null) },
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { panelHeightPx = it.height },
                 )
             }
 
@@ -212,25 +351,58 @@ fun GenreMapScreen(
     }
 }
 
-/** The detail panel for a tapped genre — what it is, and the two things to do with it. */
+/**
+ * What to offer next to a genre: its subgenres, or — for a leaf — its closest
+ * relatives elsewhere on the map.
+ *
+ * A leaf with an empty list would be a dead end in the one place the map is
+ * meant to keep you moving, and "drift phonk has no children" is not an
+ * interesting fact about drift phonk.
+ */
+private data class Related(val nodes: List<GenreNode>, val areChildren: Boolean)
+
+private fun relatedTo(graph: tf.monochrome.android.domain.model.GenreGraph, node: GenreNode): Related {
+    val children = graph.children(node.id)
+    if (children.isNotEmpty()) return Related(children, areChildren = true)
+    return Related(
+        graph.neighbours(node.id, maxHops = 1).map { it.node }.take(8),
+        areChildren = false,
+    )
+}
+
+/** The detail panel for a tapped genre — what it is, where to go next, what to do with it. */
 @Composable
 private fun GenreCard(
     node: GenreNode,
-    childCount: Int,
+    related: Related,
     familyName: String,
+    familyColor: Color,
+    hazeState: HazeState,
     onPlay: () -> Unit,
     onExplore: () -> Unit,
+    onRelated: (GenreNode) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    // The mini player's glass treatment, and gated the same way: the shared
+    // `allowHazeBlur` is what both the device tier and the "remove liquid glass"
+    // switch turn off, and with it off the panel needs a real surface behind it
+    // rather than the nothing that a no-op glass modifier would leave.
+    val glass = LocalPerformanceProfile.current.allowHazeBlur
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(12.dp)
-            .navigationBarsPadding(),
-        shape = MonoDimens.shapeLg,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 3.dp,
+            .navigationBarsPadding()
+            .then(
+                if (glass) {
+                    Modifier.liquidGlass(hazeState = hazeState, shape = MonoDimens.shapeLg)
+                } else {
+                    Modifier
+                        .clip(MonoDimens.shapeLg)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                },
+            ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -246,7 +418,7 @@ private fun GenreCard(
                     append(familyName)
                     if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
                     node.era.getOrNull(0)?.let { append(" · from $it") }
-                    if (childCount > 0) append(" · $childCount subgenres")
+                    if (related.areChildren) append(" · ${related.nodes.size} subgenres")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -260,6 +432,30 @@ private fun GenreCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+
+            // Where to go next. Naming the subgenres rather than counting them
+            // is the difference between "Dub has 3 subgenres" and being one tap
+            // from dub techno — and each tap flies the map to it, so the panel
+            // doubles as a way to steer.
+            if (related.nodes.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = if (related.areChildren) "Subgenres" else "Closest to it",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(related.nodes, key = { it.id }) { child ->
+                        RelativeChip(
+                            node = child,
+                            accent = familyColor,
+                            onClick = { onRelated(child) },
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Surface(
@@ -311,6 +507,50 @@ private fun GenreCard(
     }
 }
 
+/**
+ * One subgenre (or close relative) in the panel's rail.
+ *
+ * Tinted with the family colour so the chips read as the same thing as the dots
+ * on the map behind them, and carrying its tempo because on a map about genres
+ * "138–142 BPM" is often the fastest way to know whether you want it.
+ */
+@Composable
+private fun RelativeChip(node: GenreNode, accent: Color, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.bounceClick(onClick = onClick),
+        shape = MonoDimens.shapePill,
+        color = accent.copy(alpha = 0.16f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(accent),
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                text = node.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            if (node.hasTempo) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "${node.bpmLow}–${node.bpmHigh}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
 // ── layout & drawing ───────────────────────────────────────────────────────
 
 private const val MIN_SCALE = 0.6f
@@ -318,6 +558,128 @@ private const val MAX_SCALE = 14f
 
 /** Leaves a little air around the map at scale 1 instead of running it to the bezel. */
 private const val FIT_MARGIN = 0.92f
+
+/**
+ * How close the camera gets when you select a genre.
+ *
+ * Only ever a floor: flying to a node never pulls you *back* from a zoom you
+ * chose yourself, it just guarantees that whatever you tapped ends up close
+ * enough to read its neighbours' labels.
+ */
+private const val FOCUS_SCALE = 2.6f
+private const val FLIGHT_MILLIS = 620
+
+/**
+ * The camera over the map: how far in, and where it's looking.
+ *
+ * One object rather than two pieces of state because zooming about a point
+ * changes both together, and a frame that applied the new scale with the old
+ * offset would visibly kick sideways.
+ */
+private data class Camera(val scale: Float = 1f, val offset: Offset = Offset.Zero) {
+
+    /**
+     * Pinch about [centroid] — the point between the fingers stays under them.
+     *
+     * Zooming about the *screen centre* instead is the thing that makes a map
+     * feel broken: you pinch on the corner you're interested in and the map
+     * runs away from your fingers. The ratio is taken from the clamped scale,
+     * not the raw gesture, so the anchor still holds at the zoom limits.
+     */
+    fun zoomedAt(centroid: Offset, pan: Offset, zoom: Float, size: IntSize, bounds: MapBounds): Camera {
+        val next = (scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
+        val ratio = if (scale == 0f) 1f else next / scale
+        val rel = Offset(centroid.x - size.width / 2f, centroid.y - size.height / 2f)
+        return Camera(next, rel * (1f - ratio) + offset * ratio + pan).clampedTo(size, bounds)
+    }
+
+    /**
+     * Keeps a readable amount of map on screen.
+     *
+     * Without this the map can be flung into empty space — trivially easy at
+     * 14× on something 355 nodes wide — and the only way back is the recentre
+     * button, which you have to know is there. The limit lets the map's edge
+     * come inward as far as a quarter of the viewport and no further.
+     */
+    fun clampedTo(size: IntSize, bounds: MapBounds): Camera {
+        if (size.width == 0 || size.height == 0) return this
+        val k = fitFor(size.width.toFloat(), size.height.toFloat(), bounds) * scale
+        val margin = minOf(size.width, size.height) * 0.25f
+        val maxX = (bounds.spanX * k / 2f + size.width / 2f - margin).coerceAtLeast(0f)
+        val maxY = (bounds.spanY * k / 2f + size.height / 2f - margin).coerceAtLeast(0f)
+        return copy(offset = Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY)))
+    }
+}
+
+/**
+ * A camera move that curves.
+ *
+ * Two things make it read as a move rather than a jump. The timing is a
+ * symmetric ease — slow to leave, fast across the middle, slow to arrive — and
+ * the path bows sideways, peaking at half-flight, so the camera arcs into
+ * position instead of sliding down a ruled line. The bow is proportional to the
+ * distance travelled and capped, so a nudge to a neighbouring genre stays
+ * nearly straight while a jump across the map genuinely swings.
+ *
+ * Scale is interpolated on the same curve, which is what keeps the destination
+ * growing smoothly under you rather than snapping to size on arrival.
+ */
+private suspend fun flyTo(
+    node: GenreNode,
+    canvas: IntSize,
+    panelHeightPx: Int,
+    bounds: MapBounds,
+    from: Camera,
+    instant: Boolean,
+    onFrame: (Camera) -> Unit,
+) {
+    val targetScale = maxOf(from.scale, FOCUS_SCALE)
+    val target = Camera(targetScale, centreOffsetFor(node, canvas, panelHeightPx, bounds, targetScale))
+    if (instant) {
+        onFrame(target)
+        return
+    }
+
+    val delta = target.offset - from.offset
+    val distance = hypot(delta.x, delta.y)
+    // Perpendicular to the direction of travel, so the bow is always across the
+    // path rather than along it.
+    val bow = if (distance < 1f) Offset.Zero else {
+        Offset(-delta.y / distance, delta.x / distance) * (distance * 0.16f).coerceAtMost(220f)
+    }
+
+    animate(0f, 1f, animationSpec = tween(FLIGHT_MILLIS, easing = FlightEasing)) { t, _ ->
+        onFrame(
+            Camera(
+                scale = from.scale + (target.scale - from.scale) * t,
+                offset = from.offset + delta * t + bow * sin(t * PI.toFloat()),
+            ),
+        )
+    }
+}
+
+private val FlightEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
+
+/**
+ * Where the camera has to sit for [node] to land in the middle of the map you
+ * can actually see — which is the space above the detail panel, not the middle
+ * of the canvas. Centring on the canvas would park every genre you select
+ * underneath its own information.
+ */
+private fun centreOffsetFor(
+    node: GenreNode,
+    canvas: IntSize,
+    panelHeightPx: Int,
+    bounds: MapBounds,
+    scale: Float,
+): Offset {
+    val k = fitFor(canvas.width.toFloat(), canvas.height.toFloat(), bounds) * scale
+    val focusY = (canvas.height - panelHeightPx) / 2f
+    return Offset(
+        x = -(node.x - bounds.centreX) * k,
+        y = focusY - canvas.height / 2f - (node.y - bounds.centreY) * k,
+    )
+}
 
 /**
  * The extent of the baked layout, in layout units.
@@ -355,39 +717,94 @@ private fun visibleNodes(
     collapsed: Set<String>,
 ): List<GenreNode> {
     if (collapsed.isEmpty()) return graph.allGenres
-    val hidden = HashSet<String>()
-    var frontier = collapsed.toList()
+    val hidden = descendantsOf(graph, collapsed)
+    return graph.allGenres.filterNot { it.id in hidden }
+}
+
+private fun descendantsOf(
+    graph: tf.monochrome.android.domain.model.GenreGraph,
+    id: String,
+): Set<String> = descendantsOf(graph, setOf(id))
+
+private fun descendantsOf(
+    graph: tf.monochrome.android.domain.model.GenreGraph,
+    roots: Set<String>,
+): Set<String> {
+    val found = HashSet<String>()
+    var frontier = roots.toList()
     while (frontier.isNotEmpty()) {
         val next = ArrayList<String>()
         for (id in frontier) {
             for (child in graph.children(id)) {
-                if (hidden.add(child.id)) next.add(child.id)
+                if (found.add(child.id)) next.add(child.id)
             }
         }
         frontier = next
     }
-    return graph.allGenres.filterNot { it.id in hidden }
+    return found
 }
+
+/**
+ * A branch being unfolded or folded back, and how far through it is.
+ *
+ * The whole subtree scales out of the branch's own position, so unfolding reads
+ * as the genres growing out of the genre they came from rather than as a set of
+ * dots appearing. Folding runs the same thing backwards and slightly faster —
+ * putting something away should not take as long as opening it.
+ */
+private data class Fold(
+    /**
+     * Which fold this is. Cancelling a coroutine only takes effect at its next
+     * suspension point, so without a token to check, the frame callback of a
+     * fold that has just been superseded can stamp its own progress onto the
+     * new one — and then commit the wrong branch to `collapsed` on the way out.
+     */
+    val epoch: Int,
+    val rootId: String,
+    val subtree: Set<String>,
+    val collapsing: Boolean,
+    val progress: Float,
+)
+
+private const val FOLD_OUT_MILLIS = 380
+private const val FOLD_IN_MILLIS = 240
+private val FoldOutEasing = CubicBezierEasing(0.2f, 1.5f, 0.4f, 1f)
+private val FoldInEasing = CubicBezierEasing(0.5f, 0f, 0.9f, 0.4f)
+
+/**
+ * Layout units to pixels at scale 1 — the whole map fitted to the viewport.
+ *
+ * One factor for both axes, so the clusters stay circular rather than being
+ * squashed into ellipses in portrait.
+ */
+private fun fitFor(width: Float, height: Float, bounds: MapBounds): Float =
+    minOf(width / bounds.spanX, height / bounds.spanY) * FIT_MARGIN
 
 private fun positionsFor(
     nodes: List<GenreNode>,
     width: Float,
     height: Float,
     bounds: MapBounds,
-    scale: Float,
-    offset: Offset,
+    camera: Camera,
+    fold: Fold? = null,
 ): Map<String, Offset> {
-    // Fit the whole layout at scale 1, uniformly on both axes so the clusters
-    // stay circular rather than being squashed into ellipses in portrait.
-    val fit = minOf(width / bounds.spanX, height / bounds.spanY) * FIT_MARGIN
-    val k = fit * scale
-    val cx = width / 2f + offset.x
-    val cy = height / 2f + offset.y
+    val k = fitFor(width, height, bounds) * camera.scale
+    val cx = width / 2f + camera.offset.x
+    val cy = height / 2f + camera.offset.y
+    fun place(node: GenreNode) = Offset(
+        x = cx + (node.x - bounds.centreX) * k,
+        y = cy + (node.y - bounds.centreY) * k,
+    )
+    // A folding subtree is drawn part of the way home to its branch root, so
+    // hit-testing lands where the dots actually are mid-animation too.
+    val anchor = fold?.let { f -> nodes.firstOrNull { it.id == f.rootId }?.let(::place) }
     return nodes.associate { node ->
-        node.id to Offset(
-            x = cx + (node.x - bounds.centreX) * k,
-            y = cy + (node.y - bounds.centreY) * k,
-        )
+        val p = place(node)
+        node.id to if (anchor != null && node.id in fold!!.subtree) {
+            anchor + (p - anchor) * fold.progress
+        } else {
+            p
+        }
     }
 }
 
@@ -397,10 +814,10 @@ private fun hitTest(
     width: Int,
     height: Int,
     bounds: MapBounds,
-    scale: Float,
-    offset: Offset,
+    camera: Camera,
+    fold: Fold? = null,
 ): GenreNode? {
-    val positions = positionsFor(nodes, width.toFloat(), height.toFloat(), bounds, scale, offset)
+    val positions = positionsFor(nodes, width.toFloat(), height.toFloat(), bounds, camera, fold)
     // Generous radius: these are small targets on a zoomable canvas, and
     // missing by four pixels should still select the thing you aimed at.
     val touchRadius = 28f
@@ -419,6 +836,7 @@ private fun DrawScope.drawMap(
     positions: Map<String, Offset>,
     collapsed: Set<String>,
     selectedId: String?,
+    fold: Fold?,
     familyColors: Map<String, Color>,
     edgeColor: Color,
     labelColor: Color,
@@ -426,6 +844,13 @@ private fun DrawScope.drawMap(
     scale: Float,
 ) {
     val byId = nodes.associateBy { it.id }
+
+    // How present a node is right now: 1 for everything settled, and the fold's
+    // progress for the subtree currently growing out of — or shrinking back
+    // into — its branch. Clamped because the grow easing overshoots past 1 on
+    // purpose, and an alpha above 1 is not a brighter dot, it's an exception.
+    fun presence(id: String): Float =
+        if (fold != null && id in fold.subtree) fold.progress.coerceIn(0f, 1f) else 1f
 
     // Everything below is culled to the viewport. Zoomed in, most of a
     // 355-node map is off-screen, and drawing it anyway costs a full pass of
@@ -444,11 +869,18 @@ private fun DrawScope.drawMap(
     // instead would be a grey haze over the whole map.
     for (node in nodes) {
         val to = positions[node.id] ?: continue
+        val here = presence(node.id)
+        if (here <= 0.01f) continue
         for (parentId in node.parents) {
             val from = positions[parentId] ?: continue
             if (parentId !in byId) continue
             if (!onScreen(to) && !onScreen(from)) continue
-            drawLine(color = edgeColor, start = from, end = to, strokeWidth = 1.5f)
+            drawLine(
+                color = edgeColor.copy(alpha = edgeColor.alpha * here),
+                start = from,
+                end = to,
+                strokeWidth = 1.5f,
+            )
         }
         for ((otherId, weight) in node.nearEdges()) {
             val other = byId[otherId] ?: continue
@@ -458,8 +890,9 @@ private fun DrawScope.drawMap(
             if (otherId < node.id) continue
             val from = positions[otherId] ?: continue
             if (!onScreen(to) && !onScreen(from)) continue
+            val alpha = (0.10f + 0.18f * weight) * here * presence(otherId)
             drawLine(
-                color = (familyColors[node.family] ?: edgeColor).copy(alpha = 0.10f + 0.18f * weight),
+                color = (familyColors[node.family] ?: edgeColor).copy(alpha = alpha),
                 start = from,
                 end = to,
                 strokeWidth = 1f,
@@ -470,13 +903,19 @@ private fun DrawScope.drawMap(
     for (node in nodes) {
         val centre = positions[node.id] ?: continue
         if (!onScreen(centre)) continue
-        val color = familyColors[node.family] ?: labelColor
-        // Roots read as anchors, so they stay larger at every zoom level.
+        val here = presence(node.id)
+        if (here <= 0.01f) continue
+        val color = (familyColors[node.family] ?: labelColor).copy(alpha = here)
+        // Roots read as anchors, so they stay larger at every zoom level. A dot
+        // growing in scales with the fold, so the subtree swells into place
+        // rather than sliding out at full size.
         val radius = when {
             node.ring == 0 -> 9f
             node.ring == 1 -> 6.5f
             else -> 4.5f
-        }
+        } * here
+        // Mid-fold the branch root's ring would flicker on for one frame at the
+        // end, so it waits until the subtree is actually gone.
         val folded = node.id in collapsed
 
         drawCircle(color = color, radius = radius, center = centre)
@@ -519,10 +958,14 @@ private fun DrawScope.drawMap(
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.CENTER
         }
+        val baseAlpha = paint.alpha
         for (node in nodes) {
             if (node.ring > labelThreshold) continue
             val centre = positions[node.id] ?: continue
             if (!onScreen(centre)) continue
+            val here = presence(node.id)
+            if (here <= 0.01f) continue
+            paint.alpha = (baseAlpha * here).toInt()
             drawText(node.name, centre.x, centre.y - 14f, paint)
         }
     }
