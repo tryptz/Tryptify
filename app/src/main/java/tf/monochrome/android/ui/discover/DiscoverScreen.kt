@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.QueueMusic
@@ -127,9 +128,21 @@ fun DiscoverScreen(
 
         // Flow: the active way through the same feed. Sits above the shelves
         // because it is the fastest route into music, not an afterthought.
-        FlowEntryButton(
-            onClick = { navController.navigateSafe(Screen.DiscoveryFlow.route) },
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                FlowEntryButton(
+                    onClick = { navController.navigateSafe(Screen.DiscoveryFlow.route) },
+                )
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                MapEntryButton(
+                    onClick = { navController.navigateSafe(Screen.GenreMap.route) },
+                )
+            }
+        }
 
         AdventureControl(
             value = adventure,
@@ -260,13 +273,13 @@ private fun FlowEntryButton(onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 8.dp, vertical = 8.dp)
             .bounceClick(onClick = onClick),
         shape = MonoDimens.shapePill,
         color = MaterialTheme.colorScheme.primaryContainer,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -283,7 +296,7 @@ private fun FlowEntryButton(onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
-                    text = "One track at a time — swipe for the next",
+                    text = "One at a time, swipe on",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
                 )
@@ -293,6 +306,46 @@ private fun FlowEntryButton(onClick: () -> Unit) {
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
+        }
+    }
+}
+
+/** The way into [GenreMapScreen] — the whole taxonomy as one picture. */
+@Composable
+private fun MapEntryButton(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .bounceClick(onClick = onClick),
+        shape = MonoDimens.shapePill,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.AccountTree,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Genre map",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                )
+                Text(
+                    text = "Every genre, linked",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

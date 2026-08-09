@@ -22,12 +22,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.data.repository.GenreGraphRepository
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
 import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
+import tf.monochrome.android.domain.model.GenreGraph
+import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.DiscoveryFeedUseCase
 import tf.monochrome.android.domain.usecase.toUnifiedTrackAuto
@@ -71,6 +74,7 @@ class DiscoverViewModel @Inject constructor(
     private val seedsRepository: RecommendationSeedsRepository,
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val preferences: PreferencesManager,
+    private val genreGraphRepo: GenreGraphRepository,
 ) : ViewModel() {
 
     /**
@@ -82,8 +86,19 @@ class DiscoverViewModel @Inject constructor(
      * crashes on. It is also what the selection is looked up by, so a repeat
      * would make one of the two chips unselectable anyway.
      */
-    val chips: List<RecommendationSeed> =
-        (seedsRepository.moods() + seedsRepository.seeds()).distinctBy { it.label }
+    val chips: List<RecommendationSeed> = buildList {
+        // The graph's moods lead, because those are the ones that expand into
+        // real genre shelves rather than a single opaque search. The asset
+        // seeds follow as a tail — and as the whole list if the graph failed to
+        // load, which is the pre-graph behaviour, unchanged.
+        for (mood in genreGraphRepo.graph.moods) add(RecommendationSeed(mood.label, mood.id))
+        addAll(seedsRepository.moods())
+        addAll(seedsRepository.seeds())
+    }.distinctBy { it.label }
+
+    /** Graph mood ids, by the chip label that selects them. */
+    private val moodIdByLabel: Map<String, String> =
+        genreGraphRepo.graph.moods.associate { it.label to it.id }
 
     // null = "For you", the personalized feed. Any other value is a chip label.
     private val _selectedChip = MutableStateFlow<String?>(null)
@@ -241,7 +256,10 @@ class DiscoverViewModel @Inject constructor(
 
     private fun rebuild(
         label: String? = _selectedChip.value,
-        adventure: Float? = null,
+        // Named to avoid shadowing the `adventure` StateFlow above — the
+        // override is the value a just-released slider committed, which the
+        // StateFlow mirror may not have caught up to yet.
+        adventureOverride: Float? = null,
     ) {
         _selectedChip.value = label
         feedJob?.cancel()
@@ -252,11 +270,37 @@ class DiscoverViewModel @Inject constructor(
             _flowExtra.value = emptyList()
             try {
                 val built = if (label == null) {
-                    buildForYou(adventure)
+                    buildForYou(adventureOverride)
                 } else {
+                    // A genre picked on the map. Matched by name so that
+                    // switching to a chip clears it, rather than the map's
+                    // choice silently outliving the label on screen.
+                    val genreId = _selectedGenreId.value
+                        ?.takeIf { genreGraphRepo.graph[it]?.name == label }
+                    val moodId = moodIdByLabel[label]
                     val seed = chips.firstOrNull { it.label == label }
-                    if (seed == null) emptyList()
-                    else discoveryFeed.buildForQuery(seed.label, seed.query)
+                    val knob = adventureOverride ?: _pendingAdventure.value ?: adventure.value
+                    when {
+                        genreId != null -> discoveryFeed.buildForGenre(
+                            genreId = genreId,
+                            adventure = knob,
+                            itemsPerShelf = SHELF_SIZE,
+                        )
+                        // A graph mood: expands into one shelf per genre, each
+                        // with its own tempo and a reason in the mood's terms.
+                        moodId != null -> discoveryFeed.buildForMood(
+                            moodId = moodId,
+                            adventure = knob,
+                            itemsPerShelf = SHELF_SIZE,
+                        ).ifEmpty {
+                            // The graph knew the mood but the catalogue had
+                            // nothing for it — fall back to the flat search
+                            // rather than showing an empty page.
+                            seed?.let { discoveryFeed.buildForQuery(it.label, it.query) }.orEmpty()
+                        }
+                        seed != null -> discoveryFeed.buildForQuery(seed.label, seed.query)
+                        else -> emptyList()
+                    }
                 }
                 // The feed keys its lazy list on the shelf id, and ids are
                 // derived from what came back rather than from a counter: two
@@ -281,6 +325,62 @@ class DiscoverViewModel @Inject constructor(
             _refreshing.value = false
         }
     }
+
+    /** The map reads the graph straight off the repository. */
+    val genreGraph: GenreGraph get() = genreGraphRepo.graph
+
+    private val _mapSelection = MutableStateFlow<GenreNode?>(null)
+    val mapSelection: StateFlow<GenreNode?> = _mapSelection.asStateFlow()
+
+    fun selectOnMap(genreId: String?) {
+        _mapSelection.value = genreId?.let { genreGraphRepo.graph[it] }
+    }
+
+    /**
+     * Play a genre straight from the map.
+     *
+     * Searches the catalogue for the genre's own name and plays what comes
+     * back, queueing the rest — the same path Flow uses, so leaving the map
+     * keeps the music going. This is the "quickly listen to" half of the map;
+     * [selectGenre] is the "look into it properly" half.
+     */
+    fun playGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
+        val node = genreGraphRepo.graph[genreId] ?: return
+        viewModelScope.launch {
+            val shelves = runCatching {
+                discoveryFeed.buildForGenre(
+                    genreId = genreId,
+                    adventure = _pendingAdventure.value ?: adventure.value,
+                    maxShelves = 1,
+                )
+            }.getOrDefault(emptyList())
+            val tracks = shelves
+                .flatMap { it.items }
+                .filterIsInstance<DiscoveryItem.TrackItem>()
+                .map { it.track }
+                .distinctBy { it.id }
+            // Silence rather than a wrong track: if the catalogue has nothing
+            // for this genre there is nothing honest to play.
+            tracks.firstOrNull()?.let { player.playUnifiedTrack(it, tracks) }
+            // The map stays open, so the panel should reflect what's playing.
+            _mapSelection.value = node
+        }
+    }
+
+    /**
+     * Hand a genre to the Discover feed — the map's other exit.
+     *
+     * Rebuilds the page around that genre and its graph neighbours, and lights
+     * the chip rail on the genre's own name so the page says what it is
+     * showing rather than silently changing under the listener.
+     */
+    fun selectGenre(genreId: String) {
+        val node = genreGraphRepo.graph[genreId] ?: return
+        _selectedGenreId.value = genreId
+        rebuild(label = node.name)
+    }
+
+    private val _selectedGenreId = MutableStateFlow<String?>(null)
 
     fun refresh() {
         _refreshing.value = true
@@ -333,7 +433,7 @@ class DiscoverViewModel @Inject constructor(
             // Passed explicitly rather than re-read: `adventure` mirrors the
             // DataStore flow through a StateFlow, and nothing orders that
             // emission ahead of the rebuild reaching the value.
-            rebuild(adventure = target)
+            rebuild(adventureOverride = target)
         }
     }
 

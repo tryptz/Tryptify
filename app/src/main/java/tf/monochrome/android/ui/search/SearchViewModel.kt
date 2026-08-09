@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.data.repository.GenreGraphRepository
+import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.Artist
@@ -33,6 +35,7 @@ class SearchViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val unifiedLibrarySearch: SearchUnifiedLibraryUseCase,
     private val preferences: PreferencesManager,
+    private val genreGraph: GenreGraphRepository,
 ) : ViewModel() {
 
     /**
@@ -267,10 +270,27 @@ class SearchViewModel @Inject constructor(
         _selectedSource.value = source
     }
 
+    /**
+     * The genre the current query names, if it names one.
+     *
+     * Exposed so the results screen can say what it understood the query to be
+     * — "dnb" silently becoming a drum & bass search is helpful; silently
+     * becoming one with no explanation is confusing.
+     */
+    private val _resolvedGenre = MutableStateFlow<GenreNode?>(null)
+    val resolvedGenre: StateFlow<GenreNode?> = _resolvedGenre.asStateFlow()
+
     private suspend fun performSearch(query: String) {
         _isSearching.value = true
         _searchError.value = false
-        val trimmedQuery = query.trim()
+        // "dnb" is not a string any catalogue has tagged anything with, but it
+        // is unambiguously drum & bass. Resolve first and search the genre's
+        // real name, keeping the raw text as a fallback for everything the
+        // graph doesn't recognise — which is most queries, since most queries
+        // are artists and titles.
+        val genre = genreGraph.graph.resolve(query.trim())
+        _resolvedGenre.value = genre
+        val trimmedQuery = genre?.queries()?.firstOrNull() ?: query.trim()
         // TIDAL, Qobuz, and the local/collection library all run in parallel.
         // Qobuz failures (instance unset, network error, schema mismatch) are
         // swallowed so the existing TIDAL flow keeps working unchanged.

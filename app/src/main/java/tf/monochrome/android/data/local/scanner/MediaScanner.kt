@@ -42,7 +42,8 @@ class MediaScanner @Inject constructor(
     private val localMediaDao: LocalMediaDao,
     private val musicDatabase: tf.monochrome.android.data.db.MusicDatabase,
     private val preferences: PreferencesManager,
-    private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision
+    private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
+    private val genreGraph: tf.monochrome.android.data.repository.GenreGraphRepository,
 ) {
 
     fun fullScan(
@@ -296,8 +297,14 @@ class MediaScanner @Inject constructor(
             val normalizedArtist = normalizeText(artistName)
             artistSet.getOrPut(normalizedArtist) { mutableListOf() }.add(track)
 
-            track.genre?.let { genre ->
-                genreSet[genre] = (genreSet[genre] ?: 0) + 1
+            track.genre?.let { raw ->
+                // Tags are free text, so "Hip-Hop", "Hip Hop" and "hip hop"
+                // arrived as three separate rows in the genre list. Resolving
+                // through the graph collapses them onto one canonical name;
+                // anything the graph doesn't know keeps its tag verbatim, so
+                // no genre is ever lost, only merged.
+                val canonical = genreGraph.graph.resolve(raw)?.name ?: raw
+                genreSet[canonical] = (genreSet[canonical] ?: 0) + 1
             }
         }
 

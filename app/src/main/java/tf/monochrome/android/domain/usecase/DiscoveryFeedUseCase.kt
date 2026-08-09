@@ -7,10 +7,16 @@ import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
+import tf.monochrome.android.data.repository.GenreGraphRepository
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
 import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
+import tf.monochrome.android.domain.model.GenreConfidence
+import tf.monochrome.android.domain.model.GenreNode
+import tf.monochrome.android.domain.model.MoodProfile
+import tf.monochrome.android.domain.model.RelatedGenre
+import tf.monochrome.android.domain.model.UnifiedTrack
 import javax.inject.Inject
 
 /**
@@ -32,6 +38,7 @@ class DiscoveryFeedUseCase @Inject constructor(
     private val music: MusicRepository,
     private val registry: QobuzIdRegistry,
     private val seeds: RecommendationSeedsRepository,
+    private val genreGraph: GenreGraphRepository,
 ) {
 
     /**
@@ -113,6 +120,102 @@ class DiscoveryFeedUseCase @Inject constructor(
                 .toShelf("mood_artists_$query", "$label artists", "Artists to start from"),
         )
     } ?: emptyList()
+
+    /**
+     * A mood, expanded through the genre graph into one shelf per genre.
+     *
+     * This is what the graph was built for. "Late night" used to be a single
+     * opaque search — `searchQobuz("late night ambient downtempo")` — sliced
+     * three ways, so the page could only ever be as good as whatever that
+     * string happened to match, and it could not explain itself. Now the mood
+     * names actual genres, each with a tempo and energy profile, each fetched
+     * and titled separately: *Dub Techno · Slow and deep, for Late night*.
+     *
+     * [adventure] decides how far past the mood's own genres to walk, so the
+     * knob widens the *kind* of music offered and not merely the shelf count.
+     */
+    suspend fun buildForMood(
+        moodId: String,
+        adventure: Float = DiscoveryAdventure.DEFAULT,
+        itemsPerShelf: Int = 12,
+        maxShelves: Int = 6,
+    ): List<DiscoveryShelf> = coroutineScope {
+        val graph = genreGraph.graph
+        val mood = graph.mood(moodId) ?: return@coroutineScope emptyList()
+        val picks = graph.genresForMood(
+            moodId = moodId,
+            maxHops = DiscoveryAdventure.maxHops(adventure),
+            limit = maxShelves,
+        )
+        if (picks.isEmpty()) return@coroutineScope emptyList()
+
+        picks.map { related ->
+            async { genreShelfFor(related, mood, itemsPerShelf) }
+        }.mapNotNull { it.await() }
+    }
+
+    /**
+     * One genre's shelf. [mood] is null when the genre is the subject rather
+     * than a means to a mood — the reason line changes, nothing else does.
+     */
+    private suspend fun genreShelfFor(
+        related: RelatedGenre,
+        mood: MoodProfile?,
+        limit: Int,
+    ): DiscoveryShelf? = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+        val node = related.node
+        // The node's own name first — it is what the catalogue is most likely
+        // to have tagged — with an alias as the fallback for genres a store
+        // spells differently.
+        val query = node.queries().firstOrNull() ?: return@withTimeoutOrNull null
+        val result = music.searchQobuz(query).getOrNull() ?: return@withTimeoutOrNull null
+        registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
+
+        val reason = buildString {
+            append(
+                when {
+                    mood != null && related.hops == 0 -> "For ${mood.label.lowercase()}"
+                    mood != null -> "A step out from ${mood.label.lowercase()}"
+                    related.hops == 0 -> "The genre itself"
+                    else -> "Next to it on the map"
+                }
+            )
+            if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
+        }
+
+        val tracks = result.tracks.take(limit)
+            .map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack().taggedWith(node)) }
+        val items = tracks.ifEmpty { result.albums.take(limit).map { DiscoveryItem.AlbumItem(it) } }
+        val prefix = mood?.let { "mood_" + it.id } ?: "genre"
+        items.toShelf(id = prefix + "_" + node.id, title = node.name, reason = reason)
+    }
+
+    /**
+     * A feed built around one genre — what the map hands back when you tap a node.
+     *
+     * The genre itself leads, then its relatives in graph order, so the page
+     * reads as "this, and what sits next to it". [adventure] decides how far
+     * the neighbours reach, exactly as it does for a mood, which keeps the one
+     * knob meaningful everywhere instead of meaning something different per
+     * surface.
+     */
+    suspend fun buildForGenre(
+        genreId: String,
+        adventure: Float = DiscoveryAdventure.DEFAULT,
+        itemsPerShelf: Int = 12,
+        maxShelves: Int = 6,
+    ): List<DiscoveryShelf> = coroutineScope {
+        val graph = genreGraph.graph
+        val root = graph[genreId] ?: return@coroutineScope emptyList()
+        val hops = DiscoveryAdventure.maxHops(adventure)
+        val floor = DiscoveryAdventure.neighbourFloor(adventure)
+
+        val picks = listOf(RelatedGenre(root, 1f, 0)) +
+            graph.neighbours(genreId, maxHops = hops, floor = floor).take(maxShelves - 1)
+
+        picks.map { related -> async { genreShelfFor(related, mood = null, limit = itemsPerShelf) } }
+            .mapNotNull { it.await() }
+    }
 
     // ── Shelf builders ───────────────────────────────────────────────────
 
@@ -255,6 +358,23 @@ class DiscoveryFeedUseCase @Inject constructor(
         }
         return out
     }
+
+    /**
+     * Attach the genre we searched for, without overwriting one the catalogue
+     * actually stated.
+     *
+     * This is the INFERRED rung: the track came back from a search for
+     * "Liquid Drum & Bass", so it probably is some. Probably is enough to rank
+     * on and to title a shelf with; it is not enough to assert, which is why
+     * the confidence travels with it and the UI hedges anything below TAGGED.
+     */
+    private fun UnifiedTrack.taggedWith(node: GenreNode): UnifiedTrack =
+        if (genre != null) copy(genreId = genreId ?: node.id)
+        else copy(
+            genre = node.name,
+            genreId = node.id,
+            genreConfidence = GenreConfidence.INFERRED,
+        )
 
     /** Lenient match so search albums credited to the seed artist are kept. */
     private fun String.matchesArtist(name: String): Boolean {

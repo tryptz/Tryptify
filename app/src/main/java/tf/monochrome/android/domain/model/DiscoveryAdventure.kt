@@ -57,6 +57,31 @@ object DiscoveryAdventure {
     }
 
     /**
+     * How far to walk the genre graph at [adventure].
+     *
+     * This is what finally gives the knob a metric instead of just a shelf
+     * count. One hop is the genre and its immediate relatives — a fan of liquid
+     * DnB gets atmospheric DnB. Three hops crosses into neighbouring scenes,
+     * which is what "way out" should mean and what nothing in the app could
+     * express before the graph existed.
+     */
+    fun maxHops(adventure: Float): Int = when {
+        clamp(adventure) < 0.35f -> 1
+        clamp(adventure) < 0.75f -> 2
+        else -> 3
+    }
+
+    /**
+     * How weak a graph edge may be and still count, at [adventure].
+     *
+     * Walking further is only half of it: the floor has to drop too, or extra
+     * hops just find the same strong relatives by longer paths. Staying
+     * strictly above zero keeps genuinely unrelated genres out at every
+     * setting — adventurous is not the same as random.
+     */
+    fun neighbourFloor(adventure: Float): Float = 0.30f - clamp(adventure) * 0.18f
+
+    /**
      * Fold [adventure] into the three planner weights that describe the same
      * axis, leaving the other eleven exactly as the user set them in
      * Settings › Radio.

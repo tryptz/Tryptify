@@ -80,6 +80,7 @@ import tf.monochrome.android.ui.eq.ParametricEqScreen
 import tf.monochrome.android.ui.discover.DiscoverScreen
 import tf.monochrome.android.ui.discover.DiscoverShelfScreen
 import tf.monochrome.android.ui.discover.DiscoveryFlowScreen
+import tf.monochrome.android.ui.discover.GenreMapScreen
 import tf.monochrome.android.ui.home.HomeScreen
 import tf.monochrome.android.ui.mixer.MixerScreen
 import tf.monochrome.android.ui.library.LibraryScreen
@@ -107,6 +108,7 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Discover : Screen("discover")
     data object DiscoveryFlow : Screen("discover/flow")
+    data object GenreMap : Screen("discover/map")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
     }
@@ -360,6 +362,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 // Tab stubs – content is rendered by the pager above
                 composable(Screen.Home.route) { }
                 composable(Screen.Discover.route) { }
+                composable(Screen.GenreMap.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("genre_map") {
+                        GenreMapScreen(
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
+                    }
+                }
                 composable(Screen.DiscoveryFlow.route) {
                     tf.monochrome.android.devedit.DevEditScreen("discover_flow") {
                         DiscoveryFlowScreen(
