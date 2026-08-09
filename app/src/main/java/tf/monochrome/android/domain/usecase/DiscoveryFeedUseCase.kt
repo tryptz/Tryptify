@@ -10,6 +10,7 @@ import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.GenreGraphRepository
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
 import tf.monochrome.android.domain.model.DiscoveryAdventure
+import tf.monochrome.android.data.charts.normalizeForMatch
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
 import tf.monochrome.android.domain.model.GenreConfidence
@@ -34,6 +35,7 @@ import javax.inject.Inject
  * instance yields an empty list rather than an error.
  */
 class DiscoveryFeedUseCase @Inject constructor(
+    private val genreCharts: GenreChartUseCase,
     private val library: LibraryRepository,
     private val music: MusicRepository,
     private val registry: QobuzIdRegistry,
@@ -243,7 +245,36 @@ class DiscoveryFeedUseCase @Inject constructor(
             if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
         }
 
-        val tracks = result.tracks.take(limit)
+        // The search ranked these by how well a *title or album* matched the
+        // genre's name, which is the query machine-generated filler is built to
+        // win: asking for hardstyle returns "Hardstyle Fish", "I'm so lucky! -
+        // Hardstyle" and compilations whose artwork happens to say Hardstyle.
+        // Keep only the ones whose artist the genre actually owns.
+        //
+        // Verification is by artist rather than per track because it is cached
+        // per artist for a month and shared across every shelf and chart — a
+        // warm cache makes this free, and a cold one costs at most one request
+        // per new name.
+        val candidates = result.tracks.take(limit * SHELF_OVERFETCH)
+        val confirmed = runCatching {
+            genreCharts.confirmedArtists(
+                genreId = node.id,
+                artistNames = candidates.mapNotNull { it.artists.firstOrNull()?.name },
+            )
+        }.getOrDefault(emptySet())
+
+        val kept = if (confirmed.isEmpty()) {
+            // Nothing to verify against — an obscure genre no source knows.
+            // Filtering on no evidence would empty the shelf, which is worse
+            // than showing the unfiltered search.
+            candidates
+        } else {
+            candidates.filter { track ->
+                normalizeForMatch(track.artists.firstOrNull()?.name.orEmpty()) in confirmed
+            }.ifEmpty { candidates }
+        }
+
+        val tracks = kept.take(limit)
             .map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack().taggedWith(node)) }
         val items = tracks.ifEmpty { result.albums.take(limit).map { DiscoveryItem.AlbumItem(it) } }
         val prefix = mood?.let { "mood_" + it.id } ?: "genre"
@@ -463,6 +494,13 @@ class DiscoveryFeedUseCase @Inject constructor(
         // Per-shelf ceiling, mirroring the 7s budget SearchViewModel uses for
         // Qobuz so one slow lookup can't stall the whole feed.
         private const val QOBUZ_BUDGET_MS = 7_000L
+
+        /**
+         * How many extra search hits to pull before filtering by artist.
+         * Roughly half a genre-name search is usually filler, so fetching only
+         * [limit] leaves a half-empty shelf once the filler is dropped.
+         */
+        private const val SHELF_OVERFETCH = 3
 
         /** Ceiling on how far paging widens the graph walk. */
         private const val MAX_HOPS = 5

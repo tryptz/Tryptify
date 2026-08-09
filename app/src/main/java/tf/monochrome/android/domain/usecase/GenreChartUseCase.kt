@@ -92,7 +92,7 @@ class GenreChartUseCase @Inject constructor(
             val tag = charts.tagChart(genreId, names, apiKey)
             if (tag.isEmpty()) return null
             val entries = capPerArtist(tag.take(limit), MAX_PER_ARTIST)
-            val confirmed = confirmArtists(node, entries, apiKey)
+            val confirmed = confirmChartArtists(node, entries, apiKey)
             return GenreChart(
                 genreId = genreId,
                 genreName = node.name,
@@ -138,6 +138,28 @@ class GenreChartUseCase @Inject constructor(
         mapIndexed { index, entry -> entry.copy(rank = index + 1) }
 
     /**
+     * Which of these artists genuinely belong to [genreId].
+     *
+     * Public because the Discover shelves need exactly the same judgement the
+     * charts do. They were built from a catalogue search on the genre's *name*,
+     * which ranks by how well a title or album matches those words — asking for
+     * hardstyle returned "Hardstyle Fish", "I'm so lucky! - Hardstyle" and two
+     * compilations whose album art happened to say "Hardstyle". Names are
+     * returned normalised, for comparison against [normalizeForMatch].
+     */
+    suspend fun confirmedArtists(genreId: String, artistNames: List<String>): Set<String> {
+        val node = genreGraph.graph[genreId] ?: return emptySet()
+        val apiKey = runCatching { preferences.lastFmChartsApiKey.first() }.getOrNull().orEmpty()
+        return confirmArtists(node, artistNames, apiKey)
+    }
+
+    private suspend fun confirmChartArtists(
+        node: tf.monochrome.android.domain.model.GenreNode,
+        entries: List<ChartEntry>,
+        apiKey: String,
+    ): Set<String> = confirmArtists(node, entries.map { it.artistName }, apiKey)
+
+    /**
      * Which of a chart's artists genuinely belong to this genre.
      *
      * Two sources of evidence, unioned, because each misses what the other
@@ -159,16 +181,14 @@ class GenreChartUseCase @Inject constructor(
      */
     private suspend fun confirmArtists(
         node: tf.monochrome.android.domain.model.GenreNode,
-        entries: List<ChartEntry>,
+        artistNames: List<String>,
         apiKey: String,
     ): Set<String> {
         val relatives = relativesOf(node)
         val fromMusicBrainz = charts.artistsFor(node.id, node.queries())
 
         val confirmed = mutableSetOf<String>()
-        val artists = entries.take(VERIFY_DEPTH)
-            .map { it.artistName }
-            .distinctBy { normalizeForMatch(it) }
+        val artists = artistNames.take(VERIFY_DEPTH).distinctBy { normalizeForMatch(it) }
 
         for (artist in artists) {
             val key = normalizeForMatch(artist)
