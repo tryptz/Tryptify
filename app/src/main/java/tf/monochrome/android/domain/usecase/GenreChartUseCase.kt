@@ -67,7 +67,7 @@ class GenreChartUseCase @Inject constructor(
             )
 
         val names = node.queries()
-        val apiKey = runCatching { preferences.lastFmApiKey.first() }.getOrNull().orEmpty()
+        val apiKey = runCatching { preferences.lastFmChartsApiKey.first() }.getOrNull().orEmpty()
 
         fun tagChartOr(fallback: GenreChart): suspend () -> GenreChart = {
             val tag = charts.tagChart(genreId, names, apiKey)

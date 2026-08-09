@@ -143,10 +143,16 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val listenBrainzToken: StateFlow<String?> = preferences.listenBrainzToken
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    /** The listener's own credentials — what scrobbling signs with, and what the field shows. */
     val lastFmApiKey: StateFlow<String> = preferences.lastFmApiKey
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
     val lastFmApiSecret: StateFlow<String> = preferences.lastFmApiSecret
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    /** Whether charts have a key at all — usually the bundled one, so usually true. */
+    val chartsKeyAvailable: StateFlow<Boolean> = preferences.lastFmChartsApiKey
+        .map { it.isNotBlank() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun setLastFmApiCredentials(apiKey: String, apiSecret: String) {
         viewModelScope.launch { preferences.setLastFmApiCredentials(apiKey, apiSecret) }

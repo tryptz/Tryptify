@@ -1047,6 +1047,7 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
     val lbToken by viewModel.listenBrainzToken.collectAsStateWithLifecycle()
     val apiKey by viewModel.lastFmApiKey.collectAsStateWithLifecycle()
     val apiSecret by viewModel.lastFmApiSecret.collectAsStateWithLifecycle()
+    val chartsKeyAvailable by viewModel.chartsKeyAvailable.collectAsStateWithLifecycle()
 
     var showLastFmDialog by rememberSaveable { mutableStateOf(false) }
     var showLbDialog by rememberSaveable { mutableStateOf(false) }
@@ -1057,16 +1058,27 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
         var secretInput by rememberSaveable { mutableStateOf(apiSecret) }
         AlertDialog(
             onDismissRequest = { showApiKeyDialog = false },
-            title = { Text("Last.fm API key") },
+            title = { Text("Your Last.fm API key") },
             text = {
                 Column {
                     Text(
-                        // Worth spelling out: this is not the session key above,
-                        // and a listener who conflates the two gets silent
-                        // failures on both scrobbling and charts.
-                        "An application key, not your account login. Create one " +
-                            "free at last.fm/api/account/create. The key alone " +
-                            "unlocks genre charts; scrobbling also needs the secret.",
+                        // Two different things share the word "key" here, and a
+                        // listener who conflates them gets silent failures. This
+                        // is an *application* key, not the session key above and
+                        // not an account login.
+                        "Needed to scrobble. Scrobbles are signed with your own " +
+                            "secret and posted to your own listening history, so " +
+                            "they use your credentials rather than a key shared " +
+                            "by everyone. Create a pair free at " +
+                            "last.fm/api/account/create.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Genre charts don't need this — they read public data " +
+                            "with a key built into the app. Entering one here " +
+                            "makes charts use yours instead.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1078,7 +1090,7 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = secretInput, onValueChange = { secretInput = it },
-                        label = { Text("Shared secret (optional)") },
+                        label = { Text("Shared secret") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1157,11 +1169,16 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
 
     SettingsGroupHeader("Last.fm")
     SettingItem(
-        title = "API key",
-        subtitle = if (apiKey.isNotBlank()) {
-            "Set — genre charts and scrobbling can use it"
-        } else {
-            "Not set — genre Top 100s fall back to windowed data"
+        title = "Your API key",
+        subtitle = when {
+            apiKey.isNotBlank() && apiSecret.isNotBlank() ->
+                "Set — scrobbling can sign as you"
+            apiKey.isNotBlank() ->
+                "Key set, secret missing — scrobbling still can't sign"
+            chartsKeyAvailable ->
+                "Not set — charts use the built-in key; scrobbling needs yours"
+            else ->
+                "Not set — needed for scrobbling and for all-time charts"
         },
         onClick = { showApiKeyDialog = true }
     )

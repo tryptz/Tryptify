@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.LyricsFxSettings
@@ -488,18 +489,33 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
-     * The listener's own Last.fm application key.
+     * The key genre **charts** read with — the listener's own if they entered
+     * one, otherwise the key built into this app.
      *
-     * Not shipped with the app: a key is per-application and a FOSS client that
-     * baked one in would be handing every install the same credential, which is
-     * exactly what gets a key revoked. Empty until someone pastes theirs in, and
-     * everything that reads it degrades rather than fails when it is.
+     * Sharing one key here is safe because a tag chart is a public read: no
+     * account, no signature, nothing attributable to a person. The override is
+     * the escape hatch if the shared key is ever rate-limited or revoked, and
+     * how someone building this themselves supplies their own.
+     */
+    val lastFmChartsApiKey: Flow<String> = dataStore.data.map { prefs ->
+        prefs[LASTFM_API_KEY]?.takeIf { it.isNotBlank() } ?: BuildConfig.LASTFM_API_KEY
+    }
+
+    /**
+     * The credentials **scrobbling** signs with — the listener's own, or nothing.
+     *
+     * Deliberately no fallback to the bundled key. A scrobble is a write against
+     * a named person's listening history, signed with the shared secret, and a
+     * secret shipped inside an APK is extractable by anyone who looks: whoever
+     * pulled it could sign traffic that Last.fm attributes to this application,
+     * and the resulting suspension would land on every listener at once. Each
+     * person registers their own pair, so the blast radius of a leak is one
+     * account — their own.
      */
     val lastFmApiKey: Flow<String> = dataStore.data.map { prefs ->
         prefs[LASTFM_API_KEY].orEmpty()
     }
 
-    /** Paired with the key above; only scrobbling needs it, charts do not. */
     val lastFmApiSecret: Flow<String> = dataStore.data.map { prefs ->
         prefs[LASTFM_API_SECRET].orEmpty()
     }

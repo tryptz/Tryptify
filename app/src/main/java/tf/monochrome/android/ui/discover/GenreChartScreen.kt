@@ -239,12 +239,10 @@ private fun EmptyChart(chart: GenreChart?) {
         )
         Spacer(Modifier.height(MonoDimens.spacingSm))
         Text(
-            // The all-time ranking is the one that reaches small scenes, and it
-            // is the one that needs a key — so a listener staring at an empty
-            // niche genre should be told that, not left to guess.
-            text = "Windowed charts come from global listening data, which thins " +
-                "out for smaller genres. Add a Last.fm API key in Settings › " +
-                "Scrobbling to get all-time charts for any genre.",
+            // Say which way the data thinned out, so an empty screen reads as a
+            // fact about this genre in this window rather than a broken feature.
+            text = "Windowed charts are drawn from global listening data, which " +
+                "thins out for smaller genres. Try a longer window, or All time.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
