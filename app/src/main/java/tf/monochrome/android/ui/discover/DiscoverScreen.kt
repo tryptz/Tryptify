@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,6 +46,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -111,6 +113,7 @@ fun DiscoverScreen(
 ) {
     val shelves by viewModel.visibleShelves.collectAsStateWithLifecycle()
     val selectedChip by viewModel.selectedChip.collectAsStateWithLifecycle()
+    val genreQuery by viewModel.genreQuery.collectAsStateWithLifecycle()
     val selectedMoods by viewModel.selectedMoods.collectAsStateWithLifecycle()
     val combinedGenres by viewModel.combinedGenres.collectAsStateWithLifecycle()
     val excluded by viewModel.excludedGenres.collectAsStateWithLifecycle()
@@ -157,9 +160,18 @@ fun DiscoverScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
 
-        // Your genres, above the moods. Moods are the same seven for everyone;
-        // this row is the listener's own — what they hearted on the map and
-        // what they last played from it — so it goes first.
+        // Search, then the genres it matched. 771 genres is far past what a row
+        // can hold, and the ones somebody wants are rarely the ones a fixed row
+        // would have picked — typing is the only interface that reaches all of
+        // them. Empty, it still shows the listener's own genres, so the row is
+        // never blank and never worse than the static one it replaces.
+        GenreSearchField(
+            query = genreQuery,
+            onQueryChange = viewModel::setGenreQuery,
+            resultCount = genreRail.size,
+            onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
+        )
+
         GenreRail(
             items = genreRail,
             selected = selectedChip,
@@ -319,6 +331,48 @@ fun DiscoverScreen(
         playerViewModel = playerViewModel,
         onRemove = menuTrack?.let { held -> { viewModel.dismissItem("t:" + held.id) } },
         removeLabel = "Not interested",
+    )
+}
+
+/**
+ * The genre search box.
+ *
+ * Deliberately a plain field rather than a full search screen: the results are
+ * the row directly beneath it, so typing and picking never leaves the feed, and
+ * the page you were reading stays where it was. The count is shown because a
+ * query that matches nothing and a query still being typed look identical
+ * otherwise.
+ */
+@Composable
+private fun GenreSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    resultCount: Int,
+    onOpenMap: () -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        placeholder = { Text("Search 771 genres — try dnb, liquid, phonk") },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear")
+                }
+            } else {
+                IconButton(onClick = onOpenMap) {
+                    Icon(Icons.Default.AccountTree, contentDescription = "Browse the genre map")
+                }
+            }
+        },
+        supportingText = if (query.isNotBlank() && resultCount == 0) {
+            { Text("No genre matches that") }
+        } else null,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
     )
 }
 

@@ -91,6 +91,7 @@ class DiscoverViewModel @Inject constructor(
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val preferences: PreferencesManager,
     private val genreGraphRepo: GenreGraphRepository,
+    private val genreSearch: tf.monochrome.android.domain.usecase.GenreSearchUseCase,
     private val genreCharts: tf.monochrome.android.domain.usecase.GenreChartUseCase,
 ) : ViewModel() {
 
@@ -249,15 +250,41 @@ class DiscoverViewModel @Inject constructor(
      * stale id from an older dataset simply disappears instead of rendering as
      * a blank chip.
      */
+
+    /** What the listener has typed into the genre search. */
+    private val _genreQuery = MutableStateFlow("")
+    val genreQuery: StateFlow<String> = _genreQuery.asStateFlow()
+
+    /**
+     * The genres offered right now.
+     *
+     * With nothing typed this is the listener's own — hearted on the map, then
+     * recently played — because that is the row they had before and the one
+     * most likely to be what they want. The moment anything is typed it becomes
+     * the search, so the row is a way into all 771 genres rather than a fixed
+     * shortlist of the handful already visited.
+     */
     val genreRail: StateFlow<List<GenreRailItem>> =
-        combine(preferences.discoveryHeartedGenres, preferences.discoveryRecentGenres) { hearted, recent ->
+        combine(
+            preferences.discoveryHeartedGenres,
+            preferences.discoveryRecentGenres,
+            _genreQuery,
+        ) { hearted, recent, query ->
             val graph = genreGraphRepo.graph
-            val heartedNodes = hearted.mapNotNull { graph[it] }.sortedBy { it.name }
-                .map { GenreRailItem(it, hearted = true) }
-            val recentNodes = recent.filterNot { it in hearted }.mapNotNull { graph[it] }
-                .map { GenreRailItem(it, hearted = false) }
-            (heartedNodes + recentNodes).distinctBy { it.node.id }
+            if (query.isBlank()) {
+                val heartedNodes = hearted.mapNotNull { graph[it] }.sortedBy { it.name }
+                    .map { GenreRailItem(it, hearted = true) }
+                val recentNodes = recent.filterNot { it in hearted }.mapNotNull { graph[it] }
+                    .map { GenreRailItem(it, hearted = false) }
+                (heartedNodes + recentNodes).distinctBy { it.node.id }
+            } else {
+                genreSearch.search(query).map { GenreRailItem(it, hearted = it.id in hearted) }
+            }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun setGenreQuery(query: String) {
+        _genreQuery.value = query
+    }
 
     val heartedGenres: StateFlow<Set<String>> = preferences.discoveryHeartedGenres
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
