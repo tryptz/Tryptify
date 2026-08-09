@@ -203,6 +203,10 @@ private fun Provenance(chart: GenreChart) {
                 }
             )
             chart.range()?.let { append(", $it") }
+            // Crowd tags put popular artists in genres they don't belong to, so
+            // whether this list was checked against a curated source changes how
+            // much of it to believe.
+            if (chart.crossChecked) append(" · cross-checked with MusicBrainz")
         }
     }
     Text(

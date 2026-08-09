@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.charts
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -29,6 +30,7 @@ class ChartsRepository @Inject constructor(
     private val sitewide = mutableMapOf<ChartWindow, Cached<SitewideChart>>()
     private val artistSets = mutableMapOf<String, Cached<Set<String>>>()
     private val tagCharts = mutableMapOf<String, Cached<List<ChartEntry>>>()
+    private val artistTags = mutableMapOf<String, Cached<List<String>>>()
 
     companion object {
         /** The seven-day window genuinely moves day to day; the longer ones do not. */
@@ -36,6 +38,14 @@ class ChartsRepository @Inject constructor(
         private const val TTL_LONG_WINDOW_MS = 24L * 60 * 60 * 1000
         private const val TTL_TAG_CHART_MS = 24L * 60 * 60 * 1000
         private const val TTL_ARTIST_SET_MS = 7L * 24 * 60 * 60 * 1000
+        private const val TTL_ARTIST_TAGS_MS = 30L * 24 * 60 * 60 * 1000
+
+        /**
+         * Ceiling on how many of a genre's artists to collect, per spelling.
+         * Three pages covers every genre in the graph with room to spare, and
+         * bounds a cold fetch to a few paced requests rather than dozens.
+         */
+        private const val MAX_ARTISTS_PER_NAME = 300
     }
 
     private class Cached<T>(val value: T, val at: Long = System.currentTimeMillis()) {
@@ -60,23 +70,58 @@ class ChartsRepository @Inject constructor(
     /**
      * The set of artists belonging to a genre, normalised for matching.
      *
-     * [names] is the genre's own name followed by its aliases; they are tried in
-     * order and the results unioned, because MusicBrainz taggers are inconsistent
-     * about which spelling of a genre they reach for and no single one of them
-     * covers a scene on its own.
+     * [names] is the genre's own name followed by its aliases. The primary
+     * spelling is paged out in full first; an alias is only tried if that found
+     * nothing at all, because taggers are inconsistent about which spelling they
+     * reach for but rarely split a scene evenly between two of them.
      */
     suspend fun artistsFor(genreId: String, names: List<String>): Set<String> {
         mutex.withLock { artistSets[genreId]?.takeIf { it.fresh(TTL_ARTIST_SET_MS) } }
             ?.let { return it.value }
 
         val union = mutableSetOf<String>()
+        var requests = 0
         for (name in names.take(3)) {
-            union += client.artistsForTag(name).map { normalizeForMatch(it) }
+            // Page through the primary spelling before trying an alias. A genre
+            // of any size has more than one page of artists — hard techno has
+            // ~167 — and a set that stops at 100 leaves real artists looking
+            // unconfirmed, which is the failure this set exists to prevent.
+            var offset = 0
+            while (offset < MAX_ARTISTS_PER_NAME) {
+                if (requests++ > 0) delay(ChartsClient.MUSICBRAINZ_PACE_MS)
+                val page = client.artistsForTag(name, offset = offset)
+                union += page.map { normalizeForMatch(it) }
+                // A short page is the last page; asking for the next one would
+                // spend a second of someone's time to be told the same thing.
+                if (page.size < ChartsClient.MUSICBRAINZ_PAGE) break
+                offset += ChartsClient.MUSICBRAINZ_PAGE
+            }
+            // Aliases are only worth the round trip when the primary name found
+            // nothing — MusicBrainz taggers are inconsistent about which
+            // spelling they reach for, but they rarely split a scene evenly.
+            if (union.isNotEmpty()) break
         }
         if (union.isNotEmpty()) {
             mutex.withLock { artistSets[genreId] = Cached(union) }
         }
         return union
+    }
+
+    /**
+     * What an artist is generally tagged as. Cached for a month: an artist's
+     * tag cloud is a summary of a career, and it does not move in a week.
+     */
+    suspend fun artistTags(artist: String, apiKey: String): List<String> {
+        val key = normalizeForMatch(artist)
+        if (key.isEmpty()) return emptyList()
+        mutex.withLock { artistTags[key]?.takeIf { it.fresh(TTL_ARTIST_TAGS_MS) } }
+            ?.let { return it.value }
+
+        val tags = client.artistTopTags(artist, apiKey)
+        if (tags.isNotEmpty()) {
+            mutex.withLock { artistTags[key] = Cached(tags) }
+        }
+        return tags
     }
 
     /** A genre's all-time tag chart, if a Last.fm key is configured. */
@@ -105,5 +150,6 @@ class ChartsRepository @Inject constructor(
         sitewide.clear()
         artistSets.clear()
         tagCharts.clear()
+        artistTags.clear()
     }
 }

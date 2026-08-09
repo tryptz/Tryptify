@@ -50,6 +50,21 @@ class GenreChartUseCase @Inject constructor(
          * number of catalogue lookups.
          */
         const val POOL_DEPTH = 30
+
+        /**
+         * How far down a tag chart to verify artists. Each new artist costs a
+         * request; the head is what gets read and what playback opens on.
+         */
+        const val VERIFY_DEPTH = 40
+
+        /**
+         * Most entries one artist may hold. Without this, cross-checking makes
+         * clumping worse rather than better: promoting the confirmed artists in
+         * hard techno floated four consecutive Sara Landry tracks to the top,
+         * which is a truthful chart and a bad one. A Top 100 that is one artist
+         * repeated tells you less than a Top 100 that is a scene.
+         */
+        const val MAX_PER_ARTIST = 3
     }
 
     suspend fun chart(
@@ -69,32 +84,30 @@ class GenreChartUseCase @Inject constructor(
         val names = node.queries()
         val apiKey = runCatching { preferences.lastFmChartsApiKey.first() }.getOrNull().orEmpty()
 
-        fun tagChartOr(fallback: GenreChart): suspend () -> GenreChart = {
+        /**
+         * The all-time chart, cross-checked against MusicBrainz before it is
+         * handed back. Null when there is no tag chart to be had.
+         */
+        suspend fun tagChart(shownAs: ChartWindow): GenreChart? {
             val tag = charts.tagChart(genreId, names, apiKey)
-            if (tag.isEmpty()) fallback else GenreChart(
+            if (tag.isEmpty()) return null
+            val entries = capPerArtist(tag.take(limit), MAX_PER_ARTIST)
+            val confirmed = confirmArtists(node, entries, apiKey)
+            return GenreChart(
                 genreId = genreId,
                 genreName = node.name,
                 requested = window,
-                shown = ChartWindow.ALL_TIME,
+                shown = shownAs,
                 source = ChartSource.TAG_CHART,
-                entries = tag.take(limit).reranked(),
+                entries = promoteConfirmed(entries, confirmed),
+                crossChecked = confirmed.isNotEmpty(),
             )
         }
 
         // All time is the tag chart's native window, so ask for it directly
         // before paying for a sitewide pull.
         if (window == ChartWindow.ALL_TIME) {
-            val tag = charts.tagChart(genreId, names, apiKey)
-            if (tag.isNotEmpty()) {
-                return GenreChart(
-                    genreId = genreId,
-                    genreName = node.name,
-                    requested = window,
-                    shown = window,
-                    source = ChartSource.TAG_CHART,
-                    entries = tag.take(limit).reranked(),
-                )
-            }
+            tagChart(shownAs = window)?.let { return it }
         }
 
         val sitewide = charts.sitewide(window)
@@ -117,12 +130,80 @@ class GenreChartUseCase @Inject constructor(
         // Too thin to stand on its own. Prefer a real all-time ranking over a
         // three-row "chart", but keep the thin window if there is no tag chart
         // to fall back to — a short honest list still beats an empty screen.
-        return tagChartOr(windowed)()
+        return tagChart(shownAs = ChartWindow.ALL_TIME) ?: windowed
     }
 
     /** Renumber after filtering so ranks read 1..n rather than the source's gaps. */
     private fun List<ChartEntry>.reranked(): List<ChartEntry> =
         mapIndexed { index, entry -> entry.copy(rank = index + 1) }
+
+    /**
+     * Which of a chart's artists genuinely belong to this genre.
+     *
+     * Two sources of evidence, unioned, because each misses what the other
+     * catches. MusicBrainz's artist-tag search is curated and precise but thin:
+     * asked for hard techno it names 167 artists and still doesn't include
+     * Klangkuenstler, who is about as hard techno as it gets. An artist's own
+     * Last.fm tag cloud covers nearly everyone and is dominated by what they
+     * actually are — Klangkuenstler comes back `techno`, `hard techno`, while
+     * FKA twigs comes back `trip-hop`, `dream pop` and Baby Jane, sitting at
+     * number seven in hard techno, comes back `hard rock`, `sleaze rock`.
+     *
+     * Tags are matched through the genre graph rather than by string, so
+     * `techno` confirms a hard techno artist via the parent relation and
+     * `dub techno` confirms via the graph's sideways edges. That is the
+     * difference between recognising a scene and recognising a spelling.
+     *
+     * Only the head of the chart is checked. It costs a request per new artist,
+     * and the tail is not what anyone reads or what playback opens on.
+     */
+    private suspend fun confirmArtists(
+        node: tf.monochrome.android.domain.model.GenreNode,
+        entries: List<ChartEntry>,
+        apiKey: String,
+    ): Set<String> {
+        val relatives = relativesOf(node)
+        val fromMusicBrainz = charts.artistsFor(node.id, node.queries())
+
+        val confirmed = mutableSetOf<String>()
+        val artists = entries.take(VERIFY_DEPTH)
+            .map { it.artistName }
+            .distinctBy { normalizeForMatch(it) }
+
+        for (artist in artists) {
+            val key = normalizeForMatch(artist)
+            if (key in fromMusicBrainz) {
+                confirmed += key
+                continue
+            }
+            val belongs = charts.artistTags(artist, apiKey).any { tag ->
+                genreGraph.graph.resolve(tag)?.id in relatives
+            }
+            if (belongs) confirmed += key
+        }
+        return confirmed
+    }
+
+    /**
+     * The genre plus everything adjacent to it in the graph.
+     *
+     * An artist is rarely tagged with the exact leaf you are looking at. Someone
+     * who makes hard techno is tagged `techno` far more often than `hard techno`,
+     * and a dub techno producer is tagged `dub techno`, `minimal techno` and
+     * `ambient techno` in roughly equal measure. Accepting the parent, the
+     * children and the sideways edges is what makes the check recognise a scene
+     * instead of a single word — while still rejecting `pop` and `reggaeton`,
+     * which are nowhere near this part of the map.
+     */
+    private fun relativesOf(node: tf.monochrome.android.domain.model.GenreNode): Set<String> =
+        buildSet {
+            add(node.id)
+            addAll(node.parents)
+            addAll(node.nearEdges().map { it.first })
+            genreGraph.graph.allGenres.forEach { candidate ->
+                if (node.id in candidate.parents) add(candidate.id)
+            }
+        }
 
     /**
      * The genre's charting tracks, in rank order, as things the player can take.
@@ -201,6 +282,60 @@ internal fun agrees(entry: ChartEntry, artistName: String, title: String): Boole
  * — 4, 51, 900 — and presenting those as a genre chart would suggest 895 hard
  * techno tracks nobody bothered to show.
  */
+/**
+ * Float the artists MusicBrainz confirms for this genre above the ones it doesn't.
+ *
+ * Last.fm tags are crowd-applied, and a very popular artist accumulates loose
+ * ones: `hard techno` comes back led by FKA twigs and Charli xcx, with the first
+ * actual hard techno producer at number three. Nobody sat down and decided that
+ * — it is what happens when a million casual taggers meet an artist who is on
+ * everyone's radar. MusicBrainz tags are curated by people editing a database,
+ * so they disagree in exactly the useful direction.
+ *
+ * Demotion rather than deletion, because MusicBrainz coverage is partial: a
+ * genuinely obscure producer may simply not be in the artist set, and dropping
+ * unconfirmed rows would quietly delete the deep cuts a genre chart exists to
+ * surface. Sorting them below the confirmed ones fixes the head of the chart —
+ * which is what anybody actually reads, and what playback opens on — while
+ * costing nothing at the tail.
+ *
+ * Both guards matter. With no artist set at all (a genre MusicBrainz has never
+ * heard of) and with nothing confirmed (a set that missed entirely), the chart
+ * is returned untouched rather than shuffled on no evidence.
+ */
+internal fun promoteConfirmed(
+    entries: List<ChartEntry>,
+    artistKeys: Set<String>,
+): List<ChartEntry> {
+    if (artistKeys.isEmpty()) return entries
+    val (confirmed, unconfirmed) = entries.partition {
+        normalizeForMatch(it.artistName) in artistKeys
+    }
+    if (confirmed.isEmpty()) return entries
+    // partition preserves relative order, so Last.fm's ranking survives inside
+    // each group and only the boundary between them is new.
+    return (confirmed + unconfirmed).mapIndexed { index, entry -> entry.copy(rank = index + 1) }
+}
+
+/**
+ * Stop one artist from owning the chart.
+ *
+ * Keeps each artist's best [max] entries in rank order and drops the rest, then
+ * renumbers. Dropping rather than demoting, because an artist's fourth-best
+ * track is exactly the entry a reader would skip anyway, and carrying it to
+ * position 90 spends a slot that a different artist would fill more usefully.
+ */
+internal fun capPerArtist(entries: List<ChartEntry>, max: Int): List<ChartEntry> {
+    if (max <= 0) return entries
+    val seen = mutableMapOf<String, Int>()
+    return entries.filter { entry ->
+        val key = normalizeForMatch(entry.artistName)
+        val count = seen.getOrDefault(key, 0)
+        seen[key] = count + 1
+        count < max
+    }.mapIndexed { index, entry -> entry.copy(rank = index + 1) }
+}
+
 internal fun narrowToGenre(
     entries: List<ChartEntry>,
     artistKeys: Set<String>,

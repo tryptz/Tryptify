@@ -118,6 +118,29 @@ class ChartsParsingTest {
     }
 
     @Test
+    fun `artist tags parse strongest-first and drop the single-tagger tail`() {
+        // Last.fm normalises the top tag to 100, so counts are percentages of
+        // the strongest. Below a few percent a tag is one person's opinion and
+        // would confirm an artist into a genre nobody else associates them with.
+        val body = """
+            {"toptags":{"tag":[
+              {"name":"techno","count":100},
+              {"name":"hard techno","count":13},
+              {"name":"germany","count":2},
+              {"name":"seen live","count":1}
+            ],"@attr":{"artist":"Klangkuenstler"}}}
+        """.trimIndent()
+
+        assertEquals(listOf("techno", "hard techno"), parseArtistTopTags(body))
+    }
+
+    @Test
+    fun `an artist with no tags parses to nothing rather than throwing`() {
+        assertEquals(0, parseArtistTopTags("""{"toptags":{"tag":[]}}""").size)
+        assertEquals(0, parseArtistTopTags("""{}""").size)
+    }
+
+    @Test
     fun `an empty or shapeless payload yields an empty chart, not a throw`() {
         assertEquals(0, parseSitewide("""{"payload":{}}""").entries.size)
         assertEquals(0, parseTagTopTracks("""{}""").size)

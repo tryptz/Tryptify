@@ -51,6 +51,16 @@ class ChartsClient @Inject constructor(
          * 1000 is the most the endpoint will serve in one request.
          */
         const val SITEWIDE_DEPTH = 1000
+
+        /** MusicBrainz caps a search page at 100 results. */
+        const val MUSICBRAINZ_PAGE = 100
+
+        /**
+         * MusicBrainz asks for at most one request a second and enforces it
+         * with 503s. Paging a genre's artists is the only place here that
+         * makes several calls in a row, so it is the only place that waits.
+         */
+        const val MUSICBRAINZ_PACE_MS = 1_100L
     }
 
     /**
@@ -60,11 +70,16 @@ class ChartsClient @Inject constructor(
      * parameter and silently returns nothing, which reads like "this genre has
      * no artists" instead of "that query was malformed".
      */
-    suspend fun artistsForTag(tag: String, limit: Int = 100): List<String> = runCatching {
+    suspend fun artistsForTag(
+        tag: String,
+        limit: Int = MUSICBRAINZ_PAGE,
+        offset: Int = 0,
+    ): List<String> = runCatching {
         val body = httpClient.get(MUSICBRAINZ_ARTIST_URL) {
             header("User-Agent", USER_AGENT)
             parameter("query", "tag:\"$tag\"")
-            parameter("limit", limit.coerceIn(1, 100))
+            parameter("limit", limit.coerceIn(1, MUSICBRAINZ_PAGE))
+            parameter("offset", offset)
             parameter("fmt", "json")
         }.bodyAsText()
         parseArtistsForTag(body)
@@ -89,6 +104,32 @@ class ChartsClient @Inject constructor(
                 parameter("format", "json")
             }.bodyAsText()
             parseTagTopTracks(body)
+        }.getOrDefault(emptyList())
+    }
+
+    /**
+     * What an artist is generally tagged as, most-applied first.
+     *
+     * The counterpart to [artistsForTag], and the one that actually separates a
+     * genre's artists from the pop acts a crowd has sprinkled the genre's tag
+     * onto. Asking "who is tagged hard techno" surfaces whoever the tag search
+     * ranks highest and misses most working producers entirely; asking "what is
+     * this artist tagged as" is answered from their own tag cloud, which is
+     * dominated by what they actually are. FKA twigs comes back trip-hop and
+     * dream pop, Klangkuenstler comes back techno and hard techno.
+     */
+    suspend fun artistTopTags(artist: String, apiKey: String): List<String> {
+        if (apiKey.isBlank() || artist.isBlank()) return emptyList()
+        return runCatching {
+            val body = httpClient.get(LASTFM_API_URL) {
+                header("User-Agent", USER_AGENT)
+                parameter("method", "artist.gettoptags")
+                parameter("artist", artist)
+                parameter("autocorrect", 1)
+                parameter("api_key", apiKey)
+                parameter("format", "json")
+            }.bodyAsText()
+            parseArtistTopTags(body)
         }.getOrDefault(emptyList())
     }
 
@@ -146,6 +187,16 @@ internal fun parseTagTopTracks(body: String): List<ChartEntry> =
                 artworkUrl = track.image.orEmpty().lastOrNull { !it.text.isNullOrBlank() }?.text,
             )
         }
+
+/**
+ * An artist's tag cloud, strongest first, keeping only tags a real number of
+ * people applied. Last.fm normalises counts to 100 for the top tag, so the
+ * long tail below a few percent is one or two individuals and says nothing.
+ */
+internal fun parseArtistTopTags(body: String, minCount: Int = 3): List<String> =
+    chartsJson.decodeFromString<LastFmArtistTags>(body).topTags?.tag.orEmpty()
+        .filter { it.count >= minCount }
+        .mapNotNull { it.name?.takeIf { name -> name.isNotBlank() } }
 
 internal fun parseSitewide(body: String): SitewideChart {
     val payload = chartsJson.decodeFromString<ListenBrainzStats>(body).payload
@@ -222,6 +273,15 @@ private data class LastFmImage(@SerialName("#text") val text: String? = null, va
 
 @Serializable
 private data class LastFmAttr(val rank: String? = null)
+
+@Serializable
+private data class LastFmArtistTags(@SerialName("toptags") val topTags: LastFmTagList? = null)
+
+@Serializable
+private data class LastFmTagList(val tag: List<LastFmTag> = emptyList())
+
+@Serializable
+private data class LastFmTag(val name: String? = null, val count: Int = 0)
 
 @Serializable
 private data class ListenBrainzStats(val payload: ListenBrainzPayload? = null)
