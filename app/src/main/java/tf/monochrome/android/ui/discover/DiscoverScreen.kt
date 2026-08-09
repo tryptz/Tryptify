@@ -23,9 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.QueueMusic
@@ -151,7 +149,7 @@ fun DiscoverScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Discover") },
+            title = { Text("Discover (Beta)") },
             actions = {
                 IconButton(onClick = { viewModel.showSomethingElse() }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Show me something else")
@@ -204,23 +202,9 @@ fun DiscoverScreen(
 
         SortRow(selected = sort, onSelect = viewModel::setSort)
 
-        // Flow: the active way through the same feed. Sits above the shelves
+        // The map, full width now that Flow is gone. Sits above the shelves
         // because it is the fastest route into music, not an afterthought.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                FlowEntryButton(
-                    onClick = { navController.navigateSafe(Screen.DiscoveryFlow.route) },
-                )
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                MapEntryButton(
-                    onClick = { navController.navigateSafe(Screen.GenreMap.route) },
-                )
-            }
-        }
+        MapEntryButton(onClick = { navController.navigateSafe(Screen.GenreMap.route) })
 
         AdventureControl(
             value = adventure,
@@ -572,51 +556,6 @@ private fun CombinedGenreRow(
                     },
                 )
             }
-        }
-    }
-}
-
-/**
- * The way into [DiscoveryFlowScreen] — one track at a time, swipe for the next.
- */
-@Composable
-private fun FlowEntryButton(onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp)
-            .bounceClick(onClick = onClick),
-        shape = MonoDimens.shapePill,
-        color = MaterialTheme.colorScheme.primaryContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.Bolt,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Flow",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    text = "One at a time, swipe on",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
-                )
-            }
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
         }
     }
 }

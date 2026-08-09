@@ -68,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -686,7 +687,15 @@ private fun GenreCard(
                     .matchParentSize()
                     .playerGlass(tint = tint),
             ) {
-                drawRect(color = tint)
+                // Round, not a rect. The glass shader builds its bevel and rim
+                // from the gradient of what this canvas draws, so a full-bleed
+                // rect gives it straight edges only: the parent clip then cuts
+                // the square corners away and each corner is left with no rim
+                // at all — four visible gaps in the outline. Drawing the same
+                // radius the panel is clipped to puts an alpha edge on the arc,
+                // so the rim runs continuously around the corner.
+                val r = MonoDimens.radiusLg.toPx()
+                drawRoundRect(color = tint, cornerRadius = CornerRadius(r, r))
             }
         }
 

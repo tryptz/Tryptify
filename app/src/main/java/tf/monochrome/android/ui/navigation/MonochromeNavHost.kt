@@ -79,7 +79,6 @@ import tf.monochrome.android.ui.eq.ParametricEqEditScreen
 import tf.monochrome.android.ui.eq.ParametricEqScreen
 import tf.monochrome.android.ui.discover.DiscoverScreen
 import tf.monochrome.android.ui.discover.DiscoverShelfScreen
-import tf.monochrome.android.ui.discover.DiscoveryFlowScreen
 import tf.monochrome.android.ui.discover.GenreChartScreen
 import tf.monochrome.android.ui.discover.GenreMapScreen
 import tf.monochrome.android.ui.home.HomeScreen
@@ -108,7 +107,6 @@ sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Search : Screen("search")
     data object Discover : Screen("discover")
-    data object DiscoveryFlow : Screen("discover/flow")
     data object GenreMap : Screen("discover/map")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
@@ -220,9 +218,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val showMiniPlayer = currentTrack != null
         && currentDestination?.route != Screen.NowPlaying.route
         && currentDestination?.route != Screen.Mixer.route
-        // Flow is full-bleed and already shows the playing track as the page
-        // you're on; a mini player would be a second copy of it over the top.
-        && currentDestination?.route != Screen.DiscoveryFlow.route
 
     // Pager state for the main tabs
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabRoutes.size })
@@ -308,8 +303,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // flat background behind it and the bar's glass has nothing to blur.
         // Running the map under it gives the glass real content to lens, and
         // the map pads its own panel clear of the bar.
-        val fullBleedRoute = currentDestination?.route == Screen.DiscoveryFlow.route ||
-            currentDestination?.route == Screen.GenreMap.route
+        val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route
         val detailBottomInset = when {
             fullBleedRoute -> 0.dp
             else -> navBarHeight + if (showMiniPlayer) miniPlayerReserve else 0.dp
@@ -378,14 +372,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.GenreMap.route) {
                     tf.monochrome.android.devedit.DevEditScreen("genre_map") {
                         GenreMapScreen(
-                            navController = navController,
-                            playerViewModel = playerViewModel,
-                        )
-                    }
-                }
-                composable(Screen.DiscoveryFlow.route) {
-                    tf.monochrome.android.devedit.DevEditScreen("discover_flow") {
-                        DiscoveryFlowScreen(
                             navController = navController,
                             playerViewModel = playerViewModel,
                         )
