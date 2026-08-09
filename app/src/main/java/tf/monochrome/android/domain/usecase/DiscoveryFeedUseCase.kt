@@ -134,6 +134,49 @@ class DiscoveryFeedUseCase @Inject constructor(
      * [adventure] decides how far past the mood's own genres to walk, so the
      * knob widens the *kind* of music offered and not merely the shelf count.
      */
+    /**
+     * A page built from several moods at once, minus anything subtracted.
+     *
+     * The single-mood path stays [buildForMood] and is untouched; this is the
+     * combining case, and it titles its shelves from the mood that contributed
+     * most to each genre so a combined page still says why each row is there.
+     */
+    suspend fun buildForMoods(
+        moodIds: List<String>,
+        excluded: Set<String> = emptySet(),
+        adventure: Float = DiscoveryAdventure.DEFAULT,
+        itemsPerShelf: Int = 12,
+        maxShelves: Int = 6,
+        page: Int = 0,
+    ): List<DiscoveryShelf> = coroutineScope {
+        val graph = genreGraph.graph
+        if (moodIds.size == 1 && excluded.isEmpty()) {
+            return@coroutineScope buildForMood(moodIds.first(), adventure, itemsPerShelf, maxShelves, page)
+        }
+        val moods = moodIds.mapNotNull { graph.mood(it) }
+        if (moods.isEmpty()) return@coroutineScope emptyList()
+
+        val skip = page * maxShelves
+        val picks = graph.genresForMoods(
+            moodIds = moodIds,
+            excluded = excluded,
+            maxHops = hopsFor(adventure, page),
+            limit = skip + maxShelves,
+        ).drop(skip)
+        if (picks.isEmpty()) return@coroutineScope emptyList()
+
+        picks.map { related ->
+            // Attribute each shelf to whichever of the combined moods ranks this
+            // genre highest, so the reason on a row names a mood the listener
+            // actually picked rather than the combination as a whole.
+            val owner = moods.maxByOrNull { mood ->
+                mood.genres.firstOrNull { it.getOrNull(0)?.asId() == related.node.id }
+                    ?.getOrNull(1)?.asWeight() ?: 0f
+            } ?: moods.first()
+            async { genreShelfFor(related, owner, itemsPerShelf, variation = page) }
+        }.mapNotNull { it.await() }
+    }
+
     suspend fun buildForMood(
         moodId: String,
         adventure: Float = DiscoveryAdventure.DEFAULT,

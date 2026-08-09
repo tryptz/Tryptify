@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +45,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -108,6 +111,10 @@ fun DiscoverScreen(
 ) {
     val shelves by viewModel.visibleShelves.collectAsStateWithLifecycle()
     val selectedChip by viewModel.selectedChip.collectAsStateWithLifecycle()
+    val selectedMoods by viewModel.selectedMoods.collectAsStateWithLifecycle()
+    val combinedGenres by viewModel.combinedGenres.collectAsStateWithLifecycle()
+    val excluded by viewModel.excludedGenres.collectAsStateWithLifecycle()
+    val combinedLabels = remember(selectedMoods) { viewModel.labelsForMoods(selectedMoods) }
     val hero by viewModel.hero.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
@@ -169,8 +176,19 @@ fun DiscoverScreen(
         DiscoveryChipRail(
             chips = viewModel.chips.map { it.label },
             selected = selectedChip,
+            combinedLabels = combinedLabels,
             onSelect = { viewModel.selectChip(it) },
+            onToggle = { viewModel.toggleMood(it) },
         )
+
+        if (selectedMoods.size >= 2) {
+            CombinedGenreRow(
+                genres = combinedGenres,
+                excludedCount = excluded.size,
+                onSubtract = { viewModel.subtractGenre(it) },
+                onReset = { viewModel.clearSubtractions() },
+            )
+        }
 
         SortRow(selected = sort, onSelect = viewModel::setSort)
 
@@ -407,7 +425,9 @@ private fun SortRow(selected: DiscoverySort, onSelect: (DiscoverySort) -> Unit) 
 private fun DiscoveryChipRail(
     chips: List<String>,
     selected: String?,
+    combinedLabels: Set<String>,
     onSelect: (String?) -> Unit,
+    onToggle: (String) -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth().swallowHorizontalScroll(),
@@ -416,19 +436,88 @@ private fun DiscoveryChipRail(
     ) {
         item(key = "for_you") {
             FilterChip(
-                selected = selected == null,
+                selected = selected == null && combinedLabels.isEmpty(),
                 onClick = { onSelect(null) },
                 label = { Text("For you") },
                 colors = FilterChipDefaults.filterChipColors(),
             )
         }
-        items(chips, key = { it }) { label ->
+        itemsIndexed(chips, key = { _, label -> label }) { index, label ->
+            // The rail opens with the listener's own entry points, which are a
+            // single choice about whose taste the page follows and don't
+            // compose with each other. Moods start after them and do.
+            val combinable = index >= COMBINABLE_FROM
+            val isOn = if (combinable) label in combinedLabels else selected == label
             FilterChip(
-                selected = selected == label,
-                onClick = { onSelect(if (selected == label) null else label) },
+                selected = isOn,
+                onClick = {
+                    if (combinable) onToggle(label)
+                    else onSelect(if (selected == label) null else label)
+                },
                 label = { Text(label) },
+                leadingIcon = if (combinable && isOn) {
+                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                } else null,
                 colors = FilterChipDefaults.filterChipColors(),
             )
+        }
+    }
+}
+
+/**
+ * What a combination is currently drawing on, and a way to take pieces out.
+ *
+ * Only shown once two or more moods are on, because with one mood the pool is
+ * just that mood and "subtract" would be a second, worse way to say "pick a
+ * different chip". Subtractions last as long as the combination does — changing
+ * the moods clears them, since an exclusion only means anything against the
+ * pool it was made from.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CombinedGenreRow(
+    genres: List<tf.monochrome.android.domain.model.GenreNode>,
+    excludedCount: Int,
+    onSubtract: (String) -> Unit,
+    onReset: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp),
+        ) {
+            Text(
+                text = if (genres.isEmpty()) {
+                    "Nothing left in this mix"
+                } else {
+                    "Drawing on ${genres.size} genres — tap to remove"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            if (excludedCount > 0) {
+                TextButton(onClick = onReset) { Text("Reset") }
+            }
+        }
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().swallowHorizontalScroll(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(genres, key = { it.id }) { node ->
+                AssistChip(
+                    onClick = { onSubtract(node.id) },
+                    label = { Text(node.name) },
+                    trailingIcon = {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Remove ${node.name}",
+                            modifier = Modifier.size(16.dp),
+                        )
+                    },
+                )
+            }
         }
     }
 }

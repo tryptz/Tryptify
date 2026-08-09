@@ -38,11 +38,14 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -85,10 +88,14 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.PI
+import androidx.compose.ui.graphics.Path
+import kotlin.math.atan2
 import kotlin.math.hypot
+import kotlin.math.ln
 import kotlin.math.sin
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import tf.monochrome.android.domain.model.GenreGraph
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
@@ -300,6 +307,15 @@ fun GenreMapScreen(
         selected?.let { focusOn(it) }
     }
 
+    // Constellations are off by default. They explain the map's structure,
+    // which is worth seeing once and then not every time.
+    var showRings by remember { mutableStateOf(false) }
+    val constellations = remember(graph) { constellationsFor(graph) }
+    // Popularity leads: with 771 nodes, which genres are big is the first thing
+    // that makes the picture navigable.
+    var weighting by remember { mutableStateOf(MapWeight.POPULARITY) }
+    val weightScale = remember(graph) { WeightScale(graph) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Genre map") },
@@ -323,6 +339,20 @@ fun GenreMapScreen(
                     collapsed = emptySet()
                 }) {
                     Icon(Icons.Default.UnfoldMore, contentDescription = "Expand everything")
+                }
+                IconButton(onClick = { weighting = weighting.next() }) {
+                    Icon(Icons.Default.Tune, contentDescription = "Change what size means")
+                }
+                IconButton(onClick = { showRings = !showRings }) {
+                    Icon(
+                        Icons.Default.TrackChanges,
+                        contentDescription = if (showRings) "Hide constellations" else "Show constellations",
+                        tint = if (showRings) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            LocalContentColor.current
+                        },
+                    )
                 }
                 IconButton(onClick = { flight?.cancel(); camera = Camera() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Recentre")
@@ -361,6 +391,14 @@ fun GenreMapScreen(
                         }
                     },
             ) {
+                if (showRings) {
+                    drawConstellations(
+                        constellations = constellations,
+                        bounds = bounds,
+                        camera = camera,
+                        familyColors = familyColors,
+                    )
+                }
                 drawMap(
                     nodes = visible,
                     positions = positionsFor(visible, size.width, size.height, bounds, camera, fold),
@@ -373,8 +411,22 @@ fun GenreMapScreen(
                     labelColor = onSurface,
                     labelSizePx = labelPx,
                     scale = camera.scale,
+                    weighting = weighting,
+                    weights = weightScale,
                 )
             }
+
+            // Names the active weighting. Without it a dot's size is a claim
+            // with no stated units — the listener can see that one genre is
+            // bigger without being able to find out in what sense.
+            Text(
+                text = weighting.caption,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(horizontal = MonoDimens.spacingLg, vertical = MonoDimens.spacingSm),
+            )
 
             selected?.let { node ->
                 val related = remember(graph, node.id) { relatedTo(graph, node) }
@@ -980,6 +1032,163 @@ private val FoldInEasing = CubicBezierEasing(0.5f, 0f, 0.9f, 0.4f)
 private fun fitFor(width: Float, height: Float, bounds: MapBounds): Float =
     minOf(width / bounds.spanX, height / bounds.spanY) * FIT_MARGIN
 
+/**
+ * What a dot's size means.
+ *
+ * Size was previously depth in the parent forest, which is an artefact of how
+ * the tree was authored rather than a fact about the music: techno and Xtra Raw
+ * are both one hop below their parent, and drawing them the same size says the
+ * scene and the footnote are equally significant. Making the encoding
+ * switchable — and naming the active one on screen — is what turns a dot's size
+ * from decoration into a claim you can check.
+ */
+private enum class MapWeight(val caption: String) {
+    POPULARITY("Sized by listeners on Last.fm"),
+    ERA("Sized by how recent the genre is"),
+    DEPTH("Sized by depth in the genre tree"),
+    ;
+
+    fun next(): MapWeight = entries[(ordinal + 1) % entries.size]
+}
+
+/**
+ * The ranges the weightings normalise against, measured once from the graph.
+ *
+ * Reach spans four orders of magnitude — techno has 72,677 taggers, Xtra Raw
+ * has 12 — so it is normalised on a log, without which every genre below the
+ * few giants would round to the same smallest dot.
+ */
+private class WeightScale(graph: GenreGraph) {
+    private val maxLogReach = graph.allGenres
+        .mapNotNull { it.reach }
+        .maxOrNull()
+        ?.let { ln(1f + it) }
+        ?.takeIf { it > 0f } ?: 1f
+    private val earliest = graph.allGenres.mapNotNull { it.era.getOrNull(0) }.minOrNull() ?: 1900
+    private val latest = graph.allGenres.mapNotNull { it.era.getOrNull(0) }.maxOrNull() ?: 2025
+
+    /** 0 for the least prominent genre under this weighting, 1 for the most. */
+    fun prominence(node: GenreNode, weight: MapWeight): Float = when (weight) {
+        // Depth keeps the exact steps the map has always drawn, so switching
+        // back to it is a return rather than a different-looking map.
+        MapWeight.DEPTH -> depthProminence(node)
+        MapWeight.POPULARITY -> node.reach
+            ?.let { (ln(1f + it) / maxLogReach).coerceIn(0f, 1f) }
+            ?: depthProminence(node)
+        MapWeight.ERA -> node.era.getOrNull(0)
+            ?.let { ((it - earliest).toFloat() / (latest - earliest).coerceAtLeast(1)).coerceIn(0f, 1f) }
+            ?: depthProminence(node)
+    }
+
+    private fun depthProminence(node: GenreNode): Float = when (node.ring) {
+        0 -> 1f
+        1 -> 0.47f
+        2 -> 0.2f
+        else -> 0f
+    }
+}
+
+/**
+ * One depth level of one family, as the shape its genres actually make.
+ *
+ * [points] are the members in layout units, ordered by bearing from the family
+ * root, so stroking through them traces the real outline of that depth rather
+ * than a circle fitted to it.
+ */
+private data class Constellation(
+    val familyId: String,
+    val depth: Int,
+    val points: List<Offset>,
+)
+
+/**
+ * The map's depth structure, drawn from the data rather than idealised.
+ *
+ * This started as concentric circles at each depth's median radius and that was
+ * wrong, because the depths are not circles. Measured from a family's root the
+ * medians do order cleanly — rock at 83 → 124 → 157 → 214 layout units — but
+ * the spread around them is enormous: electronic's first depth runs from 102 to
+ * 488, because it holds the sub-family roots (house, techno, drum & bass) that
+ * are spread wide on purpose to seed clusters of their own. A circle through
+ * the median of that would pass through almost none of the genres it claimed to
+ * describe.
+ *
+ * So the outline follows the members themselves, sorted by bearing and closed
+ * into a loop. It comes out lopsided and lumpy — bulging where a family has
+ * grown a dense branch, pinched where it hasn't — which is the point: the shape
+ * is evidence about how the music is distributed, and smoothing it into a
+ * circle would throw exactly that away.
+ *
+ * Needs three points to enclose anything; depths with fewer are skipped.
+ */
+private fun constellationsFor(graph: GenreGraph): List<Constellation> =
+    graph.allGenres.groupBy { it.family }.flatMap { (family, nodes) ->
+        val root = nodes.firstOrNull { it.ring == 0 } ?: return@flatMap emptyList()
+        nodes.asSequence()
+            .filter { it.ring > 0 }
+            .groupBy { it.ring }
+            .filterValues { it.size >= 3 }
+            .map { (depth, members) ->
+                Constellation(
+                    familyId = family,
+                    depth = depth,
+                    points = members
+                        .sortedBy { atan2(it.y - root.y, it.x - root.x) }
+                        .map { Offset(it.x, it.y) },
+                )
+            }
+    }
+
+/**
+ * Trace each depth's outline under the map, in its family's own colour.
+ *
+ * Smoothed through the midpoints between neighbours rather than drawn as
+ * straight segments: a polygon through several hundred points reads as noise,
+ * while the same points as one continuous curve read as a shape. The curve
+ * still passes near every member, so the lumpiness survives the smoothing.
+ */
+private fun DrawScope.drawConstellations(
+    constellations: List<Constellation>,
+    bounds: MapBounds,
+    camera: Camera,
+    familyColors: Map<String, Color>,
+) {
+    val k = fitFor(size.width, size.height, bounds) * camera.scale
+    val cx = size.width / 2f + camera.offset.x
+    val cy = size.height / 2f + camera.offset.y
+
+    for (constellation in constellations) {
+        val colour = familyColors[constellation.familyId] ?: continue
+        val screen = constellation.points.map { point ->
+            Offset(
+                x = cx + (point.x - bounds.centreX) * k,
+                y = cy + (point.y - bounds.centreY) * k,
+            )
+        }
+        if (screen.size < 3) continue
+
+        val path = Path()
+        fun midpoint(a: Offset, b: Offset) = Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
+        var previous = screen.last()
+        path.moveTo(midpoint(previous, screen.first()).x, midpoint(previous, screen.first()).y)
+        for (point in screen) {
+            val mid = midpoint(previous, point)
+            // Each member is the control point, so the curve bends toward every
+            // genre without being forced to pass exactly through it.
+            path.quadraticBezierTo(previous.x, previous.y, mid.x, mid.y)
+            previous = point
+        }
+        path.close()
+
+        drawPath(
+            path = path,
+            color = colour,
+            alpha = (0.30f - (constellation.depth - 1) * 0.045f).coerceAtLeast(0.07f),
+            style = Stroke(width = 1.4f),
+        )
+    }
+}
+
 private fun positionsFor(
     nodes: List<GenreNode>,
     width: Float,
@@ -1043,6 +1252,8 @@ private fun DrawScope.drawMap(
     labelColor: Color,
     labelSizePx: Float,
     scale: Float,
+    weighting: MapWeight,
+    weights: WeightScale,
 ) {
     val byId = nodes.associateBy { it.id }
 
@@ -1119,12 +1330,11 @@ private fun DrawScope.drawMap(
         // rather than sliding out at full size, and the selected one carries
         // the spring that fired when it was tapped.
         val selected = node.id == selectedId
-        val radius = when {
-            node.ring == 0 -> 14f
-            node.ring == 1 -> 10f
-            node.ring == 2 -> 8f
-            else -> 6.5f
-        } * dotScale * here * if (selected) selectedScale else 1f
+        val prominence = weights.prominence(node, weighting)
+        // 6.5..14 px, the range depth sizing has always used, so no weighting
+        // can produce a dot too small to hit or big enough to swamp its cluster.
+        val radius = (6.5f + 7.5f * prominence) *
+            dotScale * here * if (selected) selectedScale else 1f
         // Mid-fold the branch root's ring would flicker on for one frame at the
         // end, so it waits until the subtree is actually gone.
         val folded = node.id in collapsed
@@ -1173,8 +1383,22 @@ private fun DrawScope.drawMap(
             textAlign = android.graphics.Paint.Align.CENTER
         }
         val baseAlpha = paint.alpha
+        // Which names survive has to follow the same weighting as the dots —
+        // labelling by depth while sizing by popularity would name a genre
+        // nobody tags and leave the biggest dot on screen anonymous.
+        val labelCut = when {
+            scale >= 5f -> 0f
+            scale >= 2.8f -> 0.30f
+            scale >= 1.5f -> 0.55f
+            else -> 0.95f
+        }
         for (node in nodes) {
-            if (node.ring > labelThreshold) continue
+            val named = if (weighting == MapWeight.DEPTH) {
+                node.ring <= labelThreshold
+            } else {
+                weights.prominence(node, weighting) >= labelCut
+            }
+            if (!named) continue
             val centre = positions[node.id] ?: continue
             if (!onScreen(centre)) continue
             val here = presence(node.id)

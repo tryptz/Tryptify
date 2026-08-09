@@ -34,8 +34,17 @@ data class GenreNode(
      */
     val x: Float = 0f,
     val y: Float = 0f,
-    /** Depth in the parent forest, 0 at a root. Drives dot size and labelling. */
+    /** Depth in the parent forest, 0 at a root. One of the map's size weightings. */
     val ring: Int = 0,
+    /**
+     * How many distinct people have tagged this genre on Last.fm.
+     *
+     * Baked at build time, not fetched on device — the map has to be the same
+     * map every launch. Null when the popularity pass has never covered this
+     * genre, which the renderer treats as "fall back to depth" rather than as
+     * zero: an unmeasured genre is not an unpopular one.
+     */
+    val reach: Int? = null,
     /** Sideways neighbours as `[id, weight]`; parent/child links are implicit. */
     val near: List<List<@Serializable(with = IdOrWeightSerializer::class) IdOrWeight>> = emptyList(),
 ) {
@@ -67,10 +76,20 @@ data class MoodProfile(
     val label: String,
     val bpm: List<Int> = emptyList(),
     val energy: List<Float> = emptyList(),
+    /**
+     * Pleasantness window, 0..1.
+     *
+     * The field that separates moods energy alone cannot tell apart: Rage and
+     * Euphoric are both pinned at the top of the arousal scale and are nothing
+     * like each other, and Menacing is Hypnotic with the lights off.
+     */
+    val valence: List<Float> = emptyList(),
     val genres: List<List<@Serializable(with = IdOrWeightSerializer::class) IdOrWeight>> = emptyList(),
 ) {
     val energyLow: Float get() = energy.getOrNull(0) ?: 0f
     val energyHigh: Float get() = energy.getOrNull(1) ?: 1f
+    val valenceLow: Float get() = valence.getOrNull(0) ?: 0f
+    val valenceHigh: Float get() = valence.getOrNull(1) ?: 1f
 }
 
 @Serializable
@@ -240,6 +259,54 @@ class GenreGraph(private val data: GenreGraphData, private val vocabulary: Map<S
         return out.values.sortedWith(
             compareBy<RelatedGenre> { it.hops }.thenByDescending { it.weight }
         ).take(limit)
+    }
+
+    /**
+     * The genres behind several moods at once, strongest first.
+     *
+     * Union, not intersection. Asking for "Workout + Chill" as an intersection
+     * returns nothing, because no genre is authored as both — but a listener
+     * combining them plainly means "draw on both", not "find me the music that
+     * is somehow simultaneously each". So every mood contributes its genres and
+     * a genre appearing in more than one **sums** its weights, which floats the
+     * genres genuinely sitting in the overlap to the top without discarding the
+     * ones that only belong to a single mood.
+     *
+     * Sorted by summed weight alone rather than by hops first, unlike the
+     * single-mood case: with several moods in play the number of graph hops a
+     * genre sits from any one of them says less than how many of them wanted it.
+     *
+     * [excluded] drops genres the listener has subtracted, before ranking.
+     */
+    fun genresForMoods(
+        moodIds: List<String>,
+        excluded: Set<String> = emptySet(),
+        maxHops: Int = 0,
+        limit: Int = 12,
+    ): List<RelatedGenre> {
+        if (moodIds.isEmpty()) return emptyList()
+        if (moodIds.size == 1 && excluded.isEmpty()) {
+            return genresForMood(moodIds.first(), maxHops, limit)
+        }
+
+        val summed = LinkedHashMap<String, Float>()
+        val nodes = HashMap<String, GenreNode>()
+        val nearest = HashMap<String, Int>()
+        for (moodId in moodIds) {
+            for (related in genresForMood(moodId, maxHops, limit = Int.MAX_VALUE)) {
+                val id = related.node.id
+                if (id in excluded) continue
+                summed[id] = (summed[id] ?: 0f) + related.weight
+                nodes[id] = related.node
+                nearest[id] = minOf(nearest[id] ?: Int.MAX_VALUE, related.hops)
+            }
+        }
+        return summed.entries
+            .sortedByDescending { it.value }
+            .mapNotNull { (id, weight) ->
+                nodes[id]?.let { RelatedGenre(it, weight, nearest[id] ?: 0) }
+            }
+            .take(limit)
     }
 
     /** Parent chain to a family root, nearest first. Empty when [id] is unknown. */

@@ -531,7 +531,7 @@ GENRES = [
     ("berlin-school", "Berlin School", "experimental", ("ambient", "krautrock"), (),
      (90, 130), (1970, E), 0.4, 0.6, ("focus", "commute"), ()),
     ("power-electronics", "Power Electronics", "experimental", ("noise",), (),
-     (0, 0), (1980, E), 0.95, 0.1, (), ()),
+     (0, 0), (1980, E), 0.95, 0.1, ("workout",), ()),
     ("plunderphonics", "Plunderphonics", "experimental", ("musique-concrete",), (),
      (0, 0), (1985, E), 0.5, 0.5, ("focus",), (("vaporwave", 0.5),)),
 
@@ -642,13 +642,13 @@ GENRES = [
     ("new-age", "New Age", "experimental", ("ambient",), (),
      (50, 90), (1975, E), 0.15, 0.8, ("wind-down", "sleep"), ()),
     ("noise", "Noise", "experimental", (), (),
-     (0, 0), (1970, E), 0.9, 0.15, (), (("industrial", 0.7), ("harsh-noise-wall", 0.9))),
+     (0, 0), (1970, E), 0.9, 0.15, ("focus",), (("industrial", 0.7), ("harsh-noise-wall", 0.9))),
     ("harsh-noise-wall", "Harsh Noise Wall", "experimental", ("noise",), ("hnw",),
-     (0, 0), (2000, E), 0.7, 0.1, (), ()),
+     (0, 0), (2000, E), 0.7, 0.1, ("focus",), ()),
     ("industrial", "Industrial", "experimental", (), (),
      (100, 140), (1975, E), 0.8, 0.2, ("workout", "late-night"), (("ebm", 0.7), ("industrial-metal", 0.7))),
     ("musique-concrete", "Musique Concrète", "experimental", (), (),
-     (0, 0), (1948, E), 0.4, 0.35, (), (("modern-classical", 0.5),)),
+     (0, 0), (1948, E), 0.4, 0.35, ("focus",), (("modern-classical", 0.5),)),
     ("field-recording", "Field Recording", "experimental", ("ambient",), (),
      (0, 0), (1950, E), 0.1, 0.55, ("sleep", "focus"), ()),
     ("lowercase", "Lowercase", "experimental", ("ambient",), (),
@@ -840,7 +840,7 @@ GENRES = [
     ("romantic", "Romantic", "classical", ("classical",), (),
      (0, 0), (1800, 1910), 0.55, 0.65, ("focus", "wind-down"), ()),
     ("opera", "Opera", "classical", ("classical",), (),
-     (0, 0), (1600, E), 0.6, 0.6, (), ()),
+     (0, 0), (1600, E), 0.6, 0.6, ("focus",), ()),
     ("modern-classical", "Modern Classical", "classical", ("classical",), ("contemporary classical",),
      (0, 0), (1900, E), 0.4, 0.5, ("focus",), (("minimalism", 0.85),)),
     ("minimalism", "Minimalism", "classical", ("modern-classical",), ("minimal classical",),
@@ -1774,48 +1774,138 @@ GENRES += [
 
 
 MOODS = [
-    ("focus", "Focus", (60, 130), (0.15, 0.6),
+    # (id, label, bpm, energy window, valence window, curated genres)
+    #
+    # Valence is the field that separates moods energy alone cannot tell apart:
+    # Rage and Euphoric are both pinned at the top of the arousal scale and are
+    # nothing like each other, and Menacing is Hypnotic with the lights off.
+    #
+    # The curated list is the mood's spine, not its whole body — everything a
+    # genre declares in its own `moods` field joins below these, and a mood that
+    # is still thin after that is filled out by tempo/energy/valence fit at
+    # build time. So ten entries here is a claim about what should lead, not a
+    # cap on what the mood contains.
+
+    ("focus", "Focus", (60, 130), (0.15, 0.6), (0.35, 0.75),
      (("ambient", 1.0), ("minimalism", 0.9), ("lofi-hiphop", 0.9), ("dub-techno", 0.85),
       ("minimal-techno", 0.8), ("ambient-techno", 0.8), ("neoclassical", 0.8),
       ("atmospheric-dnb", 0.7), ("drone", 0.6), ("post-rock", 0.6))),
 
-    ("late-night", "Late night", (70, 140), (0.2, 0.7),
+    ("late-night", "Late night", (70, 140), (0.2, 0.7), (0.2, 0.6),
      (("dub-techno", 1.0), ("deep-house", 0.9), ("trip-hop", 0.85), ("future-garage", 0.85),
       ("neo-soul", 0.8), ("dark-ambient", 0.7), ("halftime-dnb", 0.7), ("three-step", 0.7),
       ("cloud-rap", 0.6), ("synthwave", 0.6))),
 
-    ("workout", "Workout", (130, 200), (0.75, 1.0),
+    ("workout", "Workout", (130, 200), (0.75, 1.0), (0.3, 0.8),
      (("drum-and-bass", 1.0), ("hard-techno", 0.95), ("hardstyle", 0.9), ("brostep", 0.9),
       ("neurofunk", 0.85), ("drift-phonk", 0.85), ("trap", 0.8), ("peak-time-techno", 0.8),
       ("metalcore", 0.7), ("gabber", 0.6))),
 
-    ("party", "Party", (110, 150), (0.65, 1.0),
+    ("party", "Party", (110, 150), (0.65, 1.0), (0.6, 1.0),
      (("house", 1.0), ("tech-house", 0.9), ("disco", 0.85), ("baile-funk", 0.8),
       ("uk-garage", 0.8), ("amapiano", 0.8), ("jersey-club", 0.75), ("big-room", 0.7),
       ("dancehall", 0.7), ("reggaeton", 0.7))),
 
-    ("chill", "Chill", (60, 120), (0.2, 0.55),
+    ("chill", "Chill", (60, 120), (0.2, 0.55), (0.5, 0.9),
      (("downtempo", 1.0), ("lounge", 0.9), ("lofi-hiphop", 0.85), ("bossa-nova", 0.8),
       ("neo-soul", 0.8), ("dream-pop", 0.75), ("organic-house", 0.7), ("smooth-jazz", 0.7),
       ("indie-folk", 0.65), ("chillwave", 0.65))),
 
-    ("commute", "Commute", (95, 145), (0.5, 0.85),
+    ("commute", "Commute", (95, 145), (0.5, 0.85), (0.5, 0.9),
      (("liquid-dnb", 0.9), ("synthwave", 0.85), ("boom-bap", 0.85), ("indie-rock", 0.8),
       ("melodic-house-techno", 0.8), ("nu-disco", 0.75), ("afrobeats", 0.75),
       ("city-pop", 0.7), ("progressive-house", 0.7), ("britpop", 0.6))),
 
-    ("wind-down", "Wind down", (50, 100), (0.1, 0.45),
+    ("wind-down", "Wind down", (50, 100), (0.1, 0.45), (0.4, 0.85),
      (("ambient", 1.0), ("neoclassical", 0.9), ("new-age", 0.8), ("lofi-hiphop", 0.8),
       ("cool-jazz", 0.75), ("shoegaze", 0.7), ("psydub", 0.7), ("ambient-dub", 0.7),
       ("bedroom-pop", 0.65), ("singer-songwriter", 0.6))),
 
-    ("uplifting", "Uplifting", (110, 180), (0.7, 1.0),
+    ("uplifting", "Uplifting", (110, 180), (0.7, 1.0), (0.7, 1.0),
      (("uplifting-trance", 1.0), ("euphoric-hardstyle", 0.85), ("happy-hardcore", 0.85),
       ("gospel", 0.8), ("dance-pop", 0.8), ("motown", 0.75), ("power-metal", 0.7),
       ("future-bass", 0.7), ("vocal-trance", 0.7), ("gospel-house", 0.65))),
 
-    ("sleep", "Sleep", (40, 80), (0.0, 0.25),
+    ("sleep", "Sleep", (40, 80), (0.0, 0.25), (0.35, 0.8),
      (("ambient", 1.0), ("drone", 0.85), ("new-age", 0.85), ("minimalism", 0.8),
       ("field-recording", 0.75), ("neoclassical", 0.7), ("lowercase", 0.7),
       ("mallsoft", 0.6), ("lofi-hiphop", 0.55))),
+
+    # ─── The ones with a temperature ───────────────────────────────────────
+    # Everything above describes a *situation* — commuting, sleeping, working.
+    # These describe a state, which is the other reason people reach for music
+    # and the one the rail had nothing for.
+
+    ("rage", "Rage", (150, 230), (0.88, 1.0), (0.0, 0.35),
+     (("gabber", 1.0), ("hardcore-uptempo", 0.95), ("terrorcore", 0.9),
+      ("industrial-hardcore", 0.9), ("xtra-raw", 0.85), ("powerviolence", 0.85),
+      ("deathgrind", 0.8), ("crust-punk", 0.8), ("thrashcore", 0.75), ("speedcore", 0.7))),
+
+    ("unhinged", "Unhinged", (170, 400), (0.9, 1.0), (0.3, 0.8),
+     (("breakcore", 1.0), ("lolicore", 0.9), ("mashcore", 0.9), ("extratone", 0.85),
+      ("splittercore", 0.85), ("digital-hardcore", 0.8), ("dariacore", 0.8),
+      ("cybergrind", 0.75), ("flashcore", 0.7), ("glitchcore", 0.7))),
+
+    ("menacing", "Menacing", (125, 180), (0.6, 0.95), (0.0, 0.3),
+     (("industrial-techno", 1.0), ("neurofunk", 0.95), ("darkstep", 0.9),
+      ("drift-phonk", 0.85), ("witch-house", 0.8), ("uk-drill", 0.8), ("techstep", 0.8),
+      ("crossbreed", 0.75), ("darksynth", 0.7), ("skullstep", 0.7))),
+
+    ("dread", "Dread", (40, 120), (0.15, 0.7), (0.0, 0.25),
+     (("dark-ambient", 1.0), ("funeral-doom", 0.9), ("harsh-noise-wall", 0.85),
+      ("power-electronics", 0.85), ("doomcore", 0.8), ("drone", 0.8),
+      ("atmospheric-black-metal", 0.75), ("doomgaze", 0.7), ("noise", 0.7),
+      ("dungeon-synth", 0.65))),
+
+    ("hypnotic", "Hypnotic", (118, 140), (0.4, 0.75), (0.3, 0.65),
+     (("hypnotic-techno", 1.0), ("minimal-techno", 0.95), ("dub-techno", 0.9),
+      ("rominimal", 0.85), ("deep-tech", 0.8), ("microhouse", 0.8),
+      ("ambient-techno", 0.75), ("broken-techno", 0.7), ("acid-techno", 0.7),
+      ("peak-time-techno", 0.65))),
+
+    ("euphoric", "Euphoric", (135, 180), (0.8, 1.0), (0.75, 1.0),
+     (("uplifting-trance", 1.0), ("euphoric-hardstyle", 0.95), ("happy-hardcore", 0.9),
+      ("freeform-hardcore", 0.85), ("hands-up", 0.85), ("uk-hardcore", 0.8),
+      ("vocal-trance", 0.8), ("rawphoric", 0.75), ("makina", 0.7), ("j-core", 0.7))),
+
+    ("feral", "Feral", (140, 210), (0.85, 1.0), (0.35, 0.75),
+     (("hardcore-uptempo", 1.0), ("frenchcore", 0.95), ("hardtek", 0.9),
+      ("raggatek", 0.85), ("jungle-terror", 0.8), ("singeli", 0.8), ("gqom", 0.75),
+      ("free-tekno", 0.75), ("hardcore-frenchcore", 0.7), ("bubbling", 0.65))),
+
+    ("melancholy", "Melancholy", (55, 115), (0.15, 0.5), (0.0, 0.35),
+     (("slowcore", 1.0), ("doomgaze", 0.9), ("fado", 0.85), ("morna", 0.85),
+      ("shoegaze", 0.8), ("blackgaze", 0.8), ("neofolk", 0.75), ("arabesk", 0.7),
+      ("sevdalinka", 0.7), ("coldwave", 0.65))),
+
+    ("swagger", "Swagger", (75, 115), (0.55, 0.9), (0.35, 0.75),
+     (("memphis-rap", 1.0), ("g-funk", 0.95), ("phonk", 0.9), ("uk-drill", 0.85),
+      ("trap", 0.85), ("hyphy", 0.8), ("drill", 0.8), ("mobb-music", 0.75),
+      ("dirty-south", 0.7), ("boom-bap", 0.7))),
+
+    # Doom is deliberately not Dread. Dread is atmospheric and mostly beatless —
+    # the noise and dark-ambient end. Doom is slow, heavy and played on
+    # instruments: it wants tempo held low with the energy still up, which is a
+    # different corner of the same dark half.
+    ("doom", "Doom", (50, 90), (0.5, 0.85), (0.0, 0.3),
+     (("doom-metal", 1.0), ("funeral-doom", 0.95), ("sludge-metal", 0.9),
+      ("post-metal", 0.85), ("doomgaze", 0.8), ("stoner-rock", 0.8),
+      ("doomcore", 0.75), ("atmospheric-black-metal", 0.7), ("drone", 0.7),
+      ("blackgaze", 0.65))),
+
+    # Dysphoric is unease rather than aggression: music that sounds wrong on
+    # purpose. Mid tempo, mid energy, valence on the floor — the combination
+    # none of the other moods reach, because the dark ones are all either slow
+    # or fast and this sits between them.
+    ("dysphoric", "Dysphoric", (90, 150), (0.35, 0.8), (0.0, 0.25),
+     (("witch-house", 1.0), ("deconstructed-club", 0.95), ("coldwave", 0.85),
+      ("darkwave", 0.85), ("illbient", 0.8), ("industrial", 0.8),
+      ("harsh-noise-wall", 0.75), ("sigilkore", 0.7), ("minimal-wave", 0.7),
+      ("glitch", 0.65))),
+
+    ("blissed", "Blissed out", (60, 125), (0.2, 0.6), (0.7, 1.0),
+     (("ambient-house", 1.0), ("psydub", 0.9), ("dream-pop", 0.85), ("chillwave", 0.85),
+      ("balearic", 0.8), ("new-age", 0.8), ("slushwave", 0.75), ("organic-house", 0.75),
+      ("kankyo-ongaku", 0.7), ("ambient-dub", 0.7))),
 ]
+

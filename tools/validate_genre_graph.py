@@ -146,6 +146,9 @@ def main() -> int:
         lo, hi = m["bpm"]
         if lo > hi:
             errors.append(f"mood {m['id']}: bpm range reversed {m['bpm']}")
+        vlo, vhi = m.get("valence", [0.0, 1.0])
+        if not (0.0 <= vlo <= vhi <= 1.0):
+            errors.append(f"mood {m['id']}: valence window {m.get('valence')} invalid")
         elo, ehi = m["energy"]
         if not (0.0 <= elo <= ehi <= 1.0):
             errors.append(f"mood {m['id']}: energy window {m['energy']} invalid")
@@ -166,6 +169,13 @@ def main() -> int:
     print(f"  moods:  {len(graph['moods'])}")
     electronic = sum(1 for g in genres if g["family"] == "electronic")
     print(f"  electronic: {electronic}")
+
+    reachable = {e[0] for m in graph["moods"] for e in m["genres"]}
+    orphans = [g["id"] for g in genres if g["id"] not in reachable]
+    if orphans:
+        errors.append(
+            f"{len(orphans)} genre(s) reachable from no mood, e.g. {orphans[:5]}"
+        )
 
     if errors:
         print(f"\nRESULT: {len(errors)} problem(s)")

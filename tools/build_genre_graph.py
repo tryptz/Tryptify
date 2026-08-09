@@ -487,8 +487,187 @@ def build_vocabulary(nodes: list[dict]) -> dict:
     return mapping
 
 
+
+# ─── Popularity ──────────────────────────────────────────────────────────────
+
+# Shared with app/build.gradle.kts. Charts read public tag data, so one key
+# for everyone is the right shape; see the note there.
+DEFAULT_LASTFM_KEY = "153452aaeaa3e666645274b3a9e5bb0a"
+
+REACH_CACHE = os.path.join(ROOT, "tools", "genre_reach.json")
+
+# Last.fm asks callers to be reasonable rather than publishing a rate; a quarter
+# of a second between calls is well inside anything they enforce and puts a full
+# cold fetch of the whole graph at roughly four minutes.
+REACH_PACE_S = 0.25
+
+
+def load_reach() -> dict:
+    """Cached tag reach, keyed by genre id.
+
+    Committed to the repo on purpose. The asset has to be rebuildable offline
+    and byte-identical for a given source — a build that silently produces a
+    different map depending on whether the network was up, or on what Last.fm's
+    counts happened to be that afternoon, is not reproducible. Refreshing is an
+    explicit act (`--popularity`), not a side effect of building.
+    """
+    if not os.path.exists(REACH_CACHE):
+        return {}
+    with open(REACH_CACHE, encoding="utf-8") as fh:
+        return json.load(fh).get("reach", {})
+
+
+def fetch_reach(nodes: list[dict], api_key: str, cache: dict) -> dict:
+    """Fill in any genre the cache doesn't have yet. Existing entries are kept."""
+    import time
+    import urllib.parse
+    import urllib.request
+
+    missing = [n for n in nodes if n["id"] not in cache]
+    if not missing:
+        print("popularity  cache already covers every genre")
+        return cache
+
+    print(f"popularity  fetching {len(missing)} of {len(nodes)} "
+          f"(~{len(missing) * REACH_PACE_S / 60:.1f} min)")
+    for index, node in enumerate(missing):
+        params = urllib.parse.urlencode({
+            "method": "tag.getinfo", "tag": node["name"],
+            "api_key": api_key, "format": "json",
+        })
+        request = urllib.request.Request(
+            f"https://ws.audioscrobbler.com/2.0/?{params}",
+            headers={"User-Agent": "Tryptify/1.0 ( https://github.com/tryptz/tryptify )"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                payload = json.load(response)
+            # A tag nobody has ever applied is a real answer, not a failure, and
+            # zero is what should be recorded for it.
+            cache[node["id"]] = int(payload.get("tag", {}).get("reach") or 0)
+        except Exception as exc:  # noqa: BLE001 - one bad tag must not fail a build
+            print(f"  ! {node['id']}: {exc}")
+        if (index + 1) % 50 == 0:
+            print(f"  {index + 1}/{len(missing)}")
+        time.sleep(REACH_PACE_S)
+
+    with open(REACH_CACHE, "w", encoding="utf-8") as fh:
+        json.dump({"version": 1, "reach": cache}, fh,
+                  ensure_ascii=False, indent=0, sort_keys=True)
+        fh.write("\n")
+    return cache
+
+
+# ─── Mood membership ─────────────────────────────────────────────────────────
+
+# Ceiling for a membership derived from a genre's own `moods` declaration.
+# Every hand-authored weight in MOODS sits at 0.6 or above, so derived members
+# always sort below curated ones and curation still decides what leads a mood.
+DERIVED_MOOD_CEILING = 0.5
+
+# Fitted members — genres that never declared the mood but sit squarely in its
+# tempo, energy and valence — rank below declared ones again.
+FITTED_MOOD_CEILING = 0.3
+
+# Below this the fit is a coincidence rather than a resemblance, and padding a
+# mood with those makes it mean less, not more.
+MIN_FITTED_MOOD_FIT = 0.55
+
+# How many genres a mood should reach before it stops being padded.
+MOOD_FLOOR = 40
+
+
+def _mood_fit(node: dict, bpm: tuple, energy: tuple, valence: tuple = (0.0, 1.0)) -> float:
+    """How comfortably a genre sits inside a mood's declared windows, 0.5..1.
+
+    Only used to *order* derived members against each other. A genre that
+    declared the mood is in it either way — this decides whether it leads the
+    derived group or trails it, so a mood built mostly from derivation still
+    opens on the genres that actually fit its tempo and energy.
+    """
+    score = 1.0
+    elo, ehi = energy
+    e = node["energy"]
+    if e < elo:
+        score -= min(0.4, (elo - e))
+    elif e > ehi:
+        score -= min(0.4, (e - ehi))
+
+    vlo, vhi = valence
+    v = node["valence"]
+    if v < vlo:
+        score -= min(0.4, (vlo - v))
+    elif v > vhi:
+        score -= min(0.4, (v - vhi))
+
+    lo, hi = node["bpm"]
+    if lo > 0 and hi >= lo:
+        blo, bhi = bpm
+        overlap = min(hi, bhi) - max(lo, blo)
+        if overlap <= 0:
+            score -= 0.3
+        else:
+            score -= 0.2 * (1 - min(1.0, overlap / max(1, hi - lo)))
+    return max(0.0, min(1.0, score))
+
+
+def mood_members(mood_id, bpm, energy, valence, curated, nodes) -> list[list]:
+    """Curated members first, then every genre that declares this mood.
+
+    The genre→mood direction was already authored on 766 of 771 nodes and then
+    never read: `genresForMood` only ever looked at the mood→genre weights, so a
+    mood chip drew on ten hand-picked genres while the rest of the map sat there
+    declaring itself relevant to nobody. This joins the two directions, which is
+    why it needs no similarity heuristic — the data is hand-authored on both
+    sides, it was simply never connected.
+    """
+    out = [[gid, round(float(w), 3)] for gid, w in curated]
+    taken = {gid for gid, _ in curated}
+    derived = [
+        (n["id"], DERIVED_MOOD_CEILING * _mood_fit(n, bpm, energy, valence))
+        for n in nodes
+        if mood_id in n.get("moods", ()) and n["id"] not in taken
+    ]
+    derived.sort(key=lambda gw: (-gw[1], gw[0]))
+    out.extend([gid, round(float(w), 3)] for gid, w in derived)
+    taken.update(gid for gid, _ in derived)
+
+    # A mood nobody has declared yet — every newly authored one — would
+    # otherwise ship with only its ten curated genres against a 771-node graph,
+    # which is the exact thinness this whole pass exists to fix. Fill it from
+    # tempo, energy and valence until it is big enough to be worth opening.
+    # Fitted members sort below declared ones, which sort below curated ones, so
+    # the ordering still reflects how much was actually known about each.
+    if len(out) < MOOD_FLOOR:
+        fitted = sorted(
+            (
+                (n["id"], _mood_fit(n, bpm, energy, valence))
+                for n in nodes
+                if n["id"] not in taken
+            ),
+            key=lambda gw: (-gw[1], gw[0]),
+        )
+        for gid, fit in fitted[: MOOD_FLOOR - len(out)]:
+            if fit <= MIN_FITTED_MOOD_FIT:
+                break
+            out.append([gid, round(float(FITTED_MOOD_CEILING * fit), 3)])
+    return out
+
+
 def main() -> int:
     nodes = build_genres()
+
+    reach = load_reach()
+    if "--popularity" in sys.argv:
+        key = os.environ.get("LASTFM_API_KEY", DEFAULT_LASTFM_KEY)
+        if key:
+            reach = fetch_reach(nodes, key, reach)
+        else:
+            print("popularity  no API key; keeping the cached values")
+    for node in nodes:
+        if node["id"] in reach:
+            node["reach"] = reach[node["id"]]
+
     symmetrise(nodes)
     families = [{"id": k, "name": v} for k, v in FAMILIES.items()]
     bake_layout(nodes, families)
@@ -504,9 +683,10 @@ def main() -> int:
                 "label": label,
                 "bpm": list(bpm),
                 "energy": list(energy),
-                "genres": [[g, round(float(w), 3)] for g, w in genres],
+                "valence": list(valence),
+                "genres": mood_members(mid, bpm, energy, valence, genres, nodes),
             }
-            for (mid, label, bpm, energy, genres) in MOODS
+            for (mid, label, bpm, energy, valence, genres) in MOODS
         ],
     }
 
@@ -529,7 +709,10 @@ def main() -> int:
     mapped = sum(1 for v in vocabulary.values() if v)
     rings = max(n.get("ring", 0) for n in nodes) if nodes else 0
     print(f"genres     {len(nodes)}  ({os.path.getsize(graph_path) / 1024:.0f} KB), {rings + 1} rings")
-    print(f"moods      {len(graph['moods'])}")
+    reachable = {e[0] for m in graph["moods"] for e in m["genres"]}
+    print(f"moods      {len(graph['moods'])}, reaching {len(reachable)}/{len(nodes)} genres")
+    scored = sum(1 for n in nodes if "reach" in n)
+    print(f"popularity {scored}/{len(nodes)} genres carry a reach value")
     print(f"vocabulary {len(vocabulary)} names, {mapped} mapped "
           f"({os.path.getsize(vocab_path) / 1024:.0f} KB)")
     return 0

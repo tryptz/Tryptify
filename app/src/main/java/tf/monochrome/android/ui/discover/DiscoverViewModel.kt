@@ -71,6 +71,18 @@ data class DiscoveryHero(
     val artworkUrl: String?,
 )
 
+/**
+ * Index in the chip rail from which chips start combining.
+ *
+ * The first three are the listener's own entry points — a single choice about
+ * whose taste the page follows, which does not compose. Moods begin after them
+ * and are the only chips that combine.
+ */
+const val COMBINABLE_FROM = 3
+
+/** How many contributing genres the subtract control offers. */
+const val COMBINED_GENRE_LIMIT = 14
+
 @HiltViewModel
 class DiscoverViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
@@ -101,6 +113,10 @@ class DiscoverViewModel @Inject constructor(
         addAll(seedsRepository.seeds())
     }.distinctBy { it.label }
 
+    /** Chip labels, by graph mood id — the reverse of [moodIdByLabel]. */
+    private val labelByMoodId: Map<String, String> =
+        genreGraphRepo.graph.moods.associate { it.id to it.label }
+
     /** Graph mood ids, by the chip label that selects them. */
     private val moodIdByLabel: Map<String, String> =
         genreGraphRepo.graph.moods.associate { it.label to it.id }
@@ -108,6 +124,38 @@ class DiscoverViewModel @Inject constructor(
     // null = "For you", the personalized feed. Any other value is a chip label.
     private val _selectedChip = MutableStateFlow<String?>(null)
     val selectedChip: StateFlow<String?> = _selectedChip.asStateFlow()
+
+    /**
+     * Mood ids currently combined, in the order they were picked.
+     *
+     * Empty means no combination is active and [selectedChip] decides the page.
+     * Only chips from [COMBINABLE_FROM] onward can enter this set: the rail
+     * opens with the listener's own entry points, which are a single choice
+     * about whose taste the page follows and don't compose with each other.
+     */
+    private val _selectedMoods = MutableStateFlow<List<String>>(emptyList())
+    val selectedMoods: StateFlow<List<String>> = _selectedMoods.asStateFlow()
+
+    /**
+     * Genres subtracted from the current combination.
+     *
+     * Cleared whenever the combination changes, because a subtraction only
+     * means anything against the pool it was made from — carrying "no gabber"
+     * from Workout across into Wind down would silently narrow a page the
+     * listener never applied it to. Session-scoped and unsaved, matching how
+     * the existing "Not interested" dismissals already behave.
+     */
+    private val _excludedGenres = MutableStateFlow<Set<String>>(emptySet())
+    val excludedGenres: StateFlow<Set<String>> = _excludedGenres.asStateFlow()
+
+    /** The genres feeding the current combination, so the UI can offer them for removal. */
+    val combinedGenres: StateFlow<List<tf.monochrome.android.domain.model.GenreNode>> =
+        combine(_selectedMoods, _excludedGenres) { moods, excluded ->
+            if (moods.size < 2) emptyList()
+            else genreGraphRepo.graph
+                .genresForMoods(moods, excluded, maxHops = 0, limit = COMBINED_GENRE_LIMIT)
+                .map { it.node }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Deliberately private: everything on screen reads `visibleShelves`, which
     // is this minus what the listener has waved away. A new surface wired to
@@ -344,7 +392,47 @@ class DiscoverViewModel @Inject constructor(
         selectChip(null)
     }
 
-    fun selectChip(label: String?) = rebuild(label = label)
+    fun selectChip(label: String?) {
+        // Picking a single chip ends any combination in progress.
+        _selectedMoods.value = emptyList()
+        _excludedGenres.value = emptySet()
+        rebuild(label = label)
+    }
+
+    /**
+     * Add or remove a mood from the combination.
+     *
+     * Toggling the last one off returns to "For you" rather than leaving the
+     * page showing whatever the combination happened to produce last.
+     */
+    fun toggleMood(label: String) {
+        val moodId = moodIdByLabel[label] ?: return
+        val next = _selectedMoods.value.toMutableList()
+        if (!next.remove(moodId)) next.add(moodId)
+        _selectedMoods.value = next
+        // Any change to the combination invalidates the subtractions made
+        // against it — see the note on [_excludedGenres].
+        _excludedGenres.value = emptySet()
+        rebuild(label = if (next.isEmpty()) null else _selectedChip.value)
+    }
+
+    /** Chip labels for a set of mood ids, so the rail can light them up. */
+    fun labelsForMoods(moodIds: List<String>): Set<String> =
+        moodIds.mapNotNullTo(mutableSetOf()) { id -> labelByMoodId[id] }
+
+    /** Drop a genre from the combined page. */
+    fun subtractGenre(genreId: String) {
+        if (_selectedMoods.value.size < 2) return
+        _excludedGenres.value = _excludedGenres.value + genreId
+        rebuild()
+    }
+
+    /** Put every subtracted genre back. */
+    fun clearSubtractions() {
+        if (_excludedGenres.value.isEmpty()) return
+        _excludedGenres.value = emptySet()
+        rebuild()
+    }
 
     private fun rebuild(
         label: String? = _selectedChip.value,
@@ -365,7 +453,16 @@ class DiscoverViewModel @Inject constructor(
             // The tail was fetched to continue a feed that no longer exists.
             _flowExtra.value = emptyList()
             try {
-                val built = if (label == null) {
+                val moods = _selectedMoods.value
+                val knobForMoods = adventureOverride ?: _pendingAdventure.value ?: adventure.value
+                val built = if (moods.isNotEmpty()) {
+                    discoveryFeed.buildForMoods(
+                        moodIds = moods,
+                        excluded = _excludedGenres.value,
+                        adventure = knobForMoods,
+                        itemsPerShelf = SHELF_SIZE,
+                    )
+                } else if (label == null) {
                     buildForYou(adventureOverride)
                 } else {
                     // A genre picked on the map. Matched by name so that
