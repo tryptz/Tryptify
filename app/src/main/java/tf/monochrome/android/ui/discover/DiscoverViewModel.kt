@@ -29,6 +29,7 @@ import tf.monochrome.android.data.repository.RecommendationSeedsRepository
 import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
+import tf.monochrome.android.domain.model.DiscoverySort
 import tf.monochrome.android.domain.model.GenreGraph
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
@@ -59,6 +60,9 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
     // owner is a worse feed, not a crash.
     return if (owner != null) hiltViewModel(owner) else hiltViewModel()
 }
+
+/** One genre on Discover's genre rail, and why it's there. */
+data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
 
 /** What the hero card at the top of Discover is offering. */
 data class DiscoveryHero(
@@ -154,17 +158,104 @@ class DiscoverViewModel @Inject constructor(
     /** How many times "show me something else" has been tapped, rotating the seeds. */
     private var rotation = 0
 
+    // ── Sorting ─────────────────────────────────────────────────────────
+
+    val sort: StateFlow<DiscoverySort> = preferences.discoverySort
+        .map { DiscoverySort.fromId(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DiscoverySort.DEFAULT)
+
+    fun setSort(value: DiscoverySort) {
+        viewModelScope.launch { preferences.setDiscoverySort(value.id) }
+    }
+
+    /**
+     * Lower-cased names of the artists the listener actually plays, for the
+     * "For you" ordering.
+     *
+     * Compared by name rather than by id because a shelf mixes sources and only
+     * some of them carry a catalogue artist id — an id match would silently
+     * order half the feed as though nothing were familiar.
+     */
+    private val _familiarArtists = MutableStateFlow<Set<String>>(emptySet())
+    private val familiarArtists: StateFlow<Set<String>> = _familiarArtists.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _familiarArtists.value = runCatching {
+                libraryRepository.getSeedArtistNames(FAMILIAR_ARTISTS)
+                    .map { it.lowercase() }
+                    .toSet()
+            }.getOrDefault(emptySet())
+        }
+    }
+
+    // ── The genre rail ──────────────────────────────────────────────────
+
+    /**
+     * Genres hearted on the map, and genres recently played from it.
+     *
+     * Hearted first and marked as such, then recents that aren't already
+     * hearted — a genre you both hearted and played last night should appear
+     * once, in the row that means something. Resolved through the graph so a
+     * stale id from an older dataset simply disappears instead of rendering as
+     * a blank chip.
+     */
+    val genreRail: StateFlow<List<GenreRailItem>> =
+        combine(preferences.discoveryHeartedGenres, preferences.discoveryRecentGenres) { hearted, recent ->
+            val graph = genreGraphRepo.graph
+            val heartedNodes = hearted.mapNotNull { graph[it] }.sortedBy { it.name }
+                .map { GenreRailItem(it, hearted = true) }
+            val recentNodes = recent.filterNot { it in hearted }.mapNotNull { graph[it] }
+                .map { GenreRailItem(it, hearted = false) }
+            (heartedNodes + recentNodes).distinctBy { it.node.id }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val heartedGenres: StateFlow<Set<String>> = preferences.discoveryHeartedGenres
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    fun toggleHeartGenre(genreId: String) {
+        viewModelScope.launch { preferences.toggleHeartedGenre(genreId) }
+    }
+
+    private fun noteGenreVisited(genreId: String) {
+        viewModelScope.launch { preferences.noteGenreVisited(genreId) }
+    }
+
+    // ── Paging ──────────────────────────────────────────────────────────
+
+    private val _loadingMore = MutableStateFlow(false)
+    val loadingMore: StateFlow<Boolean> = _loadingMore.asStateFlow()
+
+    /**
+     * True once a page has come back with nothing new.
+     *
+     * The feed is meant to feel bottomless, but a catalogue is not, and a list
+     * that keeps firing a request every time you reach the end of the same
+     * shelves is worse than one that admits it has run out.
+     */
+    private val _exhausted = MutableStateFlow(false)
+    val exhausted: StateFlow<Boolean> = _exhausted.asStateFlow()
+
+    private var page = 0
+    private var moreJob: Job? = null
+
     /**
      * The feed with dismissals applied. Everything on screen reads this rather
      * than [_shelves], so waving a card away takes effect everywhere at once —
      * the shelf, its See All grid, and the Flow feed.
      */
     val visibleShelves: StateFlow<List<DiscoveryShelf>> =
-        combine(_shelves, _dismissedItems, _dismissedShelves) { shelves, items, hiddenShelves ->
-            shelves
+        combine(_shelves, _dismissedItems, _dismissedShelves, sort, familiarArtists) {
+            shelves, items, hiddenShelves, order, familiar ->
+            val kept = shelves
                 .filterNot { it.id in hiddenShelves }
                 .map { shelf -> shelf.copy(items = shelf.items.filterNot { it.key in items }) }
                 .filter { it.items.isNotEmpty() }
+            // Sorting last, and here rather than in the builder: it reorders
+            // what has already been fetched, so changing it is instant and
+            // costs no round trip. Qobuz ranks a genre search one way and one
+            // way only — "the newest drum & bass" is not a question it answers.
+            DiscoverySort.apply(kept, order, familiar)
             // Eagerly for the same reason as flowTracks below: a See All grid
             // reached on a restored back stack would otherwise read the initial
             // empty list and report the shelf missing.
@@ -263,6 +354,10 @@ class DiscoverViewModel @Inject constructor(
     ) {
         _selectedChip.value = label
         feedJob?.cancel()
+        moreJob?.cancel()
+        page = 0
+        _exhausted.value = false
+        _loadingMore.value = false
         feedJob = viewModelScope.launch {
             _loading.value = true
             _shelves.value = emptyList()
@@ -326,6 +421,86 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fetch the next page of the current category and append it.
+     *
+     * Called when the list is nearly scrolled out rather than on a timer or a
+     * button: the feed should feel like it has no end, and the only honest
+     * moment to spend a network round trip on more of it is when the listener
+     * has actually reached the bottom of what's already there.
+     *
+     * A page that comes back with nothing new sets [exhausted] and stops the
+     * loop — genuinely infinite would mean re-requesting the same shelves for
+     * as long as the screen is open.
+     */
+    fun loadMore() {
+        if (_loading.value || _loadingMore.value || _exhausted.value) return
+        if (moreJob?.isActive == true) return
+        val label = _selectedChip.value
+        moreJob = viewModelScope.launch {
+            _loadingMore.value = true
+            val next = page + 1
+            val built = try {
+                buildPage(label, next)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val known = _shelves.value.map { it.id }.toSet()
+            val fresh = built.distinctBy { it.id }.filterNot { it.id in known }
+            if (fresh.isEmpty()) {
+                _exhausted.value = true
+            } else {
+                page = next
+                _shelves.value = _shelves.value + fresh
+            }
+            _loadingMore.value = false
+        }
+    }
+
+    /**
+     * One page of whichever category is showing.
+     *
+     * Page 0 is the initial build; every page after it walks further out — into
+     * the genre graph for a mood or a genre, and into the seed-artist list for
+     * the personalized feed.
+     */
+    private suspend fun buildPage(label: String?, page: Int): List<DiscoveryShelf> {
+        val knob = _pendingAdventure.value ?: adventure.value
+        if (label == null) {
+            // "For you" has no graph to walk, so it rotates the curated seeds
+            // and the artist window instead — the same mechanism "show me
+            // something else" uses, driven by depth rather than by a tap.
+            return discoveryFeed.build(
+                adventure = knob,
+                itemsPerShelf = SHELF_SIZE,
+                rotation = rotation + page * PAGE_ROTATION,
+            )
+        }
+        val genreId = _selectedGenreId.value
+            ?.takeIf { genreGraphRepo.graph[it]?.name == label }
+        val moodId = moodIdByLabel[label]
+        return when {
+            genreId != null -> discoveryFeed.buildForGenre(
+                genreId = genreId,
+                adventure = knob,
+                itemsPerShelf = SHELF_SIZE,
+                page = page,
+            )
+            moodId != null -> discoveryFeed.buildForMood(
+                moodId = moodId,
+                adventure = knob,
+                itemsPerShelf = SHELF_SIZE,
+                page = page,
+            )
+            // A plain seed chip is one search with no graph behind it, so there
+            // is no second page to fetch — saying so beats firing the same
+            // query again and quietly discarding the answer.
+            else -> emptyList()
+        }
+    }
+
     /** The map reads the graph straight off the repository. */
     val genreGraph: GenreGraph get() = genreGraphRepo.graph
 
@@ -379,6 +554,7 @@ class DiscoverViewModel @Inject constructor(
      */
     fun playGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
         val node = genreGraphRepo.graph[genreId] ?: return
+        noteGenreVisited(genreId)
         viewModelScope.launch {
             val tracks = genrePool(genreId)
             // Silence rather than a wrong track: if the catalogue has nothing
@@ -399,6 +575,7 @@ class DiscoverViewModel @Inject constructor(
      */
     fun radioGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
         val node = genreGraphRepo.graph[genreId] ?: return
+        noteGenreVisited(genreId)
         viewModelScope.launch {
             val tracks = genrePool(genreId).take(RADIO_OPENING)
             val seed = tracks.firstOrNull() ?: return@launch
@@ -423,6 +600,7 @@ class DiscoverViewModel @Inject constructor(
      */
     fun selectGenre(genreId: String) {
         val node = genreGraphRepo.graph[genreId] ?: return
+        noteGenreVisited(genreId)
         _selectedGenreId.value = genreId
         rebuild(label = node.name)
     }
@@ -559,5 +737,11 @@ class DiscoverViewModel @Inject constructor(
 
         /** Genre tracks played ahead of a station, to anchor it in the genre. */
         const val RADIO_OPENING = 6
+
+        /** How many library artists count as "familiar" for the For you sort. */
+        const val FAMILIAR_ARTISTS = 60
+
+        /** Seed rotation per page of the personalized feed. */
+        const val PAGE_ROTATION = 3
     }
 }

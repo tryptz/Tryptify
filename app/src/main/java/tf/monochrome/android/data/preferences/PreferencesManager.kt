@@ -155,6 +155,16 @@ class PreferencesManager @Inject constructor(
         // follow the listener between devices.
         private val DISCOVERY_ADVENTURE = floatPreferencesKey("discovery_adventure")
 
+        // Genres the listener has hearted on the map. Taste, like the knob
+        // above, so it syncs. The recents beside it are history and stay local,
+        // matching how the app treats play history everywhere else.
+        private val DISCOVERY_HEARTED_GENRES = stringSetPreferencesKey("discovery_hearted_genres")
+        private val DISCOVERY_RECENT_GENRES = stringPreferencesKey("discovery_recent_genres")
+        private val DISCOVERY_SORT = stringPreferencesKey("discovery_sort")
+
+        /** How many genres the "recently played" rail remembers. */
+        private const val MAX_RECENT_GENRES = 12
+
         private val LOW_PERFORMANCE_MODE = booleanPreferencesKey("low_performance_mode")
         private val DISABLE_ANIMATIONS = booleanPreferencesKey("disable_animations")
         private val LEGACY_PLAYER = booleanPreferencesKey("legacy_player")
@@ -383,6 +393,8 @@ class PreferencesManager @Inject constructor(
             RADIO_WEIGHT_MOOD_CONTINUITY, RADIO_WEIGHT_ERA_CONSISTENCY,
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
             DISCOVERY_ADVENTURE,
+            DISCOVERY_HEARTED_GENRES,
+            DISCOVERY_SORT,
         )
         private val SETTINGS_SYNC_KEY_NAMES: Set<String> = SETTINGS_SYNC_KEYS.map { it.name }.toSet()
     }
@@ -1721,6 +1733,46 @@ class PreferencesManager @Inject constructor(
         val weights = DiscoveryAdventure.toPlannerWeights(radioPlannerWeights.first(), clamped)
         dataStore.edit { it[DISCOVERY_ADVENTURE] = clamped }
         setRadioPlannerWeights(weights)
+    }
+
+    val discoveryHeartedGenres: Flow<Set<String>> = dataStore.data.map {
+        it[DISCOVERY_HEARTED_GENRES] ?: emptySet()
+    }
+
+    suspend fun toggleHeartedGenre(genreId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[DISCOVERY_HEARTED_GENRES] ?: emptySet()
+            prefs[DISCOVERY_HEARTED_GENRES] =
+                if (genreId in current) current - genreId else current + genreId
+        }
+    }
+
+    /**
+     * Genres played or opened from the map, most recent first.
+     *
+     * A newline-joined string rather than a `stringSet` because the order *is*
+     * the data — a set would come back in whatever order DataStore felt like
+     * and "recently listened to" would be a lie.
+     */
+    val discoveryRecentGenres: Flow<List<String>> = dataStore.data.map { prefs ->
+        prefs[DISCOVERY_RECENT_GENRES].orEmpty().split("\n").filter { it.isNotBlank() }
+    }
+
+    suspend fun noteGenreVisited(genreId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[DISCOVERY_RECENT_GENRES].orEmpty()
+                .split("\n").filter { it.isNotBlank() }
+            prefs[DISCOVERY_RECENT_GENRES] =
+                (listOf(genreId) + current.filterNot { it == genreId })
+                    .take(MAX_RECENT_GENRES)
+                    .joinToString("\n")
+        }
+    }
+
+    val discoverySort: Flow<String> = dataStore.data.map { it[DISCOVERY_SORT].orEmpty() }
+
+    suspend fun setDiscoverySort(id: String) {
+        dataStore.edit { it[DISCOVERY_SORT] = id }
     }
 
     // --- Low performance mode ---

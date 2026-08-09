@@ -32,6 +32,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.UnfoldLess
@@ -231,6 +233,7 @@ fun GenreMapScreen(
     // LocalPlayerGlass because the nav host only provides that local around the
     // mini player and the page indicator, not around detail routes.
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
+    val hearted by viewModel.heartedGenres.collectAsStateWithLifecycle()
 
     fun focusOn(node: GenreNode) {
         flight?.cancel()
@@ -382,6 +385,8 @@ fun GenreMapScreen(
                     familyColor = familyColors[node.family] ?: MaterialTheme.colorScheme.primary,
                     hazeState = mapHaze,
                     glass = glassSettings,
+                    hearted = node.id in hearted,
+                    onHeart = { viewModel.toggleHeartGenre(node.id) },
                     onPlay = { viewModel.playGenre(node.id, playerViewModel) },
                     onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
                     onExplore = {
@@ -447,6 +452,8 @@ private fun GenreCard(
     familyColor: Color,
     hazeState: HazeState,
     glass: PlayerGlassSettings,
+    hearted: Boolean,
+    onHeart: () -> Unit,
     onPlay: () -> Unit,
     onRadio: () -> Unit,
     onExplore: () -> Unit,
@@ -538,6 +545,19 @@ private fun GenreCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // Hearting a genre pins it to Discover's genre rail, which is
+                // the only place the map's choices survive leaving the map.
+                IconButton(onClick = onHeart, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = if (hearted) Icons.Default.Favorite
+                        else Icons.Default.FavoriteBorder,
+                        contentDescription = if (hearted) "Remove from your genres"
+                        else "Keep in your genres",
+                        tint = if (hearted) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
                 // Close moves up here out of the action row, which now has to
                 // hold three things and had no room left for a fourth.
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {

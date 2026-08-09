@@ -139,20 +139,33 @@ class DiscoveryFeedUseCase @Inject constructor(
         adventure: Float = DiscoveryAdventure.DEFAULT,
         itemsPerShelf: Int = 12,
         maxShelves: Int = 6,
+        page: Int = 0,
     ): List<DiscoveryShelf> = coroutineScope {
         val graph = genreGraph.graph
         val mood = graph.mood(moodId) ?: return@coroutineScope emptyList()
+        val skip = page * maxShelves
         val picks = graph.genresForMood(
             moodId = moodId,
-            maxHops = DiscoveryAdventure.maxHops(adventure),
-            limit = maxShelves,
-        )
+            maxHops = hopsFor(adventure, page),
+            limit = skip + maxShelves,
+        ).drop(skip)
         if (picks.isEmpty()) return@coroutineScope emptyList()
 
         picks.map { related ->
-            async { genreShelfFor(related, mood, itemsPerShelf) }
+            async { genreShelfFor(related, mood, itemsPerShelf, variation = page) }
         }.mapNotNull { it.await() }
     }
+
+    /**
+     * How far out to walk for page [page] of a category.
+     *
+     * The knob sets the starting reach; scrolling widens it. Without that, a
+     * mood's genre list is however long the graph says it is and the feed hits
+     * a hard floor two screens down — with it, page five is drawing on genres
+     * three hops out and there is always more below.
+     */
+    private fun hopsFor(adventure: Float, page: Int): Int =
+        (DiscoveryAdventure.maxHops(adventure) + page / 2).coerceAtMost(MAX_HOPS)
 
     /**
      * One genre's shelf. [mood] is null when the genre is the subject rather
@@ -209,17 +222,31 @@ class DiscoveryFeedUseCase @Inject constructor(
         itemsPerShelf: Int = 12,
         maxShelves: Int = 6,
         variation: Int = 0,
+        page: Int = 0,
     ): List<DiscoveryShelf> = coroutineScope {
         val graph = genreGraph.graph
         val root = graph[genreId] ?: return@coroutineScope emptyList()
-        val hops = DiscoveryAdventure.maxHops(adventure)
         val floor = DiscoveryAdventure.neighbourFloor(adventure)
+        val neighbours = graph.neighbours(genreId, maxHops = hopsFor(adventure, page), floor = floor)
 
-        val picks = listOf(RelatedGenre(root, 1f, 0)) +
-            graph.neighbours(genreId, maxHops = hops, floor = floor).take(maxShelves - 1)
+        // The genre itself leads its own first page and nothing else's — page
+        // two is neighbours, not the same shelf again with a different name.
+        val picks = if (page == 0) {
+            listOf(RelatedGenre(root, 1f, 0)) + neighbours.take(maxShelves - 1)
+        } else {
+            neighbours.drop(page * maxShelves - 1).take(maxShelves)
+        }
+        if (picks.isEmpty()) return@coroutineScope emptyList()
 
         picks.map { related ->
-            async { genreShelfFor(related, mood = null, limit = itemsPerShelf, variation = variation) }
+            async {
+                genreShelfFor(
+                    related,
+                    mood = null,
+                    limit = itemsPerShelf,
+                    variation = variation + page,
+                )
+            }
         }.mapNotNull { it.await() }
     }
 
@@ -393,5 +420,8 @@ class DiscoveryFeedUseCase @Inject constructor(
         // Per-shelf ceiling, mirroring the 7s budget SearchViewModel uses for
         // Qobuz so one slow lookup can't stall the whole feed.
         private const val QOBUZ_BUDGET_MS = 7_000L
+
+        /** Ceiling on how far paging widens the graph walk. */
+        private const val MAX_HOPS = 5
     }
 }

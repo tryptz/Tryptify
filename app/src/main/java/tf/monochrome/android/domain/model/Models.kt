@@ -428,6 +428,14 @@ data class UnifiedTrack(
     // Album info
     val albumTitle: String? = null,
     val albumId: String? = null,
+    /**
+     * Release year, inherited from the album.
+     *
+     * Carried on the track because Discover's "Newest" sort has to compare
+     * tracks against each other, and by the time a shelf is built the album
+     * they came from is long gone.
+     */
+    val releaseYear: Int? = null,
 
     // Artwork
     val artworkUri: String? = null,

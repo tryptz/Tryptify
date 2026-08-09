@@ -1,78 +1,91 @@
 package tf.monochrome.android.ui.discover
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.QueueMusic
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
-import kotlinx.coroutines.launch
-import tf.monochrome.android.domain.model.DiscoveryAdventure
-import tf.monochrome.android.domain.model.UnifiedTrack
-import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
-import tf.monochrome.android.ui.components.bounceClick
-import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
+import tf.monochrome.android.domain.model.DiscoverySort
+import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.AlbumItem
 import tf.monochrome.android.ui.components.ArtistItem
 import tf.monochrome.android.ui.components.DiscoveryTrackCard
 import tf.monochrome.android.ui.components.SectionHeader
+import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
+import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.swallowHorizontalScroll
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.openCatalogAlbum
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
  * Discover — the browsing half of the app, split out of Home.
@@ -101,6 +114,26 @@ fun DiscoverScreen(
     val adventure by viewModel.adventureDisplay.collectAsStateWithLifecycle()
     val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
     val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsStateWithLifecycle()
+    val genreRail by viewModel.genreRail.collectAsStateWithLifecycle()
+    val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val loadingMore by viewModel.loadingMore.collectAsStateWithLifecycle()
+    val exhausted by viewModel.exhausted.collectAsStateWithLifecycle()
+
+    val listState = rememberLazyListState()
+    // Nothing is fetched ahead of time: the next page is requested when the
+    // listener has actually reached the end of this one — the footer coming
+    // into view is the signal. Re-armed on every change to the feed, because a
+    // collector that stayed running would see "still at the end" as no change
+    // and never ask for a third page.
+    LaunchedEffect(listState, shelves.size, selectedChip) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - 1
+        }
+            .distinctUntilChanged()
+            .collect { atEnd -> if (atEnd) viewModel.loadMore() }
+    }
 
     // The ⋮ sheet for a tapped-and-held track card. Held here, outside the
     // list, so it survives the row that opened it scrolling out of view.
@@ -117,6 +150,19 @@ fun DiscoverScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
 
+        // Your genres, above the moods. Moods are the same seven for everyone;
+        // this row is the listener's own — what they hearted on the map and
+        // what they last played from it — so it goes first.
+        GenreRail(
+            items = genreRail,
+            selected = selectedChip,
+            onSelect = {
+                if (selectedChip == it.node.name) viewModel.selectChip(null)
+                else viewModel.selectGenre(it.node.id)
+            },
+            onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
+        )
+
         // Chip rail, pinned above the feed rather than scrolling with it: it is
         // the control for what's below, so it has to stay reachable once the
         // user is three shelves deep.
@@ -125,6 +171,8 @@ fun DiscoverScreen(
             selected = selectedChip,
             onSelect = { viewModel.selectChip(it) },
         )
+
+        SortRow(selected = sort, onSelect = viewModel::setSort)
 
         // Flow: the active way through the same feed. Sits above the shelves
         // because it is the fastest route into music, not an afterthought.
@@ -156,6 +204,7 @@ fun DiscoverScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 160.dp),
         ) {
@@ -202,8 +251,29 @@ fun DiscoverScreen(
                 )
             }
 
-            // No spinner item: PullToRefreshBox draws the indicator, and a
-            // second one at the bottom of the list said the same thing twice.
+            // The paging footer. PullToRefreshBox owns the *top* indicator, so
+            // this one only ever speaks for the fetch happening below.
+            if (shelves.isNotEmpty()) {
+                item(key = "paging_footer") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        when {
+                            loadingMore -> CircularProgressIndicator(
+                                modifier = Modifier.size(26.dp),
+                                strokeWidth = 2.5.dp,
+                            )
+                            exhausted -> Text(
+                                text = "That's everything for this one.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
             if (!loading && shelves.isEmpty()) {
                 item(key = "empty") {
                     Text(
@@ -232,6 +302,104 @@ fun DiscoverScreen(
         onRemove = menuTrack?.let { held -> { viewModel.dismissItem("t:" + held.id) } },
         removeLabel = "Not interested",
     )
+}
+
+/**
+ * The listener's own genres — hearted on the map, or recently played from it.
+ *
+ * Sits above the moods because the moods are the same seven for everybody and
+ * this row isn't. Empty until they've used the map, and then it says so and
+ * offers the way there rather than rendering as a blank strip: an invisible
+ * feature is one nobody finds.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GenreRail(
+    items: List<GenreRailItem>,
+    selected: String?,
+    onSelect: (GenreRailItem) -> Unit,
+    onOpenMap: () -> Unit,
+) {
+    if (items.isEmpty()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AssistChip(
+                onClick = onOpenMap,
+                label = { Text("Pick genres on the map") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.AccountTree,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+            )
+        }
+        return
+    }
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().swallowHorizontalScroll(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(items, key = { it.node.id }) { item ->
+            FilterChip(
+                selected = selected == item.node.name,
+                onClick = { onSelect(item) },
+                label = { Text(item.node.name) },
+                leadingIcon = if (item.hearted) {
+                    {
+                        Icon(
+                            Icons.Default.Favorite,
+                            contentDescription = "Hearted",
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                } else {
+                    null
+                },
+                colors = FilterChipDefaults.filterChipColors(),
+            )
+        }
+    }
+}
+
+/**
+ * How the current category is ordered.
+ *
+ * Applies to whatever is on screen — a mood, a genre, or the personalized feed
+ * — and reorders what has already been fetched, so switching is instant. See
+ * [tf.monochrome.android.domain.model.DiscoverySort] for why it isn't pushed
+ * into the search instead.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortRow(selected: DiscoverySort, onSelect: (DiscoverySort) -> Unit) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        DiscoverySort.entries.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = option == selected,
+                onClick = { onSelect(option) },
+                shape = SegmentedButtonDefaults.itemShape(index, DiscoverySort.entries.size),
+                label = {
+                    Text(
+                        text = option.label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                },
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
