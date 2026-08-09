@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.discover
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -39,6 +40,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.BubbleChart
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -181,7 +184,23 @@ fun GenreMapScreen(
 
     val density = LocalDensity.current
     val labelPx = with(density) { 11.dp.toPx() }
-    val bounds = remember(graph) { boundsOf(graph.allGenres) }
+    var layout by remember { mutableStateOf(MapLayout.RADIAL) }
+    val timeline = remember(graph) { timelineFor(graph) }
+    // 0 is the radial map, 1 the timeline. Everything that differs between the
+    // two reads this, so the transition is one number rather than a mode flag
+    // and a pile of branches.
+    val morph = remember { Animatable(0f) }
+    LaunchedEffect(layout) {
+        morph.animateTo(
+            targetValue = if (layout == MapLayout.TIMELINE) 1f else 0f,
+            animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+        )
+    }
+
+    val radialBounds = remember(graph) { boundsOf(graph.allGenres) }
+    // Lerped rather than swapped: snapping the frame at the start of the
+    // animation would jolt every node before any of them had moved.
+    val bounds = lerpBounds(radialBounds, timeline.bounds, morph.value)
 
     val familyColors = remember(graph) { familyPalette(graph.allGenres.map { it.family }.distinct()) }
 
@@ -316,6 +335,7 @@ fun GenreMapScreen(
     var weighting by remember { mutableStateOf(MapWeight.POPULARITY) }
     val weightScale = remember(graph) { WeightScale(graph) }
 
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Genre map") },
@@ -339,6 +359,19 @@ fun GenreMapScreen(
                     collapsed = emptySet()
                 }) {
                     Icon(Icons.Default.UnfoldMore, contentDescription = "Expand everything")
+                }
+                IconButton(onClick = {
+                    layout = if (layout == MapLayout.RADIAL) MapLayout.TIMELINE else MapLayout.RADIAL
+                }) {
+                    Icon(
+                        if (layout == MapLayout.TIMELINE) Icons.Default.BubbleChart
+                        else Icons.Default.Timeline,
+                        contentDescription = if (layout == MapLayout.TIMELINE) {
+                            "Back to the constellation map"
+                        } else {
+                            "Arrange by year"
+                        },
+                    )
                 }
                 IconButton(onClick = { weighting = weighting.next() }) {
                     Icon(Icons.Default.Tune, contentDescription = "Change what size means")
@@ -385,23 +418,44 @@ fun GenreMapScreen(
                             val hit = hitTest(
                                 point, liveVisible.value, size.width, size.height,
                                 bounds, liveCamera.value, liveFold.value,
+                                timeline = timeline.positions,
+                                morph = morph.value,
                             ) ?: return@detectTapGestures
                             viewModel.selectOnMap(hit.id)
                             toggleBranch(hit.id)
                         }
                     },
             ) {
-                if (showRings) {
-                    drawConstellations(
-                        constellations = constellations,
+                if (morph.value < 0.999f) {
+                    // The timeline chrome takes over as these fade; drawing
+                    // both at full strength mid-flight is unreadable.
+                    if (showRings) {
+                        drawConstellations(
+                            constellations = constellations,
+                            bounds = bounds,
+                            camera = camera,
+                            familyColors = familyColors,
+                            fade = 1f - morph.value,
+                        )
+                    }
+                }
+                if (morph.value > 0.001f) {
+                    drawTimelineChrome(
+                        timeline = timeline,
                         bounds = bounds,
                         camera = camera,
-                        familyColors = familyColors,
+                        labelColor = onSurface,
+                        labelSizePx = labelPx,
+                        fade = morph.value,
                     )
                 }
                 drawMap(
                     nodes = visible,
-                    positions = positionsFor(visible, size.width, size.height, bounds, camera, fold),
+                    positions = positionsFor(
+                        visible, size.width, size.height, bounds, camera, fold,
+                        timeline = timeline.positions,
+                        morph = morph.value,
+                    ),
                     collapsed = collapsed,
                     selectedId = selected?.id,
                     selectedScale = selectPop.value,
@@ -413,6 +467,8 @@ fun GenreMapScreen(
                     scale = camera.scale,
                     weighting = weighting,
                     weights = weightScale,
+                    morph = morph.value,
+                    topInset = TIMELINE_AXIS_INSET * morph.value,
                 )
             }
 
@@ -420,7 +476,11 @@ fun GenreMapScreen(
             // with no stated units — the listener can see that one genre is
             // bigger without being able to find out in what sense.
             Text(
-                text = weighting.caption,
+                text = if (morph.value > 0.5f) {
+                    "Oldest left, newest right — each subgenre branches under its parent"
+                } else {
+                    weighting.caption
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -1091,6 +1151,185 @@ private class WeightScale(graph: GenreGraph) {
     }
 }
 
+
+// ─── Timeline layout ─────────────────────────────────────────────────────────
+
+/** Which arrangement the map is in. */
+private enum class MapLayout { RADIAL, TIMELINE }
+
+private class Timeline(
+    val positions: Map<String, Offset>,
+    val bounds: MapBounds,
+)
+
+private const val TIMELINE_WIDTH = 3600f
+private const val TIMELINE_ROW = 40f
+
+/** Minimum horizontal clearance before two genres may share a row. */
+private const val TIMELINE_X_GAP = 30f
+
+/**
+ * Layout units per character, used to reserve room for a genre's name.
+ *
+ * The timeline is meant to show all 771 names at once, which a dot-sized gap
+ * cannot deliver: "Uptempo Frenchcore" needs an order of magnitude more room
+ * than its dot does, so packing on dot width alone produces a compact layout
+ * whose labels then have to be thrown away to stay readable. Reserving the
+ * text's own width instead makes the layout exactly as tall as naming
+ * everything requires — taller, and complete.
+ */
+private const val TIMELINE_CHAR_WIDTH = 13.5f
+
+private const val TIMELINE_MIN_YEAR = 400
+private const val TIMELINE_MAX_YEAR = 2025
+private const val TIMELINE_PIVOT_YEAR = 1900
+
+/**
+ * Share of the width given to everything before 1900.
+ *
+ * The dataset is 100 genres spread over the fifteen centuries to 1899 and 671
+ * packed into the 123 years since. On a straight linear axis those 671 would
+ * occupy eight percent of the map and be unreadable, so the pre-modern era is
+ * compressed into a fixed band. That is a distortion, which is why the axis
+ * draws the break as a labelled boundary rather than pretending to be uniform —
+ * a compressed scale you can see is a scale; a hidden one is a lie.
+ */
+private const val TIMELINE_PRE_SPAN = 0.18f
+
+/** Screen-space strip at the top reserved for the year axis. */
+private const val TIMELINE_AXIS_INSET = 46f
+
+/**
+ * Tick spacings the axis will choose between, coarsest first.
+ *
+ * Ends at 1 so that zooming into a single scene resolves to individual years —
+ * at that magnification "1990" spanning a third of the screen is no longer
+ * telling you anything the position hadn't already.
+ */
+private val TIMELINE_TICK_STEPS = intArrayOf(100, 50, 25, 10, 5, 2, 1)
+
+/** Room a labelled tick needs before the axis will subdivide further. */
+private const val TIMELINE_TICK_MIN_PX = 74f
+
+/** Minor rules may sit closer, since they carry no text. */
+private const val TIMELINE_MINOR_MIN_PX = 16f
+
+private fun timelineX(year: Int): Float {
+    val y = year.coerceIn(TIMELINE_MIN_YEAR, TIMELINE_MAX_YEAR)
+    val fraction = if (y < TIMELINE_PIVOT_YEAR) {
+        TIMELINE_PRE_SPAN * (y - TIMELINE_MIN_YEAR) /
+            (TIMELINE_PIVOT_YEAR - TIMELINE_MIN_YEAR).toFloat()
+    } else {
+        TIMELINE_PRE_SPAN + (1f - TIMELINE_PRE_SPAN) * (y - TIMELINE_PIVOT_YEAR) /
+            (TIMELINE_MAX_YEAR - TIMELINE_PIVOT_YEAR).toFloat()
+    }
+    return fraction * TIMELINE_WIDTH
+}
+
+private fun startYear(node: GenreNode): Int = node.era.getOrNull(0) ?: TIMELINE_MAX_YEAR
+
+/**
+ * The whole graph as one genealogy: time along x, descent down y.
+ *
+ * Every genre sits at the year it appeared, so the picture reads left to right
+ * as history. One tree, not twelve — the families are not separated into bands,
+ * because the interesting thing about this dataset is where they cross. Jazz
+ * house descends from both jazz and house; nu metal from both metal and hip-hop.
+ * Banding by family puts those two parents on opposite sides of the page and
+ * draws a long wire between them; letting the whole forest share one set of rows
+ * puts a child directly under whichever parent it was reached from, and the
+ * colour change along a branch is then visible as the crossing it is.
+ *
+ * Genres are walked depth first from the oldest roots, and each is placed on the
+ * first row **at or below its parent's** that has room at that year, so descent
+ * always reads downward. Rows are shared whenever the years don't collide, so
+ * the picture is as tall as the music's actual overlap in time requires rather
+ * than one row per genre.
+ */
+private fun timelineFor(graph: GenreGraph): Timeline {
+    val children = HashMap<String, MutableList<GenreNode>>()
+    val roots = ArrayList<GenreNode>()
+    for (node in graph.allGenres) {
+        val parent = node.parents.firstOrNull { graph[it] != null }
+        if (parent == null) roots.add(node) else {
+            children.getOrPut(parent) { ArrayList() }.add(node)
+        }
+    }
+
+    val seen = HashSet<String>()
+    val order = ArrayList<GenreNode>()
+    fun visit(node: GenreNode, guard: Int) {
+        if (guard > 40 || !seen.add(node.id)) return
+        order.add(node)
+        children[node.id]?.sortedBy { startYear(it) }?.forEach { visit(it, guard + 1) }
+    }
+    roots.sortedBy { startYear(it) }.forEach { visit(it, 0) }
+    // Anything a cycle or a missing parent kept out of the walk still has to be
+    // placed; dropping a genre off the map would be the worst of the options.
+    graph.allGenres.filterNot { it.id in seen }.sortedBy { startYear(it) }.forEach { visit(it, 0) }
+
+    val positions = HashMap<String, Offset>()
+    val rowOf = HashMap<String, Int>()
+    val rowLastX = ArrayList<Float>()
+    for (node in order) {
+        val x = timelineX(startYear(node))
+        val room = maxOf(TIMELINE_X_GAP, node.name.length * TIMELINE_CHAR_WIDTH)
+        // Never above the parent: descent has to read downward for the shape to
+        // mean anything.
+        var row = node.parents.firstNotNullOfOrNull { rowOf[it] } ?: 0
+        while (row < rowLastX.size && rowLastX[row] > x - room) row++
+        while (rowLastX.size <= row) rowLastX.add(Float.NEGATIVE_INFINITY)
+        // Store the right edge of this genre's *label*, not of its dot, so the
+        // next genre on this row clears the text as well as the circle.
+        rowLastX[row] = x + room
+        rowOf[node.id] = row
+        positions[node.id] = Offset(x, row * TIMELINE_ROW)
+    }
+
+    val bounds = if (positions.isEmpty()) MapBounds(0f, 0f, 1f, 1f) else MapBounds(
+        minX = positions.values.minOf { it.x },
+        minY = positions.values.minOf { it.y },
+        maxX = positions.values.maxOf { it.x },
+        maxY = positions.values.maxOf { it.y },
+    )
+    return Timeline(positions, bounds)
+}
+
+private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+
+private fun lerpBounds(a: MapBounds, b: MapBounds, t: Float) = MapBounds(
+    minX = lerp(a.minX, b.minX, t),
+    minY = lerp(a.minY, b.minY, t),
+    maxX = lerp(a.maxX, b.maxX, t),
+    maxY = lerp(a.maxY, b.maxY, t),
+)
+
+/**
+ * How far a node bows off the straight line on its way between layouts.
+ *
+ * Everything travelling in straight lines at once reads as a diagram being
+ * redrawn; the same nodes on arcs read as a thing rearranging itself. The sign
+ * alternates on the id so the field fans out rather than sweeping one way.
+ */
+private const val MORPH_ARC = 0.22f
+
+/** Where a node is right now, [morph] of the way from the radial map to the timeline. */
+private fun morphedPoint(node: GenreNode, timeline: Map<String, Offset>?, morph: Float): Offset {
+    val from = Offset(node.x, node.y)
+    val to = timeline?.get(node.id) ?: return from
+    if (morph <= 0.001f) return from
+    if (morph >= 0.999f) return to
+
+    val delta = to - from
+    val length = hypot(delta.x, delta.y).coerceAtLeast(1f)
+    val sign = if (node.id.hashCode() and 1 == 0) 1f else -1f
+    val control = Offset((from.x + to.x) / 2f, (from.y + to.y) / 2f) +
+        Offset(-delta.y / length, delta.x / length) * (length * MORPH_ARC * sign)
+
+    val inv = 1f - morph
+    return from * (inv * inv) + control * (2f * inv * morph) + to * (morph * morph)
+}
+
 /**
  * One depth level of one family, as the shape its genres actually make.
  *
@@ -1155,6 +1394,7 @@ private fun DrawScope.drawConstellations(
     bounds: MapBounds,
     camera: Camera,
     familyColors: Map<String, Color>,
+    fade: Float = 1f,
 ) {
     val k = fitFor(size.width, size.height, bounds) * camera.scale
     val cx = size.width / 2f + camera.offset.x
@@ -1186,9 +1426,121 @@ private fun DrawScope.drawConstellations(
         drawPath(
             path = path,
             color = colour,
-            alpha = (0.30f - (constellation.depth - 1) * 0.045f).coerceAtLeast(0.07f),
+            alpha = (0.30f - (constellation.depth - 1) * 0.045f).coerceAtLeast(0.07f) * fade,
             style = Stroke(width = 1.4f),
         )
+    }
+}
+
+
+/**
+ * The timeline's axis and lanes.
+ *
+ * Decade rules so a position on the page converts back into a year, and an
+ * explicit marker at 1900 where the scale changes. The pre-modern era is compressed roughly
+ * fifteen-to-one against the modern one; drawing that boundary is the
+ * difference between a compressed axis and a dishonest one.
+ */
+private fun DrawScope.drawTimelineChrome(
+    timeline: Timeline,
+    bounds: MapBounds,
+    camera: Camera,
+    labelColor: Color,
+    labelSizePx: Float,
+    fade: Float,
+) {
+    val k = fitFor(size.width, size.height, bounds) * camera.scale
+    val cx = size.width / 2f + camera.offset.x
+    val cy = size.height / 2f + camera.offset.y
+    fun sx(x: Float) = cx + (x - bounds.centreX) * k
+    fun sy(y: Float) = cy + (y - bounds.centreY) * k
+
+    val top = sy(timeline.bounds.minY - TIMELINE_ROW)
+    val bottom = sy(timeline.bounds.maxY + TIMELINE_ROW)
+
+    // The year axis is pinned to the screen rather than drawn in world space.
+    // In world space it scrolls away the moment you pan down — an axis you have
+    // to scroll back to is no longer telling you where you are — and it slides
+    // under the first lane's genre labels on the way. A reserved strip is both
+    // always visible and never in anything's way; [TIMELINE_AXIS_INSET] keeps
+    // the genre labels out of it.
+    val axisBaseline = labelSizePx + 10f
+    drawRect(
+        color = Color.Black,
+        topLeft = Offset(0f, 0f),
+        size = androidx.compose.ui.geometry.Size(size.width, TIMELINE_AXIS_INSET),
+        alpha = 0.55f * fade,
+    )
+
+    // The rules follow the zoom: centuries when the whole span is on screen,
+    // single years once there is room for them. A fixed decade grid is wrong at
+    // both ends — unreadable stripes zoomed out, and zoomed in on one scene it
+    // stops resolving exactly where the year is the thing you came to read.
+    val pixelsPerYear = (TIMELINE_WIDTH * (1f - TIMELINE_PRE_SPAN) /
+        (TIMELINE_MAX_YEAR - TIMELINE_PIVOT_YEAR)) * k
+    val step = TIMELINE_TICK_STEPS.firstOrNull { it * pixelsPerYear >= TIMELINE_TICK_MIN_PX } ?: 1
+    // Minor rules subdivide the labelled ones, but only while they stay apart.
+    val minorStep = TIMELINE_TICK_STEPS.firstOrNull {
+        it < step && it * pixelsPerYear >= TIMELINE_MINOR_MIN_PX
+    }
+
+    fun rule(year: Int, alpha: Float) {
+        val x = sx(timelineX(year))
+        if (x <= -60f || x >= size.width + 60f) return
+        drawLine(
+            color = labelColor,
+            start = Offset(x, maxOf(top, TIMELINE_AXIS_INSET)),
+            end = Offset(x, bottom),
+            strokeWidth = 1f,
+            alpha = alpha * fade,
+        )
+    }
+
+    if (minorStep != null) {
+        var year = TIMELINE_PIVOT_YEAR
+        while (year <= TIMELINE_MAX_YEAR) {
+            if (year % step != 0) rule(year, 0.035f)
+            year += minorStep
+        }
+    }
+    var year = TIMELINE_PIVOT_YEAR
+    while (year <= TIMELINE_MAX_YEAR) {
+        rule(year, 0.09f)
+        year += step
+    }
+
+    // The scale break, drawn rather than hidden.
+    val pivotX = sx(timelineX(TIMELINE_PIVOT_YEAR))
+    drawLine(
+        color = labelColor,
+        start = Offset(pivotX, maxOf(top, TIMELINE_AXIS_INSET)),
+        end = Offset(pivotX, bottom),
+        strokeWidth = 1.6f,
+        alpha = 0.22f * fade,
+    )
+
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint().apply {
+            color = labelColor.toArgb()
+            textSize = labelSizePx
+            isAntiAlias = true
+            alpha = (150 * fade).toInt()
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        var tick = TIMELINE_PIVOT_YEAR
+        while (tick <= TIMELINE_MAX_YEAR) {
+            val x = sx(timelineX(tick))
+            if (x > 20f && x < size.width - 20f) {
+                drawText(tick.toString(), x, axisBaseline, paint)
+            }
+            tick += step
+        }
+        paint.textAlign = android.graphics.Paint.Align.RIGHT
+        val preX = sx(timelineX(TIMELINE_PIVOT_YEAR)) - 12f
+        if (preX > 40f) {
+            drawText("before 1900", preX, axisBaseline, paint)
+        }
+
     }
 }
 
@@ -1199,14 +1551,19 @@ private fun positionsFor(
     bounds: MapBounds,
     camera: Camera,
     fold: Fold? = null,
+    timeline: Map<String, Offset>? = null,
+    morph: Float = 0f,
 ): Map<String, Offset> {
     val k = fitFor(width, height, bounds) * camera.scale
     val cx = width / 2f + camera.offset.x
     val cy = height / 2f + camera.offset.y
-    fun place(node: GenreNode) = Offset(
-        x = cx + (node.x - bounds.centreX) * k,
-        y = cy + (node.y - bounds.centreY) * k,
-    )
+    fun place(node: GenreNode): Offset {
+        val point = morphedPoint(node, timeline, morph)
+        return Offset(
+            x = cx + (point.x - bounds.centreX) * k,
+            y = cy + (point.y - bounds.centreY) * k,
+        )
+    }
     // A folding subtree is drawn part of the way home to its branch root, so
     // hit-testing lands where the dots actually are mid-animation too.
     val anchor = fold?.let { f -> nodes.firstOrNull { it.id == f.rootId }?.let(::place) }
@@ -1228,8 +1585,12 @@ private fun hitTest(
     bounds: MapBounds,
     camera: Camera,
     fold: Fold? = null,
+    timeline: Map<String, Offset>? = null,
+    morph: Float = 0f,
 ): GenreNode? {
-    val positions = positionsFor(nodes, width.toFloat(), height.toFloat(), bounds, camera, fold)
+    val positions = positionsFor(
+        nodes, width.toFloat(), height.toFloat(), bounds, camera, fold, timeline, morph,
+    )
     // Generous radius: these are small targets on a zoomable canvas, and
     // missing by four pixels should still select the thing you aimed at.
     val touchRadius = 34f
@@ -1257,6 +1618,8 @@ private fun DrawScope.drawMap(
     scale: Float,
     weighting: MapWeight,
     weights: WeightScale,
+    morph: Float = 0f,
+    topInset: Float = 0f,
 ) {
     val byId = nodes.associateBy { it.id }
 
@@ -1297,12 +1660,27 @@ private fun DrawScope.drawMap(
             val from = positions[parentId] ?: continue
             if (parentId !in byId) continue
             if (!onScreen(to) && !onScreen(from)) continue
-            drawLine(
-                color = edgeColor.copy(alpha = edgeColor.alpha * here),
-                start = from,
-                end = to,
-                strokeWidth = 1.5f,
-            )
+            if (morph <= 0.01f) {
+                drawLine(
+                    color = edgeColor.copy(alpha = edgeColor.alpha * here),
+                    start = from,
+                    end = to,
+                    strokeWidth = 1.5f,
+                )
+            } else {
+                // On the timeline a parent link is a branch, and a branch that
+                // leaves horizontally and arrives horizontally reads as descent
+                // along the time axis. A straight diagonal reads as a wire.
+                val reach = (to.x - from.x).coerceAtLeast(18f) * 0.5f * morph
+                drawPath(
+                    path = Path().apply {
+                        moveTo(from.x, from.y)
+                        cubicTo(from.x + reach, from.y, to.x - reach, to.y, to.x, to.y)
+                    },
+                    color = edgeColor.copy(alpha = edgeColor.alpha * here),
+                    style = Stroke(width = 1.5f),
+                )
+            }
         }
         for ((otherId, weight) in node.nearEdges()) {
             val other = byId[otherId] ?: continue
@@ -1399,6 +1777,11 @@ private fun DrawScope.drawMap(
         // whatever doesn't fit gives a view that stays legible at every zoom
         // and fills the space it has.
         val labelCut = when {
+            // The timeline reserves each name's own width when it packs rows,
+            // so every genre has somewhere to put its label and all 771 are
+            // offered. Collision still arbitrates when zoomed far enough out
+            // that the text no longer fits the space the layout gave it.
+            morph > 0.5f -> 0f
             scale >= 5f -> 0f
             scale >= 2.8f -> 0.20f
             scale >= 1.5f -> 0.40f
@@ -1431,6 +1814,9 @@ private fun DrawScope.drawMap(
             // Off the side of the canvas is its own kind of collision: a name
             // sliced in half by the edge is worse than no name.
             if (box.left < 0f || box.right > size.width) continue
+            // The timeline reserves a strip for its year axis; a genre name
+            // drawn into it collides with a number rather than another name.
+            if (box.top < topInset) continue
             if (taken.any { android.graphics.RectF.intersects(it, box) }) continue
 
             taken.add(box)
