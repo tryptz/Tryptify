@@ -1,6 +1,10 @@
 package tf.monochrome.android.domain.usecase
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.data.charts.ChartSource
 import tf.monochrome.android.data.charts.ChartWindow
@@ -65,6 +69,22 @@ class GenreChartUseCase @Inject constructor(
          * repeated tells you less than a Top 100 that is a scene.
          */
         const val MAX_PER_ARTIST = 3
+
+        /**
+         * How many artist lookups to have in flight at once. Enough to hide the
+         * latency, few enough not to arrive at Last.fm as a burst.
+         */
+        const val VERIFY_CONCURRENCY = 8
+
+        /**
+         * How long cross-checking may take before the chart is shown without it.
+         *
+         * A chart that never appears is worse than one that appears unverified:
+         * the ordering is still the source's own, and the screen simply doesn't
+         * claim to be cross-checked. Whatever the lookups return afterwards
+         * lands in the cache for the next visit.
+         */
+        const val CROSS_CHECK_BUDGET_MS = 4_000L
     }
 
     suspend fun chart(
@@ -92,7 +112,9 @@ class GenreChartUseCase @Inject constructor(
             val tag = charts.tagChart(genreId, names, apiKey)
             if (tag.isEmpty()) return null
             val entries = capPerArtist(tag.take(limit), MAX_PER_ARTIST)
-            val confirmed = confirmChartArtists(node, entries, apiKey)
+            val confirmed = withTimeoutOrNull(CROSS_CHECK_BUDGET_MS) {
+                confirmChartArtists(node, entries, apiKey)
+            } ?: emptySet()
             return GenreChart(
                 genreId = genreId,
                 genreName = node.name,
@@ -110,8 +132,16 @@ class GenreChartUseCase @Inject constructor(
             tagChart(shownAs = window)?.let { return it }
         }
 
-        val sitewide = charts.sitewide(window)
-        val artists = charts.artistsFor(genreId, names)
+        // Independent of each other: one is a global listening window, the
+        // other is which artists a genre owns. Run together rather than in
+        // sequence — the MusicBrainz side deliberately paces itself at a
+        // request a second, and there is no reason ListenBrainz should wait
+        // behind that.
+        val (sitewide, artists) = coroutineScope {
+            val sitewideJob = async { charts.sitewide(window) }
+            val artistsJob = async { charts.artistsFor(genreId, names) }
+            sitewideJob.await() to artistsJob.await()
+        }
         val filtered = narrowToGenre(sitewide.entries, artists, limit)
 
         val windowed = GenreChart(
@@ -187,21 +217,30 @@ class GenreChartUseCase @Inject constructor(
         val relatives = relativesOf(node)
         val fromMusicBrainz = charts.artistsFor(node.id, node.queries())
 
-        val confirmed = mutableSetOf<String>()
         val artists = artistNames.take(VERIFY_DEPTH).distinctBy { normalizeForMatch(it) }
 
-        for (artist in artists) {
-            val key = normalizeForMatch(artist)
-            if (key in fromMusicBrainz) {
-                confirmed += key
-                continue
-            }
-            val belongs = charts.artistTags(artist, apiKey).any { tag ->
-                genreGraph.graph.resolve(tag)?.id in relatives
-            }
-            if (belongs) confirmed += key
+        // Concurrent, in bounded batches. This loop was sequential, and each
+        // unseen artist is a network round trip: forty of them in a row is the
+        // ten-to-twenty seconds of spinner the chart screen was showing before
+        // it rendered anything. The work is entirely I/O-bound and the requests
+        // are independent, so the only reason it was serial was that it was
+        // written as a for loop.
+        return coroutineScope {
+            artists.chunked(VERIFY_CONCURRENCY).flatMap { batch ->
+                batch.map { artist ->
+                    async {
+                        val key = normalizeForMatch(artist)
+                        when {
+                            key in fromMusicBrainz -> key
+                            charts.artistTags(artist, apiKey).any { tag ->
+                                genreGraph.graph.resolve(tag)?.id in relatives
+                            } -> key
+                            else -> null
+                        }
+                    }
+                }.awaitAll()
+            }.filterNotNull().toSet()
         }
-        return confirmed
     }
 
     /**
