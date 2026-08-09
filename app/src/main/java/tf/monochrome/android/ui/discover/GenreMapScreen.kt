@@ -1,10 +1,15 @@
 package tf.monochrome.android.ui.discover
 
+import android.os.Build
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -24,8 +29,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -53,6 +62,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,22 +75,29 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlin.math.PI
+import kotlin.math.hypot
+import kotlin.math.sin
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.GenreNode
+import tf.monochrome.android.domain.model.PlayerGlassSettings
+import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
-import kotlin.math.PI
-import kotlin.math.hypot
-import kotlin.math.sin
 
 /**
  * The genre map — all 355 genres as one picture you can move around in.
@@ -109,9 +126,17 @@ import kotlin.math.sin
  * family one tap at a time. The panel names the subgenres rather than counting
  * them, and each of those is a tap to the next one.
  *
- * *Play* sends the genre straight into the real player and queue — the same path
- * Flow uses, because "quickly listen to each genre" is the whole point. *Explore
- * in Discover* hands it to the feed, which rebuilds around it and its neighbours.
+ * The panel's three actions: *Shuffle* drops a shuffled page of that genre into
+ * the real player and queue — the same path Flow uses, because "quickly listen to
+ * each genre" is the whole point, and shuffled because the same genre tapped
+ * twice returning the same song in the same order reads as the map being broken.
+ * *Radio* opens a few of those tracks and then hands over to the station planner,
+ * which keeps going. *Explore in Discover* hands the genre to the feed, which
+ * rebuilds around it and its graph neighbours.
+ *
+ * The panel is drawn from the mini player's own glass settings — the Studio's
+ * "Player Glass" tab — because it floats directly above the bar and two sheets
+ * of glass tuned differently an inch apart looked like a bug.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,8 +198,39 @@ fun GenreMapScreen(
 
     // The map blurs itself behind the panel. A local haze source rather than the
     // shared app one: the panel sits inside the same subtree, and pointing it at
-    // the app-wide state would have it sampling its own output.
+    // the app-wide state would have it sampling its own output. (The map also
+    // feeds the *app* haze — it runs full-bleed under the mini player, whose
+    // glass needs real content behind it — but that source is declared once by
+    // the nav host around everything, not here.)
     val mapHaze = rememberHazeState()
+
+    // The map runs under the mini player so the bar has something to lens, so
+    // the panel has to clear the bar itself.
+    val playing by playerViewModel.currentTrack.collectAsStateWithLifecycle()
+    val panelBottomInset = if (playing != null) MINI_PLAYER_RESERVE else 0.dp
+
+    // A selected genre swells and springs back — bouncy enough to read as a
+    // response to the tap, and it settles larger than it started so the node
+    // you're looking at stays the obvious one on a map of 355 dots.
+    val selectPop = remember { Animatable(SELECTED_SCALE) }
+    LaunchedEffect(selected?.id) {
+        if (selected == null) return@LaunchedEffect
+        if (instant) { selectPop.snapTo(SELECTED_SCALE); return@LaunchedEffect }
+        selectPop.snapTo(SELECTED_SCALE * 1.7f)
+        selectPop.animateTo(
+            targetValue = SELECTED_SCALE,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow,
+            ),
+        )
+    }
+
+    // The same settings the mini player is drawn from, straight off the
+    // Studio's "Player Glass" tab. Read from the player rather than through
+    // LocalPlayerGlass because the nav host only provides that local around the
+    // mini player and the page indicator, not around detail routes.
+    val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     fun focusOn(node: GenreNode) {
         flight?.cancel()
@@ -303,6 +359,7 @@ fun GenreMapScreen(
                     positions = positionsFor(visible, size.width, size.height, bounds, camera, fold),
                     collapsed = collapsed,
                     selectedId = selected?.id,
+                    selectedScale = selectPop.value,
                     fold = fold,
                     familyColors = familyColors,
                     edgeColor = edgeColor,
@@ -314,13 +371,19 @@ fun GenreMapScreen(
 
             selected?.let { node ->
                 val related = remember(graph, node.id) { relatedTo(graph, node) }
+                // The shader modifier reads its parameters from this local, so
+                // the panel has to provide it — this route sits outside the
+                // nav host's provider, which only wraps the mini player.
+                CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
                 GenreCard(
                     node = node,
                     related = related,
                     familyName = graph.family(node.family)?.name ?: node.family,
                     familyColor = familyColors[node.family] ?: MaterialTheme.colorScheme.primary,
                     hazeState = mapHaze,
+                    glass = glassSettings,
                     onPlay = { viewModel.playGenre(node.id, playerViewModel) },
+                    onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
                     onExplore = {
                         viewModel.selectGenre(node.id)
                         navController.popBackStack()
@@ -335,8 +398,13 @@ fun GenreMapScreen(
                     onDismiss = { viewModel.selectOnMap(null) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .onSizeChanged { panelHeightPx = it.height },
+                        // Measured outside the reserve, not inside it: the
+                        // camera centres a genre in what's left of the map, and
+                        // the mini player occludes that too.
+                        .onSizeChanged { panelHeightPx = it.height }
+                        .padding(bottom = panelBottomInset),
                 )
+                }
             }
 
             if (graph.size == 0) {
@@ -378,51 +446,108 @@ private fun GenreCard(
     familyName: String,
     familyColor: Color,
     hazeState: HazeState,
+    glass: PlayerGlassSettings,
     onPlay: () -> Unit,
+    onRadio: () -> Unit,
     onExplore: () -> Unit,
     onRelated: (GenreNode) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // The mini player's glass treatment, and gated the same way: the shared
-    // `allowHazeBlur` is what both the device tier and the "remove liquid glass"
-    // switch turn off, and with it off the panel needs a real surface behind it
-    // rather than the nothing that a no-op glass modifier would leave.
-    val glass = LocalPerformanceProfile.current.allowHazeBlur
+    // Exactly the mini player's glass, from exactly the same settings: the
+    // panel floats directly above the bar, and two sheets of glass with
+    // different tints and different tuning an inch apart looked like a mistake.
+    // On the shader path that means the frosted haze backdrop with the tunable
+    // slab relit on top; below API 33, with button glass switched off, or on a
+    // low tier it falls back to the app's plain glassmorphism, and with liquid
+    // glass removed entirely to an opaque surface — a no-op modifier would
+    // otherwise leave the panel with no background at all.
+    val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
+    val flat = LocalLowPerformance.current.disableLiquidGlass
+    val shaderGlass = !flat && glass.enabled &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else MaterialTheme.colorScheme.primary
+    val frostBg = MaterialTheme.colorScheme.background
+    val isDark = frostBg.luminance() <= 0.5f
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(12.dp)
             .navigationBarsPadding()
+            .clip(MonoDimens.shapeLg)
             .then(
-                if (glass) {
-                    Modifier.liquidGlass(hazeState = hazeState, shape = MonoDimens.shapeLg)
-                } else {
-                    Modifier
-                        .clip(MonoDimens.shapeLg)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                when {
+                    shaderGlass -> Modifier
+                    allowHaze && !flat ->
+                        Modifier.liquidGlass(hazeState = hazeState, shape = MonoDimens.shapeLg)
+                    else -> Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 },
             ),
     ) {
+        if (shaderGlass) {
+            // Frost first. The slab body goes down to 0.2 opacity, and without
+            // this the map's edges and labels read straight through it and
+            // fight the panel's own text.
+            if (allowHaze && glass.hazeBlurDp > 0f) {
+                val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
+                    else Color.White.copy(alpha = 0.45f))
+                    .let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeStyle(
+                                backgroundColor = frostBg,
+                                blurRadius = glass.hazeBlurDp.dp,
+                                tints = listOf(HazeTint(frostTint)),
+                                noiseFactor = 0f,
+                            ),
+                        ),
+                )
+            }
+            Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .playerGlass(tint = tint),
+            ) {
+                drawRect(color = tint)
+            }
+        }
+
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = node.name,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = buildString {
-                    append(familyName)
-                    if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
-                    node.era.getOrNull(0)?.let { append(" · from $it") }
-                    if (related.areChildren) append(" · ${related.nodes.size} subgenres")
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = node.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = buildString {
+                            append(familyName)
+                            if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
+                            node.era.getOrNull(0)?.let { append(" · from $it") }
+                            if (related.areChildren) append(" · ${related.nodes.size} subgenres")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // Close moves up here out of the action row, which now has to
+                // hold three things and had no room left for a fourth.
+                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             if (node.aka.isNotEmpty()) {
                 Text(
                     text = "also called " + node.aka.joinToString(", "),
@@ -456,53 +581,81 @@ private fun GenreCard(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            // Three actions instead of two, so they get two rows rather than
+            // being squeezed until "Explore in Discover" ellipsises itself into
+            // "Explore in Disco…". Shuffle and Radio share the top row — both
+            // start music, both are one word — and Explore takes the full width
+            // below, since it's the one that leaves the map.
+            Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    modifier = Modifier.weight(1f).bounceClick(onClick = onPlay),
-                    shape = MonoDimens.shapePill,
-                    color = MaterialTheme.colorScheme.primary,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Play",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-                }
-                Surface(
-                    modifier = Modifier.weight(1f).bounceClick(onClick = onExplore),
-                    shape = MonoDimens.shapePill,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Text(
-                        text = "Explore in Discover",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        Icons.Default.UnfoldLess,
-                        contentDescription = "Close",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                ActionPill(
+                    icon = Icons.Default.Shuffle,
+                    label = "Shuffle",
+                    container = MaterialTheme.colorScheme.primary,
+                    content = MaterialTheme.colorScheme.onPrimary,
+                    onClick = onPlay,
+                    modifier = Modifier.weight(1f),
+                )
+                ActionPill(
+                    icon = Icons.Default.Radio,
+                    label = "Radio",
+                    container = MaterialTheme.colorScheme.secondaryContainer,
+                    content = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = onRadio,
+                    modifier = Modifier.weight(1f),
+                )
             }
+            Spacer(Modifier.height(8.dp))
+            Row {
+                ActionPill(
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    label = "Explore in Discover",
+                    container = Color.Transparent,
+                    content = MaterialTheme.colorScheme.onSurfaceVariant,
+                    onClick = onExplore,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MonoDimens.shapePill),
+                )
+            }
+        }
+    }
+}
+
+/** One action in the panel's button rows — icon, then label, centred. */
+@Composable
+private fun ActionPill(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    container: Color,
+    content: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.bounceClick(onClick = onClick),
+        shape = MonoDimens.shapePill,
+        color = container,
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = content,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -567,6 +720,12 @@ private const val FIT_MARGIN = 0.92f
  * enough to read its neighbours' labels.
  */
 private const val FOCUS_SCALE = 2.6f
+
+/** Resting size of the selected dot, relative to its neighbours. */
+private const val SELECTED_SCALE = 1.45f
+
+/** Height the floating mini player needs, matching the nav host's own reserve. */
+private val MINI_PLAYER_RESERVE = 72.dp
 private const val FLIGHT_MILLIS = 620
 
 /**
@@ -820,7 +979,7 @@ private fun hitTest(
     val positions = positionsFor(nodes, width.toFloat(), height.toFloat(), bounds, camera, fold)
     // Generous radius: these are small targets on a zoomable canvas, and
     // missing by four pixels should still select the thing you aimed at.
-    val touchRadius = 28f
+    val touchRadius = 34f
     return nodes
         .mapNotNull { node ->
             val p = positions[node.id] ?: return@mapNotNull null
@@ -836,6 +995,7 @@ private fun DrawScope.drawMap(
     positions: Map<String, Offset>,
     collapsed: Set<String>,
     selectedId: String?,
+    selectedScale: Float,
     fold: Fold?,
     familyColors: Map<String, Color>,
     edgeColor: Color,
@@ -851,6 +1011,13 @@ private fun DrawScope.drawMap(
     // purpose, and an alpha above 1 is not a brighter dot, it's an exception.
     fun presence(id: String): Float =
         if (fold != null && id in fold.subtree) fold.progress.coerceIn(0f, 1f) else 1f
+
+    // Dots grow a little with the zoom, within limits. Fixed-pixel dots have to
+    // be sized for one of the two views and are wrong in the other: big enough
+    // to hit comfortably when you're in among them turns the whole-map view
+    // into a solid blob, and small enough for the overview leaves nothing to
+    // aim at up close. Clamped at both ends so neither view runs away.
+    val dotScale = (0.62f + 0.38f * scale).coerceIn(0.72f, 1.7f)
 
     // Everything below is culled to the viewport. Zoomed in, most of a
     // 355-node map is off-screen, and drawing it anyway costs a full pass of
@@ -908,33 +1075,39 @@ private fun DrawScope.drawMap(
         val color = (familyColors[node.family] ?: labelColor).copy(alpha = here)
         // Roots read as anchors, so they stay larger at every zoom level. A dot
         // growing in scales with the fold, so the subtree swells into place
-        // rather than sliding out at full size.
+        // rather than sliding out at full size, and the selected one carries
+        // the spring that fired when it was tapped.
+        val selected = node.id == selectedId
         val radius = when {
-            node.ring == 0 -> 9f
-            node.ring == 1 -> 6.5f
-            else -> 4.5f
-        } * here
+            node.ring == 0 -> 14f
+            node.ring == 1 -> 10f
+            node.ring == 2 -> 8f
+            else -> 6.5f
+        } * dotScale * here * if (selected) selectedScale else 1f
         // Mid-fold the branch root's ring would flicker on for one frame at the
         // end, so it waits until the subtree is actually gone.
         val folded = node.id in collapsed
 
+        // A soft halo under the bigger dots keeps them from disappearing into
+        // the edges crossing behind them.
+        drawCircle(color = color.copy(alpha = color.alpha * 0.16f), radius = radius * 1.6f, center = centre)
         drawCircle(color = color, radius = radius, center = centre)
         if (folded) {
             // A ring around a folded branch: the one piece of state on the map
             // that isn't visible from its children, so it has to be marked.
             drawCircle(
                 color = color,
-                radius = radius + 5f,
-                center = centre,
-                style = Stroke(width = 2f),
-            )
-        }
-        if (node.id == selectedId) {
-            drawCircle(
-                color = labelColor,
-                radius = radius + 9f,
+                radius = radius + 6f,
                 center = centre,
                 style = Stroke(width = 2.5f),
+            )
+        }
+        if (selected) {
+            drawCircle(
+                color = labelColor,
+                radius = radius + 10f,
+                center = centre,
+                style = Stroke(width = 3f),
             )
         }
     }

@@ -337,32 +337,79 @@ class DiscoverViewModel @Inject constructor(
     }
 
     /**
+     * How many times a genre has been played from the map this session.
+     *
+     * Two taps on the same genre used to be two identical queues, in the same
+     * order, starting on the same song — which reads as the map being broken
+     * rather than as the catalogue being stable. The counter walks the genre's
+     * aliases so the underlying search differs too, not just the shuffle.
+     */
+    private val genrePlays = HashMap<String, Int>()
+
+    /** Every track the catalogue will give us for a genre, in a fresh order each time. */
+    private suspend fun genrePool(genreId: String): List<UnifiedTrack> {
+        val variation = genrePlays.merge(genreId, 1, Int::plus)!! - 1
+        val shelves = runCatching {
+            discoveryFeed.buildForGenre(
+                genreId = genreId,
+                adventure = _pendingAdventure.value ?: adventure.value,
+                // A deep single shelf, not several shallow ones: "play this
+                // genre" should stay inside the genre, and a wide pool is what
+                // makes shuffling it worth anything.
+                itemsPerShelf = 40,
+                maxShelves = 1,
+                variation = variation,
+            )
+        }.getOrDefault(emptyList())
+        return shelves
+            .flatMap { it.items }
+            .filterIsInstance<DiscoveryItem.TrackItem>()
+            .map { it.track }
+            .distinctBy { it.id }
+            .shuffled()
+    }
+
+    /**
      * Play a genre straight from the map.
      *
-     * Searches the catalogue for the genre's own name and plays what comes
-     * back, queueing the rest — the same path Flow uses, so leaving the map
-     * keeps the music going. This is the "quickly listen to" half of the map;
-     * [selectGenre] is the "look into it properly" half.
+     * Searches the catalogue for the genre and plays what comes back in a
+     * shuffled order, queueing the rest — the same path Flow uses, so leaving
+     * the map keeps the music going. This is the "quickly listen to" half of
+     * the map; [selectGenre] is the "look into it properly" half.
      */
     fun playGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
         val node = genreGraphRepo.graph[genreId] ?: return
         viewModelScope.launch {
-            val shelves = runCatching {
-                discoveryFeed.buildForGenre(
-                    genreId = genreId,
-                    adventure = _pendingAdventure.value ?: adventure.value,
-                    maxShelves = 1,
-                )
-            }.getOrDefault(emptyList())
-            val tracks = shelves
-                .flatMap { it.items }
-                .filterIsInstance<DiscoveryItem.TrackItem>()
-                .map { it.track }
-                .distinctBy { it.id }
+            val tracks = genrePool(genreId)
             // Silence rather than a wrong track: if the catalogue has nothing
             // for this genre there is nothing honest to play.
             tracks.firstOrNull()?.let { player.playUnifiedTrack(it, tracks) }
             // The map stays open, so the panel should reflect what's playing.
+            _mapSelection.value = node
+        }
+    }
+
+    /**
+     * Start a radio station from a genre.
+     *
+     * Seeds the existing station machinery from a random track of that genre
+     * and hands over: the station then expands through neighbouring artists
+     * and keeps refilling, which is the difference between this and [playGenre]
+     * — that plays a finite page of search results, this doesn't end.
+     */
+    fun radioGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
+        val node = genreGraphRepo.graph[genreId] ?: return
+        viewModelScope.launch {
+            val tracks = genrePool(genreId).take(RADIO_OPENING)
+            val seed = tracks.firstOrNull() ?: return@launch
+            // A short opening run rather than the whole pool. The station is
+            // seeded from one track and then follows *that* track's neighbours,
+            // so a handful of genre tracks in front keeps the first stretch
+            // sounding like the genre you asked for instead of like whichever
+            // artist happened to come up first. The planner treats what's
+            // already queued as seen, so it appends rather than repeating them.
+            player.playUnifiedTrack(seed, tracks)
+            player.startRadioFrom(seed.toLegacyTrack())
             _mapSelection.value = node
         }
     }
@@ -509,5 +556,8 @@ class DiscoverViewModel @Inject constructor(
 
     private companion object {
         const val SHELF_SIZE = 12
+
+        /** Genre tracks played ahead of a station, to anchor it in the genre. */
+        const val RADIO_OPENING = 6
     }
 }

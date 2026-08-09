@@ -162,12 +162,16 @@ class DiscoveryFeedUseCase @Inject constructor(
         related: RelatedGenre,
         mood: MoodProfile?,
         limit: Int,
+        variation: Int = 0,
     ): DiscoveryShelf? = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
         val node = related.node
         // The node's own name first — it is what the catalogue is most likely
         // to have tagged — with an alias as the fallback for genres a store
-        // spells differently.
-        val query = node.queries().firstOrNull() ?: return@withTimeoutOrNull null
+        // spells differently. [variation] walks the aliases instead, which is
+        // what stops a genre asked for twice from returning the same search.
+        val queries = node.queries()
+        if (queries.isEmpty()) return@withTimeoutOrNull null
+        val query = queries[Math.floorMod(variation, queries.size)]
         val result = music.searchQobuz(query).getOrNull() ?: return@withTimeoutOrNull null
         registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
 
@@ -204,6 +208,7 @@ class DiscoveryFeedUseCase @Inject constructor(
         adventure: Float = DiscoveryAdventure.DEFAULT,
         itemsPerShelf: Int = 12,
         maxShelves: Int = 6,
+        variation: Int = 0,
     ): List<DiscoveryShelf> = coroutineScope {
         val graph = genreGraph.graph
         val root = graph[genreId] ?: return@coroutineScope emptyList()
@@ -213,8 +218,9 @@ class DiscoveryFeedUseCase @Inject constructor(
         val picks = listOf(RelatedGenre(root, 1f, 0)) +
             graph.neighbours(genreId, maxHops = hops, floor = floor).take(maxShelves - 1)
 
-        picks.map { related -> async { genreShelfFor(related, mood = null, limit = itemsPerShelf) } }
-            .mapNotNull { it.await() }
+        picks.map { related ->
+            async { genreShelfFor(related, mood = null, limit = itemsPerShelf, variation = variation) }
+        }.mapNotNull { it.await() }
     }
 
     // ── Shelf builders ───────────────────────────────────────────────────

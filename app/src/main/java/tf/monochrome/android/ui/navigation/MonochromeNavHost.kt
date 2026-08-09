@@ -296,7 +296,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // Flow is deliberately edge-to-edge — full-bleed artwork behind the
         // system bars — and pads itself, so it opts out of the shared inset
         // rather than being letterboxed above the nav bar and padded twice.
-        val fullBleedRoute = currentDestination?.route == Screen.DiscoveryFlow.route
+        //
+        // The genre map opts out for a different reason: this Box is the app's
+        // haze source, so anything letterboxed above the mini player leaves
+        // flat background behind it and the bar's glass has nothing to blur.
+        // Running the map under it gives the glass real content to lens, and
+        // the map pads its own panel clear of the bar.
+        val fullBleedRoute = currentDestination?.route == Screen.DiscoveryFlow.route ||
+            currentDestination?.route == Screen.GenreMap.route
         val detailBottomInset = when {
             fullBleedRoute -> 0.dp
             else -> navBarHeight + if (showMiniPlayer) miniPlayerReserve else 0.dp
