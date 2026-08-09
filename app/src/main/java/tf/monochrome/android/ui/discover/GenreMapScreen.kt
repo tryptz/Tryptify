@@ -211,6 +211,14 @@ fun GenreMapScreen(
     val liveCamera = rememberUpdatedState(camera)
     val liveVisible = rememberUpdatedState(visible)
     val liveFold = rememberUpdatedState(fold)
+    // These two have to be read live for the same reason, and did not before the
+    // timeline existed: `bounds` used to be a constant computed once from the
+    // graph, so capturing it was harmless. It is now interpolated between the
+    // two layouts and changes every frame, and `morph` decides where a node
+    // actually is. Captured, the hit test goes on computing radial positions
+    // while the screen shows something else, and taps land on nothing.
+    val liveBounds = rememberUpdatedState(bounds)
+    val liveMorph = rememberUpdatedState(morph.value)
 
     // How much of the bottom the detail panel is covering, so a genre can be
     // centred in the part of the map you can actually see.
@@ -425,16 +433,17 @@ fun GenreMapScreen(
                             // you're trying to steer is the worst kind of
                             // animation.
                             flight?.cancel()
-                            camera = liveCamera.value.zoomedAt(centroid, pan, zoom, size, bounds)
+                            camera = liveCamera.value
+                                .zoomedAt(centroid, pan, zoom, size, liveBounds.value)
                         }
                     }
                     .pointerInput(Unit) {
                         detectTapGestures { point ->
                             val hit = hitTest(
                                 point, liveVisible.value, size.width, size.height,
-                                bounds, liveCamera.value, liveFold.value,
+                                liveBounds.value, liveCamera.value, liveFold.value,
                                 timeline = timeline.positions,
-                                morph = morph.value,
+                                morph = liveMorph.value,
                             ) ?: return@detectTapGestures
                             viewModel.selectOnMap(hit.id)
                             toggleBranch(hit.id)
