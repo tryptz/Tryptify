@@ -123,6 +123,7 @@ import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
+import tf.monochrome.android.ui.navigation.navigateTool
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -301,7 +302,7 @@ private fun EqualizerTab(
                 navController.navigate("settings?tab=4") {
                     popUpTo("settings?tab={tab}") { inclusive = true }
                 }
-                navController.navigate("equalizer")
+                navController.navigateTool(Screen.Equalizer)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -315,7 +316,7 @@ private fun EqualizerTab(
                 navController.navigate("settings?tab=4") {
                     popUpTo("settings?tab={tab}") { inclusive = true }
                 }
-                navController.navigate("parametric_eq")
+                navController.navigateTool(Screen.ParametricEq)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -793,7 +794,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         SettingItem(
             title = "Player Visuals Studio",
             subtitle = "Live editor for the lyric type / 3D wave / beat FX, plus the player and mini-player glass",
-            onClick = { navController.navigate(Screen.LyricsFxStudio.route) },
+            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1044,9 +1045,55 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
     val lastFmUsername by viewModel.lastFmUsername.collectAsStateWithLifecycle()
     val lbEnabled by viewModel.listenBrainzEnabled.collectAsStateWithLifecycle()
     val lbToken by viewModel.listenBrainzToken.collectAsStateWithLifecycle()
+    val apiKey by viewModel.lastFmApiKey.collectAsStateWithLifecycle()
+    val apiSecret by viewModel.lastFmApiSecret.collectAsStateWithLifecycle()
 
     var showLastFmDialog by rememberSaveable { mutableStateOf(false) }
     var showLbDialog by rememberSaveable { mutableStateOf(false) }
+    var showApiKeyDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showApiKeyDialog) {
+        var keyInput by rememberSaveable { mutableStateOf(apiKey) }
+        var secretInput by rememberSaveable { mutableStateOf(apiSecret) }
+        AlertDialog(
+            onDismissRequest = { showApiKeyDialog = false },
+            title = { Text("Last.fm API key") },
+            text = {
+                Column {
+                    Text(
+                        // Worth spelling out: this is not the session key above,
+                        // and a listener who conflates the two gets silent
+                        // failures on both scrobbling and charts.
+                        "An application key, not your account login. Create one " +
+                            "free at last.fm/api/account/create. The key alone " +
+                            "unlocks genre charts; scrobbling also needs the secret.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = keyInput, onValueChange = { keyInput = it },
+                        label = { Text("API key") }, modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = secretInput, onValueChange = { secretInput = it },
+                        label = { Text("Shared secret (optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setLastFmApiCredentials(keyInput, secretInput)
+                    showApiKeyDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showApiKeyDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     if (showLastFmDialog) {
         var sessionInput by rememberSaveable { mutableStateOf("") }
@@ -1109,6 +1156,15 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
     }
 
     SettingsGroupHeader("Last.fm")
+    SettingItem(
+        title = "API key",
+        subtitle = if (apiKey.isNotBlank()) {
+            "Set — genre charts and scrobbling can use it"
+        } else {
+            "Not set — genre Top 100s fall back to windowed data"
+        },
+        onClick = { showApiKeyDialog = true }
+    )
     SettingItem(
         title = "Last.fm",
         subtitle = if (lastFmEnabled) "Connected as ${lastFmUsername ?: "user"}" else "Not connected",
@@ -1238,13 +1294,13 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedButton(
-                onClick = { navController.navigate("oxford?tab=0") },
+                onClick = { navController.navigateTool(Screen.Oxford, "oxford?tab=0") },
                 modifier = Modifier.weight(1f),
             ) {
                 Text("Seap Compressor")
             }
             OutlinedButton(
-                onClick = { navController.navigate("oxford?tab=1") },
+                onClick = { navController.navigateTool(Screen.Oxford, "oxford?tab=1") },
                 modifier = Modifier.weight(1f),
             ) {
                 Text("Seap Inflator")
@@ -1256,7 +1312,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         SettingItem(
             title = "Atmos Renderer Configuration",
             subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
-            onClick = { navController.navigate(Screen.AtmosRenderer.route) },
+            onClick = { navController.navigateTool(Screen.AtmosRenderer) },
         )
 
         // Everything below used to sit under "Spatial Audio" too, which only
@@ -2427,7 +2483,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         SettingItem(
             title = "View debug log",
             subtitle = "Live logcat stream for this process — copy or export as a file for bug reports",
-            onClick = { navController.navigate(Screen.DebugLog.route) },
+            onClick = { navController.navigateTool(Screen.DebugLog) },
         )
 
         // Moved from Audio, where it had ended up under the "Spatial Audio"

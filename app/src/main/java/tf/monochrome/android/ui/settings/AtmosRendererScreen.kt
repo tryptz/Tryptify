@@ -82,6 +82,8 @@ import javax.inject.Inject
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
+import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.navigateTool
 
 @HiltViewModel
 class AtmosRendererViewModel @Inject constructor(
@@ -534,7 +536,7 @@ fun AtmosRendererScreen(
                 }
                 Row {
                     TextButton(onClick = {
-                        navController.navigate(tf.monochrome.android.ui.navigation.Screen.HrtfDatabase.route)
+                        navController.navigateTool(Screen.HrtfDatabase)
                     }) { Text("Browse HRTF database") }
                     TextButton(onClick = { sofaPicker.launch(sofaMimes) }) {
                         Text("Load .sofa file")

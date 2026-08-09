@@ -80,6 +80,7 @@ import tf.monochrome.android.ui.eq.ParametricEqScreen
 import tf.monochrome.android.ui.discover.DiscoverScreen
 import tf.monochrome.android.ui.discover.DiscoverShelfScreen
 import tf.monochrome.android.ui.discover.DiscoveryFlowScreen
+import tf.monochrome.android.ui.discover.GenreChartScreen
 import tf.monochrome.android.ui.discover.GenreMapScreen
 import tf.monochrome.android.ui.home.HomeScreen
 import tf.monochrome.android.ui.mixer.MixerScreen
@@ -111,6 +112,11 @@ sealed class Screen(val route: String) {
     data object GenreMap : Screen("discover/map")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
+    }
+    data object GenreChart : Screen("discover/chart/{genreId}?name={name}") {
+        fun createRoute(genreId: String, name: String) =
+            "discover/chart/${android.net.Uri.encode(genreId)}" +
+                "?name=${android.net.Uri.encode(name)}"
     }
     data object Library : Screen("library")
     data object AlbumDetail : Screen("album/{albumId}") {
@@ -245,7 +251,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     restoreState = true
                 }
             }
-            else -> navController.navigate(initialRoute)
+            else -> navController.navigateSafe(initialRoute)
         }
     }
 
@@ -394,6 +400,26 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     tf.monochrome.android.devedit.DevEditScreen("discover_shelf") {
                         DiscoverShelfScreen(
                             shelfId = entry.arguments?.getString("shelfId").orEmpty(),
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
+                    }
+                }
+
+                composable(
+                    route = Screen.GenreChart.route,
+                    arguments = listOf(
+                        navArgument("genreId") { type = NavType.StringType },
+                        navArgument("name") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    )
+                ) { entry ->
+                    tf.monochrome.android.devedit.DevEditScreen("genre_chart") {
+                        GenreChartScreen(
+                            genreId = entry.arguments?.getString("genreId").orEmpty(),
+                            genreName = entry.arguments?.getString("name").orEmpty(),
                             navController = navController,
                             playerViewModel = playerViewModel,
                         )
@@ -719,7 +745,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 onPlayPauseClick = { playerViewModel.togglePlayPause() },
                                 onSkipNextClick = { playerViewModel.skipToNext() },
                                 onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                                onClick = { navController.navigate(Screen.NowPlaying.route) },
+                                onClick = { navController.navigateTool(Screen.NowPlaying) },
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 hazeState = hazeState,
                                 blendMillis = miniBlendMs,
@@ -750,7 +776,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             onPlayPauseClick = { playerViewModel.togglePlayPause() },
                             onSkipNextClick = { playerViewModel.skipToNext() },
                             onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                            onClick = { navController.navigate(Screen.NowPlaying.route) },
+                            onClick = { navController.navigateTool(Screen.NowPlaying) },
                             modifier = Modifier.padding(horizontal = 16.dp),
                             // No frost on detail screens (Settings, EQ, …): the
                             // haze source is the tab pager, so here the frost

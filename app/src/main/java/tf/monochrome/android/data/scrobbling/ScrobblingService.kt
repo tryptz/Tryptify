@@ -28,12 +28,26 @@ class ScrobblingService @Inject constructor(
     companion object {
         private const val LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/"
         private const val LISTENBRAINZ_API_URL = "https://api.listenbrainz.org/1/submit-listens"
-        
-        // In a real app, these would be in BuildConfig or secure storage
-        // Since this is a FOSS client, we'll assume they will be injected properly or requested from the user.
-        // For this implementation parity task, we will just simulate success logs if keys are missing.
-        private const val LASTFM_API_KEY = "dummy_api_key"
-        private const val LASTFM_API_SECRET = "dummy_secret"
+    }
+
+    /**
+     * The listener's Last.fm application credentials, or null if they haven't
+     * set any up.
+     *
+     * These used to be `"dummy_api_key"` / `"dummy_secret"` constants, which
+     * meant every scrobble this app ever sent was signed with a fake secret and
+     * silently rejected — the enclosing `try` swallowed the failure, so
+     * scrobbling appeared to work and never had. A key is per-application and
+     * can't be shipped in a FOSS client without handing every install the same
+     * revocable credential, so it comes from settings instead.
+     */
+    private data class LastFmCredentials(val apiKey: String, val apiSecret: String)
+
+    private suspend fun lastFmCredentials(): LastFmCredentials? {
+        val apiKey = preferences.lastFmApiKey.first()
+        val apiSecret = preferences.lastFmApiSecret.first()
+        if (apiKey.isBlank() || apiSecret.isBlank()) return null
+        return LastFmCredentials(apiKey, apiSecret)
     }
 
     private fun getMd5Hash(input: String): String {
@@ -41,9 +55,9 @@ class ScrobblingService @Inject constructor(
             .joinToString("") { "%02x".format(it) }
     }
 
-    private suspend fun generateLastFmSignature(params: Map<String, String>): String {
+    private fun generateLastFmSignature(params: Map<String, String>, apiSecret: String): String {
         val sortedParams = params.toSortedMap().entries.joinToString("") { "${it.key}${it.value}" }
-        return getMd5Hash(sortedParams + LASTFM_API_SECRET)
+        return getMd5Hash(sortedParams + apiSecret)
     }
 
     suspend fun updateNowPlaying(track: Track) {
@@ -74,11 +88,12 @@ class ScrobblingService @Inject constructor(
 
     private suspend fun updateLastFmNowPlaying(track: Track) {
         val sessionKey = preferences.lastFmSessionKey.first() ?: return
-        
+        val credentials = lastFmCredentials() ?: return
+
         try {
             val params = mapOf(
                 "method" to "track.updateNowPlaying",
-                "api_key" to LASTFM_API_KEY,
+                "api_key" to credentials.apiKey,
                 "sk" to sessionKey,
                 "track" to track.title,
                 "artist" to (track.artist?.name ?: "Unknown Artist")
@@ -86,7 +101,7 @@ class ScrobblingService @Inject constructor(
             
             track.album?.title?.let { params["album"] = it }
             
-            val sig = generateLastFmSignature(params)
+            val sig = generateLastFmSignature(params, credentials.apiSecret)
             params["api_sig"] = sig
             params["format"] = "json"
             
@@ -101,11 +116,12 @@ class ScrobblingService @Inject constructor(
 
     private suspend fun scrobbleLastFmTrack(track: Track, timestampUnix: Long) {
         val sessionKey = preferences.lastFmSessionKey.first() ?: return
-        
+        val credentials = lastFmCredentials() ?: return
+
         try {
             val params = mapOf(
                 "method" to "track.scrobble",
-                "api_key" to LASTFM_API_KEY,
+                "api_key" to credentials.apiKey,
                 "sk" to sessionKey,
                 "timestamp[0]" to timestampUnix.toString(),
                 "track[0]" to track.title,
@@ -114,7 +130,7 @@ class ScrobblingService @Inject constructor(
             
             track.album?.title?.let { params["album[0]"] = it }
             
-            val sig = generateLastFmSignature(params)
+            val sig = generateLastFmSignature(params, credentials.apiSecret)
             params["api_sig"] = sig
             params["format"] = "json"
             

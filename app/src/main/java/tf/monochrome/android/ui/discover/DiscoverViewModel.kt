@@ -79,6 +79,7 @@ class DiscoverViewModel @Inject constructor(
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val preferences: PreferencesManager,
     private val genreGraphRepo: GenreGraphRepository,
+    private val genreCharts: tf.monochrome.android.domain.usecase.GenreChartUseCase,
 ) : ViewModel() {
 
     /**
@@ -521,6 +522,25 @@ class DiscoverViewModel @Inject constructor(
      */
     private val genrePlays = HashMap<String, Int>()
 
+    /**
+     * What "play this genre" should actually queue.
+     *
+     * The genre's chart comes first, in rank order, so tapping hard techno
+     * starts on the record hard techno listeners actually play. The old path —
+     * straight to a catalogue search for the genre's name — ranked by how well
+     * a *title or album* matched the words "hard techno", which is exactly the
+     * query machine-generated filler is built to win. A genre is a property of
+     * the music, not a substring of its title.
+     *
+     * The search pool stays as the fallback for genres no chart source has
+     * heard of, where a rough answer still beats silence.
+     */
+    private suspend fun genreQueue(genreId: String): List<UnifiedTrack> {
+        val charted = runCatching { genreCharts.playablePool(genreId) }
+            .getOrDefault(emptyList())
+        return charted.ifEmpty { genrePool(genreId) }
+    }
+
     /** Every track the catalogue will give us for a genre, in a fresh order each time. */
     private suspend fun genrePool(genreId: String): List<UnifiedTrack> {
         val variation = genrePlays.merge(genreId, 1, Int::plus)!! - 1
@@ -556,7 +576,7 @@ class DiscoverViewModel @Inject constructor(
         val node = genreGraphRepo.graph[genreId] ?: return
         noteGenreVisited(genreId)
         viewModelScope.launch {
-            val tracks = genrePool(genreId)
+            val tracks = genreQueue(genreId)
             // Silence rather than a wrong track: if the catalogue has nothing
             // for this genre there is nothing honest to play.
             tracks.firstOrNull()?.let { player.playUnifiedTrack(it, tracks) }
@@ -577,7 +597,7 @@ class DiscoverViewModel @Inject constructor(
         val node = genreGraphRepo.graph[genreId] ?: return
         noteGenreVisited(genreId)
         viewModelScope.launch {
-            val tracks = genrePool(genreId).take(RADIO_OPENING)
+            val tracks = genreQueue(genreId).take(RADIO_OPENING)
             val seed = tracks.firstOrNull() ?: return@launch
             // A short opening run rather than the whole pool. The station is
             // seeded from one track and then follows *that* track's neighbours,

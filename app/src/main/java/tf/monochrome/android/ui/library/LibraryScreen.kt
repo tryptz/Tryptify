@@ -69,6 +69,8 @@ import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.navigateTool
 
 /**
  * The section Library lands on — page 0, and deliberately absent from the
@@ -194,10 +196,10 @@ fun LibraryScreen(
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
             },
             onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
             }
         )
     }
@@ -338,7 +340,7 @@ fun LibraryScreen(
                             }
                         }
                     }
-                    IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
+                    IconButton(onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "Settings",
@@ -408,7 +410,7 @@ fun LibraryScreen(
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
                                 isDownloaded = track.id in downloadedTrackIds,
@@ -433,7 +435,7 @@ fun LibraryScreen(
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
                                 isDownloaded = track.id in downloadedTrackIds,
@@ -457,20 +459,20 @@ fun LibraryScreen(
                     onAlbumClick = { album ->
                         val albumId = album.id.removePrefix("local_album_").toLongOrNull()
                         if (albumId != null) {
-                            navController.navigate("local_album/$albumId")
+                            navController.navigateSafe("local_album/$albumId")
                         }
                     },
                     onArtistClick = { artist ->
                         val artistId = artist.id.removePrefix("local_artist_").toLongOrNull()
                         if (artistId != null) {
-                            navController.navigate("local_artist/$artistId")
+                            navController.navigateSafe("local_artist/$artistId")
                         }
                     },
                     onGenreClick = { genre ->
-                        navController.navigate(Screen.LocalGenreDetail.createRoute(genre))
+                        navController.navigateSafe(Screen.LocalGenreDetail.createRoute(genre))
                     },
                     onFolderClick = { path ->
-                        navController.navigate("folder/${java.net.URLEncoder.encode(path, "UTF-8")}")
+                        navController.navigateSafe("folder/${java.net.URLEncoder.encode(path, "UTF-8")}")
                     },
                     onShuffleAll = { tracks ->
                         playerViewModel.shufflePlayUnified(tracks)
@@ -513,7 +515,7 @@ fun LibraryScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { navController.navigate("playlist/${playlist.id}") }
+                                    .clickable { navController.navigateSafe("playlist/${playlist.id}") }
                                     .padding(horizontal = 24.dp, vertical = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -590,7 +592,7 @@ fun LibraryScreen(
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 downloadState = activeDownloads[track.id],
                                 isDownloaded = track.id in downloadedTrackIds,
@@ -607,10 +609,10 @@ fun LibraryScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { navController.navigate(Screen.AlbumDetail.createRoute(album.id)) },
+                                    .clickable { navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id)) },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                AlbumItem(album = album, onClick = { navController.navigate(Screen.AlbumDetail.createRoute(album.id)) })
+                                AlbumItem(album = album, onClick = { navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id)) })
                             }
                         }
                     }
@@ -622,10 +624,10 @@ fun LibraryScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { navController.navigate(Screen.ArtistDetail.createRoute(artist.id)) },
+                                    .clickable { navController.navigateSafe(Screen.ArtistDetail.createRoute(artist.id)) },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                ArtistItem(artist = artist, onClick = { navController.navigate(Screen.ArtistDetail.createRoute(artist.id)) })
+                                ArtistItem(artist = artist, onClick = { navController.navigateSafe(Screen.ArtistDetail.createRoute(artist.id)) })
                             }
                         }
                     }

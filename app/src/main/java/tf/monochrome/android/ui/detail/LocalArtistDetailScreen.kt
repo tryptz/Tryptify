@@ -72,6 +72,7 @@ import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.navigation.navigateSafe
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -226,7 +227,7 @@ fun LocalArtistDetailScreen(
                                         onClick = {
                                             val albumId = album.id.removePrefix("local_album_").toLongOrNull()
                                             if (albumId != null) {
-                                                navController.navigate(Screen.LocalAlbumDetail.createRoute(albumId))
+                                                navController.navigateSafe(Screen.LocalAlbumDetail.createRoute(albumId))
                                             }
                                         }
                                     )

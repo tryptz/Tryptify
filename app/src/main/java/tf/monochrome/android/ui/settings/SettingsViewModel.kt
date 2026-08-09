@@ -143,6 +143,14 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val listenBrainzToken: StateFlow<String?> = preferences.listenBrainzToken
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val lastFmApiKey: StateFlow<String> = preferences.lastFmApiKey
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val lastFmApiSecret: StateFlow<String> = preferences.lastFmApiSecret
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    fun setLastFmApiCredentials(apiKey: String, apiSecret: String) {
+        viewModelScope.launch { preferences.setLastFmApiCredentials(apiKey, apiSecret) }
+    }
 
     // --- Audio ---
     val wifiQuality: StateFlow<AudioQuality> = preferences.wifiQuality

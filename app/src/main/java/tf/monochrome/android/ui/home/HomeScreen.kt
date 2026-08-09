@@ -79,6 +79,8 @@ import tf.monochrome.android.ui.search.SearchQueryField
 import tf.monochrome.android.ui.search.SearchHistoryContent
 import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
+import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.navigateTool
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -192,10 +194,10 @@ fun HomeScreen(
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
             },
             onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
             }
         )
     }
@@ -294,14 +296,14 @@ fun HomeScreen(
                         overallProgress = downloadProgress,
                         onClick = { showDownloadsMonitor = true },
                     )
-                    IconButton(onClick = { navController.navigate(Screen.Settings.createRoute()) }) {
+                    IconButton(onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "Settings",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = { navController.navigate(Screen.Profile.route) }) {
+                    IconButton(onClick = { navController.navigateTool(Screen.Profile) }) {
                         Icon(
                             Icons.Default.AccountCircle,
                             contentDescription = "Profile",
@@ -439,7 +441,7 @@ fun HomeScreen(
                             subtitle = "See what's new",
                             onOpen = {
                                 settingsViewModel.markWhatsNewSeen()
-                                navController.navigate(
+                                navController.navigateSafe(
                                     Screen.Settings.createRoute(
                                         tf.monochrome.android.ui.settings.SETTINGS_TAB_ABOUT
                                     )
@@ -472,7 +474,7 @@ fun HomeScreen(
                             onMoreClick = { showContextMenuForTrack = track },
                             onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                             onAlbumClick = track.album?.id?.let { albumId ->
-                                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
                             },
                             isDownloaded = track.id in downloadedTrackIds,
                             selectionMode = selection.active,

@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.UnfoldLess
@@ -128,13 +130,15 @@ import tf.monochrome.android.ui.theme.reduceMotion
  * family one tap at a time. The panel names the subgenres rather than counting
  * them, and each of those is a tap to the next one.
  *
- * The panel's three actions: *Shuffle* drops a shuffled page of that genre into
- * the real player and queue — the same path Flow uses, because "quickly listen to
- * each genre" is the whole point, and shuffled because the same genre tapped
- * twice returning the same song in the same order reads as the map being broken.
- * *Radio* opens a few of those tracks and then hands over to the station planner,
- * which keeps going. *Explore in Discover* hands the genre to the feed, which
- * rebuilds around it and its graph neighbours.
+ * The panel's four actions: *Play top* queues the genre's chart in rank order,
+ * so it opens on the record that genre is actually known for. It used to search
+ * the catalogue for the genre's name and shuffle the results, which ranked by
+ * how well a title or album matched the words — the one query machine-generated
+ * filler reliably wins. *Radio* opens a few of those tracks and then hands over
+ * to the station planner, which keeps going. *Top 100* leaves the catalogue
+ * behind and asks the outside world what this genre actually plays, over a
+ * window. *Explore in Discover* hands the genre to the feed, which rebuilds
+ * around it and its graph neighbours.
  *
  * The panel is drawn from the mini player's own glass settings — the Studio's
  * "Player Glass" tab — because it floats directly above the bar and two sheets
@@ -389,6 +393,11 @@ fun GenreMapScreen(
                     onHeart = { viewModel.toggleHeartGenre(node.id) },
                     onPlay = { viewModel.playGenre(node.id, playerViewModel) },
                     onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
+                    onCharts = {
+                        navController.navigateSafe(
+                            Screen.GenreChart.createRoute(node.id, node.name)
+                        )
+                    },
                     onExplore = {
                         viewModel.selectGenre(node.id)
                         navController.popBackStack()
@@ -456,6 +465,7 @@ private fun GenreCard(
     onHeart: () -> Unit,
     onPlay: () -> Unit,
     onRadio: () -> Unit,
+    onCharts: () -> Unit,
     onExplore: () -> Unit,
     onRelated: (GenreNode) -> Unit,
     onDismiss: () -> Unit,
@@ -609,8 +619,8 @@ private fun GenreCard(
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionPill(
-                    icon = Icons.Default.Shuffle,
-                    label = "Shuffle",
+                    icon = Icons.Default.PlayArrow,
+                    label = "Play top",
                     container = MaterialTheme.colorScheme.primary,
                     content = MaterialTheme.colorScheme.onPrimary,
                     onClick = onPlay,
@@ -623,6 +633,17 @@ private fun GenreCard(
                     content = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = onRadio,
                     modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row {
+                ActionPill(
+                    icon = Icons.Default.BarChart,
+                    label = "Top 100",
+                    container = MaterialTheme.colorScheme.secondaryContainer,
+                    content = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = onCharts,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
             Spacer(Modifier.height(8.dp))

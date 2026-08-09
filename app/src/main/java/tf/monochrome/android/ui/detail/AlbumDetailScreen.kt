@@ -53,6 +53,7 @@ import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.navigation.navigateSafe
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,7 +97,7 @@ fun AlbumDetailScreen(
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = null, // Already here
             onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
             }
         )
     }
@@ -219,7 +220,7 @@ fun AlbumDetailScreen(
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.clickable(enabled = detail.album.artist?.id != null) {
                                     detail.album.artist?.id?.let { artistId ->
-                                        navController.navigate(Screen.ArtistDetail.createRoute(artistId))
+                                        navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId))
                                     }
                                 }
                             )

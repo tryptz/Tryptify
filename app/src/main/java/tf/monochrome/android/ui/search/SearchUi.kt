@@ -87,6 +87,7 @@ import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.navigation.navigateSafe
 
 @Composable
 fun SearchQueryField(
@@ -252,10 +253,10 @@ fun SearchResultsContent(
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
             },
             onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
             }
         )
     }
@@ -403,7 +404,7 @@ fun SearchResultsContent(
                                 ArtistItem(
                                     artist = artist,
                                     onClick = {
-                                        navController.navigate(
+                                        navController.navigateSafe(
                                             Screen.ArtistDetail.createRoute(artist.id)
                                         )
                                     }
@@ -426,7 +427,7 @@ fun SearchResultsContent(
                                 AlbumItem(
                                     album = album,
                                     onClick = {
-                                        navController.navigate(
+                                        navController.navigateSafe(
                                             Screen.AlbumDetail.createRoute(album.id)
                                         )
                                     }
@@ -442,7 +443,7 @@ fun SearchResultsContent(
                         PlaylistSearchItem(
                             playlist = playlist,
                             onClick = {
-                                navController.navigate(
+                                navController.navigateSafe(
                                     Screen.PlaylistDetail.createRoute(playlist.uuid)
                                 )
                             }

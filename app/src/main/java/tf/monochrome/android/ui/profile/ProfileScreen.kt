@@ -69,6 +69,8 @@ import tf.monochrome.android.data.auth.UserProfile
 import tf.monochrome.android.ui.components.liquidGlass
 import android.content.Context
 import androidx.hilt.navigation.compose.hiltViewModel
+import tf.monochrome.android.ui.navigation.navigateTool
+import tf.monochrome.android.ui.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -157,7 +159,7 @@ fun ProfileScreen(
                         isSyncing = isSyncing,
                         syncStatus = syncStatus,
                         onSync = { viewModel.syncNow() },
-                        onOpenStats = { navController.navigate("stats") },
+                        onOpenStats = { navController.navigateTool(Screen.Stats) },
                         onSignOut = {
                             viewModel.signOut()
                         }

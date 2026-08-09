@@ -71,6 +71,8 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
 import java.util.Locale
+import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.navigateTool
 
 /**
  * Stateful entry point for the main player. Collects every flow from
@@ -256,7 +258,7 @@ fun MainPlayerRoute(
             favoritePresetIds = visualizerFavoritePresetIds,
             onPresetSelected = playerViewModel::selectVisualizerPreset,
             onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
-            onSettingsClick = { navController.navigate(Screen.Settings.createRoute()) },
+            onSettingsClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onDismiss = { showPresetSheet = false },
         )
     }
@@ -388,7 +390,7 @@ fun MainPlayerRoute(
             downloadState = downloadState,
             heroStyle = heroStyle,
             onCollapse = { navController.popBackStack() },
-            onOutputClick = { navController.navigate(Screen.Settings.createRoute()) },
+            onOutputClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
             onCycleRepeat = playerViewModel::cycleRepeatMode,
@@ -401,14 +403,14 @@ fun MainPlayerRoute(
                 }
             },
             onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-            onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
-            onOpenLyricsStudio = { navController.navigate(Screen.LyricsFxStudio.route) },
-            onOpenSettings = { navController.navigate(Screen.Settings.createRoute()) },
+            onOpenEqualizer = { navController.navigateTool(Screen.Equalizer) },
+            onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
+            onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
-                { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
             },
             onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
-                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
             },
         )
     }
@@ -616,10 +618,10 @@ fun MainPlayerRoute(
                 onForward10 = playerViewModel::forward10,
                 onNext = playerViewModel::skipToNext,
                 onTimer = { showSleepSheet = true },
-                onMixer = { navController.navigate(Screen.Mixer.route) },
+                onMixer = { navController.navigateTool(Screen.Mixer) },
                 onPlaylist = { showQueueSheet = true },
-                onOutput = { navController.navigate(Screen.Settings.createRoute()) },
-                onSound = { navController.navigate(Screen.Equalizer.route) },
+                onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+                onSound = { navController.navigateTool(Screen.Equalizer) },
                 onSpeed = { showSpeedSheet = true },
                 onVisualizer = {
                     playerViewModel.setNowPlayingViewMode(
@@ -665,10 +667,10 @@ fun MainPlayerRoute(
                     )
                 },
                 onTimer = { showSleepSheet = true },
-                onMixer = { navController.navigate(Screen.Mixer.route) },
+                onMixer = { navController.navigateTool(Screen.Mixer) },
                 onPlaylist = { showQueueSheet = true },
-                onOutput = { navController.navigate(Screen.Settings.createRoute()) },
-                onSound = { navController.navigate(Screen.Equalizer.route) },
+                onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+                onSound = { navController.navigateTool(Screen.Equalizer) },
                 onSpeed = { showSpeedSheet = true },
                 onVisualizer = {
                     playerViewModel.setNowPlayingViewMode(
@@ -680,9 +682,9 @@ fun MainPlayerRoute(
                 onCompressorToggle = playerViewModel::setCompressorEnabled,
                 onInflatorToggle = playerViewModel::setInflatorEnabled,
                 onCrossfeedToggle = playerViewModel::setCrossfeedEnabled,
-                onCompressorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 0)) },
-                onInflatorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 1)) },
-                onCrossfeedOpen = { navController.navigate(Screen.Crossfeed.route) },
+                onCompressorOpen = { navController.navigateTool(Screen.Oxford, Screen.Oxford.createRoute(tab = 0)) },
+                onInflatorOpen = { navController.navigateTool(Screen.Oxford, Screen.Oxford.createRoute(tab = 1)) },
+                onCrossfeedOpen = { navController.navigateTool(Screen.Crossfeed) },
                 onAutoEqToggle = playerViewModel::setAutoEqEnabled,
                 onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
                 onToneControlsChange = playerViewModel::setToneControls,

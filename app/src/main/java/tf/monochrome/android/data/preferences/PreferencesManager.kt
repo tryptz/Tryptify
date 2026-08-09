@@ -102,6 +102,8 @@ class PreferencesManager @Inject constructor(
         // Scrobbling
         private val LASTFM_SESSION_KEY = stringPreferencesKey("lastfm_session_key")
         private val LASTFM_USERNAME = stringPreferencesKey("lastfm_username")
+        private val LASTFM_API_KEY = stringPreferencesKey("lastfm_api_key")
+        private val LASTFM_API_SECRET = stringPreferencesKey("lastfm_api_secret")
         private val LASTFM_ENABLED = booleanPreferencesKey("lastfm_enabled")
         private val LISTENBRAINZ_TOKEN = stringPreferencesKey("listenbrainz_token")
         private val LISTENBRAINZ_ENABLED = booleanPreferencesKey("listenbrainz_enabled")
@@ -483,6 +485,30 @@ class PreferencesManager @Inject constructor(
     // Scrobbling - Last.fm
     val lastFmSessionKey: Flow<String?> = dataStore.data.map { prefs ->
         prefs[LASTFM_SESSION_KEY]
+    }
+
+    /**
+     * The listener's own Last.fm application key.
+     *
+     * Not shipped with the app: a key is per-application and a FOSS client that
+     * baked one in would be handing every install the same credential, which is
+     * exactly what gets a key revoked. Empty until someone pastes theirs in, and
+     * everything that reads it degrades rather than fails when it is.
+     */
+    val lastFmApiKey: Flow<String> = dataStore.data.map { prefs ->
+        prefs[LASTFM_API_KEY].orEmpty()
+    }
+
+    /** Paired with the key above; only scrobbling needs it, charts do not. */
+    val lastFmApiSecret: Flow<String> = dataStore.data.map { prefs ->
+        prefs[LASTFM_API_SECRET].orEmpty()
+    }
+
+    suspend fun setLastFmApiCredentials(apiKey: String, apiSecret: String) {
+        dataStore.edit {
+            it[LASTFM_API_KEY] = apiKey.trim()
+            it[LASTFM_API_SECRET] = apiSecret.trim()
+        }
     }
 
     val lastFmUsername: Flow<String?> = dataStore.data.map { prefs ->
