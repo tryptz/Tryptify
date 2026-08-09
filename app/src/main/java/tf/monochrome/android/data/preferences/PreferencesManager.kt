@@ -108,6 +108,15 @@ class PreferencesManager @Inject constructor(
         private val LISTENBRAINZ_TOKEN = stringPreferencesKey("listenbrainz_token")
         private val LISTENBRAINZ_ENABLED = booleanPreferencesKey("listenbrainz_enabled")
 
+        // Discord presence. Deliberately NOT in SETTINGS_SYNC_KEYS: a Discord
+        // user token is an unscoped credential for the whole account, and
+        // syncing it would copy it onto every device signed into Tryptify and
+        // through the sync backend on the way. It stays on the device it was
+        // typed into.
+        private val DISCORD_TOKEN = stringPreferencesKey("discord_token")
+        private val DISCORD_APPLICATION_ID = stringPreferencesKey("discord_application_id")
+        private val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
+
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
         private val QOBUZ_INSTANCE_URL = stringPreferencesKey("qobuz_instance_url")
@@ -568,6 +577,46 @@ class PreferencesManager @Inject constructor(
         dataStore.edit {
             it.remove(LISTENBRAINZ_TOKEN)
             it[LISTENBRAINZ_ENABLED] = false
+        }
+    }
+
+    // --- Discord presence ---
+    val discordToken: Flow<String> = dataStore.data.map { prefs ->
+        prefs[DISCORD_TOKEN].orEmpty()
+    }
+
+    /**
+     * The Discord application whose media proxy mints album-art assets.
+     *
+     * Optional, and the presence works without it — just without artwork. A
+     * gateway-set activity can only carry an image Discord itself hosts, and
+     * the only route from an arbitrary cover URL to one of those runs through
+     * an application's external-assets endpoint.
+     */
+    val discordApplicationId: Flow<String> = dataStore.data.map { prefs ->
+        prefs[DISCORD_APPLICATION_ID].orEmpty()
+    }
+
+    val discordPresenceEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[DISCORD_PRESENCE_ENABLED] ?: false
+    }
+
+    suspend fun setDiscordCredentials(token: String, applicationId: String) {
+        dataStore.edit {
+            it[DISCORD_TOKEN] = token.trim()
+            it[DISCORD_APPLICATION_ID] = applicationId.trim()
+        }
+    }
+
+    suspend fun setDiscordPresenceEnabled(enabled: Boolean) {
+        dataStore.edit { it[DISCORD_PRESENCE_ENABLED] = enabled }
+    }
+
+    suspend fun clearDiscordCredentials() {
+        dataStore.edit {
+            it.remove(DISCORD_TOKEN)
+            it.remove(DISCORD_APPLICATION_ID)
+            it[DISCORD_PRESENCE_ENABLED] = false
         }
     }
 

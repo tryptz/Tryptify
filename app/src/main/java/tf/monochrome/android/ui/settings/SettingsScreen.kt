@@ -1964,12 +1964,137 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
  * a tab of its own, because [SettingsTabContent] is a LazyColumn and nesting
  * two of them throws on measure — so exactly one wrapper lives here.
  */
+
+/**
+ * Discord presence — the switch, the token, and the warning it needs.
+ *
+ * The warning is not boilerplate and is deliberately not collapsible. Every
+ * other connection in this app hands over a scoped credential: a Last.fm
+ * session key scrobbles and nothing else, a ListenBrainz token submits listens.
+ * A Discord user token is the account. It reads every DM, joins servers and
+ * spends money, and Discord has no scoped alternative that can set a presence —
+ * there is no mobile Rich Presence API at all, which is why this works the way
+ * it does. Someone switching this on should know that before they paste, not
+ * after.
+ */
+@Composable
+private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
+    val enabled by viewModel.discordPresenceEnabled.collectAsStateWithLifecycle()
+    val token by viewModel.discordToken.collectAsStateWithLifecycle()
+    val applicationId by viewModel.discordApplicationId.collectAsStateWithLifecycle()
+    val status by viewModel.discordStatus.collectAsStateWithLifecycle()
+    val error by viewModel.discordError.collectAsStateWithLifecycle()
+
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showDialog) {
+        var tokenInput by rememberSaveable { mutableStateOf(token) }
+        var appIdInput by rememberSaveable { mutableStateOf(applicationId) }
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Discord token") },
+            text = {
+                Column {
+                    Text(
+                        "This is your Discord account token, not a password and not " +
+                            "an app password. Anything holding it can read your messages " +
+                            "and act as you. Tryptify keeps it on this device only and " +
+                            "never syncs it, but paste it only if that trade is one you " +
+                            "want to make.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Discord has no presence API for phones, so the only way to do " +
+                            "this is to connect as you. That is against Discord's terms, " +
+                            "and while presence-only use has gone unpunished for years, " +
+                            "the risk of losing the account is yours.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = tokenInput, onValueChange = { tokenInput = it },
+                        label = { Text("User token") }, modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = appIdInput, onValueChange = { appIdInput = it },
+                        label = { Text("Application ID (optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Album art needs an application ID — a presence set this way can " +
+                            "only show an image Discord itself hosts, and an application " +
+                            "is what turns a cover URL into one. Without it you still get " +
+                            "the track, artist, album and progress bar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setDiscordCredentials(tokenInput, appIdInput)
+                    showDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    SettingsGroupHeader("Discord")
+    SettingItem(
+        title = "Token",
+        subtitle = if (token.isBlank()) "Not set — needed to show what you're playing"
+            else if (applicationId.isBlank()) "Set — album art off (no application ID)"
+            else "Set",
+        onClick = { showDialog = true }
+    )
+    SettingSwitchItem(
+        title = "Show what I'm playing",
+        subtitle = when {
+            token.isBlank() -> "Add a token first"
+            status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTED ->
+                "On — your profile is showing the current track"
+            status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTING ->
+                "Connecting…"
+            status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.FAILED ->
+                "Couldn't connect"
+            enabled -> "On — connects when something plays"
+            else -> "Off"
+        },
+        checked = enabled,
+        onCheckedChange = { viewModel.setDiscordPresenceEnabled(it && token.isNotBlank()) }
+    )
+    error?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        TextButton(onClick = { viewModel.clearDiscordError() }) { Text("Dismiss") }
+    }
+    if (token.isNotBlank()) {
+        TextButton(onClick = { viewModel.clearDiscordCredentials() }) {
+            Text("Forget token", color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
 @Composable
 private fun ConnectionsTab(viewModel: SettingsViewModel) {
     SettingsTabContent {
         CatalogControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
         ScrobblingControls(viewModel)
+        Spacer(modifier = Modifier.height(20.dp))
+        DiscordPresenceControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
         SpotifyAccountControls()
         Spacer(modifier = Modifier.height(20.dp))

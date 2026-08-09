@@ -50,6 +50,7 @@ class SettingsViewModel @Inject constructor(
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
     private val lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager,
+    private val discordPresence: tf.monochrome.android.data.presence.DiscordPresenceManager,
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
@@ -155,6 +156,31 @@ class SettingsViewModel @Inject constructor(
 
     /** The address to paste into the Last.fm application's Callback URL field. */
     val lastFmCallbackUrl: String get() = lastFmAuthManager.callbackUrl
+
+    // --- Discord presence ---
+    val discordPresenceEnabled: StateFlow<Boolean> = preferences.discordPresenceEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val discordToken: StateFlow<String> = preferences.discordToken
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val discordApplicationId: StateFlow<String> = preferences.discordApplicationId
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val discordStatus: StateFlow<tf.monochrome.android.data.presence.DiscordPresenceManager.Status> =
+        discordPresence.status
+    val discordError: StateFlow<String?> = discordPresence.errorMessage
+
+    fun setDiscordCredentials(token: String, applicationId: String) {
+        viewModelScope.launch { preferences.setDiscordCredentials(token, applicationId) }
+    }
+
+    fun setDiscordPresenceEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDiscordPresenceEnabled(enabled) }
+    }
+
+    fun clearDiscordCredentials() {
+        viewModelScope.launch { preferences.clearDiscordCredentials() }
+    }
+
+    fun clearDiscordError() = discordPresence.clearError()
 
     /** Whether charts have a key at all — usually the bundled one, so usually true. */
     val chartsKeyAvailable: StateFlow<Boolean> = preferences.lastFmChartsApiKey

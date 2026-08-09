@@ -267,6 +267,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.json)
     implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.websockets)
 
     // Coil
     implementation(libs.coil.compose)

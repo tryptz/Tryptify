@@ -57,6 +57,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
+    @Inject lateinit var discordPresence: tf.monochrome.android.data.presence.DiscordPresenceManager
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
@@ -200,6 +201,10 @@ class PlaybackService : MediaSessionService() {
                 // Also what wakes the blend watcher — see startCrossfadeWatcher.
                 playingSignal.value = isPlaying
                 refreshNowPlayingWidget()
+                // Discord draws the progress bar from timestamps and animates
+                // it on its own, so a pause has to be pushed or the bar runs
+                // on through music that stopped.
+                queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
             }
 
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
@@ -328,6 +333,7 @@ class PlaybackService : MediaSessionService() {
                                 libraryRepository.addToHistory(track, unified)
                                 scrobblingService.updateNowPlaying(track)
                             }
+                            pushDiscordPresence(track)
                         }
                     }
                 }
@@ -664,8 +670,39 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * Tell Discord what's playing, if the listener asked for that.
+     *
+     * Reads the play head straight off the player rather than taking a position
+     * argument: this is called from a track change and from a pause, and in
+     * both cases "where are we now" is the player's answer, not the caller's.
+     * The manager is a no-op when the feature is off, which is the normal case
+     * — so this stays a cheap call on a hot path.
+     */
+    private fun pushDiscordPresence(track: tf.monochrome.android.domain.model.Track) {
+        val player = mediaSession?.player ?: return
+        discordPresence.update(
+            tf.monochrome.android.data.presence.DiscordPresence.NowPlaying(
+                title = track.title,
+                artist = track.artist?.name,
+                album = track.album?.title,
+                artworkAsset = track.album?.cover?.let {
+                    tf.monochrome.android.domain.model.buildCoverUrl(it, 640)
+                },
+                positionMs = player.currentPosition.coerceAtLeast(0L),
+                // The player's duration is unset until the track is prepared;
+                // the catalogue's is in seconds and always there.
+                durationMs = player.duration.takeIf { it > 0 } ?: (track.duration * 1000L),
+                paused = !player.isPlaying,
+            ),
+        )
+    }
+
     @OptIn(UnstableApi::class)
     override fun onDestroy() {
+        // Discord holds a presence until the connection that set it closes, so
+        // leaving without this parks the last track on the profile for good.
+        discordPresence.clear()
         crossfade.release()
         mediaSession?.run {
             player.release()
