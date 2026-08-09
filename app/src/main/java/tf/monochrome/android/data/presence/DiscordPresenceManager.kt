@@ -20,12 +20,10 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -63,14 +61,19 @@ class DiscordPresenceManager @Inject constructor(
     private val lock = Mutex()
 
     private var socketJob: Job? = null
-    private var send: (suspend (String) -> Unit)? = null
-    private var current: JsonObject? = null
+
+    /**
+     * Written by the session coroutine when the socket opens and cleared when
+     * it closes; read by [update] on whichever thread a track change arrives
+     * on. Volatile because those are genuinely different threads and a stale
+     * null here means a silently skipped presence update.
+     */
+    @Volatile private var send: (suspend (String) -> Unit)? = null
+
+    @Volatile private var current: JsonObject? = null
 
     /** Cache of artwork URL → Discord's proxied asset path, per process. */
     private val assetCache = HashMap<String, String>()
-
-    val enabled: StateFlow<Boolean> = preferences.discordPresenceEnabled
-        .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _status = MutableStateFlow(Status.OFF)
     val status: StateFlow<Status> = _status.asStateFlow()
@@ -113,7 +116,7 @@ class DiscordPresenceManager @Inject constructor(
                 current = activity
                 val sender = send
                 if (sender == null) {
-                    connect(token, activity)
+                    connect(token)
                 } else {
                     runCatching { sender(DiscordPresence.presenceFrame(activity)) }
                         .onFailure { Log.w(TAG, "presence update failed", it) }
@@ -141,8 +144,13 @@ class DiscordPresenceManager @Inject constructor(
         if (_status.value == Status.FAILED) _status.value = Status.OFF
     }
 
-    // Called with [lock] held.
-    private fun connect(token: String, initial: JsonObject) {
+    /**
+     * Open the socket. Called with [lock] held, and with [current] already set
+     * to the activity that IDENTIFY should carry — the presence goes out inside
+     * the opening frame rather than as a follow-up, so there is no window where
+     * the connection is up and the card is empty.
+     */
+    private fun connect(token: String) {
         _status.value = Status.CONNECTING
         socketJob = scope.launch {
             var attempt = 0
@@ -161,9 +169,6 @@ class DiscordPresenceManager @Inject constructor(
                 delay(backoff + Random.nextLong(500))
             }
         }
-        // The initial activity is sent inside IDENTIFY by runSession, which
-        // reads `current` — set by the caller before this runs.
-        current = initial
     }
 
     /** @return true if the session ran normally before ending, false if it failed early. */

@@ -95,6 +95,12 @@ object WhatsNew {
                         "techno, get a track called \"Hard Techno\". It plays the charts now.",
                 ),
                 WhatsNewEntry(
+                    title = "Show what you're playing on Discord",
+                    body = "A \"Listening to\" card with the track, artist, album art and a live " +
+                        "progress bar. Off by default, and it needs your Discord token — read " +
+                        "what the setting says about that before switching it on.",
+                ),
+                WhatsNewEntry(
                     title = "Connect Last.fm in a browser",
                     body = "Connecting used to ask for a session key — something no listener " +
                         "has, and nothing in the app could produce. Tap Last.fm, approve it on " +

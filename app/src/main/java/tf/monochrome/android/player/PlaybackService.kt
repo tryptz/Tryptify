@@ -30,7 +30,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.audio.dsp.DspEngineManager
@@ -209,6 +211,21 @@ class PlaybackService : MediaSessionService() {
 
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
                 refreshNowPlayingWidget()
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                // A seek moves the play head without changing the track, and
+                // Discord is animating a bar from timestamps that just went
+                // stale — it would keep counting from where the track used to
+                // be. Only seeks: the automatic transitions are already covered
+                // by onMediaItemTransition.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -453,6 +470,20 @@ class PlaybackService : MediaSessionService() {
             }
         }
         startCrossfadeWatcher()
+
+        // The queue running dry has to take the Discord card down with it.
+        // Discord holds a presence until the connection that set it closes, so
+        // without this the last track of the night stays on the profile until
+        // the service is destroyed — which, for a foreground media service, can
+        // be hours. Watching the queue rather than a playback state catches
+        // every route to "nothing is playing": the end of the last track,
+        // clearing the queue, stopping by hand.
+        serviceScope.launch {
+            queueManager.currentTrack
+                .map { it == null }
+                .distinctUntilChanged()
+                .collect { empty -> if (empty) discordPresence.clear() }
+        }
 
         // Anything that reorders, extends or truncates the queue — drag to
         // reorder, play-next, clear-upcoming, a shuffle or repeat-mode change —
