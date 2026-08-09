@@ -1049,7 +1049,10 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
     val apiSecret by viewModel.lastFmApiSecret.collectAsStateWithLifecycle()
     val chartsKeyAvailable by viewModel.chartsKeyAvailable.collectAsStateWithLifecycle()
 
-    var showLastFmDialog by rememberSaveable { mutableStateOf(false) }
+    val lastFmConnecting by viewModel.lastFmConnecting.collectAsStateWithLifecycle()
+    val lastFmAuthError by viewModel.lastFmAuthError.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
     var showLbDialog by rememberSaveable { mutableStateOf(false) }
     var showApiKeyDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -1082,6 +1085,18 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Without this in the registration, Last.fm shows a page
+                    // asking the listener to return to the app by hand and
+                    // never redirects — the connection just never completes,
+                    // with nothing on either side saying why.
+                    Text(
+                        "Set the application's Callback URL to " +
+                            viewModel.lastFmCallbackUrl +
+                            " so authorising returns to Tryptify.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = keyInput, onValueChange = { keyInput = it },
@@ -1103,42 +1118,6 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showApiKeyDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
-
-    if (showLastFmDialog) {
-        var sessionInput by rememberSaveable { mutableStateOf("") }
-        var usernameInput by rememberSaveable { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showLastFmDialog = false },
-            title = { Text("Last.fm") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = usernameInput, onValueChange = { usernameInput = it },
-                        label = { Text("Username") }, modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = sessionInput, onValueChange = { sessionInput = it },
-                        label = { Text("Session Key") }, modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.setLastFmSession(sessionInput, usernameInput)
-                        showLastFmDialog = false
-                    },
-                    // Disabled until both fields are filled, so Connect can't
-                    // silently close without connecting.
-                    enabled = sessionInput.isNotBlank() && usernameInput.isNotBlank()
-                ) { Text("Connect") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLastFmDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -1184,13 +1163,30 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
     )
     SettingItem(
         title = "Last.fm",
-        subtitle = if (lastFmEnabled) "Connected as ${lastFmUsername ?: "user"}" else "Not connected",
-        onClick = { showLastFmDialog = true }
+        subtitle = when {
+            lastFmEnabled -> "Connected as ${lastFmUsername ?: "user"}"
+            lastFmConnecting -> "Waiting for Last.fm…"
+            else -> "Not connected — tap to authorise in your browser"
+        },
+        // No text box. A session key is not something a person has — it comes
+        // out of auth.getSession, which needs the browser handshake this
+        // starts. Asking anyone to paste one was asking for something only a
+        // developer with a terminal could produce.
+        onClick = { if (!lastFmEnabled) viewModel.connectLastFm(context) }
     )
     if (lastFmEnabled) {
         TextButton(onClick = { viewModel.clearLastFmSession() }) {
             Text("Disconnect", color = MaterialTheme.colorScheme.error)
         }
+    }
+    lastFmAuthError?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        TextButton(onClick = { viewModel.clearLastFmError() }) { Text("Dismiss") }
     }
 
     Spacer(modifier = Modifier.height(16.dp))

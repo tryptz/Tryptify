@@ -106,6 +106,18 @@
                     android:scheme="tryptify"
                     android:host="spotify-callback" />
             </intent-filter>
+
+            <!-- Last.fm auth callback deep-link. Last.fm's own handshake is not
+                 OAuth2 but has the same shape: consent in a browser, redirect
+                 back with a single-use token, exchange it for a session key. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="tryptify"
+                    android:host="lastfm-callback" />
+            </intent-filter>
         </activity>
 
         <!-- Media Playback Service -->

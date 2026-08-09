@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
     @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
+    @Inject lateinit var lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var performanceProfile: PerformanceProfile
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
@@ -355,8 +356,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Route OAuth callback deep-links: Spotify (tryptify://spotify-callback) vs
-     * Supabase (tf.monotrypt.android://login-callback). Handled from BOTH
+     * Route auth callback deep-links: Spotify (tryptify://spotify-callback),
+     * Last.fm (tryptify://lastfm-callback) and Supabase
+     * (tf.monotrypt.android://login-callback). Handled from BOTH
      * onNewIntent (app already running) and onCreate (cold start after process
      * death, where the redirect delivers the callback as the launch intent —
      * previously dropped, so login silently failed).
@@ -366,6 +368,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             if (uri.scheme == "tryptify" && uri.host == "spotify-callback") {
                 spotifyAuthManager.handleCallback(uri)
+            } else if (uri.scheme == "tryptify" && uri.host == "lastfm-callback") {
+                lastFmAuthManager.handleCallback(uri)
             } else {
                 supabaseAuthManager.handleDeepLink(uri)
             }

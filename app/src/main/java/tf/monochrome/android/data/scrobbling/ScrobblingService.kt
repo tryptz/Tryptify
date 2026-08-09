@@ -16,7 +16,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Track
-import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +25,6 @@ class ScrobblingService @Inject constructor(
     private val preferences: PreferencesManager
 ) {
     companion object {
-        private const val LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/"
         private const val LISTENBRAINZ_API_URL = "https://api.listenbrainz.org/1/submit-listens"
     }
 
@@ -48,16 +46,6 @@ class ScrobblingService @Inject constructor(
         val apiSecret = preferences.lastFmApiSecret.first()
         if (apiKey.isBlank() || apiSecret.isBlank()) return null
         return LastFmCredentials(apiKey, apiSecret)
-    }
-
-    private fun getMd5Hash(input: String): String {
-        return MessageDigest.getInstance("MD5").digest(input.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-    }
-
-    private fun generateLastFmSignature(params: Map<String, String>, apiSecret: String): String {
-        val sortedParams = params.toSortedMap().entries.joinToString("") { "${it.key}${it.value}" }
-        return getMd5Hash(sortedParams + apiSecret)
     }
 
     suspend fun updateNowPlaying(track: Track) {
@@ -101,11 +89,11 @@ class ScrobblingService @Inject constructor(
             
             track.album?.title?.let { params["album"] = it }
             
-            val sig = generateLastFmSignature(params, credentials.apiSecret)
+            val sig = LastFmSigning.sign(params, credentials.apiSecret)
             params["api_sig"] = sig
             params["format"] = "json"
             
-            val response = httpClient.post(LASTFM_API_URL) {
+            val response = httpClient.post(LastFmSigning.API_URL) {
                 setBody(FormDataContent(Parameters.build {
                     params.forEach { (k, v) -> append(k, v) }
                 }))
@@ -130,11 +118,11 @@ class ScrobblingService @Inject constructor(
             
             track.album?.title?.let { params["album[0]"] = it }
             
-            val sig = generateLastFmSignature(params, credentials.apiSecret)
+            val sig = LastFmSigning.sign(params, credentials.apiSecret)
             params["api_sig"] = sig
             params["format"] = "json"
             
-            val response = httpClient.post(LASTFM_API_URL) {
+            val response = httpClient.post(LastFmSigning.API_URL) {
                 setBody(FormDataContent(Parameters.build {
                     params.forEach { (k, v) -> append(k, v) }
                 }))

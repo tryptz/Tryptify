@@ -95,6 +95,12 @@ object WhatsNew {
                         "techno, get a track called \"Hard Techno\". It plays the charts now.",
                 ),
                 WhatsNewEntry(
+                    title = "Connect Last.fm in a browser",
+                    body = "Connecting used to ask for a session key — something no listener " +
+                        "has, and nothing in the app could produce. Tap Last.fm, approve it on " +
+                        "Last.fm's own page, and it comes straight back connected.",
+                ),
+                WhatsNewEntry(
                     title = "Your own files play first",
                     body = "Tap a song anywhere and it plays the copy already on your device " +
                         "instead of streaming it — including tracks you downloaded, which used " +

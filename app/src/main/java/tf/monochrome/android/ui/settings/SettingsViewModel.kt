@@ -49,6 +49,7 @@ class SettingsViewModel @Inject constructor(
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
+    private val lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager,
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
@@ -148,6 +149,12 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
     val lastFmApiSecret: StateFlow<String> = preferences.lastFmApiSecret
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    val lastFmConnecting: StateFlow<Boolean> = lastFmAuthManager.isConnecting
+    val lastFmAuthError: StateFlow<String?> = lastFmAuthManager.errorMessage
+
+    /** The address to paste into the Last.fm application's Callback URL field. */
+    val lastFmCallbackUrl: String get() = lastFmAuthManager.callbackUrl
 
     /** Whether charts have a key at all — usually the bundled one, so usually true. */
     val chartsKeyAvailable: StateFlow<Boolean> = preferences.lastFmChartsApiKey
@@ -421,10 +428,15 @@ class SettingsViewModel @Inject constructor(
     fun setConfirmClearQueue(enabled: Boolean) { viewModelScope.launch { preferences.setConfirmClearQueue(enabled) } }
 
     // --- Scrobbling actions ---
-    fun setLastFmSession(sessionKey: String, username: String) {
-        viewModelScope.launch { preferences.setLastFmSession(sessionKey, username) }
-    }
-    fun clearLastFmSession() { viewModelScope.launch { preferences.clearLastFmSession() } }
+    /**
+     * Open Last.fm's consent page. The session key comes back through the
+     * callback deep link, not from anything typed here — see [LastFmAuthManager].
+     */
+    fun connectLastFm(activityContext: android.content.Context) =
+        lastFmAuthManager.connect(activityContext)
+
+    fun clearLastFmSession() { viewModelScope.launch { lastFmAuthManager.disconnect() } }
+    fun clearLastFmError() = lastFmAuthManager.clearError()
     fun setListenBrainzToken(token: String) { viewModelScope.launch { preferences.setListenBrainzToken(token) } }
     fun clearListenBrainzToken() { viewModelScope.launch { preferences.clearListenBrainzToken() } }
 
