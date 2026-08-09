@@ -22,7 +22,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.domain.model.AudioQuality
-import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
@@ -156,7 +155,6 @@ class PreferencesManager @Inject constructor(
         // Discover's "familiar ↔ adventurous" knob, 0..1. Synced: unlike the
         // performance switches this is taste, not hardware, and it should
         // follow the listener between devices.
-        private val DISCOVERY_ADVENTURE = floatPreferencesKey("discovery_adventure")
 
         // Genres the listener has hearted on the map. Taste, like the knob
         // above, so it syncs. The recents beside it are history and stay local,
@@ -395,7 +393,6 @@ class PreferencesManager @Inject constructor(
             RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
             RADIO_WEIGHT_MOOD_CONTINUITY, RADIO_WEIGHT_ERA_CONSISTENCY,
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
-            DISCOVERY_ADVENTURE,
             DISCOVERY_HEARTED_GENRES,
             DISCOVERY_SORT,
         )
@@ -1760,23 +1757,6 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Discover ---
-    val discoveryAdventure: Flow<Float> = dataStore.data.map {
-        DiscoveryAdventure.clamp(it[DISCOVERY_ADVENTURE] ?: DiscoveryAdventure.DEFAULT)
-    }
-
-    /**
-     * Move the knob, and move the three planner weights that mean the same
-     * thing with it — so a station started from Discover behaves like the feed
-     * it came from. The other eleven weights are left exactly as the user set
-     * them in Settings › Radio.
-     */
-    suspend fun setDiscoveryAdventure(value: Float) {
-        val clamped = DiscoveryAdventure.clamp(value)
-        val weights = DiscoveryAdventure.toPlannerWeights(radioPlannerWeights.first(), clamped)
-        dataStore.edit { it[DISCOVERY_ADVENTURE] = clamped }
-        setRadioPlannerWeights(weights)
-    }
-
     val discoveryHeartedGenres: Flow<Set<String>> = dataStore.data.map {
         it[DISCOVERY_HEARTED_GENRES] ?: emptySet()
     }

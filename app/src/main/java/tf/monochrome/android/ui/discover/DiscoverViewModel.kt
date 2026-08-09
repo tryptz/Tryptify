@@ -161,27 +161,24 @@ class DiscoverViewModel @Inject constructor(
 
     /**
      * Set only by [refresh]. The pull-to-refresh indicator reads this rather
-     * than [loading], which is also raised by the first build, by every chip
-     * tap and by releasing the adventure slider — a spinner that appears when
+     * than [loading], which is also raised by the first build and by every
+     * chip tap — a spinner that appears when
      * you tapped something says the wrong thing about the gesture you made.
      */
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
     /**
-     * The familiar ↔ adventurous knob. Read live so the caption tracks the
-     * finger, but the feed is only rebuilt when the drag ends — see
-     * [setAdventure] / [commitAdventure].
+     * How far the feed reaches past what the listener already plays.
+     *
+     * Was a slider on the page, and it earned its place there far less than the
+     * space it took: the shelf mix it moved is a couple of rows either way, and
+     * the difference is easy to miss against a feed that reshuffles anyway.
+     * Fixed at the balanced default now, so every listener gets the mix the
+     * mix was designed around, and the page opens on music instead of on a
+     * control for it.
      */
-    val adventure: StateFlow<Float> = preferences.discoveryAdventure
-        .stateIn(viewModelScope, SharingStarted.Eagerly, DiscoveryAdventure.DEFAULT)
-
-    private val _pendingAdventure = MutableStateFlow<Float?>(null)
-
-    /** What the control should draw: the finger's position if dragging, else the stored value. */
-    val adventureDisplay: StateFlow<Float> =
-        combine(adventure, _pendingAdventure) { stored, pending -> pending ?: stored }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, DiscoveryAdventure.DEFAULT)
+    private val adventure: Float get() = DiscoveryAdventure.DEFAULT
 
     /**
      * Cards and shelves the listener has waved away this session.
@@ -450,13 +447,7 @@ class DiscoverViewModel @Inject constructor(
         rebuild()
     }
 
-    private fun rebuild(
-        label: String? = _selectedChip.value,
-        // Named to avoid shadowing the `adventure` StateFlow above — the
-        // override is the value a just-released slider committed, which the
-        // StateFlow mirror may not have caught up to yet.
-        adventureOverride: Float? = null,
-    ) {
+    private fun rebuild(label: String? = _selectedChip.value) {
         _selectedChip.value = label
         feedJob?.cancel()
         moreJob?.cancel()
@@ -470,16 +461,15 @@ class DiscoverViewModel @Inject constructor(
             _flowExtra.value = emptyList()
             try {
                 val moods = _selectedMoods.value
-                val knobForMoods = adventureOverride ?: _pendingAdventure.value ?: adventure.value
                 val built = if (moods.isNotEmpty()) {
                     discoveryFeed.buildForMoods(
                         moodIds = moods,
                         excluded = _excludedGenres.value,
-                        adventure = knobForMoods,
+                        adventure = adventure,
                         itemsPerShelf = SHELF_SIZE,
                     )
                 } else if (label == null) {
-                    buildForYou(adventureOverride)
+                    buildForYou()
                 } else {
                     // A genre picked on the map. Matched by name so that
                     // switching to a chip clears it, rather than the map's
@@ -488,18 +478,17 @@ class DiscoverViewModel @Inject constructor(
                         ?.takeIf { genreGraphRepo.graph[it]?.name == label }
                     val moodId = moodIdByLabel[label]
                     val seed = chips.firstOrNull { it.label == label }
-                    val knob = adventureOverride ?: _pendingAdventure.value ?: adventure.value
                     when {
                         genreId != null -> discoveryFeed.buildForGenre(
                             genreId = genreId,
-                            adventure = knob,
+                            adventure = adventure,
                             itemsPerShelf = SHELF_SIZE,
                         )
                         // A graph mood: expands into one shelf per genre, each
                         // with its own tempo and a reason in the mood's terms.
                         moodId != null -> discoveryFeed.buildForMood(
                             moodId = moodId,
-                            adventure = knob,
+                            adventure = adventure,
                             itemsPerShelf = SHELF_SIZE,
                         ).ifEmpty {
                             // The graph knew the mood but the catalogue had
@@ -581,13 +570,12 @@ class DiscoverViewModel @Inject constructor(
      * the personalized feed.
      */
     private suspend fun buildPage(label: String?, page: Int): List<DiscoveryShelf> {
-        val knob = _pendingAdventure.value ?: adventure.value
         if (label == null) {
             // "For you" has no graph to walk, so it rotates the curated seeds
             // and the artist window instead — the same mechanism "show me
             // something else" uses, driven by depth rather than by a tap.
             return discoveryFeed.build(
-                adventure = knob,
+                adventure = adventure,
                 itemsPerShelf = SHELF_SIZE,
                 rotation = rotation + page * PAGE_ROTATION,
             )
@@ -598,13 +586,13 @@ class DiscoverViewModel @Inject constructor(
         return when {
             genreId != null -> discoveryFeed.buildForGenre(
                 genreId = genreId,
-                adventure = knob,
+                adventure = adventure,
                 itemsPerShelf = SHELF_SIZE,
                 page = page,
             )
             moodId != null -> discoveryFeed.buildForMood(
                 moodId = moodId,
-                adventure = knob,
+                adventure = adventure,
                 itemsPerShelf = SHELF_SIZE,
                 page = page,
             )
@@ -660,7 +648,7 @@ class DiscoverViewModel @Inject constructor(
         val shelves = runCatching {
             discoveryFeed.buildForGenre(
                 genreId = genreId,
-                adventure = _pendingAdventure.value ?: adventure.value,
+                adventure = adventure,
                 // A deep single shelf, not several shallow ones: "play this
                 // genre" should stay inside the genre, and a wide pool is what
                 // makes shuffling it worth anything.
@@ -746,8 +734,8 @@ class DiscoverViewModel @Inject constructor(
     }
 
     /**
-     * Deal a different hand. Rotates the seed offset and rebuilds, so the same
-     * setting of the knob doesn't keep producing the same page.
+     * Deal a different hand. Rotates the seed offset and rebuilds, so asking
+     * twice doesn't produce the same page.
      */
     fun showSomethingElse() {
         rotation++
@@ -759,43 +747,6 @@ class DiscoverViewModel @Inject constructor(
         _flowExtra.value = emptyList()
         selectChip(_selectedChip.value)
     }
-
-    /** Live drag: move the caption without touching the feed or the store. */
-    fun setAdventure(value: Float) {
-        _pendingAdventure.value = DiscoveryAdventure.clamp(value)
-    }
-
-    /**
-     * Drag released: persist, fold the value into the planner weights, rebuild.
-     *
-     * Split from [setAdventure] because writing on every frame of a drag would
-     * be a DataStore write and a fan-out of Qobuz searches per pixel. The
-     * Studio's sliders debounce to the drag tail the same way.
-     */
-    fun commitAdventure(value: Float) {
-        val target = DiscoveryAdventure.clamp(value)
-        _pendingAdventure.value = target
-        adventureCommit++
-        val token = adventureCommit
-        viewModelScope.launch {
-            // A DataStore write can fail (disk full, corrupt file). Left
-            // uncaught it escapes viewModelScope and takes the app down, and
-            // the knob would stay stuck at a value that was never stored.
-            runCatching { preferences.setDiscoveryAdventure(target) }
-            // Only the newest commit may clear the pending value. Without the
-            // token, a slow write finishing after the user has grabbed the
-            // slider again would snap the thumb and caption back mid-drag, and
-            // the next release would commit that restored value instead of
-            // where the finger actually is.
-            if (token == adventureCommit) _pendingAdventure.value = null
-            // Passed explicitly rather than re-read: `adventure` mirrors the
-            // DataStore flow through a StateFlow, and nothing orders that
-            // emission ahead of the rebuild reaching the value.
-            rebuild(adventureOverride = target)
-        }
-    }
-
-    private var adventureCommit = 0
 
     /** Wave one card away. */
     fun dismissItem(key: String) {
@@ -816,7 +767,7 @@ class DiscoverViewModel @Inject constructor(
      * front. Favourites come from the local database rather than the network,
      * so the page has something real on it before any Qobuz call returns.
      */
-    private suspend fun buildForYou(adventureOverride: Float? = null): List<DiscoveryShelf> {
+    private suspend fun buildForYou(): List<DiscoveryShelf> {
         val favourites = libraryRepository.getFavoriteTracks().first()
             .take(SHELF_SIZE)
             .map { DiscoveryItem.TrackItem(it.toUnifiedTrackAuto(qobuzIdRegistry)) }
@@ -834,7 +785,7 @@ class DiscoverViewModel @Inject constructor(
         }
 
         return listOfNotNull(favouritesShelf) + discoveryFeed.build(
-            adventure = adventureOverride ?: _pendingAdventure.value ?: adventure.value,
+            adventure = adventure,
             itemsPerShelf = SHELF_SIZE,
             rotation = rotation,
         )

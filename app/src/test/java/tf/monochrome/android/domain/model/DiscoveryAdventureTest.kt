@@ -4,9 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import tf.monochrome.android.radio.PLANNER_WEIGHT_MAX
-import tf.monochrome.android.radio.PLANNER_WEIGHT_MIN
-import tf.monochrome.android.radio.RadioPlannerWeights
 
 /**
  * The familiar ↔ adventurous knob.
@@ -62,43 +59,6 @@ class DiscoveryAdventureTest {
     }
 
     @Test
-    fun `planner weights move with the knob and stay inside the planner clamp`() {
-        val base = RadioPlannerWeights.DEFAULT
-        val familiar = DiscoveryAdventure.toPlannerWeights(base, 0f)
-        val adventurous = DiscoveryAdventure.toPlannerWeights(base, 1f)
-
-        assertTrue("novelty should rise", adventurous.novelty > familiar.novelty)
-        assertTrue("familiarity should fall", adventurous.familiarity < familiar.familiarity)
-        assertTrue(
-            "discovery distance should rise",
-            adventurous.discoveryDistance > familiar.discoveryDistance,
-        )
-
-        for (w in listOf(familiar, adventurous)) {
-            for (v in listOf(w.novelty, w.familiarity, w.discoveryDistance)) {
-                assertTrue("$v outside the planner clamp", v in PLANNER_WEIGHT_MIN..PLANNER_WEIGHT_MAX)
-            }
-        }
-    }
-
-    @Test
-    fun `the other eleven weights are left exactly as the user set them`() {
-        // The knob is a shortcut for three of the fourteen. Someone who has
-        // tuned the rest in Settings must not have that undone by touching it.
-        val tuned = RadioPlannerWeights.DEFAULT.copy(
-            localLibrary = 2.5f,
-            moodContinuity = 0.1f,
-            eraConsistency = 2.0f,
-            avoidRecentlyPlayed = 0.3f,
-        )
-        val out = DiscoveryAdventure.toPlannerWeights(tuned, 0.8f)
-        assertEquals(2.5f, out.localLibrary, 0.0001f)
-        assertEquals(0.1f, out.moodContinuity, 0.0001f)
-        assertEquals(2.0f, out.eraConsistency, 0.0001f)
-        assertEquals(0.3f, out.avoidRecentlyPlayed, 0.0001f)
-    }
-
-    @Test
     fun `out-of-range and non-finite values fall back rather than wedging the feed`() {
         assertEquals(0f, DiscoveryAdventure.clamp(-3f), 0.0001f)
         assertEquals(1f, DiscoveryAdventure.clamp(9f), 0.0001f)
@@ -132,10 +92,4 @@ class DiscoveryAdventureTest {
         }
     }
 
-    @Test
-    fun `every position has a caption`() {
-        for (step in 0..20) {
-            assertTrue(DiscoveryAdventure.label(step / 20f).isNotBlank())
-        }
-    }
 }

@@ -53,7 +53,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -75,7 +74,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
 import tf.monochrome.android.domain.model.DiscoverySort
@@ -128,7 +126,6 @@ fun DiscoverScreen(
     val combinedLabels = remember(selectedMoods) { viewModel.labelsForMoods(selectedMoods) }
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
-    val adventure by viewModel.adventureDisplay.collectAsStateWithLifecycle()
     val genreRail by viewModel.genreRail.collectAsStateWithLifecycle()
     val sort by viewModel.sort.collectAsStateWithLifecycle()
     val loadingMore by viewModel.loadingMore.collectAsStateWithLifecycle()
@@ -238,12 +235,6 @@ fun DiscoverScreen(
         // The map, full width now that Flow is gone. Sits above the shelves
         // because it is the fastest route into music, not an afterthought.
         MapEntryButton(onClick = { navController.navigateSafe(Screen.GenreMap.route) })
-
-        AdventureControl(
-            value = adventure,
-            onChange = viewModel::setAdventure,
-            onCommit = viewModel::commitAdventure,
-        )
 
         PullToRefreshBox(
             isRefreshing = refreshing,
@@ -620,59 +611,6 @@ private fun MapEntryButton(onClick: () -> Unit) {
                 )
             }
         }
-    }
-}
-
-/**
- * The familiar ↔ adventurous knob.
- *
- * Dragging updates only the caption; the feed is rebuilt on release. Writing
- * on every frame would be a DataStore write and a fan-out of Qobuz searches
- * per pixel of travel, which is both slow and useless — you can't read a feed
- * that is rebuilding under your thumb.
- */
-@Composable
-private fun AdventureControl(
-    value: Float,
-    onChange: (Float) -> Unit,
-    onCommit: (Float) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Familiar",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = DiscoveryAdventure.label(value),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "Adventurous",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        // Hold the live drag value rather than committing the composition-
-        // captured `value`. Material3 runs onValueChange and
-        // onValueChangeFinished inside the same pointer dispatch with no
-        // recomposition between them, and `value` arrives back through a
-        // StateFlow, so the closure would commit the position from before the
-        // last drag delta — the feed would rebuild at not-quite where you let
-        // go. Same bug the player's scrubber carries a fix for.
-        var latest by remember(value) { mutableFloatStateOf(value) }
-        Slider(
-            value = value,
-            onValueChange = { latest = it; onChange(it) },
-            onValueChangeFinished = { onCommit(latest) },
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 
