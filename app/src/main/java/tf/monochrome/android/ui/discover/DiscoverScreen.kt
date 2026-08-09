@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.discover
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -55,11 +56,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -94,13 +98,19 @@ import tf.monochrome.android.ui.theme.MonoDimens
  * Discover — the browsing half of the app, split out of Home.
  *
  * The shape follows what actually works on a streaming service's discovery
- * page, in order down the screen: one featured thing so the page has a top, a
- * mood/activity rail so someone who doesn't know what they want has an entry
- * point that isn't a search box, then explained shelves — each labelled with
- * *why* it is being shown — that stay short and open into a full grid rather
- * than scrolling forever. The failure mode being designed against is not a thin
- * catalogue, it's decision fatigue: an undifferentiated wall of covers is
- * exactly as unhelpful as an empty page.
+ * page, in order down the screen: a mood/activity rail so someone who doesn't
+ * know what they want has an entry point that isn't a search box, then
+ * explained shelves — each labelled with *why* it is being shown — that stay
+ * short and open into a full grid rather than scrolling forever. The failure
+ * mode being designed against is not a thin catalogue, it's decision fatigue:
+ * an undifferentiated wall of covers is exactly as unhelpful as an empty page.
+ *
+ * Which is also why the furniture above the first shelf is kept honest. A
+ * header that fills the screen before a single recommendation is visible costs
+ * every visit, and the page has twice been asked to carry one — a hero card
+ * built from an artist you already play, and a permanent search field for a
+ * question most visits don't ask. Neither survived: search folds into an icon
+ * in the bar, and the feed starts at the top.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,12 +126,9 @@ fun DiscoverScreen(
     val combinedGenres by viewModel.combinedGenres.collectAsStateWithLifecycle()
     val excluded by viewModel.excludedGenres.collectAsStateWithLifecycle()
     val combinedLabels = remember(selectedMoods) { viewModel.labelsForMoods(selectedMoods) }
-    val hero by viewModel.hero.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val adventure by viewModel.adventureDisplay.collectAsStateWithLifecycle()
-    val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
-    val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsStateWithLifecycle()
     val genreRail by viewModel.genreRail.collectAsStateWithLifecycle()
     val sort by viewModel.sort.collectAsStateWithLifecycle()
     val loadingMore by viewModel.loadingMore.collectAsStateWithLifecycle()
@@ -147,10 +154,32 @@ fun DiscoverScreen(
     // list, so it survives the row that opened it scrolling out of view.
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
 
+    // Search is folded away by default. Everything above the first shelf is
+    // page furniture, and a two-line field plus its results row was the tallest
+    // piece of it — carried on every visit, for a question most visits don't
+    // ask. The icon in the bar is the whole feature when it isn't being used.
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    // A picked genre is the exception: the rail is the only thing that says
+    // which one is driving the feed, and the only way to turn it back off, so
+    // it stays out while a selection is live even with the field folded.
+    val genreSelected = genreRail.any { it.node.name == selectedChip }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Discover (Beta)") },
             actions = {
+                IconButton(onClick = {
+                    searchOpen = !searchOpen
+                    // Folding it away takes the query with it: a filter still
+                    // narrowing the row from behind a closed door is a page
+                    // nobody can explain.
+                    if (!searchOpen) viewModel.setGenreQuery("")
+                }) {
+                    Icon(
+                        if (searchOpen) Icons.Default.Close else Icons.Default.Search,
+                        contentDescription = if (searchOpen) "Close genre search" else "Search genres",
+                    )
+                }
                 IconButton(onClick = { viewModel.showSomethingElse() }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Show me something else")
                 }
@@ -163,22 +192,26 @@ fun DiscoverScreen(
         // would have picked — typing is the only interface that reaches all of
         // them. Empty, it still shows the listener's own genres, so the row is
         // never blank and never worse than the static one it replaces.
-        GenreSearchField(
-            query = genreQuery,
-            onQueryChange = viewModel::setGenreQuery,
-            resultCount = genreRail.size,
-            onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
-        )
+        AnimatedVisibility(visible = searchOpen) {
+            GenreSearchField(
+                query = genreQuery,
+                onQueryChange = viewModel::setGenreQuery,
+                resultCount = genreRail.size,
+                onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
+            )
+        }
 
-        GenreRail(
-            items = genreRail,
-            selected = selectedChip,
-            onSelect = {
-                if (selectedChip == it.node.name) viewModel.selectChip(null)
-                else viewModel.selectGenre(it.node.id)
-            },
-            onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
-        )
+        AnimatedVisibility(visible = searchOpen || genreSelected) {
+            GenreRail(
+                items = genreRail,
+                selected = selectedChip,
+                onSelect = {
+                    if (selectedChip == it.node.name) viewModel.selectChip(null)
+                    else viewModel.selectGenre(it.node.id)
+                },
+                onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
+            )
+        }
 
         // Chip rail, pinned above the feed rather than scrolling with it: it is
         // the control for what's below, so it has to stay reachable once the
@@ -222,23 +255,6 @@ fun DiscoverScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 160.dp),
         ) {
-            // The hero belongs to the personalized feed. On a mood chip the
-            // chip itself is the headline, and a second one would compete.
-            val currentHero = hero
-            if (selectedChip == null && currentHero != null) {
-                item(key = "hero") {
-                    DiscoveryHeroCard(
-                        hero = currentHero,
-                        isRadioActive = isRadioActive,
-                        isRadioGenerating = isRadioGenerating,
-                        onPlay = {
-                            if (isRadioActive) playerViewModel.stopRadio()
-                            else playerViewModel.playRadio()
-                        },
-                    )
-                }
-            }
-
             items(shelves, key = { it.id }) { shelf ->
                 DiscoveryShelfRow(
                     shelf = shelf,
@@ -334,6 +350,12 @@ private fun GenreSearchField(
     resultCount: Int,
     onOpenMap: () -> Unit,
 ) {
+    // Only composed while the search is open, so opening it is one tap and the
+    // keyboard is already up — asking for a second tap on a field that only
+    // exists because you asked for it is a tap for nothing.
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -356,7 +378,8 @@ private fun GenreSearchField(
         } else null,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .focusRequester(focus),
     )
 }
 

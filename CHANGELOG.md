@@ -95,6 +95,8 @@
 - **Support moved to the top of About, and What's New is easy to find** — the tip jar used to sit at the very bottom of the tab, below the release notes and the update controls, which on any phone means below the fold and behind a scroll nobody performs. It's the first thing on About now. The release notes sit directly under it behind a lit header — a tinted strip with a highlight drifting across it, badged "New in …" when you haven't read that build's notes yet. The badge reads the stored version before opening the tab overwrites it, so it survives being looked at.
 
 ### Changed
+- **Discover starts at the recommendations** — the page had grown five things above the first shelf, and you had to scroll past all of them on every visit before seeing a single record. Genre search folds into an icon in the top bar, opening with the keyboard already up and taking its results row with it, so the one visit in ten that wants to type still gets the full field and the other nine don't pay for it. A picked genre keeps its row on screen while it's driving the feed, because that row is the only way to see it and the only way to switch it off.
+- **The featured mix card is gone** — it was a full-width image, a title, a subtitle and a play button, built from an artist already well represented further down the page, and it sat between you and everything the page had actually gone and found. The radio it started is still one tap from any shelf.
 - **Discover is labelled "Discover (Beta)"** — the genre graph, the charts behind it and the map are all new enough that the page can be wrong about things, and saying so on the title is more honest than letting it read as finished.
 
 ### Removed

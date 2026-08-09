@@ -64,13 +64,6 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
 /** One genre on Discover's genre rail, and why it's there. */
 data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
 
-/** What the hero card at the top of Discover is offering. */
-data class DiscoveryHero(
-    val title: String,
-    val subtitle: String,
-    val artworkUrl: String?,
-)
-
 /**
  * Index in the chip rail from which chips start combining.
  *
@@ -162,9 +155,6 @@ class DiscoverViewModel @Inject constructor(
     // is this minus what the listener has waved away. A new surface wired to
     // the raw list would silently ignore dismissals.
     private val _shelves = MutableStateFlow<List<DiscoveryShelf>>(emptyList())
-
-    private val _hero = MutableStateFlow<DiscoveryHero?>(null)
-    val hero: StateFlow<DiscoveryHero?> = _hero.asStateFlow()
 
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
@@ -415,7 +405,6 @@ class DiscoverViewModel @Inject constructor(
     private var feedJob: Job? = null
 
     init {
-        loadHero()
         selectChip(null)
     }
 
@@ -849,31 +838,6 @@ class DiscoverViewModel @Inject constructor(
             itemsPerShelf = SHELF_SIZE,
             rotation = rotation,
         )
-    }
-
-    private fun loadHero() {
-        viewModelScope.launch {
-            runCatching {
-                // The most-played artist is the safest thing to build a mix
-                // around: it is the one recommendation that needs no
-                // explanation beyond the listener's own history.
-                val topArtist = libraryRepository.getSeedArtistNames(1).firstOrNull()
-                val recent = libraryRepository.getHistory().first().firstOrNull()
-                if (topArtist != null) {
-                    _hero.value = DiscoveryHero(
-                        title = "$topArtist mix",
-                        subtitle = "Built from an artist you keep coming back to",
-                        artworkUrl = recent?.coverUrl,
-                    )
-                } else if (recent != null) {
-                    _hero.value = DiscoveryHero(
-                        title = "Pick up where you left off",
-                        subtitle = recent.title,
-                        artworkUrl = recent.coverUrl,
-                    )
-                }
-            }
-        }
     }
 
     private companion object {
