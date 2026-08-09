@@ -28,7 +28,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GRAPH = os.path.join(ROOT, "app", "src", "main", "assets", "genre_graph.json")
 VOCAB = os.path.join(ROOT, "app", "src", "main", "assets", "genre_vocabulary.json")
 
-BPM_MIN, BPM_MAX = 40, 400
+# The ceiling is set by the speedcore branch rather than by dance music: an
+# extratone track runs past 1,000 BPM by definition, and clamping it would turn
+# the one fact that defines the genre into a lie.
+BPM_MIN, BPM_MAX = 40, 4000
 MIN_MOOD_GENRES = 4
 
 

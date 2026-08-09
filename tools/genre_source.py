@@ -136,7 +136,7 @@ GENRES = [
      (110, 130), (1990, E), 0.35, 0.6, ("focus", "wind-down"), ()),
     ("acid-techno", "Acid Techno", "electronic", ("techno", "acid-house"), (),
      (130, 145), (1990, E), 0.85, 0.4, ("party", "workout"), ()),
-    ("hard-techno", "Hard Techno", "electronic", ("techno",), ("hardtechno", "schranz"),
+    ("hard-techno", "Hard Techno", "electronic", ("techno",), ("hardtechno",),
      (140, 160), (1995, E), 0.95, 0.35, ("workout", "party"),
      (("industrial-techno", 0.8), ("hardgroove", 0.7))),
     ("hardgroove", "Hardgroove Techno", "electronic", ("hard-techno",), ("hard groove", "groove techno"),
@@ -292,6 +292,75 @@ GENRES = [
      (170, 190), (1995, E), 0.95, 0.45, ("workout", "party"), ()),
     ("digital-hardcore", "Digital Hardcore", "electronic", ("hardcore-techno", "industrial"), (),
      (180, 220), (1993, E), 1.0, 0.2, ("workout",), ()),
+
+    # ─── Hardcore, by era ──────────────────────────────────────────────────
+    # The Dutch scene names its own periods and treats them as genres — a set
+    # billed as "early hardcore" is a promise about which decade's records get
+    # played, and nobody there would accept it as a synonym for gabber.
+    ("early-hardcore", "Early Hardcore", "electronic", ("gabber",),
+     ("oldschool gabber", "old school hardcore"),
+     (160, 180), (1991, 2000), 0.95, 0.5, ("party", "workout"),
+     (("bouncy-techno", 0.85), ("breakbeat-hardcore", 0.7))),
+    ("millennium-hardcore", "Millennium Hardcore", "electronic", ("gabber",), ("nu style gabber",),
+     (170, 190), (1999, 2007), 1.0, 0.4, ("workout", "party"), (("mainstream-hardcore", 0.9),)),
+    ("mainstream-hardcore", "Mainstream Hardcore", "electronic", ("gabber",), ("mainstyle",),
+     (150, 190), (2005, E), 1.0, 0.45, ("workout", "party"),
+     (("hardcore-uptempo", 0.85), ("rawstyle", 0.7))),
+    ("bouncy-techno", "Bouncy Techno", "electronic", ("gabber",), ("hardbounce",),
+     (160, 175), (1993, 2001), 0.95, 0.7, ("party",), (("happy-hardcore", 0.8),)),
+
+    # ─── Hardcore, the darker branches ─────────────────────────────────────
+    ("industrial-hardcore", "Industrial Hardcore", "electronic",
+     ("hardcore-techno", "industrial"), (),
+     (180, 210), (1996, E), 1.0, 0.15, ("workout", "late-night"),
+     (("crossbreed", 0.9), ("terrorcore", 0.8), ("darkcore", 0.8))),
+    ("crossbreed", "Crossbreed", "electronic", ("industrial-hardcore", "drum-and-bass"), (),
+     (170, 180), (2005, E), 1.0, 0.2, ("workout", "late-night"), (("neurofunk", 0.8),)),
+    ("darkcore", "Darkcore", "electronic", ("hardcore-techno",), (),
+     (160, 180), (1992, E), 0.95, 0.2, ("late-night", "workout"), (("doomcore", 0.8),)),
+    ("doomcore", "Doomcore", "electronic", ("hardcore-techno",), ("deathchant",),
+     (110, 150), (1993, E), 0.75, 0.1, ("late-night",), ()),
+    ("lento-violento", "Lento Violento", "electronic", ("gabber",), ("slow violent",),
+     (90, 130), (2004, E), 0.7, 0.35, ("late-night",), ()),
+
+    # ─── Hardcore, the fast end ────────────────────────────────────────────
+    # Tempo is the whole argument here, so the ranges run far past anything
+    # else in the dataset. A track at 1,200 BPM is not a faster version of
+    # something — the kick has become a pitched tone and that is the point.
+    ("flashcore", "Flashcore", "electronic", ("speedcore",), (),
+     (300, 600), (2000, E), 1.0, 0.15, ("workout",), ()),
+    ("splittercore", "Splittercore", "electronic", ("speedcore",), (),
+     (600, 1000), (1999, E), 1.0, 0.1, ("workout",), (("flashcore", 0.85),)),
+    ("extratone", "Extratone", "electronic", ("speedcore",), (),
+     (1000, 3000), (1997, E), 1.0, 0.1, ("workout",), (("splittercore", 0.9),)),
+
+    # ─── Hardcore, elsewhere ───────────────────────────────────────────────
+    ("freeform-hardcore", "Freeform Hardcore", "electronic", ("uk-hardcore",), ("freeform",),
+     (170, 200), (1998, E), 0.95, 0.7, ("workout", "uplifting"), (("makina", 0.75),)),
+    ("j-core", "J-Core", "electronic", ("happy-hardcore", "hardcore-techno"),
+     ("japanese hardcore", "jcore"),
+     (170, 200), (1998, E), 0.95, 0.8, ("party", "workout"),
+     (("nightcore", 0.8), ("breakcore", 0.7))),
+    ("hardtekk", "Hardtekk", "electronic", ("hardtek",), ("tekkno",),
+     (145, 160), (2015, E), 0.9, 0.5, ("party", "workout"), (("hardstyle", 0.7),)),
+    ("schranz", "Schranz", "electronic", ("hard-techno",), (),
+     (150, 170), (1997, E), 1.0, 0.25, ("workout",), (("industrial-hardcore", 0.75),)),
+
+    # ─── Hardstyle, its own tree ───────────────────────────────────────────
+    # Rawstyle split twice over: harder and darker into Xtra Raw, and back
+    # toward the melodies it came from as Rawphoric. Both are billed by name on
+    # lineups, which is the test for whether a subgenre is real to its scene.
+    ("xtra-raw", "Xtra Raw", "electronic", ("rawstyle",), ("extra raw",),
+     (150, 165), (2017, E), 1.0, 0.15, ("workout",),
+     (("hardcore-uptempo", 0.8), ("mainstream-hardcore", 0.7))),
+    ("rawphoric", "Rawphoric", "electronic", ("rawstyle", "euphoric-hardstyle"), (),
+     (150, 160), (2015, E), 0.95, 0.6, ("workout", "party"), ()),
+    ("dubstyle", "Dubstyle", "electronic", ("hardstyle", "dubstep"), (),
+     (145, 155), (2010, E), 0.95, 0.45, ("workout", "party"), ()),
+    ("jumpstyle", "Jumpstyle", "electronic", ("hardstyle",), ("jump",),
+     (140, 150), (2005, E), 0.9, 0.7, ("party", "workout"), (("hardtekk", 0.7),)),
+    ("tekstyle", "Tekstyle", "electronic", ("jumpstyle",), (),
+     (145, 155), (2007, E), 0.9, 0.65, ("party",), ()),
 
     # ─── Downtempo / chill ─────────────────────────────────────────────────
     ("downtempo", "Downtempo", "electronic", ("electronic",), ("chillout", "chill out"),

@@ -181,7 +181,12 @@ class GenreGraphTest {
             assertTrue("${node.id} energy", node.energy in 0f..1f)
             assertTrue("${node.id} valence", node.valence in 0f..1f)
             if (node.hasTempo) {
-                assertTrue("${node.id} bpm", node.bpmLow in 40..400 && node.bpmHigh in 40..400)
+                // The ceiling is set by the speedcore branch, not by dance
+                // music: extratone runs past 1,000 BPM by definition, and
+                // clamping it would turn the one fact that defines the genre
+                // into a lie. Kept in step with BPM_MAX in
+                // tools/validate_genre_graph.py.
+                assertTrue("${node.id} bpm", node.bpmLow in 40..4000 && node.bpmHigh in 40..4000)
                 assertTrue("${node.id} bpm reversed", node.bpmLow <= node.bpmHigh)
             }
         }
