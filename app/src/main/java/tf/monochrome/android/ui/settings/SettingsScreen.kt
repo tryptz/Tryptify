@@ -107,6 +107,12 @@ import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.AudioQuality
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextAlign
+import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.theme.rememberMotionFloat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.style.TextOverflow
@@ -2435,11 +2441,20 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 @Composable
 private fun AboutTab(viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    // Latched in the ViewModel before anything writes over it, so the badge
+    // survives the effect below marking the notes read.
+    val arrivedUnread by viewModel.whatsNewWasUnread.collectAsStateWithLifecycle()
     // Reaching the panel counts as having read it, however the user got here.
     LaunchedEffect(Unit) { viewModel.markWhatsNewSeen() }
     SettingsTabContent {
-        // WhatsNewPanel supplies its own "What's New" header.
-        WhatsNewPanel()
+        // Support first. It used to sit at the bottom of About, below the
+        // release notes and the update controls — which is to say, below the
+        // fold on every phone, where nobody scrolled to find it.
+        SupportSection(onTip = { openDonationUrl(context, "https://ko-fi.com/trypt") })
+
+        Spacer(modifier = Modifier.height(28.dp))
+        WhatsNewPanel(highlight = arrivedUnread)
+
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Updates")
         SettingItem(
@@ -2447,47 +2462,14 @@ private fun AboutTab(viewModel: SettingsViewModel) {
             subtitle = "Look on GitHub for a newer release now",
             onClick = { viewModel.checkForUpdatesNow() },
         )
+
         Spacer(modifier = Modifier.height(24.dp))
         SettingsGroupHeader("About Tryptify")
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Image(
-                painter = painterResource(id = R.drawable.trypt_pfp),
-                contentDescription = "trypt avatar",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(140.dp)
-                    .clip(CircleShape)
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Support the app",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Tryptify is built and maintained by trypt. If it's "
-                    + "earned a place in your day, a tip keeps the lights on "
-                    + "and the next features shipping.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = { openDonationUrl(context, "https://ko-fi.com/trypt") },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Tip on Ko-fi")
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
             Text(
                 text = "Tryptify version ${BuildConfig.VERSION_NAME} · 2026",
                 style = MaterialTheme.typography.bodyMedium,
@@ -2499,6 +2481,43 @@ private fun AboutTab(viewModel: SettingsViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/** The tip jar, and who's asking. */
+@Composable
+private fun SupportSection(onTip: () -> Unit) {
+    SettingsGroupHeader("Support the app")
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(id = R.drawable.trypt_pfp),
+            contentDescription = "trypt avatar",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Tryptify is built and maintained by trypt. If it's "
+                + "earned a place in your day, a tip keeps the lights on "
+                + "and the next features shipping.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = onTip,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Tip on Ko-fi")
         }
     }
 }
@@ -2541,6 +2560,84 @@ private fun SettingsGroupHeader(title: String) {
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
         )
+    }
+}
+
+/**
+ * A group header that's actually lit — a tinted strip with a highlight drifting
+ * across it, and an optional version badge.
+ *
+ * The plain [SettingsGroupHeader] is a line of coloured text, which is right for
+ * the eight headers nobody needs to notice. This one is for the release notes:
+ * it's the reason most people open this tab, and after Support was moved above
+ * it, it needed to be findable at a glance on the way past.
+ *
+ * The sheen comes from [rememberMotionFloat], so "disable animations" leaves the
+ * strip lit but perfectly still rather than driving a gradient forever.
+ */
+@Composable
+private fun LitGroupHeader(title: String, badge: String? = null) {
+    val primary = MaterialTheme.colorScheme.primary
+    val sweep = rememberMotionFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        durationMillis = 5200,
+        label = "litHeaderSheen",
+        repeatMode = RepeatMode.Restart,
+        still = 0.5f,
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(MonoDimens.shapeMd)
+            .drawBehind {
+                drawRect(
+                    Brush.horizontalGradient(
+                        listOf(primary.copy(alpha = 0.18f), primary.copy(alpha = 0.05f)),
+                    ),
+                )
+                // A soft band travelling left to right. Read from the draw scope
+                // rather than recomposed, so the motion never invalidates the
+                // settings list behind it.
+                val head = size.width * (sweep.value * 1.7f - 0.35f)
+                val half = size.width * 0.22f
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            primary.copy(alpha = 0.22f),
+                            Color.Transparent,
+                        ),
+                        startX = head - half,
+                        endX = head + half,
+                    ),
+                )
+            }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = primary,
+            modifier = Modifier.weight(1f),
+        )
+        if (badge != null) {
+            Surface(
+                shape = MonoDimens.shapePill,
+                color = primary,
+            ) {
+                Text(
+                    text = "New in $badge",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        }
     }
 }
 
@@ -2726,15 +2823,21 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
 /**
  * "What's New" — the user-facing summary of each release, newest first.
  *
- * Lives at the top of About because that's where the update notice sends
- * people, and it's the first thing worth reading when you've just updated.
+ * Sits directly under Support, because between them they are the only two
+ * things on this tab anybody comes looking for, and it's where the update
+ * notice sends people.
  */
 @Composable
-private fun WhatsNewPanel() {
+private fun WhatsNewPanel(highlight: Boolean) {
     val releases = WhatsNew.releases
     if (releases.isEmpty()) return
 
-    SettingsGroupHeader("What's New")
+    LitGroupHeader(
+        title = "What's New",
+        // Only badged when you haven't read this build's notes yet. A permanent
+        // "new" flag is one nobody looks at twice.
+        badge = releases.first().versionName.takeIf { highlight },
+    )
     releases.forEach { release ->
         Text(
             text = "Version ${release.versionName}",

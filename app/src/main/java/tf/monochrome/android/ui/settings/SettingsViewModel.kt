@@ -519,6 +519,34 @@ class SettingsViewModel @Inject constructor(
     val whatsNewNeverShow: StateFlow<Boolean> = preferences.whatsNewNeverShow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    /**
+     * Whether this build's notes were still unread when Settings was opened —
+     * what the "New in …" badge on the What's New header goes by.
+     *
+     * Latched here rather than read in the composable for two reasons.
+     * [whatsNewSeenVersion] starts at an optimistic placeholder equal to the
+     * current build, so a reader that samples it on first composition always
+     * concludes "already read". And opening About marks the notes seen
+     * immediately, which would erase the answer a moment after asking — the
+     * update notice deep-links straight to that tab, so the two can genuinely
+     * land in the same frame.
+     */
+    private val _whatsNewWasUnread = MutableStateFlow(false)
+    val whatsNewWasUnread: StateFlow<Boolean> = _whatsNewWasUnread.asStateFlow()
+    private var unreadLatched = false
+
+    /** Reads the stored version once, before anything overwrites it. */
+    private suspend fun latchWhatsNewUnread() {
+        if (unreadLatched) return
+        unreadLatched = true
+        _whatsNewWasUnread.value =
+            preferences.whatsNewSeenVersion.first() < WhatsNew.currentVersionCode
+    }
+
+    init {
+        viewModelScope.launch { latchWhatsNewUnread() }
+    }
+
     // --- Update availability ---
 
     private val _availableUpdate =
@@ -579,12 +607,17 @@ class SettingsViewModel @Inject constructor(
 
     /** Records that the notes for this build have been read. */
     fun markWhatsNewSeen() {
-        viewModelScope.launch { preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode) }
+        viewModelScope.launch {
+            // Never overwrite the stored version before it's been read.
+            latchWhatsNewUnread()
+            preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode)
+        }
     }
 
     /** Dismiss forever — also marks the current build seen so nothing lingers. */
     fun neverShowWhatsNew() {
         viewModelScope.launch {
+            latchWhatsNewUnread()
             preferences.setWhatsNewNeverShow(true)
             preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode)
         }

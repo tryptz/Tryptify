@@ -38,6 +38,8 @@
 - **Genres on tracks at last** — Qobuz has always returned a genre with each release and the app parsed it and threw it away. It's captured now, and travels with the track along with how much we actually know: tagged by the catalogue, inherited from the release, or inferred from the search that surfaced it. Only the first is ever stated as fact.
 - **Your local genre list stops double-counting** — "Hip-Hop", "Hip Hop" and "hip hop" were three separate rows in Library › Genres. They resolve to one now; anything the graph doesn't know keeps its tag exactly as written, so nothing is lost, only merged.
 
+- **Support moved to the top of About, and What's New is easy to find** — the tip jar used to sit at the very bottom of the tab, below the release notes and the update controls, which on any phone means below the fold and behind a scroll nobody performs. It's the first thing on About now. The release notes sit directly under it behind a lit header — a tinted strip with a highlight drifting across it, badged "New in …" when you haven't read that build's notes yet. The badge reads the stored version before opening the tab overwrites it, so it survives being looked at.
+
 ### Fixed
 - **Discovery cards look like the rest of the app** — the recommendation card was hard-coded to its own dimensions instead of the shared cover tokens, and had no glass, no press feedback and no quality badges, so a row of tracks visibly didn't belong next to a row of albums.
 
