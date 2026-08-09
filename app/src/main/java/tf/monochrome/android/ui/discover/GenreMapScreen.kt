@@ -368,6 +368,13 @@ fun GenreMapScreen(
                     Icon(Icons.Default.UnfoldMore, contentDescription = "Expand everything")
                 }
                 IconButton(onClick = {
+                    // A width fit leaves the timeline's height running off the
+                    // bottom, so it has to arrive at its *top* — the oldest
+                    // music, where the story starts — rather than centred on
+                    // some row in the middle of the 1990s. Reset before the
+                    // morph so the two settle together.
+                    flight?.cancel()
+                    camera = Camera()
                     layout = if (layout == MapLayout.RADIAL) MapLayout.TIMELINE else MapLayout.RADIAL
                 }) {
                     Icon(
@@ -444,6 +451,7 @@ fun GenreMapScreen(
                             camera = camera,
                             familyColors = familyColors,
                             fade = 1f - morph.value,
+                            morphFit = morph.value,
                         )
                     }
                 }
@@ -455,6 +463,7 @@ fun GenreMapScreen(
                         labelColor = onSurface,
                         labelSizePx = labelPx,
                         fade = morph.value,
+                        morphFit = morph.value,
                     )
                 }
                 drawMap(
@@ -501,7 +510,18 @@ fun GenreMapScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(horizontal = MonoDimens.spacingLg, vertical = MonoDimens.spacingSm),
+                    .padding(
+                        start = MonoDimens.spacingLg,
+                        end = MonoDimens.spacingLg,
+                        bottom = MonoDimens.spacingSm,
+                        // The timeline reserves a strip at the very top for its
+                        // year axis, and the caption was landing inside it —
+                        // two lines of text in the same place. Slide below the
+                        // strip in step with the morph so it moves with the
+                        // layout rather than jumping when it arrives.
+                        top = MonoDimens.spacingSm +
+                            with(density) { TIMELINE_AXIS_INSET.toDp() } * morph.value,
+                    ),
             )
 
             selected?.let { node ->
@@ -1108,8 +1128,21 @@ private val FoldInEasing = CubicBezierEasing(0.5f, 0f, 0.9f, 0.4f)
  * One factor for both axes, so the clusters stay circular rather than being
  * squashed into ellipses in portrait.
  */
-private fun fitFor(width: Float, height: Float, bounds: MapBounds): Float =
-    minOf(width / bounds.spanX, height / bounds.spanY) * FIT_MARGIN
+/**
+ * Scale that puts the layout on screen.
+ *
+ * The radial map is roughly square and fits whole. The timeline is not — 268
+ * rows against a single span of years makes it about three times taller than it
+ * is wide, and fitting *that* whole shrinks every row until nothing is readable,
+ * which is what the first build of it did. Past the halfway point of the morph
+ * it fits to width instead and lets the height run off the bottom, the way any
+ * long document opens: legible at the top, and scrollable.
+ */
+private fun fitFor(width: Float, height: Float, bounds: MapBounds, morph: Float = 0f): Float {
+    val whole = minOf(width / bounds.spanX, height / bounds.spanY)
+    val toWidth = width / bounds.spanX
+    return lerp(whole, toWidth, morph.coerceIn(0f, 1f)) * FIT_MARGIN
+}
 
 /**
  * What a dot's size means.
@@ -1411,8 +1444,9 @@ private fun DrawScope.drawConstellations(
     camera: Camera,
     familyColors: Map<String, Color>,
     fade: Float = 1f,
+    morphFit: Float = 0f,
 ) {
-    val k = fitFor(size.width, size.height, bounds) * camera.scale
+    val k = fitFor(size.width, size.height, bounds, morphFit) * camera.scale
     val cx = size.width / 2f + camera.offset.x
     val cy = size.height / 2f + camera.offset.y
 
@@ -1464,8 +1498,9 @@ private fun DrawScope.drawTimelineChrome(
     labelColor: Color,
     labelSizePx: Float,
     fade: Float,
+    morphFit: Float,
 ) {
-    val k = fitFor(size.width, size.height, bounds) * camera.scale
+    val k = fitFor(size.width, size.height, bounds, morphFit) * camera.scale
     val cx = size.width / 2f + camera.offset.x
     val cy = size.height / 2f + camera.offset.y
     fun sx(x: Float) = cx + (x - bounds.centreX) * k
@@ -1551,10 +1586,16 @@ private fun DrawScope.drawTimelineChrome(
             }
             tick += step
         }
+        // The pre-1900 caption sits left of the scale break, but the break also
+        // carries its own "1900" tick centred on it, and the two were printed
+        // straight through each other. Only draw it when it clears that label
+        // and still starts on screen.
         paint.textAlign = android.graphics.Paint.Align.RIGHT
-        val preX = sx(timelineX(TIMELINE_PIVOT_YEAR)) - 12f
-        if (preX > 40f) {
-            drawText("before 1900", preX, axisBaseline, paint)
+        val pivotLabelHalf = paint.measureText(TIMELINE_PIVOT_YEAR.toString()) / 2f
+        val preLabel = "before 1900"
+        val preRight = sx(timelineX(TIMELINE_PIVOT_YEAR)) - pivotLabelHalf - 14f
+        if (preRight - paint.measureText(preLabel) > 12f) {
+            drawText(preLabel, preRight, axisBaseline, paint)
         }
 
     }
@@ -1570,7 +1611,7 @@ private fun positionsFor(
     timeline: Map<String, Offset>? = null,
     morph: Float = 0f,
 ): Map<String, Offset> {
-    val k = fitFor(width, height, bounds) * camera.scale
+    val k = fitFor(width, height, bounds, morph) * camera.scale
     val cx = width / 2f + camera.offset.x
     val cy = height / 2f + camera.offset.y
     fun place(node: GenreNode): Offset {
