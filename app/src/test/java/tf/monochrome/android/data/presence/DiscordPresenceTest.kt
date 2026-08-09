@@ -256,4 +256,45 @@ class DiscordPresenceTest {
                 DiscordPresence.readClose(code, null).message.contains("$code"))
         }
     }
+
+    @Test
+    fun `a token pasted with its surroundings is cleaned up`() {
+        // All of these produce the identical 4004 as a genuinely wrong token,
+        // and none of them are visible in a single-line field.
+        val token = "MjI4Njc3Mzg2NzMwNzMzNTY4.GfNOK4.abcdefghijklmnop"
+        assertEquals(token, DiscordPresence.normalizeToken("  $token\n"))
+        assertEquals(token, DiscordPresence.normalizeToken("\"$token\""))
+        assertEquals(token, DiscordPresence.normalizeToken("Authorization: $token"))
+        assertEquals(token, DiscordPresence.normalizeToken("Bearer $token"))
+        assertEquals(token, DiscordPresence.normalizeToken(token))
+    }
+
+    @Test
+    fun `a token is recognised by its three parts`() {
+        assertTrue(DiscordPresence.looksLikeToken("MjI4Njc3Mzg2NzMwNzMzNTY4.GfNOK4.abcdefgh"))
+        // A bot's "Bot xxx" prefix, an OAuth access token, and a half-copied
+        // value all fail this, and all of them are worth catching before the
+        // gateway answers with a 4004 that says none of it.
+        assertFalse(DiscordPresence.looksLikeToken("not-a-token"))
+        assertFalse(DiscordPresence.looksLikeToken("short.GfNOK4.abcdefgh"))
+        assertFalse(DiscordPresence.looksLikeToken("MjI4Njc3Mzg2NzMwNzMzNTY4.GfNOK4"))
+        assertFalse(DiscordPresence.looksLikeToken(""))
+    }
+
+    @Test
+    fun `identify sends the handshake the gateway accepts`() {
+        val frame = json.parseToJsonElement(DiscordPresence.identifyFrame("tok", null)).jsonObject
+        val props = frame["d"]!!.jsonObject["properties"]!!.jsonObject
+        // Pinned because it is empirically load-bearing rather than obviously
+        // right: this exact shape is what Discord accepts, and it was once cut
+        // back to three fields on a guess that the fuller block was causing a
+        // 4004. It wasn't — the token was mistyped — and the guess would have
+        // traded a working handshake for a tidier one.
+        assertEquals("Android", props["os"]?.jsonPrimitive?.content)
+        assertTrue("client_build_number is part of the accepted shape",
+            props.containsKey("client_build_number"))
+        assertTrue("release_channel is part of the accepted shape",
+            props.containsKey("release_channel"))
+    }
+
 }

@@ -3,6 +3,7 @@ package tf.monochrome.android.data.presence
 import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -94,6 +95,10 @@ class DiscordPresenceManager @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    /** Who the stored token belongs to, once Discord has confirmed it. */
+    private val _username = MutableStateFlow<String?>(null)
+    val username: StateFlow<String?> = _username.asStateFlow()
+
     enum class Status { OFF, CONNECTING, CONNECTED, FAILED }
 
     /**
@@ -176,9 +181,67 @@ class DiscordPresenceManager @Inject constructor(
         }
     }
 
+    /**
+     * Ask Discord who this token belongs to.
+     *
+     * The whole point is to tell two failures apart that otherwise look
+     * identical. The gateway answers a bad token and a handshake it dislikes
+     * with the same 4004 close, so a client that only talks to the gateway can
+     * never say which it is — and "your token is wrong" is very bad advice to
+     * give someone whose token is fine. A 200 here means the credential is
+     * good and any later 4004 is this app's IDENTIFY at fault; a 401 means the
+     * token really is dead.
+     *
+     * It also gives the settings screen a name to show, which is the only
+     * confirmation that survives the music not playing.
+     */
+    suspend fun verifyToken(token: String): Boolean {
+        val clean = DiscordPresence.normalizeToken(token)
+        if (!DiscordPresence.looksLikeToken(clean)) {
+            _status.value = Status.FAILED
+            _errorMessage.value =
+                "That doesn't look like a Discord token — they're three parts " +
+                    "separated by dots. Copy the whole Authorization value."
+            return false
+        }
+        return runCatching {
+            val response = httpClient.get("$API_BASE/users/@me") {
+                header("Authorization", clean)
+            }
+            when (response.status.value) {
+                in 200..299 -> {
+                    val name = runCatching {
+                        json.parseToJsonElement(response.bodyAsText())
+                            .jsonObject["username"]?.jsonPrimitive?.content
+                    }.getOrNull()
+                    _username.value = name
+                    _errorMessage.value = null
+                    if (_status.value == Status.FAILED) _status.value = Status.OFF
+                    true
+                }
+                401 -> {
+                    _username.value = null
+                    _status.value = Status.FAILED
+                    _errorMessage.value =
+                        "Discord rejected the token (401). It rotates on every " +
+                            "password change and logout — copy a fresh one."
+                    false
+                }
+                else -> {
+                    _errorMessage.value =
+                        "Discord answered ${response.status.value} when checking the token."
+                    false
+                }
+            }
+        }.onFailure {
+            Log.w(TAG, "token check failed", it)
+            _errorMessage.value = "Couldn't reach Discord to check the token: ${it.message}"
+        }.getOrDefault(false)
+    }
+
     private suspend fun show(now: DiscordPresence.NowPlaying) {
         if (!preferences.discordPresenceEnabled.first()) return
-        val token = preferences.discordToken.first()
+        val token = DiscordPresence.normalizeToken(preferences.discordToken.first())
         if (token.isBlank()) return
         if (lastSent?.sameAs(now) == true) return
 
@@ -316,7 +379,16 @@ class DiscordPresenceManager @Inject constructor(
                 Log.w(TAG, "gateway closed: ${closed?.code} ${closed?.message}")
                 if (verdict.fatal) {
                     _status.value = Status.FAILED
-                    _errorMessage.value = verdict.message
+                    // A token the REST API just accepted, refused by the
+                    // gateway, is not the listener's problem to fix — say so
+                    // rather than sending them after another token that will
+                    // fail in exactly the same way.
+                    _errorMessage.value = if (closed?.code?.toInt() == 4004 && _username.value != null) {
+                        "Discord accepted this token but refused the connection (4004). " +
+                            "That's a fault in the app's handshake, not your token."
+                    } else {
+                        verdict.message
+                    }
                 } else if (!established) {
                     _errorMessage.value = verdict.message
                 }

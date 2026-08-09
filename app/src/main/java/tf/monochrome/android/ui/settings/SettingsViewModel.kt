@@ -175,8 +175,14 @@ class SettingsViewModel @Inject constructor(
             // clear the refusal — otherwise the manager keeps refusing to
             // retry a token that has just been replaced.
             discordPresence.clearError()
+            // Checked here rather than at the next track change, so a bad
+            // token is answered while the person who typed it is still
+            // looking at the screen.
+            if (token.isNotBlank()) discordPresence.verifyToken(token)
         }
     }
+
+    val discordUsername: StateFlow<String?> = discordPresence.username
 
     fun setDiscordPresenceEnabled(enabled: Boolean) {
         viewModelScope.launch { preferences.setDiscordPresenceEnabled(enabled) }

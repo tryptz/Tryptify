@@ -1985,6 +1985,7 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
     val applicationId by viewModel.discordApplicationId.collectAsStateWithLifecycle()
     val status by viewModel.discordStatus.collectAsStateWithLifecycle()
     val error by viewModel.discordError.collectAsStateWithLifecycle()
+    val discordUser by viewModel.discordUsername.collectAsStateWithLifecycle()
 
     var showDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -2063,9 +2064,14 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
     SettingsGroupHeader("Discord")
     SettingItem(
         title = "Token",
-        subtitle = if (token.isBlank()) "Not set — needed to show what you're playing"
-            else if (applicationId.isBlank()) "Set — album art off (no application ID)"
-            else "Set",
+        subtitle = when {
+            token.isBlank() -> "Not set — needed to show what you're playing"
+            discordUser != null && applicationId.isBlank() ->
+                "$discordUser — album art off (no application ID)"
+            discordUser != null -> "$discordUser"
+            applicationId.isBlank() -> "Set — album art off (no application ID)"
+            else -> "Set"
+        },
         onClick = { showDialog = true }
     )
     SettingSwitchItem(

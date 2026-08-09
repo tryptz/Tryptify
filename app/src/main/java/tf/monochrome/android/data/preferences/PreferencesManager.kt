@@ -603,7 +603,11 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDiscordCredentials(token: String, applicationId: String) {
         dataStore.edit {
-            it[DISCORD_TOKEN] = token.trim()
+            // Normalised on the way in, not on the way out: a token pasted with
+            // a stray quote or an "Authorization:" label in front of it is
+            // indistinguishable from a wrong one once Discord has refused it.
+            it[DISCORD_TOKEN] =
+                tf.monochrome.android.data.presence.DiscordPresence.normalizeToken(token)
             it[DISCORD_APPLICATION_ID] = applicationId.trim()
         }
     }

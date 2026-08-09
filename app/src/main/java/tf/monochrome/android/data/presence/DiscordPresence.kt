@@ -141,11 +141,12 @@ object DiscordPresence {
             // a phone holding a presence. Claiming a desktop client here would
             // put a desktop icon on a status coming from a phone.
             //
-            // The fuller set matters more than it looks. A bot IDENTIFY is
-            // happy with three fields; the user gateway is stricter about what
-            // a client looks like, and a thin properties block is one of the
-            // ways a handshake gets closed with 4004 while the token itself is
-            // perfectly good.
+            // This shape is confirmed accepted by the gateway, which is the
+            // only reason it looks the way it does. It was briefly cut back to
+            // three fields on a theory that a fuller block was what earned a
+            // 4004; the 4004 turned out to be a mistyped token, and the theory
+            // was wrong. Left as the version known to work rather than the
+            // version that seems tidier.
             put("os", "Android")
             put("browser", "Discord Android")
             put("device", "android")
@@ -213,6 +214,38 @@ object DiscordPresence {
         }
     }
 
+    /**
+     * Clean up a pasted token.
+     *
+     * Copying one out of a browser's network inspector picks up whatever was
+     * around it — a trailing newline, the quotes from a JSON view, sometimes an
+     * `Authorization:` label or a scheme word. None of that is visible in a
+     * single-line text field, and all of it produces the same 4004 as a genuinely
+     * wrong token, which is an unpleasant thing to debug by eye.
+     */
+    fun normalizeToken(raw: String): String {
+        var value = raw.trim().trim('"', '\'', '`')
+        for (prefix in listOf("authorization:", "authorization", "bearer ", "bot ")) {
+            if (value.startsWith(prefix, ignoreCase = true)) {
+                value = value.removeRange(0, prefix.length).trim()
+            }
+        }
+        return value.trim().trim('"', '\'')
+    }
+
+    /**
+     * Whether [token] is even shaped like a Discord user token.
+     *
+     * Three dot-separated parts: the base64 user id, a timestamp, and an HMAC.
+     * Worth checking before anything is sent, because the failure for a
+     * malformed token and for a revoked one is the identical 4004 — and only
+     * one of those is worth fetching a new token over.
+     */
+    fun looksLikeToken(token: String): Boolean {
+        val parts = token.split('.')
+        return parts.size == 3 && parts.all { it.isNotBlank() } && parts[0].length >= 16
+    }
+
     /** Why the gateway hung up, and whether trying again could ever help. */
     data class CloseVerdict(val fatal: Boolean, val message: String)
 
@@ -268,10 +301,7 @@ object DiscordPresence {
             putJsonObject("d", data)
         }.toString()
 
-    /**
-     * The client Discord is told this is. Only ever compared for plausibility,
-     * never for accuracy — an obviously absent one reads as an unknown client.
-     */
+    /** The client Discord is told this is. Part of an accepted handshake. */
     private const val CLIENT_VERSION = "277.15 - rn"
     private const val CLIENT_BUILD = 2938
 
