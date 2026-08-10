@@ -64,6 +64,12 @@ object DiscordPresence {
         val album: String?,
         /** Already an `mp:external/…` path, or an https URL, or null for no art. */
         val artworkAsset: String?,
+        /** The animated spectrum, resolved the same way. Null for no badge. */
+        val badgeAsset: String? = null,
+        /** The graph genre, which is where the badge's rhythm comes from. */
+        val genreId: String? = null,
+        /** The cover image, which is where the badge's colour comes from. */
+        val artworkUrl: String? = null,
         val positionMs: Long,
         val durationMs: Long,
         val paused: Boolean,
@@ -84,6 +90,7 @@ object DiscordPresence {
                 album == other.album &&
                 paused == other.paused &&
                 durationMs == other.durationMs &&
+                badgeAsset == other.badgeAsset &&
                 kotlin.math.abs(positionMs - other.positionMs) < POSITION_TOLERANCE_MS
     }
 
@@ -119,14 +126,22 @@ object DiscordPresence {
                 }
             }
 
-            if (now.artworkAsset != null || now.album != null) {
+            if (now.artworkAsset != null || now.album != null || now.badgeAsset != null) {
                 putJsonObject("assets") {
                     now.artworkAsset?.let { put("large_image", it) }
                     now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", pad(it)) }
+                    // The animated spectrum rides the small slot so the cover
+                    // keeps the large one. It is dropped while paused rather
+                    // than left looping: a visualiser moving through music that
+                    // has stopped is the one thing it must never do, and the
+                    // slot is then free to say so instead.
                     if (now.paused) {
-                        // The only way to say "paused" on a card that has no
-                        // such state: the small badge over the artwork.
                         put("small_text", "Paused")
+                    } else {
+                        now.badgeAsset?.let {
+                            put("small_image", it)
+                            put("small_text", "Playing")
+                        }
                     }
                 }
             }

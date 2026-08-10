@@ -1,6 +1,8 @@
 package tf.monochrome.android.data.presence
 
+import android.content.Context
 import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.get
@@ -36,6 +38,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.data.repository.GenreGraphRepository
+import tf.monochrome.android.ui.theme.DynamicColorExtractor
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.min
@@ -56,8 +60,10 @@ import kotlin.random.Random
  */
 @Singleton
 class DiscordPresenceManager @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val httpClient: HttpClient,
     private val preferences: PreferencesManager,
+    private val genreGraph: GenreGraphRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Mutex()
@@ -248,6 +254,7 @@ class DiscordPresenceManager @Inject constructor(
         val appId = preferences.discordApplicationId.first().takeIf { it.isNotBlank() }
         val resolved = now.copy(
             artworkAsset = now.artworkAsset?.let { proxiedAsset(it, token, appId) },
+            badgeAsset = badgeFor(now)?.let { proxiedAsset(it, token, appId) },
         )
         val activity = DiscordPresence.activity(resolved, APP_NAME, appId)
         lock.withLock {
@@ -409,6 +416,40 @@ class DiscordPresenceManager @Inject constructor(
     }
 
     /**
+     * The animated spectrum for this track, as a URL, or null for none.
+     *
+     * The rhythm comes from the genre and its ancestors in the graph; the
+     * colour from the cover's own palette, which the player already extracts
+     * for its theming — so this costs one cached palette read, not a render.
+     */
+    private suspend fun badgeFor(now: DiscordPresence.NowPlaying): String? {
+        if (!preferences.discordPresenceAnimated.first()) return null
+        val genreId = now.genreId ?: return null
+        val graph = genreGraph.graph
+        val lineage = buildList {
+            var node = graph[genreId]
+            var guard = 0
+            // Guarded: the graph is authored data, and a cycle in it would
+            // otherwise hang the presence coroutine rather than fail visibly.
+            while (node != null && guard++ < LINEAGE_DEPTH) {
+                add(node.id)
+                node = node.parents.firstOrNull()?.let { graph[it] }
+            }
+        }
+        if (lineage.isEmpty()) return null
+
+        val palette = DynamicColorExtractor.extract(context, now.artworkUrl)
+        val colour = palette?.vibrant ?: palette?.dominant ?: return null
+        val argb = colour.value.toULong() shr 32
+        val rgb = Triple(
+            ((argb shr 16) and 0xFFu).toInt(),
+            ((argb shr 8) and 0xFFu).toInt(),
+            (argb and 0xFFu).toInt(),
+        )
+        return PresenceBadge.url(lineage, rgb)
+    }
+
+    /**
      * Turn an artwork URL into something Discord will actually render.
      *
      * Assets on a gateway-set presence are normally names of images uploaded to
@@ -447,6 +488,9 @@ class DiscordPresenceManager @Inject constructor(
         const val API_BASE = "https://discord.com/api/v9"
         const val BASE_BACKOFF_MS = 2_000L
         const val MAX_BACKOFF_MS = 60_000L
+
+        /** How far up the genre graph a badge looks for a rhythm it recognises. */
+        const val LINEAGE_DEPTH = 12
 
         /** How long a queue has to read empty before it counts as stopped. */
         const val HIDE_GRACE_MS = 15_000L

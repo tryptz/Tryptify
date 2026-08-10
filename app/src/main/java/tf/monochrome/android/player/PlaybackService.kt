@@ -741,6 +741,13 @@ class PlaybackService : MediaSessionService() {
                 artworkAsset = track.album?.cover?.let {
                     tf.monochrome.android.domain.model.buildCoverUrl(it, 640)
                 },
+                // The badge's rhythm and colour are resolved in the manager,
+                // which already runs off the main thread and holds the graph
+                // and the palette cache — this only hands it the two inputs.
+                genreId = unifiedTrackRegistry[track.id]?.genreId,
+                artworkUrl = track.album?.cover?.let {
+                    tf.monochrome.android.domain.model.buildCoverUrl(it, 320)
+                },
                 positionMs = if (loaded) player.currentPosition.coerceAtLeast(0L) else 0L,
                 // The player's duration is unset until the track is prepared;
                 // the catalogue's is in seconds and always there.

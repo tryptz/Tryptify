@@ -1986,6 +1986,7 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
     val status by viewModel.discordStatus.collectAsStateWithLifecycle()
     val error by viewModel.discordError.collectAsStateWithLifecycle()
     val discordUser by viewModel.discordUsername.collectAsStateWithLifecycle()
+    val animated by viewModel.discordPresenceAnimated.collectAsStateWithLifecycle()
 
     var showDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -2089,6 +2090,13 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
         },
         checked = enabled,
         onCheckedChange = { viewModel.setDiscordPresenceEnabled(it && token.isNotBlank()) }
+    )
+    SettingSwitchItem(
+        title = "Animated spectrum",
+        subtitle = "A moving spectrum beside the artwork, matched to the genre's " +
+            "rhythm and the cover's colour. Off leaves the card still.",
+        checked = animated,
+        onCheckedChange = { viewModel.setDiscordPresenceAnimated(it) }
     )
     error?.let { message ->
         Text(

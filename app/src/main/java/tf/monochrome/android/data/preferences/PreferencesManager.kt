@@ -116,6 +116,7 @@ class PreferencesManager @Inject constructor(
         private val DISCORD_TOKEN = stringPreferencesKey("discord_token")
         private val DISCORD_APPLICATION_ID = stringPreferencesKey("discord_application_id")
         private val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
+        private val DISCORD_PRESENCE_ANIMATED = booleanPreferencesKey("discord_presence_animated")
 
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
@@ -614,6 +615,21 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDiscordPresenceEnabled(enabled: Boolean) {
         dataStore.edit { it[DISCORD_PRESENCE_ENABLED] = enabled }
+    }
+
+    /**
+     * Whether the presence card carries the animated spectrum badge.
+     *
+     * Separate from the presence itself because it is a different thing to want
+     * off: the badge is decoration, and someone may want the track shown
+     * without a moving graphic on their profile all day.
+     */
+    val discordPresenceAnimated: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[DISCORD_PRESENCE_ANIMATED] ?: true
+    }
+
+    suspend fun setDiscordPresenceAnimated(enabled: Boolean) {
+        dataStore.edit { it[DISCORD_PRESENCE_ANIMATED] = enabled }
     }
 
     suspend fun clearDiscordCredentials() {

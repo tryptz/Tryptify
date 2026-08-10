@@ -30,7 +30,15 @@ class DiscordPresenceTest {
         positionMs: Long = 30_000,
         durationMs: Long = 210_000,
         paused: Boolean = false,
-    ) = DiscordPresence.NowPlaying(title, artist, album, artwork, positionMs, durationMs, paused)
+    ) = DiscordPresence.NowPlaying(
+        title = title,
+        artist = artist,
+        album = album,
+        artworkAsset = artwork,
+        positionMs = positionMs,
+        durationMs = durationMs,
+        paused = paused,
+    )
 
     @Test
     fun `a playing track is a listening activity, not a playing one`() {

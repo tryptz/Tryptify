@@ -188,6 +188,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setDiscordPresenceEnabled(enabled) }
     }
 
+    val discordPresenceAnimated: StateFlow<Boolean> = preferences.discordPresenceAnimated
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setDiscordPresenceAnimated(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDiscordPresenceAnimated(enabled) }
+    }
+
     fun clearDiscordCredentials() {
         viewModelScope.launch { preferences.clearDiscordCredentials() }
     }
