@@ -745,8 +745,14 @@ class PlaybackService : MediaSessionService() {
                 // which already runs off the main thread and holds the graph
                 // and the palette cache — this only hands it the two inputs.
                 genreId = unifiedTrackRegistry[track.id]?.genreId,
+                // The SAME size the rest of the app asks for, deliberately.
+                // DynamicColorExtractor caches by URL and Coil caches by URL, so
+                // a different size here is a different key in both: it made
+                // every track fetch a second copy of its own cover and run a
+                // second software decode and Palette pass, duplicating work the
+                // player had already done a moment earlier.
                 artworkUrl = track.album?.cover?.let {
-                    tf.monochrome.android.domain.model.buildCoverUrl(it, 320)
+                    tf.monochrome.android.domain.model.buildCoverUrl(it, 640)
                 },
                 positionMs = if (loaded) player.currentPosition.coerceAtLeast(0L) else 0L,
                 // The player's duration is unset until the track is prepared;
