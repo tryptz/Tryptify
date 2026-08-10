@@ -133,15 +133,25 @@ object PresenceBadge {
     }
 
     /**
-     * The badge for a track, or null if there is nothing to base one on.
+     * The hue used when the cover has none of its own.
      *
-     * Null rather than a default: a badge is a claim about the music, and one
-     * with an arbitrary colour under a rhythm nobody chose is worse than no
-     * badge at all. A greyscale cover is genuinely "no opinion", and the card
-     * is complete without it.
+     * Plenty of sleeves are black, white or grey, and plenty of tracks reach
+     * the player with no genre attached at all. Those used to produce no badge,
+     * which meant the card silently gained and lost a graphic depending on
+     * facts nobody can see — a worse result than a consistent default. Bucket 5
+     * is the blue end of the wheel, which is what Discord's own accent is and
+     * so reads as belonging to the card rather than as a wrong guess.
      */
-    fun url(genreIds: List<String>, coverRgb: Triple<Int, Int, Int>?): String? {
-        val hue = coverRgb?.let { hueBucket(it.first, it.second, it.third) } ?: return null
+    const val DEFAULT_HUE = 5
+
+    /**
+     * The badge for a track. Never null: an unknown genre falls back to the
+     * plain backbeat and a colourless cover to [DEFAULT_HUE], so every track
+     * gets a spectrum rather than the card changing shape depending on how much
+     * happens to be known about what is playing.
+     */
+    fun url(genreIds: List<String>, coverRgb: Triple<Int, Int, Int>?): String {
+        val hue = coverRgb?.let { hueBucket(it.first, it.second, it.third) } ?: DEFAULT_HUE
         return "$BASE_URL/spectrum-${groove(genreIds)}-$hue.webp"
     }
 

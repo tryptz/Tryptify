@@ -424,10 +424,9 @@ class DiscordPresenceManager @Inject constructor(
      */
     private suspend fun badgeFor(now: DiscordPresence.NowPlaying): String? {
         if (!preferences.discordPresenceAnimated.first()) return null
-        val genreId = now.genreId ?: return null
         val graph = genreGraph.graph
         val lineage = buildList {
-            var node = graph[genreId]
+            var node = now.genreId?.let { graph[it] }
             var guard = 0
             // Guarded: the graph is authored data, and a cycle in it would
             // otherwise hang the presence coroutine rather than fail visibly.
@@ -436,16 +435,20 @@ class DiscordPresenceManager @Inject constructor(
                 node = node.parents.firstOrNull()?.let { graph[it] }
             }
         }
-        if (lineage.isEmpty()) return null
-
+        // No early return for an empty lineage or a colourless cover: both fall
+        // back inside PresenceBadge, so every track gets a spectrum rather than
+        // the card gaining and losing a graphic depending on how much the app
+        // happens to know about what is playing.
         val palette = DynamicColorExtractor.extract(context, now.artworkUrl)
-        val colour = palette?.vibrant ?: palette?.dominant ?: return null
-        val argb = colour.value.toULong() shr 32
-        val rgb = Triple(
-            ((argb shr 16) and 0xFFu).toInt(),
-            ((argb shr 8) and 0xFFu).toInt(),
-            (argb and 0xFFu).toInt(),
-        )
+        val colour = palette?.vibrant ?: palette?.dominant
+        val rgb = colour?.let {
+            val argb = it.value.toULong() shr 32
+            Triple(
+                ((argb shr 16) and 0xFFu).toInt(),
+                ((argb shr 8) and 0xFFu).toInt(),
+                (argb and 0xFFu).toInt(),
+            )
+        }
         return PresenceBadge.url(lineage, rgb)
     }
 

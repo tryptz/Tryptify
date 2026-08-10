@@ -58,6 +58,14 @@ class PresenceBadgeTest {
     }
 
     @Test
+    fun `a track with nothing known about it still gets a badge`() {
+        // Unknown genre and a colourless cover at once — the commonest case for
+        // a local file with no tags.
+        val url = PresenceBadge.url(emptyList(), null)
+        assertTrue(url, url.endsWith("spectrum-${PresenceBadge.DEFAULT_GROOVE}-${PresenceBadge.DEFAULT_HUE}.webp"))
+    }
+
+    @Test
     fun `an unrecognised genre gets the plain backbeat`() {
         assertEquals(PresenceBadge.DEFAULT_GROOVE, PresenceBadge.groove(listOf("zzz-unknown")))
         assertEquals(PresenceBadge.DEFAULT_GROOVE, PresenceBadge.groove(emptyList()))
@@ -81,7 +89,13 @@ class PresenceBadgeTest {
         assertNull(PresenceBadge.hueBucket(20, 20, 20))
         assertNull(PresenceBadge.hueBucket(200, 200, 205))
         assertNull(PresenceBadge.hueBucket(0, 0, 0))
-        assertNull(PresenceBadge.url(listOf("house"), Triple(30, 30, 30)))
+        // The badge still appears — it falls back to the default hue rather
+        // than vanishing, so the card doesn't gain and lose a graphic depending
+        // on facts nobody can see.
+        assertTrue(
+            PresenceBadge.url(listOf("house"), Triple(30, 30, 30))
+                .endsWith("spectrum-four-${PresenceBadge.DEFAULT_HUE}.webp"),
+        )
     }
 
     @Test
@@ -96,10 +110,7 @@ class PresenceBadgeTest {
             "reggaeton", "ambient", "zzz-unknown",
         )
         for (genre in genres) {
-            for (hue in 0 until PresenceBadge.HUES) {
-                val url = PresenceBadge.url(listOf(genre), Triple(255, 40, 40))
-                assertNotNull(genre, url)
-            }
+            assertNotNull(genre, PresenceBadge.url(listOf(genre), Triple(255, 40, 40)))
             val groove = PresenceBadge.groove(listOf(genre))
             for (hue in 0 until PresenceBadge.HUES) {
                 val file = File(dir, "spectrum-$groove-$hue.webp")
