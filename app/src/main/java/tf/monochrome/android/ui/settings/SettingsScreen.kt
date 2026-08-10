@@ -298,13 +298,15 @@ private fun EqualizerTab(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Navigate straight to the tool. These used to re-enter Settings on a
+        // hardcoded `settings?tab=4` first, to force Back to land on this tab
+        // — which broke both buttons twice over. The rewritten Settings entry
+        // was not RESUMED yet when navigateTool ran, so its isSettled() guard
+        // swallowed the second call and the EQ page never opened; and tab 4 is
+        // Downloads now, not Equalizer. Nothing is lost by dropping it: the
+        // pager state is saveable, so Back restores the tab you left from.
         OutlinedButton(
-            onClick = {
-                navController.navigate("settings?tab=4") {
-                    popUpTo("settings?tab={tab}") { inclusive = true }
-                }
-                navController.navigateTool(Screen.Equalizer)
-            },
+            onClick = { navController.navigateTool(Screen.Equalizer) },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Open Precision AutoEQ")
@@ -313,12 +315,7 @@ private fun EqualizerTab(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
-            onClick = {
-                navController.navigate("settings?tab=4") {
-                    popUpTo("settings?tab={tab}") { inclusive = true }
-                }
-                navController.navigateTool(Screen.ParametricEq)
-            },
+            onClick = { navController.navigateTool(Screen.ParametricEq) },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Open Parametric EQ")
