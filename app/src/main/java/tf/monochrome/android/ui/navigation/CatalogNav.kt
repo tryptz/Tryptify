@@ -19,20 +19,58 @@ import tf.monochrome.android.domain.model.SourceType
  * double-tap fires two navigate() calls before the first destination settles;
  * the second used to push a duplicate screen. After the first navigation the
  * current entry leaves RESUMED, so the second tap is ignored here.
+ *
+ * `launchSingleTop` covers the other half of the same problem: re-entering the
+ * screen you are already on — tapping "Settings" from inside Settings, or the
+ * mini player while Now Playing is open — replaces the top entry instead of
+ * stacking an identical one behind it.
  */
 fun NavController.navigateSafe(route: String) {
-    if (currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true) {
-        navigate(route)
+    if (!isSettled()) return
+    navigate(route) { launchSingleTop = true }
+}
+
+/**
+ * Navigate to a *tool* screen — Settings, the equaliser, the mixer, Now Playing
+ * — collapsing any earlier visit to it rather than stacking another copy.
+ *
+ * Content screens are allowed to chain: album → artist → album is a trail
+ * through the catalogue, and Back should walk it in reverse. Tool screens are
+ * not. They open from everywhere, including from each other (Now Playing opens
+ * Settings, Settings opens the equaliser, the equaliser is also reachable from
+ * the player sheet), so without this a few minutes of fiddling leaves a dozen
+ * near-identical entries on the stack and Back becomes a long walk home through
+ * screens the listener has already dismissed once.
+ *
+ * [screen] supplies the route *pattern* to pop back to; [filled] is the actual
+ * target, which differs when the route carries arguments (`settings?tab=4`).
+ * Popping to a pattern that isn't on the stack is a no-op, so the first visit
+ * behaves like an ordinary push.
+ */
+fun NavController.navigateTool(screen: Screen, filled: String = screen.route) {
+    if (!isSettled()) return
+    navigate(filled) {
+        launchSingleTop = true
+        popUpTo(screen.route) { inclusive = true }
     }
 }
 
+private fun NavController.isSettled(): Boolean =
+    currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true
+
 /** Open the artist page appropriate to [sourceType]. */
-fun NavController.openArtist(sourceType: SourceType, artistId: Long) {
-    val route = when (sourceType) {
-        SourceType.LOCAL -> Screen.LocalArtistDetail.createRoute(artistId)
-        else -> Screen.ArtistDetail.createRoute(artistId)
+fun NavController.openArtist(
+    sourceType: SourceType,
+    artistId: Long,
+    artistName: String? = null,
+) {
+    // Local artists are always identified by a real row id, so the name is only
+    // ever the catalogue path's fallback — see [openCatalogArtist].
+    if (sourceType == SourceType.LOCAL) {
+        if (artistId > 0L) navigateSafe(Screen.LocalArtistDetail.createRoute(artistId))
+        return
     }
-    navigateSafe(route)
+    openCatalogArtist(artistId, artistName)
 }
 
 /**
@@ -68,8 +106,20 @@ fun isNavigableAlbumId(albumId: String?): Boolean {
 }
 
 /** Catalog-only artist navigation (for domain `Track` rows, which are TIDAL/Qobuz). */
-fun NavController.openCatalogArtist(artistId: Long) {
-    navigateSafe(Screen.ArtistDetail.createRoute(artistId))
+fun NavController.openCatalogArtist(artistId: Long, artistName: String? = null) {
+    // A track can reach the player with an artist *name* and no artist *id* —
+    // some catalogue rows carry 0 — and opening the artist screen with that
+    // guarantees a failed lookup and a dead-end error page. ("Qobuz artist not
+    // available: 0" is what that looked like once the error reporting stopped
+    // blaming the empty TIDAL pool for it.)
+    //
+    // The name is the way out: the screen can search the catalogue for it and
+    // recover the id. The same artist reached from history works without any of
+    // this, because those rows carry the real id already.
+    // Without an id AND without a name there is nothing to look up, so the only
+    // honest answer is to stay put rather than push a page that must fail.
+    if (artistId <= 0L && artistName.isNullOrBlank()) return
+    navigateSafe(Screen.ArtistDetail.createRoute(artistId, artistName))
 }
 
 /** Catalog-only album navigation (for domain `Track` rows). */

@@ -17,6 +17,7 @@ import kotlinx.coroutines.coroutineScope
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
+import tf.monochrome.android.data.api.NoInstancesConfiguredException
 import tf.monochrome.android.domain.model.ArtistDetail
 import javax.inject.Inject
 
@@ -29,6 +30,9 @@ class ArtistDetailViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val artistId: Long = savedStateHandle.get<Long>("artistId") ?: 0L
+
+    /** The fallback identity, when the row that opened this had no id. */
+    private val artistName: String = savedStateHandle.get<String>("name").orEmpty()
 
     private val _artistDetail = MutableStateFlow<ArtistDetail?>(null)
     val artistDetail: StateFlow<ArtistDetail?> = _artistDetail.asStateFlow()
@@ -88,13 +92,55 @@ class ArtistDetailViewModel @Inject constructor(
                 }
             }
 
-            var finalResult: Result<ArtistDetail>? = null
+            // Which failure gets *reported* matters as much as the order they
+            // are tried in. Keeping the first one meant a Qobuz-only setup
+            // always showed "No API instances available" — the TIDAL pool being
+            // empty is the first thing that goes wrong and the least
+            // informative thing that went wrong, since that pool was never the
+            // one holding this artist. It sent people to configure instances
+            // for a catalogue they don't use, for an artist that failed
+            // somewhere else entirely.
+            //
+            // So a missing pool is only reported when every source failed that
+            // way, i.e. when there is genuinely nothing configured to ask.
+            // An id of 0 is not an artist that failed to load, it is an artist
+            // we were never told the identity of — some catalogue rows reach
+            // the player with a name and no id. Searching the catalogue for the
+            // name recovers a real id, which is the only thing that makes the
+            // link work at all; every lookup below needs one.
+            if (artistId <= 0L && artistName.isNotBlank()) {
+                val found = repository.searchArtists(artistName, limit = 5).getOrNull()
+                    ?.firstOrNull { it.name.equals(artistName, ignoreCase = true) && it.id > 0 }
+                if (found != null) {
+                    val recovered = repository.getArtist(found.id)
+                    if (recovered.isSuccess) {
+                        _artistDetail.value = recovered.getOrThrow()
+                        _isLoading.value = false
+                        return@launch
+                    }
+                }
+                _error.value = "Couldn't find \"$artistName\" in your catalogues."
+                _isLoading.value = false
+                return@launch
+            }
+
+            var firstFailure: Result<ArtistDetail>? = null
+            var realFailure: Result<ArtistDetail>? = null
+            var success: Result<ArtistDetail>? = null
             for (attempt in ordered) {
                 val r = attempt()
-                if (finalResult == null) finalResult = r
-                if (r.isSuccess) { finalResult = r; break }
+                if (r.isSuccess) { success = r; break }
+                if (firstFailure == null) firstFailure = r
+                if (realFailure == null &&
+                    r.exceptionOrNull() !is NoInstancesConfiguredException
+                ) {
+                    realFailure = r
+                }
             }
-            finalResult = finalResult ?: Result.failure(Exception("Failed to load artist"))
+            val finalResult = success
+                ?: realFailure
+                ?: firstFailure
+                ?: Result.failure(Exception("Failed to load artist"))
 
             finalResult
                 .onSuccess { _artistDetail.value = it }

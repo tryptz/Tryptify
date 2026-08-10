@@ -1,6 +1,7 @@
 package tf.monochrome.android.domain.usecase
 
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.domain.model.GenreConfidence
 import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
@@ -46,6 +47,7 @@ fun Track.toUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     artists = uiArtistRefs(),
     albumTitle = album?.title,
     albumId = album?.id?.toString(),
+    releaseYear = album?.releaseDate?.take(4)?.toIntOrNull(),
     artworkUri = coverUrl,
     channelCount = channelCount,
     version = version,
@@ -74,10 +76,16 @@ fun Track.toQobuzUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     artists = uiArtistRefs(),
     albumTitle = album?.title,
     albumId = album?.id?.toString(),
+    releaseYear = album?.releaseDate?.take(4)?.toIntOrNull(),
     artworkUri = coverUrl,
     channelCount = channelCount,
     version = version,
     isThxSpatialAudio = isThxSpatialAudio,
+    // DERIVED, not TAGGED: Qobuz tags the *release*, not the track, so this is
+    // the album's genre inherited downward. True often enough to rank on, not
+    // reliably enough to state as fact about the track itself.
+    genre = album?.genre,
+    genreConfidence = album?.genre?.let { GenreConfidence.DERIVED },
     source = PlaybackSource.QobuzCached(qobuzId = id),
     sourceType = SourceType.QOBUZ,
 )
@@ -107,6 +115,7 @@ fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     artists = uiArtistRefs(),
     albumTitle = album?.title,
     albumId = album?.id?.toString(),
+    releaseYear = album?.releaseDate?.take(4)?.toIntOrNull(),
     artworkUri = coverUrl,
     channelCount = channelCount,
     version = version,

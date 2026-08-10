@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -57,6 +58,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
+    @Inject lateinit var discordPresence: tf.monochrome.android.data.presence.DiscordPresenceManager
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
@@ -200,10 +202,28 @@ class PlaybackService : MediaSessionService() {
                 // Also what wakes the blend watcher — see startCrossfadeWatcher.
                 playingSignal.value = isPlaying
                 refreshNowPlayingWidget()
+                // Discord draws the progress bar from timestamps and animates
+                // it on its own, so a pause has to be pushed or the bar runs
+                // on through music that stopped.
+                queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
             }
 
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
                 refreshNowPlayingWidget()
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                // A seek moves the play head without changing the track, and
+                // Discord is animating a bar from timestamps that just went
+                // stale — it would keep counting from where the track used to
+                // be. Only seeks: track changes come through the queue watcher.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -219,6 +239,11 @@ class PlaybackService : MediaSessionService() {
                     }
                     Player.STATE_READY -> {
                         consecutivePlayerErrors = 0
+                        // The queue watcher pushes the presence as soon as the
+                        // track changes, which is before the player has the
+                        // item and therefore before its position means
+                        // anything. This is the correction, once it does.
+                        queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
                         applyVolume()
                         applyPlaybackSpeed()
                         applyEq()
@@ -448,6 +473,33 @@ class PlaybackService : MediaSessionService() {
         }
         startCrossfadeWatcher()
 
+        // The Discord card mirrors the queue's current track, and nothing else.
+        //
+        // It used to be pushed from onMediaItemTransition, which was wrong in a
+        // way that only showed up on a device: that handler ignores
+        // MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED, and the ordinary way
+        // this service starts a track is player.setMediaItem — a playlist
+        // change. So the card was set by the first track and then never again,
+        // and Discord happily animated its progress bar to the end of a song
+        // that had long since finished. Only the gapless hand-off, which
+        // pre-queues and transitions with REASON_AUTO, ever got through.
+        //
+        // currentTrack has no such gaps: every route to a new track moves it —
+        // playlist replacement, the gapless hand-off, a crossfade, a skip by
+        // hand — and it going null is every route to nothing playing at all.
+        // That last part matters as much as the first: Discord holds a presence
+        // until the connection that set it closes, so without it the final
+        // track of the night sits on the profile for as long as the service
+        // lives, which for a foreground media service is hours.
+        serviceScope.launch {
+            queueManager.currentTrack
+                .distinctUntilChanged { a, b -> a?.id == b?.id }
+                .collect { track ->
+                    if (track == null) discordPresence.clear()
+                    else pushDiscordPresence(track)
+                }
+        }
+
         // Anything that reorders, extends or truncates the queue — drag to
         // reorder, play-next, clear-upcoming, a shuffle or repeat-mode change —
         // can invalidate what we pre-queued. Re-deriving the window on every
@@ -664,8 +716,63 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * Tell Discord what's playing, if the listener asked for that.
+     *
+     * The play head is only believed when the player is actually holding this
+     * track. The queue moves to the next song before the player is loaded with
+     * it, so asking then would hand Discord the *previous* track's position —
+     * and since the card's progress bar is drawn from a start timestamp, that
+     * is not a small error but a bar that opens part-filled and finishes early.
+     * Mismatched means the track is starting, which means zero; STATE_READY
+     * pushes again once the player agrees.
+     *
+     * The manager is a no-op when the feature is off, which is the normal case,
+     * so this stays a cheap call on a hot path.
+     */
+    private fun pushDiscordPresence(track: tf.monochrome.android.domain.model.Track) {
+        val player = mediaSession?.player ?: return
+        val loaded = player.currentMediaItem?.mediaId == track.id.toString()
+        discordPresence.update(
+            tf.monochrome.android.data.presence.DiscordPresence.NowPlaying(
+                title = track.title,
+                artist = track.artist?.name,
+                album = track.album?.title,
+                artworkAsset = track.album?.cover?.let {
+                    tf.monochrome.android.domain.model.buildCoverUrl(it, 640)
+                },
+                // The badge's rhythm and colour are resolved in the manager,
+                // which already runs off the main thread and holds the graph
+                // and the palette cache — this only hands it the two inputs.
+                genreId = unifiedTrackRegistry[track.id]?.genreId,
+                // The SAME size the rest of the app asks for, deliberately.
+                // DynamicColorExtractor caches by URL and Coil caches by URL, so
+                // a different size here is a different key in both: it made
+                // every track fetch a second copy of its own cover and run a
+                // second software decode and Palette pass, duplicating work the
+                // player had already done a moment earlier.
+                artworkUrl = track.album?.cover?.let {
+                    tf.monochrome.android.domain.model.buildCoverUrl(it, 640)
+                },
+                positionMs = if (loaded) player.currentPosition.coerceAtLeast(0L) else 0L,
+                // The player's duration is unset until the track is prepared;
+                // the catalogue's is in seconds and always there.
+                durationMs = (player.duration.takeIf { loaded && it > 0 })
+                    ?: (track.duration * 1000L),
+                // A track the player hasn't reached yet is starting, not paused
+                // — reading isPlaying here would badge every new song "Paused".
+                paused = loaded && !player.isPlaying,
+            ),
+        )
+    }
+
     @OptIn(UnstableApi::class)
     override fun onDestroy() {
+        // Discord holds a presence until the connection that set it closes, so
+        // leaving without this parks the last track on the profile for good.
+        // shutdown(), not clear(): the service is going away now, so there is
+        // nothing for the between-tracks grace period to wait for.
+        discordPresence.shutdown()
         crossfade.release()
         mediaSession?.run {
             player.release()

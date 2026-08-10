@@ -50,6 +50,7 @@ fun UnifiedTrackContextMenuHost(
     navController: NavController,
     playerViewModel: PlayerViewModel,
     onRemove: (() -> Unit)? = null,
+    removeLabel: String = "Remove from playlist",
 ) {
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
@@ -72,6 +73,7 @@ fun UnifiedTrackContextMenuHost(
             onToggleLike = { playerViewModel.toggleFavorite(legacy) },
             onAddToPlaylist = { addToPlaylistFor = track },
             onRemoveFromPlaylist = onRemove,
+            removeLabel = removeLabel,
             // Already on disk — nothing to fetch.
             onDownloadTrack = if (isLocal) null else ({ playerViewModel.downloadTrack(legacy) }),
             onShareFile = { playerViewModel.shareUnifiedTrack(track) },

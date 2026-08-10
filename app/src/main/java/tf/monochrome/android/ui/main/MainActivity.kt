@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
     @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
+    @Inject lateinit var lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var performanceProfile: PerformanceProfile
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
@@ -147,6 +148,12 @@ class MainActivity : ComponentActivity() {
             val customFontPath by preferences.customFontUri.collectAsStateWithLifecycle(initialValue = null)
             val dynamicColorsEnabled by preferences.dynamicColors.collectAsStateWithLifecycle(initialValue = false)
             val currentTrack by queueManager.currentTrack.collectAsStateWithLifecycle()
+            // The user's manual low-performance overrides, from Settings ›
+            // System › Performance.
+            val lowPerformance by preferences.lowPerformanceSettings
+                .collectAsStateWithLifecycle(
+                    initialValue = tf.monochrome.android.performance.LowPerformanceSettings()
+                )
             // The album palette crosses over at the speed the audio does, so a
             // blended transition doesn't have the colours land on the new track
             // while the old one is still playing.
@@ -154,7 +161,11 @@ class MainActivity : ComponentActivity() {
             val dynamicPalette by rememberDynamicPalette(
                 coverUrl = currentTrack?.coverUrl,
                 enabled = dynamicColorsEnabled,
-                blendMillis = ColorBlend.millisFor(blendSeconds),
+                // Instant colour change with animations off: the palette is a
+                // continuous cross-fade, not a one-off transition, so it keeps
+                // the theme recomposing for the whole blend window.
+                blendMillis = if (lowPerformance.disableAnimations) 0
+                else ColorBlend.millisFor(blendSeconds),
             )
 
             // Handles both a bundled `asset:` font and an imported file path —
@@ -165,8 +176,22 @@ class MainActivity : ComponentActivity() {
                 tf.monochrome.android.ui.theme.loadAppFontFamily(fontLoadContext, customFontPath)
             }
 
+            // "Remove liquid glass" is folded into the detected profile rather
+            // than checked separately: allowHazeBlur is already the flag every
+            // `Modifier.liquidGlass` call site consults, so turning it off here
+            // reaches all of them — list rows, the mini player, the nav pill,
+            // the audio-tools sheet — without touching one of them.
+            val effectiveProfile = remember(performanceProfile, lowPerformance.disableLiquidGlass) {
+                if (lowPerformance.disableLiquidGlass) {
+                    performanceProfile.copy(allowHazeBlur = false)
+                } else {
+                    performanceProfile
+                }
+            }
+
             CompositionLocalProvider(
-                LocalPerformanceProfile provides performanceProfile,
+                LocalPerformanceProfile provides effectiveProfile,
+                tf.monochrome.android.performance.LocalLowPerformance provides lowPerformance,
             ) {
                 MonochromeTheme(
                     themeName = themeName,
@@ -331,8 +356,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Route OAuth callback deep-links: Spotify (tryptify://spotify-callback) vs
-     * Supabase (tf.monotrypt.android://login-callback). Handled from BOTH
+     * Route auth callback deep-links: Spotify (tryptify://spotify-callback),
+     * Last.fm (tryptify://lastfm-callback) and Supabase
+     * (tf.monotrypt.android://login-callback). Handled from BOTH
      * onNewIntent (app already running) and onCreate (cold start after process
      * death, where the redirect delivers the callback as the launch intent —
      * previously dropped, so login silently failed).
@@ -342,6 +368,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             if (uri.scheme == "tryptify" && uri.host == "spotify-callback") {
                 spotifyAuthManager.handleCallback(uri)
+            } else if (uri.scheme == "tryptify" && uri.host == "lastfm-callback") {
+                lastFmAuthManager.handleCallback(uri)
             } else {
                 supabaseAuthManager.handleDeepLink(uri)
             }

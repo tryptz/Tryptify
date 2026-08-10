@@ -53,6 +53,7 @@ import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.navigation.navigateSafe
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,7 +134,7 @@ fun FolderBrowserScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navController.navigate("folder/${java.net.URLEncoder.encode(folder.path, "UTF-8")}") }
+                        .clickable { navController.navigateSafe("folder/${java.net.URLEncoder.encode(folder.path, "UTF-8")}") }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

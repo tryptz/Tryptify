@@ -12,12 +12,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
+import tf.monochrome.android.ui.theme.reduceMotion
 
 fun Modifier.bounceClick(
     scaleDown: Float = 0.95f,
     onClick: () -> Unit
 ) = composed {
     val interactionSource = remember { MutableInteractionSource() }
+
+    // With animations off, drop the whole spring: no press state to collect, no
+    // animation to run, and no graphicsLayer to allocate. This modifier is on
+    // every card and lazy-list row in the app, so skipping the layer here is
+    // worth more than the same skip anywhere else.
+    if (reduceMotion()) {
+        return@composed this.clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick
+        )
+    }
+
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
@@ -48,6 +62,16 @@ fun Modifier.bounceCombinedClick(
     onClick: () -> Unit
 ) = composed {
     val interactionSource = remember { MutableInteractionSource() }
+
+    if (reduceMotion()) {
+        return@composed this.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    }
+
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val scale by animateFloatAsState(

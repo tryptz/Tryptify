@@ -69,6 +69,7 @@ import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.navigation.navigateSafe
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,10 +119,10 @@ fun PlaylistScreen(
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
             },
             onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
+                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
             }
         )
     }
@@ -397,7 +398,7 @@ fun PlaylistScreen(
                         onMoreClick = { showContextMenuForTrack = track },
                         onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                         onAlbumClick = track.album?.id?.let { albumId ->
-                            { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                            { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
                         },
                         downloadState = activeDownloads[track.id],
                         isDownloaded = track.id in downloadedTrackIds,

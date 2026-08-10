@@ -71,6 +71,8 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
 import java.util.Locale
+import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.navigateTool
 
 /**
  * Stateful entry point for the main player. Collects every flow from
@@ -161,10 +163,16 @@ fun MainPlayerRoute(
     // MainPlayerScreen collapses the player chrome — no separate overlay.
     // Synced-only: lyrics without timestamps never expand, and losing sync
     // (track change, unsynced source) or leaving lyrics mode collapses.
+    val legacyPlayer = tf.monochrome.android.performance.LocalLowPerformance.current.legacyPlayer
     var lyricsExpanded by rememberSaveable { mutableStateOf(false) }
-    val lyricsSynced = lyrics?.isSynced == true
-    LaunchedEffect(viewMode, lyricsSynced) {
-        if (viewMode != NowPlayingViewMode.LYRICS || !lyricsSynced) lyricsExpanded = false
+    // The legacy layout has no expanded-lyrics state — it never collapses its
+    // chrome — so expansion is disabled there rather than left to flip an
+    // invisible flag. Without this the hero still toggled it: nothing moved on
+    // screen, but the BackHandler below then swallowed a back press and the
+    // player wouldn't close.
+    val lyricsCanExpand = lyrics?.isSynced == true && !legacyPlayer
+    LaunchedEffect(viewMode, lyricsCanExpand) {
+        if (viewMode != NowPlayingViewMode.LYRICS || !lyricsCanExpand) lyricsExpanded = false
     }
     BackHandler(enabled = lyricsExpanded) { lyricsExpanded = false }
 
@@ -205,7 +213,7 @@ fun MainPlayerRoute(
     // half the previous track. Linear for the same reason the palette is: it
     // is pacing an audio crossfade, not decorating a tap.
     val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
-    val colorBlendMs = ColorBlend.millisFor(blendSeconds)
+    val colorBlendMs = tf.monochrome.android.ui.theme.motionMillis(ColorBlend.millisFor(blendSeconds))
     // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
     val animatedDominant by androidx.compose.animation.animateColorAsState(
@@ -250,7 +258,7 @@ fun MainPlayerRoute(
             favoritePresetIds = visualizerFavoritePresetIds,
             onPresetSelected = playerViewModel::selectVisualizerPreset,
             onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
-            onSettingsClick = { navController.navigate(Screen.Settings.createRoute()) },
+            onSettingsClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onDismiss = { showPresetSheet = false },
         )
     }
@@ -321,7 +329,12 @@ fun MainPlayerRoute(
     // when the Studio toggle is on. Cover-art and lyrics views are mutually
     // exclusive, so both share ONE pulse / analyzer stake — never two FFT taps.
     val albumGlowOn = lyricsFx.glowBehindArt && lyricsFx.bassReact > 0.01f &&
-        viewMode == NowPlayingViewMode.COVER_ART
+        viewMode == NowPlayingViewMode.COVER_ART &&
+        // Only MainPlayerScreen is handed the fxUnderlay that draws this glow.
+        // Without the guard the legacy layout still staked the FFT tap and woke
+        // on every frame to compute a pulse nothing would ever draw — the exact
+        // cost the legacy player exists to avoid.
+        !legacyPlayer
     val beatOn = lyricsBeatOn || albumGlowOn
     val beatPulse: androidx.compose.runtime.State<Float>? =
         if (beatOn) rememberBassPulse(playerViewModel.spectrumAnalyzer, lyricsFx) else null
@@ -364,284 +377,344 @@ fun MainPlayerRoute(
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,
     ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        MainPlayerScreen(
-            miniGlass = miniGlass,
-            state = state,
-            positionState = positionState,
-            durationState = durationState,
-            isFullscreen = isFullscreenActive,
-            formatTime = playerViewModel::formatTime,
-            onToggleLike = playerViewModel::toggleLikeCurrentTrack,
-            onArtistClick = { artistId ->
-                // Source-aware so a local song's artist opens the local artist page.
-                navController.openArtist(currentUnified?.sourceType ?: SourceType.API, artistId)
-            },
-            onSeekCommit = playerViewModel::seekToFraction,
-            onPrevious = playerViewModel::skipToPrevious,
-            onPlayPause = playerViewModel::togglePlayPause,
-            onNext = playerViewModel::skipToNext,
-            onLyrics = {
-                playerViewModel.setNowPlayingViewMode(
-                    if (viewMode == NowPlayingViewMode.LYRICS) NowPlayingViewMode.COVER_ART
-                    else NowPlayingViewMode.LYRICS
-                )
-            },
-            onTimer = { showSleepSheet = true },
-            onMixer = { navController.navigate(Screen.Mixer.route) },
-            onPlaylist = { showQueueSheet = true },
-            onOutput = { navController.navigate(Screen.Settings.createRoute()) },
-            onSound = { navController.navigate(Screen.Equalizer.route) },
-            onSpeed = { showSpeedSheet = true },
-            onVisualizer = {
-                playerViewModel.setNowPlayingViewMode(
-                    if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
-                    else NowPlayingViewMode.VISUALIZER
-                )
-            },
-            onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
-            onCompressorToggle = playerViewModel::setCompressorEnabled,
-            onInflatorToggle = playerViewModel::setInflatorEnabled,
-            onCrossfeedToggle = playerViewModel::setCrossfeedEnabled,
-            onCompressorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 0)) },
-            onInflatorOpen = { navController.navigate(Screen.Oxford.createRoute(tab = 1)) },
-            onCrossfeedOpen = { navController.navigate(Screen.Crossfeed.route) },
-            onAutoEqToggle = playerViewModel::setAutoEqEnabled,
-            onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
-            onToneControlsChange = playerViewModel::setToneControls,
-            topBar = {
-                PlayerTopBar(
-                    speedLabel = state.speedLabel,
-                    shuffleEnabled = shuffleEnabled,
-                    repeatMode = repeatMode,
-                    isDownloaded = isDownloaded,
-                    downloadState = downloadState,
-                    heroStyle = heroStyle,
-                    onCollapse = { navController.popBackStack() },
-                    onOutputClick = { navController.navigate(Screen.Settings.createRoute()) },
-                    onSpeedClick = { showSpeedSheet = true },
-                    onToggleShuffle = playerViewModel::toggleShuffle,
-                    onCycleRepeat = playerViewModel::cycleRepeatMode,
-                    onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
-                    onCycleHeroStyle = {
-                        heroStyle = if (heroStyle == PlayerHeroStyle.Square) {
-                            PlayerHeroStyle.CircularProgress
-                        } else {
-                            PlayerHeroStyle.Square
-                        }
-                    },
-                    onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-                    onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
-                    onOpenLyricsStudio = { navController.navigate(Screen.LyricsFxStudio.route) },
-                    onOpenSettings = { navController.navigate(Screen.Settings.createRoute()) },
-                    onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
-                        { navController.navigate(Screen.ArtistDetail.createRoute(artistId)) }
-                    },
-                    onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
-                        { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
-                    },
-                )
-            },
-            hero = { heroModifier ->
-                // Manual dissolve between the album art / visualizer and the lyric
-                // surface (lyricsProgress is hoisted above). The built-in Crossfade
-                // snapped here; an explicit alpha animation is reliable, and it lets
-                // the fading art stay a centred square while the lyrics fill the
-                // full-width slot.
-                // Compose each side only while it is at all visible — derivedStateOf
-                // flips at the thresholds, not on every animation frame, so the
-                // (expensive) art/visualizer doesn't recompose mid-dissolve.
-                val showAlbumHero by remember { derivedStateOf { lyricsProgress < 0.999f } }
-                val showLyricsHero by remember { derivedStateOf { lyricsProgress > 0.001f } }
-
-                // Horizontal swipe across the hero skips tracks, matching the
-                // gesture (and the 50px threshold) the mini player already uses.
-                //
-                // detectHorizontalDragGestures, not detectDragGestures: the
-                // latter consumes vertical drags too, which would swallow the
-                // pull-up that opens the audio-tools sheet and the lyric list's
-                // own scrolling. Suppressed entirely in visualizer mode, where
-                // horizontal drags belong to the touch waveform.
-                val swipeSkipEnabled = viewMode != NowPlayingViewMode.VISUALIZER
-                // Art offset, in px, driven by the finger and then animated out
-                // and back in. An Animatable rather than a plain float so the
-                // release animation and a mid-flight new drag can't fight: a
-                // fresh snapTo cancels whatever animation is running.
-                val heroOffset = remember { androidx.compose.animation.core.Animatable(0f) }
-                val heroScope = rememberCoroutineScope()
-                val trackSwipe = Modifier.pointerInput(swipeSkipEnabled) {
-                    if (!swipeSkipEnabled) return@pointerInput
-                    val width = size.width.toFloat().coerceAtLeast(1f)
-                    // Commit distance. Compose's own touch slop only decides
-                    // when a drag *starts*; this is how far it has to travel
-                    // before it counts as a skip. Scaled off the art's width
-                    // (~22%) rather than a fixed pixel count, so it asks for the
-                    // same proportion of a gesture on any screen density.
-                    val skipThreshold = width * 0.22f
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            heroScope.launch {
-                                val dx = heroOffset.value
-                                // Carry the outgoing art the rest of the way off,
-                                // switch track, then bring the incoming one in
-                                // from the opposite edge — so the direction of
-                                // travel matches the direction of the swipe.
-                                when {
-                                    dx < -skipThreshold -> {
-                                        heroOffset.animateTo(-width, tween(140))
-                                        playerViewModel.skipToNext()
-                                        heroOffset.snapTo(width)
-                                        heroOffset.animateTo(0f, tween(260))
-                                    }
-                                    dx > skipThreshold -> {
-                                        heroOffset.animateTo(width, tween(140))
-                                        playerViewModel.skipToPrevious()
-                                        heroOffset.snapTo(-width)
-                                        heroOffset.animateTo(0f, tween(260))
-                                    }
-                                    // Under the threshold: spring back, no skip.
-                                    else -> heroOffset.animateTo(0f, spring())
-                                }
-                            }
-                        },
-                        onDragCancel = { heroScope.launch { heroOffset.animateTo(0f, spring()) } },
-                        onHorizontalDrag = { change, amount ->
-                            change.consume()
-                            heroScope.launch { heroOffset.snapTo(heroOffset.value + amount) }
-                        },
-                    )
-                }
-
-                Box(
-                    modifier = heroModifier.then(trackSwipe),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (showAlbumHero) {
-                        val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
-                            PlayerHeroStyle.Visualizer
-                        } else {
-                            heroStyle
-                        }
-                        // Keep the art a centred square whenever the slot is the
-                        // full-width lyric rectangle (i.e. any time lyrics are on
-                        // screen, including the fade-out). Bound it by WIDTH so the
-                        // now-taller lyric slot doesn't stretch the (dissolving) art
-                        // vertically; otherwise it fills the slot.
-                        val artMod = (if (lyricsSlotWide) {
-                            Modifier.fillMaxWidth().aspectRatio(1f)
-                        } else {
-                            Modifier.fillMaxSize()
-                        }).let { base ->
-                            // Report the cover's screen bounds so the reactive glow
-                            // can bloom behind it (only while that toggle is active).
-                            if (albumGlowOn) base.onGloballyPositioned { coords ->
-                                albumArtAnchor.lineCenter = coords.boundsInRoot().center
-                                albumArtAnchor.lineHalf =
-                                    Size(coords.size.width / 2f, coords.size.height / 2f)
-                            } else base
-                        }
-                        PlayerHero(
-                            modifier = artMod.graphicsLayer {
-                                // Follows the finger, then rides the release
-                                // animation out and the next cover in.
-                                translationX = heroOffset.value
-                                // Fade with distance so the swap happens while
-                                // the art is already dim, hiding the instant at
-                                // which the cover actually changes. Read in the
-                                // draw phase, so a drag costs no recomposition.
-                                val travelled =
-                                    (abs(heroOffset.value) / size.width.coerceAtLeast(1f))
-                                        .coerceIn(0f, 1f)
-                                alpha = (1f - lyricsProgress) * (1f - travelled * 0.85f)
-                            },
-                            style = effectiveStyle,
-                            isFullscreen = isFullscreenActive,
-                            track = currentTrack,
-                            isPlaying = isPlaying,
-                            progress = {
-                                val d = durationState.value
-                                if (d > 0) (positionState.value.toFloat() / d).coerceIn(0f, 1f) else 0f
-                            },
-                            albumColors = blendedColors,
-                            blendMillis = colorBlendMs,
-                            userTrackChanges = userTrackChanges,
-                            visualizerSensitivity = visualizerSensitivity,
-                            visualizerBrightness = visualizerBrightness,
-                            visualizerEngineStatus = visualizerEngineStatus,
-                            visualizerEngineEnabled = visualizerEngineEnabled,
-                            visualizerShowFps = visualizerShowFps,
-                            visualizerRepository = playerViewModel.visualizerRepository,
-                            visualizerTouchWaveform = visualizerTouchWaveform,
-                            currentVisualizerPreset = currentVisualizerPreset,
-                            visualizerAutoShuffle = visualizerAutoShuffle,
-                            onToggleVisualizerShuffle = playerViewModel::setVisualizerShuffle,
-                            onNextPreset = playerViewModel::nextVisualizerPreset,
-                            onOpenPresetBrowser = { showPresetSheet = true },
-                            isPresetFavorite = currentVisualizerPreset?.id?.let { it in visualizerFavoritePresetIds } ?: false,
-                            onTogglePresetFavorite = {
-                                currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
-                            },
-                            visualizerCompact = visualizerCompact,
-                            onToggleCompact = playerViewModel::toggleVisualizerCompact,
-                            onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
-                            spectrumBins = spectrumBins,
-                            spectrumColor = spectrumColor,
-                            showSpectrum = showNpSpectrum,
-                            onToggleShowSpectrum = {
-                                playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
-                            },
-                            onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-                            onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
-                        )
-                    }
-                    if (showLyricsHero) {
-                        // Fx/spectrum/beat locals are provided once around the
-                        // whole player (see the route-level provider). Rendered on
-                        // top of the art so it fades in over it.
-                        LyricsHeroBox(
-                            lyrics = lyrics,
-                            isLoading = isLyricsLoading,
-                            albumColors = blendedColors,
-                            positionMs = playerViewModel.positionMs,
-                            // One element, two states: compact taps expand
-                            // (synced lyrics only); expanded line taps seek and
-                            // gap taps collapse.
-                            onSeekTo = { timeMs ->
-                                if (lyricsExpanded) playerViewModel.seekTo(timeMs)
-                                else if (lyricsSynced) lyricsExpanded = true
-                            },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = lyricsProgress }
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    enabled = lyricsSynced,
-                                ) { lyricsExpanded = !lyricsExpanded },
-                        )
-                    }
+    // topBar and hero are content, not chrome — the artwork, lyrics, queue and
+    // visualizer are the same whichever layout is drawing around them. Hoisted
+    // into slots so both the current and the legacy screen are handed one copy
+    // instead of the hero being forked along with the chrome.
+    val topBarSlot: @Composable () -> Unit = {
+        PlayerTopBar(
+            speedLabel = state.speedLabel,
+            shuffleEnabled = shuffleEnabled,
+            repeatMode = repeatMode,
+            isDownloaded = isDownloaded,
+            downloadState = downloadState,
+            heroStyle = heroStyle,
+            onCollapse = { navController.popBackStack() },
+            onOutputClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+            onSpeedClick = { showSpeedSheet = true },
+            onToggleShuffle = playerViewModel::toggleShuffle,
+            onCycleRepeat = playerViewModel::cycleRepeatMode,
+            onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
+            onCycleHeroStyle = {
+                heroStyle = if (heroStyle == PlayerHeroStyle.Square) {
+                    PlayerHeroStyle.CircularProgress
+                } else {
+                    PlayerHeroStyle.Square
                 }
             },
-            fxUnderlay = {
-                if (beatPulse != null) {
-                    // Cover-art view uses the album anchor with an edge-hugging
-                    // bloom; lyrics view keeps the line-anchored glow. Only one is
-                    // ever active (the views are mutually exclusive).
-                    LyricsFxLayer(
-                        anchors = if (albumGlowOn) albumArtAnchor else glyphAnchors,
-                        pulse = beatPulse,
-                        accent = albumColors.vibrant,
-                        fx = lyricsFx,
-                        edgeHug = albumGlowOn,
-                    )
-                }
+            onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
+            onOpenEqualizer = { navController.navigateTool(Screen.Equalizer) },
+            onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
+            onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+            onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
+                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
             },
-            lyricsExpanded = lyricsExpanded,
-            // Slot stays the full-width rectangle for the whole dissolve, not just
-            // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
-            lyricsMode = lyricsSlotWide,
-            blurredBackground = blurredBackground,
+            onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
+                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
+            },
         )
+    }
+    val heroSlot: @Composable (Modifier) -> Unit = { heroModifier ->
+        // Manual dissolve between the album art / visualizer and the lyric
+        // surface (lyricsProgress is hoisted above). The built-in Crossfade
+        // snapped here; an explicit alpha animation is reliable, and it lets
+        // the fading art stay a centred square while the lyrics fill the
+        // full-width slot.
+        // Compose each side only while it is at all visible — derivedStateOf
+        // flips at the thresholds, not on every animation frame, so the
+        // (expensive) art/visualizer doesn't recompose mid-dissolve.
+        val showAlbumHero by remember { derivedStateOf { lyricsProgress < 0.999f } }
+        val showLyricsHero by remember { derivedStateOf { lyricsProgress > 0.001f } }
+
+        // Horizontal swipe across the hero skips tracks, matching the
+        // gesture (and the 50px threshold) the mini player already uses.
+        //
+        // detectHorizontalDragGestures, not detectDragGestures: the
+        // latter consumes vertical drags too, which would swallow the
+        // pull-up that opens the audio-tools sheet and the lyric list's
+        // own scrolling. Suppressed entirely in visualizer mode, where
+        // horizontal drags belong to the touch waveform.
+        val swipeSkipEnabled = viewMode != NowPlayingViewMode.VISUALIZER
+        // Art offset, in px, driven by the finger and then animated out
+        // and back in. An Animatable rather than a plain float so the
+        // release animation and a mid-flight new drag can't fight: a
+        // fresh snapTo cancels whatever animation is running.
+        val heroOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+        val heroScope = rememberCoroutineScope()
+        val trackSwipe = Modifier.pointerInput(swipeSkipEnabled) {
+            if (!swipeSkipEnabled) return@pointerInput
+            val width = size.width.toFloat().coerceAtLeast(1f)
+            // Commit distance. Compose's own touch slop only decides
+            // when a drag *starts*; this is how far it has to travel
+            // before it counts as a skip. Scaled off the art's width
+            // (~22%) rather than a fixed pixel count, so it asks for the
+            // same proportion of a gesture on any screen density.
+            val skipThreshold = width * 0.22f
+            detectHorizontalDragGestures(
+                onDragEnd = {
+                    heroScope.launch {
+                        val dx = heroOffset.value
+                        // Carry the outgoing art the rest of the way off,
+                        // switch track, then bring the incoming one in
+                        // from the opposite edge — so the direction of
+                        // travel matches the direction of the swipe.
+                        when {
+                            dx < -skipThreshold -> {
+                                heroOffset.animateTo(-width, tween(140))
+                                playerViewModel.skipToNext()
+                                heroOffset.snapTo(width)
+                                heroOffset.animateTo(0f, tween(260))
+                            }
+                            dx > skipThreshold -> {
+                                heroOffset.animateTo(width, tween(140))
+                                playerViewModel.skipToPrevious()
+                                heroOffset.snapTo(-width)
+                                heroOffset.animateTo(0f, tween(260))
+                            }
+                            // Under the threshold: spring back, no skip.
+                            else -> heroOffset.animateTo(0f, spring())
+                        }
+                    }
+                },
+                onDragCancel = { heroScope.launch { heroOffset.animateTo(0f, spring()) } },
+                onHorizontalDrag = { change, amount ->
+                    change.consume()
+                    heroScope.launch { heroOffset.snapTo(heroOffset.value + amount) }
+                },
+            )
+        }
+
+        Box(
+            modifier = heroModifier.then(trackSwipe),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (showAlbumHero) {
+                val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                    PlayerHeroStyle.Visualizer
+                } else {
+                    heroStyle
+                }
+                // Keep the art a centred square whenever the slot is the
+                // full-width lyric rectangle (i.e. any time lyrics are on
+                // screen, including the fade-out). Bound it by WIDTH so the
+                // now-taller lyric slot doesn't stretch the (dissolving) art
+                // vertically; otherwise it fills the slot.
+                val artMod = (if (lyricsSlotWide) {
+                    Modifier.fillMaxWidth().aspectRatio(1f)
+                } else {
+                    Modifier.fillMaxSize()
+                }).let { base ->
+                    // Report the cover's screen bounds so the reactive glow
+                    // can bloom behind it (only while that toggle is active).
+                    if (albumGlowOn) base.onGloballyPositioned { coords ->
+                        albumArtAnchor.lineCenter = coords.boundsInRoot().center
+                        albumArtAnchor.lineHalf =
+                            Size(coords.size.width / 2f, coords.size.height / 2f)
+                    } else base
+                }
+                PlayerHero(
+                    modifier = artMod.graphicsLayer {
+                        // Follows the finger, then rides the release
+                        // animation out and the next cover in.
+                        translationX = heroOffset.value
+                        // Fade with distance so the swap happens while
+                        // the art is already dim, hiding the instant at
+                        // which the cover actually changes. Read in the
+                        // draw phase, so a drag costs no recomposition.
+                        val travelled =
+                            (abs(heroOffset.value) / size.width.coerceAtLeast(1f))
+                                .coerceIn(0f, 1f)
+                        alpha = (1f - lyricsProgress) * (1f - travelled * 0.85f)
+                    },
+                    style = effectiveStyle,
+                    isFullscreen = isFullscreenActive,
+                    track = currentTrack,
+                    isPlaying = isPlaying,
+                    progress = {
+                        val d = durationState.value
+                        if (d > 0) (positionState.value.toFloat() / d).coerceIn(0f, 1f) else 0f
+                    },
+                    albumColors = blendedColors,
+                    blendMillis = colorBlendMs,
+                    userTrackChanges = userTrackChanges,
+                    visualizerSensitivity = visualizerSensitivity,
+                    visualizerBrightness = visualizerBrightness,
+                    visualizerEngineStatus = visualizerEngineStatus,
+                    visualizerEngineEnabled = visualizerEngineEnabled,
+                    visualizerShowFps = visualizerShowFps,
+                    visualizerRepository = playerViewModel.visualizerRepository,
+                    visualizerTouchWaveform = visualizerTouchWaveform,
+                    currentVisualizerPreset = currentVisualizerPreset,
+                    visualizerAutoShuffle = visualizerAutoShuffle,
+                    onToggleVisualizerShuffle = playerViewModel::setVisualizerShuffle,
+                    onNextPreset = playerViewModel::nextVisualizerPreset,
+                    onOpenPresetBrowser = { showPresetSheet = true },
+                    isPresetFavorite = currentVisualizerPreset?.id?.let { it in visualizerFavoritePresetIds } ?: false,
+                    onTogglePresetFavorite = {
+                        currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
+                    },
+                    visualizerCompact = visualizerCompact,
+                    onToggleCompact = playerViewModel::toggleVisualizerCompact,
+                    onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
+                    spectrumBins = spectrumBins,
+                    spectrumColor = spectrumColor,
+                    showSpectrum = showNpSpectrum,
+                    onToggleShowSpectrum = {
+                        playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
+                    },
+                    onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
+                    onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
+                )
+            }
+            if (showLyricsHero) {
+                // Fx/spectrum/beat locals are provided once around the
+                // whole player (see the route-level provider). Rendered on
+                // top of the art so it fades in over it.
+                LyricsHeroBox(
+                    lyrics = lyrics,
+                    isLoading = isLyricsLoading,
+                    albumColors = blendedColors,
+                    positionMs = playerViewModel.positionMs,
+                    // One element, two states: compact taps expand
+                    // (synced lyrics only); expanded line taps seek and
+                    // gap taps collapse.
+                    onSeekTo = { timeMs ->
+                        if (lyricsExpanded) playerViewModel.seekTo(timeMs)
+                        else if (lyricsCanExpand) lyricsExpanded = true
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = lyricsProgress }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            enabled = lyricsCanExpand,
+                        ) { lyricsExpanded = !lyricsExpanded },
+                )
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (legacyPlayer) {
+            // Settings › System › Performance › "Legacy player" — the pre-glass
+            // layout, recovered from history. Same state, same slots; no shader,
+            // no frame clock, no gravity sensor. The blurred cover layer and the
+            // beat-FX underlay are not passed because neither existed then.
+            tf.monochrome.android.ui.player.legacy.LegacyMainPlayerScreen(
+                state = state,
+                positionState = positionState,
+                durationState = durationState,
+                isFullscreen = isFullscreenActive,
+                formatTime = playerViewModel::formatTime,
+                onToggleLike = playerViewModel::toggleLikeCurrentTrack,
+                onArtistClick = { artistId ->
+                    navController.openArtist(currentUnified?.sourceType ?: SourceType.API, artistId)
+                },
+                onSeekCommit = playerViewModel::seekToFraction,
+                onPrevious = playerViewModel::skipToPrevious,
+                onRewind10 = playerViewModel::rewind10,
+                onPlayPause = playerViewModel::togglePlayPause,
+                onForward10 = playerViewModel::forward10,
+                onNext = playerViewModel::skipToNext,
+                onTimer = { showSleepSheet = true },
+                onMixer = { navController.navigateTool(Screen.Mixer) },
+                onPlaylist = { showQueueSheet = true },
+                onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+                onSound = { navController.navigateTool(Screen.Equalizer) },
+                onSpeed = { showSpeedSheet = true },
+                onVisualizer = {
+                    playerViewModel.setNowPlayingViewMode(
+                        if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
+                        else NowPlayingViewMode.VISUALIZER
+                    )
+                },
+                onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
+                onCompressorToggle = playerViewModel::setCompressorEnabled,
+                onInflatorToggle = playerViewModel::setInflatorEnabled,
+                onCrossfeedToggle = playerViewModel::setCrossfeedEnabled,
+                onAutoEqToggle = playerViewModel::setAutoEqEnabled,
+                onLyrics = {
+                    playerViewModel.setNowPlayingViewMode(
+                        if (viewMode == NowPlayingViewMode.LYRICS) NowPlayingViewMode.COVER_ART
+                        else NowPlayingViewMode.LYRICS
+                    )
+                },
+                topBar = topBarSlot,
+                hero = heroSlot,
+            )
+        } else {
+            MainPlayerScreen(
+                miniGlass = miniGlass,
+                state = state,
+                positionState = positionState,
+                durationState = durationState,
+                isFullscreen = isFullscreenActive,
+                formatTime = playerViewModel::formatTime,
+                onToggleLike = playerViewModel::toggleLikeCurrentTrack,
+                onArtistClick = { artistId, artistName ->
+                    // Source-aware so a local song's artist opens the local artist
+                    // page; the name rides along because a catalogue row can
+                    // arrive with an id of 0 and nothing but what it is called.
+                    navController.openArtist(
+                        currentUnified?.sourceType ?: SourceType.API, artistId, artistName,
+                    )
+                },
+                onSeekCommit = playerViewModel::seekToFraction,
+                onPrevious = playerViewModel::skipToPrevious,
+                onPlayPause = playerViewModel::togglePlayPause,
+                onNext = playerViewModel::skipToNext,
+                onLyrics = {
+                    playerViewModel.setNowPlayingViewMode(
+                        if (viewMode == NowPlayingViewMode.LYRICS) NowPlayingViewMode.COVER_ART
+                        else NowPlayingViewMode.LYRICS
+                    )
+                },
+                onTimer = { showSleepSheet = true },
+                onMixer = { navController.navigateTool(Screen.Mixer) },
+                onPlaylist = { showQueueSheet = true },
+                onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+                onSound = { navController.navigateTool(Screen.Equalizer) },
+                onSpeed = { showSpeedSheet = true },
+                onVisualizer = {
+                    playerViewModel.setNowPlayingViewMode(
+                        if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
+                        else NowPlayingViewMode.VISUALIZER
+                    )
+                },
+                onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
+                onCompressorToggle = playerViewModel::setCompressorEnabled,
+                onInflatorToggle = playerViewModel::setInflatorEnabled,
+                onCrossfeedToggle = playerViewModel::setCrossfeedEnabled,
+                onCompressorOpen = { navController.navigateTool(Screen.Oxford, Screen.Oxford.createRoute(tab = 0)) },
+                onInflatorOpen = { navController.navigateTool(Screen.Oxford, Screen.Oxford.createRoute(tab = 1)) },
+                onCrossfeedOpen = { navController.navigateTool(Screen.Crossfeed) },
+                onAutoEqToggle = playerViewModel::setAutoEqEnabled,
+                onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
+                onToneControlsChange = playerViewModel::setToneControls,
+                topBar = topBarSlot,
+                hero = heroSlot,
+                fxUnderlay = {
+                    if (beatPulse != null) {
+                        // Cover-art view uses the album anchor with an edge-hugging
+                        // bloom; lyrics view keeps the line-anchored glow. Only one is
+                        // ever active (the views are mutually exclusive).
+                        LyricsFxLayer(
+                            anchors = if (albumGlowOn) albumArtAnchor else glyphAnchors,
+                            pulse = beatPulse,
+                            accent = albumColors.vibrant,
+                            fx = lyricsFx,
+                            edgeHug = albumGlowOn,
+                        )
+                    }
+                },
+                lyricsExpanded = lyricsExpanded,
+                // Slot stays the full-width rectangle for the whole dissolve, not just
+                // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
+                lyricsMode = lyricsSlotWide,
+                blurredBackground = blurredBackground,
+            )
+        }
     }
     }
 }

@@ -53,6 +53,9 @@ fun TrackContextMenu(
     onToggleLike: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    // The destructive entry isn't always a playlist removal — on Discover it
+    // is "take this off my feed" — so the caller names it.
+    removeLabel: String = "Remove from playlist",
     onDownloadTrack: (() -> Unit)? = null,
     onShareFile: (() -> Unit)? = null,
     onGoToAlbum: (() -> Unit)? = null,
@@ -139,7 +142,7 @@ fun TrackContextMenu(
             if (onRemoveFromPlaylist != null) {
                 ContextMenuItem(
                     icon = Icons.Default.RemoveCircleOutline,
-                    label = "Remove from playlist",
+                    label = removeLabel,
                     tint = MaterialTheme.colorScheme.error,
                     onClick = { onRemoveFromPlaylist(); onDismiss() }
                 )

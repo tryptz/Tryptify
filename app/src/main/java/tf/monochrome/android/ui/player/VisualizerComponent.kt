@@ -76,34 +76,25 @@ fun VisualizerComponent(
     touchWaveformEnabled: Boolean = true,
     repository: ProjectMEngineRepository? = null
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "projectm-shell")
     // Kept as State (no `by`) and passed down as State so the per-frame value is
     // read inside the child Canvas draw scopes. Reading it here in composition
     // recomposed the whole visualizer — including the ProjectM AndroidView —
     // every single frame.
-    val travel = infiniteTransition.animateFloat(
+    val travel = tf.monochrome.android.ui.theme.rememberMotionFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = if (isPlaying) 5200 else 9400,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "travel"
+        durationMillis = if (isPlaying) 5200 else 9400,
+        label = "travel",
+        repeatMode = RepeatMode.Restart,
+        still = 0f,
     )
-    val pulse = infiniteTransition.animateFloat(
+    val pulse = tf.monochrome.android.ui.theme.rememberMotionFloat(
         initialValue = 0.88f,
         targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = if (isPlaying) 1800 else 3200,
-                easing = FastOutSlowInEasing
-            ),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
+        durationMillis = if (isPlaying) 1800 else 3200,
+        label = "pulse",
+        easing = FastOutSlowInEasing,
+        still = 1f,
     )
 
     // Presets install lazily; opening the visualizer is what triggers the
@@ -260,20 +251,15 @@ private fun SpectrumWaveLayer(
     alpha: Float,
     travel: State<Float>
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "spectrum-lines")
     // State (no `by`), read in the draw scope below so the per-frame phase +
     // travel animate via redraw instead of recomposing this layer each frame.
-    val phase = infiniteTransition.animateFloat(
+    val phase = tf.monochrome.android.ui.theme.rememberMotionFloat(
         initialValue = 0f,
         targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = if (isPlaying) 1700 else 5200,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "phase"
+        durationMillis = if (isPlaying) 1700 else 5200,
+        label = "phase",
+        repeatMode = RepeatMode.Restart,
+        still = 0f,
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {

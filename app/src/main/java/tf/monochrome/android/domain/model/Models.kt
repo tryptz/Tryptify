@@ -98,7 +98,12 @@ data class Album(
     // Raw Qobuz release version string; kept for tag/UI parity with Track.
     val version: String? = null,
     // THX Spatial Audio release — marks every track on it.
-    val isThxSpatialAudio: Boolean = false
+    val isThxSpatialAudio: Boolean = false,
+    // Qobuz returns this on every album and the app used to drop it on the
+    // floor. `genreSlug` is the catalogue's own taxonomy key, which is a more
+    // stable join than the display name.
+    val genre: String? = null,
+    val genreSlug: String? = null,
 ) {
     val coverUrl: String?
         get() = cover?.let { buildCoverUrl(it, 640) }
@@ -274,6 +279,25 @@ fun buildCoverUrl(coverId: String, size: Int): String {
 
 // ========== Unified Three-Source Models ==========
 
+/**
+ * How much the app actually knows about a track's genre.
+ *
+ * Kept alongside the genre itself because the three sources are not equally
+ * trustworthy and the UI has to be able to tell them apart. Ranking may use
+ * all three; only [TAGGED] may be stated as fact.
+ */
+@Serializable
+enum class GenreConfidence {
+    /** The catalogue or the file's own tags said so. */
+    TAGGED,
+
+    /** Inherited from the release or artist this track belongs to. */
+    DERIVED,
+
+    /** Guessed from the query that surfaced it. Display hedged, never bare. */
+    INFERRED,
+}
+
 @Serializable
 enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE }
 
@@ -404,6 +428,14 @@ data class UnifiedTrack(
     // Album info
     val albumTitle: String? = null,
     val albumId: String? = null,
+    /**
+     * Release year, inherited from the album.
+     *
+     * Carried on the track because Discover's "Newest" sort has to compare
+     * tracks against each other, and by the time a shelf is built the album
+     * they came from is long gone.
+     */
+    val releaseYear: Int? = null,
 
     // Artwork
     val artworkUri: String? = null,
@@ -440,7 +472,15 @@ data class UnifiedTrack(
 
     // File date (epoch millis) for local tracks — used for "sort by date".
     // Null for streaming sources.
-    val dateModified: Long? = null
+    val dateModified: Long? = null,
+
+    // Genre, and how much we trust it. Before this existed every streaming
+    // result in the app was genre-less, so search could not score on genre and
+    // shelves could not explain themselves in genre terms.
+    val genre: String? = null,
+    /** Curated graph id, when the genre resolved to one. */
+    val genreId: String? = null,
+    val genreConfidence: GenreConfidence? = null,
 ) {
     val displayArtist: String
         get() = artistName

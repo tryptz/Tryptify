@@ -36,6 +36,32 @@ class WhatsNewTest {
     }
 
     @Test
+    fun `a section's entries sit together so its heading is printed once`() {
+        // The panel prints a heading when the section changes, so a section
+        // that reappears further down would print its title twice.
+        WhatsNew.releases.forEach { release ->
+            val runs = release.entries.map { it.section }
+                .fold(mutableListOf<String?>()) { acc, s ->
+                    if (acc.lastOrNull() != s) acc.add(s)
+                    acc
+                }
+                .filterNotNull()
+            assertEquals("a section is split in ${release.versionName}", runs.distinct(), runs)
+        }
+    }
+
+    @Test
+    fun `the Discover notes are a section of their own`() {
+        val discover = WhatsNew.releases.flatMap { it.entries }
+            .filter { it.section == "Discover (Beta)" }
+        assertTrue("Discover has no notes", discover.isNotEmpty())
+        assertTrue(
+            "the map and the charts are the reason to open the page",
+            discover.any { it.title.contains("map") } && discover.any { it.title.contains("Top 100") },
+        )
+    }
+
+    @Test
     fun `someone up to date is not notified`() {
         assertFalse(WhatsNew.shouldNotify(seenVersionCode = newest, neverShow = false))
     }

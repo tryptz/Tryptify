@@ -95,6 +95,10 @@ internal fun rememberBassPulse(): State<Float> =
 @Composable
 internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings): State<Float> {
     val pulse = remember { mutableFloatStateOf(0f) }
+    // Bail before the analyzer stake and the per-frame loop, not after: with
+    // animations off there is no pulse to draw, so there is no reason to keep
+    // the FFT tap alive or to wake on every frame.
+    if (tf.monochrome.android.ui.theme.reduceMotion()) return pulse
     if (tap == null) return pulse
 
     DisposableEffect(tap) {

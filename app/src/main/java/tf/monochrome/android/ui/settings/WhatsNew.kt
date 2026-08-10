@@ -15,9 +15,17 @@ import tf.monochrome.android.BuildConfig
  * versionCode. Anything with a versionCode above what the user has already
  * acknowledged is what the update notice offers them.
  */
+/**
+ * [section] groups consecutive entries under a heading of their own. Most
+ * releases are a flat list of unrelated fixes and don't want one; a release
+ * that carries a whole new page does, because reading eight lines about
+ * Discover interleaved with download and equaliser notes tells you far less
+ * than the same eight lines under a title saying what they are about.
+ */
 data class WhatsNewEntry(
     val title: String,
     val body: String,
+    val section: String? = null,
 )
 
 data class WhatsNewRelease(
@@ -28,12 +36,76 @@ data class WhatsNewRelease(
 
 object WhatsNew {
 
+    /** The one section heading in use — the Discover page and everything under it. */
+    private const val DISCOVER = "Discover (Beta)"
+
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
         WhatsNewRelease(
             versionCode = 184,
             versionName = "1.8.4",
             entries = listOf(
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "Discover is its own tab, and it's in beta",
+                    body = "It used to be a couple of rows buried in Home. It's now the place " +
+                        "you go to look for something new, and every shelf says why it's there. " +
+                        "Beta because the genre data behind it is young and can be wrong.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "Type any of 771 genres",
+                    body = "A search box that knows what you meant — dnb, d&b, liquid, phonk, " +
+                        "and a typo like \"hardstlye\" still lands on hardstyle. The row under " +
+                        "it changes as you type, instead of a fixed list you scroll past.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "Moods you can stack",
+                    body = "Pick more than one — Late night and Focus together draw from both, " +
+                        "not from the sliver where they overlap. Anything in the mix you don't " +
+                        "want can be dropped, and it comes back when you change moods.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "The genre map",
+                    body = "Every genre as one picture, linked to its neighbours. Dots are sized " +
+                        "by how many people listen, so the big scenes read as big — or switch " +
+                        "the weighting to age, and the map becomes a picture of when things began.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "The same map, laid out by year",
+                    body = "One tap moves every genre to where it belongs in time, oldest left, " +
+                        "newest right, along a curve. Zoom in far enough and the axis goes from " +
+                        "decades to single years.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "A Top 100 for any genre",
+                    body = "Over the last 7 days, 30 days, 6 months or year. Built from what " +
+                        "people are actually listening to, and cross-checked against MusicBrainz " +
+                        "so the artists in it really belong to the genre.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "Tapping a genre plays that genre",
+                    body = "It used to search the catalogue for the genre's name, which is " +
+                        "exactly the query machine-made filler is built to win — ask for hard " +
+                        "techno, get a track called \"Hard Techno\". It plays the charts now.",
+                ),
+                WhatsNewEntry(
+                    title = "Show what you're playing on Discord",
+                    body = "A \"Listening to\" card with the track, artist, album art and a live " +
+                        "progress bar. Off by default, and it needs your Discord token — read " +
+                        "what the setting says about that before switching it on.",
+                ),
+                WhatsNewEntry(
+                    title = "Connect Last.fm in a browser",
+                    body = "Connecting used to ask for a session key — something no listener " +
+                        "has, and nothing in the app could produce. Tap Last.fm, approve it on " +
+                        "Last.fm's own page, and it comes straight back connected.",
+                ),
                 WhatsNewEntry(
                     title = "Your own files play first",
                     body = "Tap a song anywhere and it plays the copy already on your device " +

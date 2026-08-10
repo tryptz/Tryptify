@@ -1419,6 +1419,10 @@ private fun QobuzAlbumItem.toDomainAlbum(): tf.monochrome.android.domain.model.A
         duration = duration,
         version = version,
         isThxSpatialAudio = tf.monochrome.android.domain.model.isThxSpatialAudio(title, version),
+        // Qobuz has always sent this; the mapper just never read it. The slug
+        // is the catalogue's own taxonomy key and the more stable of the two.
+        genre = genre?.name,
+        genreSlug = genre?.slug,
     )
 }
 

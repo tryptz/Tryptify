@@ -212,8 +212,9 @@ private fun DockLabel(
     onClick: () -> Unit,
 ) {
     val isPressed by interactionSource.collectIsPressedAsState()
+    val stillPress = tf.monochrome.android.ui.theme.reduceMotion()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
+        targetValue = if (isPressed && !stillPress) 0.92f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "dockLabelScale",
     )

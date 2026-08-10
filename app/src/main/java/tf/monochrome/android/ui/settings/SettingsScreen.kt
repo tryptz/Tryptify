@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.ui.theme.goToPage
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.widget.Toast
@@ -41,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
@@ -106,6 +108,12 @@ import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.AudioQuality
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextAlign
+import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.theme.rememberMotionFloat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,6 +124,7 @@ import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
+import tf.monochrome.android.ui.navigation.navigateTool
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -168,6 +177,8 @@ fun SettingsScreen(
         pageCount = { settingsTabs.size },
     )
     val settingsScope = rememberCoroutineScope()
+    // Tab changes slide normally; with "Disable animations" on they jump.
+    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
     val selectedTab = settingsPager.currentPage
 
     // Toast one-shot ViewModel messages (font import, backup import, …) from
@@ -206,7 +217,7 @@ fun SettingsScreen(
             itemsIndexed(settingsTabs) { index, tab ->
                 FilterChip(
                     selected = selectedTab == index,
-                    onClick = { settingsScope.launch { settingsPager.animateScrollToPage(index) } },
+                    onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
                     label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -292,7 +303,7 @@ private fun EqualizerTab(
                 navController.navigate("settings?tab=4") {
                     popUpTo("settings?tab={tab}") { inclusive = true }
                 }
-                navController.navigate("equalizer")
+                navController.navigateTool(Screen.Equalizer)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -306,7 +317,7 @@ private fun EqualizerTab(
                 navController.navigate("settings?tab=4") {
                     popUpTo("settings?tab={tab}") { inclusive = true }
                 }
-                navController.navigate("parametric_eq")
+                navController.navigateTool(Screen.ParametricEq)
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -784,7 +795,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         SettingItem(
             title = "Player Visuals Studio",
             subtitle = "Live editor for the lyric type / 3D wave / beat FX, plus the player and mini-player glass",
-            onClick = { navController.navigate(Screen.LyricsFxStudio.route) },
+            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1035,42 +1046,79 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
     val lastFmUsername by viewModel.lastFmUsername.collectAsStateWithLifecycle()
     val lbEnabled by viewModel.listenBrainzEnabled.collectAsStateWithLifecycle()
     val lbToken by viewModel.listenBrainzToken.collectAsStateWithLifecycle()
+    val apiKey by viewModel.lastFmApiKey.collectAsStateWithLifecycle()
+    val apiSecret by viewModel.lastFmApiSecret.collectAsStateWithLifecycle()
+    val chartsKeyAvailable by viewModel.chartsKeyAvailable.collectAsStateWithLifecycle()
 
-    var showLastFmDialog by rememberSaveable { mutableStateOf(false) }
+    val lastFmConnecting by viewModel.lastFmConnecting.collectAsStateWithLifecycle()
+    val lastFmAuthError by viewModel.lastFmAuthError.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
     var showLbDialog by rememberSaveable { mutableStateOf(false) }
+    var showApiKeyDialog by rememberSaveable { mutableStateOf(false) }
 
-    if (showLastFmDialog) {
-        var sessionInput by rememberSaveable { mutableStateOf("") }
-        var usernameInput by rememberSaveable { mutableStateOf("") }
+    if (showApiKeyDialog) {
+        var keyInput by rememberSaveable { mutableStateOf(apiKey) }
+        var secretInput by rememberSaveable { mutableStateOf(apiSecret) }
         AlertDialog(
-            onDismissRequest = { showLastFmDialog = false },
-            title = { Text("Last.fm") },
+            onDismissRequest = { showApiKeyDialog = false },
+            title = { Text("Your Last.fm API key") },
             text = {
                 Column {
+                    Text(
+                        // Two different things share the word "key" here, and a
+                        // listener who conflates them gets silent failures. This
+                        // is an *application* key, not the session key above and
+                        // not an account login.
+                        "Needed to scrobble. Scrobbles are signed with your own " +
+                            "secret and posted to your own listening history, so " +
+                            "they use your credentials rather than a key shared " +
+                            "by everyone. Create a pair free at " +
+                            "last.fm/api/account/create.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Genre charts don't need this — they read public data " +
+                            "with a key built into the app. Entering one here " +
+                            "makes charts use yours instead.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Without this in the registration, Last.fm shows a page
+                    // asking the listener to return to the app by hand and
+                    // never redirects — the connection just never completes,
+                    // with nothing on either side saying why.
+                    Text(
+                        "Set the application's Callback URL to " +
+                            viewModel.lastFmCallbackUrl +
+                            " so authorising returns to Tryptify.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
-                        value = usernameInput, onValueChange = { usernameInput = it },
-                        label = { Text("Username") }, modifier = Modifier.fillMaxWidth()
+                        value = keyInput, onValueChange = { keyInput = it },
+                        label = { Text("API key") }, modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
-                        value = sessionInput, onValueChange = { sessionInput = it },
-                        label = { Text("Session Key") }, modifier = Modifier.fillMaxWidth()
+                        value = secretInput, onValueChange = { secretInput = it },
+                        label = { Text("Shared secret") },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.setLastFmSession(sessionInput, usernameInput)
-                        showLastFmDialog = false
-                    },
-                    // Disabled until both fields are filled, so Connect can't
-                    // silently close without connecting.
-                    enabled = sessionInput.isNotBlank() && usernameInput.isNotBlank()
-                ) { Text("Connect") }
+                TextButton(onClick = {
+                    viewModel.setLastFmApiCredentials(keyInput, secretInput)
+                    showApiKeyDialog = false
+                }) { Text("Save") }
             },
             dismissButton = {
-                TextButton(onClick = { showLastFmDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showApiKeyDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -1101,14 +1149,45 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
 
     SettingsGroupHeader("Last.fm")
     SettingItem(
+        title = "Your API key",
+        subtitle = when {
+            apiKey.isNotBlank() && apiSecret.isNotBlank() ->
+                "Set — scrobbling can sign as you"
+            apiKey.isNotBlank() ->
+                "Key set, secret missing — scrobbling still can't sign"
+            chartsKeyAvailable ->
+                "Not set — charts use the built-in key; scrobbling needs yours"
+            else ->
+                "Not set — needed for scrobbling and for all-time charts"
+        },
+        onClick = { showApiKeyDialog = true }
+    )
+    SettingItem(
         title = "Last.fm",
-        subtitle = if (lastFmEnabled) "Connected as ${lastFmUsername ?: "user"}" else "Not connected",
-        onClick = { showLastFmDialog = true }
+        subtitle = when {
+            lastFmEnabled -> "Connected as ${lastFmUsername ?: "user"}"
+            lastFmConnecting -> "Waiting for Last.fm…"
+            else -> "Not connected — tap to authorise in your browser"
+        },
+        // No text box. A session key is not something a person has — it comes
+        // out of auth.getSession, which needs the browser handshake this
+        // starts. Asking anyone to paste one was asking for something only a
+        // developer with a terminal could produce.
+        onClick = { if (!lastFmEnabled) viewModel.connectLastFm(context) }
     )
     if (lastFmEnabled) {
         TextButton(onClick = { viewModel.clearLastFmSession() }) {
             Text("Disconnect", color = MaterialTheme.colorScheme.error)
         }
+    }
+    lastFmAuthError?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        TextButton(onClick = { viewModel.clearLastFmError() }) { Text("Dismiss") }
     }
 
     Spacer(modifier = Modifier.height(16.dp))
@@ -1229,13 +1308,13 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedButton(
-                onClick = { navController.navigate("oxford?tab=0") },
+                onClick = { navController.navigateTool(Screen.Oxford, "oxford?tab=0") },
                 modifier = Modifier.weight(1f),
             ) {
                 Text("Seap Compressor")
             }
             OutlinedButton(
-                onClick = { navController.navigate("oxford?tab=1") },
+                onClick = { navController.navigateTool(Screen.Oxford, "oxford?tab=1") },
                 modifier = Modifier.weight(1f),
             ) {
                 Text("Seap Inflator")
@@ -1247,7 +1326,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         SettingItem(
             title = "Atmos Renderer Configuration",
             subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
-            onClick = { navController.navigate(Screen.AtmosRenderer.route) },
+            onClick = { navController.navigateTool(Screen.AtmosRenderer) },
         )
 
         // Everything below used to sit under "Spatial Audio" too, which only
@@ -1886,12 +1965,219 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
  * a tab of its own, because [SettingsTabContent] is a LazyColumn and nesting
  * two of them throws on measure — so exactly one wrapper lives here.
  */
+
+/**
+ * Discord presence — the switch, the token, and the warning it needs.
+ *
+ * The warning is not boilerplate and is deliberately not collapsible. Every
+ * other connection in this app hands over a scoped credential: a Last.fm
+ * session key scrobbles and nothing else, a ListenBrainz token submits listens.
+ * A Discord user token is the account. It reads every DM, joins servers and
+ * spends money, and Discord has no scoped alternative that can set a presence —
+ * there is no mobile Rich Presence API at all, which is why this works the way
+ * it does. Someone switching this on should know that before they paste, not
+ * after.
+ */
+@Composable
+private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
+    val enabled by viewModel.discordPresenceEnabled.collectAsStateWithLifecycle()
+    val token by viewModel.discordToken.collectAsStateWithLifecycle()
+    val applicationId by viewModel.discordApplicationId.collectAsStateWithLifecycle()
+    val status by viewModel.discordStatus.collectAsStateWithLifecycle()
+    val error by viewModel.discordError.collectAsStateWithLifecycle()
+    val discordUser by viewModel.discordUsername.collectAsStateWithLifecycle()
+    val animated by viewModel.discordPresenceAnimated.collectAsStateWithLifecycle()
+    val uploadChannel by viewModel.discordUploadChannel.collectAsStateWithLifecycle()
+    var showChannelDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showChannelDialog) {
+        var input by rememberSaveable { mutableStateOf(uploadChannel) }
+        AlertDialog(
+            onDismissRequest = { showChannelDialog = false },
+            title = { Text("Spectrum over the artwork") },
+            text = {
+                Column {
+                    Text(
+                        "With a channel set, the spectrum is drawn across the album " +
+                            "art itself instead of in the small circle. That means an " +
+                            "image per track, and Discord only shows images it can " +
+                            "fetch — so each one is posted here as an attachment and " +
+                            "the card points at it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Use a channel you don't mind filling up — a private server of " +
+                            "your own is the usual answer. Enable Developer Mode in " +
+                            "Discord, then right-click the channel and Copy Channel ID. " +
+                            "Leave it empty to keep the plain cover and the circle.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = input, onValueChange = { input = it },
+                        label = { Text("Channel ID") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setDiscordUploadChannel(input)
+                    showChannelDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChannelDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showDialog) {
+        var tokenInput by rememberSaveable { mutableStateOf(token) }
+        var appIdInput by rememberSaveable { mutableStateOf(applicationId) }
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Discord token") },
+            text = {
+                Column {
+                    Text(
+                        "This is your Discord account token, not a password and not " +
+                            "an app password. Anything holding it can read your messages " +
+                            "and act as you. Tryptify keeps it on this device only and " +
+                            "never syncs it, but paste it only if that trade is one you " +
+                            "want to make.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Discord has no presence API for phones, so the only way to do " +
+                            "this is to connect as you. That is against Discord's terms, " +
+                            "and while presence-only use has gone unpunished for years, " +
+                            "the risk of losing the account is yours.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = tokenInput, onValueChange = { tokenInput = it },
+                        label = { Text("User token") },
+                        // Replacing one is the common case, not entering the
+                        // first: tokens rotate on every password change, and
+                        // selecting seventy characters by hand to overwrite
+                        // them is a worse job than it looks.
+                        trailingIcon = {
+                            if (tokenInput.isNotEmpty()) {
+                                IconButton(onClick = { tokenInput = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear token")
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = appIdInput, onValueChange = { appIdInput = it },
+                        label = { Text("Application ID (optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Album art needs an application ID — a presence set this way can " +
+                            "only show an image Discord itself hosts, and an application " +
+                            "is what turns a cover URL into one. Without it you still get " +
+                            "the track, artist, album and progress bar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setDiscordCredentials(tokenInput, appIdInput)
+                    showDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    SettingsGroupHeader("Discord")
+    SettingItem(
+        title = "Token",
+        subtitle = when {
+            token.isBlank() -> "Not set — needed to show what you're playing"
+            discordUser != null && applicationId.isBlank() ->
+                "$discordUser — album art off (no application ID)"
+            discordUser != null -> "$discordUser"
+            applicationId.isBlank() -> "Set — album art off (no application ID)"
+            else -> "Set"
+        },
+        onClick = { showDialog = true }
+    )
+    SettingSwitchItem(
+        title = "Show what I'm playing",
+        subtitle = when {
+            token.isBlank() -> "Add a token first"
+            status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTED ->
+                "On — your profile is showing the current track"
+            status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTING ->
+                "Connecting…"
+            status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.FAILED ->
+                "Couldn't connect"
+            enabled -> "On — connects when something plays"
+            else -> "Off"
+        },
+        checked = enabled,
+        onCheckedChange = { viewModel.setDiscordPresenceEnabled(it && token.isNotBlank()) }
+    )
+    SettingItem(
+        title = "Spectrum over the artwork",
+        subtitle = if (uploadChannel.isBlank()) {
+            "Off — the spectrum sits in the small circle"
+        } else {
+            "Posting to channel $uploadChannel"
+        },
+        onClick = { showChannelDialog = true },
+    )
+    SettingSwitchItem(
+        title = "Animated spectrum",
+        subtitle = "A moving spectrum beside the artwork, matched to the genre's " +
+            "rhythm and the cover's colour. Off leaves the card still.",
+        checked = animated,
+        onCheckedChange = { viewModel.setDiscordPresenceAnimated(it) }
+    )
+    error?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        TextButton(onClick = { viewModel.clearDiscordError() }) { Text("Dismiss") }
+    }
+    if (token.isNotBlank()) {
+        TextButton(onClick = { viewModel.clearDiscordCredentials() }) {
+            Text("Forget token", color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
 @Composable
 private fun ConnectionsTab(viewModel: SettingsViewModel) {
     SettingsTabContent {
         CatalogControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
         ScrobblingControls(viewModel)
+        Spacer(modifier = Modifier.height(20.dp))
+        DiscordPresenceControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
         SpotifyAccountControls()
         Spacer(modifier = Modifier.height(20.dp))
@@ -2321,6 +2607,42 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         // business — the visualizer's own GPU settings stay with the visualizer.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Performance")
+
+        // Low performance mode. The master owns nothing of its own — it writes
+        // the three switches below it, and they write it back — so the row is
+        // a shortcut, not a fourth piece of state that can drift.
+        val lowPerformanceMode by viewModel.lowPerformanceMode.collectAsStateWithLifecycle()
+        val disableAnimations by viewModel.disableAnimations.collectAsStateWithLifecycle()
+        val legacyPlayer by viewModel.legacyPlayer.collectAsStateWithLifecycle()
+        val disableLiquidGlass by viewModel.disableLiquidGlass.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = "Low performance mode",
+            subtitle = "Turns off animations, the liquid glass effect and the new player design in one go. Saves battery and helps on older or slower devices.",
+            checked = lowPerformanceMode,
+            onCheckedChange = { viewModel.setLowPerformanceMode(it) }
+        )
+        Column(modifier = Modifier.padding(start = 16.dp)) {
+            SettingSwitchItem(
+                title = "Disable animations",
+                subtitle = "No transitions, bounces, glass motion or colour blends anywhere in the app.",
+                checked = disableAnimations,
+                onCheckedChange = { viewModel.setDisableAnimations(it) }
+            )
+            SettingSwitchItem(
+                title = "Legacy player",
+                subtitle = "Use the flat player design from before liquid glass.",
+                checked = legacyPlayer,
+                onCheckedChange = { viewModel.setLegacyPlayer(it) }
+            )
+            SettingSwitchItem(
+                title = "Remove liquid glass",
+                subtitle = "Flat, opaque surfaces instead of blurred, refractive glass throughout the app.",
+                checked = disableLiquidGlass,
+                onCheckedChange = { viewModel.setDisableLiquidGlass(it) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         val appFps by viewModel.appTargetFps.collectAsStateWithLifecycle()
         val appResolution by viewModel.appRenderResolution.collectAsStateWithLifecycle()
         // App-wide frame rate and panel resolution, applied by selecting a
@@ -2382,7 +2704,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         SettingItem(
             title = "View debug log",
             subtitle = "Live logcat stream for this process — copy or export as a file for bug reports",
-            onClick = { navController.navigate(Screen.DebugLog.route) },
+            onClick = { navController.navigateTool(Screen.DebugLog) },
         )
 
         // Moved from Audio, where it had ended up under the "Spatial Audio"
@@ -2396,11 +2718,20 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 @Composable
 private fun AboutTab(viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    // Latched in the ViewModel before anything writes over it, so the badge
+    // survives the effect below marking the notes read.
+    val arrivedUnread by viewModel.whatsNewWasUnread.collectAsStateWithLifecycle()
     // Reaching the panel counts as having read it, however the user got here.
     LaunchedEffect(Unit) { viewModel.markWhatsNewSeen() }
     SettingsTabContent {
-        // WhatsNewPanel supplies its own "What's New" header.
-        WhatsNewPanel()
+        // Support first. It used to sit at the bottom of About, below the
+        // release notes and the update controls — which is to say, below the
+        // fold on every phone, where nobody scrolled to find it.
+        SupportSection(onTip = { openDonationUrl(context, "https://ko-fi.com/trypt") })
+
+        Spacer(modifier = Modifier.height(28.dp))
+        WhatsNewPanel(highlight = arrivedUnread)
+
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Updates")
         SettingItem(
@@ -2408,47 +2739,14 @@ private fun AboutTab(viewModel: SettingsViewModel) {
             subtitle = "Look on GitHub for a newer release now",
             onClick = { viewModel.checkForUpdatesNow() },
         )
+
         Spacer(modifier = Modifier.height(24.dp))
         SettingsGroupHeader("About Tryptify")
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Image(
-                painter = painterResource(id = R.drawable.trypt_pfp),
-                contentDescription = "trypt avatar",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(140.dp)
-                    .clip(CircleShape)
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Support the app",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Tryptify is built and maintained by trypt. If it's "
-                    + "earned a place in your day, a tip keeps the lights on "
-                    + "and the next features shipping.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = { openDonationUrl(context, "https://ko-fi.com/trypt") },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Tip on Ko-fi")
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
             Text(
                 text = "Tryptify version ${BuildConfig.VERSION_NAME} · 2026",
                 style = MaterialTheme.typography.bodyMedium,
@@ -2460,6 +2758,43 @@ private fun AboutTab(viewModel: SettingsViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/** The tip jar, and who's asking. */
+@Composable
+private fun SupportSection(onTip: () -> Unit) {
+    SettingsGroupHeader("Support the app")
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(id = R.drawable.trypt_pfp),
+            contentDescription = "trypt avatar",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Tryptify is built and maintained by trypt. If it's "
+                + "earned a place in your day, a tip keeps the lights on "
+                + "and the next features shipping.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = onTip,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Tip on Ko-fi")
         }
     }
 }
@@ -2502,6 +2837,84 @@ private fun SettingsGroupHeader(title: String) {
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
         )
+    }
+}
+
+/**
+ * A group header that's actually lit — a tinted strip with a highlight drifting
+ * across it, and an optional version badge.
+ *
+ * The plain [SettingsGroupHeader] is a line of coloured text, which is right for
+ * the eight headers nobody needs to notice. This one is for the release notes:
+ * it's the reason most people open this tab, and after Support was moved above
+ * it, it needed to be findable at a glance on the way past.
+ *
+ * The sheen comes from [rememberMotionFloat], so "disable animations" leaves the
+ * strip lit but perfectly still rather than driving a gradient forever.
+ */
+@Composable
+private fun LitGroupHeader(title: String, badge: String? = null) {
+    val primary = MaterialTheme.colorScheme.primary
+    val sweep = rememberMotionFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        durationMillis = 5200,
+        label = "litHeaderSheen",
+        repeatMode = RepeatMode.Restart,
+        still = 0.5f,
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(MonoDimens.shapeMd)
+            .drawBehind {
+                drawRect(
+                    Brush.horizontalGradient(
+                        listOf(primary.copy(alpha = 0.18f), primary.copy(alpha = 0.05f)),
+                    ),
+                )
+                // A soft band travelling left to right. Read from the draw scope
+                // rather than recomposed, so the motion never invalidates the
+                // settings list behind it.
+                val head = size.width * (sweep.value * 1.7f - 0.35f)
+                val half = size.width * 0.22f
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            primary.copy(alpha = 0.22f),
+                            Color.Transparent,
+                        ),
+                        startX = head - half,
+                        endX = head + half,
+                    ),
+                )
+            }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = primary,
+            modifier = Modifier.weight(1f),
+        )
+        if (badge != null) {
+            Surface(
+                shape = MonoDimens.shapePill,
+                color = primary,
+            ) {
+                Text(
+                    text = "New in $badge",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        }
     }
 }
 
@@ -2687,15 +3100,21 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
 /**
  * "What's New" — the user-facing summary of each release, newest first.
  *
- * Lives at the top of About because that's where the update notice sends
- * people, and it's the first thing worth reading when you've just updated.
+ * Sits directly under Support, because between them they are the only two
+ * things on this tab anybody comes looking for, and it's where the update
+ * notice sends people.
  */
 @Composable
-private fun WhatsNewPanel() {
+private fun WhatsNewPanel(highlight: Boolean) {
     val releases = WhatsNew.releases
     if (releases.isEmpty()) return
 
-    SettingsGroupHeader("What's New")
+    LitGroupHeader(
+        title = "What's New",
+        // Only badged when you haven't read this build's notes yet. A permanent
+        // "new" flag is one nobody looks at twice.
+        badge = releases.first().versionName.takeIf { highlight },
+    )
     releases.forEach { release ->
         Text(
             text = "Version ${release.versionName}",
@@ -2703,7 +3122,20 @@ private fun WhatsNewPanel() {
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
         )
+        // Sections are announced when they start, so consecutive entries under
+        // one heading print it once. Entries with no section carry straight on
+        // as the flat list they were.
+        var section: String? = null
         release.entries.forEach { entry ->
+            if (entry.section != null && entry.section != section) {
+                Text(
+                    text = entry.section,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                )
+            }
+            section = entry.section
             Column(modifier = Modifier.padding(vertical = 6.dp)) {
                 Text(
                     text = entry.title,

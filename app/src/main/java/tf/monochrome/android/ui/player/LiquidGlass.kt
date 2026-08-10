@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import tf.monochrome.android.performance.LocalLowPerformance
 
 /**
  * "Liquid glass" treatment for the lyric surfaces: an AGSL RenderEffect that
@@ -50,6 +51,7 @@ internal fun Modifier.liquidGlass(
 ): Modifier {
     val fx = LocalLyricsFx.current
     val backdrop = LocalPlayerBackdrop.current
+    if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!enabled || !fx.liquidGlass || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     return this.then(liquidGlassModifier(tint, fx, backdrop))
 }
@@ -112,7 +114,11 @@ private val frameClockSeconds = mutableFloatStateOf(0f)
  */
 @Composable
 internal fun rememberFrameSeconds(animated: Boolean = true): State<Float> {
-    if (animated) {
+    // "Disable animations" stops this loop for the whole app. It is the single
+    // most expensive thing the setting touches: while the player or the mini
+    // player is on screen this pins the process at display refresh rate, and
+    // the mini player is mounted by the nav host on every tab.
+    if (animated && !LocalLowPerformance.current.disableAnimations) {
         LaunchedEffect(Unit) {
             while (true) {
                 withFrameNanos { now ->
@@ -133,6 +139,10 @@ internal fun rememberFrameSeconds(animated: Boolean = true): State<Float> {
  */
 @Composable
 internal fun Modifier.dithered(): Modifier {
+    // Dropped in low-performance mode: it's a full-screen offscreen shader pass
+    // every frame, which is exactly the cost that mode exists to shed. Gradient
+    // banding comes back, and that is the accepted trade.
+    if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     val shader = remember { runCatching { RuntimeShader(DITHER_SRC) }.getOrNull() }
         ?: return this
@@ -155,6 +165,8 @@ internal fun Modifier.dithered(): Modifier {
 @Composable
 internal fun Modifier.fxaa(): Modifier {
     val fx = LocalLyricsFx.current
+    // Nothing left to anti-alias once the glass relight is gone.
+    if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!fx.fxaa || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     return this.then(fxaaModifier(fx.fxaaStrength))
 }
@@ -249,6 +261,7 @@ private fun liquidGlassModifier(
  */
 @Composable
 internal fun Modifier.liquidGlassPanel(tint: Color): Modifier {
+    if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     return this.then(liquidGlassPanelModifier(tint))
 }
@@ -314,6 +327,7 @@ internal fun Modifier.playerGlass(
     bulgeAmount: () -> Float = { 0f },
 ): Modifier {
     val g = LocalPlayerGlass.current
+    if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount))
 }

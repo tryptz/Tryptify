@@ -66,6 +66,28 @@ android {
         )
         buildConfigField("String", "SPOTIFY_REDIRECT_URI", "\"tryptify://spotify-callback\"")
 
+        // Last.fm application key, shared by every install — CHARTS ONLY.
+        //
+        // Genre charts call tag.getTopTracks: unauthenticated, read-only, public
+        // data that belongs to nobody in particular. There is nothing here to
+        // attribute to a person or to spend on their behalf, so one key for
+        // everyone is the right shape, and making each listener register an
+        // application before a chart will draw would be friction for no gain.
+        // Last.fm's terms are silent on embedding or sharing a key; the standing
+        // guidance is to be reasonable and not make several calls per second,
+        // which the 24h per-genre cache in ChartsRepository already guarantees.
+        //
+        // Deliberately no bundled *secret*. The secret signs scrobbles, which are
+        // writes attributed to a named person's listening history, and a secret
+        // shipped in an APK is extractable by anyone who cares to look. Scrobbling
+        // therefore takes each listener's own key and secret from
+        // Settings › Connections and never falls back to this one.
+        buildConfigField(
+            "String",
+            "LASTFM_API_KEY",
+            "\"${localProperties.getProperty("lastfm.apiKey") ?: "153452aaeaa3e666645274b3a9e5bb0a"}\"",
+        )
+
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -245,6 +267,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.json)
     implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.websockets)
 
     // Coil
     implementation(libs.coil.compose)

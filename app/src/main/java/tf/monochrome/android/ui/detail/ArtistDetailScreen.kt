@@ -63,6 +63,7 @@ import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.navigation.navigateSafe
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,7 +142,7 @@ fun ArtistDetailScreen(
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
             },
             onGoToArtist = null // Already here
         )
@@ -315,7 +316,7 @@ fun ArtistDetailScreen(
                                 onMoreClick = { showContextMenuForTrack = track },
                                 onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
                                 onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigate(Screen.AlbumDetail.createRoute(albumId)) }
+                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
                                 },
                                 isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
@@ -344,7 +345,7 @@ fun ArtistDetailScreen(
                                     AlbumItem(
                                         album = album,
                                         onClick = {
-                                            navController.navigate(Screen.AlbumDetail.createRoute(album.id))
+                                            navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id))
                                         }
                                     )
                                 }
@@ -364,7 +365,7 @@ fun ArtistDetailScreen(
                                     AlbumItem(
                                         album = album,
                                         onClick = {
-                                            navController.navigate(Screen.AlbumDetail.createRoute(album.id))
+                                            navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id))
                                         }
                                     )
                                 }
@@ -405,7 +406,7 @@ fun ArtistDetailScreen(
                                     ArtistItem(
                                         artist = artist,
                                         onClick = {
-                                            navController.navigate(Screen.ArtistDetail.createRoute(artist.id))
+                                            navController.navigateSafe(Screen.ArtistDetail.createRoute(artist.id))
                                         }
                                     )
                                 }

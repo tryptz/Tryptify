@@ -17,7 +17,10 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks ORDER BY albumArtist, album, discNumber, trackNumber")
     fun getAllTracks(): Flow<List<LocalTrackEntity>>
 
-    @Query("SELECT * FROM local_tracks WHERE title LIKE :query OR artist LIKE :query OR album LIKE :query OR albumArtist LIKE :query ORDER BY title")
+    // `genre` is in the LIKE and indexed (see LocalMediaEntities). Searching
+    // "techno" used to match only tracks with it in the title; now it finds
+    // everything tagged with it, which is what a genre word means.
+    @Query("SELECT * FROM local_tracks WHERE title LIKE :query OR artist LIKE :query OR album LIKE :query OR albumArtist LIKE :query OR genre LIKE :query ORDER BY title")
     fun searchTracks(query: String): Flow<List<LocalTrackEntity>>
 
     @Query("SELECT * FROM local_tracks WHERE albumId = :albumId ORDER BY discNumber, trackNumber")

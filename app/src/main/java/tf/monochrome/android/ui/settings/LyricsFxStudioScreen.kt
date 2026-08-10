@@ -408,6 +408,19 @@ fun LyricsFxStudioScreen(
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Mini Player") })
         }
 
+        // With the glass switched off app-wide, every control on these tabs still
+        // edits and saves, but nothing renders it. Say so, rather than letting
+        // the Studio read as broken.
+        if (tf.monochrome.android.performance.LocalLowPerformance.current.disableLiquidGlass) {
+            Text(
+                text = "Liquid glass is off in Settings › System › Performance. " +
+                    "These settings are saved but not shown until you turn it back on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+
         if (selectedTab == 1 || selectedTab == 2) {
             // Both glass tabs share the same controls, preview, and theme pool;
             // only which settings blob they edit differs.

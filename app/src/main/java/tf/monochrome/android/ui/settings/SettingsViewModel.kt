@@ -49,6 +49,8 @@ class SettingsViewModel @Inject constructor(
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val supabaseSyncRepository: SupabaseSyncRepository,
     private val supabaseAuthManager: SupabaseAuthManager,
+    private val lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager,
+    private val discordPresence: tf.monochrome.android.data.presence.DiscordPresenceManager,
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
@@ -143,6 +145,77 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val listenBrainzToken: StateFlow<String?> = preferences.listenBrainzToken
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    /** The listener's own credentials — what scrobbling signs with, and what the field shows. */
+    val lastFmApiKey: StateFlow<String> = preferences.lastFmApiKey
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val lastFmApiSecret: StateFlow<String> = preferences.lastFmApiSecret
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    val lastFmConnecting: StateFlow<Boolean> = lastFmAuthManager.isConnecting
+    val lastFmAuthError: StateFlow<String?> = lastFmAuthManager.errorMessage
+
+    /** The address to paste into the Last.fm application's Callback URL field. */
+    val lastFmCallbackUrl: String get() = lastFmAuthManager.callbackUrl
+
+    // --- Discord presence ---
+    val discordPresenceEnabled: StateFlow<Boolean> = preferences.discordPresenceEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val discordToken: StateFlow<String> = preferences.discordToken
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val discordApplicationId: StateFlow<String> = preferences.discordApplicationId
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val discordStatus: StateFlow<tf.monochrome.android.data.presence.DiscordPresenceManager.Status> =
+        discordPresence.status
+    val discordError: StateFlow<String?> = discordPresence.errorMessage
+
+    fun setDiscordCredentials(token: String, applicationId: String) {
+        viewModelScope.launch {
+            preferences.setDiscordCredentials(token, applicationId)
+            // New credentials are the answer to a refused connection, so they
+            // clear the refusal — otherwise the manager keeps refusing to
+            // retry a token that has just been replaced.
+            discordPresence.clearError()
+            // Checked here rather than at the next track change, so a bad
+            // token is answered while the person who typed it is still
+            // looking at the screen.
+            if (token.isNotBlank()) discordPresence.verifyToken(token)
+        }
+    }
+
+    val discordUsername: StateFlow<String?> = discordPresence.username
+
+    fun setDiscordPresenceEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDiscordPresenceEnabled(enabled) }
+    }
+
+    val discordPresenceAnimated: StateFlow<Boolean> = preferences.discordPresenceAnimated
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setDiscordPresenceAnimated(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDiscordPresenceAnimated(enabled) }
+    }
+
+    val discordUploadChannel: StateFlow<String> = preferences.discordUploadChannel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    fun setDiscordUploadChannel(id: String) {
+        viewModelScope.launch { preferences.setDiscordUploadChannel(id) }
+    }
+
+    fun clearDiscordCredentials() {
+        viewModelScope.launch { preferences.clearDiscordCredentials() }
+    }
+
+    fun clearDiscordError() = discordPresence.clearError()
+
+    /** Whether charts have a key at all — usually the bundled one, so usually true. */
+    val chartsKeyAvailable: StateFlow<Boolean> = preferences.lastFmChartsApiKey
+        .map { it.isNotBlank() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setLastFmApiCredentials(apiKey: String, apiSecret: String) {
+        viewModelScope.launch { preferences.setLastFmApiCredentials(apiKey, apiSecret) }
+    }
 
     // --- Audio ---
     val wifiQuality: StateFlow<AudioQuality> = preferences.wifiQuality
@@ -216,6 +289,14 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val appRenderResolution: StateFlow<Int> = preferences.appRenderResolution
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val lowPerformanceMode: StateFlow<Boolean> = preferences.lowPerformanceMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val disableAnimations: StateFlow<Boolean> = preferences.disableAnimations
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val legacyPlayer: StateFlow<Boolean> = preferences.legacyPlayer
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val disableLiquidGlass: StateFlow<Boolean> = preferences.disableLiquidGlass
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
     val visualizerEngineEnabled: StateFlow<Boolean> = preferences.visualizerEngineEnabled
@@ -399,10 +480,15 @@ class SettingsViewModel @Inject constructor(
     fun setConfirmClearQueue(enabled: Boolean) { viewModelScope.launch { preferences.setConfirmClearQueue(enabled) } }
 
     // --- Scrobbling actions ---
-    fun setLastFmSession(sessionKey: String, username: String) {
-        viewModelScope.launch { preferences.setLastFmSession(sessionKey, username) }
-    }
-    fun clearLastFmSession() { viewModelScope.launch { preferences.clearLastFmSession() } }
+    /**
+     * Open Last.fm's consent page. The session key comes back through the
+     * callback deep link, not from anything typed here — see [LastFmAuthManager].
+     */
+    fun connectLastFm(activityContext: android.content.Context) =
+        lastFmAuthManager.connect(activityContext)
+
+    fun clearLastFmSession() { viewModelScope.launch { lastFmAuthManager.disconnect() } }
+    fun clearLastFmError() = lastFmAuthManager.clearError()
     fun setListenBrainzToken(token: String) { viewModelScope.launch { preferences.setListenBrainzToken(token) } }
     fun clearListenBrainzToken() { viewModelScope.launch { preferences.clearListenBrainzToken() } }
 
@@ -464,6 +550,13 @@ class SettingsViewModel @Inject constructor(
     fun setPlayerBlurredBackground(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerBlurredBackground(enabled) } }
     fun setAppTargetFps(fps: Int) { viewModelScope.launch { preferences.setAppTargetFps(fps) } }
     fun setAppRenderResolution(shortSide: Int) { viewModelScope.launch { preferences.setAppRenderResolution(shortSide) } }
+    // The master writes all three; each of the three re-derives the master.
+    // Both directions are single DataStore transactions, so the four switches
+    // are never briefly inconsistent on screen.
+    fun setLowPerformanceMode(enabled: Boolean) { viewModelScope.launch { preferences.setLowPerformanceMode(enabled) } }
+    fun setDisableAnimations(enabled: Boolean) { viewModelScope.launch { preferences.setDisableAnimations(enabled) } }
+    fun setLegacyPlayer(enabled: Boolean) { viewModelScope.launch { preferences.setLegacyPlayer(enabled) } }
+    fun setDisableLiquidGlass(enabled: Boolean) { viewModelScope.launch { preferences.setDisableLiquidGlass(enabled) } }
     fun setVisualizerVsyncEnabled(value: Boolean) { viewModelScope.launch { preferences.setVisualizerVsyncEnabled(value) } }
     fun setVisualizerShowFps(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerShowFps(enabled) } }
     fun setVisualizerFullscreen(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerFullscreen(enabled) } }
@@ -503,6 +596,34 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WhatsNew.currentVersionCode)
     val whatsNewNeverShow: StateFlow<Boolean> = preferences.whatsNewNeverShow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /**
+     * Whether this build's notes were still unread when Settings was opened —
+     * what the "New in …" badge on the What's New header goes by.
+     *
+     * Latched here rather than read in the composable for two reasons.
+     * [whatsNewSeenVersion] starts at an optimistic placeholder equal to the
+     * current build, so a reader that samples it on first composition always
+     * concludes "already read". And opening About marks the notes seen
+     * immediately, which would erase the answer a moment after asking — the
+     * update notice deep-links straight to that tab, so the two can genuinely
+     * land in the same frame.
+     */
+    private val _whatsNewWasUnread = MutableStateFlow(false)
+    val whatsNewWasUnread: StateFlow<Boolean> = _whatsNewWasUnread.asStateFlow()
+    private var unreadLatched = false
+
+    /** Reads the stored version once, before anything overwrites it. */
+    private suspend fun latchWhatsNewUnread() {
+        if (unreadLatched) return
+        unreadLatched = true
+        _whatsNewWasUnread.value =
+            preferences.whatsNewSeenVersion.first() < WhatsNew.currentVersionCode
+    }
+
+    init {
+        viewModelScope.launch { latchWhatsNewUnread() }
+    }
 
     // --- Update availability ---
 
@@ -564,12 +685,17 @@ class SettingsViewModel @Inject constructor(
 
     /** Records that the notes for this build have been read. */
     fun markWhatsNewSeen() {
-        viewModelScope.launch { preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode) }
+        viewModelScope.launch {
+            // Never overwrite the stored version before it's been read.
+            latchWhatsNewUnread()
+            preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode)
+        }
     }
 
     /** Dismiss forever — also marks the current build seen so nothing lingers. */
     fun neverShowWhatsNew() {
         viewModelScope.launch {
+            latchWhatsNewUnread()
             preferences.setWhatsNewNeverShow(true)
             preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode)
         }

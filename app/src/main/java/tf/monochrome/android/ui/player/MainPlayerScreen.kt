@@ -159,7 +159,7 @@ fun MainPlayerScreen(
     isFullscreen: Boolean,
     formatTime: (Long) -> String,
     onToggleLike: () -> Unit,
-    onArtistClick: (Long) -> Unit,
+    onArtistClick: (Long, String) -> Unit,
     onSeekCommit: (Float) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -911,7 +911,7 @@ private fun PlayerTrackInfo(
     isLiked: Boolean,
     accent: Color,
     onToggleLike: () -> Unit,
-    onArtistClick: (Long) -> Unit,
+    onArtistClick: (Long, String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -933,7 +933,11 @@ private fun PlayerTrackInfo(
                 ClickableArtists(
                     artists = refs,
                     fallbackName = track.displayArtist.ifBlank { "Unknown" },
-                    onArtistClick = { ref -> ref.id?.let { onArtistClick(it) } },
+                    // The name goes with the id, because the id is sometimes
+                    // 0: a catalogue row can reach the player identified only
+                    // by what it is called, and the artist page can search for
+                    // that. Passing the id alone made this link a dead end.
+                    onArtistClick = { ref -> onArtistClick(ref.id ?: 0L, ref.name) },
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.6f),
                     linkColor = Color.White.copy(alpha = 0.85f),

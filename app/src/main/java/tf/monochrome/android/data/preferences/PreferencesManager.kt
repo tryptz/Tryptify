@@ -20,10 +20,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
+import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
@@ -100,9 +102,22 @@ class PreferencesManager @Inject constructor(
         // Scrobbling
         private val LASTFM_SESSION_KEY = stringPreferencesKey("lastfm_session_key")
         private val LASTFM_USERNAME = stringPreferencesKey("lastfm_username")
+        private val LASTFM_API_KEY = stringPreferencesKey("lastfm_api_key")
+        private val LASTFM_API_SECRET = stringPreferencesKey("lastfm_api_secret")
         private val LASTFM_ENABLED = booleanPreferencesKey("lastfm_enabled")
         private val LISTENBRAINZ_TOKEN = stringPreferencesKey("listenbrainz_token")
         private val LISTENBRAINZ_ENABLED = booleanPreferencesKey("listenbrainz_enabled")
+
+        // Discord presence. Deliberately NOT in SETTINGS_SYNC_KEYS: a Discord
+        // user token is an unscoped credential for the whole account, and
+        // syncing it would copy it onto every device signed into Tryptify and
+        // through the sync backend on the way. It stays on the device it was
+        // typed into.
+        private val DISCORD_TOKEN = stringPreferencesKey("discord_token")
+        private val DISCORD_APPLICATION_ID = stringPreferencesKey("discord_application_id")
+        private val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
+        private val DISCORD_PRESENCE_ANIMATED = booleanPreferencesKey("discord_presence_animated")
+        private val DISCORD_UPLOAD_CHANNEL = stringPreferencesKey("discord_upload_channel")
 
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
@@ -142,6 +157,30 @@ class PreferencesManager @Inject constructor(
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
         private val APP_TARGET_FPS = intPreferencesKey("app_target_fps")
         private val APP_RENDER_RESOLUTION = intPreferencesKey("app_render_resolution")
+
+        // Low performance mode. The automatic DeviceTier already trims effects on
+        // weak hardware; these are the user's own override, for a flagship on a
+        // long day out or a GPU whose driver hates the AGSL glass shader.
+        // LOW_PERFORMANCE_MODE is a convenience master: it has no independent
+        // effect, it just reads/writes the three real switches together.
+        // Discover's "familiar ↔ adventurous" knob, 0..1. Synced: unlike the
+        // performance switches this is taste, not hardware, and it should
+        // follow the listener between devices.
+
+        // Genres the listener has hearted on the map. Taste, like the knob
+        // above, so it syncs. The recents beside it are history and stay local,
+        // matching how the app treats play history everywhere else.
+        private val DISCOVERY_HEARTED_GENRES = stringSetPreferencesKey("discovery_hearted_genres")
+        private val DISCOVERY_RECENT_GENRES = stringPreferencesKey("discovery_recent_genres")
+        private val DISCOVERY_SORT = stringPreferencesKey("discovery_sort")
+
+        /** How many genres the "recently played" rail remembers. */
+        private const val MAX_RECENT_GENRES = 12
+
+        private val LOW_PERFORMANCE_MODE = booleanPreferencesKey("low_performance_mode")
+        private val DISABLE_ANIMATIONS = booleanPreferencesKey("disable_animations")
+        private val LEGACY_PLAYER = booleanPreferencesKey("legacy_player")
+        private val DISABLE_LIQUID_GLASS = booleanPreferencesKey("disable_liquid_glass")
 
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
@@ -365,6 +404,8 @@ class PreferencesManager @Inject constructor(
             RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
             RADIO_WEIGHT_MOOD_CONTINUITY, RADIO_WEIGHT_ERA_CONSISTENCY,
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
+            DISCOVERY_HEARTED_GENRES,
+            DISCOVERY_SORT,
         )
         private val SETTINGS_SYNC_KEY_NAMES: Set<String> = SETTINGS_SYNC_KEYS.map { it.name }.toSet()
     }
@@ -455,6 +496,45 @@ class PreferencesManager @Inject constructor(
         prefs[LASTFM_SESSION_KEY]
     }
 
+    /**
+     * The key genre **charts** read with — the listener's own if they entered
+     * one, otherwise the key built into this app.
+     *
+     * Sharing one key here is safe because a tag chart is a public read: no
+     * account, no signature, nothing attributable to a person. The override is
+     * the escape hatch if the shared key is ever rate-limited or revoked, and
+     * how someone building this themselves supplies their own.
+     */
+    val lastFmChartsApiKey: Flow<String> = dataStore.data.map { prefs ->
+        prefs[LASTFM_API_KEY]?.takeIf { it.isNotBlank() } ?: BuildConfig.LASTFM_API_KEY
+    }
+
+    /**
+     * The credentials **scrobbling** signs with — the listener's own, or nothing.
+     *
+     * Deliberately no fallback to the bundled key. A scrobble is a write against
+     * a named person's listening history, signed with the shared secret, and a
+     * secret shipped inside an APK is extractable by anyone who looks: whoever
+     * pulled it could sign traffic that Last.fm attributes to this application,
+     * and the resulting suspension would land on every listener at once. Each
+     * person registers their own pair, so the blast radius of a leak is one
+     * account — their own.
+     */
+    val lastFmApiKey: Flow<String> = dataStore.data.map { prefs ->
+        prefs[LASTFM_API_KEY].orEmpty()
+    }
+
+    val lastFmApiSecret: Flow<String> = dataStore.data.map { prefs ->
+        prefs[LASTFM_API_SECRET].orEmpty()
+    }
+
+    suspend fun setLastFmApiCredentials(apiKey: String, apiSecret: String) {
+        dataStore.edit {
+            it[LASTFM_API_KEY] = apiKey.trim()
+            it[LASTFM_API_SECRET] = apiSecret.trim()
+        }
+    }
+
     val lastFmUsername: Flow<String?> = dataStore.data.map { prefs ->
         prefs[LASTFM_USERNAME]
     }
@@ -499,6 +579,82 @@ class PreferencesManager @Inject constructor(
         dataStore.edit {
             it.remove(LISTENBRAINZ_TOKEN)
             it[LISTENBRAINZ_ENABLED] = false
+        }
+    }
+
+    // --- Discord presence ---
+    val discordToken: Flow<String> = dataStore.data.map { prefs ->
+        prefs[DISCORD_TOKEN].orEmpty()
+    }
+
+    /**
+     * The Discord application whose media proxy mints album-art assets.
+     *
+     * Optional, and the presence works without it — just without artwork. A
+     * gateway-set activity can only carry an image Discord itself hosts, and
+     * the only route from an arbitrary cover URL to one of those runs through
+     * an application's external-assets endpoint.
+     */
+    val discordApplicationId: Flow<String> = dataStore.data.map { prefs ->
+        prefs[DISCORD_APPLICATION_ID].orEmpty()
+    }
+
+    val discordPresenceEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[DISCORD_PRESENCE_ENABLED] ?: false
+    }
+
+    suspend fun setDiscordCredentials(token: String, applicationId: String) {
+        dataStore.edit {
+            // Normalised on the way in, not on the way out: a token pasted with
+            // a stray quote or an "Authorization:" label in front of it is
+            // indistinguishable from a wrong one once Discord has refused it.
+            it[DISCORD_TOKEN] =
+                tf.monochrome.android.data.presence.DiscordPresence.normalizeToken(token)
+            it[DISCORD_APPLICATION_ID] = applicationId.trim()
+        }
+    }
+
+    suspend fun setDiscordPresenceEnabled(enabled: Boolean) {
+        dataStore.edit { it[DISCORD_PRESENCE_ENABLED] = enabled }
+    }
+
+    /**
+     * Whether the presence card carries the animated spectrum badge.
+     *
+     * Separate from the presence itself because it is a different thing to want
+     * off: the badge is decoration, and someone may want the track shown
+     * without a moving graphic on their profile all day.
+     */
+    val discordPresenceAnimated: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[DISCORD_PRESENCE_ANIMATED] ?: true
+    }
+
+    suspend fun setDiscordPresenceAnimated(enabled: Boolean) {
+        dataStore.edit { it[DISCORD_PRESENCE_ANIMATED] = enabled }
+    }
+
+    /**
+     * A channel to post the composited artwork into, for its URL.
+     *
+     * Drawing the spectrum across the cover means building an image per track,
+     * and Discord will only render an image it can fetch. A phone has no public
+     * address, so the file is posted as an attachment and the resulting CDN link
+     * is what the card points at. Empty means don't: the card keeps the plain
+     * cover and the circular badge.
+     */
+    val discordUploadChannel: Flow<String> = dataStore.data.map { prefs ->
+        prefs[DISCORD_UPLOAD_CHANNEL].orEmpty()
+    }
+
+    suspend fun setDiscordUploadChannel(id: String) {
+        dataStore.edit { it[DISCORD_UPLOAD_CHANNEL] = id.trim() }
+    }
+
+    suspend fun clearDiscordCredentials() {
+        dataStore.edit {
+            it.remove(DISCORD_TOKEN)
+            it.remove(DISCORD_APPLICATION_ID)
+            it[DISCORD_PRESENCE_ENABLED] = false
         }
     }
 
@@ -1685,6 +1841,105 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setAppRenderResolution(shortSide: Int) {
         dataStore.edit { it[APP_RENDER_RESOLUTION] = shortSide }
+    }
+
+    // --- Discover ---
+    val discoveryHeartedGenres: Flow<Set<String>> = dataStore.data.map {
+        it[DISCOVERY_HEARTED_GENRES] ?: emptySet()
+    }
+
+    suspend fun toggleHeartedGenre(genreId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[DISCOVERY_HEARTED_GENRES] ?: emptySet()
+            prefs[DISCOVERY_HEARTED_GENRES] =
+                if (genreId in current) current - genreId else current + genreId
+        }
+    }
+
+    /**
+     * Genres played or opened from the map, most recent first.
+     *
+     * A newline-joined string rather than a `stringSet` because the order *is*
+     * the data — a set would come back in whatever order DataStore felt like
+     * and "recently listened to" would be a lie.
+     */
+    val discoveryRecentGenres: Flow<List<String>> = dataStore.data.map { prefs ->
+        prefs[DISCOVERY_RECENT_GENRES].orEmpty().split("\n").filter { it.isNotBlank() }
+    }
+
+    suspend fun noteGenreVisited(genreId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[DISCOVERY_RECENT_GENRES].orEmpty()
+                .split("\n").filter { it.isNotBlank() }
+            prefs[DISCOVERY_RECENT_GENRES] =
+                (listOf(genreId) + current.filterNot { it == genreId })
+                    .take(MAX_RECENT_GENRES)
+                    .joinToString("\n")
+        }
+    }
+
+    val discoverySort: Flow<String> = dataStore.data.map { it[DISCOVERY_SORT].orEmpty() }
+
+    suspend fun setDiscoverySort(id: String) {
+        dataStore.edit { it[DISCOVERY_SORT] = id }
+    }
+
+    // --- Low performance mode ---
+    // Deliberately NOT in SETTINGS_SYNC_KEYS: like frame rate and resolution
+    // this is per-device tuning. A phone that needs the glass off shouldn't
+    // turn it off on the user's tablet too.
+    val disableAnimations: Flow<Boolean> = dataStore.data.map { it[DISABLE_ANIMATIONS] ?: false }
+    val legacyPlayer: Flow<Boolean> = dataStore.data.map { it[LEGACY_PLAYER] ?: false }
+    val disableLiquidGlass: Flow<Boolean> = dataStore.data.map { it[DISABLE_LIQUID_GLASS] ?: false }
+
+    /**
+     * The master switch. It owns no state of its own that the three below don't
+     * already carry — it is stored only so the row can be read back without
+     * recomputing, and it is kept true exactly while all three are true.
+     */
+    val lowPerformanceMode: Flow<Boolean> = dataStore.data.map { it[LOW_PERFORMANCE_MODE] ?: false }
+
+    /** Everything the UI layer needs to know, as one value. */
+    val lowPerformanceSettings: Flow<LowPerformanceSettings> = dataStore.data.map { prefs ->
+        LowPerformanceSettings(
+            disableAnimations = prefs[DISABLE_ANIMATIONS] ?: false,
+            legacyPlayer = prefs[LEGACY_PLAYER] ?: false,
+            disableLiquidGlass = prefs[DISABLE_LIQUID_GLASS] ?: false,
+        )
+    }
+
+    suspend fun setLowPerformanceMode(enabled: Boolean) {
+        dataStore.edit {
+            it[LOW_PERFORMANCE_MODE] = enabled
+            it[DISABLE_ANIMATIONS] = enabled
+            it[LEGACY_PLAYER] = enabled
+            it[DISABLE_LIQUID_GLASS] = enabled
+        }
+    }
+
+    suspend fun setDisableAnimations(enabled: Boolean) =
+        editLowPerformanceFlag(DISABLE_ANIMATIONS, enabled)
+
+    suspend fun setLegacyPlayer(enabled: Boolean) =
+        editLowPerformanceFlag(LEGACY_PLAYER, enabled)
+
+    suspend fun setDisableLiquidGlass(enabled: Boolean) =
+        editLowPerformanceFlag(DISABLE_LIQUID_GLASS, enabled)
+
+    // Writing one of the three re-derives the master in the same transaction, so
+    // the master switch can never disagree with the rows underneath it.
+    private suspend fun editLowPerformanceFlag(
+        key: Preferences.Key<Boolean>,
+        enabled: Boolean,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[key] = enabled
+            prefs[LOW_PERFORMANCE_MODE] = LowPerformanceSettings(
+                disableAnimations = prefs[DISABLE_ANIMATIONS] ?: false,
+                legacyPlayer = prefs[LEGACY_PLAYER] ?: false,
+                disableLiquidGlass = prefs[DISABLE_LIQUID_GLASS] ?: false,
+            ).allEnabled
+        }
     }
 
     // --- Clear all prefs (System) ---

@@ -298,18 +298,16 @@ private fun RangePicker(current: StatsRange, onPick: (StatsRange) -> Unit) {
 private fun HeroMinutesCard(state: StatsUiState) {
     val primary = MaterialTheme.colorScheme.primary
     val tertiary = MaterialTheme.colorScheme.tertiary
-    val pulse = rememberInfiniteTransition(label = "hero-pulse")
     // Keep the animated value as State (no `by`) and read it inside drawBehind,
     // so the pulse animates in the draw phase instead of recomposing the whole
-    // hero card 60×/second.
-    val t = pulse.animateFloat(
+    // hero card 60×/second. Rests mid-sweep with animations off, so the card
+    // keeps its gradient rather than pinning to one end of it.
+    val t = tf.monochrome.android.ui.theme.rememberMotionFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse-t"
+        durationMillis = 4000,
+        label = "pulse-t",
+        still = 0.5f,
     )
 
     Card(
