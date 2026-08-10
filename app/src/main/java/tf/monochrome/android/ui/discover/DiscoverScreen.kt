@@ -2,9 +2,15 @@ package tf.monochrome.android.ui.discover
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -295,6 +302,23 @@ fun DiscoverScreen(
                 }
             }
 
+            // Something to look at while the feed is built. Picking a mood or a
+            // genre fans out into catalogue searches, and until the first shelf
+            // arrives the page was simply empty — indistinguishable from a
+            // chip that returned nothing, so the honest empty-state message
+            // below was being pre-empted by a blank screen that said less.
+            if (loading && shelves.isEmpty()) {
+                item(key = "loading") {
+                    DiscoveryLoading(
+                        label = when {
+                            combinedLabels.size >= 2 -> combinedLabels.joinToString(" + ")
+                            selectedChip != null -> selectedChip
+                            else -> null
+                        },
+                    )
+                }
+            }
+
             if (!loading && shelves.isEmpty()) {
                 item(key = "empty") {
                     Text(
@@ -323,6 +347,68 @@ fun DiscoverScreen(
         onRemove = menuTrack?.let { held -> { viewModel.dismissItem("t:" + held.id) } },
         removeLabel = "Not interested",
     )
+}
+
+/**
+ * The placeholder feed, shown while the real one is being built.
+ *
+ * Shelf-shaped rather than a spinner in the middle of nothing: the point is to
+ * say what is coming, so the page keeps its layout and the content lands into a
+ * shape the eye is already holding. A bare spinner tells you to wait; this
+ * tells you what for.
+ *
+ * The pulse is deliberately slow. Skeletons that flash read as broken, and this
+ * can be on screen for a couple of seconds while several catalogue searches
+ * come back.
+ */
+@Composable
+private fun DiscoveryLoading(label: String?) {
+    val pulse = rememberInfiniteTransition(label = "discovery-loading")
+    val alpha by pulse.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse",
+    )
+    // Honouring the app-wide switch: with animations off this settles to a
+    // still skeleton rather than pulsing, same as every other moving thing.
+    val restAlpha = if (tf.monochrome.android.ui.theme.reduceMotion()) 0.35f else alpha
+    val block = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = restAlpha)
+
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(
+            text = if (label != null) "Building $label…" else "Building your feed…",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        repeat(3) {
+            // A shelf: its reason line, then the row of covers it will hold.
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .height(14.dp)
+                    .fillMaxWidth(0.45f)
+                    .clip(MonoDimens.shapeSm)
+                    .background(block),
+            )
+            Row(modifier = Modifier.padding(horizontal = 16.dp)) {
+                repeat(3) {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .size(MonoDimens.coverCard)
+                            .clip(MonoDimens.shapeMd)
+                            .background(block),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(18.dp))
+        }
+    }
 }
 
 /**
