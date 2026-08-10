@@ -54,8 +54,13 @@ object PresenceArtwork {
     /**
      * @return an animated WebP, or null if a frame failed to encode.
      */
-    fun render(cover: Bitmap, grooveName: String, tint: Int): ByteArray? {
+    fun render(cover: Bitmap, grooveName: String, tint: Int, bpm: Int? = null): ByteArray? {
         val groove = GROOVES[grooveName] ?: GROOVES.getValue(PresenceBadge.DEFAULT_GROOVE)
+        // The track's own tempo when the graph knows it, the groove's canonical
+        // one otherwise. A house groove is drawn at 128 because that is where
+        // house lives, but a 140 BPM record playing at 128 is visibly off the
+        // beat — and the genre carries a real range worth using.
+        val tempo = bpm?.takeIf { it in 40..300 } ?: groove.bpm
         val base = Bitmap.createScaledBitmap(cover, SIZE, SIZE, true)
 
         val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -99,7 +104,7 @@ object PresenceArtwork {
         canvasBitmap.recycle()
         if (base !== cover) base.recycle()
 
-        val loopMs = (BEATS * 60_000f / groove.bpm).toInt()
+        val loopMs = (BEATS * 60_000f / tempo).toInt()
         val perFrame = (loopMs / FRAMES).coerceAtLeast(1)
         return runCatching {
             AnimatedWebP.assemble(frames, List(FRAMES) { perFrame }, SIZE, SIZE)
@@ -116,11 +121,18 @@ object PresenceArtwork {
         val snare = 0.30f * gauss(octave, 5.4f, 2.6f) *
             (groove.snares.maxOfOrNull { envelope(t, it, 0.22f) } ?: 0f)
 
+        // Detail is fixed in time on purpose. Animating it scrolled the whole
+        // curve sideways, so the shape slid left and right under the hits
+        // instead of the hits standing still and pumping — which is backwards:
+        // in a spectrum the horizontal axis is frequency, and frequency does
+        // not move. Only the hit envelopes animate now, and they move the curve
+        // up and down at the place they belong: the kick low, the snare in the
+        // mids.
         val busy = min(1f, octave / 2.5f)
         val detail = 0.075f * busy * (
-            0.55f * sin(TAU * (3f * x + t)) +
-                0.30f * sin(TAU * (5f * x - 2f * t + 0.4f)) +
-                0.15f * sin(TAU * (8f * x + 3f * t + 0.8f))
+            0.55f * sin(TAU * (3f * x)) +
+                0.30f * sin(TAU * (5f * x + 0.4f)) +
+                0.15f * sin(TAU * (8f * x + 0.8f))
             ) / 0.55f
 
         val air = 1f - maxOf(0f, (octave - 8.2f) / 1.8f).let { it * it }

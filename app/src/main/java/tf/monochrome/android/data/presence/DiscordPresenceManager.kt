@@ -276,14 +276,14 @@ class DiscordPresenceManager @Inject constructor(
         // too many. Everything about it can fail (no channel, no cover, an
         // upload that 403s), and every failure falls back to what the card
         // showed before rather than to nothing.
-        // Proxied here, not after the branch. Getting a URL back from the
-        // upload is only half of it — Discord still has to mint an asset path
-        // for it, and that call can fail on its own (no application id, a proxy
-        // refusal). Treating "uploaded" as success and assigning the proxy's
-        // null straight into artworkAsset is how the card ended up with no
-        // image at all, which is strictly worse than the plain cover this was
-        // supposed to improve on.
-        val composited = compositedArtwork(now, token)?.let { proxiedAsset(it, token, appId) }
+        // NOT run through the external-assets proxy. That endpoint exists to
+        // mint an asset path for an image hosted somewhere Discord does not
+        // control — and this one is already on Discord's own CDN, because we
+        // just uploaded it there. Asking the proxy to adopt a cdn.discordapp
+        // URL fails, which is why the card kept falling back to the plain cover
+        // while the upload itself was working perfectly. An attachment has a
+        // media-proxy path of its own, derived from the URL.
+        val composited = compositedArtwork(now, token)
         val resolved = if (composited != null) {
             now.copy(artworkAsset = composited, badgeAsset = null)
         } else {
@@ -478,20 +478,46 @@ class DiscordPresenceManager @Inject constructor(
             )
         } ?: android.graphics.Color.rgb(88, 101, 242)
 
-        val groove = PresenceBadge.groove(lineageOf(now.genreId))
-        val key = "$coverUrl|$groove|$tint"
+        val lineage = lineageOf(now.genreId)
+        val groove = PresenceBadge.groove(lineage)
+        // The nearest ancestor that declares a tempo. Leaves are often silent
+        // about BPM where their family is not, so walking up finds a real
+        // number more often than reading the leaf alone.
+        val bpm = lineage.asSequence()
+            .mapNotNull { genreGraph.graph[it] }
+            .firstOrNull { it.hasTempo }
+            ?.let { (it.bpmLow + it.bpmHigh) / 2 }
+        val key = "$coverUrl|$groove|$bpm|$tint"
         compositeCache[key]?.let { return it }
 
         val bitmap = loadCover(coverUrl) ?: return null
         // Rendering two dozen frames is real work; keep it off whatever thread
         // the playback callback arrived on.
         val bytes = withContext(Dispatchers.Default) {
-            PresenceArtwork.render(bitmap, groove, tint)
+            PresenceArtwork.render(bitmap, groove, tint, bpm)
         } ?: return null
 
         val url = upload(bytes, channel, token) ?: return null
-        compositeCache[key] = url
-        return url
+        val asset = attachmentAsset(url) ?: return null
+        compositeCache[key] = asset
+        return asset
+    }
+
+    /**
+     * The media-proxy path for an attachment we uploaded.
+     *
+     * `https://cdn.discordapp.com/attachments/<channel>/<message>/<name>?ex=…`
+     * becomes `mp:attachments/<channel>/<message>/<name>`. The query string is
+     * dropped deliberately: those are expiring signed parameters for direct
+     * fetches, and the proxy path does not take them.
+     */
+    internal fun attachmentAsset(cdnUrl: String): String? {
+        val withoutQuery = cdnUrl.substringBefore('?')
+        val marker = "/attachments/"
+        val at = withoutQuery.indexOf(marker)
+        if (at < 0) return null
+        val path = withoutQuery.substring(at + 1)
+        return if (path.count { it == '/' } >= 3) "mp:$path" else null
     }
 
     /** Fetch a cover as a software bitmap, reusing the app-wide image cache. */
