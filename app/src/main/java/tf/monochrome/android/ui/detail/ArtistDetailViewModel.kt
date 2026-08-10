@@ -17,6 +17,7 @@ import kotlinx.coroutines.coroutineScope
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
+import tf.monochrome.android.data.api.NoInstancesConfiguredException
 import tf.monochrome.android.domain.model.ArtistDetail
 import javax.inject.Inject
 
@@ -88,13 +89,34 @@ class ArtistDetailViewModel @Inject constructor(
                 }
             }
 
-            var finalResult: Result<ArtistDetail>? = null
+            // Which failure gets *reported* matters as much as the order they
+            // are tried in. Keeping the first one meant a Qobuz-only setup
+            // always showed "No API instances available" — the TIDAL pool being
+            // empty is the first thing that goes wrong and the least
+            // informative thing that went wrong, since that pool was never the
+            // one holding this artist. It sent people to configure instances
+            // for a catalogue they don't use, for an artist that failed
+            // somewhere else entirely.
+            //
+            // So a missing pool is only reported when every source failed that
+            // way, i.e. when there is genuinely nothing configured to ask.
+            var firstFailure: Result<ArtistDetail>? = null
+            var realFailure: Result<ArtistDetail>? = null
+            var success: Result<ArtistDetail>? = null
             for (attempt in ordered) {
                 val r = attempt()
-                if (finalResult == null) finalResult = r
-                if (r.isSuccess) { finalResult = r; break }
+                if (r.isSuccess) { success = r; break }
+                if (firstFailure == null) firstFailure = r
+                if (realFailure == null &&
+                    r.exceptionOrNull() !is NoInstancesConfiguredException
+                ) {
+                    realFailure = r
+                }
             }
-            finalResult = finalResult ?: Result.failure(Exception("Failed to load artist"))
+            val finalResult = success
+                ?: realFailure
+                ?: firstFailure
+                ?: Result.failure(Exception("Failed to load artist"))
 
             finalResult
                 .onSuccess { _artistDetail.value = it }
