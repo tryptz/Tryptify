@@ -276,9 +276,16 @@ class DiscordPresenceManager @Inject constructor(
         // too many. Everything about it can fail (no channel, no cover, an
         // upload that 403s), and every failure falls back to what the card
         // showed before rather than to nothing.
-        val composited = compositedArtwork(now, token)
+        // Proxied here, not after the branch. Getting a URL back from the
+        // upload is only half of it — Discord still has to mint an asset path
+        // for it, and that call can fail on its own (no application id, a proxy
+        // refusal). Treating "uploaded" as success and assigning the proxy's
+        // null straight into artworkAsset is how the card ended up with no
+        // image at all, which is strictly worse than the plain cover this was
+        // supposed to improve on.
+        val composited = compositedArtwork(now, token)?.let { proxiedAsset(it, token, appId) }
         val resolved = if (composited != null) {
-            now.copy(artworkAsset = proxiedAsset(composited, token, appId), badgeAsset = null)
+            now.copy(artworkAsset = composited, badgeAsset = null)
         } else {
             now.copy(
                 artworkAsset = now.artworkAsset?.let { proxiedAsset(it, token, appId) },
