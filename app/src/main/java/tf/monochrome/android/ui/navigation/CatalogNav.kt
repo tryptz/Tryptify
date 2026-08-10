@@ -101,6 +101,16 @@ fun isNavigableAlbumId(albumId: String?): Boolean {
 
 /** Catalog-only artist navigation (for domain `Track` rows, which are TIDAL/Qobuz). */
 fun NavController.openCatalogArtist(artistId: Long) {
+    // A track can reach the player with an artist *name* and no artist *id* —
+    // some catalogue rows carry 0 — and opening the artist screen with that
+    // guarantees a failed lookup and a dead-end error page. ("Qobuz artist not
+    // available: 0" is what that looked like once the error reporting stopped
+    // blaming the empty TIDAL pool for it.)
+    //
+    // Doing nothing is the better of the two available answers here: the screen
+    // has nothing to show and no id to fetch one with. The same artist reached
+    // from history works, because those rows carry the real id.
+    if (artistId <= 0L) return
     navigateSafe(Screen.ArtistDetail.createRoute(artistId))
 }
 
