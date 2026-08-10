@@ -2,15 +2,24 @@ package tf.monochrome.android.data.presence
 
 import android.content.Context
 import android.util.Log
+import coil3.BitmapImage
+import coil3.SingletonImageLoader
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.client.request.forms.formData
+import io.ktor.client.request.forms.submitForm
+import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
@@ -32,6 +41,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -94,6 +104,15 @@ class DiscordPresenceManager @Inject constructor(
 
     /** Cache of artwork URL → Discord's proxied asset path, per process. */
     private val assetCache = HashMap<String, String>()
+
+    /**
+     * Cache of (cover, groove, tint) → the uploaded animation's CDN URL.
+     *
+     * Keyed on everything that changes the picture, so replaying a track — or
+     * looping one — costs nothing. Without it every repeat would re-render two
+     * dozen frames and post another attachment.
+     */
+    private val compositeCache = HashMap<String, String>()
 
     private val _status = MutableStateFlow(Status.OFF)
     val status: StateFlow<Status> = _status.asStateFlow()
@@ -252,10 +271,20 @@ class DiscordPresenceManager @Inject constructor(
         if (lastSent?.sameAs(now) == true) return
 
         val appId = preferences.discordApplicationId.first().takeIf { it.isNotBlank() }
-        val resolved = now.copy(
-            artworkAsset = now.artworkAsset?.let { proxiedAsset(it, token, appId) },
-            badgeAsset = badgeFor(now)?.let { proxiedAsset(it, token, appId) },
-        )
+        // The composited cover replaces the plain one when it works, and the
+        // circular badge is dropped with it — two spectrums on one card is one
+        // too many. Everything about it can fail (no channel, no cover, an
+        // upload that 403s), and every failure falls back to what the card
+        // showed before rather than to nothing.
+        val composited = compositedArtwork(now, token)
+        val resolved = if (composited != null) {
+            now.copy(artworkAsset = proxiedAsset(composited, token, appId), badgeAsset = null)
+        } else {
+            now.copy(
+                artworkAsset = now.artworkAsset?.let { proxiedAsset(it, token, appId) },
+                badgeAsset = badgeFor(now)?.let { proxiedAsset(it, token, appId) },
+            )
+        }
         val activity = DiscordPresence.activity(resolved, APP_NAME, appId)
         lock.withLock {
             lastSent = now
@@ -416,6 +445,105 @@ class DiscordPresenceManager @Inject constructor(
     }
 
     /**
+     * The cover with the spectrum drawn across it, uploaded, as a URL.
+     *
+     * Null whenever anything is missing or fails — no channel configured, no
+     * artwork, a render that returned nothing, an upload Discord refused. The
+     * caller falls back to the plain cover plus the circular badge, which is
+     * the behaviour this is an upgrade on rather than a replacement for.
+     */
+    private suspend fun compositedArtwork(
+        now: DiscordPresence.NowPlaying,
+        token: String,
+    ): String? {
+        if (!preferences.discordPresenceAnimated.first()) return null
+        val channel = preferences.discordUploadChannel.first().takeIf { it.isNotBlank() }
+            ?: return null
+        val coverUrl = now.artworkUrl ?: return null
+
+        val palette = DynamicColorExtractor.extract(context, coverUrl)
+        val tint = (palette?.vibrant ?: palette?.dominant)?.let {
+            val argb = it.value.toULong() shr 32
+            android.graphics.Color.rgb(
+                ((argb shr 16) and 0xFFu).toInt(),
+                ((argb shr 8) and 0xFFu).toInt(),
+                (argb and 0xFFu).toInt(),
+            )
+        } ?: android.graphics.Color.rgb(88, 101, 242)
+
+        val groove = PresenceBadge.groove(lineageOf(now.genreId))
+        val key = "$coverUrl|$groove|$tint"
+        compositeCache[key]?.let { return it }
+
+        val bitmap = loadCover(coverUrl) ?: return null
+        // Rendering two dozen frames is real work; keep it off whatever thread
+        // the playback callback arrived on.
+        val bytes = withContext(Dispatchers.Default) {
+            PresenceArtwork.render(bitmap, groove, tint)
+        } ?: return null
+
+        val url = upload(bytes, channel, token) ?: return null
+        compositeCache[key] = url
+        return url
+    }
+
+    /** Fetch a cover as a software bitmap, reusing the app-wide image cache. */
+    private suspend fun loadCover(url: String): android.graphics.Bitmap? = runCatching {
+        val request = ImageRequest.Builder(context)
+            .data(url)
+            // Palette and Canvas both need pixels they can read.
+            .allowHardware(false)
+            .build()
+        val result = SingletonImageLoader.get(context).execute(request)
+        (result.image as? BitmapImage)?.bitmap
+    }.onFailure { Log.w(TAG, "cover load failed", it) }.getOrNull()
+
+    /**
+     * Post the animation as an attachment and return its CDN URL.
+     *
+     * A multipart message to a channel, which is the only way a phone can hand
+     * Discord a file it will later serve back. The link carries expiring signed
+     * parameters, which is fine — it only has to outlive the track.
+     */
+    private suspend fun upload(bytes: ByteArray, channelId: String, token: String): String? =
+        runCatching {
+            val response = httpClient.submitFormWithBinaryData(
+                url = "$API_BASE/channels/$channelId/messages",
+                formData = formData {
+                    append("payload_json", """{"content":""}""")
+                    append(
+                        "files[0]", bytes,
+                        Headers.build {
+                            append(HttpHeaders.ContentType, "image/webp")
+                            append(HttpHeaders.ContentDisposition, "filename=\"np.webp\"")
+                        },
+                    )
+                },
+            ) { header("Authorization", token) }
+
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299) {
+                Log.w(TAG, "artwork upload refused (${response.status.value}): $body")
+                return null
+            }
+            json.parseToJsonElement(body).jsonObject["attachments"]?.jsonArray
+                ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+        }.onFailure { Log.w(TAG, "artwork upload failed", it) }.getOrNull()
+
+    /** The genre and its ancestors, nearest first. */
+    private fun lineageOf(genreId: String?): List<String> {
+        val graph = genreGraph.graph
+        return buildList {
+            var node = genreId?.let { graph[it] }
+            var guard = 0
+            while (node != null && guard++ < LINEAGE_DEPTH) {
+                add(node.id)
+                node = node.parents.firstOrNull()?.let { graph[it] }
+            }
+        }
+    }
+
+    /**
      * The animated spectrum for this track, as a URL, or null for none.
      *
      * The rhythm comes from the genre and its ancestors in the graph; the
@@ -424,17 +552,7 @@ class DiscordPresenceManager @Inject constructor(
      */
     private suspend fun badgeFor(now: DiscordPresence.NowPlaying): String? {
         if (!preferences.discordPresenceAnimated.first()) return null
-        val graph = genreGraph.graph
-        val lineage = buildList {
-            var node = now.genreId?.let { graph[it] }
-            var guard = 0
-            // Guarded: the graph is authored data, and a cycle in it would
-            // otherwise hang the presence coroutine rather than fail visibly.
-            while (node != null && guard++ < LINEAGE_DEPTH) {
-                add(node.id)
-                node = node.parents.firstOrNull()?.let { graph[it] }
-            }
-        }
+        val lineage = lineageOf(now.genreId)
         // No early return for an empty lineage or a colourless cover: both fall
         // back inside PresenceBadge, so every track gets a spectrum rather than
         // the card gaining and losing a graphic depending on how much the app

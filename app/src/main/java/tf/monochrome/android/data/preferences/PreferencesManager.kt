@@ -117,6 +117,7 @@ class PreferencesManager @Inject constructor(
         private val DISCORD_APPLICATION_ID = stringPreferencesKey("discord_application_id")
         private val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         private val DISCORD_PRESENCE_ANIMATED = booleanPreferencesKey("discord_presence_animated")
+        private val DISCORD_UPLOAD_CHANNEL = stringPreferencesKey("discord_upload_channel")
 
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
@@ -630,6 +631,23 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDiscordPresenceAnimated(enabled: Boolean) {
         dataStore.edit { it[DISCORD_PRESENCE_ANIMATED] = enabled }
+    }
+
+    /**
+     * A channel to post the composited artwork into, for its URL.
+     *
+     * Drawing the spectrum across the cover means building an image per track,
+     * and Discord will only render an image it can fetch. A phone has no public
+     * address, so the file is posted as an attachment and the resulting CDN link
+     * is what the card points at. Empty means don't: the card keeps the plain
+     * cover and the circular badge.
+     */
+    val discordUploadChannel: Flow<String> = dataStore.data.map { prefs ->
+        prefs[DISCORD_UPLOAD_CHANNEL].orEmpty()
+    }
+
+    suspend fun setDiscordUploadChannel(id: String) {
+        dataStore.edit { it[DISCORD_UPLOAD_CHANNEL] = id.trim() }
     }
 
     suspend fun clearDiscordCredentials() {

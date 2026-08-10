@@ -1987,6 +1987,53 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
     val error by viewModel.discordError.collectAsStateWithLifecycle()
     val discordUser by viewModel.discordUsername.collectAsStateWithLifecycle()
     val animated by viewModel.discordPresenceAnimated.collectAsStateWithLifecycle()
+    val uploadChannel by viewModel.discordUploadChannel.collectAsStateWithLifecycle()
+    var showChannelDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showChannelDialog) {
+        var input by rememberSaveable { mutableStateOf(uploadChannel) }
+        AlertDialog(
+            onDismissRequest = { showChannelDialog = false },
+            title = { Text("Spectrum over the artwork") },
+            text = {
+                Column {
+                    Text(
+                        "With a channel set, the spectrum is drawn across the album " +
+                            "art itself instead of in the small circle. That means an " +
+                            "image per track, and Discord only shows images it can " +
+                            "fetch — so each one is posted here as an attachment and " +
+                            "the card points at it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Use a channel you don't mind filling up — a private server of " +
+                            "your own is the usual answer. Enable Developer Mode in " +
+                            "Discord, then right-click the channel and Copy Channel ID. " +
+                            "Leave it empty to keep the plain cover and the circle.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = input, onValueChange = { input = it },
+                        label = { Text("Channel ID") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setDiscordUploadChannel(input)
+                    showChannelDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChannelDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
 
     var showDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -2090,6 +2137,15 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
         },
         checked = enabled,
         onCheckedChange = { viewModel.setDiscordPresenceEnabled(it && token.isNotBlank()) }
+    )
+    SettingItem(
+        title = "Spectrum over the artwork",
+        subtitle = if (uploadChannel.isBlank()) {
+            "Off — the spectrum sits in the small circle"
+        } else {
+            "Posting to channel $uploadChannel"
+        },
+        onClick = { showChannelDialog = true },
     )
     SettingSwitchItem(
         title = "Animated spectrum",

@@ -195,6 +195,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setDiscordPresenceAnimated(enabled) }
     }
 
+    val discordUploadChannel: StateFlow<String> = preferences.discordUploadChannel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    fun setDiscordUploadChannel(id: String) {
+        viewModelScope.launch { preferences.setDiscordUploadChannel(id) }
+    }
+
     fun clearDiscordCredentials() {
         viewModelScope.launch { preferences.clearDiscordCredentials() }
     }
