@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import java.io.ByteArrayOutputStream
 import kotlin.math.exp
 import kotlin.math.min
@@ -61,7 +63,7 @@ object PresenceArtwork {
         // house lives, but a 140 BPM record playing at 128 is visibly off the
         // beat — and the genre carries a real range worth using.
         val tempo = bpm?.takeIf { it in 40..300 } ?: groove.bpm
-        val base = Bitmap.createScaledBitmap(cover, SIZE, SIZE, true)
+        val base = cover.scale(SIZE, SIZE)
 
         val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             // Opaque: Discord's media proxy composites alpha onto black, so a
@@ -74,7 +76,7 @@ object PresenceArtwork {
         val scrim = Paint().apply { color = Color.argb(90, 0, 0, 0) }
 
         val frames = ArrayList<ByteArray>(FRAMES)
-        val canvasBitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+        val canvasBitmap = createBitmap(SIZE, SIZE)
         val canvas = Canvas(canvasBitmap)
         val path = Path()
 

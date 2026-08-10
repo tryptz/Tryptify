@@ -3,6 +3,7 @@ package tf.monochrome.android.data.auth
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.browser.customtabs.CustomTabsIntent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
@@ -99,7 +100,7 @@ class LastFmAuthManager @Inject constructor(
             withContext(Dispatchers.Main) {
                 try {
                     CustomTabsIntent.Builder().build()
-                        .launchUrl(activityContext, Uri.parse(LastFmSigning.authorizeUrl(apiKey)))
+                        .launchUrl(activityContext, LastFmSigning.authorizeUrl(apiKey).toUri())
                 } catch (e: Exception) {
                     _isConnecting.value = false
                     _errorMessage.value = "Could not open browser: ${e.message}"
