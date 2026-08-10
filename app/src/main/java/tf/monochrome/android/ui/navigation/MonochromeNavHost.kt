@@ -120,8 +120,15 @@ sealed class Screen(val route: String) {
     data object AlbumDetail : Screen("album/{albumId}") {
         fun createRoute(albumId: Long) = "album/$albumId"
     }
-    data object ArtistDetail : Screen("artist/{artistId}") {
-        fun createRoute(artistId: Long) = "artist/$artistId"
+    data object ArtistDetail : Screen("artist/{artistId}?name={name}") {
+        /**
+         * [name] is the fallback identity. Some catalogue rows reach the player
+         * with an artist name and an id of 0, and an id of 0 can never be
+         * looked up — so the name rides along and the screen resolves from it
+         * when there is nothing else to go on.
+         */
+        fun createRoute(artistId: Long, name: String? = null) =
+            "artist/$artistId?name=${android.net.Uri.encode(name.orEmpty())}"
     }
     data object PlaylistDetail : Screen("playlist/{playlistId}") {
         fun createRoute(playlistId: String) = "playlist/$playlistId"
@@ -419,7 +426,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 }
                 composable(
                     route = Screen.ArtistDetail.route,
-                    arguments = listOf(navArgument("artistId") { type = NavType.LongType })
+                    arguments = listOf(
+                        navArgument("artistId") { type = NavType.LongType },
+                        navArgument("name") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    )
                 ) {
                     tf.monochrome.android.devedit.DevEditScreen("artist_detail") {
                         ArtistDetailScreen(navController = navController, playerViewModel = playerViewModel)

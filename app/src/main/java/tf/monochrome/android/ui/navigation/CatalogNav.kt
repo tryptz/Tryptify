@@ -59,12 +59,18 @@ private fun NavController.isSettled(): Boolean =
     currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true
 
 /** Open the artist page appropriate to [sourceType]. */
-fun NavController.openArtist(sourceType: SourceType, artistId: Long) {
-    val route = when (sourceType) {
-        SourceType.LOCAL -> Screen.LocalArtistDetail.createRoute(artistId)
-        else -> Screen.ArtistDetail.createRoute(artistId)
+fun NavController.openArtist(
+    sourceType: SourceType,
+    artistId: Long,
+    artistName: String? = null,
+) {
+    // Local artists are always identified by a real row id, so the name is only
+    // ever the catalogue path's fallback — see [openCatalogArtist].
+    if (sourceType == SourceType.LOCAL) {
+        if (artistId > 0L) navigateSafe(Screen.LocalArtistDetail.createRoute(artistId))
+        return
     }
-    navigateSafe(route)
+    openCatalogArtist(artistId, artistName)
 }
 
 /**
@@ -100,18 +106,20 @@ fun isNavigableAlbumId(albumId: String?): Boolean {
 }
 
 /** Catalog-only artist navigation (for domain `Track` rows, which are TIDAL/Qobuz). */
-fun NavController.openCatalogArtist(artistId: Long) {
+fun NavController.openCatalogArtist(artistId: Long, artistName: String? = null) {
     // A track can reach the player with an artist *name* and no artist *id* —
     // some catalogue rows carry 0 — and opening the artist screen with that
     // guarantees a failed lookup and a dead-end error page. ("Qobuz artist not
     // available: 0" is what that looked like once the error reporting stopped
     // blaming the empty TIDAL pool for it.)
     //
-    // Doing nothing is the better of the two available answers here: the screen
-    // has nothing to show and no id to fetch one with. The same artist reached
-    // from history works, because those rows carry the real id.
-    if (artistId <= 0L) return
-    navigateSafe(Screen.ArtistDetail.createRoute(artistId))
+    // The name is the way out: the screen can search the catalogue for it and
+    // recover the id. The same artist reached from history works without any of
+    // this, because those rows carry the real id already.
+    // Without an id AND without a name there is nothing to look up, so the only
+    // honest answer is to stay put rather than push a page that must fail.
+    if (artistId <= 0L && artistName.isNullOrBlank()) return
+    navigateSafe(Screen.ArtistDetail.createRoute(artistId, artistName))
 }
 
 /** Catalog-only album navigation (for domain `Track` rows). */

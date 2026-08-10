@@ -652,9 +652,13 @@ fun MainPlayerRoute(
                 isFullscreen = isFullscreenActive,
                 formatTime = playerViewModel::formatTime,
                 onToggleLike = playerViewModel::toggleLikeCurrentTrack,
-                onArtistClick = { artistId ->
-                    // Source-aware so a local song's artist opens the local artist page.
-                    navController.openArtist(currentUnified?.sourceType ?: SourceType.API, artistId)
+                onArtistClick = { artistId, artistName ->
+                    // Source-aware so a local song's artist opens the local artist
+                    // page; the name rides along because a catalogue row can
+                    // arrive with an id of 0 and nothing but what it is called.
+                    navController.openArtist(
+                        currentUnified?.sourceType ?: SourceType.API, artistId, artistName,
+                    )
                 },
                 onSeekCommit = playerViewModel::seekToFraction,
                 onPrevious = playerViewModel::skipToPrevious,

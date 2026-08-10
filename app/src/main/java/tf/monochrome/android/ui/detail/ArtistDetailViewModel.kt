@@ -31,6 +31,9 @@ class ArtistDetailViewModel @Inject constructor(
 
     private val artistId: Long = savedStateHandle.get<Long>("artistId") ?: 0L
 
+    /** The fallback identity, when the row that opened this had no id. */
+    private val artistName: String = savedStateHandle.get<String>("name").orEmpty()
+
     private val _artistDetail = MutableStateFlow<ArtistDetail?>(null)
     val artistDetail: StateFlow<ArtistDetail?> = _artistDetail.asStateFlow()
 
@@ -100,6 +103,27 @@ class ArtistDetailViewModel @Inject constructor(
             //
             // So a missing pool is only reported when every source failed that
             // way, i.e. when there is genuinely nothing configured to ask.
+            // An id of 0 is not an artist that failed to load, it is an artist
+            // we were never told the identity of — some catalogue rows reach
+            // the player with a name and no id. Searching the catalogue for the
+            // name recovers a real id, which is the only thing that makes the
+            // link work at all; every lookup below needs one.
+            if (artistId <= 0L && artistName.isNotBlank()) {
+                val found = repository.searchArtists(artistName, limit = 5).getOrNull()
+                    ?.firstOrNull { it.name.equals(artistName, ignoreCase = true) && it.id > 0 }
+                if (found != null) {
+                    val recovered = repository.getArtist(found.id)
+                    if (recovered.isSuccess) {
+                        _artistDetail.value = recovered.getOrThrow()
+                        _isLoading.value = false
+                        return@launch
+                    }
+                }
+                _error.value = "Couldn't find \"$artistName\" in your catalogues."
+                _isLoading.value = false
+                return@launch
+            }
+
             var firstFailure: Result<ArtistDetail>? = null
             var realFailure: Result<ArtistDetail>? = null
             var success: Result<ArtistDetail>? = null
