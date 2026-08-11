@@ -111,6 +111,19 @@ class GenreChartUseCase @Inject constructor(
         const val CROSS_CHECK_BUDGET_MS = 4_000L
     }
 
+    /**
+     * Catalogue answers for chart rows, hits and misses alike. Held for the
+     * process rather than expired: a chart row is a fixed pair of strings and
+     * the catalogue's answer for it does not change while the app is open.
+     *
+     * Declared here, above every use, rather than beside [resolve] at the foot
+     * of the class. Nothing constructs this use case and immediately resolves,
+     * so the late declaration was harmless — but it is the same shape that took
+     * DiscoverViewModel down, and the fix costs nothing.
+     */
+    private val resolved = mutableMapOf<String, UnifiedTrack?>()
+    private val resolveMutex = Mutex()
+
     suspend fun chart(
         genreId: String,
         window: ChartWindow,
@@ -360,14 +373,6 @@ class GenreChartUseCase @Inject constructor(
         resolveMutex.withLock { resolved[key] = track }
         return track
     }
-
-    /**
-     * Catalogue answers for chart rows, hits and misses alike. Held for the
-     * process rather than expired: a chart row is a fixed pair of strings and
-     * the catalogue's answer for it does not change while the app is open.
-     */
-    private val resolved = mutableMapOf<String, UnifiedTrack?>()
-    private val resolveMutex = Mutex()
 }
 
 /**

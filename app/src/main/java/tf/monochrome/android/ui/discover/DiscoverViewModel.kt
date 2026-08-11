@@ -302,6 +302,23 @@ class DiscoverViewModel @Inject constructor(
     private var page = 0
     private var moreJob: Job? = null
 
+    /** Shelves with a deepening request in flight, so a fast scroll fires once. */
+    private val shelvesLoadingMore = mutableSetOf<String>()
+
+    /** Shelves whose genre has no more to give, so the grid stops asking. */
+    private val exhaustedShelves = mutableSetOf<String>()
+
+    // Everything above is read *synchronously* by [rebuild], which the init
+    // block below calls during construction, so it has to be declared above
+    // that init — Kotlin runs initializers in declaration order, and a field
+    // declared later is still null when the constructor reaches it. These two
+    // sets were originally written down beside loadMoreInShelf, at the bottom
+    // of the class, and every launch of Discover died on `.clear()` here. The
+    // compiler can't see it: the read happens through a method call. State that
+    // rebuild only touches inside its `viewModelScope.launch` is exempt — that
+    // body resumes after construction has finished — which is why the older
+    // fields further down the file get away with it.
+
     /**
      * The feed with dismissals applied. Everything on screen reads this rather
      * than [_shelves], so waving a card away takes effect everywhere at once —
@@ -612,12 +629,6 @@ class DiscoverViewModel @Inject constructor(
             shelvesLoadingMore -= shelfId
         }
     }
-
-    /** Shelves with a deepening request in flight, so a fast scroll fires once. */
-    private val shelvesLoadingMore = mutableSetOf<String>()
-
-    /** Shelves whose genre has no more to give, so the grid stops asking. */
-    private val exhaustedShelves = mutableSetOf<String>()
 
     /**
      * One page of whichever category is showing.
