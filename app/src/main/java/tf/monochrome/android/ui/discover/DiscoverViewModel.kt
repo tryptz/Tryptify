@@ -302,6 +302,23 @@ class DiscoverViewModel @Inject constructor(
     private var page = 0
     private var moreJob: Job? = null
 
+    /** Shelves with a deepening request in flight, so a fast scroll fires once. */
+    private val shelvesLoadingMore = mutableSetOf<String>()
+
+    /** Shelves whose genre has no more to give, so the grid stops asking. */
+    private val exhaustedShelves = mutableSetOf<String>()
+
+    // Everything above is read *synchronously* by [rebuild], which the init
+    // block below calls during construction, so it has to be declared above
+    // that init — Kotlin runs initializers in declaration order, and a field
+    // declared later is still null when the constructor reaches it. These two
+    // sets were originally written down beside loadMoreInShelf, at the bottom
+    // of the class, and every launch of Discover died on `.clear()` here. The
+    // compiler can't see it: the read happens through a method call. State that
+    // rebuild only touches inside its `viewModelScope.launch` is exempt — that
+    // body resumes after construction has finished — which is why the older
+    // fields further down the file get away with it.
+
     /**
      * The feed with dismissals applied. Everything on screen reads this rather
      * than [_shelves], so waving a card away takes effect everywhere at once —
@@ -454,6 +471,11 @@ class DiscoverViewModel @Inject constructor(
         page = 0
         _exhausted.value = false
         _loadingMore.value = false
+        // Per-shelf paging state belongs to the feed that was on screen. Left
+        // behind, a rebuilt feed that happens to reuse a shelf id would inherit
+        // the old one's "nothing more to give".
+        shelvesLoadingMore.clear()
+        exhaustedShelves.clear()
         feedJob = viewModelScope.launch {
             _loading.value = true
             _shelves.value = emptyList()
@@ -559,6 +581,52 @@ class DiscoverViewModel @Inject constructor(
                 _shelves.value = _shelves.value + fresh
             }
             _loadingMore.value = false
+        }
+    }
+
+    /**
+     * Deepen one shelf in place, rather than adding another shelf below it.
+     *
+     * This is what the See All grid reaches for. [loadMore] widens the *feed* —
+     * more genres — which is the wrong answer when someone has opened a single
+     * genre and scrolled to the bottom of it: they have asked for more of this,
+     * not for something adjacent. Only genre-backed shelves can grow; the rest
+     * have no page two to fetch and say so by doing nothing.
+     */
+    fun loadMoreInShelf(shelfId: String) {
+        if (shelfId in shelvesLoadingMore || shelfId in exhaustedShelves) return
+        val shelf = _shelves.value.firstOrNull { it.id == shelfId } ?: return
+        val genreId = shelf.genreId ?: return
+
+        shelvesLoadingMore += shelfId
+        viewModelScope.launch {
+            val next = shelf.depth + 1
+            val more = try {
+                discoveryFeed.moreForGenre(genreId, page = next, limit = SHELF_SIZE)
+            } catch (cancelled: CancellationException) {
+                shelvesLoadingMore -= shelfId
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            // Keyed dedup against what the shelf already holds: the chart pool
+            // and the catalogue search can both hand back a record that page
+            // one already showed, and a repeated key crashes the lazy grid.
+            val known = shelf.items.map { it.key }.toSet()
+            val fresh = more.distinctBy { it.key }.filterNot { it.key in known }
+            if (fresh.isEmpty()) {
+                exhaustedShelves += shelfId
+            } else {
+                _shelves.value = _shelves.value.map { candidate ->
+                    if (candidate.id == shelfId) {
+                        candidate.copy(items = candidate.items + fresh, depth = next)
+                    } else {
+                        candidate
+                    }
+                }
+            }
+            shelvesLoadingMore -= shelfId
         }
     }
 
@@ -792,7 +860,13 @@ class DiscoverViewModel @Inject constructor(
     }
 
     private companion object {
-        const val SHELF_SIZE = 12
+        /**
+         * Cards per shelf. Also what "See All" opens onto, which is why it is
+         * not smaller: twelve was a comfortable carousel and a disappointing
+         * grid, and it capped a genre at twelve tracks in total because nothing
+         * could page past the first shelf.
+         */
+        const val SHELF_SIZE = 20
 
         /** Genre tracks played ahead of a station, to anchor it in the genre. */
         const val RADIO_OPENING = 6

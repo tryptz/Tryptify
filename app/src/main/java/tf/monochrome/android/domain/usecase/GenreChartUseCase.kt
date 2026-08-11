@@ -4,6 +4,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.data.charts.ChartSource
@@ -50,10 +52,32 @@ class GenreChartUseCase @Inject constructor(
 
         /**
          * How much of a chart to turn into a play queue. Deep enough to be a
-         * listening session, shallow enough that building it is a manageable
-         * number of catalogue lookups.
+         * listening session, and no longer bounded by how many catalogue
+         * lookups a caller can afford to wait through — resolution runs
+         * concurrently and is cached, so this is a depth rather than a budget.
          */
-        const val POOL_DEPTH = 30
+        const val POOL_DEPTH = 60
+
+        /**
+         * How many catalogue lookups to have in flight while turning chart rows
+         * into playable tracks. Same reasoning as [VERIFY_CONCURRENCY]: enough
+         * to hide the latency, few enough to arrive as a stream and not a burst.
+         *
+         * This is also the early-stop granularity — a pool that has already
+         * filled stops after the batch that filled it rather than resolving the
+         * whole chart and discarding the tail.
+         */
+        const val RESOLVE_CONCURRENCY = 8
+
+        /**
+         * How much deeper than the requested pool to read the chart.
+         *
+         * Not every charted track is in the catalogue, and an entry that isn't
+         * resolves to nothing rather than to something near it. Reading twice
+         * the depth means an ordinary miss rate still fills the pool without a
+         * second chart request.
+         */
+        const val RESOLVE_OVERREAD = 2
 
         /**
          * How far down a tag chart to verify artists. Each new artist costs a
@@ -86,6 +110,19 @@ class GenreChartUseCase @Inject constructor(
          */
         const val CROSS_CHECK_BUDGET_MS = 4_000L
     }
+
+    /**
+     * Catalogue answers for chart rows, hits and misses alike. Held for the
+     * process rather than expired: a chart row is a fixed pair of strings and
+     * the catalogue's answer for it does not change while the app is open.
+     *
+     * Declared here, above every use, rather than beside [resolve] at the foot
+     * of the class. Nothing constructs this use case and immediately resolves,
+     * so the late declaration was harmless — but it is the same shape that took
+     * DiscoverViewModel down, and the fix costs nothing.
+     */
+    private val resolved = mutableMapOf<String, UnifiedTrack?>()
+    private val resolveMutex = Mutex()
 
     suspend fun chart(
         genreId: String,
@@ -277,14 +314,34 @@ class GenreChartUseCase @Inject constructor(
      * Entries that can't be found in the catalogue are dropped, so the result
      * may be shorter than [depth] — a short list of the real thing beats a full
      * one padded with near-misses.
+     *
+     * [skip] takes the pool from further down the same chart, which is what
+     * makes a genre pageable: page two is the next stretch of the ranking, not
+     * the head again in a different order.
      */
     suspend fun playablePool(
         genreId: String,
         window: ChartWindow = ChartWindow.ALL_TIME,
         depth: Int = POOL_DEPTH,
+        skip: Int = 0,
     ): List<UnifiedTrack> {
-        val entries = chart(genreId, window, limit = depth).entries
-        return entries.mapNotNull { resolve(it) }.distinctBy { it.id }
+        if (depth <= 0) return emptyList()
+        val wanted = (skip + depth) * RESOLVE_OVERREAD
+        val entries = chart(genreId, window, limit = wanted).entries.drop(skip)
+        if (entries.isEmpty()) return emptyList()
+
+        // Resolved in bounded parallel batches, stopping as soon as the pool is
+        // full. Sequentially this was one network round trip per row — thirty of
+        // them back to back, which is why only "play this genre" could afford to
+        // call it and the feed could not.
+        val pool = LinkedHashMap<String, UnifiedTrack>(depth)
+        for (batch in entries.chunked(RESOLVE_CONCURRENCY)) {
+            coroutineScope { batch.map { async { resolve(it) } }.awaitAll() }
+                .filterNotNull()
+                .forEach { track -> if (!pool.containsKey(track.id)) pool[track.id] = track }
+            if (pool.size >= depth) break
+        }
+        return pool.values.take(depth)
     }
 
     /**
@@ -297,12 +354,24 @@ class GenreChartUseCase @Inject constructor(
      * and title, and if none does this returns null rather than the closest
      * thing to hand. Playing the wrong track is worse than playing nothing:
      * silence is legible, a wrong record looks like the chart is nonsense.
+     *
+     * Memoised on [ChartEntry.matchKey], misses included. A genre and its
+     * neighbours overlap heavily — the same record charts under techno, hard
+     * techno and industrial techno — so on a feed that builds six shelves at
+     * once most rows are already answered. Remembering the misses matters as
+     * much as the hits: a track the catalogue simply does not carry would
+     * otherwise be re-searched once per shelf, forever.
      */
     suspend fun resolve(entry: ChartEntry): UnifiedTrack? {
-        val result = music.searchQobuz(entry.matchQuery).getOrNull() ?: return null
-        return result.tracks
-            .firstOrNull { agrees(entry, it.artists.firstOrNull()?.name ?: "", it.title) }
+        val key = entry.matchKey
+        resolveMutex.withLock { if (resolved.containsKey(key)) return resolved[key] }
+
+        val track = music.searchQobuz(entry.matchQuery).getOrNull()?.tracks
+            ?.firstOrNull { agrees(entry, it.artists.firstOrNull()?.name ?: "", it.title) }
             ?.toQobuzUnifiedTrack()
+
+        resolveMutex.withLock { resolved[key] = track }
+        return track
     }
 }
 

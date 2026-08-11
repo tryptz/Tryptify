@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -119,8 +122,24 @@ fun DiscoverShelfScreen(
             )
         }
 
+        val gridState = rememberLazyGridState()
+        // Reaching the bottom asks the shelf's genre for another page, the same
+        // way the feed asks for another row of shelves (DiscoverScreen.kt:147).
+        // Re-armed on the item count so a page that lands while sitting at the
+        // end doesn't read as "no change" and stall at page two.
+        LaunchedEffect(gridState, shelfId, shelf?.items?.size) {
+            snapshotFlow {
+                val info = gridState.layoutInfo
+                val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+                info.totalItemsCount > 0 && last >= info.totalItemsCount - 1
+            }
+                .distinctUntilChanged()
+                .collect { atEnd -> if (atEnd) viewModel.loadMoreInShelf(shelfId) }
+        }
+
         when {
             shelf != null -> LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Adaptive(MonoDimens.coverCard),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 160.dp),

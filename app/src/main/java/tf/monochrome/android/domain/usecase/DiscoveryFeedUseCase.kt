@@ -1,5 +1,6 @@
 package tf.monochrome.android.domain.usecase
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
@@ -215,24 +216,22 @@ class DiscoveryFeedUseCase @Inject constructor(
     /**
      * One genre's shelf. [mood] is null when the genre is the subject rather
      * than a means to a mood — the reason line changes, nothing else does.
+     *
+     * [page] is depth *within this genre*, not a different genre: page one is
+     * the next stretch of the same ranking. Paging used to mean only "walk
+     * further across the graph", so the genre you actually asked for was one
+     * shelf deep and there was no way to reach its thirteenth track.
      */
     private suspend fun genreShelfFor(
         related: RelatedGenre,
         mood: MoodProfile?,
         limit: Int,
         variation: Int = 0,
-    ): DiscoveryShelf? = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+        page: Int = 0,
+    ): DiscoveryShelf? {
         val node = related.node
-        // The node's own name first — it is what the catalogue is most likely
-        // to have tagged — with an alias as the fallback for genres a store
-        // spells differently. [variation] walks the aliases instead, which is
-        // what stops a genre asked for twice from returning the same search.
-        val queries = node.queries()
-        if (queries.isEmpty()) return@withTimeoutOrNull null
-        val query = queries[Math.floorMod(variation, queries.size)]
-        val result = music.searchQobuz(query).getOrNull() ?: return@withTimeoutOrNull null
-        registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
-
+        val prefix = mood?.let { "mood_" + it.id } ?: "genre"
+        val id = shelfId(prefix, node.id, page)
         val reason = buildString {
             append(
                 when {
@@ -245,12 +244,79 @@ class DiscoveryFeedUseCase @Inject constructor(
             if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
         }
 
-        // The search ranked these by how well a *title or album* matched the
-        // genre's name, which is the query machine-generated filler is built to
-        // win: asking for hardstyle returns "Hardstyle Fish", "I'm so lucky! -
-        // Hardstyle" and compilations whose artwork happens to say Hardstyle.
-        // Keep only the ones whose artist the genre actually owns.
+        // What the genre actually is, before what merely says so. The chart is
+        // ranked by what people played and each row is admitted only when it
+        // agrees with the catalogue on both artist and title, so nothing gets
+        // in on the strength of its name alone.
         //
+        // The timeout is the budget; a cancellation is the feed being replaced
+        // out from under us and has to keep travelling. runCatching around the
+        // whole thing would swallow the second as if it were the first and go
+        // on to run the fallback search for a shelf nobody is waiting for.
+        val charted = try {
+            withTimeoutOrNull(CHART_BUDGET_MS) {
+                genreCharts.playablePool(node.id, depth = limit, skip = page * limit)
+            }.orEmpty()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        if (charted.size >= MIN_CHART_TRACKS) {
+            return charted.map { DiscoveryItem.TrackItem(it.chartedAs(node)) }
+                .toShelf(
+                    id = id,
+                    title = node.name,
+                    reason = "$reason · ranked by plays",
+                    genreId = node.id,
+                    depth = page,
+                )
+        }
+
+        return withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+            searchShelf(node, id, reason, limit, variation, page)
+        }
+    }
+
+    /**
+     * The fallback shelf: a catalogue search on the genre's name, cleaned up.
+     *
+     * Reached only when no chart source has heard of the genre. The search
+     * ranks by how well a *title or album* matches the words, which is the
+     * query machine-generated filler is built to win — asking for hardstyle
+     * returns "Hardstyle Fish", "I'm so lucky! - Hardstyle" and compilations
+     * whose artwork happens to say Hardstyle.
+     *
+     * Two defences, because either alone lets the filler through. Artists the
+     * genre demonstrably owns are kept whatever their tracks are called, and
+     * floated to the front. Everyone else has to not be echoing the genre's own
+     * name back at us. What survives is presented as a search result and says so
+     * — the previous code fell back to the raw, unfiltered hits and titled them
+     * as though they were the genre, which is the part that read as broken.
+     */
+    private suspend fun searchShelf(
+        node: GenreNode,
+        id: String,
+        reason: String,
+        limit: Int,
+        variation: Int,
+        page: Int,
+    ): DiscoveryShelf? {
+        // The node's own name first — it is what the catalogue is most likely
+        // to have tagged — with an alias as the fallback for genres a store
+        // spells differently. [variation] walks the aliases instead, which is
+        // what stops a genre asked for twice from returning the same search.
+        val queries = node.queries()
+        if (queries.isEmpty()) return null
+        val query = queries[Math.floorMod(variation, queries.size)]
+        // Deeper pages ask the catalogue for a later slice rather than
+        // re-reading the first one. The parameter has been plumbed through
+        // MusicRepository and HiFiApiClient all along and was never passed.
+        val offset = page * limit * SHELF_OVERFETCH
+        val result = music.searchQobuz(query, offset).getOrNull() ?: return null
+        registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
+
         // Verification is by artist rather than per track because it is cached
         // per artist for a month and shared across every shelf and chart — a
         // warm cache makes this free, and a cold one costs at most one request
@@ -263,23 +329,61 @@ class DiscoveryFeedUseCase @Inject constructor(
             )
         }.getOrDefault(emptySet())
 
-        val kept = if (confirmed.isEmpty()) {
-            // Nothing to verify against — an obscure genre no source knows.
-            // Filtering on no evidence would empty the shelf, which is worse
-            // than showing the unfiltered search.
-            candidates
-        } else {
-            candidates.filter { track ->
-                normalizeForMatch(track.artists.firstOrNull()?.name.orEmpty()) in confirmed
-            }.ifEmpty { candidates }
-        }
+        val (owned, rest) = candidates
+            .filter { track ->
+                val artist = normalizeForMatch(track.artists.firstOrNull()?.name.orEmpty())
+                artist in confirmed || !echoesGenreName(track.title, track.album?.title, queries)
+            }
+            .partition { normalizeForMatch(it.artists.firstOrNull()?.name.orEmpty()) in confirmed }
 
-        val tracks = kept.take(limit)
+        val tracks = (owned + rest).take(limit)
             .map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack().taggedWith(node)) }
-        val items = tracks.ifEmpty { result.albums.take(limit).map { DiscoveryItem.AlbumItem(it) } }
-        val prefix = mood?.let { "mood_" + it.id } ?: "genre"
-        items.toShelf(id = prefix + "_" + node.id, title = node.name, reason = reason)
+        // Albums only when no track survived, and held to the same standard:
+        // the shelf that has just dropped every track called "Techno" would
+        // otherwise fill itself back up with compilations called "Techno 2024".
+        val items = tracks.ifEmpty {
+            result.albums
+                .filterNot { echoesGenreName(it.title, null, queries) }
+                .take(limit)
+                .map { DiscoveryItem.AlbumItem(it) }
+        }
+        val honest = if (confirmed.isEmpty()) "$reason · matched by name" else reason
+        return items.toShelf(
+            id = id,
+            title = node.name,
+            reason = honest,
+            genreId = node.id,
+            depth = page,
+        )
     }
+
+    /**
+     * The next page of one genre, as items to append to a shelf already on
+     * screen.
+     *
+     * This is what "See All" scrolls into. It deliberately returns items rather
+     * than a shelf: the grid is already showing this genre under its own title
+     * and reason, and swapping the shelf underneath it would reset the scroll
+     * position and any running selection.
+     */
+    suspend fun moreForGenre(
+        genreId: String,
+        page: Int,
+        limit: Int = 20,
+    ): List<DiscoveryItem> {
+        val node = genreGraph.graph[genreId] ?: return emptyList()
+        return genreShelfFor(
+            related = RelatedGenre(node, 1f, 0),
+            mood = null,
+            limit = limit,
+            variation = page,
+            page = page,
+        )?.items.orEmpty()
+    }
+
+    /** Shelf ids carry their depth, or a genre's second page collides with its first. */
+    private fun shelfId(prefix: String, nodeId: String, page: Int): String =
+        if (page == 0) prefix + "_" + nodeId else prefix + "_" + nodeId + "_p" + page
 
     /**
      * A feed built around one genre — what the map hands back when you tap a node.
@@ -303,22 +407,27 @@ class DiscoveryFeedUseCase @Inject constructor(
         val floor = DiscoveryAdventure.neighbourFloor(adventure)
         val neighbours = graph.neighbours(genreId, maxHops = hopsFor(adventure, page), floor = floor)
 
-        // The genre itself leads its own first page and nothing else's — page
-        // two is neighbours, not the same shelf again with a different name.
-        val picks = if (page == 0) {
-            listOf(RelatedGenre(root, 1f, 0)) + neighbours.take(maxShelves - 1)
-        } else {
-            neighbours.drop(page * maxShelves - 1).take(maxShelves)
+        // The genre itself leads every page, one stretch deeper each time,
+        // followed by neighbours we haven't shown yet. It used to lead page one
+        // and then vanish, so scrolling a genre walked away from it — twelve
+        // tracks of what you asked for and then an hour of things adjacent to
+        // it. Each pick carries its own depth: the root goes deeper, while a
+        // neighbour appearing for the first time starts at its own beginning.
+        val picks = buildList {
+            add(RelatedGenre(root, 1f, 0) to page)
+            neighbours.drop(page * (maxShelves - 1))
+                .take(maxShelves - 1)
+                .forEach { add(it to 0) }
         }
-        if (picks.isEmpty()) return@coroutineScope emptyList()
 
-        picks.map { related ->
+        picks.map { (related, depth) ->
             async {
                 genreShelfFor(
                     related,
                     mood = null,
                     limit = itemsPerShelf,
                     variation = variation + page,
+                    page = depth,
                 )
             }
         }.mapNotNull { it.await() }
@@ -422,9 +531,20 @@ class DiscoveryFeedUseCase @Inject constructor(
         id: String,
         title: String,
         reason: String?,
+        genreId: String? = null,
+        depth: Int = 0,
     ): DiscoveryShelf? = distinctBy { it.key }
         .takeIf { it.isNotEmpty() }
-        ?.let { DiscoveryShelf(id = id, title = title, reason = reason, items = it) }
+        ?.let {
+            DiscoveryShelf(
+                id = id,
+                title = title,
+                reason = reason,
+                items = it,
+                genreId = genreId,
+                depth = depth,
+            )
+        }
 
     /**
      * Tag every credited artist id as Qobuz, so ArtistDetailViewModel routes it
@@ -483,6 +603,22 @@ class DiscoveryFeedUseCase @Inject constructor(
             genreConfidence = GenreConfidence.INFERRED,
         )
 
+    /**
+     * Attach a genre the track earned by charting in it.
+     *
+     * A rung above [taggedWith]: this track is not here because a search for
+     * the genre's name returned it, but because the genre's chart ranked it and
+     * the catalogue agreed on both artist and title. That is inherited from the
+     * scene rather than stated by the file, which is what DERIVED means.
+     */
+    private fun UnifiedTrack.chartedAs(node: GenreNode): UnifiedTrack =
+        if (genre != null) copy(genreId = genreId ?: node.id)
+        else copy(
+            genre = node.name,
+            genreId = node.id,
+            genreConfidence = GenreConfidence.DERIVED,
+        )
+
     /** Lenient match so search albums credited to the seed artist are kept. */
     private fun String.matchesArtist(name: String): Boolean {
         val a = trim().lowercase()
@@ -504,5 +640,85 @@ class DiscoveryFeedUseCase @Inject constructor(
 
         /** Ceiling on how far paging widens the graph walk. */
         private const val MAX_HOPS = 5
+
+        /**
+         * How long a shelf may spend on the chart before it settles for the
+         * search. Longer than the search budget because it buys something
+         * better, and because a cold resolve cache is the expensive case — once
+         * warm, neighbouring shelves answer from memory well inside this.
+         */
+        private const val CHART_BUDGET_MS = 9_000L
+
+        /**
+         * Below this many resolved tracks a chart is not worth showing as one.
+         * A row of three is not a shelf, and the search — for all its faults —
+         * will at least fill it, so the honest trade at that depth is to fall
+         * back and label it rather than to show a stub.
+         */
+        private const val MIN_CHART_TRACKS = 6
     }
 }
+
+/**
+ * Whether this record is only in the results because it says the genre's name.
+ *
+ * The catalogue search is a title/album match, so asking it for a genre returns
+ * two kinds of thing: records that *are* the genre, and records that merely
+ * *mention* it — "Hardstyle Fish", "I'm so lucky! - Hardstyle", and the endless
+ * compilations called "Techno 2024". The second kind wins the ranking, because
+ * putting the genre in the title is exactly how you get found by someone
+ * searching for the genre.
+ *
+ * The test is deliberately one-directional: the genre's name appearing in the
+ * title or the album title is suspicious, the track's title appearing in the
+ * genre's name is not (a track really called "Techno" by a techno artist is a
+ * normal record). Callers pair this with artist evidence and let confirmed
+ * artists through regardless, so a genre's own defining track is never dropped
+ * for being named after it.
+ *
+ * Matching is on whole words, so "Trance" does not fire on "Entrance" and
+ * punctuation differences don't matter.
+ */
+internal fun echoesGenreName(
+    title: String,
+    albumTitle: String?,
+    genreNames: List<String>,
+): Boolean {
+    val haystacks = listOfNotNull(
+        foldWhole(title).takeIf { it.isNotEmpty() },
+        albumTitle?.let { foldWhole(it) }?.takeIf { it.isNotEmpty() },
+    )
+    if (haystacks.isEmpty()) return false
+
+    return genreNames.any { raw ->
+        val needle = foldWhole(raw)
+        needle.isNotEmpty() && haystacks.any { it.containsWords(needle) }
+    }
+}
+
+/**
+ * Lowercase alphanumerics and single spaces, keeping the *whole* string.
+ *
+ * Deliberately not [normalizeForMatch], which drops bracketed suffixes and
+ * everything after " - " so that two services can agree a record is the same
+ * record. Here that folding would erase the evidence: "I'm so lucky! -
+ * Hardstyle" folds to "im so lucky" under it, and the genre echo — the entire
+ * thing being tested for — disappears along with the dash. Bracketed text is
+ * kept for the same reason, so "(Hardstyle Remix)" still counts.
+ */
+private fun foldWhole(raw: String): String = buildString {
+    for (ch in raw.lowercase()) {
+        if (ch.isLetterOrDigit()) append(ch)
+        else if (isNotEmpty() && last() != ' ') append(' ')
+    }
+}.trim()
+
+/**
+ * Whether [words] appears in this string as a run of whole words.
+ *
+ * Both sides are already folded to lowercase alphanumerics separated by single
+ * spaces, so padding with spaces turns a substring test into a word-boundary
+ * one without a regex.
+ */
+private fun String.containsWords(words: String): Boolean =
+    " $this ".contains(" $words ")
