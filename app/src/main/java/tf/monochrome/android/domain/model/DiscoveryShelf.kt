@@ -43,4 +43,17 @@ data class DiscoveryShelf(
     val items: List<DiscoveryItem> = emptyList(),
     /** Whether the header offers a "See All" into the full grid. */
     val seeAll: Boolean = true,
+    /**
+     * The genre this shelf was built from, when it was built from one.
+     *
+     * Carried so a See All grid can ask for more of the same genre without
+     * having to parse it back out of [id]. Null for shelves with no genre
+     * behind them — "New from X", "Because you play X", a mood's flat search.
+     */
+    val genreId: String? = null,
+    /**
+     * How deep into [genreId] this shelf already reaches. The next page is
+     * [depth] + 1; see DiscoveryFeedUseCase.moreForGenre.
+     */
+    val depth: Int = 0,
 )
