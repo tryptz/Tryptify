@@ -60,6 +60,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -195,6 +197,9 @@ fun WorldRadioScreen(
             val land = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
             val dot = MaterialTheme.colorScheme.primary
             val onSurface = MaterialTheme.colorScheme.onSurface
+            // Native-canvas text is sized in pixels, so the density conversion
+            // happens here rather than in the draw pass. Matches the genre map.
+            val labelPx = with(density) { 11.dp.toPx() }
 
             Canvas(
                 modifier = Modifier
@@ -228,6 +233,16 @@ fun WorldRadioScreen(
                     land = land,
                     dot = dot,
                     selectedId = selected?.id,
+                    labelColor = onSurface,
+                    labelSizePx = labelPx,
+                    // The globe runs full-bleed under a transparent bar, which
+                    // is intended for the dots and unreadable for the names.
+                    topInset = topBarHeightPx.toFloat(),
+                    bottomInset = if (selected != null) {
+                        panelBottomInset.toPx() + panelHeightPx
+                    } else {
+                        0f
+                    },
                 )
             }
 
@@ -509,7 +524,19 @@ private const val SPIN_MILLIS = 700
 private val SpinEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
 
 private const val MIN_ZOOM = 0.85f
-private const val MAX_ZOOM = 9f
+
+/**
+ * How close the globe will come.
+ *
+ * Measured rather than picked: the globe's radius is `0.42 × min(w, h) × zoom`,
+ * so on a 1080 px-wide phone 48× puts the radius at 21,773 px and a screenful is
+ * about 320 km of arc — near enough that cities twenty kilometres apart sit some
+ * sixty-five pixels apart and can be told apart and tapped. The old ceiling of 9
+ * spanned ~1,700 km, which is a country, and a region's cities arrived as one
+ * blur. Nothing is drawn per zoom level — the same 5,127 coastline points and
+ * 1,611 dots either way — so the extra range is free.
+ */
+private const val MAX_ZOOM = 48f
 
 /** Fraction of the smaller viewport dimension the globe fills at zoom 1. */
 private const val GLOBE_FIT = 0.42f
@@ -532,9 +559,16 @@ private data class GlobeCamera(
         val next = (zoom * zoomBy).coerceIn(MIN_ZOOM, MAX_ZOOM)
         val radius = globeRadius(size.width.toFloat(), size.height.toFloat(), next)
         // Divide by the radius so a drag moves the surface under the finger at
-        // roughly the same rate however far in you are: at 9× a pixel of drag is
-        // a ninth of the arc it was at 1×.
-        val dYaw = if (radius <= 0f) 0f else -pan.x / radius
+        // roughly the same rate however far in you are: at 48× a pixel of drag
+        // is a forty-eighth of the arc it was at 1×.
+        //
+        // Both signs are positive because both axes move the surface the way the
+        // finger goes, which is the only thing a globe under a thumb can mean.
+        // Increasing yaw carries a point right across the disc (project() takes
+        // sin of lon + yaw), and increasing pitch carries it down, so a rightward
+        // drag wants more yaw and a downward drag wants more pitch. Yaw was
+        // negated here and the Earth ran backwards under the finger.
+        val dYaw = if (radius <= 0f) 0f else pan.x / radius
         val dPitch = if (radius <= 0f) 0f else pan.y / radius
         return GlobeCamera(
             yaw = wrap(yaw + dYaw),
@@ -694,6 +728,10 @@ private fun DrawScope.drawGlobe(
     land: Color,
     dot: Color,
     selectedId: String?,
+    labelColor: Color,
+    labelSizePx: Float,
+    topInset: Float,
+    bottomInset: Float,
 ) {
     if (data.cities.isEmpty() && data.coastline.isEmpty()) return
 
@@ -739,7 +777,15 @@ private fun DrawScope.drawGlobe(
         // makes Berlin a blot and leaves every one-station town at the same
         // invisible speck.
         val weight = (ln(1f + city.stations) / LOG_CEILING).coerceIn(0f, 1f)
-        val base = 1.6f + weight * 4.4f
+        // And grow with the zoom, or closing in only spreads the same specks
+        // further apart — the thing you zoomed in to see stays as hard to see
+        // and as hard to hit. Log again rather than the genre map's linear ramp,
+        // because this range is 0.85 to 48 rather than 0.6 to 14 and a linear
+        // one would hit its ceiling in the first tenth of the travel. Clamped at
+        // both ends: the whole-Earth view must not turn to blobs, and the
+        // closest view must not grow discs.
+        val closeness = (0.7f + 0.35f * ln(1f + camera.zoom)).coerceIn(0.75f, 2.4f)
+        val base = (1.6f + weight * 4.4f) * closeness
         val selected = city.id == selectedId
 
         // Fade toward the limb, so the sphere reads as curved rather than as a
@@ -759,7 +805,110 @@ private fun DrawScope.drawGlobe(
             center = Offset(p.x, p.y),
         )
     }
+
+    drawCityLabels(
+        data = data,
+        camera = camera,
+        cx = cx,
+        cy = cy,
+        radius = radius,
+        scale = scale,
+        labelColor = labelColor,
+        labelSizePx = labelSizePx,
+        topInset = topInset,
+        bottomInset = bottomInset,
+    )
 }
+
+/**
+ * Name the cities, once there is room to.
+ *
+ * Nothing below [LABEL_FROM_ZOOM], because at whole-Earth scale a name is longer
+ * than the continent it sits on. Past it the offer widens as you close in, and
+ * *collision* decides what is actually drawn — the same division of labour the
+ * genre map settled on for its 771 nodes, and for the same reason: a threshold
+ * alone cannot serve both ends of a fifty-fold zoom range, and tuning one is a
+ * choice between a bare view and an unreadable smear.
+ *
+ * Candidates are ordered by station count, which is what the dot size already
+ * encodes. Naming by anything else would leave the biggest dot on screen
+ * anonymous while some one-station town beside it got the label.
+ */
+private fun DrawScope.drawCityLabels(
+    data: tf.monochrome.android.domain.model.WorldRadioData,
+    camera: GlobeCamera,
+    cx: Float,
+    cy: Float,
+    radius: Float,
+    scale: Int,
+    labelColor: Color,
+    labelSizePx: Float,
+    topInset: Float,
+    bottomInset: Float,
+) {
+    if (camera.zoom < LABEL_FROM_ZOOM || data.cities.isEmpty()) return
+
+    // How many are offered, not how many are drawn. Generous on purpose.
+    val offered = when {
+        camera.zoom >= 24f -> 120
+        camera.zoom >= 12f -> 70
+        camera.zoom >= 6f -> 40
+        else -> 20
+    }
+
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint().apply {
+            color = labelColor.toArgb()
+            textSize = labelSizePx
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        val baseAlpha = paint.alpha
+        val taken = ArrayList<android.graphics.RectF>()
+        var drawn = 0
+
+        // The asset is sorted by station count ascending so the busiest cities
+        // draw last and on top; naming wants the opposite order.
+        for (city in data.cities.asReversed()) {
+            if (drawn >= offered) break
+            val p = project(city.lat, city.lon, scale, camera, cx, cy, radius)
+            if (!p.visible) continue
+
+            val halfWidth = paint.measureText(city.name) / 2f
+            // Below the dot, clear of it, so the label never sits on the thing
+            // it names — and the dot grows with zoom, so the gap has to as well.
+            val baseline = p.y + labelSizePx + 6f
+            val box = android.graphics.RectF(
+                p.x - halfWidth - LABEL_GAP,
+                baseline - labelSizePx - LABEL_GAP,
+                p.x + halfWidth + LABEL_GAP,
+                baseline + LABEL_GAP,
+            )
+
+            // Sliced by the edge of the screen is its own kind of collision, and
+            // a half-drawn name is worse than none.
+            if (box.left < 0f || box.right > size.width) continue
+            // Reserved strips: the app bar above, and the city panel below when
+            // one is open. Ink spent in either is ink nobody can read.
+            if (box.top < topInset) continue
+            if (bottomInset > 0f && box.bottom > size.height - bottomInset) continue
+            if (taken.any { android.graphics.RectF.intersects(it, box) }) continue
+
+            taken.add(box)
+            drawn++
+            // Same limb fade as the dots, so a name near the edge doesn't shout
+            // louder than the sphere it is curving away on.
+            paint.alpha = (baseAlpha * (p.z * 1.4f).coerceIn(0.3f, 1f)).toInt()
+            drawText(city.name, p.x, baseline, paint)
+        }
+    }
+}
+
+/** Below this the globe is too small for a name to fit beside its dot. */
+private const val LABEL_FROM_ZOOM = 3f
+
+/** Breathing room around a label when testing it against its neighbours. */
+private const val LABEL_GAP = 3f
 
 /**
  * ln(1 + 2294) — the busiest city in the dataset, so weights land inside 0..1.
