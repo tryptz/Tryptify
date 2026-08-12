@@ -1012,30 +1012,29 @@ private fun GenreHistoryBody(
                     )
 
                     for (section in history.sections) {
+                        // Subsections step in, so a "1990s" under "History"
+                        // reads as part of it rather than as a peer. Capped at
+                        // two steps: articles nest headings four deep and a
+                        // fourth indent on a phone leaves no line left.
+                        val indent = (section.level - 1).coerceIn(0, 2) * 10
                         Spacer(Modifier.height(12.dp))
                         Text(
                             text = section.heading,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            // Subsections step in, so a "1990s" under "History"
-                            // reads as part of it rather than as a peer.
                             color = if (section.level > 1) {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
-                            modifier = Modifier.padding(
-                                start = if (section.level > 1) 10.dp else 0.dp,
-                            ),
+                            modifier = Modifier.padding(start = indent.dp),
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = section.text,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(
-                                start = if (section.level > 1) 10.dp else 0.dp,
-                            ),
+                            modifier = Modifier.padding(start = indent.dp),
                         )
                     }
 
