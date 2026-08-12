@@ -101,6 +101,12 @@ data class MainPlayerUiState(
     val isThxSpatialAudio: Boolean = false,
     val isPlaying: Boolean,
     val isBuffering: Boolean = false,
+    /**
+     * A live radio station rather than a recording. Carried explicitly instead
+     * of inferred from a zero duration, because every ordinary track reports
+     * zero for the first frames after the item is set and would flash LIVE.
+     */
+    val isLiveStream: Boolean = false,
     val isLiked: Boolean,
     val playbackSpeed: Float,
     val shuffleEnabled: Boolean,
@@ -409,6 +415,7 @@ fun MainPlayerScreen(
                         accent = accent,
                         onToggleLike = onToggleLike,
                         onArtistClick = onArtistClick,
+                        isLiveStream = state.isLiveStream,
                     )
                 }
 
@@ -423,6 +430,7 @@ fun MainPlayerScreen(
                         accent = accent,
                         formatTime = formatTime,
                         onSeekCommit = onSeekCommit,
+                        isLive = state.isLiveStream,
                     )
                 }
 
@@ -575,7 +583,24 @@ private fun PlayerProgressSection(
     accent: androidx.compose.ui.graphics.Color,
     formatTime: (Long) -> String,
     onSeekCommit: (Float) -> Unit,
+    isLive: Boolean = false,
 ) {
+    // A live stream has no end, so it has no fraction and no total. What it does
+    // have is how long you have been listening, which is the only honest number
+    // on the row — so it takes the slot the total would have had.
+    if (isLive) {
+        PlayerProgress(
+            fraction = 0f,
+            elapsedLabel = "LIVE",
+            totalLabel = formatTime(positionState.value),
+            centerLabel = centerLabel,
+            accent = accent,
+            onSeek = {},
+            onSeekFinished = {},
+            showScrubber = false,
+        )
+        return
+    }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
     val positionMs = positionState.value
@@ -912,6 +937,7 @@ private fun PlayerTrackInfo(
     accent: Color,
     onToggleLike: () -> Unit,
     onArtistClick: (Long, String) -> Unit,
+    isLiveStream: Boolean = false,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -952,12 +978,16 @@ private fun PlayerTrackInfo(
                 )
             }
         }
-        IconButton(onClick = onToggleLike) {
-            Icon(
-                imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                contentDescription = if (isLiked) "Unlike" else "Like",
-                tint = if (isLiked) accent else Color.White,
-            )
+        // No heart for a station: there is no track to favourite, and the
+        // globe's own panel is where a station is kept.
+        if (!isLiveStream) {
+            IconButton(onClick = onToggleLike) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (isLiked) "Unlike" else "Like",
+                    tint = if (isLiked) accent else Color.White,
+                )
+            }
         }
     }
 }

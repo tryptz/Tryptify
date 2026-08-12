@@ -64,12 +64,21 @@ fun PlayerProgress(
     onSeek: (Float) -> Unit,
     onSeekFinished: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Whether to draw the scrubber at all. Off for a live stream, where there is
+     * no position to drag to: a slider that moves under your thumb and then
+     * snaps back reads as a broken control, while a row that just says LIVE
+     * reads as the truth about what you are listening to.
+     */
+    showScrubber: Boolean = true,
 ) {
     val glass = LocalPlayerGlass.current
     val tint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (glass.enabled && glass.progressGlass) {
+        if (!showScrubber) {
+            // Nothing where the tube would be; the labels below carry the row.
+        } else if (glass.enabled && glass.progressGlass) {
             GlassProgressTube(
                 fraction = fraction,
                 tint = tint,

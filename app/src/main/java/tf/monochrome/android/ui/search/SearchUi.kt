@@ -819,4 +819,5 @@ private fun SourceType.label(): String = when (this) {
     SourceType.COLLECTION -> "Collection"
     SourceType.QOBUZ -> "Qobuz"
     SourceType.APPLE -> "Apple Music"
+    SourceType.LIVE_RADIO -> "Live"
 }

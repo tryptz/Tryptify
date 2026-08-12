@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
@@ -156,7 +157,13 @@ class StreamResolver @Inject constructor(
         // resolver rather than in a screen so it holds for every entry point —
         // search results, album and artist pages, playlists, radio, the queue
         // sheet and notification skips all land here.
-        if (source !is PlaybackSource.LocalFile) {
+        //
+        // A live station is exempt, and must stay exempt. It is a stream, not a
+        // recording: a station called "Radio Paradise" or "Jazz24" would match a
+        // local file of that name and be silently replaced by it, and nothing
+        // downstream — not the notification, not the panel — could tell you that
+        // the broadcast you asked for had become an mp3 off your own disk.
+        if (source !is PlaybackSource.LocalFile && source !is PlaybackSource.RadioStream) {
             localFor(
                 title = track.title,
                 artist = track.artistName,
@@ -181,7 +188,57 @@ class StreamResolver @Inject constructor(
             is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source)
             is PlaybackSource.QobuzCached -> resolveQobuzCached(track, source)
             is PlaybackSource.AppleCached -> resolveAppleCached(track, source)
+            is PlaybackSource.RadioStream -> resolveRadioStream(track, source)
         }
+    }
+
+    /**
+     * A live station. The only resolution that touches nothing — no network, no
+     * database, no cache.
+     *
+     * That purity is required rather than incidental: this runs on the main
+     * dispatcher, immediately before `MediaController.setMediaItem`, so anything
+     * that blocked here would block a frame. Every station fact is already known
+     * by the time the globe hands the track over.
+     */
+    @OptIn(UnstableApi::class)
+    private fun resolveRadioStream(
+        track: UnifiedTrack,
+        source: PlaybackSource.RadioStream,
+    ): ResolvedMedia {
+        // ExoPlayer can open http and https and nothing else the directory
+        // lists. The same expression decides the URI and the flag, because
+        // claiming playable without a URI NPEs inside DefaultMediaSourceFactory
+        // and takes the whole session with it.
+        val scheme = source.url.substringBefore("://", "").lowercase()
+        val playable = source.url.isNotBlank() && (scheme == "http" || scheme == "https")
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artistName)
+            .setStation(track.title)
+            .setArtworkUri(normalizeArtworkUri(track.artworkUri))
+            .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION)
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+            .build()
+
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(track.id)
+            .setMediaMetadata(metadata)
+            .apply {
+                if (playable) {
+                    setUri(source.url.toUri())
+                    // The directory's own flag, not the file extension: plenty
+                    // of HLS stations are served from a path that ends in
+                    // nothing in particular, and DefaultMediaSourceFactory would
+                    // otherwise infer a progressive stream and fail.
+                    if (source.isHls) setMimeType(MimeTypes.APPLICATION_M3U8)
+                }
+            }
+            .build()
+
+        return ResolvedMedia(mediaItem = mediaItem, isPlayable = playable)
     }
 
     // Apple resolution = "ask the instance's /api/apple/download-music for the

@@ -299,7 +299,10 @@ enum class GenreConfidence {
 }
 
 @Serializable
-enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE }
+// LIVE_RADIO rather than RADIO: `tf.monochrome.android.radio` is already the
+// algorithmic queue-maker that seeds a station from a track, and the two would
+// be read as the same thing by anyone grepping for it.
+enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, LIVE_RADIO }
 
 @Serializable
 enum class AudioCodec(val displayName: String) {
@@ -376,6 +379,31 @@ sealed class PlaybackSource {
     data class AppleCached(
         val appleId: Long,
         val preferredQuality: AudioQuality = AudioQuality.LOSSLESS,
+    ) : PlaybackSource()
+
+    /**
+     * A live internet radio station, played straight from its stream URL.
+     *
+     * Unlike every other source here this is not a recording: it has no
+     * duration, no position worth seeking to, and no end. Two consequences the
+     * rest of the player has to respect — [StreamResolver] must not substitute a
+     * same-named local file for it (a station called "Radio Paradise" is not the
+     * song), and the player chrome must say LIVE rather than draw a scrubber
+     * against a duration that will never arrive.
+     *
+     * [url] is radio-browser's `url_resolved`, so redirects are already followed
+     * and the scheme is known to be http or https. [isHls] carries the
+     * directory's own flag rather than guessing from the path, because plenty of
+     * HLS stations don't end in `.m3u8`.
+     */
+    @Serializable
+    @SerialName("RadioStream")
+    data class RadioStream(
+        val stationUuid: String,
+        val url: String,
+        val isHls: Boolean = false,
+        val codecName: String? = null,
+        val bitrateKbps: Int? = null,
     ) : PlaybackSource()
 }
 

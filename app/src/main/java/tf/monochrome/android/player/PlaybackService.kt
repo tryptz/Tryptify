@@ -98,10 +98,25 @@ class PlaybackService : MediaSessionService() {
      * Everything DefaultDataSource handles (file / content / asset / http),
      * plus the `qobuz://` scheme, which plays a Qobuz track out of the cache
      * file while it is still downloading instead of waiting for the last byte.
+     *
+     * The HTTP half is built explicitly rather than left to the default, for
+     * live radio. Two of its defaults are wrong for a public directory of
+     * community-run streams: cross-protocol redirects are refused, and a large
+     * share of stations bounce between http and https on the way to the audio,
+     * so they fail before a byte arrives; and the default User-Agent gets a 403
+     * from a fair number of Icecast servers. Neither matters for TIDAL, Qobuz or
+     * Apple — this only permits requests that currently hard-fail — but the
+     * factory is shared with them and with the crossfade player, so the change
+     * is deliberately stated here rather than buried in the radio code.
      */
     @OptIn(UnstableApi::class)
     private fun buildDataSourceFactory(): androidx.media3.datasource.DataSource.Factory {
-        val default = androidx.media3.datasource.DefaultDataSource.Factory(this)
+        val http = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setUserAgent(RADIO_USER_AGENT)
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(15_000)
+        val default = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
         return androidx.media3.datasource.DataSource.Factory {
             tf.monochrome.android.data.cache.SchemeRoutingDataSource(
@@ -230,6 +245,23 @@ class PlaybackService : MediaSessionService() {
                 when (playbackState) {
                     Player.STATE_ENDED -> {
                         val currentTrack = queueManager.currentTrack.value
+                        // For a live station this is not "the song finished" —
+                        // it is the server hanging up, which Icecast does
+                        // routinely. Scrobbling it would credit a station to a
+                        // city on someone's Last.fm, and advancing would end
+                        // playback for good on a one-item queue. Reconnect
+                        // instead, bounded so a station that has gone dark for
+                        // good doesn't spin forever.
+                        if (currentTrack != null && isLiveStream(currentTrack)) {
+                            if (liveReconnects++ < MAX_LIVE_RECONNECTS) {
+                                player.prepare()
+                                player.play()
+                            } else {
+                                liveReconnects = 0
+                                onTrackEnded()
+                            }
+                            return
+                        }
                         if (currentTrack != null) {
                             serviceScope.launch {
                                 scrobblingService.scrobbleTrack(currentTrack)
@@ -239,6 +271,7 @@ class PlaybackService : MediaSessionService() {
                     }
                     Player.STATE_READY -> {
                         consecutivePlayerErrors = 0
+                        liveReconnects = 0
                         // The queue watcher pushes the presence as soon as the
                         // track changes, which is before the player has the
                         // item and therefore before its position means
@@ -275,7 +308,15 @@ class PlaybackService : MediaSessionService() {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 dropGaplessNext()
                 val attempt = consecutivePlayerErrors++
-                if (attempt >= MAX_CONSECUTIVE_PLAYER_ERRORS) {
+                // A live station gets a far longer rope than a track does. Two
+                // failures is ~3.6 s, which any signal dip on mobile data will
+                // spend without trying — and on a one-item station queue giving
+                // up means playback simply stops, with nothing to move on to and
+                // no sign of why. A track that can't be fetched is dead; a
+                // station that can't be reached this second usually isn't.
+                val live = queueManager.currentTrack.value?.let { isLiveStream(it) } == true
+                val budget = if (live) MAX_LIVE_PLAYER_ERRORS else MAX_CONSECUTIVE_PLAYER_ERRORS
+                if (attempt >= budget) {
                     consecutivePlayerErrors = 0
                     onTrackEnded()
                     return
@@ -350,8 +391,17 @@ class PlaybackService : MediaSessionService() {
                         if (track != null) {
                             serviceScope.launch {
                                 val unified = unifiedTrackRegistry[trackId]
-                                libraryRepository.addToHistory(track, unified)
-                                scrobblingService.updateNowPlaying(track)
+                                // A station is not something you listened to,
+                                // it is somewhere you tuned. Writing it to
+                                // history fills Recently Played — and the stats
+                                // Discover builds on — with entries keyed by a
+                                // synthetic hash, and telling Last.fm about it
+                                // scrobbles a "track" named after a station and
+                                // credited to a city.
+                                if (!isLiveStream(track)) {
+                                    libraryRepository.addToHistory(track, unified)
+                                    scrobblingService.updateNowPlaying(track)
+                                }
                             }
                         }
                     }
@@ -829,7 +879,9 @@ class PlaybackService : MediaSessionService() {
                     player.setMediaItem(resolved.mediaItem)
                     player.prepare()
                     startPlayback()
-                    libraryRepository.addToHistory(currentTrack, unifiedTrack)
+                    if (!isLiveStream(currentTrack)) {
+                        libraryRepository.addToHistory(currentTrack, unifiedTrack)
+                    }
                     return@launch
                 }
 
@@ -1180,9 +1232,33 @@ class PlaybackService : MediaSessionService() {
     private var consecutivePlayerErrors = 0
     private var playerErrorRecovery: kotlinx.coroutines.Job? = null
 
+    /** Times a live station has been reconnected since it last played cleanly. */
+    private var liveReconnects = 0
+
+    /** True when this track is a live stream rather than a recording. */
+    private fun isLiveStream(track: tf.monochrome.android.domain.model.Track): Boolean =
+        unifiedTrackRegistry[track.id]?.source is
+            tf.monochrome.android.domain.model.PlaybackSource.RadioStream
+
     private companion object {
         /** Retries a failing position before moving past it. */
         const val MAX_CONSECUTIVE_PLAYER_ERRORS = 2
+
+        /**
+         * The same, for a live station. Far more generous, and deliberately so:
+         * a dropped connection is the normal life of an Icecast stream, and the
+         * budget resets the moment it plays again.
+         */
+        const val MAX_LIVE_PLAYER_ERRORS = 8
+
+        /** Reconnects after the server hangs up before the station is given up on. */
+        const val MAX_LIVE_RECONNECTS = 5
+
+        /**
+         * Sent on every HTTP request the player makes. A real name because a
+         * fair number of community Icecast servers refuse the default one.
+         */
+        const val RADIO_USER_AGENT = "Tryptify/1.0 ( https://github.com/tryptz/tryptify )"
 
         /**
          * Grace given to a failing position before it's retried, multiplied by

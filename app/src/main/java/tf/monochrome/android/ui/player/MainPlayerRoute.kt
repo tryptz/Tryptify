@@ -294,6 +294,8 @@ fun MainPlayerRoute(
         isThxSpatialAudio = currentUnified?.isThxSpatialAudio ?: currentTrack?.isThxSpatialAudio ?: false,
         isPlaying = isPlaying,
         isBuffering = isBuffering,
+        isLiveStream = currentUnified?.source is
+            tf.monochrome.android.domain.model.PlaybackSource.RadioStream,
         isLiked = isLiked,
         playbackSpeed = playbackSpeed,
         shuffleEnabled = shuffleEnabled,

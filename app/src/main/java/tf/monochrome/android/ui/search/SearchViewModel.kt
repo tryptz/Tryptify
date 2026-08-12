@@ -604,6 +604,9 @@ class SearchViewModel @Inject constructor(
         SourceType.QOBUZ -> SOURCE_BOOST_API - 5
         // Apple Music (via the instance); rank just below Qobuz.
         SourceType.APPLE -> SOURCE_BOOST_API - 6
+        // Live radio never reaches search — stations are found on the globe, by
+        // place rather than by name — so it has no ranking to earn.
+        SourceType.LIVE_RADIO -> 0
     }
 
     private fun scoreField(query: String, rawValue: String?, baseScore: Int): Int {
