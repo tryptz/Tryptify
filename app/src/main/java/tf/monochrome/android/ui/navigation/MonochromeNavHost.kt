@@ -108,6 +108,7 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Discover : Screen("discover")
     data object GenreMap : Screen("discover/map")
+    data object WorldRadio : Screen("discover/radio")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
     }
@@ -307,7 +308,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // bar's glass has nothing to blur. Running the map underneath gives the
         // glass real content to lens, and the map pads its own panel clear of
         // the bar.
-        val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route
+        // Both maps run full-bleed under the mini player on purpose, so its
+        // glass has real content to lens rather than a flat inset.
+        val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
+            currentDestination?.route == Screen.WorldRadio.route
         val detailBottomInset = when {
             fullBleedRoute -> 0.dp
             else -> navBarHeight + if (showMiniPlayer) miniPlayerReserve else 0.dp
@@ -376,6 +380,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.GenreMap.route) {
                     tf.monochrome.android.devedit.DevEditScreen("genre_map") {
                         GenreMapScreen(
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
+                    }
+                }
+                composable(Screen.WorldRadio.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("world_radio") {
+                        tf.monochrome.android.ui.discover.WorldRadioScreen(
                             navController = navController,
                             playerViewModel = playerViewModel,
                         )

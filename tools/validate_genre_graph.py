@@ -16,6 +16,9 @@ What it enforces, and why each one is worth enforcing:
   energy/valence in 0..1  the mood matcher assumes the unit square
   moods >= 4 genres       a mood that resolves to one dead genre renders an empty page
   edges symmetric         asymmetry here is always an oversight, never a claim
+  history keyed to real   an entry under an unknown id is text nothing can show
+  history cited           prose without an article and revision can't be checked,
+                          and can't be attributed as its licence requires
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GRAPH = os.path.join(ROOT, "app", "src", "main", "assets", "genre_graph.json")
 VOCAB = os.path.join(ROOT, "app", "src", "main", "assets", "genre_vocabulary.json")
+HISTORY = os.path.join(ROOT, "app", "src", "main", "assets", "genre_history.json")
 
 # The ceiling is set by the speedcore branch rather than by dance music: an
 # extratone track runs past 1,000 BPM by definition, and clamping it would turn
@@ -164,6 +168,35 @@ def main() -> int:
         print(f"  vocabulary: {len(vocab['names'])} names, {mapped} mapped")
     else:
         print("  vocabulary: not built")
+
+    # ── researched history ──────────────────────────────────────────────
+    if os.path.exists(HISTORY):
+        with open(HISTORY, encoding="utf-8") as fh:
+            history = json.load(fh)
+        entries = history["entries"]
+        unknown = [gid for gid in entries if gid not in by_id]
+        if unknown:
+            errors.append(f"history filed under unknown genres: {sorted(unknown)[:5]}")
+        if not history.get("attribution") or not history.get("license"):
+            errors.append("history asset ships without its attribution or licence")
+        for gid, entry in entries.items():
+            # Every one of these is what separates a researched entry from a
+            # written one. An entry that can't name the article and revision it
+            # came from can't be checked, so it doesn't ship.
+            if not entry.get("summary", "").strip():
+                errors.append(f"history {gid}: empty summary")
+            if not entry.get("url", "").startswith("https://en.wikipedia.org/wiki/"):
+                errors.append(f"history {gid}: no source article")
+            if not entry.get("revision"):
+                errors.append(f"history {gid}: no source revision")
+            for section in entry.get("sections", []):
+                if not section.get("heading") or not section.get("text"):
+                    errors.append(f"history {gid}: section missing heading or text")
+        covered = len(entries) / len(genres) if genres else 0
+        sections = sum(len(e.get("sections", [])) for e in entries.values())
+        print(f"  history: {len(entries)} genres ({covered:.0%}), {sections} sections")
+    else:
+        print("  history: not built")
 
     print(f"  genres: {len(genres)} across {len(families)} families")
     print(f"  moods:  {len(graph['moods'])}")

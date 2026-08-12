@@ -38,6 +38,7 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
+import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
@@ -393,6 +394,17 @@ class PlayerViewModel @Inject constructor(
             // Re-fetch when track OR romaji setting changes
             kotlinx.coroutines.flow.combine(currentTrack, romajiLyrics) { track, _ -> track }
                 .collectLatest { track ->
+                    // A live station has no lyrics and no favourite to observe.
+                    // Asking anyway sends a station name and a city to TIDAL and
+                    // then to LRCLib, which can only 404 after a fifteen-second
+                    // timeout — and leaves the lyrics view spinning for all of
+                    // it. Saying so immediately is both faster and true.
+                    if (track != null && isLiveStreamTrack(track)) {
+                        _currentLyrics.value = null
+                        _isLyricsLoading.value = false
+                        _isCurrentTrackLiked.value = false
+                        return@collectLatest
+                    }
                     if (track != null) {
                         // Start fetching lyrics
                         _isLyricsLoading.value = true
@@ -439,6 +451,11 @@ class PlayerViewModel @Inject constructor(
 
     fun toggleLikeCurrentTrack() {
         val track = currentTrack.value ?: return
+        // Favouriting a station would write a row keyed by a synthetic hash and,
+        // with auto-download on, hand that same hash to the downloader — which
+        // has nothing to fetch. Stations are favourited on the globe instead,
+        // where the thing being kept is the station rather than a fake track.
+        if (isLiveStreamTrack(track)) return
         viewModelScope.launch {
             libraryRepository.toggleFavoriteTrack(track)
         }
@@ -564,6 +581,29 @@ class PlayerViewModel @Inject constructor(
         queueManager.playTrackInQueue(legacyTrack, legacyTracks)
         resolveAndPlay()
     }
+
+    /**
+     * Play a live radio station.
+     *
+     * A queue of one, and deliberately not [playUnifiedTrack]: song-radio is
+     * stood down first. The station planner tops up any queue whose tail is
+     * short, and a one-item queue is exactly that — so without this, tuning into
+     * a station in Lagos quietly grows a tail of algorithmically chosen songs
+     * behind it and the station becomes the first track of a playlist nobody
+     * asked for.
+     */
+    fun playRadioStation(station: UnifiedTrack) {
+        radioQueueManager.stopRadio()
+        val legacy = station.toLegacyTrack()
+        unifiedTrackRegistry.put(legacy.id, station)
+        queueManager.setQueue(listOf(legacy), 0)
+        resolveAndPlay()
+    }
+
+    /** True when this track is a live stream, which has no duration to seek in. */
+    fun isLiveStreamTrack(track: Track?): Boolean =
+        track != null &&
+            unifiedTrackRegistry[track.id]?.source is PlaybackSource.RadioStream
 
     /** Play all unified tracks starting from index 0. */
     fun playAllUnified(tracks: List<UnifiedTrack>) {
@@ -756,6 +796,12 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun seekTo(positionMs: Long) {
+        // A live stream has no position to seek to: ExoPlayer reports no
+        // duration, every fraction resolves to zero, and seekTo(0) would drop
+        // the connection and reconnect at the live edge — so the scrubber that
+        // looks like it rewinds would actually restart the stream. Every seek
+        // verb the UI offers funnels through here, so one guard covers them all.
+        if (isLiveStreamTrack(currentTrack.value)) return
         mediaController?.seekTo(positionMs)
         _positionMs.value = positionMs
     }
@@ -1091,7 +1137,9 @@ class PlayerViewModel @Inject constructor(
      * lookup is skipped entirely once a track has been checked once.
      */
     private fun prefetchAppleId(track: Track) {
-        if (track.appleId != null || isLocalTrack(track)) return
+        // A station is not in anyone's catalogue; searching Apple for its name
+        // and city is a request that can only miss.
+        if (track.appleId != null || isLocalTrack(track) || isLiveStreamTrack(track)) return
         if (qobuzIdRegistry.hasAppleLookup(track.id)) return
         viewModelScope.launch {
             runCatching {
@@ -1112,7 +1160,8 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun downloadTrack(track: Track) {
-        if (isLocalTrack(track)) return
+        // There is no file behind a live stream to download.
+        if (isLocalTrack(track) || isLiveStreamTrack(track)) return
         downloadManager.downloadTrack(track)
         observeTrackDownload(track.id)
     }

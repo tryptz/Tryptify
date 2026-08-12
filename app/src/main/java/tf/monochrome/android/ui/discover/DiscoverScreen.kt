@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
@@ -239,9 +240,24 @@ fun DiscoverScreen(
 
         SortRow(selected = sort, onSelect = viewModel::setSort)
 
-        // The map, full width now that Flow is gone. Sits above the shelves
-        // because it is the fastest route into music, not an afterthought.
-        MapEntryButton(onClick = { navController.navigateSafe(Screen.GenreMap.route) })
+        // Two maps, side by side. Both are the fastest route into music rather
+        // than an afterthought, so they sit above the shelves: one arranges
+        // music by what it is, the other by where it comes from. Each card
+        // carries its own 8.dp horizontal padding, so the gutter between them
+        // forms itself and the Row needs no spacing of its own.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                MapEntryButton(onClick = { navController.navigateSafe(Screen.GenreMap.route) })
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                WorldRadioEntryButton(
+                    onClick = { navController.navigateSafe(Screen.WorldRadio.route) },
+                )
+            }
+        }
 
         PullToRefreshBox(
             isRefreshing = refreshing,
@@ -660,6 +676,54 @@ private fun CombinedGenreRow(
     }
 }
 
+/**
+ * The way into [WorldRadioScreen] — the Earth, and every city on air.
+ *
+ * Deliberately the same shape as its neighbour: the two are a pair of doors into
+ * the same room, and a different silhouette would suggest they do different
+ * kinds of thing.
+ */
+@Composable
+private fun WorldRadioEntryButton(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .bounceClick(onClick = onClick),
+        shape = MonoDimens.shapePill,
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.Public,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "World radio",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "Cities on air",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
 /** The way into [GenreMapScreen] — the whole taxonomy as one picture. */
 @Composable
 private fun MapEntryButton(onClick: () -> Unit) {
@@ -688,12 +752,16 @@ private fun MapEntryButton(onClick: () -> Unit) {
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Every genre, linked",
+                    // Shorter than it was: the card is half as wide now, and
+                    // "Every genre, linked" hard-clipped mid-word.
+                    text = "Every genre",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

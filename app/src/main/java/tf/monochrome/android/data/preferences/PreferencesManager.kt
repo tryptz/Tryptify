@@ -171,6 +171,7 @@ class PreferencesManager @Inject constructor(
         // above, so it syncs. The recents beside it are history and stay local,
         // matching how the app treats play history everywhere else.
         private val DISCOVERY_HEARTED_GENRES = stringSetPreferencesKey("discovery_hearted_genres")
+        private val FAVOURITE_STATIONS = stringSetPreferencesKey("world_radio_favourite_stations")
         private val DISCOVERY_RECENT_GENRES = stringPreferencesKey("discovery_recent_genres")
         private val DISCOVERY_SORT = stringPreferencesKey("discovery_sort")
 
@@ -1853,6 +1854,25 @@ class PreferencesManager @Inject constructor(
             val current = prefs[DISCOVERY_HEARTED_GENRES] ?: emptySet()
             prefs[DISCOVERY_HEARTED_GENRES] =
                 if (genreId in current) current - genreId else current + genreId
+        }
+    }
+
+    /**
+     * Radio stations kept from the globe, by radio-browser uuid.
+     *
+     * The uuid rather than the stream URL, because the URL is the part that
+     * changes: a station that moves host keeps its identity in the directory,
+     * and a favourite that stored the old address would quietly stop working.
+     */
+    val favouriteStations: Flow<Set<String>> = dataStore.data.map {
+        it[FAVOURITE_STATIONS] ?: emptySet()
+    }
+
+    suspend fun toggleFavouriteStation(stationUuid: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[FAVOURITE_STATIONS] ?: emptySet()
+            prefs[FAVOURITE_STATIONS] =
+                if (stationUuid in current) current - stationUuid else current + stationUuid
         }
     }
 

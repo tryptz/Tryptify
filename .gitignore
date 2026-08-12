@@ -92,12 +92,36 @@ old_HomeViewModel.kt
 !app/src/main/assets/discovery_moods.json
 !app/src/main/assets/genre_graph.json
 !app/src/main/assets/genre_vocabulary.json
+!app/src/main/assets/genre_history.json
 # The genre graph's source and build/validate scripts. The committed JSON assets
 # above are generated from these, so without them the dataset is unmaintainable.
 !tools/genre_source.py
 !tools/build_genre_graph.py
 !tools/validate_genre_graph.py
+!tools/fetch_genre_history.py
 !tools/musicbrainz_genres.txt
+# The two research caches the build reads and never regenerates on its own:
+# Last.fm tag reach, and the Wikipedia histories. Both are the *input* to a
+# build, not its output — the blanket *.json rule was quietly excluding the
+# reach cache, so rebuilding the graph on a fresh clone dropped the popularity
+# figures from all 771 genres and there was no way to get them back without a
+# four-minute refetch. Committed, a build is reproducible offline and produces
+# the same asset every time, which is the whole reason the caches exist.
+!tools/genre_reach.json
+!tools/genre_history.json
+# The world radio globe: the same three-stage shape, plus its two inputs. The
+# GeoNames gazetteer zip is deliberately *not* here — it is 3 MB, it is a
+# download rather than a decision, and fetch_world_radio.py re-fetches it on
+# demand.
+!tools/fetch_world_radio.py
+!tools/build_world_radio.py
+!tools/validate_world_radio.py
+!tools/world_radio.json
+!tools/world_coastline.geojson
+!tools/world_borders.geojson
+# The gazetteer download itself stays out: 3 MB, re-fetched on demand.
+tools/cities15000.zip
+!app/src/main/assets/world_radio.json
 # The bundled font library. Caught by the blanket *.ttf and *.txt rules above,
 # but these ship in the APK — and the licence file has to travel with the fonts
 # it covers, so it is not optional.
