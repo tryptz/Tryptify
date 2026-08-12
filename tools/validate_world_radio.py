@@ -11,7 +11,8 @@ What it enforces, and why each one is worth enforcing:
   every city broadcasts   a dot is a claim you can tune in there; an empty one lies
   ids unique              the panel is keyed by id; a duplicate makes one unreachable
   coastline present       without it the globe is dots floating on nothing
-  coastline well formed   an odd-length line means a lon with no lat
+  lines well formed       an odd-length run means a lon with no lat, and the
+                          renderer reads past the end of the array
   attribution shipped     GeoNames is CC BY 4.0; the credit is not optional
   size budget             the asset parses whole on first open
 """
@@ -32,6 +33,7 @@ MAX_KB = 400
 # Below this the dataset is not a world map, it is an accident.
 MIN_CITIES = 500
 MIN_COASTLINE_POINTS = 2000
+MIN_BORDER_POINTS = 1500
 
 
 def main() -> int:
@@ -46,6 +48,7 @@ def main() -> int:
     scale = data.get("scale") or 1
     cities = data.get("cities", [])
     coastline = data.get("coastline", [])
+    borders = data.get("borders", [])
 
     if not data.get("attribution") or not data.get("license"):
         errors.append("asset ships without its attribution or licence")
@@ -72,10 +75,16 @@ def main() -> int:
     points = sum(len(line) // 2 for line in coastline)
     if points < MIN_COASTLINE_POINTS:
         errors.append(f"coastline has only {points} points")
-    for index, line in enumerate(coastline):
-        if len(line) % 2:
-            errors.append(f"coastline line {index} has an odd number of values")
-            break
+
+    border_points = sum(len(line) // 2 for line in borders)
+    if border_points < MIN_BORDER_POINTS:
+        errors.append(f"borders have only {border_points} points")
+
+    for name, lines in (("coastline", coastline), ("borders", borders)):
+        for index, line in enumerate(lines):
+            if len(line) % 2:
+                errors.append(f"{name} line {index} has an odd number of values")
+                break
 
     kilobytes = os.path.getsize(ASSET) / 1024
     if kilobytes > MAX_KB:
@@ -86,6 +95,7 @@ def main() -> int:
     print(f"  cities:    {len(cities)} across {countries} countries")
     print(f"  stations:  {stations} matches")
     print(f"  coastline: {len(coastline)} lines, {points} points")
+    print(f"  borders:   {len(borders)} lines, {border_points} points")
     print(f"  asset:     {kilobytes:.0f} KB of {MAX_KB} KB")
 
     if errors:

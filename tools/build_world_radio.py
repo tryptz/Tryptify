@@ -30,11 +30,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, "app", "src", "main", "assets")
 CACHE = os.path.join(ROOT, "tools", "world_radio.json")
 COASTLINE = os.path.join(ROOT, "tools", "world_coastline.geojson")
+BORDERS = os.path.join(ROOT, "tools", "world_borders.geojson")
 
 ATTRIBUTION = (
     "City names, coordinates and populations from GeoNames (geonames.org), "
-    "licensed CC BY 4.0. Coastlines from Natural Earth (naturalearthdata.com), "
-    "public domain. Station listings from the radio-browser.info community "
+    "licensed CC BY 4.0. Coastlines and country borders from Natural Earth "
+    "(naturalearthdata.com), public domain. Station listings from the "
+    "radio-browser.info community "
     "database. A city appears only when live stations actually name it; station "
     "counts are measured at build time and the listings are fetched live."
 )
@@ -49,9 +51,16 @@ SCALE = 100
 INTERNAL = ("capital",)
 
 
-def load_coastline() -> list[list[int]]:
-    """Natural Earth line strings as flat, quantised [lon, lat, lon, lat, ...]."""
-    with open(COASTLINE, encoding="utf-8") as fh:
+def load_lines(path: str) -> list[list[int]]:
+    """Natural Earth line strings as flat, quantised [lon, lat, lon, lat, ...].
+
+    Serves both layers. The coastline and the borders are the same shape of
+    thing at the same resolution — the borders file is the 110m
+    admin_0_boundary_lines_land set, which is Natural Earth's own and carries
+    *land* boundaries only, no maritime lines. Using their dataset as published
+    is also how this avoids the app taking a position on a disputed one.
+    """
+    with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
 
     out: list[list[int]] = []
@@ -96,7 +105,8 @@ def load_cities() -> list[dict]:
 
 
 def main() -> int:
-    coastline = load_coastline()
+    coastline = load_lines(COASTLINE)
+    borders = load_lines(BORDERS)
     cities = load_cities()
     if not cities:
         print("cities     none — run tools/fetch_world_radio.py first")
@@ -107,6 +117,7 @@ def main() -> int:
         "license": LICENSE,
         "scale": SCALE,
         "coastline": coastline,
+        "borders": borders,
         "cities": cities,
     }
 
@@ -117,9 +128,11 @@ def main() -> int:
         fh.write("\n")
 
     points = sum(len(line) // 2 for line in coastline)
+    border_points = sum(len(line) // 2 for line in borders)
     stations = sum(c["stations"] for c in cities)
     countries = len({c["country"] for c in cities})
     print(f"coastline  {len(coastline)} lines, {points} points")
+    print(f"borders    {len(borders)} lines, {border_points} points")
     print(f"cities     {len(cities)} across {countries} countries, "
           f"{stations} station matches")
     print(f"asset      {os.path.getsize(path) / 1024:.0f} KB")

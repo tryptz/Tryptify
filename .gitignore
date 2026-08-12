@@ -118,6 +118,7 @@ old_HomeViewModel.kt
 !tools/validate_world_radio.py
 !tools/world_radio.json
 !tools/world_coastline.geojson
+!tools/world_borders.geojson
 # The gazetteer download itself stays out: 3 MB, re-fetched on demand.
 tools/cities15000.zip
 !app/src/main/assets/world_radio.json

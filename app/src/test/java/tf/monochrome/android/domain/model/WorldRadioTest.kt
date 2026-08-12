@@ -82,6 +82,19 @@ class WorldRadioTest {
     }
 
     @Test
+    fun `the borders are drawable`() {
+        // Same contract as the coastline, and the same failure if it breaks: an
+        // odd-length run is a longitude with no latitude, and the renderer walks
+        // off the end of the array.
+        val points = globe.borders.sumOf { it.size / 2 }
+        assertTrue("borders have only $points points", points > 1_500)
+        val ragged = globe.borders.count { it.size % 2 != 0 }
+        assertEquals("border runs with an odd number of values", 0, ragged)
+        val tiny = globe.borders.count { it.size < 4 }
+        assertEquals("border runs too short to draw a line", 0, tiny)
+    }
+
+    @Test
     fun `the cities a listener would look for first are all present`() {
         // A globe that covered 1,600 obscure towns and missed London would pass
         // every check above and still be useless.

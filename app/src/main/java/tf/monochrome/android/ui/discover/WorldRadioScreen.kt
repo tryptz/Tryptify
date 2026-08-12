@@ -748,25 +748,34 @@ private fun DrawScope.drawGlobe(
         style = Stroke(width = 1.2f),
     )
 
-    for (line in data.coastline) {
-        val path = Path()
-        var drawing = false
-        var index = 0
-        while (index + 1 < line.size) {
-            val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
-            if (p.visible) {
-                if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
-                drawing = true
-            } else {
-                // The line went round the back. Lifting the pen is what keeps a
-                // coast from being drawn as a chord straight across the disc
-                // when it reappears on the other limb.
-                drawing = false
-            }
-            index += 2
-        }
-        drawPath(path = path, color = land, style = Stroke(width = 1.1f))
-    }
+    // Borders first, coastline over the top. The coast is the strongest
+    // structural line on the map and should stay the crispest where the two
+    // meet — and the borders are quieter besides, because at full strength
+    // across a whole hemisphere Europe becomes a scribble competing with the
+    // dots, and the dots are what this screen is for. They firm up as you close
+    // in, which is when knowing whose airwaves you are looking at starts to
+    // matter.
+    val borderAlpha = (0.3f + 0.02f * camera.zoom).coerceIn(0.3f, 0.62f)
+    drawProjectedLines(
+        lines = data.borders,
+        colour = land.copy(alpha = borderAlpha),
+        width = 0.9f,
+        camera = camera,
+        cx = cx,
+        cy = cy,
+        radius = radius,
+        scale = scale,
+    )
+    drawProjectedLines(
+        lines = data.coastline,
+        colour = land,
+        width = 1.1f,
+        camera = camera,
+        cx = cx,
+        cy = cy,
+        radius = radius,
+        scale = scale,
+    )
 
     for (city in data.cities) {
         val p = project(city.lat, city.lon, scale, camera, cx, cy, radius)
@@ -818,6 +827,45 @@ private fun DrawScope.drawGlobe(
         topInset = topInset,
         bottomInset = bottomInset,
     )
+}
+
+/**
+ * Stroke a set of flat `[lon, lat, lon, lat, …]` runs onto the sphere.
+ *
+ * Shared by the coastline and the borders because they are the same problem:
+ * the same projection, the same hemisphere culling, and the same pen-lifting
+ * when a line passes round the back. A second copy of that last part is a
+ * second place for it to rot — and getting it wrong is not subtle, it draws a
+ * chord straight across the face of the globe.
+ */
+private fun DrawScope.drawProjectedLines(
+    lines: List<List<Int>>,
+    colour: Color,
+    width: Float,
+    camera: GlobeCamera,
+    cx: Float,
+    cy: Float,
+    radius: Float,
+    scale: Int,
+) {
+    for (line in lines) {
+        val path = Path()
+        var drawing = false
+        var index = 0
+        while (index + 1 < line.size) {
+            val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
+            if (p.visible) {
+                if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
+                drawing = true
+            } else {
+                // Round the back: lift the pen so the line stops at the limb
+                // rather than being drawn across the disc when it reappears.
+                drawing = false
+            }
+            index += 2
+        }
+        drawPath(path = path, color = colour, style = Stroke(width = width))
+    }
 }
 
 /**

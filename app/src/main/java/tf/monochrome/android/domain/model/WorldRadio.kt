@@ -48,6 +48,14 @@ data class WorldRadioData(
     /** Stored units per degree. 100 means coordinates are hundredths of a degree. */
     val scale: Int = 100,
     val coastline: List<List<Int>> = emptyList(),
+    /**
+     * Country borders, in the same flat form and at the same [scale].
+     *
+     * Natural Earth's 110m land boundaries — the same generalisation pass the
+     * coastline comes from, so the two agree along a coast instead of
+     * disagreeing by a pixel. Land only: no maritime lines.
+     */
+    val borders: List<List<Int>> = emptyList(),
     val cities: List<RadioCity> = emptyList(),
 )
 
