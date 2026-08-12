@@ -10,19 +10,23 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.GenreGraphRepository
+import tf.monochrome.android.data.repository.GenreHistoryRepository
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
@@ -31,6 +35,7 @@ import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
 import tf.monochrome.android.domain.model.DiscoverySort
 import tf.monochrome.android.domain.model.GenreGraph
+import tf.monochrome.android.domain.model.GenreHistory
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.DiscoveryFeedUseCase
@@ -65,6 +70,25 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
 data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
 
 /**
+ * What the map's panel knows about the selected genre's history.
+ *
+ * [Missing] is a real state and not an error: a few dozen of the 771 genres are
+ * documented nowhere that could be verified, and the panel says so rather than
+ * spinning forever or inventing a paragraph.
+ */
+sealed interface GenreHistoryState {
+    /** The panel isn't expanded, so nothing has been asked for. */
+    data object Idle : GenreHistoryState
+
+    data object Loading : GenreHistoryState
+
+    data class Ready(val history: GenreHistory) : GenreHistoryState
+
+    /** Researched, and nothing verifiable was found. */
+    data object Missing : GenreHistoryState
+}
+
+/**
  * Index in the chip rail from which chips start combining.
  *
  * The first three are the listener's own entry points — a single choice about
@@ -76,6 +100,9 @@ const val COMBINABLE_FROM = 3
 /** How many contributing genres the subtract control offers. */
 const val COMBINED_GENRE_LIMIT = 14
 
+// transformLatest, for the map's history: a new selection has to cancel the
+// lookup the last one started rather than race it onto the panel.
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class DiscoverViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
@@ -84,6 +111,7 @@ class DiscoverViewModel @Inject constructor(
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val preferences: PreferencesManager,
     private val genreGraphRepo: GenreGraphRepository,
+    private val genreHistoryRepo: GenreHistoryRepository,
     private val genreSearch: tf.monochrome.android.domain.usecase.GenreSearchUseCase,
     private val genreCharts: tf.monochrome.android.domain.usecase.GenreChartUseCase,
 ) : ViewModel() {
@@ -679,7 +707,43 @@ class DiscoverViewModel @Inject constructor(
 
     fun selectOnMap(genreId: String?) {
         _mapSelection.value = genreId?.let { genreGraphRepo.graph[it] }
+        // Closing the panel closes the history with it. Selecting a *different*
+        // genre deliberately does not: reading down a family is the case this
+        // is for, and having to re-open the history at every step would make
+        // that the one thing the panel is worst at.
+        if (genreId == null) _mapExpanded.value = false
     }
+
+    private val _mapExpanded = MutableStateFlow(false)
+
+    /** Whether the map's panel is showing the genre's history. */
+    val mapExpanded: StateFlow<Boolean> = _mapExpanded.asStateFlow()
+
+    fun toggleMapExpanded() {
+        _mapExpanded.value = !_mapExpanded.value
+    }
+
+    /**
+     * The researched history of whatever the map has selected.
+     *
+     * Only asked for once the panel is actually expanded, which is what keeps
+     * the megabyte of prose off the path of simply tapping around the map. The
+     * flow reads both, so collapsing and re-expanding costs nothing after the
+     * first time — the repository holds the parsed asset for the process.
+     */
+    val mapHistory: StateFlow<GenreHistoryState> =
+        combine(_mapSelection, _mapExpanded) { node, expanded -> node?.id?.takeIf { expanded } }
+            .distinctUntilChanged()
+            .transformLatest { genreId ->
+                if (genreId == null) {
+                    emit(GenreHistoryState.Idle)
+                    return@transformLatest
+                }
+                emit(GenreHistoryState.Loading)
+                val history = runCatching { genreHistoryRepo.of(genreId) }.getOrNull()
+                emit(history?.let(GenreHistoryState::Ready) ?: GenreHistoryState.Missing)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GenreHistoryState.Idle)
 
     /**
      * How many times a genre has been played from the map this session.

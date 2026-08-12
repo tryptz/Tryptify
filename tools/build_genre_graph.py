@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Expand tools/genre_source.py into the two bundled assets.
+"""Expand tools/genre_source.py into the bundled assets.
 
     python3 tools/build_genre_graph.py
 
 Writes:
     app/src/main/assets/genre_graph.json       curated nodes + moods
     app/src/main/assets/genre_vocabulary.json  MusicBrainz names -> nearest node
+    app/src/main/assets/genre_history.json     researched histories, by genre id
+
+The first two are expanded from genre_source.py. The third is copied out of the
+research cache (tools/genre_history.json, written by fetch_genre_history.py) and
+filtered to the genres that still exist — this script never goes to the network.
 
 Run the validator afterwards; CI and the pre-push check both do.
 """
@@ -558,6 +563,45 @@ def fetch_reach(nodes: list[dict], api_key: str, cache: dict) -> dict:
     return cache
 
 
+# ─── Researched history ──────────────────────────────────────────────────────
+
+HISTORY_CACHE = os.path.join(ROOT, "tools", "genre_history.json")
+
+HISTORY_ATTRIBUTION = (
+    "Genre histories are extracts from English Wikipedia articles, each verified "
+    "to be about the genre it is filed under and cited with the article and "
+    "revision it was taken from. Text is available under the Creative Commons "
+    "Attribution-ShareAlike 4.0 License."
+)
+
+HISTORY_LICENSE = "CC BY-SA 4.0"
+
+# Provenance the research keeps for review but the app has no use for: which
+# check passed, which of a genre's names found the article, and whether it took
+# a search to get there. All three matter when an entry turns out to be wrong,
+# and none of them is worth shipping in the APK.
+HISTORY_INTERNAL = ("verified", "matched", "found_by")
+
+
+def build_history(nodes: list[dict]) -> dict:
+    """The researched histories, filtered to genres that still exist.
+
+    A cache entry for a genre that has since been renamed or removed would
+    otherwise ship forever, keyed by an id nothing looks up.
+    """
+    if not os.path.exists(HISTORY_CACHE):
+        return {}
+    with open(HISTORY_CACHE, encoding="utf-8") as fh:
+        entries = json.load(fh).get("entries", {})
+
+    known = {n["id"] for n in nodes}
+    return {
+        gid: {k: v for k, v in entry.items() if k not in HISTORY_INTERNAL}
+        for gid, entry in sorted(entries.items())
+        if gid in known
+    }
+
+
 # ─── Mood membership ─────────────────────────────────────────────────────────
 
 # Ceiling for a membership derived from a genre's own `moods` declaration.
@@ -695,6 +739,23 @@ def main() -> int:
     os.makedirs(ASSETS, exist_ok=True)
     graph_path = os.path.join(ASSETS, "genre_graph.json")
     vocab_path = os.path.join(ASSETS, "genre_vocabulary.json")
+    history_path = os.path.join(ASSETS, "genre_history.json")
+
+    # A separate asset, not a field on each node: the graph is read on startup
+    # by search and by every Discover build, and this is several times its size
+    # in prose that only matters once a listener expands the map's panel.
+    history = build_history(nodes)
+    with open(history_path, "w", encoding="utf-8") as fh:
+        json.dump(
+            {
+                "version": 1,
+                "attribution": HISTORY_ATTRIBUTION,
+                "license": HISTORY_LICENSE,
+                "entries": history,
+            },
+            fh, ensure_ascii=False, separators=(",", ":"), sort_keys=False,
+        )
+        fh.write("\n")
 
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(graph, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=False)
@@ -713,6 +774,9 @@ def main() -> int:
     print(f"moods      {len(graph['moods'])}, reaching {len(reachable)}/{len(nodes)} genres")
     scored = sum(1 for n in nodes if "reach" in n)
     print(f"popularity {scored}/{len(nodes)} genres carry a reach value")
+    sections = sum(len(e.get("sections", [])) for e in history.values())
+    print(f"history    {len(history)}/{len(nodes)} genres researched "
+          f"({os.path.getsize(history_path) / 1024:.0f} KB, {sections} sections)")
     print(f"vocabulary {len(vocabulary)} names, {mapped} mapped "
           f"({os.path.getsize(vocab_path) / 1024:.0f} KB)")
     return 0

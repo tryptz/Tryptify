@@ -1,6 +1,9 @@
 package tf.monochrome.android.ui.discover
 
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -8,6 +11,10 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,18 +28,23 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.BarChart
@@ -79,8 +91,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -115,7 +129,7 @@ import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
 
 /**
- * The genre map — all 355 genres as one picture you can move around in.
+ * The genre map — all 771 genres as one picture you can move around in.
  *
  * Twelve radial clusters, one per family, arranged so that the families sharing
  * the most genres end up next to each other — electronic beside hip-hop and pop,
@@ -141,6 +155,17 @@ import tf.monochrome.android.ui.theme.reduceMotion
  * family one tap at a time. The panel names the subgenres rather than counting
  * them, and each of those is a tap to the next one.
  *
+ * The panel expands. Collapsed it says what the curated dataset knows — family,
+ * tempo, era, subgenres — which is a description of a genre's *shape* and never
+ * of where it came from. Expanded it carries the genre's researched history:
+ * its origins as the source states them, the genres either side of it in time,
+ * and the article's own account of what happened, with the article and revision
+ * it was taken from named and linked. That text is researched at build time and
+ * verified to be about the genre it is filed under (`tools/fetch_genre_history.py`);
+ * a genre with nothing verifiable written about it says so rather than being
+ * given a plausible paragraph, because a map that invents history is worse than
+ * one that admits a gap.
+ *
  * The panel's four actions: *Play top* queues the genre's chart in rank order,
  * so it opens on the record that genre is actually known for. It used to search
  * the catalogue for the genre's name and shuffle the results, which ranked by
@@ -164,6 +189,8 @@ fun GenreMapScreen(
 ) {
     val graph = viewModel.genreGraph
     val selected by viewModel.mapSelection.collectAsStateWithLifecycle()
+    val expanded by viewModel.mapExpanded.collectAsStateWithLifecycle()
+    val history by viewModel.mapHistory.collectAsStateWithLifecycle()
 
     // Collapsed branches, by node id. Starts empty: the first thing you should
     // see is the whole thing, and folding is the exception.
@@ -331,7 +358,18 @@ fun GenreMapScreen(
     // panel — flies the camera to it. Keyed on the id so re-selecting the same
     // genre doesn't re-fly, and on the canvas size so a selection made before
     // the first measurement still lands.
-    LaunchedEffect(selected?.id, canvasSize) {
+    //
+    // Also keyed on the panel's measured height, which is what keeps the genre
+    // visible when the history opens: the expanded panel covers better than
+    // half the screen, and a camera that centred for the collapsed one leaves
+    // the dot you are reading about underneath the text about it. Measured
+    // rather than derived from `expanded` because the height is only known
+    // after layout — and because it re-runs as the height settles, the last
+    // flight is the one with the right number.
+    // Quantised so that only a real change of shape re-aims the camera. Keyed
+    // on the raw height, a few pixels of difference between "Looking it up…"
+    // and the loaded article would be a second flight nobody asked for.
+    LaunchedEffect(selected?.id, canvasSize, panelHeightPx / FLIGHT_HEIGHT_QUANTUM) {
         selected?.let { focusOn(it) }
     }
 
@@ -548,6 +586,25 @@ fun GenreMapScreen(
                     hazeState = mapHaze,
                     glass = glassSettings,
                     hearted = node.id in hearted,
+                    expanded = expanded,
+                    history = history,
+                    // The history is as tall as the map lets it be and then
+                    // scrolls, so the panel can never grow to cover the genre
+                    // it is describing however long the article runs.
+                    //
+                    // Two limits, and the smaller wins. The fraction is the one
+                    // that matters in portrait; the second is what stops a
+                    // landscape phone — where the whole canvas is barely taller
+                    // than the panel's own chrome — from being handed a
+                    // scroll region that pushes the buttons off the top.
+                    historyMaxHeight = with(density) {
+                        val canvas = canvasSize.height.toFloat()
+                        minOf(
+                            canvas * HISTORY_HEIGHT_FRACTION,
+                            canvas - PANEL_CHROME_RESERVE.toPx(),
+                        ).coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
+                    },
+                    onToggleExpand = { viewModel.toggleMapExpanded() },
                     onHeart = { viewModel.toggleHeartGenre(node.id) },
                     onPlay = { viewModel.playGenre(node.id, playerViewModel) },
                     onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
@@ -620,6 +677,10 @@ private fun GenreCard(
     hazeState: HazeState,
     glass: PlayerGlassSettings,
     hearted: Boolean,
+    expanded: Boolean,
+    history: GenreHistoryState,
+    historyMaxHeight: Dp,
+    onToggleExpand: () -> Unit,
     onHeart: () -> Unit,
     onPlay: () -> Unit,
     onRadio: () -> Unit,
@@ -639,6 +700,7 @@ private fun GenreCard(
     // otherwise leave the panel with no background at all.
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
     val flat = LocalLowPerformance.current.disableLiquidGlass
+    val instant = reduceMotion()
     val shaderGlass = !flat && glass.enabled &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     val tint = if (glass.tintColor != 0) Color(glass.tintColor) else MaterialTheme.colorScheme.primary
@@ -650,6 +712,20 @@ private fun GenreCard(
             .fillMaxWidth()
             .padding(12.dp)
             .navigationBarsPadding()
+            // Nothing gets through the panel to the map. The canvas underneath
+            // is one big tap target that selects whatever genre is nearest, so
+            // without this a tap on the panel's own background — or a flick
+            // that starts on its text — reaches down and selects some other
+            // genre, throwing away the panel you were reading. Consumed in the
+            // main pass, after the buttons and the scroll have had the event,
+            // so it swallows only what the panel itself didn't want.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent().changes.forEach { it.consume() }
+                    }
+                }
+            }
             .clip(MonoDimens.shapeLg)
             .then(
                 when {
@@ -721,6 +797,22 @@ private fun GenreCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // The expander. First of the three because it is the one that
+                // changes what the panel *is* — the other two act on the genre.
+                IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        // Pointing the way the panel is about to move: up to
+                        // open, because it grows upward off the mini player,
+                        // and down to put it away again.
+                        imageVector = if (expanded) Icons.Default.ExpandMore
+                        else Icons.Default.ExpandLess,
+                        contentDescription = if (expanded) "Hide the history"
+                        else "Read the history of ${node.name}",
+                        tint = if (expanded) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
                 // Hearting a genre pins it to Discover's genre rail, which is
                 // the only place the map's choices survive leaving the map.
                 IconButton(onClick = onHeart, modifier = Modifier.size(32.dp)) {
@@ -751,6 +843,32 @@ private fun GenreCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            // The history, when it's been asked for. Between the identity above
+            // and the navigation below, because it is the answer to the
+            // question the panel's title just raised.
+            //
+            // The last thing worth showing is held rather than read live: the
+            // panel goes back to Idle the instant it is told to close, and the
+            // fold-away animation still has three hundred milliseconds to run —
+            // long enough to watch a finished article turn back into "Looking
+            // it up…" on its way out.
+            var shown by remember(node.id) { mutableStateOf<GenreHistoryState>(history) }
+            LaunchedEffect(history) {
+                if (history != GenreHistoryState.Idle) shown = history
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+                exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+            ) {
+                GenreHistoryBody(
+                    node = node,
+                    state = shown,
+                    accent = familyColor,
+                    maxHeight = historyMaxHeight,
                 )
             }
 
@@ -826,6 +944,139 @@ private fun GenreCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * The expanded half of the panel: what this genre is, where it came from, and
+ * what the record says happened to it.
+ *
+ * Scrolls inside a bounded height rather than growing the panel to fit. Techno's
+ * article would otherwise push the panel past the top of the screen, and the
+ * genre's own dot — the thing the whole map exists to point at — off it.
+ *
+ * Every genre here is one of two states and never a third: there is a verified
+ * article, or there is nothing and it says so. The dataset carries no
+ * paragraphs that were written to fill the gap.
+ */
+@Composable
+private fun GenreHistoryBody(
+    node: GenreNode,
+    state: GenreHistoryState,
+    accent: Color,
+    maxHeight: Dp,
+) {
+    val uriHandler = LocalUriHandler.current
+    Column(modifier = Modifier.padding(top = 12.dp)) {
+        when (state) {
+            // Idle only happens for the frame between the tap and the flow
+            // noticing, so it draws as the loading line rather than as nothing —
+            // a panel that flickers empty on the way open looks broken.
+            GenreHistoryState.Idle, GenreHistoryState.Loading -> Text(
+                text = "Looking it up…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            GenreHistoryState.Missing -> Text(
+                text = "No history we could verify is written for ${node.name} yet. " +
+                    "It's on the map from the curated dataset — its lineage, tempo and era — " +
+                    "and nothing here is invented to fill the gap.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            is GenreHistoryState.Ready -> {
+                val history = state.history
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = maxHeight)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    // The infobox facts first: "1985, Chicago" and the genres
+                    // either side of it are the whole history in three lines,
+                    // for a reader who isn't going to read the paragraphs.
+                    history.cultural?.let { HistoryFact("Origins", it, accent) }
+                    if (history.stylistic.isNotEmpty()) {
+                        HistoryFact("Grew out of", history.stylistic.joinToString(", "), accent)
+                    }
+                    if (history.derivatives.isNotEmpty()) {
+                        HistoryFact("Led to", history.derivatives.joinToString(", "), accent)
+                    }
+                    if (history.hasOrigins) Spacer(Modifier.height(10.dp))
+
+                    Text(
+                        text = history.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+
+                    for (section in history.sections) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = section.heading,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            // Subsections step in, so a "1990s" under "History"
+                            // reads as part of it rather than as a peer.
+                            color = if (section.level > 1) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.padding(
+                                start = if (section.level > 1) 10.dp else 0.dp,
+                            ),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = section.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(
+                                start = if (section.level > 1) 10.dp else 0.dp,
+                            ),
+                        )
+                    }
+
+                    // The source, and a way to go and check it. Required by the
+                    // licence the text ships under, and the thing that makes
+                    // the difference between a claim and a citation.
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = buildString {
+                            append("From ")
+                            history.fragment?.let { append("the “$it” section of ") }
+                            append("“${history.title}” on Wikipedia, CC BY-SA 4.0")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent,
+                        modifier = Modifier
+                            .bounceClick(onClick = { uriHandler.openUri(history.url) })
+                            .padding(vertical = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One infobox fact — a short label above the thing it names. */
+@Composable
+private fun HistoryFact(label: String, value: String, accent: Color) {
+    Row(modifier = Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = accent,
+            modifier = Modifier.width(76.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -933,6 +1184,30 @@ private const val FOCUS_SCALE = 2.6f
 
 /** Resting size of the selected dot, relative to its neighbours. */
 private const val SELECTED_SCALE = 1.45f
+
+/**
+ * How much of the map the expanded history may take before it starts scrolling.
+ *
+ * Just over half: enough that a genre's origins and first section are on screen
+ * together, and little enough that the map — including the dot the panel is
+ * about, which the camera keeps in the remaining strip — is still visibly there
+ * behind it. A panel that covers everything is a page, and this is not a page.
+ */
+private const val HISTORY_HEIGHT_FRACTION = 0.52f
+
+/** Roughly what the panel needs for its title, subgenre rail and buttons. */
+private val PANEL_CHROME_RESERVE = 300.dp
+
+/** Below this the history isn't worth opening, so it scrolls in a smaller box. */
+private val MIN_HISTORY_HEIGHT = 120.dp
+
+/**
+ * Panel-height granularity, in pixels, that the camera bothers to re-aim for.
+ *
+ * Opening the history moves the panel by hundreds of pixels and has to be
+ * followed; a paragraph reflowing does not.
+ */
+private const val FLIGHT_HEIGHT_QUANTUM = 96
 
 /** Height the floating mini player needs, matching the nav host's own reserve. */
 private val MINI_PLAYER_RESERVE = 72.dp
