@@ -20,6 +20,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -2808,15 +2811,39 @@ private fun openDonationUrl(context: android.content.Context, url: String) {
 }
 
 // ─── Shared components ─────────────────────────────────────────────────
+/**
+ * Every settings tab's scroll container.
+ *
+ * The tail padding is what lets this screen run *under* the mini player instead
+ * of stopping above it. The nav host used to reserve the bar's height outside
+ * the screen, which left a band of flat theme background behind the bar for its
+ * glass to lens — so the bar read as an opaque container however transparent it
+ * was set. The space is reserved here instead, where it is scrollable: rows
+ * pass behind the glass, and the last one still comes clear of it.
+ *
+ * Reserved whether or not anything is playing. The cost when nothing is is a
+ * little empty space past the final row, which is only reachable by scrolling
+ * to it; the cost of getting it wrong the other way is a setting nobody can
+ * reach.
+ */
 @Composable
 private fun SettingsTabContent(content: @Composable () -> Unit) {
+    val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp)
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 16.dp,
+            bottom = 16.dp + MINI_PLAYER_TAIL + navBar,
+        ),
     ) {
         item { content() }
     }
 }
+
+/** Height the floating mini player occupies, mirrored from the nav host. */
+private val MINI_PLAYER_TAIL = 72.dp
 
 // Slugify a label into a stable DevEdit element id (e.g. "Gapless Playback" →
 // "gapless_playback"). Used so wrapping the shared setting rows yields stable,

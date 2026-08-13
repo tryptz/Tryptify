@@ -312,8 +312,19 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // glass has real content to lens rather than a flat inset.
         val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
             currentDestination?.route == Screen.WorldRadio.route
+
+        // Screens that run *under* the mini player rather than stopping above
+        // it. Reserving the bar's height out here letterboxes the screen and
+        // leaves a band of flat theme background behind the bar — so the glass
+        // has nothing but a solid colour to lens, and reads as an opaque
+        // container no matter how transparent it is. Running the content
+        // underneath gives it something real; the screen is then responsible
+        // for padding its own scroll so the last row can still be reached.
+        val underMiniPlayer = fullBleedRoute ||
+            currentDestination?.route == Screen.Settings.route
         val detailBottomInset = when {
             fullBleedRoute -> 0.dp
+            underMiniPlayer -> navBarHeight
             else -> navBarHeight + if (showMiniPlayer) miniPlayerReserve else 0.dp
         }
 
@@ -786,19 +797,22 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             onSkipPreviousClick = { playerViewModel.skipToPrevious() },
                             onClick = { navController.navigateTool(Screen.NowPlaying) },
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            // No frost on detail screens (Settings, EQ, …):
-                            // they stop above the mini player, so the frost has
-                            // nothing real to sample there and its base colour
-                            // renders as a solid bar. Null skips the frost
-                            // layer — the glass slab floats clean over the
-                            // screen's own content.
+                            // No frost on the detail screens that stop above the
+                            // mini player: the frost has nothing real to sample
+                            // there and its base colour renders as a solid bar.
+                            // Null skips the frost layer — the glass slab floats
+                            // clean over the screen's own content.
+                            //
+                            // Screens that run underneath it do get the frost,
+                            // because under them there is now something to
+                            // blur. That is the whole reason they were moved.
                             //
                             // A full-bleed route is the exception, and the
                             // reason it is full-bleed: the map runs underneath
                             // the bar, so there IS content to blur and passing
                             // null was throwing it away — the one screen built
                             // to feed the frost was the one screen without it.
-                            hazeState = if (fullBleedRoute) hazeState else null,
+                            hazeState = if (underMiniPlayer) hazeState else null,
                             blendMillis = miniBlendMs,
                             userTrackChanges = userTrackChanges,
                         )
