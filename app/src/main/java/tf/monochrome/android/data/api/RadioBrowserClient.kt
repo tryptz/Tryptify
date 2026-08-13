@@ -65,6 +65,23 @@ class RadioBrowserClient @Inject constructor(
     }
 
     /**
+     * Stations whose *name* matches, strongest first.
+     *
+     * A separate entry point from [stations] rather than another location field,
+     * because it answers a different question: that one asks "what broadcasts
+     * from here", this one asks "where is the station I already know the name
+     * of". Folding them together would let a station called Berlin outrank the
+     * stations actually in Berlin.
+     */
+    suspend fun searchByName(name: String, limit: Int = NAME_PAGE_LIMIT): List<RadioStation> {
+        if (name.isBlank()) return emptyList()
+        val page = search("name" to name, countryCode = "", limit = limit) ?: return emptyList()
+        return page.mapNotNull { it.toDomain() }
+            .distinctBy { it.uuid }
+            .sortedByDescending { it.votes }
+    }
+
+    /**
      * Tell the directory a station was played.
      *
      * radio-browser asks clients to do this and builds its popularity ordering
@@ -85,6 +102,7 @@ class RadioBrowserClient @Inject constructor(
     private suspend fun search(
         query: Pair<String, String>,
         countryCode: String,
+        limit: Int = PAGE_LIMIT,
     ): List<RadioBrowserStation>? = withTimeoutOrNull(REQUEST_TIMEOUT_MS) {
         runCatching {
             val response = httpClient.get("$BASE_URL/json/stations/search") {
@@ -92,7 +110,7 @@ class RadioBrowserClient @Inject constructor(
                 parameter(query.first, query.second)
                 if (countryCode.isNotBlank()) parameter("countrycode", countryCode)
                 parameter("hidebroken", true)
-                parameter("limit", PAGE_LIMIT)
+                parameter("limit", limit)
                 parameter("order", "votes")
                 parameter("reverse", true)
             }
@@ -111,6 +129,10 @@ class RadioBrowserClient @Inject constructor(
         const val REQUEST_TIMEOUT_MS = 12_000L
         const val CLICK_TIMEOUT_MS = 4_000L
         const val PAGE_LIMIT = 60
+
+        // Shorter than a city's page: these are suggestions in a row of pills,
+        // and nobody slides through sixty of them.
+        const val NAME_PAGE_LIMIT = 20
 
         /** Fields a city name might be recorded in, most reliable first. */
         val LOCATION_FIELDS = listOf("state", "name", "tag")

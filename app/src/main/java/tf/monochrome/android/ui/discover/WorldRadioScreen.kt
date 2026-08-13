@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.discover
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -9,6 +12,10 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -26,12 +33,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,9 +53,11 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
@@ -67,9 +80,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -77,8 +93,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -196,6 +214,10 @@ fun WorldRadioScreen(
     // Projected geometry, reused by every draw that only changes colour.
     val outlines = remember { OutlineCache() }
 
+    val searchOpen by viewModel.searchOpen.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+
     fun spinTo(city: RadioCity) {
         flight?.cancel()
         if (canvasSize == IntSize.Zero) return
@@ -233,8 +255,16 @@ fun WorldRadioScreen(
                 }
             },
             actions = {
+                IconButton(onClick = { viewModel.toggleSearch() }) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = if (searchOpen) "Close search" else "Search stations",
+                        tint = if (searchOpen) MaterialTheme.colorScheme.primary
+                        else LocalContentColor.current,
+                    )
+                }
                 IconButton(onClick = { showFxSheet = true }) {
-                    Icon(Icons.Default.GraphicEq, contentDescription = "Reactive outlines")
+                    Icon(Icons.Default.GraphicEq, contentDescription = "Outline glow")
                 }
                 IconButton(onClick = { flight?.cancel(); camera = GlobeCamera() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Recentre")
@@ -243,6 +273,27 @@ fun WorldRadioScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             modifier = Modifier.onSizeChanged { topBarHeightPx = it.height },
         )
+
+        // The bar drops out of the app bar rather than replacing it, so the
+        // globe never loses its title or its two toggles while you type — and
+        // the predictions sit directly under the field they came from.
+        AnimatedVisibility(
+            visible = searchOpen,
+            enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+            exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+        ) {
+            CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
+                StationSearchBar(
+                    query = query,
+                    state = suggestions,
+                    hazeState = mapHaze,
+                    glass = glassSettings,
+                    onQueryChange = { viewModel.setQuery(it) },
+                    onPick = { viewModel.playSearchResult(it, playerViewModel) },
+                    onClose = { viewModel.toggleSearch() },
+                )
+            }
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             val ocean = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
@@ -484,6 +535,175 @@ private fun GlobeFxSlider(
  */
 private fun Float.asMultiple(decimals: Int): String =
     String.format(Locale.US, "%.${decimals}f×", this)
+
+// ── search ──────────────────────────────────────────────────────────────────
+
+/**
+ * Find a station by name, anywhere on Earth.
+ *
+ * The globe's own way in is geographic — you find a place and see what it
+ * broadcasts — which is the right default and useless when you already know
+ * what you are looking for. This is the other way round, and it lands you in
+ * the same place: picking a result flies the camera to the station's city and
+ * tunes in, so a search still leaves you somewhere on the map rather than in a
+ * list that has nothing to do with it.
+ *
+ * On the same sheet of glass as the city card, from the same settings, for the
+ * reason that card documents — two panes tuned differently on one screen look
+ * like a bug.
+ */
+@Composable
+private fun StationSearchBar(
+    query: String,
+    state: StationSearchState,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
+    onQueryChange: (String) -> Unit,
+    onPick: (RadioStation) -> Unit,
+    onClose: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    // Opening the bar means wanting to type in it.
+    LaunchedEffect(Unit) {
+        runCatching { focus.requestFocus() }
+    }
+
+    GlassPanel(
+        hazeState = hazeState,
+        glass = glass,
+        modifier = Modifier.padding(horizontal = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focus),
+                    decorationBox = { inner ->
+                        if (query.isEmpty()) {
+                            Text(
+                                text = "Station name",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        inner()
+                    },
+                )
+                IconButton(
+                    onClick = { if (query.isEmpty()) onClose() else onQueryChange("") },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = if (query.isEmpty()) "Close search" else "Clear",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // The predictions. A row rather than a list, slid sideways, so they
+            // sit under the field without covering the globe the search is
+            // about — the answer to "which of these did you mean" is one glance
+            // and one tap, and a vertical list would take the screen for it.
+            when (state) {
+                StationSearchState.Idle -> Unit
+
+                StationSearchState.Searching -> SearchNote("Searching…")
+
+                StationSearchState.Unreachable ->
+                    SearchNote("Couldn't reach the station directory.")
+
+                is StationSearchState.Ready -> if (state.stations.isEmpty()) {
+                    SearchNote("No station by that name.")
+                } else {
+                    Spacer(Modifier.height(10.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Unkeyed, as everywhere else the directory's data is
+                        // listed: it does not promise unique uuids, and a
+                        // duplicate row beats a crash.
+                        items(state.stations) { station ->
+                            StationPill(
+                                station = station,
+                                onClick = {
+                                    keyboard?.hide()
+                                    onPick(station)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchNote(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+/** One prediction: the station, and the country it says it broadcasts from. */
+@Composable
+private fun StationPill(station: RadioStation, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = station.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 180.dp),
+            )
+            if (station.countryCode.isNotBlank()) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = station.countryCode,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
 
 // ── the panel ───────────────────────────────────────────────────────────────
 

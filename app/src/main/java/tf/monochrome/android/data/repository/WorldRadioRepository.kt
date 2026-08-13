@@ -83,6 +83,63 @@ class WorldRadioRepository @Inject constructor(
     suspend fun reportPlay(station: RadioStation) = client.reportClick(station.uuid)
 
     /**
+     * Stations matching a typed name. Null when the directory couldn't be
+     * reached, empty when it was asked and had nothing — the same distinction
+     * the panel makes, for the same reason.
+     */
+    suspend fun searchStations(query: String): List<RadioStation>? {
+        if (query.isBlank()) return emptyList()
+        return runCatching { client.searchByName(query.trim()) }.getOrNull()
+    }
+
+    /**
+     * Where on the globe to fly for a station found by name.
+     *
+     * The directory records a station's country but not its coordinates, and the
+     * globe can only fly to a city it actually has. So: among the cities of the
+     * station's country, prefer one this station names — broadcasters put their
+     * city in their own name far more often than not ("Radio Hamburg", "NYC
+     * Sound") — and otherwise fall back to that country's busiest.
+     *
+     * Returns null for a station whose country is blank or is not on the globe,
+     * which is the honest answer: better to play it from where you are than to
+     * fly somewhere and claim it is from there.
+     */
+    suspend fun locate(station: RadioStation): RadioCity? {
+        val code = station.countryCode.trim()
+        if (code.isBlank()) return null
+        val candidates = data().cities.filter { it.country.equals(code, ignoreCase = true) }
+        if (candidates.isEmpty()) return null
+
+        val haystack = "${station.name} ${station.tags}".lowercase()
+        val named = candidates.filter { city ->
+            // Word-boundary rather than contains: "Ely" is a city, and matching
+            // it inside "Barely Radio" would fly the globe to Cambridgeshire.
+            val name = city.name.lowercase()
+            val ascii = city.ascii.lowercase()
+            haystack.containsWord(name) || (ascii.isNotBlank() && haystack.containsWord(ascii))
+        }
+        // Among several named, and among none, the busiest is the best guess:
+        // it is the one a listener is most likely to have meant.
+        return (named.ifEmpty { candidates }).maxByOrNull { it.stations }
+    }
+
+    private fun String.containsWord(word: String): Boolean {
+        if (word.isBlank()) return false
+        var from = 0
+        while (true) {
+            val at = indexOf(word, from)
+            if (at < 0) return false
+            val before = at - 1
+            val after = at + word.length
+            val startOk = before < 0 || !this[before].isLetterOrDigit()
+            val endOk = after >= length || !this[after].isLetterOrDigit()
+            if (startOk && endOk) return true
+            from = at + 1
+        }
+    }
+
+    /**
      * The nearest other cities that also broadcast.
      *
      * Great-circle distance, because on a globe the flat one is wrong in exactly
