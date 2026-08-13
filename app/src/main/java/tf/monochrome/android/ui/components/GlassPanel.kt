@@ -36,6 +36,7 @@ import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
@@ -87,7 +88,7 @@ fun GlassPanel(
     val flat = LocalLowPerformance.current.disableLiquidGlass
     val shaderGlass = !flat && glass.enabled &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else MaterialTheme.colorScheme.primary
+    val tint = glassTint(glass.tintColor)
     val frostBg = MaterialTheme.colorScheme.background
     val isDark = frostBg.luminance() <= 0.5f
 

@@ -35,11 +35,12 @@ import tf.monochrome.android.ui.theme.MonoDimens
  * The resting primary action on Home and at the top of Discover: seed a radio
  * station and let it run.
  *
- * Its glass is hand-rolled rather than the shared `Modifier.liquidGlass` — a
- * shadow, a body gradient, a specular sweep and a gradient rim, tuned to the
- * accent — so it needs its own flat branch when glass is off. Both branches
- * keep the same shape, padding and three states, so the button doesn't move
- * when the setting changes; only its material does.
+ * Built on the shared `Modifier.liquidGlass`, with an accent wash under it and
+ * a shadow and specular sweep over it — the accent tuning is the part that is
+ * this button's own, the material is not. It still needs its own flat branch
+ * when glass is off. Both branches keep the same shape, padding and three
+ * states, so the button doesn't move when the setting changes; only its
+ * material does.
  */
 @Composable
 fun PlayRadioButton(
@@ -64,30 +65,41 @@ fun PlayRadioButton(
             // Under shadow: a soft, accent-tinted drop shadow so the pill floats
             // above the list. clip=false lets the shadow spill past the shape.
             .shadow(
-                elevation = 12.dp,
+                elevation = 10.dp,
                 shape = MonoDimens.shapePill,
                 clip = false,
                 ambientColor = accent,
                 spotColor = accent,
             )
             .clip(MonoDimens.shapePill)
-            // Liquid glass: translucent accent fill with a top-lit vertical sheen
-            // (brighter at the top edge, deeper toward the bottom) — the base
-            // "body" of the glass.
+            // An accent *wash*, not a fill.
+            //
+            // This used to be the accent at 0.94 down to 0.70, which is opaque
+            // in every way that matters: the pill was a solid slab with a rim
+            // painted on it, and none of the page it floats over came through.
+            // The glass it was named for was entirely in the highlights. At
+            // these alphas the shape reads as the accent and the background
+            // reads through it, which is what the rest of the app's glass does.
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        accent.copy(alpha = 0.94f),
-                        accent.copy(alpha = 0.70f),
+                        accent.copy(alpha = 0.38f),
+                        accent.copy(alpha = 0.20f),
                     )
                 )
             )
+            // The shared glass material on top of the wash — the same tint,
+            // rim and refraction every other pane in the app is built from,
+            // rather than a hand-rolled imitation that drifts from it. No haze
+            // state: Home has no backdrop layer to blur, and the translucent
+            // path needs none.
+            .liquidGlass(shape = MonoDimens.shapePill)
             // Specular sweep: a bright highlight across the top third that fades
             // out, giving the pill its glossy, refractive wet-glass surface.
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        specular.copy(alpha = 0.30f),
+                        specular.copy(alpha = 0.22f),
                         Color.Transparent,
                     )
                 )
@@ -121,9 +133,18 @@ fun PlayRadioButton(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val contentColor =
-            if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onPrimary
+        // On the flat branch the pill is an opaque accent, so the label is the
+        // accent's own "on" colour. On glass it is not: the fill is a wash and
+        // most of what is behind the text is the page. onPrimary is chosen to
+        // contrast with a solid primary and frequently inverts against the
+        // page — black text on a dark theme — so the glass branch takes the
+        // surface's contrast colour instead, which is right whatever shows
+        // through.
+        val contentColor = when {
+            glass -> MaterialTheme.colorScheme.onSurface
+            isActive -> MaterialTheme.colorScheme.onPrimaryContainer
+            else -> MaterialTheme.colorScheme.onPrimary
+        }
         if (isGenerating) {
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),

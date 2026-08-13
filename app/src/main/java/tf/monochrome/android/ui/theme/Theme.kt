@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.theme
 
 import android.os.Build
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -540,6 +541,29 @@ fun MonochromeTheme(
  * MaterialTheme on purpose so the menus never pick up the album accent.
  */
 val LocalDynamicColorPalette = compositionLocalOf<DynamicPalette?> { null }
+
+/**
+ * What colour a sheet of glass should be tinted.
+ *
+ * Three answers in order, and the order is the point. A tint the listener set
+ * by hand wins outright — they picked it, and an album is not entitled to
+ * overrule them. Failing that the album palette, so every pane of glass in the
+ * app drifts with what is playing whether or not the screen around it opted
+ * into [DynamicColorScope]; the glass is decoration and can follow the music,
+ * while the menus it sits beside keep the chosen theme. Failing both, the
+ * theme's own primary, which is the behaviour every one of these surfaces had
+ * before this existed.
+ *
+ * Reads the palette directly rather than the scheme so it works on screens that
+ * are not wrapped in a scope — and gives the same answer on the ones that are,
+ * since there the scheme's primary *is* the palette's.
+ */
+@Composable
+fun glassTint(explicitArgb: Int): Color {
+    if (explicitArgb != 0) return Color(explicitArgb)
+    LocalDynamicColorPalette.current?.let { return it.primary }
+    return MaterialTheme.colorScheme.primary
+}
 
 /**
  * Overlays the album-art dynamic palette ([LocalDynamicColorPalette]) onto the

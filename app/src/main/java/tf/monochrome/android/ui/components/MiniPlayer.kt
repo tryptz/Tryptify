@@ -68,6 +68,7 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
 import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.abs
 
@@ -167,7 +168,7 @@ fun MiniPlayer(
     // ── Glass path (API 33+): one tunable player-glass slab with the play/skip
     // icons punched out as see-through holes, and a smooth press-bulge under the
     // pressed control — the same shader treatment as the player action dock. ──
-    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else MaterialTheme.colorScheme.primary
+    val tint = glassTint(glass.tintColor)
     val playPainter = painterResource(if (isPlaying) R.drawable.ic_glass_pause else R.drawable.ic_glass_play)
     val skipPainter = painterResource(R.drawable.ic_glass_skip_next)
 

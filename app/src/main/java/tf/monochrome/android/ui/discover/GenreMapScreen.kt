@@ -133,6 +133,7 @@ import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
 
@@ -727,7 +728,7 @@ private fun GenreCard(
     val instant = reduceMotion()
     val shaderGlass = !flat && glass.enabled &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else MaterialTheme.colorScheme.primary
+    val tint = glassTint(glass.tintColor)
     val frostBg = MaterialTheme.colorScheme.background
     val isDark = frostBg.luminance() <= 0.5f
 
