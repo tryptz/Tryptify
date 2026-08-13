@@ -49,12 +49,6 @@ fun PlayRadioButton(
     // Inset from the screen edge on Home; zero inside the Discover hero card,
     // which is already padded.
     horizontalPadding: Dp = 16.dp,
-    /**
-     * The backdrop to frost — the same contract the search bars use. Null where
-     * the caller has none, which takes the plain translucent glass rather than
-     * asking for a blur that would resolve to a flat pane.
-     */
-    hazeState: dev.chrisbanes.haze.HazeState? = null,
 ) {
     val accent = if (isActive) MaterialTheme.colorScheme.primaryContainer
     else MaterialTheme.colorScheme.primary
@@ -74,7 +68,7 @@ fun PlayRadioButton(
         // What is left is the same material every other pane in the app is
         // built from, in a pill. No haze state: Home has no backdrop layer to
         // blur, and the translucent path needs none.
-        Modifier.liquidGlass(hazeState = hazeState, shape = MonoDimens.shapePill)
+        Modifier.liquidGlass(shape = MonoDimens.shapePill)
     } else {
         // Flat: one opaque accent fill, no shadow, no gradients, no rim.
         Modifier
