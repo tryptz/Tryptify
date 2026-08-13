@@ -1,9 +1,23 @@
 package tf.monochrome.android.ui.discover
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -21,10 +35,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,20 +52,30 @@ import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,9 +85,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -65,8 +99,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -75,16 +111,24 @@ import androidx.navigation.NavController
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import tf.monochrome.android.domain.model.GlobeFxSettings
 import tf.monochrome.android.domain.model.RadioCity
+import tf.monochrome.android.domain.model.RadioCountry
 import tf.monochrome.android.domain.model.RadioStation
 import tf.monochrome.android.ui.components.GlassPanel
+import tf.monochrome.android.ui.components.GlassSearchBar
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
+import java.util.Locale
 import kotlin.math.PI
+import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.ln
@@ -120,12 +164,36 @@ import kotlin.math.sin
  * mini player, and two sheets of glass tuned differently an inch apart look like
  * a bug.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The globe follows the album palette, like the player does.
+ *
+ * Dynamic colours are deliberately kept out of the app-wide scheme so the menus
+ * never pick up an album accent, and surfaces that want them opt in here. This
+ * screen wants them: everything on it — the lit coastlines, the city dots, the
+ * ping on the selected city — is drawn from the accent, and a globe that stayed
+ * on the app's default while a station's artwork coloured the mini player right
+ * underneath it looked like two screens stitched together.
+ *
+ * A passthrough whenever there is no palette, which is the setting turned off,
+ * nothing playing, or extraction having failed.
+ */
 @Composable
 fun WorldRadioScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
     viewModel: WorldRadioViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
+) {
+    DynamicColorScope {
+        WorldRadioContent(navController, playerViewModel, viewModel)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WorldRadioContent(
+    navController: NavController,
+    playerViewModel: PlayerViewModel,
+    viewModel: WorldRadioViewModel,
 ) {
     val globe by viewModel.globe.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
@@ -159,12 +227,51 @@ fun WorldRadioScreen(
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
+    var searchBarHeightPx by remember { mutableIntStateOf(0) }
+
+    val storedFx by viewModel.globeFx.collectAsStateWithLifecycle()
+    var showFxSheet by remember { mutableStateOf(false) }
+
+    // The sliders write here and the globe reads here, so a drag repaints at
+    // once. Persisting used to happen on every frame of the drag — a DataStore
+    // write, a flow emission and a recomposition, sixty times a second — which
+    // is what made the sliders crawl. The write is now debounced behind the
+    // live preview, the same split the EQ's knobs already use.
+    var globeFx by remember { mutableStateOf(storedFx) }
+    LaunchedEffect(storedFx) { globeFx = storedFx }
+    LaunchedEffect(globeFx) {
+        if (globeFx != storedFx) {
+            delay(FX_PERSIST_DEBOUNCE_MS)
+            viewModel.updateGlobeFx { globeFx }
+        }
+    }
+
+    // Projected geometry, reused by every draw that only changes colour.
+    val outlines = remember { OutlineCache() }
+
+    val searchOpen by viewModel.searchOpen.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val recents by viewModel.recentSearches.collectAsStateWithLifecycle()
 
     fun spinTo(city: RadioCity) {
         flight?.cancel()
         if (canvasSize == IntSize.Zero) return
+        // The strip the card will occupy once it is up. Measured, not guessed —
+        // and re-run when the measurement changes, which is what the height
+        // quantum in the effect below is for.
+        val panelStrip = with(density) { panelBottomInset.toPx() } + panelHeightPx
         flight = scope.launch {
-            spinToCity(city, globe.scale, camera, instant) { camera = it }
+            spinToCity(
+                city = city,
+                scale = globe.scale,
+                from = camera,
+                instant = instant,
+                size = canvasSize,
+                topInset = topBarHeightPx.toFloat(),
+                bottomInset = panelStrip,
+                onFrame = { camera = it },
+            )
         }
     }
 
@@ -184,6 +291,17 @@ fun WorldRadioScreen(
                 }
             },
             actions = {
+                IconButton(onClick = { viewModel.toggleSearch() }) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = if (searchOpen) "Close search" else "Search stations",
+                        tint = if (searchOpen) MaterialTheme.colorScheme.primary
+                        else LocalContentColor.current,
+                    )
+                }
+                IconButton(onClick = { showFxSheet = true }) {
+                    Icon(Icons.Default.GraphicEq, contentDescription = "Outline glow")
+                }
                 IconButton(onClick = { flight?.cancel(); camera = GlobeCamera() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Recentre")
                 }
@@ -195,7 +313,20 @@ fun WorldRadioScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             val ocean = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
             val land = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-            val dot = MaterialTheme.colorScheme.primary
+            // Eased rather than read straight off the scheme. Inside
+            // DynamicColorScope this is the current track's album colour, and
+            // the radio changing stations means it can swap several times a
+            // minute — a hard cut here was the coastline, the land fill and
+            // the halo all flashing to a new colour in the same frame, on a
+            // full-bleed surface, every time a track turned over. Land and
+            // water blend toward it (litLand's illumination lerp) rather than
+            // holding a colour of their own, so the fade has to happen here,
+            // upstream of every place that reads it.
+            val dot by animateColorAsState(
+                targetValue = MaterialTheme.colorScheme.primary,
+                animationSpec = if (instant) snap() else tween(900),
+                label = "globe_accent",
+            )
             val onSurface = MaterialTheme.colorScheme.onSurface
             // Native-canvas text is sized in pixels, so the density conversion
             // happens here rather than in the draw pass. Matches the genre map.
@@ -237,17 +368,69 @@ fun WorldRadioScreen(
                     labelSizePx = labelPx,
                     // The globe runs full-bleed under a transparent bar, which
                     // is intended for the dots and unreadable for the names.
-                    topInset = topBarHeightPx.toFloat(),
+                    topInset = topBarHeightPx.toFloat() +
+                        if (searchOpen) searchBarHeightPx.toFloat() else 0f,
                     bottomInset = if (selected != null) {
                         panelBottomInset.toPx() + panelHeightPx
                     } else {
                         0f
                     },
+                    accent = dot,
+                    outlines = outlines,
+                    fx = globeFx,
                 )
             }
 
+            // A second, near-empty canvas for the one thing on this screen that
+            // animates. It draws a single ring and nothing else, so the frames it
+            // asks for are cheap; folding it into the globe above would make each
+            // one re-project every coastline point in the asset, which is what
+            // made the station list scroll badly while a city was open.
+            selected?.let { city ->
+                SelectedCityPing(
+                    city = city,
+                    scale = globe.scale,
+                    camera = camera,
+                    accent = dot,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            // Over the globe, not above it. The glass blurs whatever the haze
+            // source drew behind it, and laid out in the column the bar had the
+            // window's own background back there and nothing else — the same
+            // panel that reads as frosted glass over the map read as a flat
+            // slab an inch higher up.
+            // Fully qualified: inside the Box the outer Column's receiver is
+            // still in scope, and the ColumnScope overload wins resolution and
+            // then fails on the missing receiver.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = searchOpen,
+                enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+                exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .onSizeChanged { searchBarHeightPx = it.height },
+            ) {
+                CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
+                    StationSearchBar(
+                        query = query,
+                        state = suggestions,
+                        hazeState = mapHaze,
+                        glass = glassSettings,
+                        onQueryChange = { viewModel.setQuery(it) },
+                        onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
+                        onPickCity = { viewModel.pickSearchCity(it) },
+                        onOpenCountry = { viewModel.openCountry(it) },
+                        recents = recents,
+                        onClearRecents = { viewModel.clearRecentSearches() },
+                        onClose = { viewModel.toggleSearch() },
+                    )
+                }
+            }
+
             Text(
-                text = if (globe.cities.isEmpty()) "" else "Dots are cities on air · sized by how many stations",
+                text = if (globe.cities.isEmpty() || searchOpen) "" else "Dots are cities on air · sized by how many stations",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -287,6 +470,452 @@ fun WorldRadioScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.Center),
+                )
+            }
+        }
+    }
+
+    if (showFxSheet) {
+        GlobeFxSheet(
+            fx = globeFx,
+            onChange = { globeFx = it },
+            onReset = { globeFx = GlobeFxSettings(); viewModel.resetGlobeFx() },
+            onDismiss = { showFxSheet = false },
+        )
+    }
+}
+
+// ── the controls ────────────────────────────────────────────────────────────
+
+/** Tuning for how the globe's outlines are lit. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GlobeFxSheet(
+    fx: GlobeFxSettings,
+    onChange: (GlobeFxSettings) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+                .navigationBarsPadding(),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Globe",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onReset) { Text("Reset") }
+            }
+            Text(
+                text = "Fills the continents and lights their edges in the app's accent colour.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            GlobeFxSlider(
+                label = "Land",
+                valueLabel = if (fx.landFill <= 0.01f) "Off"
+                else "${(fx.landFill / 0.8f * 100).toInt()}%",
+                value = fx.landFill,
+                range = 0f..0.8f,
+                description = "How solidly the continents fill against the ocean.",
+            ) { onChange(fx.copy(landFill = it)) }
+
+            GlobeFxSlider(
+                label = "Illumination",
+                valueLabel = if (fx.illumination <= 0.01f) "Off"
+                else "${(fx.illumination * 100).toInt()}%",
+                value = fx.illumination,
+                range = 0f..1f,
+                description = "How far the outlines shift from the map's ink toward the accent.",
+            ) { onChange(fx.copy(illumination = it)) }
+
+            GlobeFxSlider(
+                label = "Glow",
+                valueLabel = if (fx.glowBrightness <= 0.01f) "Off"
+                else "${(fx.glowBrightness * 100).toInt()}%",
+                value = fx.glowBrightness,
+                range = 0f..1f,
+                description = "Strength of the halo laid under each line.",
+            ) { onChange(fx.copy(glowBrightness = it)) }
+
+            GlobeFxSlider(
+                label = "Glow width",
+                valueLabel = fx.glowWidth.asMultiple(1),
+                value = fx.glowWidth,
+                range = 1f..8f,
+                description = "How far the halo spreads either side of the line.",
+            ) { onChange(fx.copy(glowWidth = it)) }
+        }
+    }
+}
+
+@Composable
+private fun GlobeFxSlider(
+    label: String,
+    valueLabel: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    description: String? = null,
+    onChange: (Float) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = valueLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        description?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * "2.40×" — fixed to [decimals], and to [Locale.US] rather than the device's.
+ *
+ * These are multipliers next to a slider, not prose: a locale that writes them
+ * with a decimal comma reads as a thousands separator beside a number this
+ * small. Formatted through the number alone and never through a string carrying
+ * a literal `%`, which is a format specifier and would throw.
+ */
+private fun Float.asMultiple(decimals: Int): String =
+    String.format(Locale.US, "%.${decimals}f×", this)
+
+// ── search ──────────────────────────────────────────────────────────────────
+
+/**
+ * Find a station by name, anywhere on Earth.
+ *
+ * The globe's own way in is geographic — you find a place and see what it
+ * broadcasts — which is the right default and useless when you already know
+ * what you are looking for. This is the other way round, and it lands you in
+ * the same place: picking a result flies the camera to the station's city and
+ * tunes in, so a search still leaves you somewhere on the map rather than in a
+ * list that has nothing to do with it.
+ *
+ * On the same sheet of glass as the city card, from the same settings, for the
+ * reason that card documents — two panes tuned differently on one screen look
+ * like a bug.
+ */
+@Composable
+private fun StationSearchBar(
+    query: String,
+    state: SearchSuggestions,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
+    onQueryChange: (String) -> Unit,
+    onPickStation: (RadioStation) -> Unit,
+    onPickCity: (RadioCity) -> Unit,
+    onOpenCountry: (RadioCountry?) -> Unit,
+    recents: List<String>,
+    onClearRecents: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    GlassSearchBar(
+        query = query,
+        onQueryChange = onQueryChange,
+        placeholder = "Station, city or country",
+        // The globe marks its own canvas as a source and this bar is a sibling
+        // above it, not a child of it — so there is a real picture under here
+        // to frost.
+        hazeState = hazeState,
+        glass = glass,
+        autoFocus = true,
+        onClose = onClose,
+        modifier = Modifier.padding(horizontal = 4.dp),
+    ) {
+            // The predictions. A row rather than a list, slid sideways, so they
+            // sit under the field without covering the globe the search is
+            // about — the answer to "which of these did you mean" is one glance
+            // and one tap, and a vertical list would take the screen for it.
+            //
+            // These were lost when this bar became the shared one: the field
+            // moved into GlassSearchBar and the results row, which lived in the
+            // same Column as the field, went with the Column. Typing still ran
+            // the search and still lit "Nothing by that name" on or off, so the
+            // bar looked wired up while having nowhere to put an answer.
+            if (!state.isEmpty) {
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Inside a country, the way back leads. Sliding right to
+                    // find the exit would make the drill-down a trap on a row
+                    // that can be two dozen cities long.
+                    state.inCountry?.let { open ->
+                        item {
+                            CountryPill(
+                                country = open,
+                                open = true,
+                                onClick = { onOpenCountry(null) },
+                            )
+                        }
+                    }
+                    // Countries first otherwise: a country is the broadest
+                    // answer to a half-typed word, and the one most likely to be
+                    // what was meant when it matches at all.
+                    items(state.countries) { country ->
+                        CountryPill(
+                            country = country,
+                            open = false,
+                            onClick = { onOpenCountry(country) },
+                        )
+                    }
+                    // Then cities. They are the ones that are certainly right —
+                    // matched against the globe's own list rather than guessed
+                    // at from a station's name — and they are already on screen
+                    // while the directory is still being asked.
+                    items(state.cities) { city ->
+                        CitySuggestionPill(
+                            city = city,
+                            onClick = {
+                                keyboard?.hide()
+                                onPickCity(city)
+                            },
+                        )
+                    }
+                    // Unkeyed, as everywhere else the directory's data is
+                    // listed: it does not promise unique uuids, and a duplicate
+                    // pill beats a crash.
+                    items(state.stations) { station ->
+                        StationPill(
+                            station = station,
+                            onClick = {
+                                keyboard?.hide()
+                                onPickStation(station)
+                            },
+                        )
+                    }
+                }
+            }
+
+            // Nothing typed yet: offer what was looked up before. This is the
+            // state the bar opens in, and an empty row under an empty field is
+            // a dead end on a screen where the interesting places are hard to
+            // spell.
+            if (query.isBlank() && recents.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(recents) { past ->
+                        RecentSearchPill(text = past, onClick = { onQueryChange(past) })
+                    }
+                    item {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Transparent,
+                            modifier = Modifier.bounceClick(onClick = onClearRecents),
+                        ) {
+                            Text(
+                                text = "Clear",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            when (state.status) {
+                SearchStatus.Idle -> Unit
+                SearchStatus.Searching ->
+                    if (state.cities.isEmpty()) SearchNote("Searching…")
+                SearchStatus.Unreachable ->
+                    SearchNote("Couldn't reach the station directory.")
+                SearchStatus.Ready ->
+                    if (state.isEmpty) SearchNote("Nothing by that name.")
+            }
+    }
+}
+
+@Composable
+private fun SearchNote(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+/** Something looked up here before. Tapping it types it again. */
+@Composable
+private fun RecentSearchPill(text: String, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Default.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 160.dp),
+            )
+        }
+    }
+}
+
+/**
+ * A country prediction, and — once [open] — the way back out of it.
+ *
+ * A country is not something you can play, so tapping it does not try to: it
+ * opens that country's cities in the same row. The count is the globe's own,
+ * the cities it can actually fly to, rather than a number from an atlas that
+ * would promise places this map does not have.
+ */
+@Composable
+private fun CountryPill(country: RadioCountry, open: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = if (open) MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)
+        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                imageVector = if (open) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Public,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = country.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 160.dp),
+            )
+            if (!open) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (country.cities == 1) "1 city" else "${country.cities} cities",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A city prediction. Tapping it does what tapping its dot does — flies there
+ * and opens the panel — rather than playing something. The city is a place with
+ * a list behind it, and picking one of that list is a separate decision.
+ */
+@Composable
+private fun CitySuggestionPill(city: RadioCity, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Default.Place,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = city.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 160.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = city.country,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** One prediction: the station, and the country it says it broadcasts from. */
+@Composable
+private fun StationPill(station: RadioStation, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = station.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 180.dp),
+            )
+            if (station.countryCode.isNotBlank()) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = station.countryCode,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -376,12 +1005,27 @@ private fun CityCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = maxStationsHeight)
-                            .verticalScroll(rememberScrollState()),
+                    // A real scroll container rather than a Column that happens
+                    // to be scrollable. Two things needed it: a city like Berlin
+                    // brings hundreds of stations and a plain Column composes and
+                    // measures every one of them to show four, and a Column's
+                    // scroll gesture has to travel up through the panel's own
+                    // pointer handling, which a LazyColumn's owns outright.
+                    //
+                    // Keyed on the city so each one opens at the top. The state
+                    // survives the Loading→Ready hop within a single city, which
+                    // is what keeps a refresh from throwing the list back.
+                    val listState = key(city.id) { rememberLazyListState() }
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.heightIn(max = maxStationsHeight),
                     ) {
-                        for (station in stations.stations) {
+                        // Deliberately unkeyed. The obvious key is the station
+                        // uuid, and the directory is a third-party listing that
+                        // does not promise uniqueness — a repeated uuid is a
+                        // crash in a keyed LazyColumn, and a duplicated row is
+                        // the better failure by a wide margin.
+                        items(stations.stations) { station ->
                             StationRow(
                                 station = station,
                                 favourite = station.uuid in favourites,
@@ -515,14 +1159,113 @@ private fun CityChip(city: RadioCity, onClick: () -> Unit) {
     }
 }
 
+/**
+ * The pulsing ring on the city whose card is open.
+ *
+ * Its own canvas, and that is the entire point of it. The globe re-projects
+ * ~5,100 coastline points, 1,611 dots and a label collision grid on every draw,
+ * so anything animated sharing that canvas drags all of it to 60 Hz — with a
+ * city selected the panel is open, and the cost landed squarely on scrolling
+ * the station list. Here the per-frame work is one projection and one circle.
+ *
+ * Draws nothing when the city is round the back, and does not exist at all with
+ * animations off — there is no still frame of this worth paying a canvas for.
+ */
+@Composable
+private fun SelectedCityPing(
+    city: RadioCity,
+    scale: Int,
+    camera: GlobeCamera,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    if (reduceMotion()) return
+
+    val breath = rememberInfiniteTransition(label = "selectedCity")
+    val ping = breath.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            // Restart, not Reverse. A ring that grows and then shrinks back into
+            // itself reads as a blob breathing; one that grows, fades, and is
+            // replaced reads as a transmitter, which is what the dot is.
+            animation = tween(1500, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "selectedPing",
+    )
+
+    Canvas(modifier = modifier) {
+        val radius = globeRadius(size.width, size.height, camera.zoom)
+        val p = project(city.lat, city.lon, scale, camera, size.width / 2f, size.height / 2f, radius)
+        if (!p.visible) return@Canvas
+
+        // Read inside the draw lambda so the ping invalidates the draw phase and
+        // never the composition around it.
+        val t = ping.value
+        // Floored well above the dot's own size. Scaled purely off the dot, the
+        // marker disappeared on ordinary cities: a 42-station dot is about four
+        // pixels across, and a ring at 2.6× of that is not a marker, it is a
+        // smudge a couple of pixels clear of the thing it is marking.
+        val base = cityDotRadius(city.stations, camera.zoom).coerceAtLeast(PING_MIN_BASE_PX)
+
+        // Two rings, half a cycle apart, so one is always mid-flight instead of
+        // there being a dead beat between pulses. Squared fade so each ring
+        // holds its brightness on the way out and then goes quickly, rather than
+        // spending its whole life as a faint smear.
+        for (i in 0 until PING_RINGS) {
+            val phase = (t + i.toFloat() / PING_RINGS) % 1f
+            val fade = 1f - phase
+            drawCircle(
+                color = accent.copy(alpha = 0.8f * fade * fade),
+                radius = base * (1.4f + PING_TRAVEL * phase),
+                center = Offset(p.x, p.y),
+                style = Stroke(width = 1.2f + 2.6f * fade),
+            )
+        }
+
+        // A steady core underneath, so the city stays marked in the instant
+        // after one ring has faded and before the next has cleared the dot.
+        drawCircle(
+            color = accent.copy(alpha = 0.32f),
+            radius = base * 1.2f,
+            center = Offset(p.x, p.y),
+        )
+    }
+}
+
+/**
+ * The smallest the ping treats its city as being.
+ *
+ * The ring is a multiple of the dot, and most dots are tiny — sizing it purely
+ * off the station count made the marker vanish on exactly the small cities that
+ * are hardest to pick out of the globe in the first place.
+ */
+private const val PING_MIN_BASE_PX = 6f
+
+/** How far a ring travels, as a multiple of the dot, before it has faded out. */
+private const val PING_TRAVEL = 7f
+
+/** Rings in flight at once, evenly spaced through the cycle. */
+private const val PING_RINGS = 2
+
 // ── projection, camera and drawing ──────────────────────────────────────────
 
 private val MINI_PLAYER_RESERVE = 72.dp
+
+/**
+ * How long the glow settings sit still before they are written.
+ *
+ * Long enough that a whole slider drag is one write instead of a hundred, short
+ * enough that letting go and leaving the screen keeps the change.
+ */
+private const val FX_PERSIST_DEBOUNCE_MS = 400L
 private const val STATIONS_HEIGHT_FRACTION = 0.34f
 private const val FLIGHT_HEIGHT_QUANTUM = 96
 private const val SPIN_MILLIS = 700
 private val SpinEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
 
+/** The widest the Earth is drawn. */
 private const val MIN_ZOOM = 0.85f
 
 /**
@@ -576,11 +1319,14 @@ private data class GlobeCamera(
             zoom = next,
         )
     }
-
-    private companion object {
-        const val MAX_PITCH = 1.45f
-    }
 }
+
+/**
+ * How far the poles may be walked toward the viewer. Short of ±π/2 on purpose:
+ * passing one flips the world upside down mid-drag. File-level rather than
+ * private to the camera because the flight has to respect the same ceiling.
+ */
+private const val MAX_PITCH = 1.45f
 
 private fun wrap(radians: Float): Float {
     val twoPi = (2 * PI).toFloat()
@@ -620,40 +1366,57 @@ private fun project(
     cy: Float,
     radius: Float,
 ): Projected {
-    val lat = Math.toRadians(latRaw.toDouble() / scale)
-    val lon = Math.toRadians(lonRaw.toDouble() / scale) + camera.yaw
-
-    val cosLat = cos(lat)
-    val x = cosLat * sin(lon)
-    val y = sin(lat)
-    val z = cosLat * cos(lon)
-
-    // Tilt about the horizontal axis, so dragging up and down walks the poles
-    // toward the viewer instead of rolling the image.
-    val cosP = cos(camera.pitch.toDouble())
-    val sinP = sin(camera.pitch.toDouble())
-    val y2 = y * cosP - z * sinP
-    val z2 = y * sinP + z * cosP
-
+    // One projection for the screen and for the land clipper. They were the same
+    // arithmetic written out twice, which is two places for the sign of the tilt
+    // to drift apart — and a clipper that disagrees with the dots about where
+    // the horizon is would cull land the cities are still drawn on.
+    val v = GlobeLandClip.project(latRaw, lonRaw, scale, camera.yaw, camera.pitch)
     return Projected(
-        x = cx + (x * radius).toFloat(),
-        y = cy - (y2 * radius).toFloat(),
-        z = z2.toFloat(),
+        x = cx + v.x * radius,
+        y = cy - v.y * radius,
+        z = v.z,
     )
 }
 
-/** Turn the Earth so a city faces the viewer, on a curve. */
+/**
+ * Turn the Earth so a city faces the viewer, on a curve.
+ *
+ * "Faces the viewer" is not the same as "sits in the middle of the canvas". The
+ * card covers the bottom third of the screen and the app bar the top of it, so
+ * centring a city on the disc puts the very dot you just selected underneath
+ * the panel describing it — the flight looks like it went somewhere wrong. The
+ * target is therefore the middle of what is actually *visible*, and because
+ * this is a sphere the only way to move a point up the screen is to rotate less
+ * than all the way: the lift is subtracted from the pitch rather than added to
+ * a translation the camera does not have.
+ */
 private suspend fun spinToCity(
     city: RadioCity,
     scale: Int,
     from: GlobeCamera,
     instant: Boolean,
+    size: IntSize,
+    topInset: Float,
+    bottomInset: Float,
     onFrame: (GlobeCamera) -> Unit,
 ) {
     val targetYaw = wrap((-Math.toRadians(city.lon.toDouble() / scale)).toFloat())
-    val targetPitch = Math.toRadians(city.lat.toDouble() / scale).toFloat()
-        .coerceIn(-1.45f, 1.45f)
     val targetZoom = maxOf(from.zoom, 2.2f)
+    val latitude = Math.toRadians(city.lat.toDouble() / scale).toFloat()
+
+    // How far above the disc's centre the city has to land, and the rotation
+    // that puts it there. project() gives screen y = cy − radius·sin(lat − pitch),
+    // so asking for an offset of d is asking for sin(lat − pitch) = d / radius.
+    // Clamped inside the domain of asin: a lift taller than the globe's own
+    // radius is unreachable at this zoom, and the nearest reachable framing is
+    // a better answer than a NaN camera.
+    val radius = globeRadius(size.width.toFloat(), size.height.toFloat(), targetZoom)
+    val lift = if (radius <= 0f) {
+        0f
+    } else {
+        asin((((bottomInset - topInset) / 2f) / radius).coerceIn(-0.95f, 0.95f))
+    }
+    val targetPitch = (latitude - lift).coerceIn(-MAX_PITCH, MAX_PITCH)
 
     if (instant) {
         onFrame(GlobeCamera(targetYaw, targetPitch, targetZoom))
@@ -732,6 +1495,9 @@ private fun DrawScope.drawGlobe(
     labelSizePx: Float,
     topInset: Float,
     bottomInset: Float,
+    accent: Color,
+    outlines: OutlineCache,
+    fx: GlobeFxSettings = GlobeFxSettings(),
 ) {
     if (data.cities.isEmpty() && data.coastline.isEmpty()) return
 
@@ -739,6 +1505,13 @@ private fun DrawScope.drawGlobe(
     val cx = size.width / 2f
     val cy = size.height / 2f
     val scale = data.scale.takeIf { it > 0 } ?: 100
+
+    // The lit ink. Blended toward the accent rather than replaced by it, so the
+    // slider has a whole range instead of an on and an off — and blended from
+    // the theme's own land colour, which is what keeps the globe legible in both
+    // light and dark instead of tuned for one of them.
+    val litLand = androidx.compose.ui.graphics.lerp(land, accent, fx.illumination)
+    val halo = if (fx.glowing) accent.copy(alpha = fx.glowBrightness * 0.45f) else null
 
     drawCircle(color = ocean, radius = radius, center = Offset(cx, cy))
     drawCircle(
@@ -756,25 +1529,46 @@ private fun DrawScope.drawGlobe(
     // in, which is when knowing whose airwaves you are looking at starts to
     // matter.
     val borderAlpha = (0.3f + 0.02f * camera.zoom).coerceIn(0.3f, 0.62f)
-    drawProjectedLines(
-        lines = data.borders,
-        colour = land.copy(alpha = borderAlpha),
-        width = 0.9f,
-        camera = camera,
-        cx = cx,
-        cy = cy,
-        radius = radius,
-        scale = scale,
+
+    // Rebuild the geometry only when it could have moved. The camera and the
+    // viewport are the whole of what the projection depends on, so a change
+    // that is only to colour reuses every path.
+    outlines.update(
+        signature = outlineSignature(camera, size.width, size.height, data),
+        buildBorders = { projectLines(data.borders, camera, cx, cy, radius, scale) },
+        buildCoastline = { projectLines(data.coastline, camera, cx, cy, radius, scale) },
+        buildLand = {
+            projectLandFill(
+                rings = data.land,
+                orientations = outlines.orientationsFor(data.land, scale),
+                camera = camera,
+                cx = cx,
+                cy = cy,
+                radius = radius,
+                scale = scale,
+            )
+        },
     )
-    drawProjectedLines(
-        lines = data.coastline,
-        colour = land,
+
+    // Land over the ocean disc and under every line, so the coast reads as the
+    // edge of the land rather than as a stroke lying on top of the sea.
+    if (fx.landFill > 0.01f) {
+        drawPath(path = outlines.land, color = litLand.copy(alpha = fx.landFill))
+    }
+
+    strokeOutlines(
+        paths = outlines.borders,
+        colour = litLand.copy(alpha = borderAlpha),
+        width = 0.9f,
+        glow = halo?.copy(alpha = halo.alpha * borderAlpha),
+        glowWidth = fx.glowWidth,
+    )
+    strokeOutlines(
+        paths = outlines.coastline,
+        colour = litLand,
         width = 1.1f,
-        camera = camera,
-        cx = cx,
-        cy = cy,
-        radius = radius,
-        scale = scale,
+        glow = halo,
+        glowWidth = fx.glowWidth,
     )
 
     for (city in data.cities) {
@@ -782,19 +1576,7 @@ private fun DrawScope.drawGlobe(
         if (!p.visible) continue
         if (p.x < -20f || p.y < -20f || p.x > size.width + 20f || p.y > size.height + 20f) continue
 
-        // Log, because the counts run from 1 to several hundred: linear sizing
-        // makes Berlin a blot and leaves every one-station town at the same
-        // invisible speck.
-        val weight = (ln(1f + city.stations) / LOG_CEILING).coerceIn(0f, 1f)
-        // And grow with the zoom, or closing in only spreads the same specks
-        // further apart — the thing you zoomed in to see stays as hard to see
-        // and as hard to hit. Log again rather than the genre map's linear ramp,
-        // because this range is 0.85 to 48 rather than 0.6 to 14 and a linear
-        // one would hit its ceiling in the first tenth of the travel. Clamped at
-        // both ends: the whole-Earth view must not turn to blobs, and the
-        // closest view must not grow discs.
-        val closeness = (0.7f + 0.35f * ln(1f + camera.zoom)).coerceIn(0.75f, 2.4f)
-        val base = (1.6f + weight * 4.4f) * closeness
+        val base = cityDotRadius(city.stations, camera.zoom)
         val selected = city.id == selectedId
 
         // Fade toward the limb, so the sphere reads as curved rather than as a
@@ -802,9 +1584,13 @@ private fun DrawScope.drawGlobe(
         val edge = (p.z * 1.4f).coerceIn(0.25f, 1f)
 
         if (selected) {
+            // The still part of the marker only. The ring that animates is drawn
+            // by [SelectedCityPing] on a canvas of its own — an animation in
+            // here would invalidate this one, and this one re-projects every
+            // coastline point in the asset each time it runs.
             drawCircle(
-                color = dot.copy(alpha = 0.30f),
-                radius = base * 3.2f,
+                color = dot.copy(alpha = 0.22f),
+                radius = base * 2.2f,
                 center = Offset(p.x, p.y),
             )
         }
@@ -830,7 +1616,85 @@ private fun DrawScope.drawGlobe(
 }
 
 /**
- * Stroke a set of flat `[lon, lat, lon, lat, …]` runs onto the sphere.
+ * A number that changes exactly when the projected outlines would.
+ *
+ * Yaw and pitch are quantised to about a five-thousandth of a radian and the
+ * zoom to four decimals — finer than any of them can shift a vertex by a
+ * visible amount, coarse enough that float noise alone never invalidates the
+ * cache. The dataset's shape is folded in too, so the frame between an empty
+ * globe and a loaded one cannot reuse an empty projection.
+ */
+private fun outlineSignature(
+    camera: GlobeCamera,
+    width: Float,
+    height: Float,
+    data: tf.monochrome.android.domain.model.WorldRadioData,
+): Long {
+    var h = (camera.yaw * 5000f).toLong()
+    h = h * 31 + (camera.pitch * 5000f).toLong()
+    h = h * 31 + (camera.zoom * 10000f).toLong()
+    h = h * 31 + width.toLong()
+    h = h * 31 + height.toLong()
+    h = h * 31 + data.coastline.size
+    h = h * 31 + data.borders.size
+    h = h * 31 + data.land.size
+    return h
+}
+
+/**
+ * The projected outlines, kept between draws.
+ *
+ * Projection is the whole cost of this screen — ~5,100 coastline points and
+ * every border vertex, each through two sines and two cosines — and it depends
+ * on nothing but the camera and the viewport. The glow settings change how the
+ * outlines are *stroked*, not where they are, so rebuilding them when a slider
+ * moves meant re-running all of it sixty times a second to change a colour.
+ * That is what made the sliders crawl.
+ *
+ * Owned by the screen and handed to the draw rather than being a global: two
+ * globes on screen at once would need two caches, and a cache keyed by a camera
+ * some other instance keeps moving is a cache that never hits.
+ */
+private class OutlineCache {
+    private var key: Long = Long.MIN_VALUE
+    var borders: List<Path> = emptyList()
+        private set
+    var coastline: List<Path> = emptyList()
+        private set
+    var land: Path = Path()
+        private set
+
+    // Which way each land ring is wound. A property of the rings, not of the
+    // camera, so it survives every rebuild above and is only recomputed when the
+    // dataset itself is swapped — once, in practice, when the asset loads.
+    private var ringsSeen: List<List<Int>>? = null
+    private var orientations: FloatArray = FloatArray(0)
+
+    fun orientationsFor(rings: List<List<Int>>, scale: Int): FloatArray {
+        if (ringsSeen !== rings) {
+            ringsSeen = rings
+            orientations = GlobeLandClip.orientations(rings, scale)
+        }
+        return orientations
+    }
+
+    /** Rebuild only when the geometry could actually have moved. */
+    fun update(
+        signature: Long,
+        buildBorders: () -> List<Path>,
+        buildCoastline: () -> List<Path>,
+        buildLand: () -> Path,
+    ) {
+        if (signature == key) return
+        key = signature
+        borders = buildBorders()
+        coastline = buildCoastline()
+        land = buildLand()
+    }
+}
+
+/**
+ * Project a set of flat `[lon, lat, lon, lat, …]` runs into screen-space paths.
  *
  * Shared by the coastline and the borders because they are the same problem:
  * the same projection, the same hemisphere culling, and the same pen-lifting
@@ -838,31 +1702,98 @@ private fun DrawScope.drawGlobe(
  * second place for it to rot — and getting it wrong is not subtle, it draws a
  * chord straight across the face of the globe.
  */
-private fun DrawScope.drawProjectedLines(
+private fun projectLines(
     lines: List<List<Int>>,
-    colour: Color,
-    width: Float,
     camera: GlobeCamera,
     cx: Float,
     cy: Float,
     radius: Float,
     scale: Int,
-) {
-    for (line in lines) {
-        val path = Path()
-        var drawing = false
-        var index = 0
-        while (index + 1 < line.size) {
-            val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
-            if (p.visible) {
-                if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
-                drawing = true
-            } else {
-                // Round the back: lift the pen so the line stops at the limb
-                // rather than being drawn across the disc when it reappears.
-                drawing = false
+): List<Path> = lines.map { line ->
+    val path = Path()
+    var drawing = false
+    var index = 0
+    while (index + 1 < line.size) {
+        val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
+        if (p.visible) {
+            if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
+            drawing = true
+        } else {
+            // Round the back: lift the pen so the line stops at the limb rather
+            // than being drawn across the disc when it reappears.
+            drawing = false
+        }
+        index += 2
+    }
+    path
+}
+
+/**
+ * Project the land rings into one fillable path.
+ *
+ * The clipping — the hard part, and the part that used to make the globe invert
+ * mid-drag — lives in [GlobeLandClip], which has no Compose in it so a test can
+ * sweep the camera over the real asset and check that the sea stays sea. All
+ * that is left here is scaling the unit disc it returns into pixels.
+ *
+ * One path for the whole world, filled even-odd: distinct landmasses never
+ * overlap on the sphere so they cannot cancel, and a hole punched by a
+ * containing ring does exactly what it should.
+ */
+private fun projectLandFill(
+    rings: List<List<Int>>,
+    orientations: FloatArray,
+    camera: GlobeCamera,
+    cx: Float,
+    cy: Float,
+    radius: Float,
+    scale: Int,
+): Path {
+    val path = Path().apply { fillType = PathFillType.EvenOdd }
+    if (radius <= 0f) return path
+
+    for ((index, ring) in rings.withIndex()) {
+        val polygons = GlobeLandClip.clipRing(
+            ring = ring,
+            orientation = orientations[index],
+            yaw = camera.yaw,
+            pitch = camera.pitch,
+            scale = scale,
+        )
+        for (poly in polygons) {
+            var started = false
+            var i = 0
+            while (i + 1 < poly.size) {
+                started = path.step(started, cx + poly[i] * radius, cy - poly[i + 1] * radius)
+                i += 2
             }
-            index += 2
+            if (started) path.close()
+        }
+    }
+    return path
+}
+
+private fun Path.step(started: Boolean, x: Float, y: Float): Boolean {
+    if (started) lineTo(x, y) else moveTo(x, y)
+    return true
+}
+
+/**
+ * Stroke already-projected outlines, halo first.
+ *
+ * Both strokes come off the one [Path], so the halo costs a second rasterise
+ * and never a second projection.
+ */
+private fun DrawScope.strokeOutlines(
+    paths: List<Path>,
+    colour: Color,
+    width: Float,
+    glow: Color?,
+    glowWidth: Float,
+) {
+    for (path in paths) {
+        if (glow != null) {
+            drawPath(path = path, color = glow, style = Stroke(width = width * glowWidth))
         }
         drawPath(path = path, color = colour, style = Stroke(width = width))
     }
@@ -950,6 +1881,26 @@ private fun DrawScope.drawCityLabels(
             drawText(city.name, p.x, baseline, paint)
         }
     }
+}
+
+/**
+ * How big a city's dot is drawn, from its station count and the zoom.
+ *
+ * Log on the count, because they run from 1 to 2,294: linear sizing makes
+ * Berlin a blot and leaves every one-station town the same invisible speck. Log
+ * again on the zoom, rather than the genre map's linear ramp, because this
+ * range is 0.85 to 48 rather than 0.6 to 14 and a linear one would hit its
+ * ceiling in the first tenth of the travel — closing in would only spread the
+ * same specks further apart, and the thing you zoomed in to see would stay as
+ * hard to see and as hard to hit. Clamped at both ends: the whole-Earth view
+ * must not turn to blobs, and the closest view must not grow discs.
+ *
+ * Shared with the selected-city ping, which has to agree with the dot it rings.
+ */
+private fun cityDotRadius(stations: Int, zoom: Float): Float {
+    val weight = (ln(1f + stations) / LOG_CEILING).coerceIn(0f, 1f)
+    val closeness = (0.7f + 0.35f * ln(1f + zoom)).coerceIn(0.75f, 2.4f)
+    return (1.6f + weight * 4.4f) * closeness
 }
 
 /** Below this the globe is too small for a name to fit beside its dot. */

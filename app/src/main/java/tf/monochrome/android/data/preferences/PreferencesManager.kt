@@ -81,6 +81,15 @@ class PreferencesManager @Inject constructor(
     companion object {
         private const val MAX_SEARCH_HISTORY_SIZE = 10
 
+        /** The app's indigo, and a near-black ground: a sane dark default pair. */
+        private const val DEFAULT_CUSTOM_ACCENT = 0xFF5865F2.toInt()
+        private const val DEFAULT_CUSTOM_BACKGROUND = 0xFF101014.toInt()
+
+        // Fewer than the catalogue's, because these are pills in a row rather
+        // than a list: past half a dozen they are off the end of the screen and
+        // the oldest are being kept for nobody.
+        private const val MAX_RADIO_SEARCH_HISTORY_SIZE = 6
+
         // Audio quality
         private val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         private val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
@@ -97,7 +106,13 @@ class PreferencesManager @Inject constructor(
 
         // Theme
         private val THEME = stringPreferencesKey("theme")
+        private val THEME_PAPER = stringPreferencesKey("theme_paper")
         private val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
+        // Custom colours: when on, an accent and a ground the listener picked
+        // replace whichever preset is selected. Stored as ARGB ints.
+        private val CUSTOM_THEME_ENABLED = booleanPreferencesKey("custom_theme_enabled")
+        private val CUSTOM_ACCENT = intPreferencesKey("custom_accent_color")
+        private val CUSTOM_BACKGROUND = intPreferencesKey("custom_background_color")
 
         // Scrobbling
         private val LASTFM_SESSION_KEY = stringPreferencesKey("lastfm_session_key")
@@ -137,6 +152,7 @@ class PreferencesManager @Inject constructor(
         private val LYRICS_BASS_REACT = floatPreferencesKey("lyrics_bass_react")
         // Full Player Visuals Studio settings as one JSON blob (takes precedence).
         private val LYRICS_FX_JSON = stringPreferencesKey("lyrics_fx_json")
+        private val GLOBE_FX_JSON = stringPreferencesKey("globe_fx_json")
         // User-saved Lyrics FX presets (a JSON array of {name, settings}).
         private val LYRICS_FX_CUSTOM_PRESETS_JSON = stringPreferencesKey("lyrics_fx_custom_presets_json")
         // Player-chrome (transport button) liquid-glass settings, one JSON blob.
@@ -351,6 +367,7 @@ class PreferencesManager @Inject constructor(
 
         // Search
         private val SEARCH_HISTORY_JSON = stringPreferencesKey("search_history_json")
+        private val RADIO_SEARCH_HISTORY_JSON = stringPreferencesKey("radio_search_history_json")
 
         // Spectrum analyzer
         private val SPECTRUM_ANALYZER_ENABLED = booleanPreferencesKey("spectrum_analyzer_enabled")
@@ -374,7 +391,9 @@ class PreferencesManager @Inject constructor(
         // deliberately added here.
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY,
-            THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
+            THEME, THEME_PAPER, DYNAMIC_COLORS,
+            CUSTOM_THEME_ENABLED, CUSTOM_ACCENT, CUSTOM_BACKGROUND,
+            FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
@@ -383,7 +402,7 @@ class PreferencesManager @Inject constructor(
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
-            LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, PLAYER_GLASS_JSON,
+            LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
@@ -488,8 +507,55 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[THEME] = theme }
     }
 
+    /**
+     * Which paper the light themes are printed on — "crisp" true white, or
+     * "warm" off-white. One axis across every light variant rather than a
+     * setting per theme: it is a preference about glare and about how a screen
+     * should feel, not about Nord.
+     */
+    val themePaper: Flow<String> = dataStore.data.map { prefs ->
+        prefs[THEME_PAPER] ?: "crisp"
+    }
+
+    suspend fun setThemePaper(paper: String) {
+        dataStore.edit { it[THEME_PAPER] = paper }
+    }
+
     suspend fun setDynamicColors(enabled: Boolean) {
         dataStore.edit { it[DYNAMIC_COLORS] = enabled }
+    }
+
+    /**
+     * Whether the listener's own two colours override the selected preset.
+     *
+     * Off by default: the presets are the designed path, and a custom scheme is
+     * only as good as the pair someone picks. When it is on, [customAccentColor]
+     * and [customBackgroundColor] are what the theme is built from.
+     */
+    val customThemeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[CUSTOM_THEME_ENABLED] ?: false
+    }
+
+    suspend fun setCustomThemeEnabled(enabled: Boolean) {
+        dataStore.edit { it[CUSTOM_THEME_ENABLED] = enabled }
+    }
+
+    /** The accent for the custom scheme. Defaults to the app's own indigo. */
+    val customAccentColor: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[CUSTOM_ACCENT] ?: DEFAULT_CUSTOM_ACCENT
+    }
+
+    suspend fun setCustomAccentColor(argb: Int) {
+        dataStore.edit { it[CUSTOM_ACCENT] = argb }
+    }
+
+    /** The ground for the custom scheme; its luminance decides dark vs light. */
+    val customBackgroundColor: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[CUSTOM_BACKGROUND] ?: DEFAULT_CUSTOM_BACKGROUND
+    }
+
+    suspend fun setCustomBackgroundColor(argb: Int) {
+        dataStore.edit { it[CUSTOM_BACKGROUND] = argb }
     }
 
     // Scrobbling - Last.fm
@@ -977,6 +1043,44 @@ class PreferencesManager @Inject constructor(
 
     suspend fun clearSearchHistory() {
         dataStore.edit { it.remove(SEARCH_HISTORY_JSON) }
+    }
+
+    /**
+     * What was last looked up on the world radio globe.
+     *
+     * Its own key rather than a share of the catalogue's history above: one is
+     * artists and albums, the other is places and station names, and offering
+     * either as a suggestion for the other is noise in both directions.
+     */
+    val radioSearchHistory: Flow<List<String>> = dataStore.data
+        .map { it[RADIO_SEARCH_HISTORY_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw?.let { s ->
+                runCatching { json.decodeFromString<List<String>>(s) }.getOrDefault(emptyList())
+            } ?: emptyList()
+        }
+
+    suspend fun addRadioSearchQuery(query: String) {
+        val normalized = query.trim()
+        if (normalized.isBlank()) return
+        dataStore.edit { prefs ->
+            val existing = prefs[RADIO_SEARCH_HISTORY_JSON]?.let { raw ->
+                runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+            }.orEmpty()
+            // Move-to-front and case-insensitive dedupe, so searching the same
+            // place twice keeps one pill rather than two that differ by a
+            // capital letter.
+            val updated = buildList {
+                add(normalized)
+                addAll(existing.filterNot { it.equals(normalized, ignoreCase = true) })
+            }.take(MAX_RADIO_SEARCH_HISTORY_SIZE)
+            prefs[RADIO_SEARCH_HISTORY_JSON] = json.encodeToString(updated)
+        }
+    }
+
+    suspend fun clearRadioSearchHistory() {
+        dataStore.edit { it.remove(RADIO_SEARCH_HISTORY_JSON) }
     }
 
     // --- Google Auth ---
@@ -1685,6 +1789,30 @@ class PreferencesManager @Inject constructor(
     suspend fun setLyricsFx(settings: LyricsFxSettings) {
         val clamped = settings.clamped()
         dataStore.edit { it[LYRICS_FX_JSON] = json.encodeToString(clamped) }
+    }
+
+    /**
+     * How the world globe's outlines react to the music. Same shape as the
+     * lyrics blob above — one JSON key, decoded lazily, and clamped on the way
+     * both in and out so a hand-edited or future-versioned value can never hand
+     * the renderer an amplitude it will draw the Earth inside out with.
+     */
+    val globeFx: Flow<tf.monochrome.android.domain.model.GlobeFxSettings> = dataStore.data
+        .map { it[GLOBE_FX_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s ->
+                    runCatching {
+                        json.decodeFromString<tf.monochrome.android.domain.model.GlobeFxSettings>(s)
+                    }.getOrNull()
+                }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.GlobeFxSettings()
+        }
+
+    suspend fun setGlobeFx(settings: tf.monochrome.android.domain.model.GlobeFxSettings) {
+        dataStore.edit { it[GLOBE_FX_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     /** User-saved Lyrics FX presets (empty until the user saves one). */

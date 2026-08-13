@@ -35,6 +35,7 @@ import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.playerGlass
 import kotlin.math.floor
+import tf.monochrome.android.ui.theme.glassTint
 
 private val SlotSpacing = 8.dp
 private val SlotRadius = 2.5.dp
@@ -130,8 +131,7 @@ fun SwipeToLibraryHint(
         )
     }
     val profile = LocalPerformanceProfile.current
-    val tint = if (glass.tintColor != 0) Color(glass.tintColor)
-               else MaterialTheme.colorScheme.primary
+    val tint = glassTint(glass.tintColor)
 
     Box(modifier = modifier.clip(shape)) {
         // Frosted backdrop UNDER the slab, mirroring the mini player. The slab

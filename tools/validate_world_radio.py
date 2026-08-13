@@ -11,6 +11,7 @@ What it enforces, and why each one is worth enforcing:
   every city broadcasts   a dot is a claim you can tune in there; an empty one lies
   ids unique              the panel is keyed by id; a duplicate makes one unreachable
   coastline present       without it the globe is dots floating on nothing
+  land rings closed       an open ring fills as a chord across the sphere
   lines well formed       an odd-length run means a lon with no lat, and the
                           renderer reads past the end of the array
   attribution shipped     GeoNames is CC BY 4.0; the credit is not optional
@@ -49,6 +50,7 @@ def main() -> int:
     cities = data.get("cities", [])
     coastline = data.get("coastline", [])
     borders = data.get("borders", [])
+    land = data.get("land", [])
 
     if not data.get("attribution") or not data.get("license"):
         errors.append("asset ships without its attribution or licence")
@@ -80,7 +82,17 @@ def main() -> int:
     if border_points < MIN_BORDER_POINTS:
         errors.append(f"borders have only {border_points} points")
 
-    for name, lines in (("coastline", coastline), ("borders", borders)):
+    if not land:
+        errors.append("no land rings — the continents would draw unfilled")
+    # A fill needs closed rings. An open one draws a chord across the sphere.
+    unclosed = [
+        i for i, ring in enumerate(land)
+        if len(ring) < 6 or ring[0] != ring[-2] or ring[1] != ring[-1]
+    ]
+    if unclosed:
+        errors.append(f"{len(unclosed)} land rings do not close")
+
+    for name, lines in (("coastline", coastline), ("borders", borders), ("land", land)):
         for index, line in enumerate(lines):
             if len(line) % 2:
                 errors.append(f"{name} line {index} has an odd number of values")
@@ -96,6 +108,7 @@ def main() -> int:
     print(f"  stations:  {stations} matches")
     print(f"  coastline: {len(coastline)} lines, {points} points")
     print(f"  borders:   {len(borders)} lines, {border_points} points")
+    print(f"  land:      {len(land)} rings, {sum(len(r) // 2 for r in land)} points")
     print(f"  asset:     {kilobytes:.0f} KB of {MAX_KB} KB")
 
     if errors:

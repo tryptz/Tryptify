@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.theme
 
 import android.os.Build
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -462,9 +463,31 @@ val themeDisplayNames = mapOf(
     "mint" to "Mint",
     "white" to "White",
     "clear" to "Clear"
-)
+) + ThemeAccents.keys.associate { base ->
+    // Every theme gets a light variant, named and listed alongside the dark
+    // one it is derived from. Generated rather than typed out so adding a
+    // theme adds its light twin automatically instead of leaving a gap
+    // somebody notices six months later.
+    lightVariantOf(base) to "${baseDisplayName(base)} Light"
+}
 
-fun getColorScheme(themeName: String) = when (themeName) {
+private fun baseDisplayName(base: String): String = when (base) {
+    "monochrome" -> "Monochrome"
+    else -> base.replaceFirstChar { it.uppercase() }
+}
+
+fun getColorScheme(themeName: String, paper: Paper = Paper.Crisp): ColorScheme {
+    // Light variants are built, not listed: "<theme>_light" for any theme the
+    // app knows an accent for. Fifteen hand-written light palettes is fifteen
+    // chances to pick a grey that fails on its own card, which is exactly how
+    // the one that existed went wrong.
+    lightVariantBase(themeName)?.let { base ->
+        ThemeAccents[base]?.let { return lightSchemeFor(it, paper) }
+    }
+    return darkSchemeFor(themeName)
+}
+
+private fun darkSchemeFor(themeName: String) = when (themeName) {
     "ocean" -> OceanDarkScheme
     "midnight" -> MidnightDarkScheme
     "crimson" -> CrimsonDarkScheme
@@ -479,6 +502,9 @@ fun getColorScheme(themeName: String) = when (themeName) {
     "gold" -> GoldDarkScheme
     "rosewater" -> RosewaterDarkScheme
     "mint" -> MintDarkScheme
+    // The original hand-built light theme, kept as its own entry so nobody who
+    // chose it wakes up on a generated one. "monochrome_light" is the built
+    // equivalent and is what "system" now reaches for.
     "white" -> WhiteScheme
     "clear" -> ClearDarkScheme
     else -> MonochromeDarkScheme
@@ -496,24 +522,45 @@ fun rememberMaterialYouScheme(dark: Boolean): ColorScheme? {
     return if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
 }
 
+/**
+ * A pair of ARGB colours the listener picked, for the custom-theme override.
+ * Held as ints so it is a stable, equals-comparable key — a [Color]-based one
+ * would still work, but this is what the store hands back.
+ */
+data class CustomThemeColors(val accent: Int, val background: Int)
+
 @Composable
 fun MonochromeTheme(
     themeName: String = "monochrome_dark",
     fontScale: Float = 1.0f,
     customFontFamily: FontFamily? = null,
     dynamicPalette: DynamicPalette? = null,
+    paper: Paper = Paper.Crisp,
+    /**
+     * The listener's own two colours. When [customColors] is set it wins over
+     * the named theme, the paper and Material You alike — it is the deliberate
+     * override the "Custom colors" switch turns on, so nothing else gets to
+     * quietly decide the scheme out from under it.
+     */
+    customColors: CustomThemeColors? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
-    // "system" follows the OS dark-mode toggle — light mode gets the
-    // rebuilt WhiteScheme, dark mode gets the default Monochrome scheme.
+    // "system" follows the OS dark-mode toggle. In light mode it now reaches
+    // for the *light variant of the chosen theme* rather than a single shared
+    // white one, so following the system no longer means losing the theme.
     val resolvedTheme = if (themeName == "system") {
-        if (systemDark) "monochrome_dark" else "white"
+        if (systemDark) "monochrome_dark" else lightVariantOf("monochrome")
     } else themeName
-    val materialYou = if (resolvedTheme == "material_you") {
+    val materialYou = if (resolvedTheme == "material_you" && customColors == null) {
         rememberMaterialYouScheme(dark = systemDark)
     } else null
-    val colorScheme = materialYou ?: getColorScheme(resolvedTheme)
+    val colorScheme = when {
+        customColors != null ->
+            customScheme(Color(customColors.accent), Color(customColors.background))
+        materialYou != null -> materialYou
+        else -> getColorScheme(resolvedTheme, paper)
+    }
     val family = customFontFamily ?: InterFontFamily
     val typography = remember(fontScale, family) {
         buildTypography(family, fontScale)
@@ -540,6 +587,26 @@ fun MonochromeTheme(
  * MaterialTheme on purpose so the menus never pick up the album accent.
  */
 val LocalDynamicColorPalette = compositionLocalOf<DynamicPalette?> { null }
+
+/**
+ * What colour a sheet of glass should be tinted.
+ *
+ * A tint the listener set by hand wins outright — they picked it, and nothing
+ * else is entitled to overrule them. Otherwise the current scheme's primary.
+ *
+ * Deliberately *not* the album palette directly. Reading it here made every
+ * pane in the app drift with what was playing, menus and search bars included,
+ * which is the bleed the theme goes out of its way to prevent. The album
+ * reaches the glass the same way it reaches everything else — by the screen
+ * opting into [DynamicColorScope], where the scheme's own primary becomes the
+ * album's. That keeps it to the places where following the music is the point:
+ * the player, and the world radio globe.
+ */
+@Composable
+fun glassTint(explicitArgb: Int): Color {
+    if (explicitArgb != 0) return Color(explicitArgb)
+    return MaterialTheme.colorScheme.primary
+}
 
 /**
  * Overlays the album-art dynamic palette ([LocalDynamicColorPalette]) onto the

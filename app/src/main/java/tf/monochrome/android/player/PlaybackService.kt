@@ -607,10 +607,12 @@ class PlaybackService : MediaSessionService() {
                     dspManager.restoreState()
                     hasRestored = true
                 } else if (ready && hasRestored) {
-                    // Re-apply saved state on engine recreation (format change)
-                    val stateJson = preferences.dspStateJson.first()
-                    if (!stateJson.isNullOrEmpty()) dspManager.loadStateJson(stateJson)
-                    dspManager.setEnabled(dspManager.enabled.value)
+                    // Re-apply on engine recreation (a track at a different
+                    // format rebuilds it). The manager reapplies from its own
+                    // live copy — reading the persisted state here rolled any
+                    // edit made in the half second before the track change back
+                    // to its previous value, and then saved it that way.
+                    dspManager.reapplyAfterEngineRecreated()
                 }
             }
         }

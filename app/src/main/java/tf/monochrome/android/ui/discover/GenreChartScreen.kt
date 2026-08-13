@@ -59,6 +59,7 @@ import tf.monochrome.android.ui.theme.MonoDimens
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 /**
  * A genre's Top 100, over a window.
@@ -131,7 +132,7 @@ fun GenreChartScreen(
                 entries.isEmpty() -> EmptyChart(chart)
 
                 else -> LazyColumn(
-                    contentPadding = PaddingValues(bottom = MonoDimens.spacingXl),
+                    contentPadding = PaddingValues(bottom = MonoDimens.spacingXl + LocalMiniPlayerInset.current),
                 ) {
                     item {
                         chart?.let { Provenance(it) }

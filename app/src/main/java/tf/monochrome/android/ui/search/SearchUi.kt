@@ -89,53 +89,10 @@ import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.navigateSafe
 
-@Composable
-fun SearchQueryField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val keyboardController = LocalSoftwareKeyboardController.current
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = {
-            Text(
-                "Search tracks, albums, artists, playlists…",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = "Search")
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear")
-                }
-            }
-        },
-        singleLine = true,
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-            onSearch = {
-                onSubmit()
-                keyboardController?.hide()
-            }
-        ),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent
-        ),
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .liquidGlass(shape = MonoDimens.shapePill)
-    )
-}
+// SearchQueryField is gone. It was a one-line forward to GlassSearchBar that
+// existed to keep Home and the search screen agreeing on a placeholder, and both
+// of them go through SearchOverlay now — which owns the haze source the field
+// was being handed, so there was nothing left for the wrapper to carry.
 
 @Composable
 fun SearchHistoryContent(

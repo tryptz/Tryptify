@@ -14,12 +14,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import tf.monochrome.android.R
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import tf.monochrome.android.ui.components.ColorPickerDialog
+import tf.monochrome.android.ui.components.ColorSwatchRow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +39,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -125,6 +133,21 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 import tf.monochrome.android.ui.navigation.navigateTool
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.components.SearchOverlay
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.border
+import tf.monochrome.android.ui.theme.lightSchemeFor
+import tf.monochrome.android.ui.theme.Paper
+import androidx.compose.foundation.layout.Box
+import kotlinx.coroutines.delay
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -137,6 +160,18 @@ import tf.monochrome.android.ui.navigation.navigateTool
 // SETTINGS_TAB_ABOUT), never a literal — a hardcoded index has silently broken
 // twice now, once per reorder.
 private val settingsTabs = listOf("Appearance", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+
+/**
+ * Which tab carries a given label, for the search index to point at.
+ *
+ * Derived rather than written down, so reordering the tabs cannot leave every
+ * search result landing one tab to the left. Throws on an unknown label, which
+ * a test turns into a build failure rather than a result that goes nowhere.
+ */
+internal fun settingsTabIndex(label: String): Int =
+    settingsTabs.indexOf(label).also {
+        require(it >= 0) { "no settings tab called \"$label\"" }
+    }
 
 /**
  * Index of the About tab, where the What's New panel lives. Derived from
@@ -190,6 +225,12 @@ fun SettingsScreen(
         }
     }
 
+    val settingsAnchors = remember { SettingsAnchors() }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchHits = remember(searchQuery) { searchSettings(searchQuery) }
+
+    CompositionLocalProvider(LocalSettingsAnchors provides settingsAnchors) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Settings") },
@@ -198,14 +239,38 @@ fun SettingsScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },
+            actions = {
+                IconButton(onClick = {
+                    searchOpen = !searchOpen
+                    if (!searchOpen) searchQuery = ""
+                }) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = if (searchOpen) "Close search" else "Find a setting",
+                        tint = if (searchOpen) MaterialTheme.colorScheme.primary
+                        else LocalContentColor.current,
+                    )
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent
             )
         )
 
+        // Settings are nine tabs and a handful of screens of their own, which
+        // is more places than anyone should have to remember. The index behind
+        // this knows where each one lives, so a result can land on the tab that
+        // holds it *or* open the screen it actually is.
+        //
         // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
         // scroll the selected chip into view — swiping out to About (last of nine)
         // would otherwise leave the highlighted chip off-screen behind you.
+        //
+        // Above the search rather than under it. The bar floats, and floating it
+        // over the chips buried the one control that says which of the nine tabs
+        // you are on — while searching, which is exactly when you are about to
+        // be moved between them. The form below is what the glass should be
+        // frosting; the tab rail is chrome, and chrome stays put.
         val chipRow = rememberLazyListState()
         LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
         LazyRow(
@@ -227,27 +292,90 @@ fun SettingsScreen(
             }
         }
 
-        HorizontalPager(
-            state = settingsPager,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            // Each tab is a full settings form; keeping neighbours composed
-            // would mean building all nine of them up front.
-            beyondViewportPageCount = 0,
-        ) { page ->
-            tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
-                when (page) {
-                    0 -> AppearanceTab(viewModel, navController)
-                    1 -> AudioTab(viewModel, navController)
-                    2 -> EqualizerTab(navController, viewModel)
-                    3 -> LibrarySettingsTab(viewModel)
-                    4 -> DownloadsTab(viewModel)
-                    5 -> ConnectionsTab(viewModel)
-                    6 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                    7 -> SystemTab(viewModel, navController)
-                    8 -> AboutTab(viewModel)
+        // The bar floats over the *form* rather than pushing it down: laid out
+        // as a row of this Column it shoved the whole form down the screen every
+        // time it opened, and had the page's background behind it with nothing
+        // to frost.
+        SearchOverlay(
+            open = searchOpen,
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            placeholder = "Find a setting",
+            onClose = { searchOpen = false; searchQuery = "" },
+            modifier = Modifier.weight(1f),
+            barContent = {
+                if (searchQuery.trim().length >= 2) {
+                    if (searchHits.isEmpty()) {
+                        Text(
+                            text = "No setting by that name.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    } else {
+                        Spacer(Modifier.height(10.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(searchHits) { hit ->
+                                SettingsHitPill(
+                                    entry = hit,
+                                    onClick = {
+                                        searchOpen = false
+                                        searchQuery = ""
+                                        when (val d = hit.destination) {
+                                            is SettingsDestination.Tab -> {
+                                                // Ask before switching: the tab
+                                                // reports the row's position as
+                                                // it lays out, and a request
+                                                // made afterwards would arrive
+                                                // one frame too late.
+                                                settingsAnchors.request(hit.title)
+                                                settingsScope.launch {
+                                                    settingsPager.goToPage(d.index, animateTabs)
+                                                }
+                                            }
+                                            is SettingsDestination.Route ->
+                                                navController.navigateSafe(d.route)
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+        ) { searchTopInset ->
+            // The form runs full height *under* the floating bar rather than
+            // being pushed below it. Pushing it down left an empty strip behind
+            // the glass, and a sheet of glass with nothing behind it to blur
+            // paints its own base colour — the solid rectangle this used to show.
+            // The inset instead becomes top padding on each tab's own scroll
+            // (below), so real settings sit behind the glass and the first row
+            // still starts clear of it.
+            CompositionLocalProvider(LocalSettingsSearchInset provides searchTopInset) {
+                HorizontalPager(
+                    state = settingsPager,
+                    modifier = Modifier.fillMaxWidth().fillMaxSize(),
+                    // Each tab is a full settings form; keeping neighbours composed
+                    // would mean building all nine of them up front.
+                    beyondViewportPageCount = 0,
+                ) { page ->
+                    tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
+                        when (page) {
+                            0 -> AppearanceTab(viewModel, navController)
+                            1 -> AudioTab(viewModel, navController)
+                            2 -> EqualizerTab(navController, viewModel)
+                            3 -> LibrarySettingsTab(viewModel)
+                            4 -> DownloadsTab(viewModel)
+                            5 -> ConnectionsTab(viewModel)
+                            6 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                            7 -> SystemTab(viewModel, navController)
+                            8 -> AboutTab(viewModel)
+                        }
+                    }
                 }
             }
         }
+    }
     }
 }
 
@@ -429,16 +557,25 @@ private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavContro
     }
 }
 
+/** Which of the two custom colours a picker is open for. */
+private enum class CustomColorTarget { Accent, Background }
+
 @Composable
 private fun AppearanceControls(viewModel: SettingsViewModel) {
     val themeName by viewModel.theme.collectAsStateWithLifecycle()
     val dynamicColors by viewModel.dynamicColors.collectAsStateWithLifecycle()
+    val themePaper by viewModel.themePaper.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
     val availableFonts by viewModel.availableFonts.collectAsStateWithLifecycle()
     val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsStateWithLifecycle()
     val glowBehindArt by viewModel.glowBehindArt.collectAsStateWithLifecycle()
+    val customThemeEnabled by viewModel.customThemeEnabled.collectAsStateWithLifecycle()
+    val customAccent by viewModel.customAccentColor.collectAsStateWithLifecycle()
+    val customBackground by viewModel.customBackgroundColor.collectAsStateWithLifecycle()
     var showThemeDropdown by remember { mutableStateOf(false) }
+    // Which picker is open, if any — accent or ground.
+    var editingColor by remember { mutableStateOf<CustomColorTarget?>(null) }
 
     // File picker for .ttf font import
     val context = LocalContext.current
@@ -454,6 +591,59 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             themeDisplayNames.forEach { (key, displayName) ->
                 DropdownMenuItem(text = { Text(displayName) }, onClick = { viewModel.setTheme(key); showThemeDropdown = false })
             }
+        }
+        // Every light theme is printed on one of two papers. It is a choice
+        // about glare rather than about any one theme, so it is one control
+        // here rather than a variant of each of the fifteen.
+        LightPaperSetting(
+            paper = themePaper,
+            onPaperChange = { viewModel.setThemePaper(it) },
+        )
+
+        // Custom colours. When on, the two swatches below build the whole app's
+        // scheme and the preset above is ignored — light or dark is decided by
+        // the ground's own brightness, and every foreground is floored for
+        // contrast against it, so even a poorly chosen pair stays legible.
+        SettingSwitchItem(
+            title = "Custom colors",
+            subtitle = "Pick your own accent and background — overrides the theme above",
+            checked = customThemeEnabled,
+            onCheckedChange = { viewModel.setCustomThemeEnabled(it) },
+        )
+        AnimatedVisibility(visible = customThemeEnabled) {
+            Column {
+                ColorSwatchRow(
+                    label = "Accent",
+                    color = Color(customAccent),
+                    onClick = { editingColor = CustomColorTarget.Accent },
+                )
+                ColorSwatchRow(
+                    label = "Background",
+                    color = Color(customBackground),
+                    onClick = { editingColor = CustomColorTarget.Background },
+                )
+            }
+        }
+        when (editingColor) {
+            CustomColorTarget.Accent -> ColorPickerDialog(
+                initial = Color(customAccent),
+                title = "Accent color",
+                onDismiss = { editingColor = null },
+                onConfirm = {
+                    viewModel.setCustomAccentColor(it.toArgb())
+                    editingColor = null
+                },
+            )
+            CustomColorTarget.Background -> ColorPickerDialog(
+                initial = Color(customBackground),
+                title = "Background color",
+                onDismiss = { editingColor = null },
+                onConfirm = {
+                    viewModel.setCustomBackgroundColor(it.toArgb())
+                    editingColor = null
+                },
+            )
+            null -> Unit
         }
         SettingSwitchItem(
             title = "Dynamic Colors",
@@ -2808,15 +2998,67 @@ private fun openDonationUrl(context: android.content.Context, url: String) {
 }
 
 // ─── Shared components ─────────────────────────────────────────────────
+/**
+ * Every settings tab's scroll container.
+ *
+ * The tail padding is what lets this screen run *under* the mini player instead
+ * of stopping above it. The nav host used to reserve the bar's height outside
+ * the screen, which left a band of flat theme background behind the bar for its
+ * glass to lens — so the bar read as an opaque container however transparent it
+ * was set. The space is reserved here instead, where it is scrollable: rows
+ * pass behind the glass, and the last one still comes clear of it.
+ *
+ * Reserved whether or not anything is playing. The cost when nothing is is a
+ * little empty space past the final row, which is only reachable by scrolling
+ * to it; the cost of getting it wrong the other way is a setting nobody can
+ * reach.
+ */
 @Composable
 private fun SettingsTabContent(content: @Composable () -> Unit) {
+    val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val anchors = LocalSettingsAnchors.current
+    val listState = rememberLazyListState()
+    var listTop by remember { mutableFloatStateOf(0f) }
+
+    // Scroll to whatever the search asked for, once the tab has laid out and
+    // the row has reported where it is. Offsets are in root coordinates, so the
+    // list's own top has to come off before it means anything to the scroll.
+    LaunchedEffect(anchors?.foundAt) {
+        val y = anchors?.foundAt ?: return@LaunchedEffect
+        listState.animateScrollBy(y - listTop - ANCHOR_HEADROOM)
+        anchors.clear()
+    }
+
+    // Give up on a request nothing answers. An index title that no longer
+    // matches any row — a renamed setting — would otherwise leave the request
+    // set for the rest of the session, and the next row to compose with that
+    // title, on any tab, would be scrolled to out of nowhere.
+    LaunchedEffect(anchors?.target) {
+        if (anchors?.target == null) return@LaunchedEffect
+        delay(ANCHOR_TIMEOUT_MS)
+        if (anchors.foundAt == null) anchors.clear()
+    }
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp)
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { listTop = it.positionInRoot().y },
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            // Clears the floating search bar when it is open. As content padding
+            // rather than a Spacer or an offset, so the rows scroll up *under*
+            // the bar's glass — giving it something real to frost — instead of
+            // stopping at a hard line below it.
+            top = 16.dp + LocalSettingsSearchInset.current,
+            bottom = 16.dp + LocalMiniPlayerInset.current + navBar,
+        ),
     ) {
         item { content() }
     }
 }
+
 
 // Slugify a label into a stable DevEdit element id (e.g. "Gapless Playback" →
 // "gapless_playback"). Used so wrapping the shared setting rows yields stable,
@@ -2832,7 +3074,9 @@ private fun SettingsGroupHeader(title: String) {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
+            modifier = Modifier
+                .settingsAnchor(title)
+                .padding(bottom = 8.dp, top = 4.dp)
         )
     }
 }
@@ -2921,6 +3165,7 @@ fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .settingsAnchor(title)
                 // Only clickable (with ripple) when there's an action — an
                 // empty onClick used to ripple like a picker but do nothing.
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
@@ -2936,7 +3181,7 @@ fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) 
 fun SettingSwitchItem(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     tf.monochrome.android.devedit.DevEditable("sw_${devSlug(title)}", Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().settingsAnchor(title).padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -3296,4 +3541,156 @@ private fun PlaylistImportSection() {
                 onDismiss = { showSpotifyPicker = false }
             )
         }
+}
+
+/** One search hit: the setting, and where it lives. */
+@Composable
+private fun SettingsHitPill(entry: SettingsEntry, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                imageVector = if (entry.destination is SettingsDestination.Route) {
+                    Icons.AutoMirrored.Filled.ArrowForward
+                } else {
+                    Icons.Default.Search
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 200.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            // Where it will take you. A pill that only says "Crossfade" makes
+            // you tap it to find out whether you are about to change tab or
+            // leave the screen.
+            Text(
+                text = entry.tabLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * How far above the wanted row the scroll stops.
+ *
+ * Landing with the row flush against the top edge reads as having overshot —
+ * the group heading it belongs to is gone and there is no sense of where in the
+ * tab you are.
+ */
+private val ANCHOR_HEADROOM = 96f
+
+/** How long a scroll request waits for a row to answer it before it is dropped. */
+private const val ANCHOR_TIMEOUT_MS = 700L
+
+/**
+ * Which paper the light themes are printed on.
+ *
+ * Two swatches rather than a switch, because the difference is a colour and a
+ * switch would have to describe it in words — "warm off-white" means very
+ * little next to seeing the two side by side. The swatches are the real
+ * backgrounds, taken from the generator, so what is shown is what will happen.
+ *
+ * Always visible, including on a dark theme. It applies to whichever light
+ * theme comes next, and "system" means that can be the next time the sun goes
+ * down; hiding the control until it is already relevant means finding it in the
+ * dark.
+ */
+@Composable
+private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().settingsAnchor("Light paper")) {
+        Text(
+            text = "Light paper",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "The ground every light theme is printed on. Crisp is true white; " +
+                "warm is off-white, for less glare.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PaperSwatch(
+                label = "Crisp",
+                paper = Paper.Crisp,
+                selected = paper != "warm",
+                onClick = { onPaperChange("crisp") },
+                modifier = Modifier.weight(1f),
+            )
+            PaperSwatch(
+                label = "Warm",
+                paper = Paper.Warm,
+                selected = paper == "warm",
+                onClick = { onPaperChange("warm") },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun PaperSwatch(
+    label: String,
+    paper: Paper,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Built from the same accent the app is currently themed with, so the
+    // swatch previews this theme's light variant rather than a generic white.
+    val accent = MaterialTheme.colorScheme.primary
+    val preview = remember(paper, accent) { lightSchemeFor(accent, paper) }
+    Column(
+        modifier = modifier
+            .clip(MonoDimens.shapeMd)
+            .background(preview.background)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else preview.outline,
+                shape = MonoDimens.shapeMd,
+            )
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+    ) {
+        // A card and a line of text on the real ground: the whole point of the
+        // choice is how a surface and its ink sit on the page, which a flat
+        // block of background colour cannot show.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(22.dp)
+                .clip(MonoDimens.shapeSm)
+                .background(preview.surfaceVariant),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = preview.onSurface,
+        )
+        Text(
+            text = "Aa",
+            style = MaterialTheme.typography.bodySmall,
+            color = preview.onSurfaceVariant,
+        )
+    }
 }

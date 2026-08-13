@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.domain.model.EqTarget
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 /**
  * MeasurementUploadScreen - Advanced calibration with headphone measurement upload
@@ -115,6 +116,7 @@ fun MeasurementUploadScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .verticalScroll(rememberScrollState())
+            .padding(bottom = LocalMiniPlayerInset.current)
     ) {
         // Header
         Row(

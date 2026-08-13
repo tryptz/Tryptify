@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.search
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -12,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.player.PlayerViewModel
 
 @Composable
@@ -36,17 +38,28 @@ fun SearchScreen(
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val libraryPlaylists by playerViewModel.playlists.collectAsStateWithLifecycle()
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
     ) {
-        SearchQueryField(
+        // The bar floats over the results and they run underneath it, the same
+        // as everywhere else. Permanent here rather than summoned — this screen
+        // *is* the search — so the results are given its height as padding: they
+        // start below the glass instead of with the first hit parked under it,
+        // and still pass behind it as they scroll.
+        SearchOverlay(
+            open = true,
             query = query,
             onQueryChange = viewModel::onQueryChange,
-            onSubmit = viewModel::submitSearch
-        )
-
+            placeholder = "Search tracks, albums, artists, playlists…",
+            onClose = null,
+            // Arriving here is a request to type: this route only exists because
+            // someone tapped search.
+            autoFocus = true,
+            onSubmit = viewModel::submitSearch,
+        ) { searchTopInset ->
+        Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
         SearchResultsContent(
             navController = navController,
             playerViewModel = playerViewModel,
@@ -76,5 +89,7 @@ fun SearchScreen(
                 )
             }
         )
+        }
+        }
     }
 }

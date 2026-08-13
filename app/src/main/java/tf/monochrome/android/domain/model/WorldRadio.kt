@@ -33,6 +33,24 @@ data class RadioCity(
 )
 
 /**
+ * A country the globe has radio in.
+ *
+ * Derived from the cities rather than shipped: the asset already knows which
+ * country every broadcasting city is in, so a separate country list would be a
+ * second thing to keep in step with it — and the counts here are the honest
+ * ones, since they are the cities and stations the globe can actually show
+ * rather than what some atlas says the country contains.
+ */
+data class RadioCountry(
+    /** ISO 3166-1 alpha-2, as the cities record it. */
+    val code: String = "",
+    /** Display name in the device's language, falling back to the code. */
+    val name: String = "",
+    val cities: Int = 0,
+    val stations: Int = 0,
+)
+
+/**
  * The bundled globe: where the land is, and where the radio is.
  *
  * [coastline] is Natural Earth's 110m coastline as flat `[lon, lat, lon, lat, …]`
@@ -56,6 +74,21 @@ data class WorldRadioData(
      * disagreeing by a pixel. Land only: no maritime lines.
      */
     val borders: List<List<Int>> = emptyList(),
+    /**
+     * Land as *closed rings*, for filling — Natural Earth's 110m land polygons.
+     *
+     * A separate layer from [coastline] rather than the same one reused, because
+     * they are different kinds of geometry and only one of them can be filled.
+     * The coastline is a set of strokes, and several of its runs are open:
+     * Afro-Eurasia arrives as a single sweep cut at the antimeridian, so closing
+     * it to fill would run a chord from West Africa to the Bering Strait. Every
+     * ring here closes, and filling one is well defined.
+     *
+     * Holes ride alongside the rings that contain them and the renderer fills
+     * even-odd, so an inland sea stays water without either side having to know
+     * which ring is which.
+     */
+    val land: List<List<Int>> = emptyList(),
     val cities: List<RadioCity> = emptyList(),
 )
 

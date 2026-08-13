@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import kotlin.math.max
 import android.content.Context
 import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
@@ -19,6 +20,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -237,6 +242,7 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uFrost", 0f)
             shader.setFloatUniform("uBulge", 0.5f, 0.5f)
             shader.setFloatUniform("uBulgeAmt", 0f)
+            shader.setFloatUniform("uBulgeR", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -299,6 +305,7 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uFrost", 0f)
             shader.setFloatUniform("uBulge", 0.5f, 0.5f)
             shader.setFloatUniform("uBulgeAmt", 0f)
+            shader.setFloatUniform("uBulgeR", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -313,6 +320,71 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
 val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings() }
 
 /**
+ * The player background as a haze source, for the chrome that sits over it.
+ *
+ * Null off the player route and on devices that can't blur. When set, the
+ * transport, dock, status tiles and hero can each frost the real, blurred album
+ * art behind them — the same live haze the mini player gets from the nav host —
+ * rather than only relighting their own fill with the shader. Carried as a local
+ * so a tile buried three composables deep gets it without every layer between
+ * passing it down.
+ *
+ * It must be provided *outside* the node marked as the source: a haze effect
+ * cannot sample a layer it is drawn inside, which paints the source's flat base
+ * colour instead of a blur — the slab-not-glass bug this whole path exists to
+ * avoid.
+ */
+val LocalPlayerHaze = compositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }
+
+/**
+ * The blurred-backdrop layer that goes *under* a piece of player glass.
+ *
+ * This is the haze — an actual gaussian blur of whatever [LocalPlayerHaze]
+ * captured — as distinct from the frost, which is the tint carried on top of it.
+ * Both are here because a sheet of real glass is both: you see the blurred room
+ * through it *and* it has a colour. Draw this first, then the shader slab, then
+ * the content; on the punched tiles (dock, transport) the icon holes then reveal
+ * this blur rather than the raw art.
+ *
+ * A no-op — drawing nothing — whenever there is no source, the device can't
+ * blur, glass is off, or the blur radius is zero, so callers can place it
+ * unconditionally.
+ */
+@Composable
+fun PlayerGlassHaze(
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
+) {
+    val haze = LocalPlayerHaze.current ?: return
+    val g = LocalPlayerGlass.current
+    val profile = tf.monochrome.android.performance.LocalPerformanceProfile.current
+    if (!profile.allowHazeBlur || !g.enabled || g.hazeBlurDp <= 0f) return
+
+    val frostBg = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val isDark = frostBg.luminance() <= 0.5f
+    // The frost tint over the blur: deepen a dark ground, lighten a light one,
+    // scaled by the listener's hazeTint. The blur is the haze; this is the
+    // frost, and it is the thin part — most of what reads is the blurred art.
+    val frostTint = (
+        if (isDark) Color.Black.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.45f)
+        ).let { it.copy(alpha = (it.alpha * g.hazeTint).coerceIn(0f, 1f)) }
+
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .clip(shape)
+            .hazeEffect(
+                state = haze,
+                style = dev.chrisbanes.haze.HazeStyle(
+                    backgroundColor = frostBg,
+                    blurRadius = g.hazeBlurDp.dp,
+                    tints = listOf(dev.chrisbanes.haze.HazeTint(frostTint)),
+                    noiseFactor = 0f,
+                ),
+            ),
+    )
+}
+
+/**
  * The SAME refractive lyric glass ([LIQUID_GLASS_SRC]) applied to a player
  * button's icon, so the play/skip shapes read as 3D chrome liquid glass just
  * like the active lyric line. Reads [LocalPlayerGlass] for its parameters
@@ -325,11 +397,21 @@ internal fun Modifier.playerGlass(
     tint: Color,
     bulgeCenter: Offset = Offset(0.5f, 0.5f),
     bulgeAmount: () -> Float = { 0f },
+    /**
+     * How wide the press dome is, as a fraction of the pane's longest side.
+     *
+     * Zero keeps the shader's own default of a sixth of the width, which is what
+     * the transport and the mini player's carved-out controls were tuned around:
+     * there the dome is meant to pick out one button on a bar of several. A pane
+     * that is *itself* the button wants the swell across the whole of it, and a
+     * sixth of the width on a full-width sheet is a dimple nobody can see.
+     */
+    bulgeRadiusFraction: Float = 0f,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount))
+    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction))
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -339,6 +421,7 @@ private fun playerGlassModifier(
     g: tf.monochrome.android.domain.model.PlayerGlassSettings,
     bulgeCenter: Offset,
     bulgeAmount: () -> Float,
+    bulgeRadiusFraction: Float,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -383,6 +466,14 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uFrost", g.frost)
             shader.setFloatUniform("uBulge", bulgeCenter.x, bulgeCenter.y)
             shader.setFloatUniform("uBulgeAmt", bulgeAmount())
+            shader.setFloatUniform(
+                "uBulgeR",
+                if (bulgeRadiusFraction > 0f) {
+                    max(size.width, size.height) * bulgeRadiusFraction
+                } else {
+                    0f
+                },
+            )
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -571,6 +662,7 @@ uniform float uFresnelPower;  // Fresnel falloff: lower = broader reflective rim
 uniform float uFrost;         // frosted roughness: 0 = clear, higher = misted
 uniform float2 uBulge;        // press-bulge centre, normalized (0..1) in the surface
 uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
+uniform float uBulgeR;        // press-bulge dome radius in px; <=0 falls back to uSize.x/6
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -694,7 +786,7 @@ half4 main(float2 p) {
     // a smooth bump that lenses the backdrop; uBulgeAmt animates it in/out.
     if (uBulgeAmt > 0.001) {
         float2 bc = uBulge * uSize;
-        float R = uSize.x / 6.0;
+        float R = (uBulgeR > 0.0) ? uBulgeR : (uSize.x / 6.0);
         float rr2 = distance(p, bc);
         float dome = smoothstep(R, 0.0, rr2);
         float2 bdir = (rr2 > 0.5) ? (p - bc) / rr2 : float2(0.0, 0.0);

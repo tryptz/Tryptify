@@ -33,6 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.RectangleShape
+import tf.monochrome.android.performance.LocalPerformanceProfile
 
 /**
  * Search box and sort control for a list of tracks.
@@ -50,21 +53,42 @@ import tf.monochrome.android.ui.theme.MonoDimens
  */
 @Composable
 fun TrackListToolbar(
-    query: String,
-    onQueryChange: (String) -> Unit,
     sort: TrackSort,
     onSortChange: (TrackSort) -> Unit,
     modifier: Modifier = Modifier,
     orders: List<TrackOrder> = DEFAULT_TRACK_ORDERS,
-    /** Rendered between the search icon and the sort button — bulk actions, counts. */
+    /** Rendered before the sort button — bulk actions, counts. */
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    // Opens itself when there is already a query, so a search that survives a
-    // rotation or a back-and-forth doesn't hide the text that's filtering the list.
-    var searchOpen by remember { mutableStateOf(query.isNotEmpty()) }
     var menuOpen by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    // This is a sticky header: it stops at the top of the list and the songs
+    // keep going underneath it, so it needs a material of its own or the rows
+    // slide straight through the icons. Glass rather than a flat fill, because
+    // a flat one draws a hard band across whatever it pins over — album art on
+    // the detail screens — and because the rest of the app's floating chrome is
+    // glass and this is the last piece that was not.
+    //
+    // Deliberately the no-haze path. This sits *inside* the layer the app marks
+    // as its haze source, so a blur here would be sampling a picture it is
+    // itself part of; the translucent tint and rim are a supported mode of the
+    // same material and cost nothing to composite.
+    //
+    // The explicit fallback is not optional: liquidGlass returns the modifier
+    // untouched on low tiers, which would leave a sticky header with no
+    // background at all.
+    // A scrim of the page's own colour, not a bordered pane.
+    //
+    // liquidGlass draws a rim on every edge, and a rim around something that
+    // spans the full width reads as a box sitting on the list rather than as
+    // the list passing behind it — which is the container this was asked not to
+    // be. A translucent wash of the background occludes the rows enough to keep
+    // the icons legible while still showing them moving underneath.
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.88f)),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -73,19 +97,6 @@ fun TrackListToolbar(
             horizontalArrangement = Arrangement.End,
         ) {
             trailing?.invoke()
-            IconButton(onClick = {
-                searchOpen = !searchOpen
-                // Closing the box clears the filter. Leaving a hidden query in
-                // place is how a list ends up looking like it has lost rows.
-                if (!searchOpen) onQueryChange("")
-            }) {
-                Icon(
-                    imageVector = if (searchOpen) Icons.Default.Close else Icons.Default.Search,
-                    contentDescription = if (searchOpen) "Close search" else "Search this list",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
@@ -142,25 +153,5 @@ fun TrackListToolbar(
             }
         }
 
-        AnimatedVisibility(visible = searchOpen) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = { Text("Search this list") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(),
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = 4.dp),
-            )
-        }
     }
 }

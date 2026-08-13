@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -99,6 +100,7 @@ import tf.monochrome.android.ui.navigation.openCatalogAlbum
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.components.SearchOverlay
 
 /**
  * Discover — the browsing half of the app, split out of Home.
@@ -197,15 +199,42 @@ fun DiscoverScreen(
         // would have picked — typing is the only interface that reaches all of
         // them. Empty, it still shows the listener's own genres, so the row is
         // never blank and never worse than the static one it replaces.
-        AnimatedVisibility(visible = searchOpen) {
-            GenreSearchField(
-                query = genreQuery,
-                onQueryChange = viewModel::setGenreQuery,
-                resultCount = genreRail.size,
-                onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
-            )
-        }
-
+        //
+        // Floating over the feed rather than laid out above it: as a row of this
+        // Column, opening the search pushed the rails, the map buttons and every
+        // shelf down by its height, and the glass had the page background behind
+        // it instead of the feed.
+        SearchOverlay(
+            open = searchOpen,
+            query = genreQuery,
+            onQueryChange = viewModel::setGenreQuery,
+            placeholder = "Search 771 genres — try dnb, liquid, phonk",
+            onClose = {
+                searchOpen = false
+                viewModel.setGenreQuery("")
+            },
+            modifier = Modifier.weight(1f),
+            // Room for the bar while it is open.
+            //
+            // The pane is deliberately just the field and one thin line of
+            // context. It briefly carried the matched-genre rail as well, which
+            // made a sheet of glass four rows deep floating over the top of the
+            // page — it covered the mood chips, the map buttons and the first
+            // shelf, so opening the search hid the very feed it filters. The
+            // matches belong on the page, where there is room for them and where
+            // picking one leaves you looking at what changed.
+            barContent = {
+                GenreSearchExtras(
+                    query = genreQuery,
+                    resultCount = genreRail.size,
+                    onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
+                )
+            },
+        ) { searchTopInset ->
+        Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
+        // The matches, and — with the search folded away — whatever selection is
+        // still live, which needs somewhere to show itself and something to turn
+        // it back off with.
         AnimatedVisibility(visible = searchOpen || genreSelected) {
             GenreRail(
                 items = genreRail,
@@ -353,6 +382,8 @@ fun DiscoverScreen(
             }
         }
         }
+        }
+        }
     }
 
     UnifiedTrackContextMenuHost(
@@ -428,52 +459,42 @@ private fun DiscoveryLoading(label: String?) {
 }
 
 /**
- * The genre search box.
+ * What hangs under the genre search field, inside the same pane of glass.
  *
- * Deliberately a plain field rather than a full search screen: the results are
- * the row directly beneath it, so typing and picking never leaves the feed, and
- * the page you were reading stays where it was. The count is shown because a
- * query that matches nothing and a query still being typed look identical
- * otherwise.
+ * Deliberately not a search screen of its own: the results are right there
+ * under what was typed, so typing and picking never leaves the feed and the
+ * page you were reading stays where it was.
  */
 @Composable
-private fun GenreSearchField(
+private fun GenreSearchExtras(
     query: String,
-    onQueryChange: (String) -> Unit,
     resultCount: Int,
     onOpenMap: () -> Unit,
 ) {
-    // Only composed while the search is open, so opening it is one tap and the
-    // keyboard is already up — asking for a second tap on a field that only
-    // exists because you asked for it is a tap for nothing.
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        singleLine = true,
-        placeholder = { Text("Search 771 genres — try dnb, liquid, phonk") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear")
-                }
-            } else {
-                IconButton(onClick = onOpenMap) {
-                    Icon(Icons.Default.AccountTree, contentDescription = "Browse the genre map")
-                }
-            }
-        },
-        supportingText = if (query.isNotBlank() && resultCount == 0) {
-            { Text("No genre matches that") }
-        } else null,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .focusRequester(focus),
-    )
+    // One tight line. Everything in this pane floats over the feed, so every row
+    // of it is a row of the page nobody can see — it is kept to the two things
+    // that cannot live anywhere else.
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // A query that matches nothing and a query still being typed look
+        // identical without this.
+        Text(
+            text = if (query.isNotBlank() && resultCount == 0) "No genre matches that" else "",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        // Always offered, not only when the search failed. The field this
+        // replaced carried the map on its trailing icon whenever it was
+        // empty, so hiding it behind a failed query dropped an entry point
+        // that used to be permanent.
+        TextButton(
+            onClick = onOpenMap,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            modifier = Modifier.heightIn(min = 28.dp),
+        ) {
+            Text("Browse the map", style = MaterialTheme.typography.labelMedium)
+        }
+    }
 }
 
 /**

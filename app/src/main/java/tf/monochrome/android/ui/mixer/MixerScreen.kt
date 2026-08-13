@@ -38,12 +38,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -155,6 +158,7 @@ fun MixerScreen(
     )
 
     var showInsertRack by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
     // ── Mixer ⇆ DSP-canvas drag-to-reveal transition ────────────────────
     // progress 0 = mixer fully shown, 1 = canvas fully shown. The two pages
@@ -398,6 +402,11 @@ fun MixerScreen(
                             contentDescription = "FX Chain",
                             onClick = { animateProgressTo(1f, 0f) }
                         )
+                        NavIconButton(
+                            icon = Icons.Default.SettingsBackupRestore,
+                            contentDescription = "Reset mixer to defaults",
+                            onClick = { showResetConfirm = true }
+                        )
 
                         DspPowerToggle(
                             enabled = enabled,
@@ -505,6 +514,31 @@ fun MixerScreen(
         PluginPickerDialog(
             onDismiss = { viewModel.dismissPluginPicker() },
             onSelect = { viewModel.addPlugin(it) }
+        )
+    }
+
+    // Confirmed rather than immediate: this throws away every plugin on every
+    // bus, and a chain someone spent an evening building is not something to
+    // lose to a mis-tap next to the FX Chain button.
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("Reset the mixer?") },
+            text = {
+                Text(
+                    "Removes every plugin and returns all buses to unity gain, " +
+                        "centred, unmuted. Saved presets are untouched."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetToDefaults()
+                    showResetConfirm = false
+                }) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) { Text("Cancel") }
+            }
         )
     }
 

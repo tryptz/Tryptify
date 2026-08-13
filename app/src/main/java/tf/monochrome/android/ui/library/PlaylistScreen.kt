@@ -70,6 +70,9 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.components.SearchOverlay
+import tf.monochrome.android.ui.components.SearchAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,6 +99,7 @@ fun PlaylistScreen(
     // Search text and order live here, not in the ViewModel: they describe how
     // this screen is being looked at right now, not anything about the playlist.
     var listQuery by rememberSaveable { mutableStateOf("") }
+    var searchOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var listSort by rememberSaveable(stateSaver = TrackSortSaver) {
         mutableStateOf(TrackSort())
     }
@@ -220,6 +224,13 @@ fun PlaylistScreen(
                 }
             },
             actions = {
+                SearchAction(open = searchOpen, onToggle = {
+                    searchOpen = !searchOpen
+                    // Closing clears the filter. A hidden query in place is how
+                    // a list ends up looking like it has lost rows.
+                    if (!searchOpen) listQuery = ""
+                })
+
                 IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "More")
                 }
@@ -275,9 +286,19 @@ fun PlaylistScreen(
             )
         }
 
+        SearchOverlay(
+            open = searchOpen,
+            query = listQuery,
+            onQueryChange = { listQuery = it },
+            placeholder = "Search this playlist",
+            onClose = { searchOpen = false; listQuery = "" },
+        ) { searchTopInset ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp)
+            contentPadding = PaddingValues(
+                        top = searchTopInset,
+                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                    )
         ) {
             item {
                 tf.monochrome.android.devedit.DevEditable("playlist_hero", Modifier.fillMaxWidth()) {
@@ -356,10 +377,8 @@ fun PlaylistScreen(
             }
 
             if (tracks.isNotEmpty()) {
-                item {
+                stickyHeader {
                     TrackListToolbar(
-                        query = listQuery,
-                        onQueryChange = { listQuery = it },
                         sort = listSort,
                         onSortChange = { listSort = it },
                     )
@@ -407,6 +426,7 @@ fun PlaylistScreen(
                     )
                 }
             }
+        }
         }
     }
 }

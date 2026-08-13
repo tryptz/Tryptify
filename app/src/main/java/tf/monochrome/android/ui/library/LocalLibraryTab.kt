@@ -101,6 +101,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.util.safTreeUriToPath
+import tf.monochrome.android.ui.components.SearchOverlay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -240,34 +241,21 @@ fun LocalLibraryTab(
             }
         }
 
-        // Search bar
-        AnimatedVisibility(visible = showSearch) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(searchFocus)
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                placeholder = { Text("Search local library...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = MonoDimens.shapeMd,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                )
-            )
-        }
-
-        // Show search results when query is active
+        // The search floats over the library rather than pushing it down: laid
+        // out as a row of this Column it shoved the sub-tabs, the action row and
+        // the whole grid down by its height every time it opened, and its glass
+        // had the page background behind it with nothing to frost.
+        SearchOverlay(
+            open = showSearch,
+            query = searchQuery,
+            onQueryChange = { viewModel.setSearchQuery(it) },
+            placeholder = "Search local library…",
+            onClose = { showSearch = false; viewModel.setSearchQuery("") },
+        ) { searchTopInset ->
+        Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
+        // Results replace the browser while there is a query. An `if` rather
+        // than the early `return@Column` this used to be: inside the overlay's
+        // content lambda there is no Column to return from.
         if (showSearch && searchQuery.isNotBlank()) {
             SongList(
                 tracks = searchResults,
@@ -275,8 +263,7 @@ fun LocalLibraryTab(
                 onMoreClick = { menuTrack = it },
                 navController = navController,
             )
-            return@Column
-        }
+        } else {
 
         // Sub-tabs get the full width. Sharing one row with the sort menu and
         // four icon buttons left the five labels about 120dp on a 360dp screen,
@@ -404,6 +391,9 @@ fun LocalLibraryTab(
                     )
                 }
             }
+        }
+        }
+        }
         }
     }
 }

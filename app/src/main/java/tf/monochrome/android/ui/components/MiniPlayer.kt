@@ -68,6 +68,7 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
 import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.abs
 
@@ -167,7 +168,7 @@ fun MiniPlayer(
     // ── Glass path (API 33+): one tunable player-glass slab with the play/skip
     // icons punched out as see-through holes, and a smooth press-bulge under the
     // pressed control — the same shader treatment as the player action dock. ──
-    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else MaterialTheme.colorScheme.primary
+    val tint = glassTint(glass.tintColor)
     val playPainter = painterResource(if (isPlaying) R.drawable.ic_glass_pause else R.drawable.ic_glass_play)
     val skipPainter = painterResource(R.drawable.ic_glass_skip_next)
 
@@ -191,9 +192,15 @@ fun MiniPlayer(
         label = "miniBulge",
     )
 
+    // The bar itself is a button too — tapping anywhere but the two controls
+    // opens the player — and it was the one press on this surface that did
+    // nothing. It shares the slab with the controls, so it shares their dome:
+    // one bulge uniform, whichever of the three was pressed last.
+    val barPress = rememberGlassPress()
+
     val density = LocalDensity.current
     var barSize by remember { mutableStateOf(IntSize.Zero) }
-    val bulgeCenter = remember(barSize, lastControl) {
+    val controlCenter = remember(barSize, lastControl) {
         if (barSize.width == 0 || barSize.height == 0) {
             Offset(0.85f, 0.5f)
         } else with(density) {
@@ -205,12 +212,20 @@ fun MiniPlayer(
         }
     }
 
+    // One dome for the whole slab. A control press keeps its tight, cell-sized
+    // swell centred on the icon; a press anywhere else on the bar raises a
+    // broader one under the finger. Whichever is live wins — they cannot both
+    // be, since the controls sit above the bar's own tap target.
+    val bulgeCenter = if (anyPressed) controlCenter else barPress.center
+    val bulge = if (anyPressed) bulgeAmt else barPress.amount
+    val bulgeSpread = if (anyPressed) 0f else GlassPressDefaults.BULGE
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .onSizeChanged { barSize = it }
             .clip(RoundedCornerShape(MiniCorner))
-            .clickable(interactionSource = null, indication = null, onClick = onClick)
+            .glassSqueeze(press = barPress, onClick = onClick)
             .then(swipeGestures)
     ) {
         // Frosted backdrop UNDER the glass slab. The slab body can be nearly
@@ -256,7 +271,12 @@ fun MiniPlayer(
         Canvas(
             modifier = Modifier
                 .matchParentSize()
-                .playerGlass(tint = tint, bulgeCenter = bulgeCenter, bulgeAmount = { bulgeAmt })
+                .playerGlass(
+                    tint = tint,
+                    bulgeCenter = bulgeCenter,
+                    bulgeAmount = { bulge },
+                    bulgeRadiusFraction = bulgeSpread,
+                )
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             val cornerPx = MiniCorner.toPx()

@@ -268,6 +268,12 @@ fun MainPlayerScreen(
     // gaussian-blur what's visually behind it — the same frost the mini
     // player gets from the nav host's source.
     val hazeState = rememberHazeState()
+    // Publish the background as a haze source to the chrome over it. The tiles
+    // that read this are siblings of the source box below, not descendants of
+    // it, so they blur it rather than trying to sample a layer they are part of.
+    androidx.compose.runtime.CompositionLocalProvider(
+        tf.monochrome.android.ui.player.LocalPlayerHaze provides hazeState,
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Box(Modifier.matchParentSize().hazeSource(hazeState)) {
         // Background on its own node so the dither layer wraps just the
@@ -568,6 +574,7 @@ fun MainPlayerScreen(
             )
             }
         }
+    }
     }
 }
 

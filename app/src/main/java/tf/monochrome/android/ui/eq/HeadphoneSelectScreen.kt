@@ -56,6 +56,7 @@ import tf.monochrome.android.domain.model.AutoEqMeasurement
 import tf.monochrome.android.domain.model.Headphone
 import tf.monochrome.android.domain.model.MeasurementRig
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.components.SearchOverlay
 
 /**
  * Full-screen headphone browser.
@@ -227,43 +228,36 @@ fun HeadphoneSelectScreen(
             }
         }
 
-        // ─── Search Bar ───
-        OutlinedTextField(
-            value = localSearchQuery,
-            onValueChange = { localSearchQuery = it },
-            placeholder = { Text("Search model (e.g. HD 600)...") },
-            leadingIcon = {
-                Icon(
-                    Icons.Default.Search, null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            trailingIcon = {
-                if (localSearchQuery.isNotEmpty()) {
-                    IconButton(onClick = { localSearchQuery = "" }) {
-                        Icon(Icons.Default.Close, "Clear", modifier = Modifier.size(18.dp))
-                    }
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.glassAlpha),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.glassAlpha),
-            ),
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
+        // ─── Search bar, floating over the measurements ───
+        //
+        // A permanent part of this screen rather than something toggled, so the
+        // list is given the bar's height as padding: it starts below the glass
+        // instead of with its first row parked under it forever, and still
+        // scrolls underneath, which is what the glass is for.
+        SearchOverlay(
+            open = true,
+            query = localSearchQuery,
+            onQueryChange = { localSearchQuery = it },
+            placeholder = "Search model (e.g. HD 600)…",
+            onClose = null,
+            modifier = Modifier.weight(1f),
+            // Arriving on this screen is not a request to type — the rig chips
+            // and the A–Z list are how most people find their headphones.
+            autoFocus = false,
+        ) { searchTopInset ->
+        Column(modifier = Modifier.fillMaxSize()) {
+        // The room goes to whichever of these is actually first, and to the list
+        // as *content* padding rather than a Spacer above it — a Spacer would
+        // put the rows below the glass and clip them at the list's own top edge,
+        // leaving the bar frosting an empty background.
+        val listTopInset = if (error.isNullOrEmpty()) searchTopInset else 0.dp
 
         // ─── Error ───
         if (!error.isNullOrEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = searchTopInset)
                     .padding(horizontal = 16.dp, vertical = 4.dp)
                     .background(
                         MaterialTheme.colorScheme.errorContainer,
@@ -282,7 +276,7 @@ fun HeadphoneSelectScreen(
         // ─── Content: list + A-Z sidebar ───
         if (headphonesLoading && availableHeadphones.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(top = listTopInset),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -297,7 +291,7 @@ fun HeadphoneSelectScreen(
             }
         } else if (rows.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(top = listTopInset),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -312,6 +306,7 @@ fun HeadphoneSelectScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
+                    contentPadding = PaddingValues(top = listTopInset),
                 ) {
                     flatList.forEachIndexed { index, entry ->
                         if (entry.isHeader && entry.letter != null) {
@@ -372,6 +367,8 @@ fun HeadphoneSelectScreen(
                     },
                 )
             }
+        }
+        }
         }
     }
 

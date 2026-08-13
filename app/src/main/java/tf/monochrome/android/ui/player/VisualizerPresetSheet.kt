@@ -1,4 +1,6 @@
 package tf.monochrome.android.ui.player
+import tf.monochrome.android.ui.components.rememberGlassPress
+import tf.monochrome.android.ui.components.glassSqueeze
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -223,7 +225,7 @@ private fun VisualizerPresetRow(
         modifier = Modifier
             .fillMaxWidth()
             .liquidGlass(shape = RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick),
+            .glassSqueeze(press = rememberGlassPress(), onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)

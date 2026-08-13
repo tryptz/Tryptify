@@ -60,6 +60,9 @@ import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.components.SearchOverlay
+import tf.monochrome.android.ui.components.SearchAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +85,7 @@ fun LocalGenreDetailScreen(
     }
 
     var listQuery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var searchOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
         mutableStateOf(TrackSort())
     }
@@ -99,6 +103,14 @@ fun LocalGenreDetailScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
+            actions = {
+                SearchAction(open = searchOpen, onToggle = {
+                    searchOpen = !searchOpen
+                    // Closing clears the filter. A hidden query in place is how
+                    // a list ends up looking like it has lost rows.
+                    if (!searchOpen) listQuery = ""
+                })
+            },
             title = {},
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
@@ -110,9 +122,19 @@ fun LocalGenreDetailScreen(
             )
         )
 
+        SearchOverlay(
+            open = searchOpen,
+            query = listQuery,
+            onQueryChange = { listQuery = it },
+            placeholder = "Search this genre",
+            onClose = { searchOpen = false; listQuery = "" },
+        ) { searchTopInset ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp)
+            contentPadding = PaddingValues(
+                        top = searchTopInset,
+                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                    )
         ) {
             item {
                 tf.monochrome.android.devedit.DevEditable("genre_hero", Modifier.fillMaxWidth()) {
@@ -186,10 +208,8 @@ fun LocalGenreDetailScreen(
             if (sortedTracks.isNotEmpty()) {
                 // A genre spans every artist and album, so every key groups
                 // something real — the default set applies unchanged.
-                item {
+                stickyHeader {
                     TrackListToolbar(
-                        query = listQuery,
-                        onQueryChange = { listQuery = it },
                         sort = listSort,
                         onSortChange = { listSort = it },
                     )
@@ -204,6 +224,7 @@ fun LocalGenreDetailScreen(
                     )
                 }
             }
+        }
         }
     }
 }
