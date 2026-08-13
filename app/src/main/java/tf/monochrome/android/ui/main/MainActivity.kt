@@ -147,6 +147,7 @@ class MainActivity : ComponentActivity() {
             val fontScale = if (followSystemFontScale) systemFontScale else storedFontScale
             val customFontPath by preferences.customFontUri.collectAsStateWithLifecycle(initialValue = null)
             val dynamicColorsEnabled by preferences.dynamicColors.collectAsStateWithLifecycle(initialValue = false)
+            val themePaper by preferences.themePaper.collectAsStateWithLifecycle(initialValue = "crisp")
             val currentTrack by queueManager.currentTrack.collectAsStateWithLifecycle()
             // The user's manual low-performance overrides, from Settings ›
             // System › Performance.
@@ -197,7 +198,12 @@ class MainActivity : ComponentActivity() {
                     themeName = themeName,
                     fontScale = fontScale,
                     customFontFamily = customFontFamily,
-                    dynamicPalette = dynamicPalette
+                    dynamicPalette = dynamicPalette,
+                    paper = if (themePaper == "warm") {
+                        tf.monochrome.android.ui.theme.Paper.Warm
+                    } else {
+                        tf.monochrome.android.ui.theme.Paper.Crisp
+                    },
                 ) {
                     // Re-apply edge-to-edge with a SystemBarStyle tuned to
                     // the current theme. Light themes need dark icons so

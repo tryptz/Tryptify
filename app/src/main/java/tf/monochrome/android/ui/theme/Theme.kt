@@ -463,9 +463,31 @@ val themeDisplayNames = mapOf(
     "mint" to "Mint",
     "white" to "White",
     "clear" to "Clear"
-)
+) + ThemeAccents.keys.associate { base ->
+    // Every theme gets a light variant, named and listed alongside the dark
+    // one it is derived from. Generated rather than typed out so adding a
+    // theme adds its light twin automatically instead of leaving a gap
+    // somebody notices six months later.
+    lightVariantOf(base) to "${baseDisplayName(base)} Light"
+}
 
-fun getColorScheme(themeName: String) = when (themeName) {
+private fun baseDisplayName(base: String): String = when (base) {
+    "monochrome" -> "Monochrome"
+    else -> base.replaceFirstChar { it.uppercase() }
+}
+
+fun getColorScheme(themeName: String, paper: Paper = Paper.Crisp): ColorScheme {
+    // Light variants are built, not listed: "<theme>_light" for any theme the
+    // app knows an accent for. Fifteen hand-written light palettes is fifteen
+    // chances to pick a grey that fails on its own card, which is exactly how
+    // the one that existed went wrong.
+    lightVariantBase(themeName)?.let { base ->
+        ThemeAccents[base]?.let { return lightSchemeFor(it, paper) }
+    }
+    return darkSchemeFor(themeName)
+}
+
+private fun darkSchemeFor(themeName: String) = when (themeName) {
     "ocean" -> OceanDarkScheme
     "midnight" -> MidnightDarkScheme
     "crimson" -> CrimsonDarkScheme
@@ -480,6 +502,9 @@ fun getColorScheme(themeName: String) = when (themeName) {
     "gold" -> GoldDarkScheme
     "rosewater" -> RosewaterDarkScheme
     "mint" -> MintDarkScheme
+    // The original hand-built light theme, kept as its own entry so nobody who
+    // chose it wakes up on a generated one. "monochrome_light" is the built
+    // equivalent and is what "system" now reaches for.
     "white" -> WhiteScheme
     "clear" -> ClearDarkScheme
     else -> MonochromeDarkScheme
@@ -503,18 +528,20 @@ fun MonochromeTheme(
     fontScale: Float = 1.0f,
     customFontFamily: FontFamily? = null,
     dynamicPalette: DynamicPalette? = null,
+    paper: Paper = Paper.Crisp,
     content: @Composable () -> Unit
 ) {
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
-    // "system" follows the OS dark-mode toggle — light mode gets the
-    // rebuilt WhiteScheme, dark mode gets the default Monochrome scheme.
+    // "system" follows the OS dark-mode toggle. In light mode it now reaches
+    // for the *light variant of the chosen theme* rather than a single shared
+    // white one, so following the system no longer means losing the theme.
     val resolvedTheme = if (themeName == "system") {
-        if (systemDark) "monochrome_dark" else "white"
+        if (systemDark) "monochrome_dark" else lightVariantOf("monochrome")
     } else themeName
     val materialYou = if (resolvedTheme == "material_you") {
         rememberMaterialYouScheme(dark = systemDark)
     } else null
-    val colorScheme = materialYou ?: getColorScheme(resolvedTheme)
+    val colorScheme = materialYou ?: getColorScheme(resolvedTheme, paper)
     val family = customFontFamily ?: InterFontFamily
     val typography = remember(fontScale, family) {
         buildTypography(family, fontScale)

@@ -102,6 +102,7 @@ class PreferencesManager @Inject constructor(
 
         // Theme
         private val THEME = stringPreferencesKey("theme")
+        private val THEME_PAPER = stringPreferencesKey("theme_paper")
         private val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
 
         // Scrobbling
@@ -381,7 +382,7 @@ class PreferencesManager @Inject constructor(
         // deliberately added here.
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY,
-            THEME, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
+            THEME, THEME_PAPER, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
@@ -493,6 +494,20 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setTheme(theme: String) {
         dataStore.edit { it[THEME] = theme }
+    }
+
+    /**
+     * Which paper the light themes are printed on — "crisp" true white, or
+     * "warm" off-white. One axis across every light variant rather than a
+     * setting per theme: it is a preference about glare and about how a screen
+     * should feel, not about Nord.
+     */
+    val themePaper: Flow<String> = dataStore.data.map { prefs ->
+        prefs[THEME_PAPER] ?: "crisp"
+    }
+
+    suspend fun setThemePaper(paper: String) {
+        dataStore.edit { it[THEME_PAPER] = paper }
     }
 
     suspend fun setDynamicColors(enabled: Boolean) {
