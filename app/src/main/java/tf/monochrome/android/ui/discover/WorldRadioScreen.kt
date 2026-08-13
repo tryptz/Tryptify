@@ -2,7 +2,12 @@ package tf.monochrome.android.ui.discover
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -21,8 +26,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -50,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,6 +99,7 @@ import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
 import java.util.Locale
 import kotlin.math.PI
+import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.ln
@@ -174,11 +183,39 @@ fun WorldRadioScreen(
     val pulse = rememberGlobePulse(viewModel.spectrum, globeFx, playing = isPlaying)
     var showFxSheet by remember { mutableStateOf(false) }
 
+    // The selected city pings continuously, whether or not anything is playing —
+    // it marks *which* dot the open card belongs to, and that has to be legible
+    // in silence. Held as a State and read from the draw lambda rather than
+    // delegated, so the breath invalidates the draw phase and not the screen.
+    val breath = rememberInfiniteTransition(label = "selectedCity")
+    val idlePing = breath.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "selectedPing",
+    )
+
     fun spinTo(city: RadioCity) {
         flight?.cancel()
         if (canvasSize == IntSize.Zero) return
+        // The strip the card will occupy once it is up. Measured, not guessed —
+        // and re-run when the measurement changes, which is what the height
+        // quantum in the effect below is for.
+        val panelStrip = with(density) { panelBottomInset.toPx() } + panelHeightPx
         flight = scope.launch {
-            spinToCity(city, globe.scale, camera, instant) { camera = it }
+            spinToCity(
+                city = city,
+                scale = globe.scale,
+                from = camera,
+                instant = instant,
+                size = canvasSize,
+                topInset = topBarHeightPx.toFloat(),
+                bottomInset = panelStrip,
+                onFrame = { camera = it },
+            )
         }
     }
 
@@ -266,6 +303,12 @@ fun WorldRadioScreen(
                     // recompose the whole screen sixty times a second, whereas a
                     // read from here invalidates the draw phase alone.
                     pulse = pulse.value,
+                    // Whichever is louder. In silence this is the idle breath;
+                    // once a track is running the bass overtakes it and the ping
+                    // lands on the beat instead of drifting against it.
+                    selectedPulse = if (instant) 0f else {
+                        maxOf(idlePing.value, pulse.value.bass)
+                    },
                 )
             }
 
@@ -556,12 +599,27 @@ private fun CityCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = maxStationsHeight)
-                            .verticalScroll(rememberScrollState()),
+                    // A real scroll container rather than a Column that happens
+                    // to be scrollable. Two things needed it: a city like Berlin
+                    // brings hundreds of stations and a plain Column composes and
+                    // measures every one of them to show four, and a Column's
+                    // scroll gesture has to travel up through the panel's own
+                    // pointer handling, which a LazyColumn's owns outright.
+                    //
+                    // Keyed on the city so each one opens at the top. The state
+                    // survives the Loading→Ready hop within a single city, which
+                    // is what keeps a refresh from throwing the list back.
+                    val listState = key(city.id) { rememberLazyListState() }
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.heightIn(max = maxStationsHeight),
                     ) {
-                        for (station in stations.stations) {
+                        // Deliberately unkeyed. The obvious key is the station
+                        // uuid, and the directory is a third-party listing that
+                        // does not promise uniqueness — a repeated uuid is a
+                        // crash in a keyed LazyColumn, and a duplicated row is
+                        // the better failure by a wide margin.
+                        items(stations.stations) { station ->
                             StationRow(
                                 station = station,
                                 favourite = station.uuid in favourites,
@@ -698,7 +756,16 @@ private fun CityChip(city: RadioCity, onClick: () -> Unit) {
 // ── projection, camera and drawing ──────────────────────────────────────────
 
 private val MINI_PLAYER_RESERVE = 72.dp
-private const val STATIONS_HEIGHT_FRACTION = 0.34f
+/**
+ * How much of the canvas the station list may take before it scrolls.
+ *
+ * Raised from a third: the list is the reason the card opens, and at a third of
+ * a phone screen a city with two hundred stations offered four of them and a
+ * scrollbar. The globe still gets the majority of the screen, which is the
+ * other half of the bargain — this panel floats over a map you are meant to be
+ * able to see.
+ */
+private const val STATIONS_HEIGHT_FRACTION = 0.42f
 private const val FLIGHT_HEIGHT_QUANTUM = 96
 private const val SPIN_MILLIS = 700
 private val SpinEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
@@ -776,11 +843,14 @@ private data class GlobeCamera(
             zoom = next,
         )
     }
-
-    private companion object {
-        const val MAX_PITCH = 1.45f
-    }
 }
+
+/**
+ * How far the poles may be walked toward the viewer. Short of ±π/2 on purpose:
+ * passing one flips the world upside down mid-drag. File-level rather than
+ * private to the camera because the flight has to respect the same ceiling.
+ */
+private const val MAX_PITCH = 1.45f
 
 private fun wrap(radians: Float): Float {
     val twoPi = (2 * PI).toFloat()
@@ -842,18 +912,45 @@ private fun project(
     )
 }
 
-/** Turn the Earth so a city faces the viewer, on a curve. */
+/**
+ * Turn the Earth so a city faces the viewer, on a curve.
+ *
+ * "Faces the viewer" is not the same as "sits in the middle of the canvas". The
+ * card covers the bottom third of the screen and the app bar the top of it, so
+ * centring a city on the disc puts the very dot you just selected underneath
+ * the panel describing it — the flight looks like it went somewhere wrong. The
+ * target is therefore the middle of what is actually *visible*, and because
+ * this is a sphere the only way to move a point up the screen is to rotate less
+ * than all the way: the lift is subtracted from the pitch rather than added to
+ * a translation the camera does not have.
+ */
 private suspend fun spinToCity(
     city: RadioCity,
     scale: Int,
     from: GlobeCamera,
     instant: Boolean,
+    size: IntSize,
+    topInset: Float,
+    bottomInset: Float,
     onFrame: (GlobeCamera) -> Unit,
 ) {
     val targetYaw = wrap((-Math.toRadians(city.lon.toDouble() / scale)).toFloat())
-    val targetPitch = Math.toRadians(city.lat.toDouble() / scale).toFloat()
-        .coerceIn(-1.45f, 1.45f)
     val targetZoom = maxOf(from.zoom, 2.2f)
+    val latitude = Math.toRadians(city.lat.toDouble() / scale).toFloat()
+
+    // How far above the disc's centre the city has to land, and the rotation
+    // that puts it there. project() gives screen y = cy − radius·sin(lat − pitch),
+    // so asking for an offset of d is asking for sin(lat − pitch) = d / radius.
+    // Clamped inside the domain of asin: a lift taller than the globe's own
+    // radius is unreachable at this zoom, and the nearest reachable framing is
+    // a better answer than a NaN camera.
+    val radius = globeRadius(size.width.toFloat(), size.height.toFloat(), targetZoom)
+    val lift = if (radius <= 0f) {
+        0f
+    } else {
+        asin((((bottomInset - topInset) / 2f) / radius).coerceIn(-0.95f, 0.95f))
+    }
+    val targetPitch = (latitude - lift).coerceIn(-MAX_PITCH, MAX_PITCH)
 
     if (instant) {
         onFrame(GlobeCamera(targetYaw, targetPitch, targetZoom))
@@ -934,6 +1031,7 @@ private fun DrawScope.drawGlobe(
     bottomInset: Float,
     fx: GlobeFxSettings = GlobeFxSettings(),
     pulse: GlobePulse = GlobePulse(),
+    selectedPulse: Float = 0f,
 ) {
     if (data.cities.isEmpty() && data.coastline.isEmpty()) return
 
@@ -1032,9 +1130,18 @@ private fun DrawScope.drawGlobe(
         val edge = (p.z * 1.4f).coerceIn(0.25f, 1f)
 
         if (selected) {
+            // A ping rather than a throb: the ring grows outward and thins as it
+            // goes, so what reads as "alive" is the expansion and not a dot
+            // changing size. Growing the dot itself would fight its own meaning
+            // — size on this globe is how many stations a city has.
             drawCircle(
-                color = dot.copy(alpha = 0.30f),
-                radius = base * 3.2f,
+                color = dot.copy(alpha = 0.34f * (1f - 0.62f * selectedPulse)),
+                radius = base * (2.6f + 2.2f * selectedPulse),
+                center = Offset(p.x, p.y),
+            )
+            drawCircle(
+                color = dot.copy(alpha = 0.22f),
+                radius = base * 2.2f,
                 center = Offset(p.x, p.y),
             )
         }
