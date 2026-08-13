@@ -119,6 +119,7 @@ import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
+import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
 import java.util.Locale
@@ -159,12 +160,36 @@ import kotlin.math.sin
  * mini player, and two sheets of glass tuned differently an inch apart look like
  * a bug.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The globe follows the album palette, like the player does.
+ *
+ * Dynamic colours are deliberately kept out of the app-wide scheme so the menus
+ * never pick up an album accent, and surfaces that want them opt in here. This
+ * screen wants them: everything on it — the lit coastlines, the city dots, the
+ * ping on the selected city — is drawn from the accent, and a globe that stayed
+ * on the app's default while a station's artwork coloured the mini player right
+ * underneath it looked like two screens stitched together.
+ *
+ * A passthrough whenever there is no palette, which is the setting turned off,
+ * nothing playing, or extraction having failed.
+ */
 @Composable
 fun WorldRadioScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
     viewModel: WorldRadioViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
+) {
+    DynamicColorScope {
+        WorldRadioContent(navController, playerViewModel, viewModel)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WorldRadioContent(
+    navController: NavController,
+    playerViewModel: PlayerViewModel,
+    viewModel: WorldRadioViewModel,
 ) {
     val globe by viewModel.globe.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
