@@ -756,16 +756,7 @@ private fun CityChip(city: RadioCity, onClick: () -> Unit) {
 // ── projection, camera and drawing ──────────────────────────────────────────
 
 private val MINI_PLAYER_RESERVE = 72.dp
-/**
- * How much of the canvas the station list may take before it scrolls.
- *
- * Raised from a third: the list is the reason the card opens, and at a third of
- * a phone screen a city with two hundred stations offered four of them and a
- * scrollbar. The globe still gets the majority of the screen, which is the
- * other half of the bargain — this panel floats over a map you are meant to be
- * able to see.
- */
-private const val STATIONS_HEIGHT_FRACTION = 0.42f
+private const val STATIONS_HEIGHT_FRACTION = 0.34f
 private const val FLIGHT_HEIGHT_QUANTUM = 96
 private const val SPIN_MILLIS = 700
 private val SpinEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
