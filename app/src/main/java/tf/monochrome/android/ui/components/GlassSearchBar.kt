@@ -89,6 +89,9 @@ fun GlassSearchBar(
         // Anchored at the top of its screen, so the system bar it should hold
         // clear of is the status bar, which its caller already handles.
         avoidNavigationBar = false,
+        // A search bar floats, and at rest often has only the page behind it.
+        // The light frost keeps it from reading as a dark slab there.
+        lightFrost = true,
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

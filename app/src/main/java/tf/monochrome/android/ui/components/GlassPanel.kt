@@ -88,6 +88,12 @@ fun GlassPanel(
      * space for a bar that is nowhere near it.
      */
     avoidNavigationBar: Boolean = true,
+    /**
+     * Use the light frost — barely-there darkening — for a panel that often
+     * floats over empty space, so it reads as clear glass rather than a slab.
+     * The heavy default suits panels with bright content always behind them.
+     */
+    lightFrost: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
@@ -145,9 +151,23 @@ fun GlassPanel(
             // frost's own base colour as a flat pane, which is the slab this
             // whole component exists not to be.
             if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
+                // How hard the frost darkens is the whole "rectangle" complaint.
+                //
+                // A heavy frost (black at a third) is right for a panel with
+                // bright content always behind it — the map's station card over
+                // the globe, the mini player over a scrolling list — where the
+                // darkening is what keeps text off that brightness. It is wrong
+                // for a floating search bar: at rest there is often nothing
+                // behind it but the page, and darkening a near-black page paints
+                // the dark rounded slab this keeps being accused of being. Those
+                // callers ask for the light frost, which barely touches a dark
+                // page, so what reads is the blur — real content when there is
+                // any, the page's own colour when there isn't, never a slab.
+                val darkAlpha = if (lightFrost) 0.10f else 0.32f
+                val lightAlpha = if (lightFrost) 0.24f else 0.45f
                 val frostTint = (
-                    if (isDark) Color.Black.copy(alpha = 0.32f)
-                    else Color.White.copy(alpha = 0.45f)
+                    if (isDark) Color.Black.copy(alpha = darkAlpha)
+                    else Color.White.copy(alpha = lightAlpha)
                     ).let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
                 Box(
                     Modifier
@@ -184,7 +204,7 @@ fun GlassPanel(
                 // bevel from, and the failure mode is a faint tint instead of a
                 // slab.
                 drawRoundRect(
-                    color = tint.copy(alpha = 0.14f),
+                    color = tint.copy(alpha = if (lightFrost) 0.07f else 0.14f),
                     cornerRadius = CornerRadius(r, r),
                 )
             }
