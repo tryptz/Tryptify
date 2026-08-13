@@ -13,8 +13,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
+import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.WorldRadioRepository
+import tf.monochrome.android.domain.model.GlobeFxSettings
 import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.RadioCity
 import tf.monochrome.android.domain.model.RadioStation
@@ -45,6 +47,13 @@ sealed interface StationsState {
 class WorldRadioViewModel @Inject constructor(
     private val repository: WorldRadioRepository,
     private val preferences: PreferencesManager,
+    /**
+     * The shared FFT tap, handed to the screen so the coastlines can move with
+     * the music. Held as the same singleton the EQ screens and the lyric pump
+     * use — analysis is reference-counted, so the globe simply becomes another
+     * subscriber rather than a second analyzer.
+     */
+    val spectrum: SpectrumAnalyzerTap,
 ) : ViewModel() {
 
     private val _globe = MutableStateFlow(WorldRadioData())
@@ -61,6 +70,18 @@ class WorldRadioViewModel @Inject constructor(
     /** Station uuids the listener has kept. */
     val favourites: StateFlow<Set<String>> = preferences.favouriteStations
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Live tuning for the reactive outlines. */
+    val globeFx: StateFlow<GlobeFxSettings> = preferences.globeFx
+        .stateIn(viewModelScope, SharingStarted.Eagerly, GlobeFxSettings())
+
+    fun updateGlobeFx(transform: (GlobeFxSettings) -> GlobeFxSettings) {
+        viewModelScope.launch { preferences.setGlobeFx(transform(globeFx.value)) }
+    }
+
+    fun resetGlobeFx() {
+        viewModelScope.launch { preferences.setGlobeFx(GlobeFxSettings()) }
+    }
 
     val stations: StateFlow<StationsState> = _selected
         .map { it?.id }

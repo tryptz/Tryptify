@@ -32,14 +32,18 @@ import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -76,6 +80,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import tf.monochrome.android.domain.model.GlobeFxSettings
 import tf.monochrome.android.domain.model.RadioCity
 import tf.monochrome.android.domain.model.RadioStation
 import tf.monochrome.android.ui.components.GlassPanel
@@ -84,6 +89,7 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -155,10 +161,18 @@ fun WorldRadioScreen(
 
     val mapHaze = rememberHazeState()
     val playing by playerViewModel.currentTrack.collectAsStateWithLifecycle()
+    val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     val panelBottomInset = if (playing != null) MINI_PLAYER_RESERVE else 0.dp
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
+
+    // The outlines move to the music. The pulse ticks once per frame while a
+    // track is actually running and settles to rest the moment it isn't, so a
+    // paused globe is a still globe rather than one frozen mid-crest.
+    val globeFx by viewModel.globeFx.collectAsStateWithLifecycle()
+    val pulse = rememberGlobePulse(viewModel.spectrum, globeFx, playing = isPlaying)
+    var showFxSheet by remember { mutableStateOf(false) }
 
     fun spinTo(city: RadioCity) {
         flight?.cancel()
@@ -184,6 +198,9 @@ fun WorldRadioScreen(
                 }
             },
             actions = {
+                IconButton(onClick = { showFxSheet = true }) {
+                    Icon(Icons.Default.GraphicEq, contentDescription = "Reactive outlines")
+                }
                 IconButton(onClick = { flight?.cancel(); camera = GlobeCamera() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = "Recentre")
                 }
@@ -243,6 +260,12 @@ fun WorldRadioScreen(
                     } else {
                         0f
                     },
+                    fx = globeFx,
+                    // Read here, inside the draw lambda, and nowhere else. The
+                    // pulse changes every frame; reading it in composition would
+                    // recompose the whole screen sixty times a second, whereas a
+                    // read from here invalidates the draw phase alone.
+                    pulse = pulse.value,
                 )
             }
 
@@ -291,7 +314,164 @@ fun WorldRadioScreen(
             }
         }
     }
+
+    if (showFxSheet) {
+        GlobeFxSheet(
+            fx = globeFx,
+            zoom = camera.zoom,
+            onChange = { viewModel.updateGlobeFx { _ -> it } },
+            onReset = { viewModel.resetGlobeFx() },
+            onDismiss = { showFxSheet = false },
+        )
+    }
 }
+
+// ── the controls ────────────────────────────────────────────────────────────
+
+/**
+ * Tuning for the reactive outlines.
+ *
+ * Deliberately shows the live zoom gain next to the zoom slider. That parameter
+ * is the one the user cannot see the effect of directly — every other slider
+ * changes something visible the instant it moves, but the zoom ramp only does
+ * anything at a zoom you are not currently at, so without a read-out it feels
+ * like a dead control.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GlobeFxSheet(
+    fx: GlobeFxSettings,
+    zoom: Float,
+    onChange: (GlobeFxSettings) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+                .navigationBarsPadding(),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Reactive outlines",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onReset) { Text("Reset") }
+            }
+            Text(
+                text = "Coastlines and borders ride the music — bass moves them, " +
+                    "treble makes them shiver.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            GlobeFxSlider(
+                label = "Amount",
+                valueLabel = if (fx.amount <= 0.01f) "Off" else "${(fx.amount * 100).toInt()}%",
+                value = fx.amount,
+                range = 0f..1f,
+                description = "Master strength. At zero nothing is analysed at all.",
+            ) { onChange(fx.copy(amount = it)) }
+
+            GlobeFxSlider(
+                label = "Bass swell",
+                valueLabel = "${(fx.swell * 100).toInt()}%",
+                value = fx.swell,
+                range = 0f..1.5f,
+                description = "The long, slow undulation, driven by 40–160 Hz.",
+            ) { onChange(fx.copy(swell = it)) }
+
+            GlobeFxSlider(
+                label = "Treble shimmer",
+                valueLabel = "${(fx.shimmer * 100).toInt()}%",
+                value = fx.shimmer,
+                range = 0f..1.5f,
+                description = "The fine vibration, driven by 3–12 kHz.",
+            ) { onChange(fx.copy(shimmer = it)) }
+
+            GlobeFxSlider(
+                label = "Wave speed",
+                valueLabel = fx.waveSpeed.asMultiple(2),
+                value = fx.waveSpeed,
+                range = 0.25f..3f,
+                description = "How fast the ripple travels along the coast.",
+            ) { onChange(fx.copy(waveSpeed = it)) }
+
+            GlobeFxSlider(
+                label = "Wave detail",
+                valueLabel = fx.waveDetail.asMultiple(2),
+                value = fx.waveDetail,
+                range = 0.3f..3f,
+                description = "How many crests fit along a stretch of coastline.",
+            ) { onChange(fx.copy(waveDetail = it)) }
+
+            val gain = fx.zoomGain(zoom, MIN_ZOOM)
+            GlobeFxSlider(
+                label = "Full effect from",
+                valueLabel = if (fx.fullEffectZoom <= MIN_ZOOM) "Always" else fx.fullEffectZoom.asMultiple(0),
+                value = fx.fullEffectZoom,
+                range = MIN_ZOOM..24f,
+                description = "Below this zoom the movement fades out, so the whole-Earth " +
+                    "view stays readable. Now ${(gain * 100).toInt()}% at ${zoom.asMultiple(1)}.",
+            ) { onChange(fx.copy(fullEffectZoom = it)) }
+        }
+    }
+}
+
+@Composable
+private fun GlobeFxSlider(
+    label: String,
+    valueLabel: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    description: String? = null,
+    onChange: (Float) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = valueLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        description?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * "2.40×" — fixed to [decimals], and to [Locale.US] rather than the device's.
+ *
+ * These are multipliers next to a slider, not prose: a locale that writes them
+ * with a decimal comma reads as a thousands separator beside a number this
+ * small. Formatted through the number alone and never through a string carrying
+ * a literal `%`, which is a format specifier and would throw.
+ */
+private fun Float.asMultiple(decimals: Int): String =
+    String.format(Locale.US, "%.${decimals}f×", this)
 
 // ── the panel ───────────────────────────────────────────────────────────────
 
@@ -523,6 +703,12 @@ private const val FLIGHT_HEIGHT_QUANTUM = 96
 private const val SPIN_MILLIS = 700
 private val SpinEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
 
+/**
+ * The widest the Earth is drawn. Mirrored by [GlobeFxSettings.MIN_RAMP], which
+ * is where the reactive-outline ramp switches off; a unit test asserts the two
+ * agree, because a ramp floor above this zoom would leave a band of the range
+ * where the effect is dead and the slider says otherwise.
+ */
 private const val MIN_ZOOM = 0.85f
 
 /**
@@ -540,6 +726,20 @@ private const val MAX_ZOOM = 48f
 
 /** Fraction of the smaller viewport dimension the globe fills at zoom 1. */
 private const val GLOBE_FIT = 0.42f
+
+/**
+ * Reactive-outline amplitude, as a fraction of the globe's radius and in pixels.
+ *
+ * Proportional so the wave is the same size relative to the Earth wherever you
+ * are, clamped at both ends for the two ways that stops being true: below the
+ * floor the displacement rounds away against a 1.1 px stroke and the effect
+ * simply vanishes rather than becoming subtle, and above the ceiling — which a
+ * 48× zoom would reach thirty times over — a coastline detaches from the sphere
+ * it is supposed to be lying on.
+ */
+private const val WARP_RADIUS_FRACTION = 0.012f
+private const val WARP_MIN_PX = 1.5f
+private const val WARP_MAX_PX = 26f
 
 /**
  * Where the Earth is turned to, and how close.
@@ -732,6 +932,8 @@ private fun DrawScope.drawGlobe(
     labelSizePx: Float,
     topInset: Float,
     bottomInset: Float,
+    fx: GlobeFxSettings = GlobeFxSettings(),
+    pulse: GlobePulse = GlobePulse(),
 ) {
     if (data.cities.isEmpty() && data.coastline.isEmpty()) return
 
@@ -739,6 +941,26 @@ private fun DrawScope.drawGlobe(
     val cx = size.width / 2f
     val cy = size.height / 2f
     val scale = data.scale.takeIf { it > 0 } ?: 100
+
+    // Amplitude scales with the globe rather than being a fixed pixel count, so
+    // the effect stays the same *proportion* of the Earth at every zoom, then
+    // hits a ceiling — past a certain size a proportional wave stops looking
+    // like a moving coast and starts looking like a coast that has come loose.
+    // The zoom ramp on top of it is the readability gate: at whole-Earth zoom
+    // this multiplies out to nothing.
+    val warp = if (fx.enabled) {
+        GlobeWarp(
+            amplitudePx = fx.amount *
+                fx.zoomGain(camera.zoom, MIN_ZOOM) *
+                (radius * WARP_RADIUS_FRACTION).coerceIn(WARP_MIN_PX, WARP_MAX_PX),
+            swell = fx.swell * pulse.bass,
+            shimmer = fx.shimmer * pulse.treble,
+            phase = pulse.phase,
+            detail = fx.waveDetail,
+        )
+    } else {
+        GlobeWarp()
+    }
 
     drawCircle(color = ocean, radius = radius, center = Offset(cx, cy))
     drawCircle(
@@ -765,6 +987,7 @@ private fun DrawScope.drawGlobe(
         cy = cy,
         radius = radius,
         scale = scale,
+        warp = warp,
     )
     drawProjectedLines(
         lines = data.coastline,
@@ -775,8 +998,15 @@ private fun DrawScope.drawGlobe(
         cy = cy,
         radius = radius,
         scale = scale,
+        warp = warp,
     )
 
+    // The dots do not move with the music, and that is not an omission. A dot is
+    // a target: [hitTest] finds it by projecting forward with no knowledge of
+    // the warp, so a displaced dot is a dot that is no longer where tapping it
+    // says it is. Names are pinned for the same reason — they are placed by
+    // collision against a grid of taken boxes, and a shivering label set would
+    // re-solve that grid every frame and flicker names in and out.
     for (city in data.cities) {
         val p = project(city.lat, city.lon, scale, camera, cx, cy, radius)
         if (!p.visible) continue
@@ -830,6 +1060,49 @@ private fun DrawScope.drawGlobe(
 }
 
 /**
+ * The music, resolved into everything the line renderer needs to bend an
+ * outline this frame. Built once per draw in [drawGlobe] and read per vertex.
+ *
+ * [amplitudePx] arrives already multiplied by the master amount and the zoom
+ * ramp, so a warp that should not be visible is a warp whose amplitude is zero
+ * and [active] is false — the renderer then takes its original path with no
+ * per-vertex cost at all.
+ */
+private data class GlobeWarp(
+    val amplitudePx: Float = 0f,
+    val swell: Float = 0f,
+    val shimmer: Float = 0f,
+    val phase: Float = 0f,
+    val detail: Float = 1f,
+) {
+    val active: Boolean
+        get() = amplitudePx > 0.01f && (swell > 0.001f || shimmer > 0.001f)
+
+    /**
+     * Displacement for the [i]th vertex of a run, in pixels along the outline's
+     * normal.
+     *
+     * The wave is indexed by position *along the line* rather than by screen
+     * position, which is what makes it read as the coast undulating rather than
+     * as the screen wobbling: a ripple travels down the coastline and stays
+     * stuck to it while the globe turns underneath. Screen-space noise would
+     * swim against the rotation and look like a rendering fault.
+     *
+     * The two components run in opposite directions on purpose. Two waves
+     * travelling the same way just beat against each other into one lumpy wave;
+     * counter-running ones cross, and the crossings are what make it look like
+     * water rather than like a sine.
+     */
+    fun displacement(i: Int): Float {
+        val s = i * detail
+        return amplitudePx * (
+            swell * sin(s * 0.55f + phase) +
+                shimmer * sin(s * 3.1f - phase * 2.4f)
+            )
+    }
+}
+
+/**
  * Stroke a set of flat `[lon, lat, lon, lat, …]` runs onto the sphere.
  *
  * Shared by the coastline and the borders because they are the same problem:
@@ -837,6 +1110,11 @@ private fun DrawScope.drawGlobe(
  * when a line passes round the back. A second copy of that last part is a
  * second place for it to rot — and getting it wrong is not subtle, it draws a
  * chord straight across the face of the globe.
+ *
+ * When [warp] is active each vertex is pushed along the outline's own normal,
+ * so the displacement is always across the line and never along it. Sliding a
+ * point down its own coast moves it nowhere visible and costs the same work;
+ * pushing it sideways is the entire effect.
  */
 private fun DrawScope.drawProjectedLines(
     lines: List<List<Int>>,
@@ -847,22 +1125,60 @@ private fun DrawScope.drawProjectedLines(
     cy: Float,
     radius: Float,
     scale: Int,
+    warp: GlobeWarp = GlobeWarp(),
 ) {
+    val warping = warp.active
     for (line in lines) {
         val path = Path()
         var drawing = false
         var index = 0
+        var vertex = 0
+        // Normal of the previous segment, carried forward so the first vertex of
+        // a run — which has no segment behind it yet — is simply left where the
+        // projection put it rather than displaced along a direction we haven't
+        // measured. Reset per line so one coastline never inherits another's.
+        var prevX = Float.NaN
+        var prevY = Float.NaN
+        var normalX = 0f
+        var normalY = 0f
         while (index + 1 < line.size) {
             val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
             if (p.visible) {
-                if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
+                var x = p.x
+                var y = p.y
+                if (warping) {
+                    if (!prevX.isNaN()) {
+                        val dx = p.x - prevX
+                        val dy = p.y - prevY
+                        val length = hypot(dx, dy)
+                        // Coincident points carry no direction; keeping the last
+                        // good normal is better than a division that yields NaN
+                        // and silently drops the rest of the path.
+                        if (length > 1e-3f) {
+                            normalX = -dy / length
+                            normalY = dx / length
+                        }
+                    }
+                    val d = warp.displacement(vertex)
+                    x += normalX * d
+                    y += normalY * d
+                }
+                if (drawing) path.lineTo(x, y) else path.moveTo(x, y)
                 drawing = true
+                // Track the *unwarped* point: measuring direction from displaced
+                // ones feeds the wave back into its own normals, and the outline
+                // curls up on itself within a few hundred vertices.
+                prevX = p.x
+                prevY = p.y
             } else {
                 // Round the back: lift the pen so the line stops at the limb
                 // rather than being drawn across the disc when it reappears.
                 drawing = false
+                prevX = Float.NaN
+                prevY = Float.NaN
             }
             index += 2
+            vertex++
         }
         drawPath(path = path, color = colour, style = Stroke(width = width))
     }

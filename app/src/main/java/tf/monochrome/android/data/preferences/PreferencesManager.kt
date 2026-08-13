@@ -137,6 +137,7 @@ class PreferencesManager @Inject constructor(
         private val LYRICS_BASS_REACT = floatPreferencesKey("lyrics_bass_react")
         // Full Player Visuals Studio settings as one JSON blob (takes precedence).
         private val LYRICS_FX_JSON = stringPreferencesKey("lyrics_fx_json")
+        private val GLOBE_FX_JSON = stringPreferencesKey("globe_fx_json")
         // User-saved Lyrics FX presets (a JSON array of {name, settings}).
         private val LYRICS_FX_CUSTOM_PRESETS_JSON = stringPreferencesKey("lyrics_fx_custom_presets_json")
         // Player-chrome (transport button) liquid-glass settings, one JSON blob.
@@ -383,7 +384,7 @@ class PreferencesManager @Inject constructor(
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
-            LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, PLAYER_GLASS_JSON,
+            LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
@@ -1685,6 +1686,30 @@ class PreferencesManager @Inject constructor(
     suspend fun setLyricsFx(settings: LyricsFxSettings) {
         val clamped = settings.clamped()
         dataStore.edit { it[LYRICS_FX_JSON] = json.encodeToString(clamped) }
+    }
+
+    /**
+     * How the world globe's outlines react to the music. Same shape as the
+     * lyrics blob above — one JSON key, decoded lazily, and clamped on the way
+     * both in and out so a hand-edited or future-versioned value can never hand
+     * the renderer an amplitude it will draw the Earth inside out with.
+     */
+    val globeFx: Flow<tf.monochrome.android.domain.model.GlobeFxSettings> = dataStore.data
+        .map { it[GLOBE_FX_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s ->
+                    runCatching {
+                        json.decodeFromString<tf.monochrome.android.domain.model.GlobeFxSettings>(s)
+                    }.getOrNull()
+                }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.GlobeFxSettings()
+        }
+
+    suspend fun setGlobeFx(settings: tf.monochrome.android.domain.model.GlobeFxSettings) {
+        dataStore.edit { it[GLOBE_FX_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     /** User-saved Lyrics FX presets (empty until the user saves one). */
