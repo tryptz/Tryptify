@@ -95,12 +95,14 @@ fun SearchQueryField(
     query: String,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hazeState: dev.chrisbanes.haze.HazeState? = null,
 ) {
     GlassSearchBar(
         query = query,
         onQueryChange = onQueryChange,
         placeholder = "Search tracks, albums, artists, playlists…",
+        hazeState = hazeState,
         onSubmit = onSubmit,
         modifier = modifier.padding(horizontal = 8.dp),
     )

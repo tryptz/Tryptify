@@ -81,6 +81,9 @@ import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
+import androidx.compose.foundation.layout.Box
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -318,24 +321,16 @@ fun HomeScreen(
             )
         }
 
-        // Search — hidden by default, revealed by the top-bar search button.
-        // The field stays visible while a query is active so results keep
-        // their input attached.
-        AnimatedVisibility(
-            visible = searchOpen || hasSearchResults,
-            enter = expandVertically(),
-            exit = shrinkVertically()
-        ) {
-            tf.monochrome.android.devedit.DevEditable("home_search_bar", Modifier.fillMaxWidth()) {
-                SearchQueryField(
-                    query = searchQuery,
-                    onQueryChange = searchViewModel::onQueryChange,
-                    onSubmit = searchViewModel::submitSearch,
-                    modifier = Modifier.focusRequester(searchFocus)
-                )
-            }
-        }
-
+        // Everything below the bar, with the search floating over it.
+        //
+        // The field used to be a row in this column, which meant it took
+        // layout space: the content started *below* it and clipped at its own
+        // top edge, so rows vanished at a hard line instead of sliding under
+        // the glass. It is an overlay now — the content keeps the full height
+        // and runs underneath.
+        val searchHaze = rememberHazeState()
+        Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().hazeSource(searchHaze)) {
         // Play Radio — the home screen's primary action: seed a station from
         // whatever is playing (falling back to recent history) and keep the
         // queue topped up.
@@ -492,6 +487,32 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+        }
+
+        // Search — hidden by default, revealed by the top-bar search button.
+        // The field stays visible while a query is active so results keep
+        // their input attached.
+        //
+        // Fully qualified: the outer column's receiver is still in scope inside
+        // this box, so the ColumnScope overload wins resolution and then fails
+        // on the receiver it cannot find.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = searchOpen || hasSearchResults,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            tf.monochrome.android.devedit.DevEditable("home_search_bar", Modifier.fillMaxWidth()) {
+                SearchQueryField(
+                    query = searchQuery,
+                    onQueryChange = searchViewModel::onQueryChange,
+                    onSubmit = searchViewModel::submitSearch,
+                    hazeState = searchHaze,
+                    modifier = Modifier.focusRequester(searchFocus)
+                )
+            }
+        }
         }
     }
 }
