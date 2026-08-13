@@ -636,6 +636,69 @@ private fun StationSearchBar(
         onClose = onClose,
         modifier = Modifier.padding(horizontal = 4.dp),
     ) {
+            // The predictions. A row rather than a list, slid sideways, so they
+            // sit under the field without covering the globe the search is
+            // about — the answer to "which of these did you mean" is one glance
+            // and one tap, and a vertical list would take the screen for it.
+            //
+            // These were lost when this bar became the shared one: the field
+            // moved into GlassSearchBar and the results row, which lived in the
+            // same Column as the field, went with the Column. Typing still ran
+            // the search and still lit "Nothing by that name" on or off, so the
+            // bar looked wired up while having nowhere to put an answer.
+            if (!state.isEmpty) {
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Inside a country, the way back leads. Sliding right to
+                    // find the exit would make the drill-down a trap on a row
+                    // that can be two dozen cities long.
+                    state.inCountry?.let { open ->
+                        item {
+                            CountryPill(
+                                country = open,
+                                open = true,
+                                onClick = { onOpenCountry(null) },
+                            )
+                        }
+                    }
+                    // Countries first otherwise: a country is the broadest
+                    // answer to a half-typed word, and the one most likely to be
+                    // what was meant when it matches at all.
+                    items(state.countries) { country ->
+                        CountryPill(
+                            country = country,
+                            open = false,
+                            onClick = { onOpenCountry(country) },
+                        )
+                    }
+                    // Then cities. They are the ones that are certainly right —
+                    // matched against the globe's own list rather than guessed
+                    // at from a station's name — and they are already on screen
+                    // while the directory is still being asked.
+                    items(state.cities) { city ->
+                        CitySuggestionPill(
+                            city = city,
+                            onClick = {
+                                keyboard?.hide()
+                                onPickCity(city)
+                            },
+                        )
+                    }
+                    // Unkeyed, as everywhere else the directory's data is
+                    // listed: it does not promise unique uuids, and a duplicate
+                    // pill beats a crash.
+                    items(state.stations) { station ->
+                        StationPill(
+                            station = station,
+                            onClick = {
+                                keyboard?.hide()
+                                onPickStation(station)
+                            },
+                        )
+                    }
+                }
+            }
+
             // Nothing typed yet: offer what was looked up before. This is the
             // state the bar opens in, and an empty row under an empty field is
             // a dead end on a screen where the interesting places are hard to
