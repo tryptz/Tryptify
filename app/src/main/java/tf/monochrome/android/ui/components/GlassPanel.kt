@@ -74,6 +74,13 @@ fun GlassPanel(
     hazeState: HazeState,
     glass: PlayerGlassSettings,
     modifier: Modifier = Modifier,
+    /**
+     * Whether to hold clear of the navigation bar. True for the panels this was
+     * written for, which sit against the bottom of the screen; false for one
+     * anchored at the top, where the inset is a gap under the panel holding
+     * space for a bar that is nowhere near it.
+     */
+    avoidNavigationBar: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
@@ -88,7 +95,7 @@ fun GlassPanel(
         modifier = modifier
             .fillMaxWidth()
             .padding(12.dp)
-            .navigationBarsPadding()
+            .then(if (avoidNavigationBar) Modifier.navigationBarsPadding() else Modifier)
             .clip(MonoDimens.shapeLg)
             .then(
                 when {

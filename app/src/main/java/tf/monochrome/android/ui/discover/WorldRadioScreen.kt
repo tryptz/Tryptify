@@ -198,6 +198,7 @@ fun WorldRadioScreen(
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
+    var searchBarHeightPx by remember { mutableIntStateOf(0) }
 
     val storedFx by viewModel.globeFx.collectAsStateWithLifecycle()
     var showFxSheet by remember { mutableStateOf(false) }
@@ -280,31 +281,6 @@ fun WorldRadioScreen(
             modifier = Modifier.onSizeChanged { topBarHeightPx = it.height },
         )
 
-        // The bar drops out of the app bar rather than replacing it, so the
-        // globe never loses its title or its two toggles while you type — and
-        // the predictions sit directly under the field they came from.
-        AnimatedVisibility(
-            visible = searchOpen,
-            enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
-            exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
-        ) {
-            CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
-                StationSearchBar(
-                    query = query,
-                    state = suggestions,
-                    hazeState = mapHaze,
-                    glass = glassSettings,
-                    onQueryChange = { viewModel.setQuery(it) },
-                    onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
-                    onPickCity = { viewModel.pickSearchCity(it) },
-                    onOpenCountry = { viewModel.openCountry(it) },
-                    recents = recents,
-                    onClearRecents = { viewModel.clearRecentSearches() },
-                    onClose = { viewModel.toggleSearch() },
-                )
-            }
-        }
-
         Box(modifier = Modifier.fillMaxSize()) {
             val ocean = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
             val land = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
@@ -350,7 +326,8 @@ fun WorldRadioScreen(
                     labelSizePx = labelPx,
                     // The globe runs full-bleed under a transparent bar, which
                     // is intended for the dots and unreadable for the names.
-                    topInset = topBarHeightPx.toFloat(),
+                    topInset = topBarHeightPx.toFloat() +
+                        if (searchOpen) searchBarHeightPx.toFloat() else 0f,
                     bottomInset = if (selected != null) {
                         panelBottomInset.toPx() + panelHeightPx
                     } else {
@@ -377,8 +354,41 @@ fun WorldRadioScreen(
                 )
             }
 
+            // Over the globe, not above it. The glass blurs whatever the haze
+            // source drew behind it, and laid out in the column the bar had the
+            // window's own background back there and nothing else — the same
+            // panel that reads as frosted glass over the map read as a flat
+            // slab an inch higher up.
+            // Fully qualified: inside the Box the outer Column's receiver is
+            // still in scope, and the ColumnScope overload wins resolution and
+            // then fails on the missing receiver.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = searchOpen,
+                enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+                exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .onSizeChanged { searchBarHeightPx = it.height },
+            ) {
+                CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
+                    StationSearchBar(
+                        query = query,
+                        state = suggestions,
+                        hazeState = mapHaze,
+                        glass = glassSettings,
+                        onQueryChange = { viewModel.setQuery(it) },
+                        onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
+                        onPickCity = { viewModel.pickSearchCity(it) },
+                        onOpenCountry = { viewModel.openCountry(it) },
+                        recents = recents,
+                        onClearRecents = { viewModel.clearRecentSearches() },
+                        onClose = { viewModel.toggleSearch() },
+                    )
+                }
+            }
+
             Text(
-                text = if (globe.cities.isEmpty()) "" else "Dots are cities on air · sized by how many stations",
+                text = if (globe.cities.isEmpty() || searchOpen) "" else "Dots are cities on air · sized by how many stations",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -597,6 +607,7 @@ private fun StationSearchBar(
         hazeState = hazeState,
         glass = glass,
         modifier = Modifier.padding(horizontal = 4.dp),
+        avoidNavigationBar = false,
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
