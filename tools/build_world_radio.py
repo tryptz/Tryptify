@@ -8,6 +8,7 @@ Writes:
 
 Reads two committed inputs and never goes to the network:
     tools/world_coastline.geojson  Natural Earth 110m coastline (public domain)
+    tools/world_land.geojson       Natural Earth 110m land polygons (public domain)
     tools/world_radio.json         the research cache from fetch_world_radio.py
 
 Run tools/validate_world_radio.py afterwards.
@@ -31,10 +32,11 @@ ASSETS = os.path.join(ROOT, "app", "src", "main", "assets")
 CACHE = os.path.join(ROOT, "tools", "world_radio.json")
 COASTLINE = os.path.join(ROOT, "tools", "world_coastline.geojson")
 BORDERS = os.path.join(ROOT, "tools", "world_borders.geojson")
+LAND = os.path.join(ROOT, "tools", "world_land.geojson")
 
 ATTRIBUTION = (
     "City names, coordinates and populations from GeoNames (geonames.org), "
-    "licensed CC BY 4.0. Coastlines and country borders from Natural Earth "
+    "licensed CC BY 4.0. Land, coastlines and country borders from Natural Earth "
     "(naturalearthdata.com), public domain. Station listings from the "
     "radio-browser.info community "
     "database. A city appears only when live stations actually name it; station "
@@ -86,6 +88,45 @@ def load_lines(path: str) -> list[list[int]]:
     return out
 
 
+def load_land(path: str) -> list[list[int]]:
+    """Natural Earth land as flat, quantised, *closed* rings.
+
+    Separate from load_lines because it answers a different question. The
+    coastline is a set of strokes and several of its runs are open — Afro-Eurasia
+    arrives as one sweep cut at the antimeridian — so closing them to fill would
+    draw a chord from West Africa to the Bering Strait. These are polygons: every
+    ring closes, and filling one is well defined.
+
+    Holes are emitted alongside the rings that contain them and the renderer
+    fills with the even-odd rule, so a lake stays water without either side
+    needing to know which ring is which.
+    """
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+
+    out: list[list[int]] = []
+    for feature in data["features"]:
+        geometry = feature["geometry"]
+        polygons = (
+            [geometry["coordinates"]] if geometry["type"] == "Polygon"
+            else geometry["coordinates"]
+        )
+        for polygon in polygons:
+            for ring in polygon:
+                flat: list[int] = []
+                previous = None
+                for lon, lat in ring:
+                    point = (round(lon * SCALE), round(lat * SCALE))
+                    if point == previous:
+                        continue
+                    previous = point
+                    flat.extend(point)
+                # A ring needs three distinct corners to enclose anything.
+                if len(flat) >= 6:
+                    out.append(flat)
+    return out
+
+
 def load_cities() -> list[dict]:
     """Cities that broadcast, ordered so the biggest draw last (on top)."""
     if not os.path.exists(CACHE):
@@ -107,6 +148,7 @@ def load_cities() -> list[dict]:
 def main() -> int:
     coastline = load_lines(COASTLINE)
     borders = load_lines(BORDERS)
+    land = load_land(LAND)
     cities = load_cities()
     if not cities:
         print("cities     none — run tools/fetch_world_radio.py first")
@@ -118,6 +160,7 @@ def main() -> int:
         "scale": SCALE,
         "coastline": coastline,
         "borders": borders,
+        "land": land,
         "cities": cities,
     }
 
@@ -131,6 +174,8 @@ def main() -> int:
     border_points = sum(len(line) // 2 for line in borders)
     stations = sum(c["stations"] for c in cities)
     countries = len({c["country"] for c in cities})
+    land_points = sum(len(ring) // 2 for ring in land)
+    print(f"land       {len(land)} rings, {land_points} points")
     print(f"coastline  {len(coastline)} lines, {points} points")
     print(f"borders    {len(borders)} lines, {border_points} points")
     print(f"cities     {len(cities)} across {countries} countries, "

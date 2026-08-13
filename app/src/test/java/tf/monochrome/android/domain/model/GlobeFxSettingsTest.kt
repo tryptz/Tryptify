@@ -21,11 +21,24 @@ class GlobeFxSettingsTest {
             illumination = 12f,
             glowBrightness = -4f,
             glowWidth = 900f,
+            landFill = 7f,
         ).clamped()
 
         assertEquals(1f, wild.illumination, 1e-6f)
         assertEquals(0f, wild.glowBrightness, 1e-6f)
         assertEquals(8f, wild.glowWidth, 1e-6f)
+        assertEquals(0.8f, wild.landFill, 1e-6f)
+        assertEquals(0f, GlobeFxSettings(landFill = -3f).clamped().landFill, 1e-6f)
+    }
+
+    /**
+     * The land fill is what tells a viewer which side of a coast is which, so
+     * "off" has to be reachable and has to mean it — that is the pre-land-layer
+     * globe, and the renderer skips the fill pass entirely there.
+     */
+    @Test
+    fun `land fill can be turned off entirely`() {
+        assertEquals(0f, GlobeFxSettings(landFill = 0f).clamped().landFill, 1e-6f)
     }
 
     @Test

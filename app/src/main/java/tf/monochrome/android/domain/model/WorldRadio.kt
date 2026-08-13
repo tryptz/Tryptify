@@ -74,6 +74,21 @@ data class WorldRadioData(
      * disagreeing by a pixel. Land only: no maritime lines.
      */
     val borders: List<List<Int>> = emptyList(),
+    /**
+     * Land as *closed rings*, for filling — Natural Earth's 110m land polygons.
+     *
+     * A separate layer from [coastline] rather than the same one reused, because
+     * they are different kinds of geometry and only one of them can be filled.
+     * The coastline is a set of strokes, and several of its runs are open:
+     * Afro-Eurasia arrives as a single sweep cut at the antimeridian, so closing
+     * it to fill would run a chord from West Africa to the Bering Strait. Every
+     * ring here closes, and filling one is well defined.
+     *
+     * Holes ride alongside the rings that contain them and the renderer fills
+     * even-odd, so an inland sea stays water without either side having to know
+     * which ring is which.
+     */
+    val land: List<List<Int>> = emptyList(),
     val cities: List<RadioCity> = emptyList(),
 )
 

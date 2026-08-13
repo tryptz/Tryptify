@@ -31,6 +31,14 @@ data class GlobeFxSettings(
     val glowBrightness: Float = 0.3f,
     /** Halo width, as a multiple of the outline's own stroke. */
     val glowWidth: Float = 3.5f,
+    /**
+     * How solidly the continents are filled over the ocean disc.
+     *
+     * Zero is the globe as it was before the land layer existed: an ocean with
+     * outlines drawn on it and no way to tell, at a glance, which side of a
+     * coast is which.
+     */
+    val landFill: Float = 0.3f,
 ) {
     /** Whether the halo pass is worth running at all. */
     val glowing: Boolean get() = glowBrightness > 0.01f && glowWidth > 1.01f
@@ -39,5 +47,6 @@ data class GlobeFxSettings(
         illumination = illumination.coerceIn(0f, 1f),
         glowBrightness = glowBrightness.coerceIn(0f, 1f),
         glowWidth = glowWidth.coerceIn(1f, 8f),
+        landFill = landFill.coerceIn(0f, 0.8f),
     )
 }

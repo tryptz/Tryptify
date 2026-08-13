@@ -94,6 +94,44 @@ class WorldRadioTest {
         assertEquals("border runs too short to draw a line", 0, tiny)
     }
 
+    /**
+     * The land layer is the one thing on the globe that gets *filled*, and a
+     * fill needs closed rings. An open one does not draw a gap — it draws a
+     * chord straight across the sphere from wherever the ring stopped back to
+     * where it started, which is how the coastline behaved and why it could
+     * never be used for this.
+     */
+    @Test
+    fun `every land ring closes`() {
+        assertTrue("no land rings at all", globe.land.isNotEmpty())
+
+        val ragged = globe.land.count { it.size % 2 != 0 }
+        assertEquals("land rings with an odd number of values", 0, ragged)
+
+        val open = globe.land.count { ring ->
+            ring.size < 6 || ring[0] != ring[ring.size - 2] || ring[1] != ring[ring.size - 1]
+        }
+        assertEquals("land rings that do not close", 0, open)
+    }
+
+    /**
+     * The land and the coastline are drawn from two files and have to agree, or
+     * the fill and the line it is supposed to sit behind will be visibly apart.
+     * Both come from Natural Earth's same 110m pass, so their point counts land
+     * within a few of each other; a big divergence means one was regenerated
+     * from a different resolution.
+     */
+    @Test
+    fun `land and coastline come from the same generalisation`() {
+        val landPoints = globe.land.sumOf { it.size / 2 }
+        val coastPoints = globe.coastline.sumOf { it.size / 2 }
+        val drift = kotlin.math.abs(landPoints - coastPoints)
+        assertTrue(
+            "land has $landPoints points, coastline $coastPoints",
+            drift < coastPoints / 10,
+        )
+    }
+
     @Test
     fun `the cities a listener would look for first are all present`() {
         // A globe that covered 1,600 obscure towns and missed London would pass

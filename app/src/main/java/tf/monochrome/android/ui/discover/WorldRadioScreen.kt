@@ -88,6 +88,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -454,17 +455,26 @@ private fun GlobeFxSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Outline glow",
+                    text = "Globe",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onReset) { Text("Reset") }
             }
             Text(
-                text = "Lights the coastlines and borders in the app's own accent colour.",
+                text = "Fills the continents and lights their edges in the app's accent colour.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            GlobeFxSlider(
+                label = "Land",
+                valueLabel = if (fx.landFill <= 0.01f) "Off"
+                else "${(fx.landFill / 0.8f * 100).toInt()}%",
+                value = fx.landFill,
+                range = 0f..0.8f,
+                description = "How solidly the continents fill against the ocean.",
+            ) { onChange(fx.copy(landFill = it)) }
 
             GlobeFxSlider(
                 label = "Illumination",
@@ -1523,7 +1533,14 @@ private fun DrawScope.drawGlobe(
         signature = outlineSignature(camera, size.width, size.height, data),
         buildBorders = { projectLines(data.borders, camera, cx, cy, radius, scale) },
         buildCoastline = { projectLines(data.coastline, camera, cx, cy, radius, scale) },
+        buildLand = { projectLandFill(data.land, camera, cx, cy, radius, scale) },
     )
+
+    // Land over the ocean disc and under every line, so the coast reads as the
+    // edge of the land rather than as a stroke lying on top of the sea.
+    if (fx.landFill > 0.01f) {
+        drawPath(path = outlines.land, color = litLand.copy(alpha = fx.landFill))
+    }
 
     strokeOutlines(
         paths = outlines.borders,
@@ -1606,6 +1623,7 @@ private fun outlineSignature(
     h = h * 31 + height.toLong()
     h = h * 31 + data.coastline.size
     h = h * 31 + data.borders.size
+    h = h * 31 + data.land.size
     return h
 }
 
@@ -1629,17 +1647,21 @@ private class OutlineCache {
         private set
     var coastline: List<Path> = emptyList()
         private set
+    var land: Path = Path()
+        private set
 
     /** Rebuild only when the geometry could actually have moved. */
     fun update(
         signature: Long,
         buildBorders: () -> List<Path>,
         buildCoastline: () -> List<Path>,
+        buildLand: () -> Path,
     ) {
         if (signature == key) return
         key = signature
         borders = buildBorders()
         coastline = buildCoastline()
+        land = buildLand()
     }
 }
 
@@ -1676,6 +1698,102 @@ private fun projectLines(
         index += 2
     }
     path
+}
+
+/**
+ * Project the land rings into one fillable path.
+ *
+ * The hard part is the limb. A landmass that runs round the back of the globe
+ * has no boundary of its own there — the boundary is the edge of the visible
+ * hemisphere — so the ring is walked in its own order and every vertex on the
+ * far side is pushed radially out onto the rim, with the exact crossing point
+ * inserted where an edge changes sides. The hidden stretch collapses onto the
+ * arc it was hiding behind, which is precisely where the true silhouette runs,
+ * and because the walk keeps the ring's own direction the arc is traced the
+ * right way round without any of the sorting a real spherical clipper needs.
+ *
+ * Rings with nothing visible are dropped rather than collapsed, or they would
+ * paint a hairline of land along the rim of an empty ocean.
+ *
+ * One path for the whole world, filled even-odd: distinct landmasses never
+ * overlap on the sphere so they cannot cancel, and a hole punched by a
+ * containing ring does exactly what it should.
+ */
+private fun projectLandFill(
+    rings: List<List<Int>>,
+    camera: GlobeCamera,
+    cx: Float,
+    cy: Float,
+    radius: Float,
+    scale: Int,
+): Path {
+    val path = Path().apply { fillType = PathFillType.EvenOdd }
+    if (radius <= 0f) return path
+
+    for (ring in rings) {
+        val count = ring.size / 2
+        if (count < 3) continue
+
+        // Unit-sphere view coordinates: x right, y up, z toward the viewer.
+        val ux = FloatArray(count)
+        val uy = FloatArray(count)
+        val uz = FloatArray(count)
+        var anyVisible = false
+        for (i in 0 until count) {
+            val p = project(ring[i * 2 + 1], ring[i * 2], scale, camera, cx, cy, radius)
+            ux[i] = (p.x - cx) / radius
+            uy[i] = (cy - p.y) / radius
+            uz[i] = p.z
+            if (p.z >= 0f) anyVisible = true
+        }
+        if (!anyVisible) continue
+
+        var started = false
+        for (i in 0 until count) {
+            val j = if (i + 1 == count) 0 else i + 1
+            started = if (uz[i] >= 0f) {
+                path.step(started, cx + ux[i] * radius, cy - uy[i] * radius)
+            } else {
+                path.stepOnRim(started, ux[i], uy[i], cx, cy, radius)
+            }
+            if ((uz[i] >= 0f) != (uz[j] >= 0f)) {
+                // Where the edge crosses the limb. Interpolating the view-space
+                // vector puts z exactly at zero, so the point is on the rim
+                // circle once its length is normalised away.
+                val t = uz[i] / (uz[i] - uz[j])
+                started = path.stepOnRim(
+                    started,
+                    ux[i] + (ux[j] - ux[i]) * t,
+                    uy[i] + (uy[j] - uy[i]) * t,
+                    cx,
+                    cy,
+                    radius,
+                )
+            }
+        }
+        if (started) path.close()
+    }
+    return path
+}
+
+private fun Path.step(started: Boolean, x: Float, y: Float): Boolean {
+    if (started) lineTo(x, y) else moveTo(x, y)
+    return true
+}
+
+private fun Path.stepOnRim(
+    started: Boolean,
+    x: Float,
+    y: Float,
+    cx: Float,
+    cy: Float,
+    radius: Float,
+): Boolean {
+    val length = hypot(x, y)
+    // A point on the axis has no direction to be pushed out along. It is the
+    // dead centre of the far side, so dropping it loses nothing.
+    if (length <= 1e-5f) return started
+    return step(started, cx + x / length * radius, cy - y / length * radius)
 }
 
 /**
