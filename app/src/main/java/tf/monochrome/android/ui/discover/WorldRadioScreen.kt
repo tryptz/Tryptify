@@ -2,7 +2,7 @@ package tf.monochrome.android.ui.discover
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
@@ -87,6 +87,7 @@ import androidx.navigation.NavController
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.GlobeFxSettings
 import tf.monochrome.android.domain.model.RadioCity
@@ -175,8 +176,25 @@ fun WorldRadioScreen(
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
 
-    val globeFx by viewModel.globeFx.collectAsStateWithLifecycle()
+    val storedFx by viewModel.globeFx.collectAsStateWithLifecycle()
     var showFxSheet by remember { mutableStateOf(false) }
+
+    // The sliders write here and the globe reads here, so a drag repaints at
+    // once. Persisting used to happen on every frame of the drag — a DataStore
+    // write, a flow emission and a recomposition, sixty times a second — which
+    // is what made the sliders crawl. The write is now debounced behind the
+    // live preview, the same split the EQ's knobs already use.
+    var globeFx by remember { mutableStateOf(storedFx) }
+    LaunchedEffect(storedFx) { globeFx = storedFx }
+    LaunchedEffect(globeFx) {
+        if (globeFx != storedFx) {
+            delay(FX_PERSIST_DEBOUNCE_MS)
+            viewModel.updateGlobeFx { globeFx }
+        }
+    }
+
+    // Projected geometry, reused by every draw that only changes colour.
+    val outlines = remember { OutlineCache() }
 
     fun spinTo(city: RadioCity) {
         flight?.cancel()
@@ -278,6 +296,7 @@ fun WorldRadioScreen(
                         0f
                     },
                     accent = dot,
+                    outlines = outlines,
                     fx = globeFx,
                 )
             }
@@ -346,8 +365,8 @@ fun WorldRadioScreen(
     if (showFxSheet) {
         GlobeFxSheet(
             fx = globeFx,
-            onChange = { viewModel.updateGlobeFx { _ -> it } },
-            onReset = { viewModel.resetGlobeFx() },
+            onChange = { globeFx = it },
+            onReset = { globeFx = GlobeFxSettings(); viewModel.resetGlobeFx() },
             onDismiss = { showFxSheet = false },
         )
     }
@@ -730,8 +749,11 @@ private fun SelectedCityPing(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
+            // Restart, not Reverse. A ring that grows and then shrinks back into
+            // itself reads as a blob breathing; one that grows, fades, and is
+            // replaced reads as a transmitter, which is what the dot is.
+            animation = tween(1500, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
         ),
         label = "selectedPing",
     )
@@ -741,35 +763,72 @@ private fun SelectedCityPing(
         val p = project(city.lat, city.lon, scale, camera, size.width / 2f, size.height / 2f, radius)
         if (!p.visible) return@Canvas
 
-        // Read inside the draw lambda so the breath invalidates the draw phase
-        // and never the composition around it.
+        // Read inside the draw lambda so the ping invalidates the draw phase and
+        // never the composition around it.
         val t = ping.value
-        val base = cityDotRadius(city.stations, camera.zoom)
-        // Grows outward and thins as it goes, so what reads as alive is the
-        // expansion. Growing the dot itself would say something false — size on
-        // this globe is how many stations a city has.
+        // Floored well above the dot's own size. Scaled purely off the dot, the
+        // marker disappeared on ordinary cities: a 42-station dot is about four
+        // pixels across, and a ring at 2.6× of that is not a marker, it is a
+        // smudge a couple of pixels clear of the thing it is marking.
+        val base = cityDotRadius(city.stations, camera.zoom).coerceAtLeast(PING_MIN_BASE_PX)
+
+        // Two rings, half a cycle apart, so one is always mid-flight instead of
+        // there being a dead beat between pulses. Squared fade so each ring
+        // holds its brightness on the way out and then goes quickly, rather than
+        // spending its whole life as a faint smear.
+        for (i in 0 until PING_RINGS) {
+            val phase = (t + i.toFloat() / PING_RINGS) % 1f
+            val fade = 1f - phase
+            drawCircle(
+                color = accent.copy(alpha = 0.8f * fade * fade),
+                radius = base * (1.4f + PING_TRAVEL * phase),
+                center = Offset(p.x, p.y),
+                style = Stroke(width = 1.2f + 2.6f * fade),
+            )
+        }
+
+        // A steady core underneath, so the city stays marked in the instant
+        // after one ring has faded and before the next has cleared the dot.
         drawCircle(
-            color = accent.copy(alpha = 0.34f * (1f - 0.62f * t)),
-            radius = base * (2.6f + 2.2f * t),
+            color = accent.copy(alpha = 0.32f),
+            radius = base * 1.2f,
             center = Offset(p.x, p.y),
         )
     }
 }
 
+/**
+ * The smallest the ping treats its city as being.
+ *
+ * The ring is a multiple of the dot, and most dots are tiny — sizing it purely
+ * off the station count made the marker vanish on exactly the small cities that
+ * are hardest to pick out of the globe in the first place.
+ */
+private const val PING_MIN_BASE_PX = 6f
+
+/** How far a ring travels, as a multiple of the dot, before it has faded out. */
+private const val PING_TRAVEL = 7f
+
+/** Rings in flight at once, evenly spaced through the cycle. */
+private const val PING_RINGS = 2
+
 // ── projection, camera and drawing ──────────────────────────────────────────
 
 private val MINI_PLAYER_RESERVE = 72.dp
+
+/**
+ * How long the glow settings sit still before they are written.
+ *
+ * Long enough that a whole slider drag is one write instead of a hundred, short
+ * enough that letting go and leaving the screen keeps the change.
+ */
+private const val FX_PERSIST_DEBOUNCE_MS = 400L
 private const val STATIONS_HEIGHT_FRACTION = 0.34f
 private const val FLIGHT_HEIGHT_QUANTUM = 96
 private const val SPIN_MILLIS = 700
 private val SpinEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
 
-/**
- * The widest the Earth is drawn. Mirrored by [GlobeFxSettings.MIN_RAMP], which
- * is where the reactive-outline ramp switches off; a unit test asserts the two
- * agree, because a ramp floor above this zoom would leave a band of the range
- * where the effect is dead and the slider says otherwise.
- */
+/** The widest the Earth is drawn. */
 private const val MIN_ZOOM = 0.85f
 
 /**
@@ -1010,6 +1069,7 @@ private fun DrawScope.drawGlobe(
     topInset: Float,
     bottomInset: Float,
     accent: Color,
+    outlines: OutlineCache,
     fx: GlobeFxSettings = GlobeFxSettings(),
 ) {
     if (data.cities.isEmpty() && data.coastline.isEmpty()) return
@@ -1042,27 +1102,27 @@ private fun DrawScope.drawGlobe(
     // in, which is when knowing whose airwaves you are looking at starts to
     // matter.
     val borderAlpha = (0.3f + 0.02f * camera.zoom).coerceIn(0.3f, 0.62f)
-    drawProjectedLines(
-        lines = data.borders,
+
+    // Rebuild the geometry only when it could have moved. The camera and the
+    // viewport are the whole of what the projection depends on, so a change
+    // that is only to colour reuses every path.
+    outlines.update(
+        signature = outlineSignature(camera, size.width, size.height, data),
+        buildBorders = { projectLines(data.borders, camera, cx, cy, radius, scale) },
+        buildCoastline = { projectLines(data.coastline, camera, cx, cy, radius, scale) },
+    )
+
+    strokeOutlines(
+        paths = outlines.borders,
         colour = litLand.copy(alpha = borderAlpha),
         width = 0.9f,
-        camera = camera,
-        cx = cx,
-        cy = cy,
-        radius = radius,
-        scale = scale,
         glow = halo?.copy(alpha = halo.alpha * borderAlpha),
         glowWidth = fx.glowWidth,
     )
-    drawProjectedLines(
-        lines = data.coastline,
+    strokeOutlines(
+        paths = outlines.coastline,
         colour = litLand,
         width = 1.1f,
-        camera = camera,
-        cx = cx,
-        cy = cy,
-        radius = radius,
-        scale = scale,
         glow = halo,
         glowWidth = fx.glowWidth,
     )
@@ -1112,49 +1172,113 @@ private fun DrawScope.drawGlobe(
 }
 
 /**
- * Stroke a set of flat `[lon, lat, lon, lat, …]` runs onto the sphere.
+ * A number that changes exactly when the projected outlines would.
+ *
+ * Yaw and pitch are quantised to about a five-thousandth of a radian and the
+ * zoom to four decimals — finer than any of them can shift a vertex by a
+ * visible amount, coarse enough that float noise alone never invalidates the
+ * cache. The dataset's shape is folded in too, so the frame between an empty
+ * globe and a loaded one cannot reuse an empty projection.
+ */
+private fun outlineSignature(
+    camera: GlobeCamera,
+    width: Float,
+    height: Float,
+    data: tf.monochrome.android.domain.model.WorldRadioData,
+): Long {
+    var h = (camera.yaw * 5000f).toLong()
+    h = h * 31 + (camera.pitch * 5000f).toLong()
+    h = h * 31 + (camera.zoom * 10000f).toLong()
+    h = h * 31 + width.toLong()
+    h = h * 31 + height.toLong()
+    h = h * 31 + data.coastline.size
+    h = h * 31 + data.borders.size
+    return h
+}
+
+/**
+ * The projected outlines, kept between draws.
+ *
+ * Projection is the whole cost of this screen — ~5,100 coastline points and
+ * every border vertex, each through two sines and two cosines — and it depends
+ * on nothing but the camera and the viewport. The glow settings change how the
+ * outlines are *stroked*, not where they are, so rebuilding them when a slider
+ * moves meant re-running all of it sixty times a second to change a colour.
+ * That is what made the sliders crawl.
+ *
+ * Owned by the screen and handed to the draw rather than being a global: two
+ * globes on screen at once would need two caches, and a cache keyed by a camera
+ * some other instance keeps moving is a cache that never hits.
+ */
+private class OutlineCache {
+    private var key: Long = Long.MIN_VALUE
+    var borders: List<Path> = emptyList()
+        private set
+    var coastline: List<Path> = emptyList()
+        private set
+
+    /** Rebuild only when the geometry could actually have moved. */
+    fun update(
+        signature: Long,
+        buildBorders: () -> List<Path>,
+        buildCoastline: () -> List<Path>,
+    ) {
+        if (signature == key) return
+        key = signature
+        borders = buildBorders()
+        coastline = buildCoastline()
+    }
+}
+
+/**
+ * Project a set of flat `[lon, lat, lon, lat, …]` runs into screen-space paths.
  *
  * Shared by the coastline and the borders because they are the same problem:
  * the same projection, the same hemisphere culling, and the same pen-lifting
  * when a line passes round the back. A second copy of that last part is a
  * second place for it to rot — and getting it wrong is not subtle, it draws a
  * chord straight across the face of the globe.
- *
- * When [glow] is set the path is stroked twice: once wide and translucent for
- * the halo, then again at its own weight on top. Both strokes come off the one
- * [Path], so the halo costs a second rasterise and not a second projection —
- * and projection is the whole cost here, ~5,100 points of trigonometry per
- * draw. Building the path twice would double the expensive half to buy the
- * cheap one.
  */
-private fun DrawScope.drawProjectedLines(
+private fun projectLines(
     lines: List<List<Int>>,
-    colour: Color,
-    width: Float,
     camera: GlobeCamera,
     cx: Float,
     cy: Float,
     radius: Float,
     scale: Int,
-    glow: Color? = null,
-    glowWidth: Float = 1f,
-) {
-    for (line in lines) {
-        val path = Path()
-        var drawing = false
-        var index = 0
-        while (index + 1 < line.size) {
-            val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
-            if (p.visible) {
-                if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
-                drawing = true
-            } else {
-                // Round the back: lift the pen so the line stops at the limb
-                // rather than being drawn across the disc when it reappears.
-                drawing = false
-            }
-            index += 2
+): List<Path> = lines.map { line ->
+    val path = Path()
+    var drawing = false
+    var index = 0
+    while (index + 1 < line.size) {
+        val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
+        if (p.visible) {
+            if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
+            drawing = true
+        } else {
+            // Round the back: lift the pen so the line stops at the limb rather
+            // than being drawn across the disc when it reappears.
+            drawing = false
         }
+        index += 2
+    }
+    path
+}
+
+/**
+ * Stroke already-projected outlines, halo first.
+ *
+ * Both strokes come off the one [Path], so the halo costs a second rasterise
+ * and never a second projection.
+ */
+private fun DrawScope.strokeOutlines(
+    paths: List<Path>,
+    colour: Color,
+    width: Float,
+    glow: Color?,
+    glowWidth: Float,
+) {
+    for (path in paths) {
         if (glow != null) {
             drawPath(path = path, color = glow, style = Stroke(width = width * glowWidth))
         }
