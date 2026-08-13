@@ -337,6 +337,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         CompositionLocalProvider(
             LocalMiniPlayerInset provides if (showMiniPlayer) MINI_PLAYER_INSET else 0.dp,
             LocalAppHaze provides hazeState,
+            // Published for the whole app, so every floating sheet of glass on
+            // an ordinary screen is the same material as the bar it sits beside
+            // rather than the untouched defaults.
+            LocalMiniPlayerGlass provides miniPlayerGlass,
         ) {
         Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
             // Pager for main tabs — fills entire screen

@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +36,7 @@ import dev.chrisbanes.haze.hazeEffect
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
+import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -66,9 +68,11 @@ import tf.monochrome.android.ui.theme.MonoDimens
  *   claim them, and gestures that take several events to declare themselves —
  *   which is every scroll — were lost two times in three.
  *
- * Callers must provide [LocalPlayerGlass] around this — detail routes sit
- * outside the nav host's own provider, and the shader modifier reads its
- * parameters from that local.
+ * The [glass] parameter is the whole material: the frost above reads it, and it
+ * is published as [LocalPlayerGlass] for the shader below, which takes its
+ * bevel, refraction and rim from that local. Callers used to have to provide
+ * the local themselves and a detail route that forgot got a panel frosted from
+ * one set of settings and relit from another.
  */
 @Composable
 fun GlassPanel(
@@ -183,6 +187,11 @@ fun GlassPanel(
                         ),
                 )
             }
+            // The shader reads its bevel, refraction, rim and body opacity from
+            // LocalPlayerGlass, so the settings this panel was *handed* have to
+            // be published for it or half of them are quietly ignored — the
+            // panel would frost with one material and relight with another.
+            CompositionLocalProvider(LocalPlayerGlass provides glass) {
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
@@ -207,6 +216,7 @@ fun GlassPanel(
                     color = tint.copy(alpha = if (lightFrost) 0.07f else 0.14f),
                     cornerRadius = CornerRadius(r, r),
                 )
+            }
             }
         }
         content()

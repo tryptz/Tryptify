@@ -30,7 +30,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import tf.monochrome.android.domain.model.PlayerGlassSettings
-import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 
 /**
  * The app's search bar: a floating pane of glass over whatever is behind it.
@@ -63,7 +63,14 @@ fun GlassSearchBar(
      * source, which most bars are drawn inside and so cannot sample.
      */
     hazeState: HazeState? = null,
-    glass: PlayerGlassSettings = LocalPlayerGlass.current,
+    /**
+     * The material. The mini player's settings by default, not the player's:
+     * this bar floats over an ordinary screen, usually with that very bar on it,
+     * and the two should be cut from the same glass. Reading LocalPlayerGlass
+     * here gave the untouched defaults on every screen the nav host did not
+     * explicitly wrap, so nothing anyone tuned in the Studio ever reached them.
+     */
+    glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
     /** Focus and open the keyboard on first composition. For bars that appear on demand. */
     autoFocus: Boolean = false,
     onSubmit: () -> Unit = {},

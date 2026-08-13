@@ -37,3 +37,23 @@ val LocalMiniPlayerInset = compositionLocalOf<Dp> { 0.dp }
  * just not a blurring one.
  */
 val LocalAppHaze = compositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }
+
+/**
+ * The glass the app's own chrome is made of — the mini player's settings.
+ *
+ * There are two tunable glass materials in the app: the player's, for the
+ * transport and its panels, and the mini player's, for the bar that floats over
+ * every screen. Everything else that is a floating sheet of glass on an ordinary
+ * screen belongs to the second one — it sits beside the mini player, often on
+ * the same page, and a search bar built from the defaults while the bar beside
+ * it carries the listener's tuned settings is two materials pretending to be
+ * one.
+ *
+ * [tf.monochrome.android.ui.player.LocalPlayerGlass] could not do this job: the
+ * player route overrides it with the *player's* settings for its own chrome,
+ * which is right there and wrong everywhere else, and outside the few places the
+ * nav host provided it, it fell back to defaults that no one chose.
+ */
+val LocalMiniPlayerGlass = compositionLocalOf {
+    tf.monochrome.android.domain.model.PlayerGlassSettings()
+}
