@@ -128,6 +128,7 @@ import tf.monochrome.android.ui.theme.reduceMotion
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.ln
@@ -1365,25 +1366,15 @@ private fun project(
     cy: Float,
     radius: Float,
 ): Projected {
-    val lat = Math.toRadians(latRaw.toDouble() / scale)
-    val lon = Math.toRadians(lonRaw.toDouble() / scale) + camera.yaw
-
-    val cosLat = cos(lat)
-    val x = cosLat * sin(lon)
-    val y = sin(lat)
-    val z = cosLat * cos(lon)
-
-    // Tilt about the horizontal axis, so dragging up and down walks the poles
-    // toward the viewer instead of rolling the image.
-    val cosP = cos(camera.pitch.toDouble())
-    val sinP = sin(camera.pitch.toDouble())
-    val y2 = y * cosP - z * sinP
-    val z2 = y * sinP + z * cosP
-
+    // One projection for the screen and for the land clipper. They were the same
+    // arithmetic written out twice, which is two places for the sign of the tilt
+    // to drift apart — and a clipper that disagrees with the dots about where
+    // the horizon is would cull land the cities are still drawn on.
+    val v = GlobeLandClip.project(latRaw, lonRaw, scale, camera.yaw, camera.pitch)
     return Projected(
-        x = cx + (x * radius).toFloat(),
-        y = cy - (y2 * radius).toFloat(),
-        z = z2.toFloat(),
+        x = cx + v.x * radius,
+        y = cy - v.y * radius,
+        z = v.z,
     )
 }
 
@@ -1546,7 +1537,17 @@ private fun DrawScope.drawGlobe(
         signature = outlineSignature(camera, size.width, size.height, data),
         buildBorders = { projectLines(data.borders, camera, cx, cy, radius, scale) },
         buildCoastline = { projectLines(data.coastline, camera, cx, cy, radius, scale) },
-        buildLand = { projectLandFill(data.land, camera, cx, cy, radius, scale) },
+        buildLand = {
+            projectLandFill(
+                rings = data.land,
+                orientations = outlines.orientationsFor(data.land, scale),
+                camera = camera,
+                cx = cx,
+                cy = cy,
+                radius = radius,
+                scale = scale,
+            )
+        },
     )
 
     // Land over the ocean disc and under every line, so the coast reads as the
@@ -1663,6 +1664,20 @@ private class OutlineCache {
     var land: Path = Path()
         private set
 
+    // Which way each land ring is wound. A property of the rings, not of the
+    // camera, so it survives every rebuild above and is only recomputed when the
+    // dataset itself is swapped — once, in practice, when the asset loads.
+    private var ringsSeen: List<List<Int>>? = null
+    private var orientations: FloatArray = FloatArray(0)
+
+    fun orientationsFor(rings: List<List<Int>>, scale: Int): FloatArray {
+        if (ringsSeen !== rings) {
+            ringsSeen = rings
+            orientations = GlobeLandClip.orientations(rings, scale)
+        }
+        return orientations
+    }
+
     /** Rebuild only when the geometry could actually have moved. */
     fun update(
         signature: Long,
@@ -1716,17 +1731,10 @@ private fun projectLines(
 /**
  * Project the land rings into one fillable path.
  *
- * The hard part is the limb. A landmass that runs round the back of the globe
- * has no boundary of its own there — the boundary is the edge of the visible
- * hemisphere — so the ring is walked in its own order and every vertex on the
- * far side is pushed radially out onto the rim, with the exact crossing point
- * inserted where an edge changes sides. The hidden stretch collapses onto the
- * arc it was hiding behind, which is precisely where the true silhouette runs,
- * and because the walk keeps the ring's own direction the arc is traced the
- * right way round without any of the sorting a real spherical clipper needs.
- *
- * Rings with nothing visible are dropped rather than collapsed, or they would
- * paint a hairline of land along the rim of an empty ocean.
+ * The clipping — the hard part, and the part that used to make the globe invert
+ * mid-drag — lives in [GlobeLandClip], which has no Compose in it so a test can
+ * sweep the camera over the real asset and check that the sea stays sea. All
+ * that is left here is scaling the unit disc it returns into pixels.
  *
  * One path for the whole world, filled even-odd: distinct landmasses never
  * overlap on the sphere so they cannot cancel, and a hole punched by a
@@ -1734,6 +1742,7 @@ private fun projectLines(
  */
 private fun projectLandFill(
     rings: List<List<Int>>,
+    orientations: FloatArray,
     camera: GlobeCamera,
     cx: Float,
     cy: Float,
@@ -1743,48 +1752,23 @@ private fun projectLandFill(
     val path = Path().apply { fillType = PathFillType.EvenOdd }
     if (radius <= 0f) return path
 
-    for (ring in rings) {
-        val count = ring.size / 2
-        if (count < 3) continue
-
-        // Unit-sphere view coordinates: x right, y up, z toward the viewer.
-        val ux = FloatArray(count)
-        val uy = FloatArray(count)
-        val uz = FloatArray(count)
-        var anyVisible = false
-        for (i in 0 until count) {
-            val p = project(ring[i * 2 + 1], ring[i * 2], scale, camera, cx, cy, radius)
-            ux[i] = (p.x - cx) / radius
-            uy[i] = (cy - p.y) / radius
-            uz[i] = p.z
-            if (p.z >= 0f) anyVisible = true
-        }
-        if (!anyVisible) continue
-
-        var started = false
-        for (i in 0 until count) {
-            val j = if (i + 1 == count) 0 else i + 1
-            started = if (uz[i] >= 0f) {
-                path.step(started, cx + ux[i] * radius, cy - uy[i] * radius)
-            } else {
-                path.stepOnRim(started, ux[i], uy[i], cx, cy, radius)
+    for ((index, ring) in rings.withIndex()) {
+        val polygons = GlobeLandClip.clipRing(
+            ring = ring,
+            orientation = orientations[index],
+            yaw = camera.yaw,
+            pitch = camera.pitch,
+            scale = scale,
+        )
+        for (poly in polygons) {
+            var started = false
+            var i = 0
+            while (i + 1 < poly.size) {
+                started = path.step(started, cx + poly[i] * radius, cy - poly[i + 1] * radius)
+                i += 2
             }
-            if ((uz[i] >= 0f) != (uz[j] >= 0f)) {
-                // Where the edge crosses the limb. Interpolating the view-space
-                // vector puts z exactly at zero, so the point is on the rim
-                // circle once its length is normalised away.
-                val t = uz[i] / (uz[i] - uz[j])
-                started = path.stepOnRim(
-                    started,
-                    ux[i] + (ux[j] - ux[i]) * t,
-                    uy[i] + (uy[j] - uy[i]) * t,
-                    cx,
-                    cy,
-                    radius,
-                )
-            }
+            if (started) path.close()
         }
-        if (started) path.close()
     }
     return path
 }
@@ -1792,21 +1776,6 @@ private fun projectLandFill(
 private fun Path.step(started: Boolean, x: Float, y: Float): Boolean {
     if (started) lineTo(x, y) else moveTo(x, y)
     return true
-}
-
-private fun Path.stepOnRim(
-    started: Boolean,
-    x: Float,
-    y: Float,
-    cx: Float,
-    cy: Float,
-    radius: Float,
-): Boolean {
-    val length = hypot(x, y)
-    // A point on the axis has no direction to be pushed out along. It is the
-    // dead centre of the far side, so dropping it loses nothing.
-    if (length <= 1e-5f) return started
-    return step(started, cx + x / length * radius, cy - y / length * radius)
 }
 
 /**
