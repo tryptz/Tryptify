@@ -140,6 +140,10 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.border
+import tf.monochrome.android.ui.theme.lightSchemeFor
+import tf.monochrome.android.ui.theme.Paper
+import androidx.compose.foundation.layout.Box
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -534,6 +538,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavContro
 private fun AppearanceControls(viewModel: SettingsViewModel) {
     val themeName by viewModel.theme.collectAsStateWithLifecycle()
     val dynamicColors by viewModel.dynamicColors.collectAsStateWithLifecycle()
+    val themePaper by viewModel.themePaper.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
     val availableFonts by viewModel.availableFonts.collectAsStateWithLifecycle()
@@ -556,6 +561,13 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                 DropdownMenuItem(text = { Text(displayName) }, onClick = { viewModel.setTheme(key); showThemeDropdown = false })
             }
         }
+        // Every light theme is printed on one of two papers. It is a choice
+        // about glare rather than about any one theme, so it is one control
+        // here rather than a variant of each of the fifteen.
+        LightPaperSetting(
+            paper = themePaper,
+            onPaperChange = { viewModel.setThemePaper(it) },
+        )
         SettingSwitchItem(
             title = "Dynamic Colors",
             subtitle = "Tint the player, mini player and lyrics from album art — the menus keep the theme color. Off = everything uses the theme color",
@@ -3492,3 +3504,99 @@ private fun SettingsHitPill(entry: SettingsEntry, onClick: () -> Unit) {
  * tab you are.
  */
 private val ANCHOR_HEADROOM = 96f
+
+/**
+ * Which paper the light themes are printed on.
+ *
+ * Two swatches rather than a switch, because the difference is a colour and a
+ * switch would have to describe it in words — "warm off-white" means very
+ * little next to seeing the two side by side. The swatches are the real
+ * backgrounds, taken from the generator, so what is shown is what will happen.
+ *
+ * Always visible, including on a dark theme. It applies to whichever light
+ * theme comes next, and "system" means that can be the next time the sun goes
+ * down; hiding the control until it is already relevant means finding it in the
+ * dark.
+ */
+@Composable
+private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().settingsAnchor("Light paper")) {
+        Text(
+            text = "Light paper",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "The ground every light theme is printed on. Crisp is true white; " +
+                "warm is off-white, for less glare.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PaperSwatch(
+                label = "Crisp",
+                paper = Paper.Crisp,
+                selected = paper != "warm",
+                onClick = { onPaperChange("crisp") },
+                modifier = Modifier.weight(1f),
+            )
+            PaperSwatch(
+                label = "Warm",
+                paper = Paper.Warm,
+                selected = paper == "warm",
+                onClick = { onPaperChange("warm") },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun PaperSwatch(
+    label: String,
+    paper: Paper,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Built from the same accent the app is currently themed with, so the
+    // swatch previews this theme's light variant rather than a generic white.
+    val accent = MaterialTheme.colorScheme.primary
+    val preview = remember(paper, accent) { lightSchemeFor(accent, paper) }
+    Column(
+        modifier = modifier
+            .clip(MonoDimens.shapeMd)
+            .background(preview.background)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else preview.outline,
+                shape = MonoDimens.shapeMd,
+            )
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+    ) {
+        // A card and a line of text on the real ground: the whole point of the
+        // choice is how a surface and its ink sit on the page, which a flat
+        // block of background colour cannot show.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(22.dp)
+                .clip(MonoDimens.shapeSm)
+                .background(preview.surfaceVariant),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = preview.onSurface,
+        )
+        Text(
+            text = "Aa",
+            style = MaterialTheme.typography.bodySmall,
+            color = preview.onSurfaceVariant,
+        )
+    }
+}

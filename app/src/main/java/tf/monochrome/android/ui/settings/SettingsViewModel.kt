@@ -395,6 +395,14 @@ class SettingsViewModel @Inject constructor(
 
     // --- Appearance actions ---
     fun setTheme(theme: String) { viewModelScope.launch { preferences.setTheme(theme) } }
+
+    /** "crisp" or "warm" — the paper every light theme is printed on. */
+    val themePaper: StateFlow<String> = preferences.themePaper
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "crisp")
+
+    fun setThemePaper(paper: String) {
+        viewModelScope.launch { preferences.setThemePaper(paper) }
+    }
     fun setDynamicColors(enabled: Boolean) { viewModelScope.launch { preferences.setDynamicColors(enabled) } }
     fun setFontScale(scale: Float) { viewModelScope.launch { preferences.setFontScale(scale) } }
     fun setFontScaleFollowSystem(enabled: Boolean) {
