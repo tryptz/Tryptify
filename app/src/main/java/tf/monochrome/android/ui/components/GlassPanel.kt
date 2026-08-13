@@ -169,7 +169,24 @@ fun GlassPanel(
                     .playerGlass(tint = tint),
             ) {
                 val r = MonoDimens.radiusLg.toPx()
-                drawRoundRect(color = tint, cornerRadius = CornerRadius(r, r))
+                // A wash, not a fill.
+                //
+                // This drew the tint at full opacity and trusted the AGSL
+                // shader above it to turn a solid slab into glass. When the
+                // shader does not apply — it is remembered from a runCatching
+                // that returns null on any device that will not compile it, and
+                // the modifier then no-ops — what is left on screen is exactly
+                // that: an opaque rounded rectangle in the accent colour. That
+                // is the container this panel has been accused of being, and it
+                // was never the haze.
+                //
+                // At this alpha the shader still has a gradient to build its
+                // bevel from, and the failure mode is a faint tint instead of a
+                // slab.
+                drawRoundRect(
+                    color = tint.copy(alpha = 0.14f),
+                    cornerRadius = CornerRadius(r, r),
+                )
             }
         }
         content()
