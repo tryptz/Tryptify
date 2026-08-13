@@ -81,6 +81,9 @@ import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import androidx.compose.foundation.layout.Box
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -336,22 +339,6 @@ fun HomeScreen(
             }
         }
 
-        // Play Radio — the home screen's primary action: seed a station from
-        // whatever is playing (falling back to recent history) and keep the
-        // queue topped up.
-        if (!searchOpen && !hasSearchResults) {
-            tf.monochrome.android.devedit.DevEditable("home_play_radio", Modifier.fillMaxWidth()) {
-                tf.monochrome.android.ui.components.PlayRadioButton(
-                    isActive = isRadioActive,
-                    isGenerating = isRadioGenerating,
-                    onClick = {
-                        if (isRadioActive) playerViewModel.stopRadio()
-                        else playerViewModel.playRadio()
-                    }
-                )
-            }
-        }
-
         if (hasSearchResults) {
             SearchResultsContent(
                 navController = navController,
@@ -406,8 +393,17 @@ fun HomeScreen(
             }
 
             // ── Home content ────────────────────────────────────
+            //
+            // Play Radio floats over this rather than sitting in the column
+            // above it. It is the same sheet of glass as the search bars, and
+            // glass needs something behind it: as a row in the page flow the
+            // only thing under it was the page's own background, so it frosted
+            // nothing and read as a grey slab. The shelves run underneath it
+            // and show through.
+            val radioHaze = rememberHazeState()
+            Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().hazeSource(radioHaze),
                 contentPadding = PaddingValues(bottom = 160.dp)
             ) {
                 // One dismissible bar per release, at the top of the first
@@ -492,6 +488,28 @@ fun HomeScreen(
                     }
                 }
             }
+
+            // Top-aligned over the shelves. Hidden while searching, as before —
+            // the results are the answer to what was asked, and a station
+            // seeder floating over them is not.
+            if (!searchOpen && !hasSearchResults) {
+                tf.monochrome.android.devedit.DevEditable(
+                    "home_play_radio",
+                    Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                ) {
+                    tf.monochrome.android.ui.components.PlayRadioButton(
+                        isActive = isRadioActive,
+                        isGenerating = isRadioGenerating,
+                        hazeState = radioHaze,
+                        onClick = {
+                            if (isRadioActive) playerViewModel.stopRadio()
+                            else playerViewModel.playRadio()
+                        }
+                    )
+                }
+            }
+            }
+
         }
     }
 }
