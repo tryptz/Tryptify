@@ -400,6 +400,7 @@ private fun WorldRadioContent(
                     StationSearchBar(
                         query = query,
                         state = suggestions,
+                        hazeState = mapHaze,
                         glass = glassSettings,
                         onQueryChange = { viewModel.setQuery(it) },
                         onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
@@ -610,6 +611,7 @@ private fun Float.asMultiple(decimals: Int): String =
 private fun StationSearchBar(
     query: String,
     state: SearchSuggestions,
+    hazeState: dev.chrisbanes.haze.HazeState,
     glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
     onQueryChange: (String) -> Unit,
     onPickStation: (RadioStation) -> Unit,
@@ -625,6 +627,10 @@ private fun StationSearchBar(
         query = query,
         onQueryChange = onQueryChange,
         placeholder = "Station, city or country",
+        // The globe marks its own canvas as a source and this bar is a sibling
+        // above it, not a child of it — so there is a real picture under here
+        // to frost.
+        hazeState = hazeState,
         glass = glass,
         autoFocus = true,
         onClose = onClose,

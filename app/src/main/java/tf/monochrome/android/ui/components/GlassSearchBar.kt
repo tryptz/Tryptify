@@ -29,9 +29,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.rememberHazeState
 import tf.monochrome.android.domain.model.PlayerGlassSettings
-import tf.monochrome.android.ui.navigation.LocalAppHaze
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 
 /**
@@ -59,7 +57,12 @@ fun GlassSearchBar(
     onQueryChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
-    hazeState: HazeState? = LocalAppHaze.current,
+    /**
+     * What to frost. Null means the caller has no backdrop of its own, and the
+     * bar takes the plain translucent glass — deliberately *not* the app-wide
+     * source, which most bars are drawn inside and so cannot sample.
+     */
+    hazeState: HazeState? = null,
     glass: PlayerGlassSettings = LocalPlayerGlass.current,
     /** Focus and open the keyboard on first composition. For bars that appear on demand. */
     autoFocus: Boolean = false,
@@ -75,22 +78,12 @@ fun GlassSearchBar(
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = remember { FocusRequester() }
 
-    // Both of these are called unconditionally. `remember` and `LaunchedEffect`
-    // are positional — they claim a slot by where they appear — so calling one
-    // only on some compositions changes the shape of the slot table under
-    // Compose. The elvis this used to hang the haze fallback on short-circuits,
-    // which meant `rememberHazeState()` ran only while the local was null; a
-    // screen whose backdrop arrives after first composition would have
-    // reshuffled every slot after it.
-    val fallbackHaze = rememberHazeState()
-    val haze = hazeState ?: fallbackHaze
-
     LaunchedEffect(autoFocus) {
         if (autoFocus) runCatching { focus.requestFocus() }
     }
 
     GlassPanel(
-        hazeState = haze,
+        hazeState = hazeState,
         glass = glass,
         modifier = modifier,
         // Anchored at the top of its screen, so the system bar it should hold

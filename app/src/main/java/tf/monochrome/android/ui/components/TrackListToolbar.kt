@@ -78,17 +78,17 @@ fun TrackListToolbar(
     // The explicit fallback is not optional: liquidGlass returns the modifier
     // untouched on low tiers, which would leave a sticky header with no
     // background at all.
-    val glassy = LocalPerformanceProfile.current.allowHazeBlur
+    // A scrim of the page's own colour, not a bordered pane.
+    //
+    // liquidGlass draws a rim on every edge, and a rim around something that
+    // spans the full width reads as a box sitting on the list rather than as
+    // the list passing behind it — which is the container this was asked not to
+    // be. A translucent wash of the background occludes the rows enough to keep
+    // the icons legible while still showing them moving underneath.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (glassy) {
-                    Modifier.liquidGlass(shape = RectangleShape)
-                } else {
-                    Modifier.background(MaterialTheme.colorScheme.background)
-                },
-            ),
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.88f)),
     ) {
         Row(
             modifier = Modifier

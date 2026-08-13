@@ -72,7 +72,13 @@ import tf.monochrome.android.ui.theme.MonoDimens
  */
 @Composable
 fun GlassPanel(
-    hazeState: HazeState,
+    /**
+     * The backdrop to frost. Null when the caller has none — the panel then
+     * takes the plain translucent glass instead of asking haze to blur a
+     * backdrop that was never fed, which paints its base colour and reads as a
+     * solid container.
+     */
+    hazeState: HazeState?,
     glass: PlayerGlassSettings,
     modifier: Modifier = Modifier,
     /**
@@ -135,7 +141,10 @@ fun GlassPanel(
         )
 
         if (shaderGlass) {
-            if (allowHaze && glass.hazeBlurDp > 0f) {
+            // Only with a real backdrop. Frosting an unfed state draws the
+            // frost's own base colour as a flat pane, which is the slab this
+            // whole component exists not to be.
+            if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
                 val frostTint = (
                     if (isDark) Color.Black.copy(alpha = 0.32f)
                     else Color.White.copy(alpha = 0.45f)
