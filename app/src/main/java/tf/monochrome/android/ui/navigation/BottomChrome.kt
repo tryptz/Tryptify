@@ -22,3 +22,18 @@ import androidx.compose.ui.unit.dp
  * is not there.
  */
 val LocalMiniPlayerInset = compositionLocalOf<Dp> { 0.dp }
+
+/**
+ * The app's one backdrop layer, for anything that wants to frost what is
+ * behind it.
+ *
+ * The nav host already marks the whole content layer as a haze source — it is
+ * what the mini player blurs. Publishing it here means a floating bar on any
+ * screen can lens the real page under it without that screen having to stand up
+ * a source of its own, which is the plumbing that kept glass panels pinned to
+ * the two map screens that happened to have one.
+ *
+ * Null outside the nav host: previews and tests get a bar that is still glass,
+ * just not a blurring one.
+ */
+val LocalAppHaze = compositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }

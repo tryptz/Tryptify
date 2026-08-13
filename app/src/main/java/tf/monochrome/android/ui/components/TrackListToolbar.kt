@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.components.GlassSearchBar
 
 /**
  * Search box and sort control for a list of tracks.
@@ -143,23 +144,15 @@ fun TrackListToolbar(
         }
 
         AnimatedVisibility(visible = searchOpen) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = { Text("Search this list") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(),
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = 4.dp),
+            GlassSearchBar(
+                query = query,
+                onQueryChange = onQueryChange,
+                placeholder = "Search this list",
+                autoFocus = true,
+                modifier = Modifier.padding(
+                    horizontal = MonoDimens.listItemPaddingH,
+                    vertical = 4.dp,
+                ),
             )
         }
     }

@@ -101,6 +101,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.util.safTreeUriToPath
+import tf.monochrome.android.ui.components.GlassSearchBar
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -242,28 +243,12 @@ fun LocalLibraryTab(
 
         // Search bar
         AnimatedVisibility(visible = showSearch) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(searchFocus)
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                placeholder = { Text("Search local library...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = MonoDimens.shapeMd,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                )
+            GlassSearchBar(
+                query = searchQuery,
+                onQueryChange = { viewModel.setSearchQuery(it) },
+                placeholder = "Search local library…",
+                autoFocus = true,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
 

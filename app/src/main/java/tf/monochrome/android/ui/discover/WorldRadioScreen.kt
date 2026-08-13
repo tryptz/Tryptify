@@ -116,6 +116,7 @@ import tf.monochrome.android.domain.model.RadioCity
 import tf.monochrome.android.domain.model.RadioCountry
 import tf.monochrome.android.domain.model.RadioStation
 import tf.monochrome.android.ui.components.GlassPanel
+import tf.monochrome.android.ui.components.GlassSearchBar
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -399,7 +400,6 @@ private fun WorldRadioContent(
                     StationSearchBar(
                         query = query,
                         state = suggestions,
-                        hazeState = mapHaze,
                         glass = glassSettings,
                         onQueryChange = { viewModel.setQuery(it) },
                         onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
@@ -610,7 +610,6 @@ private fun Float.asMultiple(decimals: Int): String =
 private fun StationSearchBar(
     query: String,
     state: SearchSuggestions,
-    hazeState: dev.chrisbanes.haze.HazeState,
     glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
     onQueryChange: (String) -> Unit,
     onPickStation: (RadioStation) -> Unit,
@@ -620,122 +619,17 @@ private fun StationSearchBar(
     onClearRecents: () -> Unit,
     onClose: () -> Unit,
 ) {
-    val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
-    // Opening the bar means wanting to type in it.
-    LaunchedEffect(Unit) {
-        runCatching { focus.requestFocus() }
-    }
-
-    GlassPanel(
-        hazeState = hazeState,
+    GlassSearchBar(
+        query = query,
+        onQueryChange = onQueryChange,
+        placeholder = "Station, city or country",
         glass = glass,
+        autoFocus = true,
+        onClose = onClose,
         modifier = Modifier.padding(horizontal = 4.dp),
-        avoidNavigationBar = false,
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(focus),
-                    decorationBox = { inner ->
-                        if (query.isEmpty()) {
-                            Text(
-                                text = "Station, city or country",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        inner()
-                    },
-                )
-                IconButton(
-                    onClick = { if (query.isEmpty()) onClose() else onQueryChange("") },
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = if (query.isEmpty()) "Close search" else "Clear",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            // The predictions. A row rather than a list, slid sideways, so they
-            // sit under the field without covering the globe the search is
-            // about — the answer to "which of these did you mean" is one glance
-            // and one tap, and a vertical list would take the screen for it.
-            if (!state.isEmpty) {
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Inside a country, the way back leads. Sliding right to
-                    // find the exit would make the drill-down a trap on a row
-                    // that can be two dozen cities long.
-                    state.inCountry?.let { open ->
-                        item {
-                            CountryPill(
-                                country = open,
-                                open = true,
-                                onClick = { onOpenCountry(null) },
-                            )
-                        }
-                    }
-                    // Countries first otherwise: a country is the broadest
-                    // answer to a half-typed word, and the one most likely to be
-                    // what was meant when it matches at all.
-                    items(state.countries) { country ->
-                        CountryPill(
-                            country = country,
-                            open = false,
-                            onClick = { onOpenCountry(country) },
-                        )
-                    }
-                    // Then cities. They are the ones that are certainly right —
-                    // matched against the globe's own list rather than guessed
-                    // at from a station's name — and they are already on screen
-                    // while the directory is still being asked.
-                    items(state.cities) { city ->
-                        CitySuggestionPill(
-                            city = city,
-                            onClick = {
-                                keyboard?.hide()
-                                onPickCity(city)
-                            },
-                        )
-                    }
-                    // Unkeyed, as everywhere else the directory's data is
-                    // listed: it does not promise unique uuids, and a duplicate
-                    // pill beats a crash.
-                    items(state.stations) { station ->
-                        StationPill(
-                            station = station,
-                            onClick = {
-                                keyboard?.hide()
-                                onPickStation(station)
-                            },
-                        )
-                    }
-                }
-            }
-
             // Nothing typed yet: offer what was looked up before. This is the
             // state the bar opens in, and an empty row under an empty field is
             // a dead end on a screen where the interesting places are hard to
@@ -772,7 +666,6 @@ private fun StationSearchBar(
                 SearchStatus.Ready ->
                     if (state.isEmpty) SearchNote("Nothing by that name.")
             }
-        }
     }
 }
 

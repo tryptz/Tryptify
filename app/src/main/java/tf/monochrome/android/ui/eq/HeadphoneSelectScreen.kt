@@ -56,6 +56,7 @@ import tf.monochrome.android.domain.model.AutoEqMeasurement
 import tf.monochrome.android.domain.model.Headphone
 import tf.monochrome.android.domain.model.MeasurementRig
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.components.GlassSearchBar
 
 /**
  * Full-screen headphone browser.
@@ -228,33 +229,11 @@ fun HeadphoneSelectScreen(
         }
 
         // ─── Search Bar ───
-        OutlinedTextField(
-            value = localSearchQuery,
-            onValueChange = { localSearchQuery = it },
-            placeholder = { Text("Search model (e.g. HD 600)...") },
-            leadingIcon = {
-                Icon(
-                    Icons.Default.Search, null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            trailingIcon = {
-                if (localSearchQuery.isNotEmpty()) {
-                    IconButton(onClick = { localSearchQuery = "" }) {
-                        Icon(Icons.Default.Close, "Clear", modifier = Modifier.size(18.dp))
-                    }
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.glassAlpha),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.glassAlpha),
-            ),
+        GlassSearchBar(
+            query = localSearchQuery,
+            onQueryChange = { localSearchQuery = it },
+            placeholder = "Search model (e.g. HD 600)…",
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
 
         Spacer(modifier = Modifier.height(8.dp))

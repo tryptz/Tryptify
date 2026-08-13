@@ -99,6 +99,7 @@ import tf.monochrome.android.ui.navigation.openCatalogAlbum
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.components.GlassSearchBar
 
 /**
  * Discover — the browsing half of the app, split out of Home.
@@ -443,37 +444,30 @@ private fun GenreSearchField(
     resultCount: Int,
     onOpenMap: () -> Unit,
 ) {
-    // Only composed while the search is open, so opening it is one tap and the
-    // keyboard is already up — asking for a second tap on a field that only
-    // exists because you asked for it is a tap for nothing.
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        singleLine = true,
-        placeholder = { Text("Search 771 genres — try dnb, liquid, phonk") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear")
-                }
-            } else {
-                IconButton(onClick = onOpenMap) {
-                    Icon(Icons.Default.AccountTree, contentDescription = "Browse the genre map")
-                }
+    GlassSearchBar(
+        query = query,
+        onQueryChange = onQueryChange,
+        placeholder = "Search 771 genres — try dnb, liquid, phonk",
+        // Only composed while the search is open, so opening it is one tap and
+        // the keyboard is already up — asking for a second tap on a field that
+        // only exists because you asked for it is a tap for nothing.
+        autoFocus = true,
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        // A query that matches nothing and a query still being typed look
+        // identical without this.
+        if (query.isNotBlank() && resultCount == 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "No genre matches that",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).padding(top = 6.dp),
+                )
+                TextButton(onClick = onOpenMap) { Text("Browse the map") }
             }
-        },
-        supportingText = if (query.isNotBlank() && resultCount == 0) {
-            { Text("No genre matches that") }
-        } else null,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .focusRequester(focus),
-    )
+        }
+    }
 }
 
 /**

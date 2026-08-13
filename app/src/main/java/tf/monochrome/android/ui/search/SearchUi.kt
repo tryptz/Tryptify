@@ -88,6 +88,7 @@ import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.components.GlassSearchBar
 
 @Composable
 fun SearchQueryField(
@@ -96,44 +97,12 @@ fun SearchQueryField(
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val keyboardController = LocalSoftwareKeyboardController.current
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = {
-            Text(
-                "Search tracks, albums, artists, playlists…",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = "Search")
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear")
-                }
-            }
-        },
-        singleLine = true,
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-            onSearch = {
-                onSubmit()
-                keyboardController?.hide()
-            }
-        ),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent
-        ),
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .liquidGlass(shape = MonoDimens.shapePill)
+    GlassSearchBar(
+        query = query,
+        onQueryChange = onQueryChange,
+        placeholder = "Search tracks, albums, artists, playlists…",
+        onSubmit = onSubmit,
+        modifier = modifier.padding(horizontal = 8.dp),
     )
 }
 
