@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -213,32 +214,29 @@ fun DiscoverScreen(
                 viewModel.setGenreQuery("")
             },
             modifier = Modifier.weight(1f),
+            // Room for the bar while it is open.
+            //
+            // The pane is deliberately just the field and one thin line of
+            // context. It briefly carried the matched-genre rail as well, which
+            // made a sheet of glass four rows deep floating over the top of the
+            // page — it covered the mood chips, the map buttons and the first
+            // shelf, so opening the search hid the very feed it filters. The
+            // matches belong on the page, where there is room for them and where
+            // picking one leaves you looking at what changed.
+            reserveSpace = true,
             barContent = {
-                // The matches hang off the field, inside the same pane. They
-                // are the answer to what was typed, and a floating bar with its
-                // own results row parked underneath it on the page would have
-                // been two sheets of glass saying one thing — and the lower one
-                // would have been hidden behind the upper.
                 GenreSearchExtras(
                     query = genreQuery,
                     resultCount = genreRail.size,
                     onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
                 )
-                GenreRail(
-                    items = genreRail,
-                    selected = selectedChip,
-                    onSelect = {
-                        if (selectedChip == it.node.name) viewModel.selectChip(null)
-                        else viewModel.selectGenre(it.node.id)
-                    },
-                    onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
-                )
             },
-        ) { _ ->
-        Column(modifier = Modifier.fillMaxSize()) {
-        // With the search folded away a live selection still needs somewhere to
-        // show itself, and something to turn it back off with.
-        AnimatedVisibility(visible = !searchOpen && genreSelected) {
+        ) { searchTopInset ->
+        Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
+        // The matches, and — with the search folded away — whatever selection is
+        // still live, which needs somewhere to show itself and something to turn
+        // it back off with.
+        AnimatedVisibility(visible = searchOpen || genreSelected) {
             GenreRail(
                 items = genreRail,
                 selected = selectedChip,
@@ -474,6 +472,9 @@ private fun GenreSearchExtras(
     resultCount: Int,
     onOpenMap: () -> Unit,
 ) {
+    // One tight line. Everything in this pane floats over the feed, so every row
+    // of it is a row of the page nobody can see — it is kept to the two things
+    // that cannot live anywhere else.
     Row(verticalAlignment = Alignment.CenterVertically) {
         // A query that matches nothing and a query still being typed look
         // identical without this.
@@ -481,13 +482,19 @@ private fun GenreSearchExtras(
             text = if (query.isNotBlank() && resultCount == 0) "No genre matches that" else "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f).padding(top = 6.dp),
+            modifier = Modifier.weight(1f),
         )
         // Always offered, not only when the search failed. The field this
         // replaced carried the map on its trailing icon whenever it was
         // empty, so hiding it behind a failed query dropped an entry point
         // that used to be permanent.
-        TextButton(onClick = onOpenMap) { Text("Browse the map") }
+        TextButton(
+            onClick = onOpenMap,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            modifier = Modifier.heightIn(min = 28.dp),
+        ) {
+            Text("Browse the map", style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
 

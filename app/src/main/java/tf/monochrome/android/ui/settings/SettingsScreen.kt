@@ -258,10 +258,40 @@ fun SettingsScreen(
         // this knows where each one lives, so a result can land on the tab that
         // holds it *or* open the screen it actually is.
         //
-        // The bar floats over the tabs rather than pushing them down: laid out
-        // as a row of this Column it shoved the chip rail and the whole form
-        // down the screen every time it opened, and had the page's background
-        // behind it with nothing to frost.
+        // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
+        // scroll the selected chip into view — swiping out to About (last of nine)
+        // would otherwise leave the highlighted chip off-screen behind you.
+        //
+        // Above the search rather than under it. The bar floats, and floating it
+        // over the chips buried the one control that says which of the nine tabs
+        // you are on — while searching, which is exactly when you are about to
+        // be moved between them. The form below is what the glass should be
+        // frosting; the tab rail is chrome, and chrome stays put.
+        val chipRow = rememberLazyListState()
+        LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
+        LazyRow(
+            state = chipRow,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(settingsTabs) { index, tab ->
+                FilterChip(
+                    selected = selectedTab == index,
+                    onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
+                    label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
+            }
+        }
+
+        // The bar floats over the *form* rather than pushing it down: laid out
+        // as a row of this Column it shoved the whole form down the screen every
+        // time it opened, and had the page's background behind it with nothing
+        // to frost.
         SearchOverlay(
             open = searchOpen,
             query = searchQuery,
@@ -311,30 +341,6 @@ fun SettingsScreen(
             },
         ) { _ ->
             Column(modifier = Modifier.fillMaxSize()) {
-                // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
-                // scroll the selected chip into view — swiping out to About (last of nine)
-                // would otherwise leave the highlighted chip off-screen behind you.
-                val chipRow = rememberLazyListState()
-                LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
-                LazyRow(
-                    state = chipRow,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(settingsTabs) { index, tab ->
-                        FilterChip(
-                            selected = selectedTab == index,
-                            onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
-                            label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            )
-                        )
-                    }
-                }
-
                 HorizontalPager(
                     state = settingsPager,
                     modifier = Modifier.fillMaxWidth().weight(1f),
