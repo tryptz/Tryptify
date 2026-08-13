@@ -33,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
-import tf.monochrome.android.ui.components.GlassSearchBar
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.RectangleShape
 import tf.monochrome.android.performance.LocalPerformanceProfile

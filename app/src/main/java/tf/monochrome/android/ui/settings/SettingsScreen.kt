@@ -131,11 +131,10 @@ import tf.monochrome.android.ui.theme.themeDisplayNames
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 import tf.monochrome.android.ui.navigation.navigateSafe
-import tf.monochrome.android.ui.components.GlassSearchBar
+import tf.monochrome.android.ui.components.SearchOverlay
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -258,15 +257,19 @@ fun SettingsScreen(
         // is more places than anyone should have to remember. The index behind
         // this knows where each one lives, so a result can land on the tab that
         // holds it *or* open the screen it actually is.
-        AnimatedVisibility(visible = searchOpen) {
-            GlassSearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                placeholder = "Find a setting",
-                autoFocus = true,
-                onClose = { searchOpen = false },
-                modifier = Modifier.padding(horizontal = 8.dp),
-            ) {
+        //
+        // The bar floats over the tabs rather than pushing them down: laid out
+        // as a row of this Column it shoved the chip rail and the whole form
+        // down the screen every time it opened, and had the page's background
+        // behind it with nothing to frost.
+        SearchOverlay(
+            open = searchOpen,
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            placeholder = "Find a setting",
+            onClose = { searchOpen = false; searchQuery = "" },
+            modifier = Modifier.weight(1f),
+            barContent = {
                 if (searchQuery.trim().length >= 2) {
                     if (searchHits.isEmpty()) {
                         Text(
@@ -305,51 +308,53 @@ fun SettingsScreen(
                         }
                     }
                 }
-            }
-        }
+            },
+        ) { _ ->
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
+                // scroll the selected chip into view — swiping out to About (last of nine)
+                // would otherwise leave the highlighted chip off-screen behind you.
+                val chipRow = rememberLazyListState()
+                LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
+                LazyRow(
+                    state = chipRow,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(settingsTabs) { index, tab ->
+                        FilterChip(
+                            selected = selectedTab == index,
+                            onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
+                            label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+                }
 
-        // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
-        // scroll the selected chip into view — swiping out to About (last of nine)
-        // would otherwise leave the highlighted chip off-screen behind you.
-        val chipRow = rememberLazyListState()
-        LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
-        LazyRow(
-            state = chipRow,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            itemsIndexed(settingsTabs) { index, tab ->
-                FilterChip(
-                    selected = selectedTab == index,
-                    onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
-                    label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                )
-            }
-        }
-
-        HorizontalPager(
-            state = settingsPager,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            // Each tab is a full settings form; keeping neighbours composed
-            // would mean building all nine of them up front.
-            beyondViewportPageCount = 0,
-        ) { page ->
-            tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
-                when (page) {
-                    0 -> AppearanceTab(viewModel, navController)
-                    1 -> AudioTab(viewModel, navController)
-                    2 -> EqualizerTab(navController, viewModel)
-                    3 -> LibrarySettingsTab(viewModel)
-                    4 -> DownloadsTab(viewModel)
-                    5 -> ConnectionsTab(viewModel)
-                    6 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                    7 -> SystemTab(viewModel, navController)
-                    8 -> AboutTab(viewModel)
+                HorizontalPager(
+                    state = settingsPager,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    // Each tab is a full settings form; keeping neighbours composed
+                    // would mean building all nine of them up front.
+                    beyondViewportPageCount = 0,
+                ) { page ->
+                    tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
+                        when (page) {
+                            0 -> AppearanceTab(viewModel, navController)
+                            1 -> AudioTab(viewModel, navController)
+                            2 -> EqualizerTab(navController, viewModel)
+                            3 -> LibrarySettingsTab(viewModel)
+                            4 -> DownloadsTab(viewModel)
+                            5 -> ConnectionsTab(viewModel)
+                            6 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                            7 -> SystemTab(viewModel, navController)
+                            8 -> AboutTab(viewModel)
+                        }
+                    }
                 }
             }
         }
