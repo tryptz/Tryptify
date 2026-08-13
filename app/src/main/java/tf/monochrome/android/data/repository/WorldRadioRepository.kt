@@ -93,6 +93,37 @@ class WorldRadioRepository @Inject constructor(
     }
 
     /**
+     * Cities matching what is being typed, best first.
+     *
+     * Answered from the bundled asset, so it costs no network and appears while
+     * the directory is still being asked — which is the point of having it
+     * alongside the station results rather than instead of them.
+     *
+     * Prefix matches rank above substring ones: someone typing "man" means
+     * Manchester or Manila long before they mean Oman. Within each, the busiest
+     * city wins, which is the same ordering the dots on the globe already use.
+     */
+    suspend fun searchCities(query: String, limit: Int = CITY_SUGGESTIONS): List<RadioCity> {
+        val typed = query.trim().lowercase()
+        if (typed.isBlank()) return emptyList()
+        return data().cities.asSequence()
+            .mapNotNull { city ->
+                val name = city.name.lowercase()
+                val ascii = city.ascii.lowercase()
+                val rank = when {
+                    name.startsWith(typed) || ascii.startsWith(typed) -> 0
+                    name.contains(typed) || ascii.contains(typed) -> 1
+                    else -> return@mapNotNull null
+                }
+                city to rank
+            }
+            .sortedWith(compareBy({ it.second }, { -it.first.stations }))
+            .take(limit)
+            .map { it.first }
+            .toList()
+    }
+
+    /**
      * Where on the globe to fly for a station found by name.
      *
      * The directory records a station's country but not its coordinates, and the
@@ -179,5 +210,9 @@ class WorldRadioRepository @Inject constructor(
 
     private companion object {
         const val ASSET = "world_radio.json"
+
+        // Enough to cover the near-misses of a half-typed name, few enough that
+        // the cities never push the station results off the end of the row.
+        const val CITY_SUGGESTIONS = 6
     }
 }

@@ -27,14 +27,31 @@ import tf.monochrome.android.domain.model.WorldRadioData
 import tf.monochrome.android.ui.player.PlayerViewModel
 import javax.inject.Inject
 
-/** What the search bar knows about what is being typed. */
-sealed interface StationSearchState {
-    data object Idle : StationSearchState
-    data object Searching : StationSearchState
-    data class Ready(val stations: List<RadioStation>) : StationSearchState
+/** How far the station half of a search has got. */
+enum class SearchStatus {
+    Idle,
+    Searching,
+    Ready,
 
     /** Asked and couldn't reach the directory — not the same as finding nothing. */
-    data object Unreachable : StationSearchState
+    Unreachable,
+}
+
+/**
+ * What the search bar has to offer for what is being typed.
+ *
+ * Two sources with very different costs, so they are two fields rather than one
+ * merged list. Cities come out of the bundled asset and are there by the time
+ * the keystroke has rendered; stations are a network round-trip away. Holding
+ * them apart is what lets the row fill in immediately and then grow, instead of
+ * staying empty until the slower half arrives.
+ */
+data class SearchSuggestions(
+    val cities: List<RadioCity> = emptyList(),
+    val stations: List<RadioStation> = emptyList(),
+    val status: SearchStatus = SearchStatus.Idle,
+) {
+    val isEmpty: Boolean get() = cities.isEmpty() && stations.isEmpty()
 }
 
 /** Shortest query worth a request. */
@@ -108,25 +125,31 @@ class WorldRadioViewModel @Inject constructor(
      * and the directory is a volunteer-run service. Short queries emit nothing
      * at all rather than asking for every station whose name contains "ra".
      */
-    val suggestions: StateFlow<StationSearchState> = _query
+    val suggestions: StateFlow<SearchSuggestions> = _query
         .map { it.trim() }
         .distinctUntilChanged()
         .transformLatest { typed ->
             if (typed.length < MIN_QUERY) {
-                emit(StationSearchState.Idle)
+                emit(SearchSuggestions())
                 return@transformLatest
             }
-            emit(StationSearchState.Searching)
+            // The cities are local, so they land on this keystroke rather than
+            // after the debounce — the row is never empty while the directory
+            // is being asked, which is most of the time you spend typing.
+            val cities = repository.searchCities(typed)
+            emit(SearchSuggestions(cities = cities, status = SearchStatus.Searching))
+
             delay(SEARCH_DEBOUNCE_MS)
             val found = repository.searchStations(typed)
             emit(
-                when {
-                    found == null -> StationSearchState.Unreachable
-                    else -> StationSearchState.Ready(found)
-                },
+                SearchSuggestions(
+                    cities = cities,
+                    stations = found.orEmpty(),
+                    status = if (found == null) SearchStatus.Unreachable else SearchStatus.Ready,
+                ),
             )
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StationSearchState.Idle)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchSuggestions())
 
     /**
      * Fly to a searched station and tune in.

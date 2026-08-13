@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -289,7 +290,8 @@ fun WorldRadioScreen(
                     hazeState = mapHaze,
                     glass = glassSettings,
                     onQueryChange = { viewModel.setQuery(it) },
-                    onPick = { viewModel.playSearchResult(it, playerViewModel) },
+                    onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
+                    onPickCity = { viewModel.select(it) },
                     onClose = { viewModel.toggleSearch() },
                 )
             }
@@ -555,11 +557,12 @@ private fun Float.asMultiple(decimals: Int): String =
 @Composable
 private fun StationSearchBar(
     query: String,
-    state: StationSearchState,
+    state: SearchSuggestions,
     hazeState: dev.chrisbanes.haze.HazeState,
     glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
     onQueryChange: (String) -> Unit,
-    onPick: (RadioStation) -> Unit,
+    onPickStation: (RadioStation) -> Unit,
+    onPickCity: (RadioCity) -> Unit,
     onClose: () -> Unit,
 ) {
     val focus = remember { FocusRequester() }
@@ -624,33 +627,45 @@ private fun StationSearchBar(
             // sit under the field without covering the globe the search is
             // about — the answer to "which of these did you mean" is one glance
             // and one tap, and a vertical list would take the screen for it.
-            when (state) {
-                StationSearchState.Idle -> Unit
-
-                StationSearchState.Searching -> SearchNote("Searching…")
-
-                StationSearchState.Unreachable ->
-                    SearchNote("Couldn't reach the station directory.")
-
-                is StationSearchState.Ready -> if (state.stations.isEmpty()) {
-                    SearchNote("No station by that name.")
-                } else {
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Unkeyed, as everywhere else the directory's data is
-                        // listed: it does not promise unique uuids, and a
-                        // duplicate row beats a crash.
-                        items(state.stations) { station ->
-                            StationPill(
-                                station = station,
-                                onClick = {
-                                    keyboard?.hide()
-                                    onPick(station)
-                                },
-                            )
-                        }
+            if (!state.isEmpty) {
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Cities lead. They are the ones that are certainly right —
+                    // matched against the globe's own list rather than guessed
+                    // at from a station's name — and they are already on screen
+                    // while the directory is still being asked.
+                    items(state.cities) { city ->
+                        CitySuggestionPill(
+                            city = city,
+                            onClick = {
+                                keyboard?.hide()
+                                onPickCity(city)
+                            },
+                        )
+                    }
+                    // Unkeyed, as everywhere else the directory's data is
+                    // listed: it does not promise unique uuids, and a duplicate
+                    // pill beats a crash.
+                    items(state.stations) { station ->
+                        StationPill(
+                            station = station,
+                            onClick = {
+                                keyboard?.hide()
+                                onPickStation(station)
+                            },
+                        )
                     }
                 }
+            }
+
+            when (state.status) {
+                SearchStatus.Idle -> Unit
+                SearchStatus.Searching ->
+                    if (state.cities.isEmpty()) SearchNote("Searching…")
+                SearchStatus.Unreachable ->
+                    SearchNote("Couldn't reach the station directory.")
+                SearchStatus.Ready ->
+                    if (state.isEmpty) SearchNote("Nothing by that name.")
             }
         }
     }
@@ -664,6 +679,47 @@ private fun SearchNote(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),
     )
+}
+
+/**
+ * A city prediction. Tapping it does what tapping its dot does — flies there
+ * and opens the panel — rather than playing something. The city is a place with
+ * a list behind it, and picking one of that list is a separate decision.
+ */
+@Composable
+private fun CitySuggestionPill(city: RadioCity, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Default.Place,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = city.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 160.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = city.country,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 /** One prediction: the station, and the country it says it broadcasts from. */
