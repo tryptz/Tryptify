@@ -170,33 +170,13 @@ fun WorldRadioScreen(
 
     val mapHaze = rememberHazeState()
     val playing by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     val panelBottomInset = if (playing != null) MINI_PLAYER_RESERVE else 0.dp
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
 
-    // The outlines move to the music. The pulse ticks once per frame while a
-    // track is actually running and settles to rest the moment it isn't, so a
-    // paused globe is a still globe rather than one frozen mid-crest.
     val globeFx by viewModel.globeFx.collectAsStateWithLifecycle()
-    val pulse = rememberGlobePulse(viewModel.spectrum, globeFx, playing = isPlaying)
     var showFxSheet by remember { mutableStateOf(false) }
-
-    // The selected city pings continuously, whether or not anything is playing —
-    // it marks *which* dot the open card belongs to, and that has to be legible
-    // in silence. Held as a State and read from the draw lambda rather than
-    // delegated, so the breath invalidates the draw phase and not the screen.
-    val breath = rememberInfiniteTransition(label = "selectedCity")
-    val idlePing = breath.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "selectedPing",
-    )
 
     fun spinTo(city: RadioCity) {
         flight?.cancel()
@@ -297,18 +277,23 @@ fun WorldRadioScreen(
                     } else {
                         0f
                     },
+                    accent = dot,
                     fx = globeFx,
-                    // Read here, inside the draw lambda, and nowhere else. The
-                    // pulse changes every frame; reading it in composition would
-                    // recompose the whole screen sixty times a second, whereas a
-                    // read from here invalidates the draw phase alone.
-                    pulse = pulse.value,
-                    // Whichever is louder. In silence this is the idle breath;
-                    // once a track is running the bass overtakes it and the ping
-                    // lands on the beat instead of drifting against it.
-                    selectedPulse = if (instant) 0f else {
-                        maxOf(idlePing.value, pulse.value.bass)
-                    },
+                )
+            }
+
+            // A second, near-empty canvas for the one thing on this screen that
+            // animates. It draws a single ring and nothing else, so the frames it
+            // asks for are cheap; folding it into the globe above would make each
+            // one re-project every coastline point in the asset, which is what
+            // made the station list scroll badly while a city was open.
+            selected?.let { city ->
+                SelectedCityPing(
+                    city = city,
+                    scale = globe.scale,
+                    camera = camera,
+                    accent = dot,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 
@@ -361,7 +346,6 @@ fun WorldRadioScreen(
     if (showFxSheet) {
         GlobeFxSheet(
             fx = globeFx,
-            zoom = camera.zoom,
             onChange = { viewModel.updateGlobeFx { _ -> it } },
             onReset = { viewModel.resetGlobeFx() },
             onDismiss = { showFxSheet = false },
@@ -371,20 +355,11 @@ fun WorldRadioScreen(
 
 // ── the controls ────────────────────────────────────────────────────────────
 
-/**
- * Tuning for the reactive outlines.
- *
- * Deliberately shows the live zoom gain next to the zoom slider. That parameter
- * is the one the user cannot see the effect of directly — every other slider
- * changes something visible the instant it moves, but the zoom ramp only does
- * anything at a zoom you are not currently at, so without a read-out it feels
- * like a dead control.
- */
+/** Tuning for how the globe's outlines are lit. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GlobeFxSheet(
     fx: GlobeFxSettings,
-    zoom: Float,
     onChange: (GlobeFxSettings) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
@@ -400,68 +375,43 @@ private fun GlobeFxSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Reactive outlines",
+                    text = "Outline glow",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onReset) { Text("Reset") }
             }
             Text(
-                text = "Coastlines and borders ride the music — bass moves them, " +
-                    "treble makes them shiver.",
+                text = "Lights the coastlines and borders in the app's own accent colour.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             GlobeFxSlider(
-                label = "Amount",
-                valueLabel = if (fx.amount <= 0.01f) "Off" else "${(fx.amount * 100).toInt()}%",
-                value = fx.amount,
+                label = "Illumination",
+                valueLabel = if (fx.illumination <= 0.01f) "Off"
+                else "${(fx.illumination * 100).toInt()}%",
+                value = fx.illumination,
                 range = 0f..1f,
-                description = "Master strength. At zero nothing is analysed at all.",
-            ) { onChange(fx.copy(amount = it)) }
+                description = "How far the outlines shift from the map's ink toward the accent.",
+            ) { onChange(fx.copy(illumination = it)) }
 
             GlobeFxSlider(
-                label = "Bass swell",
-                valueLabel = "${(fx.swell * 100).toInt()}%",
-                value = fx.swell,
-                range = 0f..1.5f,
-                description = "The long, slow undulation, driven by 40–160 Hz.",
-            ) { onChange(fx.copy(swell = it)) }
+                label = "Glow",
+                valueLabel = if (fx.glowBrightness <= 0.01f) "Off"
+                else "${(fx.glowBrightness * 100).toInt()}%",
+                value = fx.glowBrightness,
+                range = 0f..1f,
+                description = "Strength of the halo laid under each line.",
+            ) { onChange(fx.copy(glowBrightness = it)) }
 
             GlobeFxSlider(
-                label = "Treble shimmer",
-                valueLabel = "${(fx.shimmer * 100).toInt()}%",
-                value = fx.shimmer,
-                range = 0f..1.5f,
-                description = "The fine vibration, driven by 3–12 kHz.",
-            ) { onChange(fx.copy(shimmer = it)) }
-
-            GlobeFxSlider(
-                label = "Wave speed",
-                valueLabel = fx.waveSpeed.asMultiple(2),
-                value = fx.waveSpeed,
-                range = 0.25f..3f,
-                description = "How fast the ripple travels along the coast.",
-            ) { onChange(fx.copy(waveSpeed = it)) }
-
-            GlobeFxSlider(
-                label = "Wave detail",
-                valueLabel = fx.waveDetail.asMultiple(2),
-                value = fx.waveDetail,
-                range = 0.3f..3f,
-                description = "How many crests fit along a stretch of coastline.",
-            ) { onChange(fx.copy(waveDetail = it)) }
-
-            val gain = fx.zoomGain(zoom, MIN_ZOOM)
-            GlobeFxSlider(
-                label = "Full effect from",
-                valueLabel = if (fx.fullEffectZoom <= MIN_ZOOM) "Always" else fx.fullEffectZoom.asMultiple(0),
-                value = fx.fullEffectZoom,
-                range = MIN_ZOOM..24f,
-                description = "Below this zoom the movement fades out, so the whole-Earth " +
-                    "view stays readable. Now ${(gain * 100).toInt()}% at ${zoom.asMultiple(1)}.",
-            ) { onChange(fx.copy(fullEffectZoom = it)) }
+                label = "Glow width",
+                valueLabel = fx.glowWidth.asMultiple(1),
+                value = fx.glowWidth,
+                range = 1f..8f,
+                description = "How far the halo spreads either side of the line.",
+            ) { onChange(fx.copy(glowWidth = it)) }
         }
     }
 }
@@ -753,6 +703,59 @@ private fun CityChip(city: RadioCity, onClick: () -> Unit) {
     }
 }
 
+/**
+ * The pulsing ring on the city whose card is open.
+ *
+ * Its own canvas, and that is the entire point of it. The globe re-projects
+ * ~5,100 coastline points, 1,611 dots and a label collision grid on every draw,
+ * so anything animated sharing that canvas drags all of it to 60 Hz — with a
+ * city selected the panel is open, and the cost landed squarely on scrolling
+ * the station list. Here the per-frame work is one projection and one circle.
+ *
+ * Draws nothing when the city is round the back, and does not exist at all with
+ * animations off — there is no still frame of this worth paying a canvas for.
+ */
+@Composable
+private fun SelectedCityPing(
+    city: RadioCity,
+    scale: Int,
+    camera: GlobeCamera,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    if (reduceMotion()) return
+
+    val breath = rememberInfiniteTransition(label = "selectedCity")
+    val ping = breath.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "selectedPing",
+    )
+
+    Canvas(modifier = modifier) {
+        val radius = globeRadius(size.width, size.height, camera.zoom)
+        val p = project(city.lat, city.lon, scale, camera, size.width / 2f, size.height / 2f, radius)
+        if (!p.visible) return@Canvas
+
+        // Read inside the draw lambda so the breath invalidates the draw phase
+        // and never the composition around it.
+        val t = ping.value
+        val base = cityDotRadius(city.stations, camera.zoom)
+        // Grows outward and thins as it goes, so what reads as alive is the
+        // expansion. Growing the dot itself would say something false — size on
+        // this globe is how many stations a city has.
+        drawCircle(
+            color = accent.copy(alpha = 0.34f * (1f - 0.62f * t)),
+            radius = base * (2.6f + 2.2f * t),
+            center = Offset(p.x, p.y),
+        )
+    }
+}
+
 // ── projection, camera and drawing ──────────────────────────────────────────
 
 private val MINI_PLAYER_RESERVE = 72.dp
@@ -784,20 +787,6 @@ private const val MAX_ZOOM = 48f
 
 /** Fraction of the smaller viewport dimension the globe fills at zoom 1. */
 private const val GLOBE_FIT = 0.42f
-
-/**
- * Reactive-outline amplitude, as a fraction of the globe's radius and in pixels.
- *
- * Proportional so the wave is the same size relative to the Earth wherever you
- * are, clamped at both ends for the two ways that stops being true: below the
- * floor the displacement rounds away against a 1.1 px stroke and the effect
- * simply vanishes rather than becoming subtle, and above the ceiling — which a
- * 48× zoom would reach thirty times over — a coastline detaches from the sphere
- * it is supposed to be lying on.
- */
-private const val WARP_RADIUS_FRACTION = 0.012f
-private const val WARP_MIN_PX = 1.5f
-private const val WARP_MAX_PX = 26f
 
 /**
  * Where the Earth is turned to, and how close.
@@ -1020,9 +1009,8 @@ private fun DrawScope.drawGlobe(
     labelSizePx: Float,
     topInset: Float,
     bottomInset: Float,
+    accent: Color,
     fx: GlobeFxSettings = GlobeFxSettings(),
-    pulse: GlobePulse = GlobePulse(),
-    selectedPulse: Float = 0f,
 ) {
     if (data.cities.isEmpty() && data.coastline.isEmpty()) return
 
@@ -1031,25 +1019,12 @@ private fun DrawScope.drawGlobe(
     val cy = size.height / 2f
     val scale = data.scale.takeIf { it > 0 } ?: 100
 
-    // Amplitude scales with the globe rather than being a fixed pixel count, so
-    // the effect stays the same *proportion* of the Earth at every zoom, then
-    // hits a ceiling — past a certain size a proportional wave stops looking
-    // like a moving coast and starts looking like a coast that has come loose.
-    // The zoom ramp on top of it is the readability gate: at whole-Earth zoom
-    // this multiplies out to nothing.
-    val warp = if (fx.enabled) {
-        GlobeWarp(
-            amplitudePx = fx.amount *
-                fx.zoomGain(camera.zoom, MIN_ZOOM) *
-                (radius * WARP_RADIUS_FRACTION).coerceIn(WARP_MIN_PX, WARP_MAX_PX),
-            swell = fx.swell * pulse.bass,
-            shimmer = fx.shimmer * pulse.treble,
-            phase = pulse.phase,
-            detail = fx.waveDetail,
-        )
-    } else {
-        GlobeWarp()
-    }
+    // The lit ink. Blended toward the accent rather than replaced by it, so the
+    // slider has a whole range instead of an on and an off — and blended from
+    // the theme's own land colour, which is what keeps the globe legible in both
+    // light and dark instead of tuned for one of them.
+    val litLand = androidx.compose.ui.graphics.lerp(land, accent, fx.illumination)
+    val halo = if (fx.glowing) accent.copy(alpha = fx.glowBrightness * 0.45f) else null
 
     drawCircle(color = ocean, radius = radius, center = Offset(cx, cy))
     drawCircle(
@@ -1069,51 +1044,35 @@ private fun DrawScope.drawGlobe(
     val borderAlpha = (0.3f + 0.02f * camera.zoom).coerceIn(0.3f, 0.62f)
     drawProjectedLines(
         lines = data.borders,
-        colour = land.copy(alpha = borderAlpha),
+        colour = litLand.copy(alpha = borderAlpha),
         width = 0.9f,
         camera = camera,
         cx = cx,
         cy = cy,
         radius = radius,
         scale = scale,
-        warp = warp,
+        glow = halo?.copy(alpha = halo.alpha * borderAlpha),
+        glowWidth = fx.glowWidth,
     )
     drawProjectedLines(
         lines = data.coastline,
-        colour = land,
+        colour = litLand,
         width = 1.1f,
         camera = camera,
         cx = cx,
         cy = cy,
         radius = radius,
         scale = scale,
-        warp = warp,
+        glow = halo,
+        glowWidth = fx.glowWidth,
     )
 
-    // The dots do not move with the music, and that is not an omission. A dot is
-    // a target: [hitTest] finds it by projecting forward with no knowledge of
-    // the warp, so a displaced dot is a dot that is no longer where tapping it
-    // says it is. Names are pinned for the same reason — they are placed by
-    // collision against a grid of taken boxes, and a shivering label set would
-    // re-solve that grid every frame and flicker names in and out.
     for (city in data.cities) {
         val p = project(city.lat, city.lon, scale, camera, cx, cy, radius)
         if (!p.visible) continue
         if (p.x < -20f || p.y < -20f || p.x > size.width + 20f || p.y > size.height + 20f) continue
 
-        // Log, because the counts run from 1 to several hundred: linear sizing
-        // makes Berlin a blot and leaves every one-station town at the same
-        // invisible speck.
-        val weight = (ln(1f + city.stations) / LOG_CEILING).coerceIn(0f, 1f)
-        // And grow with the zoom, or closing in only spreads the same specks
-        // further apart — the thing you zoomed in to see stays as hard to see
-        // and as hard to hit. Log again rather than the genre map's linear ramp,
-        // because this range is 0.85 to 48 rather than 0.6 to 14 and a linear
-        // one would hit its ceiling in the first tenth of the travel. Clamped at
-        // both ends: the whole-Earth view must not turn to blobs, and the
-        // closest view must not grow discs.
-        val closeness = (0.7f + 0.35f * ln(1f + camera.zoom)).coerceIn(0.75f, 2.4f)
-        val base = (1.6f + weight * 4.4f) * closeness
+        val base = cityDotRadius(city.stations, camera.zoom)
         val selected = city.id == selectedId
 
         // Fade toward the limb, so the sphere reads as curved rather than as a
@@ -1121,15 +1080,10 @@ private fun DrawScope.drawGlobe(
         val edge = (p.z * 1.4f).coerceIn(0.25f, 1f)
 
         if (selected) {
-            // A ping rather than a throb: the ring grows outward and thins as it
-            // goes, so what reads as "alive" is the expansion and not a dot
-            // changing size. Growing the dot itself would fight its own meaning
-            // — size on this globe is how many stations a city has.
-            drawCircle(
-                color = dot.copy(alpha = 0.34f * (1f - 0.62f * selectedPulse)),
-                radius = base * (2.6f + 2.2f * selectedPulse),
-                center = Offset(p.x, p.y),
-            )
+            // The still part of the marker only. The ring that animates is drawn
+            // by [SelectedCityPing] on a canvas of its own — an animation in
+            // here would invalidate this one, and this one re-projects every
+            // coastline point in the asset each time it runs.
             drawCircle(
                 color = dot.copy(alpha = 0.22f),
                 radius = base * 2.2f,
@@ -1158,49 +1112,6 @@ private fun DrawScope.drawGlobe(
 }
 
 /**
- * The music, resolved into everything the line renderer needs to bend an
- * outline this frame. Built once per draw in [drawGlobe] and read per vertex.
- *
- * [amplitudePx] arrives already multiplied by the master amount and the zoom
- * ramp, so a warp that should not be visible is a warp whose amplitude is zero
- * and [active] is false — the renderer then takes its original path with no
- * per-vertex cost at all.
- */
-private data class GlobeWarp(
-    val amplitudePx: Float = 0f,
-    val swell: Float = 0f,
-    val shimmer: Float = 0f,
-    val phase: Float = 0f,
-    val detail: Float = 1f,
-) {
-    val active: Boolean
-        get() = amplitudePx > 0.01f && (swell > 0.001f || shimmer > 0.001f)
-
-    /**
-     * Displacement for the [i]th vertex of a run, in pixels along the outline's
-     * normal.
-     *
-     * The wave is indexed by position *along the line* rather than by screen
-     * position, which is what makes it read as the coast undulating rather than
-     * as the screen wobbling: a ripple travels down the coastline and stays
-     * stuck to it while the globe turns underneath. Screen-space noise would
-     * swim against the rotation and look like a rendering fault.
-     *
-     * The two components run in opposite directions on purpose. Two waves
-     * travelling the same way just beat against each other into one lumpy wave;
-     * counter-running ones cross, and the crossings are what make it look like
-     * water rather than like a sine.
-     */
-    fun displacement(i: Int): Float {
-        val s = i * detail
-        return amplitudePx * (
-            swell * sin(s * 0.55f + phase) +
-                shimmer * sin(s * 3.1f - phase * 2.4f)
-            )
-    }
-}
-
-/**
  * Stroke a set of flat `[lon, lat, lon, lat, …]` runs onto the sphere.
  *
  * Shared by the coastline and the borders because they are the same problem:
@@ -1209,10 +1120,12 @@ private data class GlobeWarp(
  * second place for it to rot — and getting it wrong is not subtle, it draws a
  * chord straight across the face of the globe.
  *
- * When [warp] is active each vertex is pushed along the outline's own normal,
- * so the displacement is always across the line and never along it. Sliding a
- * point down its own coast moves it nowhere visible and costs the same work;
- * pushing it sideways is the entire effect.
+ * When [glow] is set the path is stroked twice: once wide and translucent for
+ * the halo, then again at its own weight on top. Both strokes come off the one
+ * [Path], so the halo costs a second rasterise and not a second projection —
+ * and projection is the whole cost here, ~5,100 points of trigonometry per
+ * draw. Building the path twice would double the expensive half to buy the
+ * cheap one.
  */
 private fun DrawScope.drawProjectedLines(
     lines: List<List<Int>>,
@@ -1223,60 +1136,27 @@ private fun DrawScope.drawProjectedLines(
     cy: Float,
     radius: Float,
     scale: Int,
-    warp: GlobeWarp = GlobeWarp(),
+    glow: Color? = null,
+    glowWidth: Float = 1f,
 ) {
-    val warping = warp.active
     for (line in lines) {
         val path = Path()
         var drawing = false
         var index = 0
-        var vertex = 0
-        // Normal of the previous segment, carried forward so the first vertex of
-        // a run — which has no segment behind it yet — is simply left where the
-        // projection put it rather than displaced along a direction we haven't
-        // measured. Reset per line so one coastline never inherits another's.
-        var prevX = Float.NaN
-        var prevY = Float.NaN
-        var normalX = 0f
-        var normalY = 0f
         while (index + 1 < line.size) {
             val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
             if (p.visible) {
-                var x = p.x
-                var y = p.y
-                if (warping) {
-                    if (!prevX.isNaN()) {
-                        val dx = p.x - prevX
-                        val dy = p.y - prevY
-                        val length = hypot(dx, dy)
-                        // Coincident points carry no direction; keeping the last
-                        // good normal is better than a division that yields NaN
-                        // and silently drops the rest of the path.
-                        if (length > 1e-3f) {
-                            normalX = -dy / length
-                            normalY = dx / length
-                        }
-                    }
-                    val d = warp.displacement(vertex)
-                    x += normalX * d
-                    y += normalY * d
-                }
-                if (drawing) path.lineTo(x, y) else path.moveTo(x, y)
+                if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
                 drawing = true
-                // Track the *unwarped* point: measuring direction from displaced
-                // ones feeds the wave back into its own normals, and the outline
-                // curls up on itself within a few hundred vertices.
-                prevX = p.x
-                prevY = p.y
             } else {
                 // Round the back: lift the pen so the line stops at the limb
                 // rather than being drawn across the disc when it reappears.
                 drawing = false
-                prevX = Float.NaN
-                prevY = Float.NaN
             }
             index += 2
-            vertex++
+        }
+        if (glow != null) {
+            drawPath(path = path, color = glow, style = Stroke(width = width * glowWidth))
         }
         drawPath(path = path, color = colour, style = Stroke(width = width))
     }
@@ -1364,6 +1244,26 @@ private fun DrawScope.drawCityLabels(
             drawText(city.name, p.x, baseline, paint)
         }
     }
+}
+
+/**
+ * How big a city's dot is drawn, from its station count and the zoom.
+ *
+ * Log on the count, because they run from 1 to 2,294: linear sizing makes
+ * Berlin a blot and leaves every one-station town the same invisible speck. Log
+ * again on the zoom, rather than the genre map's linear ramp, because this
+ * range is 0.85 to 48 rather than 0.6 to 14 and a linear one would hit its
+ * ceiling in the first tenth of the travel — closing in would only spread the
+ * same specks further apart, and the thing you zoomed in to see would stay as
+ * hard to see and as hard to hit. Clamped at both ends: the whole-Earth view
+ * must not turn to blobs, and the closest view must not grow discs.
+ *
+ * Shared with the selected-city ping, which has to agree with the dot it rings.
+ */
+private fun cityDotRadius(stations: Int, zoom: Float): Float {
+    val weight = (ln(1f + stations) / LOG_CEILING).coerceIn(0f, 1f)
+    val closeness = (0.7f + 0.35f * ln(1f + zoom)).coerceIn(0.75f, 2.4f)
+    return (1.6f + weight * 4.4f) * closeness
 }
 
 /** Below this the globe is too small for a name to fit beside its dot. */
