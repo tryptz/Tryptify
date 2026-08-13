@@ -1,4 +1,6 @@
 package tf.monochrome.android.ui.mixer.fxchain
+import tf.monochrome.android.ui.components.rememberGlassPress
+import tf.monochrome.android.ui.components.glassSqueeze
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -308,7 +310,7 @@ private fun AddEffectBar(
                 shape = MonoDimens.shapeMd,
                 tintAlpha = if (atMax) 0.04f else 0.10f
             )
-            .clickable(enabled = !atMax, onClick = onClick)
+            .glassSqueeze(press = rememberGlassPress(), enabled = !atMax, onClick = onClick)
             .alpha(if (atMax) 0.5f else 1f)
             .padding(horizontal = MonoDimens.spacingMd),
         verticalAlignment = Alignment.CenterVertically,

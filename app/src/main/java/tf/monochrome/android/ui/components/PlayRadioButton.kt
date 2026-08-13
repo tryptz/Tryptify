@@ -54,7 +54,11 @@ fun PlayRadioButton(
     else MaterialTheme.colorScheme.primary
     val glass = LocalPerformanceProfile.current.allowHazeBlur
 
-    val surface = if (glass) {
+    val outer = modifier
+        .fillMaxWidth()
+        .padding(horizontal = horizontalPadding, vertical = 8.dp)
+
+    if (glass) {
         // The glass, and nothing else.
         //
         // Everything that used to be layered on top of it was in its way. An
@@ -65,26 +69,41 @@ fun PlayRadioButton(
         // that appeared to go through the button. And the hand-rolled rim was a
         // second edge stacked on the one the shared material already draws.
         //
-        // What is left is the same material every other pane in the app is
-        // built from, in a pill. No haze state: Home has no backdrop layer to
-        // blur, and the translucent path needs none.
-        Modifier.liquidGlass(shape = MonoDimens.shapePill)
+        // PressableGlass rather than a bare liquidGlass pill: this is a button,
+        // and the app's glass buttons swell under a finger. It used to take a
+        // plain `clickable` and do nothing at all on press, which on the same
+        // material as the transport — where pressing raises a dome — read as two
+        // different substances.
+        PressableGlass(
+            onClick = onClick,
+            modifier = outer,
+            shape = MonoDimens.shapePill,
+        ) {
+            PlayRadioLabel(glass, isActive, isGenerating)
+        }
     } else {
         // Flat: one opaque accent fill, no shadow, no gradients, no rim.
-        Modifier
-            .clip(MonoDimens.shapePill)
-            .background(accent)
+        Row(
+            modifier = outer
+                .clip(MonoDimens.shapePill)
+                .background(accent)
+                .clickable(onClick = onClick)
+                .padding(vertical = 14.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PlayRadioLabel(glass, isActive, isGenerating)
+        }
     }
+}
 
+/** Icon and label, identical on both paths so nothing moves when glass is off. */
+@Composable
+private fun PlayRadioLabel(glass: Boolean, isActive: Boolean, isGenerating: Boolean) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding, vertical = 8.dp)
-            .then(surface)
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // With no fill behind it, the label is what carries the accent — and it
         // is sitting on the page, so it needs a colour picked to be read there.

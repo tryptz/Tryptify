@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import kotlin.math.max
 import android.content.Context
 import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
@@ -237,6 +238,7 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uFrost", 0f)
             shader.setFloatUniform("uBulge", 0.5f, 0.5f)
             shader.setFloatUniform("uBulgeAmt", 0f)
+            shader.setFloatUniform("uBulgeR", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -299,6 +301,7 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uFrost", 0f)
             shader.setFloatUniform("uBulge", 0.5f, 0.5f)
             shader.setFloatUniform("uBulgeAmt", 0f)
+            shader.setFloatUniform("uBulgeR", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -325,11 +328,21 @@ internal fun Modifier.playerGlass(
     tint: Color,
     bulgeCenter: Offset = Offset(0.5f, 0.5f),
     bulgeAmount: () -> Float = { 0f },
+    /**
+     * How wide the press dome is, as a fraction of the pane's longest side.
+     *
+     * Zero keeps the shader's own default of a sixth of the width, which is what
+     * the transport and the mini player's carved-out controls were tuned around:
+     * there the dome is meant to pick out one button on a bar of several. A pane
+     * that is *itself* the button wants the swell across the whole of it, and a
+     * sixth of the width on a full-width sheet is a dimple nobody can see.
+     */
+    bulgeRadiusFraction: Float = 0f,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount))
+    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction))
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -339,6 +352,7 @@ private fun playerGlassModifier(
     g: tf.monochrome.android.domain.model.PlayerGlassSettings,
     bulgeCenter: Offset,
     bulgeAmount: () -> Float,
+    bulgeRadiusFraction: Float,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -383,6 +397,14 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uFrost", g.frost)
             shader.setFloatUniform("uBulge", bulgeCenter.x, bulgeCenter.y)
             shader.setFloatUniform("uBulgeAmt", bulgeAmount())
+            shader.setFloatUniform(
+                "uBulgeR",
+                if (bulgeRadiusFraction > 0f) {
+                    max(size.width, size.height) * bulgeRadiusFraction
+                } else {
+                    0f
+                },
+            )
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -571,6 +593,7 @@ uniform float uFresnelPower;  // Fresnel falloff: lower = broader reflective rim
 uniform float uFrost;         // frosted roughness: 0 = clear, higher = misted
 uniform float2 uBulge;        // press-bulge centre, normalized (0..1) in the surface
 uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
+uniform float uBulgeR;        // press-bulge dome radius in px; <=0 falls back to uSize.x/6
 
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
@@ -694,7 +717,7 @@ half4 main(float2 p) {
     // a smooth bump that lenses the backdrop; uBulgeAmt animates it in/out.
     if (uBulgeAmt > 0.001) {
         float2 bc = uBulge * uSize;
-        float R = uSize.x / 6.0;
+        float R = (uBulgeR > 0.0) ? uBulgeR : (uSize.x / 6.0);
         float rr2 = distance(p, bc);
         float dome = smoothstep(R, 0.0, rr2);
         float2 bdir = (rr2 > 0.5) ? (p - bc) / rr2 : float2(0.0, 0.0);

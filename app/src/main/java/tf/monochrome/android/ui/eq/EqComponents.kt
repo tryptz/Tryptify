@@ -1,4 +1,6 @@
 package tf.monochrome.android.ui.eq
+import tf.monochrome.android.ui.components.rememberGlassPress
+import tf.monochrome.android.ui.components.glassSqueeze
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -315,7 +317,7 @@ fun SelectorRow(
                 .weight(1f)
                 .clip(RoundedCornerShape(8.dp))
                 .liquidGlass(shape = RoundedCornerShape(8.dp))
-                .clickable(onClick = onClick)
+                .glassSqueeze(press = rememberGlassPress(), onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
