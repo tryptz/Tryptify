@@ -88,25 +88,11 @@ import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.navigateSafe
-import tf.monochrome.android.ui.components.GlassSearchBar
 
-@Composable
-fun SearchQueryField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    modifier: Modifier = Modifier,
-    hazeState: dev.chrisbanes.haze.HazeState? = null,
-) {
-    GlassSearchBar(
-        query = query,
-        onQueryChange = onQueryChange,
-        placeholder = "Search tracks, albums, artists, playlists…",
-        hazeState = hazeState,
-        onSubmit = onSubmit,
-        modifier = modifier.padding(horizontal = 8.dp),
-    )
-}
+// SearchQueryField is gone. It was a one-line forward to GlassSearchBar that
+// existed to keep Home and the search screen agreeing on a placeholder, and both
+// of them go through SearchOverlay now — which owns the haze source the field
+// was being handed, so there was nothing left for the wrapper to carry.
 
 @Composable
 fun SearchHistoryContent(

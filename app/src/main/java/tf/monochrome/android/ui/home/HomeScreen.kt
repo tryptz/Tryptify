@@ -3,8 +3,6 @@ package tf.monochrome.android.ui.home
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,7 +28,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ButtonDefaults
@@ -51,7 +48,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -75,15 +71,13 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
-import tf.monochrome.android.ui.search.SearchQueryField
+import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.search.SearchHistoryContent
 import tf.monochrome.android.ui.search.SearchResultsContent
 import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
 import androidx.compose.foundation.layout.Box
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,17 +137,14 @@ fun HomeScreen(
     var searchOpen by androidx.compose.runtime.saveable.rememberSaveable {
         androidx.compose.runtime.mutableStateOf(false)
     }
-    val searchFocus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
-    // Only grab focus on a genuine user open (pendingFocus is non-saveable, so
-    // returning from a detail screen with searchOpen restored true does NOT
-    // re-pop the keyboard over the results).
-    var pendingSearchFocus by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(pendingSearchFocus) {
-        if (pendingSearchFocus) {
-            pendingSearchFocus = false
-            runCatching { searchFocus.requestFocus() }
-        }
-    }
+    // Whether opening the bar should take the keyboard with it.
+    //
+    // Deliberately a plain remember against a saveable searchOpen: the bar is
+    // composed only while it is showing, so it asks for focus each time it
+    // appears — and "appears" includes Home being rebuilt with searchOpen
+    // restored true, which is arriving back from a detail screen, not a request
+    // to type. That case rebuilds this as false and the keyboard stays down.
+    var focusOnOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
     val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsStateWithLifecycle()
 
@@ -285,7 +276,7 @@ fun HomeScreen(
                         }
                         val opening = !searchOpen
                         searchOpen = opening
-                        if (opening) pendingSearchFocus = true
+                        focusOnOpen = opening
                     }) {
                         Icon(
                             if (searchOpen) Icons.Default.Clear else Icons.Default.Search,
@@ -323,14 +314,31 @@ fun HomeScreen(
 
         // Everything below the bar, with the search floating over it.
         //
-        // The field used to be a row in this column, which meant it took
-        // layout space: the content started *below* it and clipped at its own
-        // top edge, so rows vanished at a hard line instead of sliding under
-        // the glass. It is an overlay now — the content keeps the full height
-        // and runs underneath.
-        val searchHaze = rememberHazeState()
-        Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().hazeSource(searchHaze)) {
+        // The field used to be a row in this column, which meant it took layout
+        // space: the content started *below* it and clipped at its own top edge,
+        // so rows vanished at a hard line instead of sliding under the glass.
+        // Home worked out the fix first and kept its own hand-built Box, haze
+        // source and AnimatedVisibility for it; that is SearchOverlay now, and
+        // this is the last screen to stop having a private copy of it.
+        //
+        // The bar stays out while a query is live, not only while the search is
+        // "open", so results never lose the field that produced them.
+        SearchOverlay(
+            open = searchOpen || hasSearchResults,
+            query = searchQuery,
+            onQueryChange = searchViewModel::onQueryChange,
+            placeholder = "Search tracks, albums, artists, playlists…",
+            onSubmit = searchViewModel::submitSearch,
+            onClose = {
+                searchViewModel.onQueryChange("")
+                searchOpen = false
+            },
+            // Only on a genuine user open. This is a plain remember, not a
+            // saveable, so coming back to a Home whose searchOpen was restored
+            // true does not re-pop the keyboard over the results.
+            autoFocus = focusOnOpen,
+        ) { _ ->
+        Column(modifier = Modifier.fillMaxSize()) {
         // Play Radio — the home screen's primary action: seed a station from
         // whatever is playing (falling back to recent history) and keep the
         // queue topped up.
@@ -488,30 +496,6 @@ fun HomeScreen(
                 }
             }
         }
-        }
-
-        // Search — hidden by default, revealed by the top-bar search button.
-        // The field stays visible while a query is active so results keep
-        // their input attached.
-        //
-        // Fully qualified: the outer column's receiver is still in scope inside
-        // this box, so the ColumnScope overload wins resolution and then fails
-        // on the receiver it cannot find.
-        androidx.compose.animation.AnimatedVisibility(
-            visible = searchOpen || hasSearchResults,
-            enter = expandVertically(),
-            exit = shrinkVertically(),
-            modifier = Modifier.align(Alignment.TopCenter),
-        ) {
-            tf.monochrome.android.devedit.DevEditable("home_search_bar", Modifier.fillMaxWidth()) {
-                SearchQueryField(
-                    query = searchQuery,
-                    onQueryChange = searchViewModel::onQueryChange,
-                    onSubmit = searchViewModel::submitSearch,
-                    hazeState = searchHaze,
-                    modifier = Modifier.focusRequester(searchFocus)
-                )
-            }
         }
         }
     }
