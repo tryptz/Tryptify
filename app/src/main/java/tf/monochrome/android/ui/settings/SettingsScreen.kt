@@ -15,6 +15,8 @@ import androidx.compose.ui.res.painterResource
 import tf.monochrome.android.R
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import tf.monochrome.android.ui.components.ColorPickerDialog
@@ -3357,38 +3359,76 @@ private fun WhatsNewPanel(highlight: Boolean) {
         // "new" flag is one nobody looks at twice.
         badge = releases.first().versionName.takeIf { highlight },
     )
-    releases.forEach { release ->
-        Text(
-            text = "Version ${release.versionName}",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+    // One release is dozens of entries, and the older ones are history rather
+    // than news — left open they bury the version somebody actually just
+    // installed under everything that came before it. Each version is a row you
+    // can fold, and only the newest starts open.
+    releases.forEachIndexed { index, release ->
+        var expanded by rememberSaveable(release.versionCode) { mutableStateOf(index == 0) }
+        val turn by animateFloatAsState(
+            targetValue = if (expanded) 180f else 0f,
+            label = "whatsNewChevron",
         )
-        // Sections are announced when they start, so consecutive entries under
-        // one heading print it once. Entries with no section carry straight on
-        // as the flat list they were.
-        var section: String? = null
-        release.entries.forEach { entry ->
-            if (entry.section != null && entry.section != section) {
-                Text(
-                    text = entry.section,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
-                )
-            }
-            section = entry.section
-            Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                Text(
-                    text = entry.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = entry.body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Version ${release.versionName}",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            // The count is what makes a folded row worth reading: it says how
+            // much is behind it without opening it.
+            Text(
+                text = "${release.entries.size} changes",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.rotate(turn),
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column {
+                // Sections are announced when they start, so consecutive entries
+                // under one heading print it once. Entries with no section carry
+                // straight on as the flat list they were.
+                var section: String? = null
+                release.entries.forEach { entry ->
+                    if (entry.section != null && entry.section != section) {
+                        Text(
+                            text = entry.section,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                        )
+                    }
+                    section = entry.section
+                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                        Text(
+                            text = entry.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = entry.body,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
