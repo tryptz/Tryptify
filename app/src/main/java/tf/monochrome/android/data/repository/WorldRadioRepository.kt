@@ -9,8 +9,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.data.api.RadioBrowserClient
 import tf.monochrome.android.domain.model.RadioCity
+import tf.monochrome.android.domain.model.RadioCountry
 import tf.monochrome.android.domain.model.RadioStation
 import tf.monochrome.android.domain.model.WorldRadioData
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +46,8 @@ class WorldRadioRepository @Inject constructor(
 
     private val stationCache = mutableMapOf<String, List<RadioStation>>()
     private val stationMutex = Mutex()
+    private val countryMutex = Mutex()
+    private var countries: List<RadioCountry>? = null
 
     /** The bundled globe, loading it first if this is the first caller. */
     suspend fun data(): WorldRadioData {
@@ -122,6 +126,75 @@ class WorldRadioRepository @Inject constructor(
             .map { it.first }
             .toList()
     }
+
+    /**
+     * Countries matching what is being typed.
+     *
+     * Names come from the platform rather than a bundled table, so they arrive
+     * in the device's own language and never drift out of date. A code that
+     * resolves to nothing recognisable stays as the code — better a bare "XK"
+     * than a country invented to fill the gap.
+     *
+     * Ranked like the cities: names that start with what was typed first, then
+     * names that merely contain it, busiest country first within each. An exact
+     * code match ("DE") is treated as a prefix hit, because someone who typed
+     * two letters that are a country code meant that country.
+     */
+    suspend fun searchCountries(query: String, limit: Int = COUNTRY_SUGGESTIONS): List<RadioCountry> {
+        val typed = query.trim().lowercase()
+        if (typed.isBlank()) return emptyList()
+        return countryIndex().asSequence()
+            .mapNotNull { country ->
+                val name = country.name.lowercase()
+                val rank = when {
+                    country.code.equals(typed, ignoreCase = true) -> 0
+                    name.startsWith(typed) -> 0
+                    name.contains(typed) -> 1
+                    else -> return@mapNotNull null
+                }
+                country to rank
+            }
+            .sortedWith(compareBy({ it.second }, { -it.first.stations }))
+            .take(limit)
+            .map { it.first }
+            .toList()
+    }
+
+    /** The broadcasting cities of one country, busiest first. */
+    suspend fun citiesIn(countryCode: String, limit: Int = COUNTRY_CITY_LIMIT): List<RadioCity> =
+        data().cities
+            .filter { it.country.equals(countryCode, ignoreCase = true) }
+            .sortedByDescending { it.stations }
+            .take(limit)
+
+    /**
+     * Every country on the globe, built once.
+     *
+     * Grouping 1,611 cities is cheap but not free, and the search runs it on
+     * every keystroke; the asset never changes within a process, so neither
+     * does this.
+     */
+    private suspend fun countryIndex(): List<RadioCountry> {
+        countryMutex.withLock { countries }?.let { return it }
+        val built = data().cities
+            .groupBy { it.country.uppercase() }
+            .map { (code, group) ->
+                RadioCountry(
+                    code = code,
+                    name = countryName(code),
+                    cities = group.size,
+                    stations = group.sumOf { it.stations },
+                )
+            }
+        countryMutex.withLock { countries = built }
+        return built
+    }
+
+    private fun countryName(code: String): String = runCatching {
+        Locale.Builder().setRegion(code).build().getDisplayCountry(Locale.getDefault())
+    }.getOrNull()
+        ?.takeIf { it.isNotBlank() && !it.equals(code, ignoreCase = true) }
+        ?: code
 
     /**
      * Where on the globe to fly for a station found by name.
@@ -214,5 +287,13 @@ class WorldRadioRepository @Inject constructor(
         // Enough to cover the near-misses of a half-typed name, few enough that
         // the cities never push the station results off the end of the row.
         const val CITY_SUGGESTIONS = 6
+
+        // Fewer, because they lead the row and a country is a coarse answer:
+        // three plausible ones is a choice, ten is a list to read.
+        const val COUNTRY_SUGGESTIONS = 3
+
+        // How many of a country's cities the drill-down offers. The tail of any
+        // large country is one-station towns nobody is looking for.
+        const val COUNTRY_CITY_LIMIT = 24
     }
 }

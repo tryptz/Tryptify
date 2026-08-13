@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -19,6 +20,7 @@ import tf.monochrome.android.data.repository.WorldRadioRepository
 import tf.monochrome.android.domain.model.GlobeFxSettings
 import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.RadioCity
+import tf.monochrome.android.domain.model.RadioCountry
 import tf.monochrome.android.domain.model.RadioStation
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.UnifiedArtistRef
@@ -47,11 +49,19 @@ enum class SearchStatus {
  * staying empty until the slower half arrives.
  */
 data class SearchSuggestions(
+    val countries: List<RadioCountry> = emptyList(),
     val cities: List<RadioCity> = emptyList(),
     val stations: List<RadioStation> = emptyList(),
     val status: SearchStatus = SearchStatus.Idle,
+    /**
+     * Set once a country pill has been opened. The row then shows that
+     * country's cities instead of the typed results, with a way back — a
+     * country is an answer that leads somewhere rather than one you can play.
+     */
+    val inCountry: RadioCountry? = null,
 ) {
-    val isEmpty: Boolean get() = cities.isEmpty() && stations.isEmpty()
+    val isEmpty: Boolean
+        get() = countries.isEmpty() && cities.isEmpty() && stations.isEmpty()
 }
 
 /** Shortest query worth a request. */
@@ -105,17 +115,25 @@ class WorldRadioViewModel @Inject constructor(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    private val _openCountry = MutableStateFlow<RadioCountry?>(null)
+
     fun toggleSearch() {
         val opening = !_searchOpen.value
         _searchOpen.value = opening
         // Closing clears the query. Leaving a stale one behind means re-opening
         // shows results for something typed minutes ago, under a bar that looks
         // like it is waiting for input.
-        if (!opening) _query.value = ""
+        if (!opening) {
+            _query.value = ""
+            _openCountry.value = null
+        }
     }
 
     fun setQuery(value: String) {
         _query.value = value
+        // Typing is a new question. Staying inside a country while the text
+        // changes would leave the row answering the previous one.
+        _openCountry.value = null
     }
 
     /**
@@ -125,24 +143,47 @@ class WorldRadioViewModel @Inject constructor(
      * and the directory is a volunteer-run service. Short queries emit nothing
      * at all rather than asking for every station whose name contains "ra".
      */
-    val suggestions: StateFlow<SearchSuggestions> = _query
-        .map { it.trim() }
-        .distinctUntilChanged()
-        .transformLatest { typed ->
+    val suggestions: StateFlow<SearchSuggestions> = combine(
+        _query.map { it.trim() }.distinctUntilChanged(),
+        _openCountry,
+    ) { typed, country -> typed to country }
+        .transformLatest { (typed, country) ->
+            // Inside a country, the row is that country's cities and nothing
+            // else. Mixing the typed results back in would put Berlin beside
+            // the cities of Brazil because both were on screen a moment ago.
+            if (country != null) {
+                emit(
+                    SearchSuggestions(
+                        cities = repository.citiesIn(country.code),
+                        status = SearchStatus.Ready,
+                        inCountry = country,
+                    ),
+                )
+                return@transformLatest
+            }
+
             if (typed.length < MIN_QUERY) {
                 emit(SearchSuggestions())
                 return@transformLatest
             }
-            // The cities are local, so they land on this keystroke rather than
-            // after the debounce — the row is never empty while the directory
-            // is being asked, which is most of the time you spend typing.
+            // Countries and cities are local, so they land on this keystroke
+            // rather than after the debounce — the row is never empty while the
+            // directory is being asked, which is most of the time spent typing.
+            val countries = repository.searchCountries(typed)
             val cities = repository.searchCities(typed)
-            emit(SearchSuggestions(cities = cities, status = SearchStatus.Searching))
+            emit(
+                SearchSuggestions(
+                    countries = countries,
+                    cities = cities,
+                    status = SearchStatus.Searching,
+                ),
+            )
 
             delay(SEARCH_DEBOUNCE_MS)
             val found = repository.searchStations(typed)
             emit(
                 SearchSuggestions(
+                    countries = countries,
                     cities = cities,
                     stations = found.orEmpty(),
                     status = if (found == null) SearchStatus.Unreachable else SearchStatus.Ready,
@@ -150,6 +191,11 @@ class WorldRadioViewModel @Inject constructor(
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchSuggestions())
+
+    /** Open a country's cities in the prediction row. */
+    fun openCountry(country: RadioCountry?) {
+        _openCountry.value = country
+    }
 
     /**
      * Fly to a searched station and tune in.

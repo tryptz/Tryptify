@@ -33,6 +33,24 @@ data class RadioCity(
 )
 
 /**
+ * A country the globe has radio in.
+ *
+ * Derived from the cities rather than shipped: the asset already knows which
+ * country every broadcasting city is in, so a separate country list would be a
+ * second thing to keep in step with it — and the counts here are the honest
+ * ones, since they are the cities and stations the globe can actually show
+ * rather than what some atlas says the country contains.
+ */
+data class RadioCountry(
+    /** ISO 3166-1 alpha-2, as the cities record it. */
+    val code: String = "",
+    /** Display name in the device's language, falling back to the code. */
+    val name: String = "",
+    val cities: Int = 0,
+    val stations: Int = 0,
+)
+
+/**
  * The bundled globe: where the land is, and where the radio is.
  *
  * [coastline] is Natural Earth's 110m coastline as flat `[lon, lat, lon, lat, …]`

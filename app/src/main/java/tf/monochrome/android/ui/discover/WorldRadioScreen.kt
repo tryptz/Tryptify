@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -110,6 +111,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.GlobeFxSettings
 import tf.monochrome.android.domain.model.RadioCity
+import tf.monochrome.android.domain.model.RadioCountry
 import tf.monochrome.android.domain.model.RadioStation
 import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.components.bounceClick
@@ -292,6 +294,7 @@ fun WorldRadioScreen(
                     onQueryChange = { viewModel.setQuery(it) },
                     onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
                     onPickCity = { viewModel.select(it) },
+                    onOpenCountry = { viewModel.openCountry(it) },
                     onClose = { viewModel.toggleSearch() },
                 )
             }
@@ -563,6 +566,7 @@ private fun StationSearchBar(
     onQueryChange: (String) -> Unit,
     onPickStation: (RadioStation) -> Unit,
     onPickCity: (RadioCity) -> Unit,
+    onOpenCountry: (RadioCountry?) -> Unit,
     onClose: () -> Unit,
 ) {
     val focus = remember { FocusRequester() }
@@ -603,7 +607,7 @@ private fun StationSearchBar(
                     decorationBox = { inner ->
                         if (query.isEmpty()) {
                             Text(
-                                text = "Station name",
+                                text = "Station, city or country",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -630,7 +634,29 @@ private fun StationSearchBar(
             if (!state.isEmpty) {
                 Spacer(Modifier.height(10.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Cities lead. They are the ones that are certainly right —
+                    // Inside a country, the way back leads. Sliding right to
+                    // find the exit would make the drill-down a trap on a row
+                    // that can be two dozen cities long.
+                    state.inCountry?.let { open ->
+                        item {
+                            CountryPill(
+                                country = open,
+                                open = true,
+                                onClick = { onOpenCountry(null) },
+                            )
+                        }
+                    }
+                    // Countries first otherwise: a country is the broadest
+                    // answer to a half-typed word, and the one most likely to be
+                    // what was meant when it matches at all.
+                    items(state.countries) { country ->
+                        CountryPill(
+                            country = country,
+                            open = false,
+                            onClick = { onOpenCountry(country) },
+                        )
+                    }
+                    // Then cities. They are the ones that are certainly right —
                     // matched against the globe's own list rather than guessed
                     // at from a station's name — and they are already on screen
                     // while the directory is still being asked.
@@ -679,6 +705,53 @@ private fun SearchNote(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),
     )
+}
+
+/**
+ * A country prediction, and — once [open] — the way back out of it.
+ *
+ * A country is not something you can play, so tapping it does not try to: it
+ * opens that country's cities in the same row. The count is the globe's own,
+ * the cities it can actually fly to, rather than a number from an atlas that
+ * would promise places this map does not have.
+ */
+@Composable
+private fun CountryPill(country: RadioCountry, open: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = if (open) MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)
+        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                imageVector = if (open) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Public,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = country.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 160.dp),
+            )
+            if (!open) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (country.cities == 1) "1 city" else "${country.cities} cities",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 /**
