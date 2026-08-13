@@ -135,6 +135,40 @@ class LightSchemesTest {
         )
     }
 
+    /**
+     * Each light theme has to be recognisable as itself before any content is
+     * drawn on it. Sharing one neutral page across fifteen variants made them
+     * the same theme with a different highlighter.
+     */
+    @Test
+    fun `light themes do not all share one page`() {
+        for (paper in papers) {
+            val grounds = ThemeAccents.mapValues { (_, accent) ->
+                lightSchemeFor(accent, paper).background
+            }
+            assertEquals(
+                "$paper backgrounds collapsed onto ${grounds.values.distinct().size} colours",
+                grounds.size,
+                grounds.values.distinct().size,
+            )
+        }
+    }
+
+    /** Tinting the page must not darken it into something that is not light. */
+    @Test
+    fun `every tinted page is still light`() {
+        eachScheme { name, paper, s ->
+            assertTrue(
+                "$name/$paper background luminance is ${"%.3f".format(relativeLuminance(s.background))}",
+                relativeLuminance(s.background) > 0.72,
+            )
+            assertTrue(
+                "$name/$paper surface luminance is ${"%.3f".format(relativeLuminance(s.surface))}",
+                relativeLuminance(s.surface) > 0.72,
+            )
+        }
+    }
+
     @Test
     fun `ensureContrast leaves a colour that already passes alone`() {
         val black = Color(0xFF000000)

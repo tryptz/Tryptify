@@ -71,6 +71,39 @@ private fun rampOf(paper: Paper) = when (paper) {
     Paper.Warm -> WarmRamp
 }
 
+/**
+ * The same paper, carrying a trace of the theme's own hue.
+ *
+ * Without this every light variant was the same page with a different accent
+ * on it — Ocean Light and Forest Light differed only in the colour of their
+ * icons, which is not a theme, it is a highlighter. The ground now leans the
+ * way the accent does.
+ *
+ * Tinted toward a *pale* version of the accent rather than the accent itself.
+ * Blending white paper toward Monochrome's near-black or Crimson's deep red
+ * would darken the page rather than colour it, and a light theme that arrives
+ * at grey has stopped being one. Lifting the accent to a tint first means the
+ * hue survives and the lightness does not move.
+ *
+ * The amounts climb with the layer: the page barely leans, the cards lean more,
+ * the outlines most. That ordering is what keeps a card visible against the
+ * page it sits on — the separation between them is now hue as well as value.
+ */
+private fun PaperRamp.tintedBy(accent: Color): PaperRamp {
+    val pale = blend(Color.White, accent, 0.30f)
+    return PaperRamp(
+        background = blend(background, pale, 0.10f),
+        surface = blend(surface, pale, 0.06f),
+        surfaceVariant = blend(surfaceVariant, pale, 0.20f),
+        container = blend(container, pale, 0.16f),
+        outline = blend(outline, pale, 0.34f),
+        // The ink takes the faintest trace of it too, so text on a tinted page
+        // does not read as pure black dropped onto a coloured sheet.
+        ink = blend(ink, accent, 0.08f),
+        inkMuted = blend(inkMuted, accent, 0.14f),
+    )
+}
+
 // ── Contrast ────────────────────────────────────────────────────────────────
 
 /** WCAG relative luminance. */
@@ -161,7 +194,7 @@ private fun blend(bottom: Color, top: Color, amount: Float): Color = Color(
  * `onPrimary` would fail every one of those.
  */
 fun lightSchemeFor(accent: Color, paper: Paper): ColorScheme {
-    val ramp = rampOf(paper)
+    val ramp = rampOf(paper).tintedBy(accent)
 
     val primary = ensureContrast(accent, ramp.surface)
     val primaryContainer = blend(ramp.surface, accent, 0.18f)
@@ -190,17 +223,37 @@ fun lightSchemeFor(accent: Color, paper: Paper): ColorScheme {
         // out around 3:1.
         onSurfaceVariant = ensureContrast(ramp.inkMuted, ramp.surfaceVariant),
         surfaceContainerHigh = ramp.container,
-        outline = ramp.outline,
-        // Deliberately not the outline: outlineVariant is used for hairlines
+        // Held to a floor against the surface, like everything else here.
+        // Tinting the ramp toward a pale accent lightens the outline as well,
+        // and a pale accent means a very light tint — Gold's landed at 1.29:1
+        // on warm paper, which is a border you cannot see. Guaranteed rather
+        // than asserted: the test that caught it should be confirming a
+        // property, not discovering one.
+        outline = ensureContrast(ramp.outline, ramp.surface, OUTLINE_CONTRAST),
+        // Deliberately lighter than the outline: outlineVariant draws hairlines
         // between rows, where the outline proper is heavy enough to stripe a
         // list.
-        outlineVariant = blend(ramp.surfaceVariant, ramp.outline, 0.5f),
+        outlineVariant = ensureContrast(
+            blend(ramp.surfaceVariant, ramp.outline, 0.5f),
+            ramp.surface,
+            HAIRLINE_CONTRAST,
+        ),
         error = LightError,
         onError = Color.White,
         errorContainer = blend(ramp.surface, LightError, 0.16f),
         onErrorContainer = ensureContrast(ramp.ink, blend(ramp.surface, LightError, 0.16f)),
     )
 }
+
+/**
+ * Floors for the non-text furniture.
+ *
+ * Well under the 4.5:1 text needs — a border held to that would be a black
+ * frame around every card — but far enough above 1:1 to be a line rather than a
+ * suggestion of one.
+ */
+private const val OUTLINE_CONTRAST = 1.45
+private const val HAIRLINE_CONTRAST = 1.18
 
 /** Red that passes on light ground; the dark themes' ErrorRed does not. */
 private val LightError = Color(0xFFB3261E)

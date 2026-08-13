@@ -41,8 +41,25 @@ fun Modifier.liquidGlass(
 ) = composed {
     val profile = LocalPerformanceProfile.current
     val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
-    val tintColor = if (isDark) Color.Black else Color.White
-    val adaptedTintAlpha = if (isDark) (tintAlpha * 1.4f).coerceAtMost(0.50f) else tintAlpha
+    // Glass shades what is behind it. On a dark ground that means deepening it,
+    // which is what the black tint has always done; on a light one it means the
+    // same thing, not the opposite.
+    //
+    // This used to tint *white* on light themes — white glass over a white page
+    // has nothing to shade and no edge to find, so every pane on every light
+    // theme was invisible except for its rim. Inverting the tint looked
+    // symmetrical and was simply the wrong model: a frosted pane does not
+    // brighten the wall behind it.
+    //
+    // Much lower alpha on light than dark. The same 0.25 that reads as a pane
+    // over near-black reads as a grey slab over white, which is the other way
+    // this went wrong.
+    val tintColor = Color.Black
+    val adaptedTintAlpha = if (isDark) {
+        (tintAlpha * 1.4f).coerceAtMost(0.50f)
+    } else {
+        (tintAlpha * 0.34f).coerceIn(0.04f, 0.12f)
+    }
     // Clear, theme-independent specular rim: a translucent white edge on dark
     // themes (and a dark edge on light themes), matching the "Clear" theme's
     // visible outline. Using a luminance-based color instead of the per-scheme

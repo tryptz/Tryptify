@@ -1,7 +1,6 @@
 package tf.monochrome.android.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -21,10 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -35,12 +30,15 @@ import tf.monochrome.android.ui.theme.MonoDimens
  * The resting primary action on Home and at the top of Discover: seed a radio
  * station and let it run.
  *
- * Built on the shared `Modifier.liquidGlass`, with an accent wash under it and
- * a shadow and specular sweep over it — the accent tuning is the part that is
- * this button's own, the material is not. It still needs its own flat branch
- * when glass is off. Both branches keep the same shape, padding and three
- * states, so the button doesn't move when the setting changes; only its
- * material does.
+ * On the glass path it is a pill of the shared `Modifier.liquidGlass` and the
+ * label, and nothing else — no fill of its own, because a fill is the one thing
+ * glass cannot be seen through. Its colour comes from the label rather than
+ * from a slab behind it.
+ *
+ * It still needs a flat branch when glass is off, and there the accent has to
+ * come back as a fill or the button would be text floating on the page. Both
+ * branches keep the same shape, padding and three states, so nothing moves when
+ * the setting changes; only the material does.
  */
 @Composable
 fun PlayRadioButton(
@@ -54,68 +52,23 @@ fun PlayRadioButton(
 ) {
     val accent = if (isActive) MaterialTheme.colorScheme.primaryContainer
     else MaterialTheme.colorScheme.primary
-    val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
-    // Specular highlight is white glass on dark themes; a touch of black keeps the
-    // "wet glass" read on light ones without washing the accent out.
-    val specular = if (isDark) Color.White else Color.White.copy(alpha = 0.6f)
     val glass = LocalPerformanceProfile.current.allowHazeBlur
 
     val surface = if (glass) {
-        Modifier
-            // Under shadow: a soft, accent-tinted drop shadow so the pill floats
-            // above the list. clip=false lets the shadow spill past the shape.
-            .shadow(
-                elevation = 10.dp,
-                shape = MonoDimens.shapePill,
-                clip = false,
-                ambientColor = accent,
-                spotColor = accent,
-            )
-            .clip(MonoDimens.shapePill)
-            // An accent *wash*, not a fill.
-            //
-            // This used to be the accent at 0.94 down to 0.70, which is opaque
-            // in every way that matters: the pill was a solid slab with a rim
-            // painted on it, and none of the page it floats over came through.
-            // The glass it was named for was entirely in the highlights. At
-            // these alphas the shape reads as the accent and the background
-            // reads through it, which is what the rest of the app's glass does.
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        accent.copy(alpha = 0.38f),
-                        accent.copy(alpha = 0.20f),
-                    )
-                )
-            )
-            // The shared glass material on top of the wash — the same tint,
-            // rim and refraction every other pane in the app is built from,
-            // rather than a hand-rolled imitation that drifts from it. No haze
-            // state: Home has no backdrop layer to blur, and the translucent
-            // path needs none.
-            .liquidGlass(shape = MonoDimens.shapePill)
-            // Specular sweep: a bright highlight across the top third that fades
-            // out, giving the pill its glossy, refractive wet-glass surface.
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        specular.copy(alpha = 0.22f),
-                        Color.Transparent,
-                    )
-                )
-            )
-            // Specular rim: a luminous edge, brightest along the top, that reads
-            // as light catching the glass border.
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        specular.copy(alpha = 0.55f),
-                        specular.copy(alpha = 0.08f),
-                    )
-                ),
-                shape = MonoDimens.shapePill,
-            )
+        // The glass, and nothing else.
+        //
+        // Everything that used to be layered on top of it was in its way. An
+        // accent wash under the glass is a container, and a container is the
+        // one thing glass cannot be seen through. The specular sweep — a
+        // vertical gradient fading to transparent partway down — drew a visible
+        // seam straight across the pill where it ran out, which is the line
+        // that appeared to go through the button. And the hand-rolled rim was a
+        // second edge stacked on the one the shared material already draws.
+        //
+        // What is left is the same material every other pane in the app is
+        // built from, in a pill. No haze state: Home has no backdrop layer to
+        // blur, and the translucent path needs none.
+        Modifier.liquidGlass(shape = MonoDimens.shapePill)
     } else {
         // Flat: one opaque accent fill, no shadow, no gradients, no rim.
         Modifier
@@ -133,15 +86,14 @@ fun PlayRadioButton(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // On the flat branch the pill is an opaque accent, so the label is the
-        // accent's own "on" colour. On glass it is not: the fill is a wash and
-        // most of what is behind the text is the page. onPrimary is chosen to
-        // contrast with a solid primary and frequently inverts against the
-        // page — black text on a dark theme — so the glass branch takes the
-        // surface's contrast colour instead, which is right whatever shows
-        // through.
+        // With no fill behind it, the label is what carries the accent — and it
+        // is sitting on the page, so it needs a colour picked to be read there.
+        // That is `primary`, which the light schemes hold to 4.5:1 on the
+        // surface for exactly this kind of use. onPrimary would be wrong twice
+        // over: it is chosen to contrast with a *solid* primary, and against
+        // the page it inverts — black text on a dark theme.
         val contentColor = when {
-            glass -> MaterialTheme.colorScheme.onSurface
+            glass -> MaterialTheme.colorScheme.primary
             isActive -> MaterialTheme.colorScheme.onPrimaryContainer
             else -> MaterialTheme.colorScheme.onPrimary
         }
