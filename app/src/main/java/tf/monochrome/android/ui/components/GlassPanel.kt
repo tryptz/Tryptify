@@ -59,8 +59,11 @@ import tf.monochrome.android.ui.theme.MonoDimens
  * * **Nothing gets through.** The canvas underneath is one big tap target that
  *   selects whatever is nearest, so without swallowing what the panel's own
  *   children didn't want, a tap on the panel's background reaches down and
- *   selects something else, throwing away the panel you were reading. Consumed
- *   in the main pass, *after* the buttons and any scroll have had the event.
+ *   selects something else, throwing away the panel you were reading. The
+ *   backstop is the panel's *bottom sibling*, not a modifier on the panel
+ *   itself: as an ancestor it swallowed drags before the content's scroll could
+ *   claim them, and gestures that take several events to declare themselves —
+ *   which is every scroll — were lost two times in three.
  *
  * Callers must provide [LocalPlayerGlass] around this — detail routes sit
  * outside the nav host's own provider, and the shader modifier reads its
@@ -86,13 +89,6 @@ fun GlassPanel(
             .fillMaxWidth()
             .padding(12.dp)
             .navigationBarsPadding()
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent().changes.forEach { it.consume() }
-                    }
-                }
-            }
             .clip(MonoDimens.shapeLg)
             .then(
                 when {
@@ -103,6 +99,33 @@ fun GlassPanel(
                 },
             ),
     ) {
+        // The backstop for taps the panel's own children didn't want, and the
+        // lowest layer on purpose.
+        //
+        // It used to live on the Box above, as an ancestor of everything. An
+        // ancestor cannot swallow "what the children didn't want", because it
+        // only learns what they wanted one event at a time: a tap resolves
+        // within a single event and survived, but a *drag* has to cross touch
+        // slop over several, and the ancestor consumed each one before the
+        // scroll had accumulated enough of them to claim the gesture. The
+        // station list needed two or three attempts before one got through.
+        //
+        // As the bottom sibling it is only reached where nothing above it
+        // handles the touch, which is exactly the case it was written for — and
+        // being a hit at all is what keeps the event inside this panel, so the
+        // full-bleed map underneath never sees it.
+        Box(
+            Modifier
+                .matchParentSize()
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent().changes.forEach { it.consume() }
+                        }
+                    }
+                },
+        )
+
         if (shaderGlass) {
             if (allowHaze && glass.hazeBlurDp > 0f) {
                 val frostTint = (
