@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.GlassSearchBar
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.RectangleShape
+import tf.monochrome.android.performance.LocalPerformanceProfile
 
 /**
  * Search box and sort control for a list of tracks.
@@ -61,13 +63,32 @@ fun TrackListToolbar(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
-    // Opaque, because this is used as a sticky header: it stops at the top of
-    // the list and the songs keep going underneath it. Transparent, the rows
-    // would slide through the icons.
+    // This is a sticky header: it stops at the top of the list and the songs
+    // keep going underneath it, so it needs a material of its own or the rows
+    // slide straight through the icons. Glass rather than a flat fill, because
+    // a flat one draws a hard band across whatever it pins over — album art on
+    // the detail screens — and because the rest of the app's floating chrome is
+    // glass and this is the last piece that was not.
+    //
+    // Deliberately the no-haze path. This sits *inside* the layer the app marks
+    // as its haze source, so a blur here would be sampling a picture it is
+    // itself part of; the translucent tint and rim are a supported mode of the
+    // same material and cost nothing to composite.
+    //
+    // The explicit fallback is not optional: liquidGlass returns the modifier
+    // untouched on low tiers, which would leave a sticky header with no
+    // background at all.
+    val glassy = LocalPerformanceProfile.current.allowHazeBlur
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background),
+            .then(
+                if (glassy) {
+                    Modifier.liquidGlass(shape = RectangleShape)
+                } else {
+                    Modifier.background(MaterialTheme.colorScheme.background)
+                },
+            ),
     ) {
         Row(
             modifier = Modifier
