@@ -4,8 +4,13 @@ Guidance for anyone (human or agent) changing this codebase's interface. None of
 this is style preference: every rule is a bug that was found the hard way,
 usually from a screenshot, and reverting one brings the bug back.
 
-The build these describe is tagged `ui-baseline-2026-08-13`, so the accepted
-state can be diffed against rather than argued about.
+The build these describe is commit `5ec5b072` ("Match the search bars to the mini
+player, and undo the player haze"), so the accepted state can be diffed against
+rather than argued about:
+
+```
+git diff 5ec5b072 -- app/src/main/java/tf/monochrome/android/ui
+```
 
 These describe the current, accepted look. If a change makes one of them false,
 the change is wrong even if it compiles and the tests pass.

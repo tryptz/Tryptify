@@ -15,8 +15,12 @@ why they kept getting undone. A slab drawn at a tenth opacity looks like a
 deliberate choice. A haze pane under a button looks like an improvement. A search
 bar laid out inline looks perfectly ordinary.
 
-The build those rules describe is tagged `ui-baseline-2026-08-13`. If something
-looks wrong and you are not sure whether it changed, diff against that tag.
+The build those rules describe is commit `5ec5b072`. If something looks wrong and
+you are not sure whether it changed, diff against it:
+
+```
+git diff 5ec5b072 -- app/src/main/java/tf/monochrome/android/ui
+```
 
 ## Build and test
 
