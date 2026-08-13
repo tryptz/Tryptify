@@ -55,6 +55,8 @@ import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.components.SearchOverlay
+import tf.monochrome.android.ui.components.SearchAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +83,7 @@ fun AlbumDetailScreen(
     // How this album is being looked at right now — not anything about the
     // album, so it lives here rather than in the ViewModel.
     var listQuery by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var searchOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
         androidx.compose.runtime.mutableStateOf(TrackSort())
     }
@@ -150,6 +153,14 @@ fun AlbumDetailScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
+            actions = {
+                SearchAction(open = searchOpen, onToggle = {
+                    searchOpen = !searchOpen
+                    // Closing clears the filter. A hidden query in place is how
+                    // a list ends up looking like it has lost rows.
+                    if (!searchOpen) listQuery = ""
+                })
+            },
             title = {},
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
@@ -186,6 +197,13 @@ fun AlbumDetailScreen(
                         onAddToPlaylist = { showAddToPlaylistForSelection = true }
                     )
                 }
+                SearchOverlay(
+                    open = searchOpen,
+                    query = listQuery,
+                    onQueryChange = { listQuery = it },
+                    placeholder = "Search this album",
+                    onClose = { searchOpen = false; listQuery = "" },
+                ) { searchTopInset ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current)
@@ -316,6 +334,7 @@ fun AlbumDetailScreen(
                             selected = track.id in selection.selectedIds
                         )
                     }
+                }
                 }
             }
         }

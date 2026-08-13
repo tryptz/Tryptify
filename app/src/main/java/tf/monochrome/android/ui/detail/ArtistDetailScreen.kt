@@ -65,6 +65,8 @@ import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.components.SearchOverlay
+import tf.monochrome.android.ui.components.SearchAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,6 +97,7 @@ fun ArtistDetailScreen(
     // Applies to the Top Tracks list. Top Tracks arrives in a popularity order
     // someone else decided, so ORIGINAL stays the default.
     var listQuery by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var searchOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
         androidx.compose.runtime.mutableStateOf(TrackSort())
     }
@@ -206,6 +209,13 @@ fun ArtistDetailScreen(
                 }
             },
             actions = {
+                SearchAction(open = searchOpen, onToggle = {
+                    searchOpen = !searchOpen
+                    // Closing clears the filter. A hidden query in place is how
+                    // a list ends up looking like it has lost rows.
+                    if (!searchOpen) listQuery = ""
+                })
+
                 if (artistDetail != null) {
                     IconButton(
                         onClick = { showDownloadConfirm = true },
@@ -246,6 +256,13 @@ fun ArtistDetailScreen(
                         onAddToPlaylist = { showAddToPlaylistForSelection = true }
                     )
                 }
+                SearchOverlay(
+                    open = searchOpen,
+                    query = listQuery,
+                    onQueryChange = { listQuery = it },
+                    placeholder = "Search this artist",
+                    onClose = { searchOpen = false; listQuery = "" },
+                ) { searchTopInset ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current)
@@ -414,6 +431,7 @@ fun ArtistDetailScreen(
                             }
                         }
                     }
+                }
                 }
             }
         }

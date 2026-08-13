@@ -58,12 +58,9 @@ fun TrackListToolbar(
     onSortChange: (TrackSort) -> Unit,
     modifier: Modifier = Modifier,
     orders: List<TrackOrder> = DEFAULT_TRACK_ORDERS,
-    /** Rendered between the search icon and the sort button — bulk actions, counts. */
+    /** Rendered before the sort button — bulk actions, counts. */
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    // Opens itself when there is already a query, so a search that survives a
-    // rotation or a back-and-forth doesn't hide the text that's filtering the list.
-    var searchOpen by remember { mutableStateOf(query.isNotEmpty()) }
     var menuOpen by remember { mutableStateOf(false) }
 
     // Opaque, because this is used as a sticky header: it stops at the top of
@@ -82,19 +79,6 @@ fun TrackListToolbar(
             horizontalArrangement = Arrangement.End,
         ) {
             trailing?.invoke()
-            IconButton(onClick = {
-                searchOpen = !searchOpen
-                // Closing the box clears the filter. Leaving a hidden query in
-                // place is how a list ends up looking like it has lost rows.
-                if (!searchOpen) onQueryChange("")
-            }) {
-                Icon(
-                    imageVector = if (searchOpen) Icons.Default.Close else Icons.Default.Search,
-                    contentDescription = if (searchOpen) "Close search" else "Search this list",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
@@ -151,17 +135,5 @@ fun TrackListToolbar(
             }
         }
 
-        AnimatedVisibility(visible = searchOpen) {
-            GlassSearchBar(
-                query = query,
-                onQueryChange = onQueryChange,
-                placeholder = "Search this list",
-                autoFocus = true,
-                modifier = Modifier.padding(
-                    horizontal = MonoDimens.listItemPaddingH,
-                    vertical = 4.dp,
-                ),
-            )
-        }
     }
 }

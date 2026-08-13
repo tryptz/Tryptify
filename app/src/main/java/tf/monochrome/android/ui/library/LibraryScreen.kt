@@ -71,6 +71,8 @@ import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
+import tf.monochrome.android.ui.components.SearchOverlay
+import tf.monochrome.android.ui.components.SearchAction
 
 /**
  * The section Library lands on — page 0, and deliberately absent from the
@@ -166,6 +168,7 @@ fun LibraryScreen(
     // How the Liked Songs list is being looked at right now. Screen-local
     // rather than ViewModel state: it describes the view, not the library.
     var likedQuery by rememberSaveable { mutableStateOf("") }
+    var likedSearchOpen by rememberSaveable { mutableStateOf(false) }
     var likedSort by rememberSaveable(stateSaver = TrackSortSaver) { mutableStateOf(TrackSort()) }
     val visibleFavorites = remember(favoriteTracks, likedQuery, likedSort) {
         favoriteTracks.applySearchAndSort(likedQuery, likedSort)
@@ -339,6 +342,15 @@ fun LibraryScreen(
                                 )
                             }
                         }
+                    }
+                    // Only where there is a list to search. The other sections
+                    // are grids of albums and artists with no filter behind
+                    // them, and an icon that does nothing is worse than none.
+                    if (currentSectionId == "favorites") {
+                        SearchAction(open = likedSearchOpen, onToggle = {
+                            likedSearchOpen = !likedSearchOpen
+                            if (!likedSearchOpen) likedQuery = ""
+                        })
                     }
                     IconButton(onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) }) {
                         Icon(
@@ -577,9 +589,16 @@ fun LibraryScreen(
                             },
                         )
                     }
+                SearchOverlay(
+                    open = likedSearchOpen,
+                    query = likedQuery,
+                    onQueryChange = { likedQuery = it },
+                    placeholder = "Search liked songs",
+                    onClose = { likedSearchOpen = false; likedQuery = "" },
+                ) { searchTopInset ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(top = searchTopInset, bottom = 80.dp)
                 ) {
                     if (favoriteTracks.isNotEmpty()) {
                         items(visibleFavorites, key = { LibraryKeys.track(it.id) }) { track ->
@@ -638,6 +657,7 @@ fun LibraryScreen(
                     if (favoriteTracks.isEmpty() && favoriteAlbums.isEmpty() && favoriteArtists.isEmpty()) {
                         item { EmptyState("Like tracks, albums, and artists to see them here.") }
                     }
+                }
                 }
                 }
 
