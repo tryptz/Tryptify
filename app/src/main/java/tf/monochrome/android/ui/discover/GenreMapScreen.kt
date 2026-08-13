@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.discover
 
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -16,6 +17,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -33,9 +35,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -90,8 +94,10 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -118,6 +124,8 @@ import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
+import coil3.compose.AsyncImage
+import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
@@ -191,6 +199,20 @@ fun GenreMapScreen(
     val selected by viewModel.mapSelection.collectAsStateWithLifecycle()
     val expanded by viewModel.mapExpanded.collectAsStateWithLifecycle()
     val history by viewModel.mapHistory.collectAsStateWithLifecycle()
+    val chartOpen by viewModel.mapChartOpen.collectAsStateWithLifecycle()
+    val chart by viewModel.mapChart.collectAsStateWithLifecycle()
+    val chartMessage by viewModel.mapChartMessage.collectAsStateWithLifecycle()
+
+    // A tapped chart row that no catalogue can match says so. The row stays in
+    // the list either way — the chart is a record of what was listened to, and
+    // dropping the rows this app happens not to stock would quietly rewrite it.
+    val chartToastContext = LocalContext.current
+    LaunchedEffect(chartMessage) {
+        chartMessage?.let {
+            Toast.makeText(chartToastContext, it, Toast.LENGTH_SHORT).show()
+            viewModel.consumeMapChartMessage()
+        }
+    }
 
     // Collapsed branches, by node id. Starts empty: the first thing you should
     // see is the whole thing, and folding is the exception.
@@ -588,6 +610,8 @@ fun GenreMapScreen(
                     hearted = node.id in hearted,
                     expanded = expanded,
                     history = history,
+                    chartOpen = chartOpen,
+                    chart = chart,
                     // The history is as tall as the map lets it be and then
                     // scrolls, so the panel can never grow to cover the genre
                     // it is describing however long the article runs.
@@ -608,11 +632,8 @@ fun GenreMapScreen(
                     onHeart = { viewModel.toggleHeartGenre(node.id) },
                     onPlay = { viewModel.playGenre(node.id, playerViewModel) },
                     onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
-                    onCharts = {
-                        navController.navigateSafe(
-                            Screen.GenreChart.createRoute(node.id, node.name)
-                        )
-                    },
+                    onToggleChart = { viewModel.toggleMapChart() },
+                    onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
                     onExplore = {
                         viewModel.selectGenre(node.id)
                         navController.popBackStack()
@@ -680,11 +701,14 @@ private fun GenreCard(
     expanded: Boolean,
     history: GenreHistoryState,
     historyMaxHeight: Dp,
+    chartOpen: Boolean,
+    chart: GenreChartState,
     onToggleExpand: () -> Unit,
     onHeart: () -> Unit,
     onPlay: () -> Unit,
     onRadio: () -> Unit,
-    onCharts: () -> Unit,
+    onToggleChart: () -> Unit,
+    onPlayChartEntry: (ChartEntry) -> Unit,
     onExplore: () -> Unit,
     onRelated: (GenreNode) -> Unit,
     onDismiss: () -> Unit,
@@ -712,20 +736,6 @@ private fun GenreCard(
             .fillMaxWidth()
             .padding(12.dp)
             .navigationBarsPadding()
-            // Nothing gets through the panel to the map. The canvas underneath
-            // is one big tap target that selects whatever genre is nearest, so
-            // without this a tap on the panel's own background — or a flick
-            // that starts on its text — reaches down and selects some other
-            // genre, throwing away the panel you were reading. Consumed in the
-            // main pass, after the buttons and the scroll have had the event,
-            // so it swallows only what the panel itself didn't want.
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent().changes.forEach { it.consume() }
-                    }
-                }
-            }
             .clip(MonoDimens.shapeLg)
             .then(
                 when {
@@ -736,6 +746,29 @@ private fun GenreCard(
                 },
             ),
     ) {
+        // Nothing gets through the panel to the map. The canvas underneath is
+        // one big tap target that selects whatever genre is nearest, so without
+        // this a tap on the panel's own background — or a flick that starts on
+        // its text — reaches down and selects some other genre, throwing away
+        // the panel you were reading.
+        //
+        // The bottom sibling, not a modifier on the panel itself. As an ancestor
+        // it consumed every event on its way past, and a gesture that takes
+        // several of them to declare itself — which is every scroll — was
+        // swallowed before the content could claim it. The history section could
+        // be flicked; the chart list below could not.
+        Box(
+            Modifier
+                .matchParentSize()
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent().changes.forEach { it.consume() }
+                        }
+                    }
+                },
+        )
+
         if (shaderGlass) {
             // Frost first. The slab body goes down to 0.2 opacity, and without
             // this the map's edges and labels read straight through it and
@@ -919,15 +952,34 @@ private fun GenreCard(
                     modifier = Modifier.weight(1f),
                 )
             }
+            // Top 100 opens in place rather than leaving for a screen of its
+            // own. The chart is the same kind of thing as the subgenre chips
+            // above it — something to look at while deciding — and pushing a
+            // route to show it meant losing the map's camera, the panel, and
+            // your place in the family you were reading down.
             Spacer(Modifier.height(8.dp))
             Row {
                 ActionPill(
                     icon = Icons.Default.BarChart,
                     label = "Top 100",
-                    container = MaterialTheme.colorScheme.secondaryContainer,
-                    content = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = onCharts,
+                    container = if (chartOpen) familyColor.copy(alpha = 0.22f)
+                    else MaterialTheme.colorScheme.secondaryContainer,
+                    content = if (chartOpen) familyColor
+                    else MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = onToggleChart,
                     modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            AnimatedVisibility(
+                visible = chartOpen,
+                enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+                exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+            ) {
+                GenreChartBody(
+                    state = chart,
+                    accent = familyColor,
+                    maxHeight = historyMaxHeight,
+                    onPlay = onPlayChartEntry,
                 )
             }
             Spacer(Modifier.height(8.dp))
@@ -959,6 +1011,124 @@ private fun GenreCard(
  * article, or there is nothing and it says so. The dataset carries no
  * paragraphs that were written to fill the gap.
  */
+/**
+ * The genre's chart, inside the panel.
+ *
+ * A LazyColumn in a bounded height, the same shape the world globe's station
+ * list settled on and for the same two reasons: a hundred rows composed eagerly
+ * to show six is work nobody asked for, and the panel must never grow tall
+ * enough to cover the genre dot it is describing.
+ *
+ * Artwork comes with the chart row itself, so the list draws in full without
+ * resolving anything. Tapping is what costs a catalogue search, and only for
+ * the row tapped.
+ */
+@Composable
+private fun GenreChartBody(
+    state: GenreChartState,
+    accent: Color,
+    maxHeight: Dp,
+    onPlay: (ChartEntry) -> Unit,
+) {
+    Column(modifier = Modifier.padding(top = 12.dp)) {
+        when (state) {
+            // Idle is the frame between the tap and the flow noticing. Drawn as
+            // the loading line rather than as nothing, so the section does not
+            // flicker empty on its way open.
+            GenreChartState.Idle, GenreChartState.Loading -> Text(
+                text = "Counting them up…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            GenreChartState.Unreachable -> Text(
+                text = "Couldn't reach the chart sources. It's the listing that's " +
+                    "missing, not the music — try again in a moment.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            is GenreChartState.Ready -> {
+                val entries = state.chart.entries
+                if (entries.isEmpty()) {
+                    Text(
+                        text = "No chart is published for this genre.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = maxHeight)) {
+                        // Unkeyed: the rank would be the obvious key, and two
+                        // sources joined into one chart can tie. A duplicated
+                        // row beats a crash.
+                        items(entries) { entry ->
+                            PanelChartRow(
+                                entry = entry,
+                                accent = accent,
+                                onPlay = { onPlay(entry) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One chart row, sized for the panel rather than for a full screen. */
+@Composable
+private fun PanelChartRow(entry: ChartEntry, accent: Color, onPlay: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPlay)
+            .padding(vertical = 6.dp),
+    ) {
+        Text(
+            text = entry.rank.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            // Monospace so a 1 beside an 8 doesn't make the column wander,
+            // which is very visible down a hundred rows.
+            fontFamily = FontFamily.Monospace,
+            color = accent,
+            modifier = Modifier.width(26.dp),
+        )
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(MonoDimens.spacingXs))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            if (entry.artworkUrl != null) {
+                AsyncImage(
+                    model = entry.artworkUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = entry.artistName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
 @Composable
 private fun GenreHistoryBody(
     node: GenreNode,

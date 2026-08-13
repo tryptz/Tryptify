@@ -76,6 +76,20 @@ data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
  * documented nowhere that could be verified, and the panel says so rather than
  * spinning forever or inventing a paragraph.
  */
+/** What the map's panel knows about the selected genre's chart right now. */
+sealed interface GenreChartState {
+    data object Idle : GenreChartState
+    data object Loading : GenreChartState
+    data class Ready(val chart: tf.monochrome.android.data.charts.GenreChart) : GenreChartState
+
+    /**
+     * The chart sources couldn't be reached. Distinct from a [Ready] with no
+     * entries for the same reason the world globe's panel distinguishes them:
+     * "we couldn't ask" and "nobody charts this genre" are different claims.
+     */
+    data object Unreachable : GenreChartState
+}
+
 sealed interface GenreHistoryState {
     /** The panel isn't expanded, so nothing has been asked for. */
     data object Idle : GenreHistoryState
@@ -711,7 +725,10 @@ class DiscoverViewModel @Inject constructor(
         // genre deliberately does not: reading down a family is the case this
         // is for, and having to re-open the history at every step would make
         // that the one thing the panel is worst at.
-        if (genreId == null) _mapExpanded.value = false
+        if (genreId == null) {
+            _mapExpanded.value = false
+            _mapChartOpen.value = false
+        }
     }
 
     private val _mapExpanded = MutableStateFlow(false)
@@ -744,6 +761,80 @@ class DiscoverViewModel @Inject constructor(
                 emit(history?.let(GenreHistoryState::Ready) ?: GenreHistoryState.Missing)
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GenreHistoryState.Idle)
+
+    private val _mapChartOpen = MutableStateFlow(false)
+
+    /** Whether the map's panel is showing the genre's chart. */
+    val mapChartOpen: StateFlow<Boolean> = _mapChartOpen.asStateFlow()
+
+    fun toggleMapChart() {
+        _mapChartOpen.value = !_mapChartOpen.value
+    }
+
+    /**
+     * The selected genre's chart, for the panel's own Top 100.
+     *
+     * Fetched only while the section is open, on the same terms as the history
+     * above: tapping around the map must not cost a chart request per genre.
+     * Closing and re-opening is cheap — the repository caches — but a *different*
+     * genre refetches, which is the point.
+     *
+     * Rows are not resolved here. A chart row is an artist and a title, not a
+     * playable object, and turning all hundred into one would be a hundred
+     * catalogue searches to draw a list nobody has touched. The artwork comes
+     * with the chart itself, so the list can be drawn in full without any of
+     * that; resolution happens on tap, in [playChartEntry].
+     */
+    val mapChart: StateFlow<GenreChartState> =
+        combine(_mapSelection, _mapChartOpen) { node, open -> node?.id?.takeIf { open } }
+            .distinctUntilChanged()
+            .transformLatest { genreId ->
+                if (genreId == null) {
+                    emit(GenreChartState.Idle)
+                    return@transformLatest
+                }
+                emit(GenreChartState.Loading)
+                val chart = runCatching {
+                    genreCharts.chart(genreId, tf.monochrome.android.data.charts.ChartWindow.DEFAULT)
+                }.getOrNull()
+                emit(
+                    when {
+                        chart == null -> GenreChartState.Unreachable
+                        else -> GenreChartState.Ready(chart)
+                    },
+                )
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GenreChartState.Idle)
+
+    /**
+     * Play one chart row.
+     *
+     * Resolves through the use case's verifying resolver rather than taking the
+     * search backend's first hit — a chart row names a specific record, and a
+     * result agreeing on neither artist nor title is not that record.
+     */
+    fun playChartEntry(
+        entry: tf.monochrome.android.data.charts.ChartEntry,
+        player: tf.monochrome.android.ui.player.PlayerViewModel,
+    ) {
+        viewModelScope.launch {
+            val track = runCatching { genreCharts.resolve(entry) }.getOrNull()
+            if (track == null) {
+                _mapChartMessage.value = "\"${entry.title}\" isn't in the catalogue"
+                return@launch
+            }
+            player.playUnifiedTrack(track, listOf(track))
+        }
+    }
+
+    private val _mapChartMessage = MutableStateFlow<String?>(null)
+
+    /** One-shot text for the panel; cleared once shown. */
+    val mapChartMessage: StateFlow<String?> = _mapChartMessage.asStateFlow()
+
+    fun consumeMapChartMessage() {
+        _mapChartMessage.value = null
+    }
 
     /**
      * How many times a genre has been played from the map this session.
