@@ -3,6 +3,7 @@ package tf.monochrome.android.ui.discover
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -11,6 +12,7 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -310,7 +312,20 @@ private fun WorldRadioContent(
         Box(modifier = Modifier.fillMaxSize()) {
             val ocean = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
             val land = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-            val dot = MaterialTheme.colorScheme.primary
+            // Eased rather than read straight off the scheme. Inside
+            // DynamicColorScope this is the current track's album colour, and
+            // the radio changing stations means it can swap several times a
+            // minute — a hard cut here was the coastline, the land fill and
+            // the halo all flashing to a new colour in the same frame, on a
+            // full-bleed surface, every time a track turned over. Land and
+            // water blend toward it (litLand's illumination lerp) rather than
+            // holding a colour of their own, so the fade has to happen here,
+            // upstream of every place that reads it.
+            val dot by animateColorAsState(
+                targetValue = MaterialTheme.colorScheme.primary,
+                animationSpec = if (instant) snap() else tween(900),
+                label = "globe_accent",
+            )
             val onSurface = MaterialTheme.colorScheme.onSurface
             // Native-canvas text is sized in pixels, so the density conversion
             // happens here rather than in the draw pass. Matches the genre map.
