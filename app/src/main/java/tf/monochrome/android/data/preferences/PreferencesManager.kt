@@ -81,6 +81,10 @@ class PreferencesManager @Inject constructor(
     companion object {
         private const val MAX_SEARCH_HISTORY_SIZE = 10
 
+        /** The app's indigo, and a near-black ground: a sane dark default pair. */
+        private const val DEFAULT_CUSTOM_ACCENT = 0xFF5865F2.toInt()
+        private const val DEFAULT_CUSTOM_BACKGROUND = 0xFF101014.toInt()
+
         // Fewer than the catalogue's, because these are pills in a row rather
         // than a list: past half a dozen they are off the end of the screen and
         // the oldest are being kept for nobody.
@@ -104,6 +108,11 @@ class PreferencesManager @Inject constructor(
         private val THEME = stringPreferencesKey("theme")
         private val THEME_PAPER = stringPreferencesKey("theme_paper")
         private val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
+        // Custom colours: when on, an accent and a ground the listener picked
+        // replace whichever preset is selected. Stored as ARGB ints.
+        private val CUSTOM_THEME_ENABLED = booleanPreferencesKey("custom_theme_enabled")
+        private val CUSTOM_ACCENT = intPreferencesKey("custom_accent_color")
+        private val CUSTOM_BACKGROUND = intPreferencesKey("custom_background_color")
 
         // Scrobbling
         private val LASTFM_SESSION_KEY = stringPreferencesKey("lastfm_session_key")
@@ -382,7 +391,9 @@ class PreferencesManager @Inject constructor(
         // deliberately added here.
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY,
-            THEME, THEME_PAPER, DYNAMIC_COLORS, FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
+            THEME, THEME_PAPER, DYNAMIC_COLORS,
+            CUSTOM_THEME_ENABLED, CUSTOM_ACCENT, CUSTOM_BACKGROUND,
+            FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
@@ -512,6 +523,39 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDynamicColors(enabled: Boolean) {
         dataStore.edit { it[DYNAMIC_COLORS] = enabled }
+    }
+
+    /**
+     * Whether the listener's own two colours override the selected preset.
+     *
+     * Off by default: the presets are the designed path, and a custom scheme is
+     * only as good as the pair someone picks. When it is on, [customAccentColor]
+     * and [customBackgroundColor] are what the theme is built from.
+     */
+    val customThemeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[CUSTOM_THEME_ENABLED] ?: false
+    }
+
+    suspend fun setCustomThemeEnabled(enabled: Boolean) {
+        dataStore.edit { it[CUSTOM_THEME_ENABLED] = enabled }
+    }
+
+    /** The accent for the custom scheme. Defaults to the app's own indigo. */
+    val customAccentColor: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[CUSTOM_ACCENT] ?: DEFAULT_CUSTOM_ACCENT
+    }
+
+    suspend fun setCustomAccentColor(argb: Int) {
+        dataStore.edit { it[CUSTOM_ACCENT] = argb }
+    }
+
+    /** The ground for the custom scheme; its luminance decides dark vs light. */
+    val customBackgroundColor: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[CUSTOM_BACKGROUND] ?: DEFAULT_CUSTOM_BACKGROUND
+    }
+
+    suspend fun setCustomBackgroundColor(argb: Int) {
+        dataStore.edit { it[CUSTOM_BACKGROUND] = argb }
     }
 
     // Scrobbling - Last.fm

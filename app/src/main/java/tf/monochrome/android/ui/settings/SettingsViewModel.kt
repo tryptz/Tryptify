@@ -403,6 +403,25 @@ class SettingsViewModel @Inject constructor(
     fun setThemePaper(paper: String) {
         viewModelScope.launch { preferences.setThemePaper(paper) }
     }
+
+    /** Custom colours — the listener's own accent and ground, overriding the preset. */
+    val customThemeEnabled: StateFlow<Boolean> = preferences.customThemeEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val customAccentColor: StateFlow<Int> = preferences.customAccentColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0xFF5865F2.toInt())
+    val customBackgroundColor: StateFlow<Int> = preferences.customBackgroundColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0xFF101014.toInt())
+
+    fun setCustomThemeEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setCustomThemeEnabled(enabled) }
+    }
+    fun setCustomAccentColor(argb: Int) {
+        viewModelScope.launch { preferences.setCustomAccentColor(argb) }
+    }
+    fun setCustomBackgroundColor(argb: Int) {
+        viewModelScope.launch { preferences.setCustomBackgroundColor(argb) }
+    }
+
     fun setDynamicColors(enabled: Boolean) { viewModelScope.launch { preferences.setDynamicColors(enabled) } }
     fun setFontScale(scale: Float) { viewModelScope.launch { preferences.setFontScale(scale) } }
     fun setFontScaleFollowSystem(enabled: Boolean) {

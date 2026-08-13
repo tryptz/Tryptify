@@ -14,7 +14,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import tf.monochrome.android.R
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import tf.monochrome.android.ui.components.ColorPickerDialog
+import tf.monochrome.android.ui.components.ColorSwatchRow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -549,6 +553,9 @@ private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavContro
     }
 }
 
+/** Which of the two custom colours a picker is open for. */
+private enum class CustomColorTarget { Accent, Background }
+
 @Composable
 private fun AppearanceControls(viewModel: SettingsViewModel) {
     val themeName by viewModel.theme.collectAsStateWithLifecycle()
@@ -559,7 +566,12 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     val availableFonts by viewModel.availableFonts.collectAsStateWithLifecycle()
     val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsStateWithLifecycle()
     val glowBehindArt by viewModel.glowBehindArt.collectAsStateWithLifecycle()
+    val customThemeEnabled by viewModel.customThemeEnabled.collectAsStateWithLifecycle()
+    val customAccent by viewModel.customAccentColor.collectAsStateWithLifecycle()
+    val customBackground by viewModel.customBackgroundColor.collectAsStateWithLifecycle()
     var showThemeDropdown by remember { mutableStateOf(false) }
+    // Which picker is open, if any — accent or ground.
+    var editingColor by remember { mutableStateOf<CustomColorTarget?>(null) }
 
     // File picker for .ttf font import
     val context = LocalContext.current
@@ -583,6 +595,52 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             paper = themePaper,
             onPaperChange = { viewModel.setThemePaper(it) },
         )
+
+        // Custom colours. When on, the two swatches below build the whole app's
+        // scheme and the preset above is ignored — light or dark is decided by
+        // the ground's own brightness, and every foreground is floored for
+        // contrast against it, so even a poorly chosen pair stays legible.
+        SettingSwitchItem(
+            title = "Custom colors",
+            subtitle = "Pick your own accent and background — overrides the theme above",
+            checked = customThemeEnabled,
+            onCheckedChange = { viewModel.setCustomThemeEnabled(it) },
+        )
+        AnimatedVisibility(visible = customThemeEnabled) {
+            Column {
+                ColorSwatchRow(
+                    label = "Accent",
+                    color = Color(customAccent),
+                    onClick = { editingColor = CustomColorTarget.Accent },
+                )
+                ColorSwatchRow(
+                    label = "Background",
+                    color = Color(customBackground),
+                    onClick = { editingColor = CustomColorTarget.Background },
+                )
+            }
+        }
+        when (editingColor) {
+            CustomColorTarget.Accent -> ColorPickerDialog(
+                initial = Color(customAccent),
+                title = "Accent color",
+                onDismiss = { editingColor = null },
+                onConfirm = {
+                    viewModel.setCustomAccentColor(it.toArgb())
+                    editingColor = null
+                },
+            )
+            CustomColorTarget.Background -> ColorPickerDialog(
+                initial = Color(customBackground),
+                title = "Background color",
+                onDismiss = { editingColor = null },
+                onConfirm = {
+                    viewModel.setCustomBackgroundColor(it.toArgb())
+                    editingColor = null
+                },
+            )
+            null -> Unit
+        }
         SettingSwitchItem(
             title = "Dynamic Colors",
             subtitle = "Tint the player, mini player and lyrics from album art — the menus keep the theme color. Off = everything uses the theme color",

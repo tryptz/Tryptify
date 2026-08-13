@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.theme
 
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import kotlin.math.max
@@ -283,6 +284,164 @@ val ThemeAccents: Map<String, Color> = mapOf(
     "rosewater" to RosewaterPrimary,
     "mint" to MintPrimary,
 )
+
+// ── Custom scheme ────────────────────────────────────────────────────────────
+
+/**
+ * A whole scheme from two colours the listener picked: an accent and a ground.
+ *
+ * The override the "Custom colors" toggle turns on. Unlike the fifteen presets
+ * this is handed *arbitrary* input — someone can pick a black accent on a black
+ * ground — so it leans on the same contrast machinery the light variants do, in
+ * both directions: on a dark ground foregrounds are lifted toward white, on a
+ * light one pushed toward black, each only as far as it must go to be read.
+ *
+ * The ground decides everything else. Whether the theme is dark or light is
+ * [background]'s own luminance, not a separate switch, so the one picker can
+ * make either — and the surfaces are lifted off the ground toward the readable
+ * ink, so a card is always a step away from the page whichever way that is.
+ */
+fun customScheme(accent: Color, background: Color): ColorScheme {
+    // The readable ink for this ground, and with it the direction everything
+    // else moves. White ink means a dark theme; black ink a light one.
+    val ink = inkOn(background)
+    val dark = ink == Color.White
+
+    // Surfaces are the ground lifted toward the ink. On dark that lightens, on
+    // light it darkens — either way a card separates from the page. Leaned very
+    // slightly toward the accent as the layer climbs, the same cohesion trick
+    // the light papers use, so the furniture belongs to the accent rather than
+    // floating in neutral grey on top of a coloured screen.
+    fun layer(amount: Float, tint: Float): Color =
+        blend(blend(background, ink, amount), accent, tint)
+
+    val surface = layer(0.05f, 0.02f)
+    val surfaceVariant = layer(0.11f, 0.05f)
+    val container = layer(0.08f, 0.04f)
+    val outlineBase = layer(0.22f, 0.08f)
+
+    // Muted foreground: the ink softened back toward the ground, for secondary
+    // text. Still floored against the surface it sits on below.
+    val inkMuted = blend(ink, background, 0.32f)
+
+    val primary = readable(accent, surface)
+    val primaryContainer = blend(surface, accent, if (dark) 0.28f else 0.18f)
+    val secondary = readable(blend(accent, ink, 0.30f), surface)
+
+    // The two builders take the same names; only the base greys they fill the
+    // slots this scheme does not set differ, so which one is called still
+    // matters. Every slot below is chosen here regardless.
+    val error = if (dark) ErrorRed else LightError
+    val errorContainer = blend(surface, error, if (dark) 0.22f else 0.16f)
+    val build: (Unit) -> ColorScheme = {
+        val common = ColorSchemeSlots(
+            primary = primary,
+            onPrimary = inkOn(primary),
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = readable(ink, primaryContainer),
+            secondary = secondary,
+            onSecondary = inkOn(secondary),
+            secondaryContainer = container,
+            onSecondaryContainer = readable(ink, container),
+            tertiary = readable(inkMuted, surface),
+            onTertiary = inkOn(inkMuted),
+            tertiaryContainer = container,
+            onTertiaryContainer = readable(ink, container),
+            background = background,
+            onBackground = readable(ink, background),
+            surface = surface,
+            onSurface = readable(ink, surface),
+            surfaceVariant = surfaceVariant,
+            onSurfaceVariant = readable(inkMuted, surfaceVariant),
+            surfaceContainerHigh = container,
+            outline = readable(outlineBase, surface, OUTLINE_CONTRAST),
+            outlineVariant = readable(
+                blend(surfaceVariant, outlineBase, 0.5f), surface, HAIRLINE_CONTRAST,
+            ),
+            error = error,
+            onError = inkOn(error),
+            errorContainer = errorContainer,
+            onErrorContainer = readable(ink, errorContainer),
+        )
+        if (dark) common.toDark() else common.toLight()
+    }
+    return build(Unit)
+}
+
+/** The slots a scheme sets here, so the dark and light builders share one list. */
+private class ColorSchemeSlots(
+    val primary: Color, val onPrimary: Color,
+    val primaryContainer: Color, val onPrimaryContainer: Color,
+    val secondary: Color, val onSecondary: Color,
+    val secondaryContainer: Color, val onSecondaryContainer: Color,
+    val tertiary: Color, val onTertiary: Color,
+    val tertiaryContainer: Color, val onTertiaryContainer: Color,
+    val background: Color, val onBackground: Color,
+    val surface: Color, val onSurface: Color,
+    val surfaceVariant: Color, val onSurfaceVariant: Color,
+    val surfaceContainerHigh: Color,
+    val outline: Color, val outlineVariant: Color,
+    val error: Color, val onError: Color,
+    val errorContainer: Color, val onErrorContainer: Color,
+) {
+    fun toLight(): ColorScheme = lightColorScheme(
+        primary = primary, onPrimary = onPrimary,
+        primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
+        secondary = secondary, onSecondary = onSecondary,
+        secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
+        tertiary = tertiary, onTertiary = onTertiary,
+        tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
+        background = background, onBackground = onBackground,
+        surface = surface, onSurface = onSurface,
+        surfaceVariant = surfaceVariant, onSurfaceVariant = onSurfaceVariant,
+        surfaceContainerHigh = surfaceContainerHigh,
+        outline = outline, outlineVariant = outlineVariant,
+        error = error, onError = onError,
+        errorContainer = errorContainer, onErrorContainer = onErrorContainer,
+    )
+
+    fun toDark(): ColorScheme = darkColorScheme(
+        primary = primary, onPrimary = onPrimary,
+        primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
+        secondary = secondary, onSecondary = onSecondary,
+        secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
+        tertiary = tertiary, onTertiary = onTertiary,
+        tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
+        background = background, onBackground = onBackground,
+        surface = surface, onSurface = onSurface,
+        surfaceVariant = surfaceVariant, onSurfaceVariant = onSurfaceVariant,
+        surfaceContainerHigh = surfaceContainerHigh,
+        outline = outline, outlineVariant = outlineVariant,
+        error = error, onError = onError,
+        errorContainer = errorContainer, onErrorContainer = onErrorContainer,
+    )
+}
+
+/**
+ * [color] blended toward readable, only as far as it must be to be legible on
+ * [on].
+ *
+ * The two-directional cousin of [ensureContrast]: that one only darkens, which
+ * is all a light scheme's near-white ground ever needs, but a custom ground can
+ * be anything — a dark one needs its dim foregrounds *lifted*, and a mid-tone
+ * one needs each foreground moved toward whichever of black or white that
+ * particular surface can actually carry. So the direction is chosen per call,
+ * from the surface itself, not handed down globally: on any surface at least one
+ * of the two pure inks clears 4.5 (their crossover sits at ~4.58), so this can
+ * always reach the floor.
+ */
+private fun readable(color: Color, on: Color, minimum: Double = 4.5): Color {
+    if (contrastRatio(color, on) >= minimum) return color
+    val toward = inkOn(on)
+    var lo = 0f
+    var hi = 1f
+    repeat(20) {
+        val mid = (lo + hi) / 2f
+        if (contrastRatio(blend(color, toward, mid), on) >= minimum) hi = mid else lo = mid
+    }
+    val result = blend(color, toward, hi)
+    return if (contrastRatio(result, on) >= minimum) result else toward
+}
 
 /** `"nord_light"` → `"nord"`, or null when the name is not a light variant. */
 fun lightVariantBase(themeName: String): String? =

@@ -522,6 +522,13 @@ fun rememberMaterialYouScheme(dark: Boolean): ColorScheme? {
     return if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
 }
 
+/**
+ * A pair of ARGB colours the listener picked, for the custom-theme override.
+ * Held as ints so it is a stable, equals-comparable key — a [Color]-based one
+ * would still work, but this is what the store hands back.
+ */
+data class CustomThemeColors(val accent: Int, val background: Int)
+
 @Composable
 fun MonochromeTheme(
     themeName: String = "monochrome_dark",
@@ -529,6 +536,13 @@ fun MonochromeTheme(
     customFontFamily: FontFamily? = null,
     dynamicPalette: DynamicPalette? = null,
     paper: Paper = Paper.Crisp,
+    /**
+     * The listener's own two colours. When [customColors] is set it wins over
+     * the named theme, the paper and Material You alike — it is the deliberate
+     * override the "Custom colors" switch turns on, so nothing else gets to
+     * quietly decide the scheme out from under it.
+     */
+    customColors: CustomThemeColors? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -538,10 +552,15 @@ fun MonochromeTheme(
     val resolvedTheme = if (themeName == "system") {
         if (systemDark) "monochrome_dark" else lightVariantOf("monochrome")
     } else themeName
-    val materialYou = if (resolvedTheme == "material_you") {
+    val materialYou = if (resolvedTheme == "material_you" && customColors == null) {
         rememberMaterialYouScheme(dark = systemDark)
     } else null
-    val colorScheme = materialYou ?: getColorScheme(resolvedTheme, paper)
+    val colorScheme = when {
+        customColors != null ->
+            customScheme(Color(customColors.accent), Color(customColors.background))
+        materialYou != null -> materialYou
+        else -> getColorScheme(resolvedTheme, paper)
+    }
     val family = customFontFamily ?: InterFontFamily
     val typography = remember(fontScale, family) {
         buildTypography(family, fontScale)

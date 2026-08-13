@@ -148,6 +148,11 @@ class MainActivity : ComponentActivity() {
             val customFontPath by preferences.customFontUri.collectAsStateWithLifecycle(initialValue = null)
             val dynamicColorsEnabled by preferences.dynamicColors.collectAsStateWithLifecycle(initialValue = false)
             val themePaper by preferences.themePaper.collectAsStateWithLifecycle(initialValue = "crisp")
+            // Custom colours override the preset when the switch is on. Read here
+            // so a change repaints the whole app the same frame the store emits.
+            val customThemeEnabled by preferences.customThemeEnabled.collectAsStateWithLifecycle(initialValue = false)
+            val customAccent by preferences.customAccentColor.collectAsStateWithLifecycle(initialValue = 0xFF5865F2.toInt())
+            val customBackground by preferences.customBackgroundColor.collectAsStateWithLifecycle(initialValue = 0xFF101014.toInt())
             val currentTrack by queueManager.currentTrack.collectAsStateWithLifecycle()
             // The user's manual low-performance overrides, from Settings ›
             // System › Performance.
@@ -203,6 +208,14 @@ class MainActivity : ComponentActivity() {
                         tf.monochrome.android.ui.theme.Paper.Warm
                     } else {
                         tf.monochrome.android.ui.theme.Paper.Crisp
+                    },
+                    customColors = if (customThemeEnabled) {
+                        tf.monochrome.android.ui.theme.CustomThemeColors(
+                            accent = customAccent,
+                            background = customBackground,
+                        )
+                    } else {
+                        null
                     },
                 ) {
                     // Re-apply edge-to-edge with a SystemBarStyle tuned to
