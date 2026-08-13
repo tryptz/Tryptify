@@ -81,6 +81,11 @@ class PreferencesManager @Inject constructor(
     companion object {
         private const val MAX_SEARCH_HISTORY_SIZE = 10
 
+        // Fewer than the catalogue's, because these are pills in a row rather
+        // than a list: past half a dozen they are off the end of the screen and
+        // the oldest are being kept for nobody.
+        private const val MAX_RADIO_SEARCH_HISTORY_SIZE = 6
+
         // Audio quality
         private val WIFI_QUALITY = stringPreferencesKey("wifi_quality")
         private val CELLULAR_QUALITY = stringPreferencesKey("cellular_quality")
@@ -352,6 +357,7 @@ class PreferencesManager @Inject constructor(
 
         // Search
         private val SEARCH_HISTORY_JSON = stringPreferencesKey("search_history_json")
+        private val RADIO_SEARCH_HISTORY_JSON = stringPreferencesKey("radio_search_history_json")
 
         // Spectrum analyzer
         private val SPECTRUM_ANALYZER_ENABLED = booleanPreferencesKey("spectrum_analyzer_enabled")
@@ -978,6 +984,44 @@ class PreferencesManager @Inject constructor(
 
     suspend fun clearSearchHistory() {
         dataStore.edit { it.remove(SEARCH_HISTORY_JSON) }
+    }
+
+    /**
+     * What was last looked up on the world radio globe.
+     *
+     * Its own key rather than a share of the catalogue's history above: one is
+     * artists and albums, the other is places and station names, and offering
+     * either as a suggestion for the other is noise in both directions.
+     */
+    val radioSearchHistory: Flow<List<String>> = dataStore.data
+        .map { it[RADIO_SEARCH_HISTORY_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw?.let { s ->
+                runCatching { json.decodeFromString<List<String>>(s) }.getOrDefault(emptyList())
+            } ?: emptyList()
+        }
+
+    suspend fun addRadioSearchQuery(query: String) {
+        val normalized = query.trim()
+        if (normalized.isBlank()) return
+        dataStore.edit { prefs ->
+            val existing = prefs[RADIO_SEARCH_HISTORY_JSON]?.let { raw ->
+                runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+            }.orEmpty()
+            // Move-to-front and case-insensitive dedupe, so searching the same
+            // place twice keeps one pill rather than two that differ by a
+            // capital letter.
+            val updated = buildList {
+                add(normalized)
+                addAll(existing.filterNot { it.equals(normalized, ignoreCase = true) })
+            }.take(MAX_RADIO_SEARCH_HISTORY_SIZE)
+            prefs[RADIO_SEARCH_HISTORY_JSON] = json.encodeToString(updated)
+        }
+    }
+
+    suspend fun clearRadioSearchHistory() {
+        dataStore.edit { it.remove(RADIO_SEARCH_HISTORY_JSON) }
     }
 
     // --- Google Auth ---

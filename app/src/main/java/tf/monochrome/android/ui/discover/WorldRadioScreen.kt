@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
@@ -220,6 +221,7 @@ fun WorldRadioScreen(
     val searchOpen by viewModel.searchOpen.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val recents by viewModel.recentSearches.collectAsStateWithLifecycle()
 
     fun spinTo(city: RadioCity) {
         flight?.cancel()
@@ -293,8 +295,10 @@ fun WorldRadioScreen(
                     glass = glassSettings,
                     onQueryChange = { viewModel.setQuery(it) },
                     onPickStation = { viewModel.playSearchResult(it, playerViewModel) },
-                    onPickCity = { viewModel.select(it) },
+                    onPickCity = { viewModel.pickSearchCity(it) },
                     onOpenCountry = { viewModel.openCountry(it) },
+                    recents = recents,
+                    onClearRecents = { viewModel.clearRecentSearches() },
                     onClose = { viewModel.toggleSearch() },
                 )
             }
@@ -567,6 +571,8 @@ private fun StationSearchBar(
     onPickStation: (RadioStation) -> Unit,
     onPickCity: (RadioCity) -> Unit,
     onOpenCountry: (RadioCountry?) -> Unit,
+    recents: List<String>,
+    onClearRecents: () -> Unit,
     onClose: () -> Unit,
 ) {
     val focus = remember { FocusRequester() }
@@ -684,6 +690,33 @@ private fun StationSearchBar(
                 }
             }
 
+            // Nothing typed yet: offer what was looked up before. This is the
+            // state the bar opens in, and an empty row under an empty field is
+            // a dead end on a screen where the interesting places are hard to
+            // spell.
+            if (query.isBlank() && recents.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(recents) { past ->
+                        RecentSearchPill(text = past, onClick = { onQueryChange(past) })
+                    }
+                    item {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Transparent,
+                            modifier = Modifier.bounceClick(onClick = onClearRecents),
+                        ) {
+                            Text(
+                                text = "Clear",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
             when (state.status) {
                 SearchStatus.Idle -> Unit
                 SearchStatus.Searching ->
@@ -705,6 +738,37 @@ private fun SearchNote(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),
     )
+}
+
+/** Something looked up here before. Tapping it types it again. */
+@Composable
+private fun RecentSearchPill(text: String, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Default.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 160.dp),
+            )
+        }
+    }
 }
 
 /**

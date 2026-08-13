@@ -195,6 +195,37 @@ class WorldRadioViewModel @Inject constructor(
     /** Open a country's cities in the prediction row. */
     fun openCountry(country: RadioCountry?) {
         _openCountry.value = country
+        // Opening one is a search that went somewhere, even though it is not
+        // the last step. Closing it is not.
+        if (country != null) rememberQuery()
+    }
+
+    /** What has been looked up here before, most recent first. */
+    val recentSearches: StateFlow<List<String>> = preferences.radioSearchHistory
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun clearRecentSearches() {
+        viewModelScope.launch { preferences.clearRadioSearchHistory() }
+    }
+
+    /**
+     * Keep the current query, if it led anywhere.
+     *
+     * Recorded on the *pick* rather than on the typing. Storing what was typed
+     * would fill the row with every prefix on the way to a word — "b", "be",
+     * "ber", "berl" — and none of them are things anyone searched for. A query
+     * someone acted on is one they meant.
+     */
+    private fun rememberQuery() {
+        val typed = _query.value.trim()
+        if (typed.length < MIN_QUERY) return
+        viewModelScope.launch { preferences.addRadioSearchQuery(typed) }
+    }
+
+    /** Pick a city from the search row: remember the query, then fly to it. */
+    fun pickSearchCity(city: RadioCity) {
+        rememberQuery()
+        select(city)
     }
 
     /**
@@ -206,6 +237,7 @@ class WorldRadioViewModel @Inject constructor(
      * still plays; it just plays without the journey.
      */
     fun playSearchResult(station: RadioStation, player: PlayerViewModel) {
+        rememberQuery()
         viewModelScope.launch {
             val city = repository.locate(station)
             if (city != null) select(city)
