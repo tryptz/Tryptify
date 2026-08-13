@@ -544,6 +544,12 @@ fun MainPlayerScreen(
             StatusOverlayPanel(
                 accent = accent,
                 hazeState = hazeState,
+                // The sheet takes the same backdrop the player behind it has, so
+                // pulling it up does not swap the artwork for a black slab.
+                blurredBackground = blurredBackground,
+                coverUrl = state.track?.coverUrl,
+                albumColors = state.albumColors,
+                colorBlendMs = state.colorBlendMs,
                 outputLabel = state.outputLabel,
                 soundLabel = state.soundLabel,
                 speedLabel = state.speedLabel,
@@ -674,6 +680,10 @@ private fun SwipeUpHandle(onClick: () -> Unit) {
 private fun StatusOverlayPanel(
     accent: Color,
     hazeState: HazeState?,
+    blurredBackground: Boolean,
+    coverUrl: String?,
+    albumColors: AlbumColors,
+    colorBlendMs: Int,
     outputLabel: String,
     soundLabel: String,
     speedLabel: String,
@@ -718,10 +728,34 @@ private fun StatusOverlayPanel(
         // readability wash (the AGSL slab is nearly transparent at low
         // bodyOpacity, and the tiles sit over bright album art); the opaque
         // fill remains solely as the pre-Tiramisu / glass-off fallback.
-        color = if (useGlass) PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.45f)
-                else PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
+        //
+        // With the blurred artwork on, the wash steps back further still: the
+        // art is the background the listener asked for, and 45% black over it
+        // is most of the way to hiding it. The artwork's own scrim already
+        // carries the legibility.
+        color = when {
+            blurredBackground && useGlass -> Color.Transparent
+            useGlass -> PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.45f)
+            else -> PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f)
+        },
     ) {
         androidx.compose.foundation.layout.Box {
+        // The same blurred artwork the player behind is showing, drawn into the
+        // sheet itself rather than left to the frost.
+        //
+        // Relying on the haze alone did not work: the sheet slides up over the
+        // player, so what it blurs is whatever the backdrop happens to be at
+        // that height — and the sheet is tall enough to reach past the artwork
+        // into flat background. Drawing it here means the toggle looks the same
+        // pulled up as it does down, which is the whole request. It is clipped
+        // by the Surface's shape, so it takes the sheet's rounded top corners.
+        if (blurredBackground) {
+            PlayerBlurredArtBackground(
+                coverUrl = coverUrl,
+                albumColors = albumColors,
+                blendMillis = colorBlendMs,
+            )
+        }
         // Frosted backdrop UNDER the slab — the mini player's exact recipe.
         val profile = LocalPerformanceProfile.current
         if (useGlass && hazeState != null && profile.allowHazeBlur && g.hazeBlurDp > 0f) {

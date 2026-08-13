@@ -131,13 +131,6 @@ fun PlayerTransportControls(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                // The blurred backdrop, revealed through the punched-out glyph:
-                // the play triangle is a hole cut in the disc, and it now shows
-                // frosted album art rather than the raw picture behind the disc.
-                PlayerGlassHaze(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = CircleShape,
-                )
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()

@@ -320,6 +320,37 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
 val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings() }
 
 /**
+ * Whether [playerGlass] will actually do anything here.
+ *
+ * The modifier is a silent no-op in four cases — glass switched off, the
+ * low-performance override, below API 33, or a device whose driver will not
+ * compile the shader — and a caller cannot otherwise tell. That matters because
+ * the slab a caller draws underneath it is meant to be turned *into* glass: at
+ * full opacity it is a solid rounded rectangle until the shader bevels it, so
+ * the honest choice of fill depends on whether the shader is coming.
+ *
+ * This existed as a guess before, and the guess was to draw the slab at a tenth
+ * of its opacity so the failure mode would be a faint tint. That made every
+ * panel that *did* have the shader look nothing like the mini player, which
+ * draws its slab solid: the shader builds its bevel and rim from the alpha
+ * heightfield of what is under it, and a near-transparent fill gives it almost
+ * no heightfield to read — a soft smudge with no edge instead of a pane.
+ *
+ * The compile attempt is remembered unconditionally, before any of the state
+ * that can change, so this never alters the shape of a caller's composition.
+ */
+@Composable
+fun rememberLiquidGlassAvailable(): Boolean {
+    val compiles = remember {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() != null
+    }
+    val flat = LocalLowPerformance.current.disableLiquidGlass
+    val enabled = LocalPlayerGlass.current.enabled
+    return compiles && !flat && enabled
+}
+
+/**
  * The player background as a haze source, for the chrome that sits over it.
  *
  * Null off the player route and on devices that can't blur. When set, the
