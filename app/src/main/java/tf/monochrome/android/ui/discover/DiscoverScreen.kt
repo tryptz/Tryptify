@@ -454,18 +454,20 @@ private fun GenreSearchField(
         autoFocus = true,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
-        // A query that matches nothing and a query still being typed look
-        // identical without this.
-        if (query.isNotBlank() && resultCount == 0) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "No genre matches that",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f).padding(top = 6.dp),
-                )
-                TextButton(onClick = onOpenMap) { Text("Browse the map") }
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // A query that matches nothing and a query still being typed look
+            // identical without this.
+            Text(
+                text = if (query.isNotBlank() && resultCount == 0) "No genre matches that" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f).padding(top = 6.dp),
+            )
+            // Always offered, not only when the search failed. The field this
+            // replaced carried the map on its trailing icon whenever it was
+            // empty, so hiding it behind a failed query dropped an entry point
+            // that used to be permanent.
+            TextButton(onClick = onOpenMap) { Text("Browse the map") }
         }
     }
 }

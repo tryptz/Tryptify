@@ -376,8 +376,6 @@ fun PlaylistScreen(
             if (tracks.isNotEmpty()) {
                 stickyHeader {
                     TrackListToolbar(
-                        query = listQuery,
-                        onQueryChange = { listQuery = it },
                         sort = listSort,
                         onSortChange = { listSort = it },
                     )

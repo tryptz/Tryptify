@@ -572,8 +572,6 @@ fun LibraryScreen(
                     // unlike a single album's track list.
                     if (favoriteTracks.isNotEmpty()) {
                         TrackListToolbar(
-                            query = likedQuery,
-                            onQueryChange = { likedQuery = it },
                             sort = likedSort,
                             onSortChange = { likedSort = it },
                             trailing = {

@@ -302,8 +302,6 @@ fun ArtistDetailScreen(
                         item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = "Top Tracks") } }
                         stickyHeader {
                             TrackListToolbar(
-                                query = listQuery,
-                                onQueryChange = { listQuery = it },
                                 sort = listSort,
                                 onSortChange = { listSort = it },
                                 // No "Artist": it's this artist on every row.

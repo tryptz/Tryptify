@@ -75,14 +75,19 @@ fun GlassSearchBar(
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = remember { FocusRequester() }
 
-    if (autoFocus) {
-        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    }
+    // Both of these are called unconditionally. `remember` and `LaunchedEffect`
+    // are positional — they claim a slot by where they appear — so calling one
+    // only on some compositions changes the shape of the slot table under
+    // Compose. The elvis this used to hang the haze fallback on short-circuits,
+    // which meant `rememberHazeState()` ran only while the local was null; a
+    // screen whose backdrop arrives after first composition would have
+    // reshuffled every slot after it.
+    val fallbackHaze = rememberHazeState()
+    val haze = hazeState ?: fallbackHaze
 
-    // Outside the nav host there is no backdrop to sample. Falling back to a
-    // fresh state keeps the bar glass rather than crashing or going flat, and
-    // an unfed haze state simply blurs nothing.
-    val haze = hazeState ?: rememberHazeState()
+    LaunchedEffect(autoFocus) {
+        if (autoFocus) runCatching { focus.requestFocus() }
+    }
 
     GlassPanel(
         hazeState = haze,

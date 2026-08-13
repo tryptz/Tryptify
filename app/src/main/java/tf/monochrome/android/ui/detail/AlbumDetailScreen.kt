@@ -301,8 +301,6 @@ fun AlbumDetailScreen(
 
                     stickyHeader {
                         TrackListToolbar(
-                            query = listQuery,
-                            onQueryChange = { listQuery = it },
                             sort = listSort,
                             onSortChange = { listSort = it },
                             // No "Album": every row here is from the same one.

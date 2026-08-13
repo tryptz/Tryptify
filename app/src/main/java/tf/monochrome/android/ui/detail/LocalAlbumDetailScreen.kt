@@ -239,8 +239,6 @@ fun LocalAlbumDetailScreen(
 
                     stickyHeader {
                         TrackListToolbar(
-                            query = listQuery,
-                            onQueryChange = { listQuery = it },
                             sort = listSort,
                             onSortChange = { listSort = it },
                             // No "Album": one album, one value.

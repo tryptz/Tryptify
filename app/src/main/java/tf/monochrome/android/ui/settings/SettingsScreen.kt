@@ -144,6 +144,7 @@ import androidx.compose.foundation.border
 import tf.monochrome.android.ui.theme.lightSchemeFor
 import tf.monochrome.android.ui.theme.Paper
 import androidx.compose.foundation.layout.Box
+import kotlinx.coroutines.delay
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -2952,6 +2953,16 @@ private fun SettingsTabContent(content: @Composable () -> Unit) {
         anchors.clear()
     }
 
+    // Give up on a request nothing answers. An index title that no longer
+    // matches any row — a renamed setting — would otherwise leave the request
+    // set for the rest of the session, and the next row to compose with that
+    // title, on any tab, would be scrolled to out of nowhere.
+    LaunchedEffect(anchors?.target) {
+        if (anchors?.target == null) return@LaunchedEffect
+        delay(ANCHOR_TIMEOUT_MS)
+        if (anchors.foundAt == null) anchors.clear()
+    }
+
     LazyColumn(
         state = listState,
         modifier = Modifier
@@ -3504,6 +3515,9 @@ private fun SettingsHitPill(entry: SettingsEntry, onClick: () -> Unit) {
  * tab you are.
  */
 private val ANCHOR_HEADROOM = 96f
+
+/** How long a scroll request waits for a row to answer it before it is dropped. */
+private const val ANCHOR_TIMEOUT_MS = 700L
 
 /**
  * Which paper the light themes are printed on.

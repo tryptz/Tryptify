@@ -52,8 +52,6 @@ import androidx.compose.foundation.background
  */
 @Composable
 fun TrackListToolbar(
-    query: String,
-    onQueryChange: (String) -> Unit,
     sort: TrackSort,
     onSortChange: (TrackSort) -> Unit,
     modifier: Modifier = Modifier,

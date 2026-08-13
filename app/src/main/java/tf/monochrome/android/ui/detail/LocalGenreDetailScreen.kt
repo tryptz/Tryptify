@@ -207,8 +207,6 @@ fun LocalGenreDetailScreen(
                 // something real — the default set applies unchanged.
                 stickyHeader {
                     TrackListToolbar(
-                        query = listQuery,
-                        onQueryChange = { listQuery = it },
                         sort = listSort,
                         onSortChange = { listSort = it },
                     )
