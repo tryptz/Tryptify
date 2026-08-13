@@ -38,17 +38,40 @@ import java.io.ByteArrayOutputStream
  */
 object PresenceArtwork {
 
-    const val SIZE = 320
+    /**
+     * Canvas size. Smaller than the spectrum's 320 for one reason: total file
+     * size (see [MAX_BYTES]). A spinning disc is a full, distinct picture every
+     * frame — the spectrum reused one near-static cover — so at 320 it more than
+     * doubled the spectrum's bytes and blew past Discord's animation cap. 288 is
+     * still sharper than the slot renders it at.
+     */
+    const val SIZE = 288
 
     /**
      * Frames per revolution.
      *
-     * Every frame is one whole re-encoded canvas, so this is the cost knob. At
-     * 36 the disc steps 10° at a time, which reads as turning; at the 24 the
-     * spectrum used it reads as ticking round like a clock hand.
+     * Every frame is one whole re-encoded canvas, so this is the cost knob for
+     * both time and bytes. 28 steps the disc ~13° at a time, which still reads
+     * as turning rather than ticking.
      */
-    const val FRAMES = 36
-    const val QUALITY = 76
+    const val FRAMES = 28
+
+    /**
+     * The ceiling the assembled animation is kept under.
+     *
+     * Discord's media proxy will not animate an asset past roughly a quarter of
+     * a megabyte — over it, the client shows the first frame and nothing else,
+     * which on a disc at rest is just a round cover that never turns. That is
+     * exactly the "animation isn't showing" this exists to prevent. The number
+     * is a little under 256 KiB to leave room for the container around the
+     * frames. [render] steps the encoder's quality down until it fits.
+     */
+    private const val MAX_BYTES = 248_000
+
+    /** Where the quality search starts, and the floor it will not go below. */
+    private const val QUALITY_MAX = 74
+    private const val QUALITY_MIN = 40
+    const val QUALITY = QUALITY_MAX
 
     /** The disc, as a fraction of the canvas. Short of the edge so it reads as round. */
     private const val DISC = 0.94f
@@ -165,12 +188,15 @@ object PresenceArtwork {
             color = Color.argb(70, 255, 255, 255)
         }
 
-        val frames = ArrayList<ByteArray>(FRAMES)
-        val canvasBitmap = createBitmap(SIZE, SIZE)
-        val canvas = Canvas(canvasBitmap)
-
+        // Draw every frame once, as a bitmap. Encoding is separate and may be
+        // repeated at a lower quality to fit the budget, and re-drawing the
+        // rotation each time would be wasted work — so the pixels are held and
+        // only re-compressed.
+        val frameBitmaps = ArrayList<Bitmap>(FRAMES)
         for (f in 0 until FRAMES) {
             val angle = 360f * f / FRAMES
+            val frame = createBitmap(SIZE, SIZE)
+            val canvas = Canvas(frame)
             canvas.drawPaint(backdrop)
 
             // Only the artwork turns. Everything after this — grooves, sheen,
@@ -186,23 +212,66 @@ object PresenceArtwork {
             canvas.drawCircle(centre, centre, radius, rim)
             canvas.drawCircle(centre, centre, radius * HUB, hub)
             canvas.drawCircle(centre, centre, radius * HUB, hubRing)
-
-            val out = ByteArrayOutputStream()
-            @Suppress("DEPRECATION")
-            val ok = canvasBitmap.compress(Bitmap.CompressFormat.WEBP, QUALITY, out)
-            if (!ok) return null
-            frames += out.toByteArray()
+            frameBitmaps += frame
         }
-        canvasBitmap.recycle()
         if (base !== cover) base.recycle()
 
-        // One revolution per bar. Seamless by construction: the last frame is
-        // one step short of all the way round, so the loop back to zero is the
-        // same step as every other.
         val loopMs = (BEATS * 60_000f / tempo).toInt()
-        val perFrame = (loopMs / FRAMES).coerceAtLeast(1)
-        return runCatching {
-            AnimatedWebP.assemble(frames, List(FRAMES) { perFrame }, SIZE, SIZE)
-        }.getOrNull()
+
+        // Encode under the cap, on two levers. First quality: a busy cover at
+        // full quality can be over the budget, so it steps down until the whole
+        // animation fits, and a simple cover keeps its crispness because it was
+        // already small. If quality bottoms out and it still won't fit, frames
+        // are dropped — every second one — which halves the bytes and only
+        // widens the step the disc turns in. Both are better than a pristine
+        // animation Discord freezes on its first frame.
+        //
+        // Frame counts are strides of the full set, so the angles stay evenly
+        // spaced and one bar still turns the disc exactly once.
+        val result = try {
+            var best: ByteArray? = null
+            for (stride in intArrayOf(1, 2)) {
+                val frames = frameBitmaps.filterIndexed { i, _ -> i % stride == 0 }
+                val count = frames.size
+                val perFrame = (loopMs / count).coerceAtLeast(1)
+                val durations = List(count) { perFrame }
+
+                var quality = QUALITY_MAX
+                var fitAtThisStride: ByteArray? = null
+                while (quality >= QUALITY_MIN) {
+                    val encoded = frames.map { bmp ->
+                        val out = ByteArrayOutputStream()
+                        @Suppress("DEPRECATION")
+                        if (!bmp.compress(Bitmap.CompressFormat.WEBP, quality, out)) {
+                            return@map null
+                        }
+                        out.toByteArray()
+                    }
+                    if (encoded.any { it == null }) break
+                    @Suppress("UNCHECKED_CAST")
+                    val webp = AnimatedWebP.assemble(
+                        encoded as List<ByteArray>, durations, SIZE, SIZE,
+                    )
+                    // Keep the smallest thing seen, so even the pathological
+                    // case returns something rather than nothing.
+                    if (best == null || webp.size < best!!.size) best = webp
+                    if (webp.size <= MAX_BYTES) {
+                        fitAtThisStride = webp
+                        break
+                    }
+                    quality -= 8
+                }
+                if (fitAtThisStride != null) {
+                    best = fitAtThisStride
+                    break
+                }
+            }
+            best
+        } catch (t: Throwable) {
+            null
+        }
+
+        frameBitmaps.forEach { it.recycle() }
+        return result
     }
 }
