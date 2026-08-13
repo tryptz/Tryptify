@@ -136,6 +136,10 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.runtime.CompositionLocalProvider
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -213,10 +217,12 @@ fun SettingsScreen(
         }
     }
 
+    val settingsAnchors = remember { SettingsAnchors() }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val searchHits = remember(searchQuery) { searchSettings(searchQuery) }
 
+    CompositionLocalProvider(LocalSettingsAnchors provides settingsAnchors) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Settings") },
@@ -274,10 +280,17 @@ fun SettingsScreen(
                                         searchOpen = false
                                         searchQuery = ""
                                         when (val d = hit.destination) {
-                                            is SettingsDestination.Tab ->
+                                            is SettingsDestination.Tab -> {
+                                                // Ask before switching: the tab
+                                                // reports the row's position as
+                                                // it lays out, and a request
+                                                // made afterwards would arrive
+                                                // one frame too late.
+                                                settingsAnchors.request(hit.title)
                                                 settingsScope.launch {
                                                     settingsPager.goToPage(d.index, animateTabs)
                                                 }
+                                            }
                                             is SettingsDestination.Route ->
                                                 navController.navigateSafe(d.route)
                                         }
@@ -335,6 +348,7 @@ fun SettingsScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -2913,8 +2927,24 @@ private fun openDonationUrl(context: android.content.Context, url: String) {
 @Composable
 private fun SettingsTabContent(content: @Composable () -> Unit) {
     val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val anchors = LocalSettingsAnchors.current
+    val listState = rememberLazyListState()
+    var listTop by remember { mutableFloatStateOf(0f) }
+
+    // Scroll to whatever the search asked for, once the tab has laid out and
+    // the row has reported where it is. Offsets are in root coordinates, so the
+    // list's own top has to come off before it means anything to the scroll.
+    LaunchedEffect(anchors?.foundAt) {
+        val y = anchors?.foundAt ?: return@LaunchedEffect
+        listState.animateScrollBy(y - listTop - ANCHOR_HEADROOM)
+        anchors.clear()
+    }
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { listTop = it.positionInRoot().y },
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
@@ -2941,7 +2971,9 @@ private fun SettingsGroupHeader(title: String) {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp, top = 4.dp)
+            modifier = Modifier
+                .settingsAnchor(title)
+                .padding(bottom = 8.dp, top = 4.dp)
         )
     }
 }
@@ -3030,6 +3062,7 @@ fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .settingsAnchor(title)
                 // Only clickable (with ripple) when there's an action — an
                 // empty onClick used to ripple like a picker but do nothing.
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
@@ -3045,7 +3078,7 @@ fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) 
 fun SettingSwitchItem(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     tf.monochrome.android.devedit.DevEditable("sw_${devSlug(title)}", Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().settingsAnchor(title).padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -3450,3 +3483,12 @@ private fun SettingsHitPill(entry: SettingsEntry, onClick: () -> Unit) {
         }
     }
 }
+
+/**
+ * How far above the wanted row the scroll stops.
+ *
+ * Landing with the row flush against the top edge reads as having overshot —
+ * the group heading it belongs to is gone and there is no sense of where in the
+ * tab you are.
+ */
+private val ANCHOR_HEADROOM = 96f

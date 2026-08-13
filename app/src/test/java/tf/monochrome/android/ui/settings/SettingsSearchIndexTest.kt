@@ -92,6 +92,28 @@ class SettingsSearchIndexTest {
         }
     }
 
+    /**
+     * A tab result scrolls to its row by matching the title, so a title the
+     * settings screens never use anchors nothing — it lands on the tab and
+     * stops, silently, with no way to tell from the outside that it was
+     * supposed to do more. Renaming a row is exactly how that happens.
+     */
+    @Test
+    fun `every tab entry names something the settings screens actually say`() {
+        val sources = File("src/main/java/tf/monochrome/android/ui/settings")
+            .walkTopDown()
+            .filter { it.extension == "kt" }
+            .joinToString("\n") { it.readText() }
+            .lowercase()
+
+        val unanchored = SettingsSearchIndex
+            .filter { it.destination is SettingsDestination.Tab }
+            .map { it.title }
+            .filterNot { sources.contains(it.lowercase()) }
+
+        assertTrue("index titles that appear nowhere in Settings: $unanchored", unanchored.isEmpty())
+    }
+
     /** Sub-screens have to be reachable, or the index is only a tab switcher. */
     @Test
     fun `results can leave the settings screen`() {

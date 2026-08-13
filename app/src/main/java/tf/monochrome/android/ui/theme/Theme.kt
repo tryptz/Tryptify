@@ -572,23 +572,20 @@ val LocalDynamicColorPalette = compositionLocalOf<DynamicPalette?> { null }
 /**
  * What colour a sheet of glass should be tinted.
  *
- * Three answers in order, and the order is the point. A tint the listener set
- * by hand wins outright — they picked it, and an album is not entitled to
- * overrule them. Failing that the album palette, so every pane of glass in the
- * app drifts with what is playing whether or not the screen around it opted
- * into [DynamicColorScope]; the glass is decoration and can follow the music,
- * while the menus it sits beside keep the chosen theme. Failing both, the
- * theme's own primary, which is the behaviour every one of these surfaces had
- * before this existed.
+ * A tint the listener set by hand wins outright — they picked it, and nothing
+ * else is entitled to overrule them. Otherwise the current scheme's primary.
  *
- * Reads the palette directly rather than the scheme so it works on screens that
- * are not wrapped in a scope — and gives the same answer on the ones that are,
- * since there the scheme's primary *is* the palette's.
+ * Deliberately *not* the album palette directly. Reading it here made every
+ * pane in the app drift with what was playing, menus and search bars included,
+ * which is the bleed the theme goes out of its way to prevent. The album
+ * reaches the glass the same way it reaches everything else — by the screen
+ * opting into [DynamicColorScope], where the scheme's own primary becomes the
+ * album's. That keeps it to the places where following the music is the point:
+ * the player, and the world radio globe.
  */
 @Composable
 fun glassTint(explicitArgb: Int): Color {
     if (explicitArgb != 0) return Color(explicitArgb)
-    LocalDynamicColorPalette.current?.let { return it.primary }
     return MaterialTheme.colorScheme.primary
 }
 
