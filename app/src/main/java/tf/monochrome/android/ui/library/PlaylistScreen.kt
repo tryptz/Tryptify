@@ -357,7 +357,7 @@ fun PlaylistScreen(
             }
 
             if (tracks.isNotEmpty()) {
-                item {
+                stickyHeader {
                     TrackListToolbar(
                         query = listQuery,
                         onQueryChange = { listQuery = it },

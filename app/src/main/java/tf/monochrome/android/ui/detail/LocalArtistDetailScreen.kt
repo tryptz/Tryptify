@@ -240,7 +240,7 @@ fun LocalArtistDetailScreen(
                     // All tracks
                     if (sortedTracks.isNotEmpty()) {
                         item { tf.monochrome.android.devedit.DevEditable("artist_tracks_header", Modifier.fillMaxWidth()) { SectionHeader(title = "All Tracks") } }
-                        item {
+                        stickyHeader {
                             TrackListToolbar(
                                 query = listQuery,
                                 onQueryChange = { listQuery = it },

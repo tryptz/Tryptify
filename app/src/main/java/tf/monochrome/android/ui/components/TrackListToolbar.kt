@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.GlassSearchBar
+import androidx.compose.foundation.background
 
 /**
  * Search box and sort control for a list of tracks.
@@ -65,7 +66,14 @@ fun TrackListToolbar(
     var searchOpen by remember { mutableStateOf(query.isNotEmpty()) }
     var menuOpen by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    // Opaque, because this is used as a sticky header: it stops at the top of
+    // the list and the songs keep going underneath it. Transparent, the rows
+    // would slide through the icons.
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

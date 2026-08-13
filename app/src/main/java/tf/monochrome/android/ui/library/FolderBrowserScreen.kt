@@ -164,7 +164,7 @@ fun FolderBrowserScreen(
 
             // Tracks in this folder
             if (tracks.isNotEmpty()) {
-                item {
+                stickyHeader {
                     TrackListToolbar(
                         query = listQuery,
                         onQueryChange = { listQuery = it },

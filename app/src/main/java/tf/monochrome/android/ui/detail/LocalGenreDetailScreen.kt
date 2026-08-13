@@ -187,7 +187,7 @@ fun LocalGenreDetailScreen(
             if (sortedTracks.isNotEmpty()) {
                 // A genre spans every artist and album, so every key groups
                 // something real — the default set applies unchanged.
-                item {
+                stickyHeader {
                     TrackListToolbar(
                         query = listQuery,
                         onQueryChange = { listQuery = it },

@@ -283,7 +283,7 @@ fun ArtistDetailScreen(
 
                     if (detail.topTracks.isNotEmpty()) {
                         item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = "Top Tracks") } }
-                        item {
+                        stickyHeader {
                             TrackListToolbar(
                                 query = listQuery,
                                 onQueryChange = { listQuery = it },

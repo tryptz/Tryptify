@@ -219,7 +219,7 @@ fun LocalAlbumDetailScreen(
                         }
                     }
 
-                    item {
+                    stickyHeader {
                         TrackListToolbar(
                             query = listQuery,
                             onQueryChange = { listQuery = it },

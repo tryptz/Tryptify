@@ -281,7 +281,7 @@ fun AlbumDetailScreen(
                         }
                     }
 
-                    item {
+                    stickyHeader {
                         TrackListToolbar(
                             query = listQuery,
                             onQueryChange = { listQuery = it },

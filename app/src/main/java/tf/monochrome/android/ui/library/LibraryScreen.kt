@@ -546,39 +546,42 @@ fun LibraryScreen(
                 }
 
             "favorites" ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Pinned, not an item in the list.
+                    //
+                    // As a row of the list it scrolled away with the songs, so
+                    // the way to search a long list was to scroll back to the
+                    // top of it first. It also carried a "Liked Songs" heading
+                    // directly under an app bar that already said Favorites —
+                    // the same list, named twice, in the space where the tools
+                    // for it should have been.
+                    //
+                    // Full key set: liked songs span every album and artist,
+                    // unlike a single album's track list.
                     if (favoriteTracks.isNotEmpty()) {
-                        item {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                SectionHeader(title = "Liked Songs")
-                                IconButton(onClick = { playerViewModel.downloadAllTracks(visibleFavorites) }) {
+                        TrackListToolbar(
+                            query = likedQuery,
+                            onQueryChange = { likedQuery = it },
+                            sort = likedSort,
+                            onSortChange = { likedSort = it },
+                            trailing = {
+                                IconButton(onClick = {
+                                    playerViewModel.downloadAllTracks(visibleFavorites)
+                                }) {
                                     Icon(
                                         Icons.Default.Download,
                                         contentDescription = "Download All",
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
-                            }
-                        }
-                        item {
-                            // Full key set: liked songs span every album and
-                            // artist, unlike a single album's track list.
-                            TrackListToolbar(
-                                query = likedQuery,
-                                onQueryChange = { likedQuery = it },
-                                sort = likedSort,
-                                onSortChange = { likedSort = it },
-                            )
-                        }
+                            },
+                        )
+                    }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
+                    if (favoriteTracks.isNotEmpty()) {
                         items(visibleFavorites, key = { LibraryKeys.track(it.id) }) { track ->
                             TrackItem(
                                 track = track,
@@ -635,6 +638,7 @@ fun LibraryScreen(
                     if (favoriteTracks.isEmpty() && favoriteAlbums.isEmpty() && favoriteArtists.isEmpty()) {
                         item { EmptyState("Like tracks, albums, and artists to see them here.") }
                     }
+                }
                 }
 
             "downloads" ->
