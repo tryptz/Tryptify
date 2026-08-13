@@ -344,13 +344,17 @@ fun SettingsScreen(
                 }
             },
         ) { searchTopInset ->
-            // The form is pushed down by the open bar rather than sitting under
-            // it, so opening the search hides none of the settings on the tab
-            // you were already reading.
-            Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
+            // The form runs full height *under* the floating bar rather than
+            // being pushed below it. Pushing it down left an empty strip behind
+            // the glass, and a sheet of glass with nothing behind it to blur
+            // paints its own base colour — the solid rectangle this used to show.
+            // The inset instead becomes top padding on each tab's own scroll
+            // (below), so real settings sit behind the glass and the first row
+            // still starts clear of it.
+            CompositionLocalProvider(LocalSettingsSearchInset provides searchTopInset) {
                 HorizontalPager(
                     state = settingsPager,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().fillMaxSize(),
                     // Each tab is a full settings form; keeping neighbours composed
                     // would mean building all nine of them up front.
                     beyondViewportPageCount = 0,
@@ -3043,7 +3047,11 @@ private fun SettingsTabContent(content: @Composable () -> Unit) {
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 16.dp,
+            // Clears the floating search bar when it is open. As content padding
+            // rather than a Spacer or an offset, so the rows scroll up *under*
+            // the bar's glass — giving it something real to frost — instead of
+            // stopping at a hard line below it.
+            top = 16.dp + LocalSettingsSearchInset.current,
             bottom = 16.dp + LocalMiniPlayerInset.current + navBar,
         ),
     ) {

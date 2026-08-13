@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.settings
 
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -51,6 +52,16 @@ class SettingsAnchors {
 }
 
 val LocalSettingsAnchors = compositionLocalOf<SettingsAnchors?> { null }
+
+/**
+ * How far the open search bar reaches down over a settings tab.
+ *
+ * Fed into each tab's own scroll as top content padding, so the form runs full
+ * height *under* the floating bar — giving its glass real settings to frost
+ * instead of an empty strip that reads as a solid rectangle — while the first
+ * row still starts just below it. Zero when the search is closed.
+ */
+val LocalSettingsSearchInset = compositionLocalOf { 0.dp }
 
 /**
  * Marks this element as the row called [title], for search to scroll to.
