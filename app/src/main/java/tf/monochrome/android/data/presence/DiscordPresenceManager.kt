@@ -25,6 +25,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
+import androidx.core.graphics.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -520,6 +521,52 @@ class DiscordPresenceManager @Inject constructor(
         return if (path.count { it == '/' } >= 3) "mp:$path" else null
     }
 
+    /**
+     * Host a local cover on Discord and return the asset path for it.
+     *
+     * Everything Discord will render has to be somewhere Discord can fetch, and
+     * a track ripped from a CD has artwork that exists only as bytes in a tag on
+     * this phone. The external-asset proxy cannot help — it adopts URLs from the
+     * public web — so the picture is uploaded as an attachment and referenced by
+     * the media-proxy path that gives it, which is the same trick the animated
+     * composite already uses. The link Discord mints is temporary and signed,
+     * and it only has to outlive the track.
+     *
+     * Needs the upload channel, for the same reason the composite does: an
+     * attachment has to be posted *somewhere*. Without one this returns null and
+     * the card goes out with no art rather than not going out.
+     *
+     * Cached per cover, so a local album played end to end uploads once per
+     * sleeve rather than once per track, and a repeat costs nothing.
+     */
+    private suspend fun hostedAsset(url: String, token: String): String? {
+        assetCache[url]?.let { return it }
+        val channel = preferences.discordUploadChannel.first().takeIf { it.isNotBlank() }
+            ?: return null
+
+        val bitmap = loadCover(url) ?: return null
+        val bytes = withContext(Dispatchers.Default) {
+            // Square, and no larger than the card ever renders. Tag artwork runs
+            // to a few thousand pixels either way, and posting that costs the
+            // listener's data to produce something drawn at a couple of hundred.
+            val square = bitmap.scale(PresenceArtwork.SIZE, PresenceArtwork.SIZE)
+            val out = java.io.ByteArrayOutputStream()
+            @Suppress("DEPRECATION")
+            val ok = square.compress(
+                android.graphics.Bitmap.CompressFormat.WEBP,
+                PresenceArtwork.QUALITY,
+                out,
+            )
+            if (square !== bitmap) square.recycle()
+            if (ok) out.toByteArray() else null
+        } ?: return null
+
+        val uploaded = upload(bytes, channel, token) ?: return null
+        val asset = attachmentAsset(uploaded) ?: return null
+        assetCache[url] = asset
+        return asset
+    }
+
     /** Fetch a cover as a software bitmap, reusing the app-wide image cache. */
     private suspend fun loadCover(url: String): android.graphics.Bitmap? = runCatching {
         val request = ImageRequest.Builder(context)
@@ -617,10 +664,14 @@ class DiscordPresenceManager @Inject constructor(
      * rather than not going out.
      */
     private suspend fun proxiedAsset(url: String, token: String, appId: String?): String? {
+        // A local file has no URL Discord can reach, so the proxy is the wrong
+        // tool: it adopts images hosted elsewhere on the public web, and a
+        // `content://` or `file://` path is meaningless to it. The whole local
+        // library used to fail here and play with no cover at all. Hosting it
+        // ourselves is the way round, and the app can already do that — it is
+        // how the animated composite gets on the card.
+        if (!url.startsWith("https://")) return hostedAsset(url, token)
         if (appId == null) return null
-        // A local file path is meaningless to Discord's proxy, and most of a
-        // local library has one. Fail fast rather than spend a request on it.
-        if (!url.startsWith("https://")) return null
         assetCache[url]?.let { return it }
 
         return runCatching {
