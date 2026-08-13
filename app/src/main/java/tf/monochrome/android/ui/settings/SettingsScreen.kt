@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -129,6 +130,12 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.components.GlassSearchBar
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.animation.AnimatedVisibility
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -141,6 +148,18 @@ import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 // SETTINGS_TAB_ABOUT), never a literal — a hardcoded index has silently broken
 // twice now, once per reorder.
 private val settingsTabs = listOf("Appearance", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+
+/**
+ * Which tab carries a given label, for the search index to point at.
+ *
+ * Derived rather than written down, so reordering the tabs cannot leave every
+ * search result landing one tab to the left. Throws on an unknown label, which
+ * a test turns into a build failure rather than a result that goes nowhere.
+ */
+internal fun settingsTabIndex(label: String): Int =
+    settingsTabs.indexOf(label).also {
+        require(it >= 0) { "no settings tab called \"$label\"" }
+    }
 
 /**
  * Index of the About tab, where the What's New panel lives. Derived from
@@ -194,6 +213,10 @@ fun SettingsScreen(
         }
     }
 
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchHits = remember(searchQuery) { searchSettings(searchQuery) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Settings") },
@@ -202,10 +225,70 @@ fun SettingsScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },
+            actions = {
+                IconButton(onClick = {
+                    searchOpen = !searchOpen
+                    if (!searchOpen) searchQuery = ""
+                }) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = if (searchOpen) "Close search" else "Find a setting",
+                        tint = if (searchOpen) MaterialTheme.colorScheme.primary
+                        else LocalContentColor.current,
+                    )
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent
             )
         )
+
+        // Settings are nine tabs and a handful of screens of their own, which
+        // is more places than anyone should have to remember. The index behind
+        // this knows where each one lives, so a result can land on the tab that
+        // holds it *or* open the screen it actually is.
+        AnimatedVisibility(visible = searchOpen) {
+            GlassSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                placeholder = "Find a setting",
+                autoFocus = true,
+                onClose = { searchOpen = false },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) {
+                if (searchQuery.trim().length >= 2) {
+                    if (searchHits.isEmpty()) {
+                        Text(
+                            text = "No setting by that name.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    } else {
+                        Spacer(Modifier.height(10.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(searchHits) { hit ->
+                                SettingsHitPill(
+                                    entry = hit,
+                                    onClick = {
+                                        searchOpen = false
+                                        searchQuery = ""
+                                        when (val d = hit.destination) {
+                                            is SettingsDestination.Tab ->
+                                                settingsScope.launch {
+                                                    settingsPager.goToPage(d.index, animateTabs)
+                                                }
+                                            is SettingsDestination.Route ->
+                                                navController.navigateSafe(d.route)
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Tab row. A LazyRow rather than the old horizontalScroll(Row) so it can
         // scroll the selected chip into view — swiping out to About (last of nine)
@@ -3322,4 +3405,48 @@ private fun PlaylistImportSection() {
                 onDismiss = { showSpotifyPicker = false }
             )
         }
+}
+
+/** One search hit: the setting, and where it lives. */
+@Composable
+private fun SettingsHitPill(entry: SettingsEntry, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.bounceClick(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                imageVector = if (entry.destination is SettingsDestination.Route) {
+                    Icons.AutoMirrored.Filled.ArrowForward
+                } else {
+                    Icons.Default.Search
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 200.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            // Where it will take you. A pill that only says "Crossfade" makes
+            // you tap it to find out whether you are about to change tab or
+            // leave the screen.
+            Text(
+                text = entry.tabLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
