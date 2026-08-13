@@ -233,6 +233,16 @@ fun PressableGlass(
             ),
         contentAlignment = contentAlignment,
     ) {
+        // The real backdrop blur, lowest of all. Present when the screen has
+        // published a player-haze source; a silent no-op otherwise, so this is
+        // free on screens with nothing behind the glass to blur. The haze is
+        // the "see the blurred room through it" half; the shader wash and the
+        // liquidGlass tint above are the "it has a colour" half.
+        tf.monochrome.android.ui.player.PlayerGlassHaze(
+            modifier = Modifier.matchParentSize(),
+            shape = shape,
+        )
+
         // The deforming layer, under the content.
         //
         // A near-transparent wash rather than nothing: the shader builds its

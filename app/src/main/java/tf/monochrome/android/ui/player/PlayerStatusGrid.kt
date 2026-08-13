@@ -114,25 +114,15 @@ private fun StatusCard(
     accent: Color,
     onClick: () -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "statusCardScale",
-    )
-    Surface(
-        modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .liquidGlass(
-                shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerMedium),
-                tintAlpha = PlayerDesignTokens.GlassTintStrong,
-                borderAlpha = PlayerDesignTokens.GlassTintSoft,
-            ),
+    // The same glass button the transport and dock are: real haze behind, the
+    // shader dome under a finger, the squeeze on press. It used to be a Surface
+    // with a flat liquidGlass tint and a 3% scale — glass in name, not in
+    // behaviour — while the buttons an inch above it swelled. One material now.
+    tf.monochrome.android.ui.components.PressableGlass(
+        onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerMedium),
-        color = Color.Transparent,
-        contentColor = Color.White,
+        contentAlignment = Alignment.CenterStart,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),

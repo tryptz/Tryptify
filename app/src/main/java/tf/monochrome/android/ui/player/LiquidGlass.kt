@@ -20,6 +20,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -314,6 +318,71 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
  * route from the persisted [tf.monochrome.android.domain.model.PlayerGlassSettings].
  */
 val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings() }
+
+/**
+ * The player background as a haze source, for the chrome that sits over it.
+ *
+ * Null off the player route and on devices that can't blur. When set, the
+ * transport, dock, status tiles and hero can each frost the real, blurred album
+ * art behind them — the same live haze the mini player gets from the nav host —
+ * rather than only relighting their own fill with the shader. Carried as a local
+ * so a tile buried three composables deep gets it without every layer between
+ * passing it down.
+ *
+ * It must be provided *outside* the node marked as the source: a haze effect
+ * cannot sample a layer it is drawn inside, which paints the source's flat base
+ * colour instead of a blur — the slab-not-glass bug this whole path exists to
+ * avoid.
+ */
+val LocalPlayerHaze = compositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }
+
+/**
+ * The blurred-backdrop layer that goes *under* a piece of player glass.
+ *
+ * This is the haze — an actual gaussian blur of whatever [LocalPlayerHaze]
+ * captured — as distinct from the frost, which is the tint carried on top of it.
+ * Both are here because a sheet of real glass is both: you see the blurred room
+ * through it *and* it has a colour. Draw this first, then the shader slab, then
+ * the content; on the punched tiles (dock, transport) the icon holes then reveal
+ * this blur rather than the raw art.
+ *
+ * A no-op — drawing nothing — whenever there is no source, the device can't
+ * blur, glass is off, or the blur radius is zero, so callers can place it
+ * unconditionally.
+ */
+@Composable
+fun PlayerGlassHaze(
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
+) {
+    val haze = LocalPlayerHaze.current ?: return
+    val g = LocalPlayerGlass.current
+    val profile = tf.monochrome.android.performance.LocalPerformanceProfile.current
+    if (!profile.allowHazeBlur || !g.enabled || g.hazeBlurDp <= 0f) return
+
+    val frostBg = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val isDark = frostBg.luminance() <= 0.5f
+    // The frost tint over the blur: deepen a dark ground, lighten a light one,
+    // scaled by the listener's hazeTint. The blur is the haze; this is the
+    // frost, and it is the thin part — most of what reads is the blurred art.
+    val frostTint = (
+        if (isDark) Color.Black.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.45f)
+        ).let { it.copy(alpha = (it.alpha * g.hazeTint).coerceIn(0f, 1f)) }
+
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .clip(shape)
+            .hazeEffect(
+                state = haze,
+                style = dev.chrisbanes.haze.HazeStyle(
+                    backgroundColor = frostBg,
+                    blurRadius = g.hazeBlurDp.dp,
+                    tints = listOf(dev.chrisbanes.haze.HazeTint(frostTint)),
+                    noiseFactor = 0f,
+                ),
+            ),
+    )
+}
 
 /**
  * The SAME refractive lyric glass ([LIQUID_GLASS_SRC]) applied to a player
