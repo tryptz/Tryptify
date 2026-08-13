@@ -87,7 +87,62 @@ class DspEngineManager @Inject constructor(
         }
     }
 
-    private fun requestSave() { saveSignal.tryEmit(Unit) }
+    /**
+     * The live state, captured the instant it changes.
+     *
+     * The DataStore write below is debounced by half a second, which is right
+     * for flash but wrong as a source of truth: the native engine is destroyed
+     * and rebuilt whenever the audio format changes — a track at a different
+     * sample rate is enough — and whatever reapplies state to the new engine
+     * has to reapply what the user *has*, not what was last written. Reading
+     * the preference there meant a knob moved less than 500 ms before a track
+     * change was reverted to its previous value, and then saved in that
+     * reverted state, which made it permanent.
+     *
+     * Serialising here costs one native call per edit. The write is what is
+     * expensive and the write is still debounced.
+     */
+    @Volatile private var liveStateJson: String? = null
+
+    private fun requestSave() {
+        getStateJson().takeIf { it != "{}" }?.let { liveStateJson = it }
+        saveSignal.tryEmit(Unit)
+    }
+
+    /**
+     * Push the state back into a freshly rebuilt engine.
+     *
+     * Prefers the in-memory copy over the persisted one for the reason above,
+     * and falls back to the preference only when there is no in-memory state
+     * yet — which is startup, and startup goes through [restoreState] anyway.
+     */
+    suspend fun reapplyAfterEngineRecreated() {
+        val json = liveStateJson ?: preferences.dspStateJson.first()
+        if (!json.isNullOrEmpty() && json != "{}") loadStateJson(json)
+        processor.setMixBypassed(!_enabled.value)
+    }
+
+    /**
+     * Back to a bare mixer: no plugins anywhere, every bus at unity and centre,
+     * nothing muted or soloed, and input on bus 1 alone.
+     *
+     * Driven through the ordinary setters rather than by loading a hand-written
+     * default JSON, so native, the Kotlin mirror and the save all move together
+     * through paths that are already exercised — a reset that half-applied
+     * would be worse than no reset button.
+     */
+    fun resetToDefaults() {
+        for (bus in _buses.value) {
+            for (slot in bus.plugins.indices.reversed()) removePlugin(bus.index, slot)
+        }
+        for (default in BusConfig.defaultBuses()) {
+            setBusGain(default.index, default.gainDb)
+            setBusPan(default.index, default.pan)
+            setBusMute(default.index, default.muted)
+            setBusSolo(default.index, default.soloed)
+            setBusInputEnabled(default.index, default.inputEnabled)
+        }
+    }
 
     fun pollLevels() {
         val ptr = processor.getEnginePtr()
@@ -188,6 +243,7 @@ class DspEngineManager @Inject constructor(
 
         if (!stateJson.isNullOrEmpty() && stateJson != "{}") {
             loadStateJson(stateJson)
+            liveStateJson = stateJson
         }
 
         _enabled.value = enabled

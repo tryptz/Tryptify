@@ -77,6 +77,16 @@ class MixerViewModel @Inject constructor(
 
     fun setEnabled(enabled: Boolean) = dspManager.setEnabled(enabled)
 
+    /**
+     * Back to a bare mixer. Clears the loaded preset name too — what is on the
+     * buses is no longer that preset, and leaving its name in the bar would
+     * claim otherwise.
+     */
+    fun resetToDefaults() {
+        dspManager.resetToDefaults()
+        _currentPresetName.value = null
+    }
+
     fun selectBus(index: Int) { _selectedBusIndex.value = index }
 
     // ── Bus controls ────────────────────────────────────────────────────
