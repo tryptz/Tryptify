@@ -131,7 +131,10 @@ fun LocalGenreDetailScreen(
         ) { searchTopInset ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current)
+            contentPadding = PaddingValues(
+                        top = searchTopInset,
+                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                    )
         ) {
             item {
                 tf.monochrome.android.devedit.DevEditable("genre_hero", Modifier.fillMaxWidth()) {

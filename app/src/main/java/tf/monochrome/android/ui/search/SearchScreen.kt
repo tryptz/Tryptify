@@ -54,7 +54,6 @@ fun SearchScreen(
             onQueryChange = viewModel::onQueryChange,
             placeholder = "Search tracks, albums, artists, playlists…",
             onClose = null,
-            reserveSpace = true,
             // Arriving here is a request to type: this route only exists because
             // someone tapped search.
             autoFocus = true,

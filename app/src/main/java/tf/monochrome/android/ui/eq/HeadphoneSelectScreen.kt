@@ -241,7 +241,6 @@ fun HeadphoneSelectScreen(
             placeholder = "Search model (e.g. HD 600)…",
             onClose = null,
             modifier = Modifier.weight(1f),
-            reserveSpace = true,
             // Arriving on this screen is not a request to type — the rig chips
             // and the A–Z list are how most people find their headphones.
             autoFocus = false,

@@ -337,7 +337,7 @@ fun HomeScreen(
             // saveable, so coming back to a Home whose searchOpen was restored
             // true does not re-pop the keyboard over the results.
             autoFocus = focusOnOpen,
-        ) { _ ->
+        ) { searchTopInset ->
         Column(modifier = Modifier.fillMaxSize()) {
         // Play Radio — the home screen's primary action: seed a station from
         // whatever is playing (falling back to recent history) and keep the
@@ -411,7 +411,7 @@ fun HomeScreen(
             // ── Home content ────────────────────────────────────
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 160.dp)
+                contentPadding = PaddingValues(top = searchTopInset, bottom = 160.dp)
             ) {
                 // One dismissible bar per release, at the top of the first
                 // screen the user lands on. Tapping it opens the notes in

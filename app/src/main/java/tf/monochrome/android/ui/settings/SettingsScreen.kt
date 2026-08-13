@@ -339,8 +339,11 @@ fun SettingsScreen(
                     }
                 }
             },
-        ) { _ ->
-            Column(modifier = Modifier.fillMaxSize()) {
+        ) { searchTopInset ->
+            // The form is pushed down by the open bar rather than sitting under
+            // it, so opening the search hides none of the settings on the tab
+            // you were already reading.
+            Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
                 HorizontalPager(
                     state = settingsPager,
                     modifier = Modifier.fillMaxWidth().weight(1f),

@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -80,19 +81,6 @@ fun SearchOverlay(
     onClose: (() -> Unit)?,
     modifier: Modifier = Modifier,
     /**
-     * Whether the bar is a permanent fixture of its screen rather than one that
-     * is toggled on demand.
-     *
-     * A bar that comes and goes can sit over the first row: it is a moment, and
-     * the row is one flick away. A bar that is *always* there parks itself on
-     * top of the first result forever, which on a screen whose whole job is
-     * showing results is the one row that must not be hidden. Those callers get
-     * the bar's height as content padding — which starts the list below the
-     * glass while still letting it scroll underneath, so there is always
-     * something real to frost.
-     */
-    reserveSpace: Boolean = false,
-    /**
      * Whether opening the bar takes the keyboard with it. True for a bar summoned
      * by a tap, where the tap *was* the request to type. False for one that is
      * simply part of the screen, where throwing the keyboard up on arrival covers
@@ -108,20 +96,32 @@ fun SearchOverlay(
      */
     barContent: @Composable ColumnScope.() -> Unit = {},
     /**
-     * The screen's content, handed the room the bar is taking. Zero unless
-     * [reserveSpace] — it runs under the bar rather than below it, which is
-     * what gives the glass something to frost.
+     * The screen's content, handed the room the bar is taking — its measured
+     * height while it is open, and zero while it is closed.
+     *
+     * Pass it to the scrolling container as **content padding**, not as padding
+     * on the container itself. That is the whole trick, and the two are not
+     * interchangeable: content padding starts the rows below the glass while
+     * leaving them free to travel up behind it, which is exactly the behaviour
+     * wanted — nothing hidden when the bar appears, rows sliding under it as
+     * soon as you scroll. Padding the container instead moves its top edge down
+     * and the list then clips there, so rows vanish at a hard line an inch short
+     * of the glass.
      */
     content: @Composable (topInset: Dp) -> Unit,
 ) {
-    // No top inset by default, deliberately.
+    // The bar takes room, and gives it back on the way out.
     //
-    // Padding the list down by the bar's height put the rows *below* the glass,
-    // which left it frosting an empty background — a blur of nothing is a flat
-    // pane, and a flat pane is the container this is supposed not to be. The
-    // list starts at the top and runs underneath instead, so what shows through
-    // the glass is the list. The first row sits behind the bar while it is
-    // open, and scrolls out from under it.
+    // Two earlier arrangements were both wrong. Laying the bar out as a row of
+    // the screen's own column pushed everything down and made the list clip at
+    // its new top edge. Floating it over a list with no inset at all hid
+    // whatever was under it the moment it opened — on a screen whose first row
+    // is the thing you came for, that is the one row you cannot cover.
+    //
+    // Handing the height to the list's *content padding* is the arrangement
+    // that is neither: at rest the first row sits just below the glass, and it
+    // passes behind the glass as soon as anything scrolls. Which also keeps the
+    // frost honest — there is real content under it whenever it matters.
 
     // The overlay owns its backdrop.
     //
@@ -135,26 +135,33 @@ fun SearchOverlay(
     val haze = rememberHazeState()
 
     val density = LocalDensity.current
+    // The bar's full height, measured on the bar itself rather than on the
+    // AnimatedVisibility around it. Expand/shrink animates the *container's*
+    // height, so measuring there would report a value climbing from zero and
+    // the inset would chase it; the child inside is laid out at full size and
+    // only clipped, so onSizeChanged here is the real, stable height — and it
+    // still tracks a taller bar when barContent adds pills under the field.
     var barHeight by remember { mutableStateOf(0.dp) }
+
+    // The room the list keeps clear, animated so it opens and closes with the
+    // bar rather than snapping. Full height while open — the list starts below
+    // the glass, so nothing is hidden the instant it appears — and zero while
+    // closed, so a screen never holds a gap for a bar that isn't there.
+    val inset by animateDpAsState(
+        targetValue = if (open) barHeight else 0.dp,
+        label = "searchInset",
+    )
 
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().hazeSource(haze)) {
-            content(if (reserveSpace) barHeight else 0.dp)
+            content(inset)
         }
 
         AnimatedVisibility(
             visible = open,
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .onSizeChanged { size ->
-                    // Measured rather than guessed: the bar grows by whatever
-                    // barContent hangs under the field, so a constant here
-                    // would be wrong on every screen that uses that slot.
-                    val h = with(density) { size.height.toDp() }
-                    if (h != barHeight) barHeight = h
-                },
+            modifier = Modifier.align(Alignment.TopCenter),
         ) {
             GlassSearchBar(
                 query = query,
@@ -164,7 +171,12 @@ fun SearchOverlay(
                 autoFocus = autoFocus,
                 onSubmit = onSubmit,
                 onClose = onClose,
-                modifier = Modifier.padding(horizontal = 4.dp),
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .onSizeChanged { size ->
+                        val h = with(density) { size.height.toDp() }
+                        if (h != barHeight) barHeight = h
+                    },
                 content = barContent,
             )
         }

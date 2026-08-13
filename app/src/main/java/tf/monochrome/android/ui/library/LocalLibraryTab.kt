@@ -251,8 +251,8 @@ fun LocalLibraryTab(
             onQueryChange = { viewModel.setSearchQuery(it) },
             placeholder = "Search local library…",
             onClose = { showSearch = false; viewModel.setSearchQuery("") },
-        ) { _ ->
-        Column(modifier = Modifier.fillMaxSize()) {
+        ) { searchTopInset ->
+        Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
         // Results replace the browser while there is a query. An `if` rather
         // than the early `return@Column` this used to be: inside the overlay's
         // content lambda there is no Column to return from.

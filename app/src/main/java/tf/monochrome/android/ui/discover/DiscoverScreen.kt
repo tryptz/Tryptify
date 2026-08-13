@@ -223,7 +223,6 @@ fun DiscoverScreen(
             // shelf, so opening the search hid the very feed it filters. The
             // matches belong on the page, where there is room for them and where
             // picking one leaves you looking at what changed.
-            reserveSpace = true,
             barContent = {
                 GenreSearchExtras(
                     query = genreQuery,
