@@ -10,6 +10,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -127,6 +130,7 @@ import tf.monochrome.android.ui.player.withLyricFont
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.exp
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @HiltViewModel
 class LyricsFxStudioViewModel @Inject constructor(
@@ -644,9 +648,19 @@ fun LyricsFxStudioScreen(
             )
         }
 
+        // The tail reserves the mini player's height inside the scroll rather
+        // than outside the screen. Reserved outside, the strip behind the bar
+        // was flat theme background and the bar's glass had nothing but a solid
+        // colour to lens; reserved here it is scrollable, so the sliders pass
+        // behind the glass and the last one still comes clear of it.
+        val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = 48.dp + LocalMiniPlayerInset.current + navBar,
+            ),
         ) {
             item {
                 StudioSection("Typography")

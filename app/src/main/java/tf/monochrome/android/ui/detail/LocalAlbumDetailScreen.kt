@@ -62,6 +62,7 @@ import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,7 +119,7 @@ fun LocalAlbumDetailScreen(
                 val albumData = album ?: return
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current)
                 ) {
                     item {
                         tf.monochrome.android.devedit.DevEditable("album_hero", Modifier.fillMaxWidth()) {

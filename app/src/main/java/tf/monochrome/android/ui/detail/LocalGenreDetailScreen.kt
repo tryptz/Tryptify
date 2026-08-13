@@ -60,6 +60,7 @@ import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +113,7 @@ fun LocalGenreDetailScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp)
+            contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current)
         ) {
             item {
                 tf.monochrome.android.devedit.DevEditable("genre_hero", Modifier.fillMaxWidth()) {

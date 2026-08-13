@@ -56,6 +56,7 @@ import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.player.SpectrumOverlay
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @Composable
 fun ParametricEqScreen(
@@ -102,7 +103,7 @@ fun ParametricEqScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp)
+            contentPadding = PaddingValues(bottom = 32.dp + LocalMiniPlayerInset.current)
         ) {
             // Title
             item {

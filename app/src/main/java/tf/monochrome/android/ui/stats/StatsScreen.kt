@@ -89,6 +89,7 @@ import tf.monochrome.android.data.db.dao.TopArtistAggregate
 import tf.monochrome.android.data.db.dao.TopTrackAggregate
 import tf.monochrome.android.data.db.dao.WeekdayAggregate
 import kotlin.math.roundToInt
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,7 +151,7 @@ private fun StatsContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + LocalMiniPlayerInset.current),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item { tf.monochrome.android.devedit.DevEditable("range_picker", Modifier.fillMaxWidth()) { RangePicker(state.range, onPick = onPickRange) } }

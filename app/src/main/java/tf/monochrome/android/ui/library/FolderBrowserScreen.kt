@@ -54,6 +54,7 @@ import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,7 +128,7 @@ fun FolderBrowserScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp)
+            contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current)
         ) {
             // Subfolders
             items(subfolders) { folder ->

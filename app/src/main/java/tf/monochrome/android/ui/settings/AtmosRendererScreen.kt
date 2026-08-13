@@ -84,6 +84,7 @@ import kotlin.math.min
 import kotlin.math.sin
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.navigateTool
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @HiltViewModel
 class AtmosRendererViewModel @Inject constructor(
@@ -351,6 +352,7 @@ fun AtmosRendererScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalMiniPlayerInset.current)
                 .padding(horizontal = 20.dp),
         ) {
             // ── Channel map ────────────────────────────────────────────────

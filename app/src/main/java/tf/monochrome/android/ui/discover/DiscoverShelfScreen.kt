@@ -41,6 +41,7 @@ import tf.monochrome.android.ui.components.TrackSelectionBar
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 /**
  * One shelf, opened out into a full grid — the far end of "See All".
@@ -142,7 +143,7 @@ fun DiscoverShelfScreen(
                 state = gridState,
                 columns = GridCells.Adaptive(MonoDimens.coverCard),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 160.dp),
+                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 160.dp + LocalMiniPlayerInset.current),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

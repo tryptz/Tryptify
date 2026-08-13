@@ -71,6 +71,7 @@ import android.content.Context
 import androidx.hilt.navigation.compose.hiltViewModel
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,6 +148,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
+                    .padding(bottom = LocalMiniPlayerInset.current)
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 // Center the form in the middle of the screen by default; it still

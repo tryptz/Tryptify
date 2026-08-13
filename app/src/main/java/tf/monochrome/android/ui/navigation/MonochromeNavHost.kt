@@ -301,7 +301,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // Detail screens reserve nav bar + mini-player height so content
         // isn't hidden behind the floating mini player. Main tabs (pager)
         // handle their own bottom contentPadding already.
-        val miniPlayerReserve = 72.dp
         // The genre map draws under the mini player rather than being
         // letterboxed above it: this Box is the app's haze source, so anything
         // stopping short of the bar leaves flat background behind it and the
@@ -313,20 +312,17 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
             currentDestination?.route == Screen.WorldRadio.route
 
-        // Screens that run *under* the mini player rather than stopping above
-        // it. Reserving the bar's height out here letterboxes the screen and
-        // leaves a band of flat theme background behind the bar — so the glass
-        // has nothing but a solid colour to lens, and reads as an opaque
-        // container no matter how transparent it is. Running the content
-        // underneath gives it something real; the screen is then responsible
-        // for padding its own scroll so the last row can still be reached.
-        val underMiniPlayer = fullBleedRoute ||
-            currentDestination?.route == Screen.Settings.route
-        val detailBottomInset = when {
-            fullBleedRoute -> 0.dp
-            underMiniPlayer -> navBarHeight
-            else -> navBarHeight + if (showMiniPlayer) miniPlayerReserve else 0.dp
-        }
+        // Every screen runs *under* the mini player. Reserving the bar's height
+        // out here letterboxed them: the strip behind the bar was flat theme
+        // background, so the bar's glass had nothing but a solid colour to lens
+        // and read as an opaque container however transparent it was set.
+        //
+        // The reserve moves into each screen's own scroll, published below as
+        // [LocalMiniPlayerInset], where it is scrollable — content passes
+        // behind the glass and the last row still comes clear of the bar. The
+        // nav bar stays reserved out here, because that one is not glass and
+        // nothing should ever be under it.
+        val detailBottomInset = if (fullBleedRoute) 0.dp else navBarHeight
 
         // One SaveableStateHolder keeps each tab's subtree state (selected
         // Library sub-tab, LazyColumn scroll offsets, text field input, etc.)
@@ -338,6 +334,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // scroll to the top.
         val tabStateHolder = rememberSaveableStateHolder()
 
+        CompositionLocalProvider(
+            LocalMiniPlayerInset provides if (showMiniPlayer) MINI_PLAYER_INSET else 0.dp,
+        ) {
         Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
             // Pager for main tabs — fills entire screen
             if (isOnMainTab) {
@@ -745,6 +744,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 )
             }
         }
+        }
 
         // ── Layer 2: Navigation bar + mini player (overlays content) ──
         if (isOnMainTab) {
@@ -797,22 +797,19 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             onSkipPreviousClick = { playerViewModel.skipToPrevious() },
                             onClick = { navController.navigateTool(Screen.NowPlaying) },
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            // No frost on the detail screens that stop above the
-                            // mini player: the frost has nothing real to sample
-                            // there and its base colour renders as a solid bar.
-                            // Null skips the frost layer — the glass slab floats
-                            // clean over the screen's own content.
-                            //
-                            // Screens that run underneath it do get the frost,
-                            // because under them there is now something to
-                            // blur. That is the whole reason they were moved.
+                            // The frost is on everywhere now. It used to be
+                            // switched off here because detail screens stopped
+                            // above the bar and left it nothing real to sample,
+                            // so its base colour rendered as a solid slab —
+                            // true at the time, and fixed by putting content
+                            // under the bar rather than by hiding the frost.
                             //
                             // A full-bleed route is the exception, and the
                             // reason it is full-bleed: the map runs underneath
                             // the bar, so there IS content to blur and passing
                             // null was throwing it away — the one screen built
                             // to feed the frost was the one screen without it.
-                            hazeState = if (underMiniPlayer) hazeState else null,
+                            hazeState = hazeState,
                             blendMillis = miniBlendMs,
                             userTrackChanges = userTrackChanges,
                         )
@@ -860,3 +857,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         }
     }
 }
+
+/**
+ * Room the floating mini player needs at the bottom of a scrolling screen.
+ *
+ * Published as [LocalMiniPlayerInset] while a track is loaded, and zero
+ * otherwise so no screen carries dead space for a bar that is not there.
+ */
+private val MINI_PLAYER_INSET = 72.dp

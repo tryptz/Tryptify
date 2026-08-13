@@ -70,6 +70,7 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -277,7 +278,7 @@ fun PlaylistScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp)
+            contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current)
         ) {
             item {
                 tf.monochrome.android.devedit.DevEditable("playlist_hero", Modifier.fillMaxWidth()) {

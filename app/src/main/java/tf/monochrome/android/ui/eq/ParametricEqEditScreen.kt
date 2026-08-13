@@ -52,6 +52,7 @@ import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.bounceCombinedClick
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @Composable
 fun ParametricEqEditScreen(
@@ -83,6 +84,7 @@ fun ParametricEqEditScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
+            .padding(bottom = LocalMiniPlayerInset.current)
     ) {
         // Top bar
         tf.monochrome.android.devedit.DevEditable("peq_edit_top_bar", Modifier.fillMaxWidth()) {

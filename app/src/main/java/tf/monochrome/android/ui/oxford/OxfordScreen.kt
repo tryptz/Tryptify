@@ -45,6 +45,8 @@ import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import androidx.compose.foundation.layout.padding
 
 // ----------------------------------------------------------------------------
 // Shared M3 tokens — thin wrapper over MaterialTheme.colorScheme so the two
@@ -493,6 +495,7 @@ private fun TutorialSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalMiniPlayerInset.current)
                 .padding(horizontal = 20.dp, vertical = 4.dp)
                 .padding(bottom = 24.dp),
         ) {

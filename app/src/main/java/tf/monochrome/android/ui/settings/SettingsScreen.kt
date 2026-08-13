@@ -128,6 +128,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.themeDisplayNames
 import tf.monochrome.android.ui.navigation.navigateTool
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -2835,15 +2836,13 @@ private fun SettingsTabContent(content: @Composable () -> Unit) {
             start = 16.dp,
             end = 16.dp,
             top = 16.dp,
-            bottom = 16.dp + MINI_PLAYER_TAIL + navBar,
+            bottom = 16.dp + LocalMiniPlayerInset.current + navBar,
         ),
     ) {
         item { content() }
     }
 }
 
-/** Height the floating mini player occupies, mirrored from the nav host. */
-private val MINI_PLAYER_TAIL = 72.dp
 
 // Slugify a label into a stable DevEdit element id (e.g. "Gapless Playback" →
 // "gapless_playback"). Used so wrapping the shared setting rows yields stable,
