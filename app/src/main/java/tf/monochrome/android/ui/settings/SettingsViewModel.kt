@@ -115,6 +115,10 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "monochrome_dark")
     val dynamicColors: StateFlow<Boolean> = preferences.dynamicColors
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val dynamicColorMenus: StateFlow<Boolean> = preferences.dynamicColorMenus
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val dynamicColorKeepBackground: StateFlow<Boolean> = preferences.dynamicColorKeepBackground
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val fontScale: StateFlow<Float> = preferences.fontScale
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
     val fontScaleFollowSystem: StateFlow<Boolean> = preferences.fontScaleFollowSystem
@@ -423,6 +427,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setDynamicColors(enabled: Boolean) { viewModelScope.launch { preferences.setDynamicColors(enabled) } }
+    fun setDynamicColorMenus(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDynamicColorMenus(enabled) }
+    }
+    fun setDynamicColorKeepBackground(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDynamicColorKeepBackground(enabled) }
+    }
     fun setFontScale(scale: Float) { viewModelScope.launch { preferences.setFontScale(scale) } }
     fun setFontScaleFollowSystem(enabled: Boolean) {
         viewModelScope.launch { preferences.setFontScaleFollowSystem(enabled) }

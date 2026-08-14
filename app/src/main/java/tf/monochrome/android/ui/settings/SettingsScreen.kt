@@ -566,6 +566,8 @@ private enum class CustomColorTarget { Accent, Background }
 private fun AppearanceControls(viewModel: SettingsViewModel) {
     val themeName by viewModel.theme.collectAsStateWithLifecycle()
     val dynamicColors by viewModel.dynamicColors.collectAsStateWithLifecycle()
+    val dynamicColorMenus by viewModel.dynamicColorMenus.collectAsStateWithLifecycle()
+    val dynamicColorKeepBackground by viewModel.dynamicColorKeepBackground.collectAsStateWithLifecycle()
     val themePaper by viewModel.themePaper.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
@@ -653,6 +655,27 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
+        // The two below only mean anything once there is a palette to spend, so
+        // they live inside the switch that produces one rather than sitting
+        // greyed out beside it.
+        AnimatedVisibility(visible = dynamicColors) {
+            Column {
+                SettingSwitchItem(
+                    title = "Tint the menus too",
+                    subtitle = "Let the cover set the app's accent and background everywhere, not just the player",
+                    checked = dynamicColorMenus,
+                    onCheckedChange = { viewModel.setDynamicColorMenus(it) },
+                )
+                AnimatedVisibility(visible = dynamicColorMenus) {
+                    SettingSwitchItem(
+                        title = "Keep the theme background",
+                        subtitle = "Accent only — the background stays the color your theme chose",
+                        checked = dynamicColorKeepBackground,
+                        onCheckedChange = { viewModel.setDynamicColorKeepBackground(it) },
+                    )
+                }
+            }
+        }
         SettingSwitchItem(
             title = "Glow behind album art",
             subtitle = "Bloom the bass-reactive glow around the album cover too, pumping with the kick.",

@@ -2,6 +2,7 @@ package tf.monochrome.android.ui.theme
 
 import android.os.Build
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -543,6 +544,18 @@ fun MonochromeTheme(
      * quietly decide the scheme out from under it.
      */
     customColors: CustomThemeColors? = null,
+    /**
+     * "Tint the menus": let the album's colours reach the app-wide scheme, not
+     * just the surfaces that opt into [DynamicColorScope]. Ignored when there is
+     * no [dynamicPalette] to read.
+     */
+    dynamicMenus: Boolean = false,
+    /**
+     * The bypass for the half of [dynamicMenus] people most often do not want:
+     * the accent still follows the cover, the ground stays where the theme put
+     * it. Only consulted while [dynamicMenus] is on.
+     */
+    dynamicMenusKeepBackground: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -555,27 +568,89 @@ fun MonochromeTheme(
     val materialYou = if (resolvedTheme == "material_you" && customColors == null) {
         rememberMaterialYouScheme(dark = systemDark)
     } else null
-    val colorScheme = when {
+    val chosen = when {
         customColors != null ->
             customScheme(Color(customColors.accent), Color(customColors.background))
         materialYou != null -> materialYou
         else -> getColorScheme(resolvedTheme, paper)
     }
+    val colorScheme = tintedByAlbum(
+        base = chosen,
+        palette = dynamicPalette.takeIf { dynamicMenus },
+        keepBackground = dynamicMenusKeepBackground,
+    )
     val family = customFontFamily ?: InterFontFamily
     val typography = remember(fontScale, family) {
         buildTypography(family, fontScale)
     }
 
-    // Album-art dynamic colours are deliberately NOT overlaid on the global
-    // scheme — doing so bleeds the album accent into the menus. Instead the
-    // palette is published via [LocalDynamicColorPalette], and only the player,
-    // mini player and lyrics opt in through [DynamicColorScope]; every other
-    // surface keeps the user's chosen theme.
+    // By default the album palette is NOT overlaid on the global scheme — doing
+    // so bleeds the album accent into the menus. It is published via
+    // [LocalDynamicColorPalette] and only the player, mini player and lyrics opt
+    // in through [DynamicColorScope]; every other surface keeps the chosen
+    // theme. "Tint the menus" is the listener asking for that bleed on purpose,
+    // and [tintedByAlbum] above is the only thing that grants it.
     CompositionLocalProvider(LocalDynamicColorPalette provides dynamicPalette) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typography,
             content = content
+        )
+    }
+}
+
+/**
+ * How far the app's ground travels toward the cover's dominant colour.
+ *
+ * Not all the way, and this is the whole reason the app-wide tint is usable at
+ * all. Handing [customScheme] a raw album colour lets every bright cover flip
+ * the entire app to a light scheme and every dark one flip it back, so a queue
+ * strobes the menus between light and dark from track to track. A quarter of
+ * the way keeps the hue plainly visible while the theme goes on deciding
+ * whether this is a light app or a dark one.
+ *
+ * The accent takes no such wash — an accent is meant to be loud, and
+ * [customScheme] already floors it for contrast wherever it lands.
+ */
+private const val ALBUM_GROUND_MIX = 0.25f
+
+/**
+ * The theme's ground carried a quarter of the way toward the cover's.
+ *
+ * Pulled out of [tintedByAlbum] so `AlbumTintTest` can hold it to the promise
+ * the constant makes: whatever is playing, the tinted ground must stay on the
+ * same side of the light/dark line as the theme's own, so the menus never flip
+ * polarity between two tracks.
+ */
+internal fun albumTintedGround(base: Color, album: Color): Color =
+    lerp(base, album, ALBUM_GROUND_MIX)
+
+/**
+ * The app-wide scheme rebuilt around the album, for "Tint the menus".
+ *
+ * Rebuilt rather than patched: swapping the accent slots the way
+ * [DynamicColorScope] does works on a player whose foregrounds are hardcoded
+ * white, and falls apart across the menus, where a cover's accent lands on
+ * surfaces the base theme derived from a different colour entirely and can end
+ * up under 4.5:1 on any of them. [customScheme] takes an accent and a ground and
+ * derives every other slot from them with the contrast floors applied, which is
+ * exactly this job — the same machinery the listener's own two colours use.
+ *
+ * A passthrough when the tint is off, when nothing is playing, or when the cover
+ * yielded no palette.
+ */
+@Composable
+private fun tintedByAlbum(
+    base: ColorScheme,
+    palette: DynamicPalette?,
+    keepBackground: Boolean,
+): ColorScheme {
+    if (palette == null) return base
+    return remember(base, palette, keepBackground) {
+        customScheme(
+            accent = palette.primary,
+            background = if (keepBackground) base.background
+            else albumTintedGround(base.background, palette.background),
         )
     }
 }
