@@ -211,14 +211,65 @@ private fun DrawScope.drawPlayPauseSymbol(
         val w = d * 0.32f * scale
         val h = d * 0.34f * scale
         val tcx = cx - d * 0.32f * 0.06f // optical-centre (scale-independent so passes stay concentric)
-        val tri = Path().apply {
-            moveTo(tcx - w * 0.40f, cy - h / 2f)
-            lineTo(tcx - w * 0.40f, cy + h / 2f)
-            lineTo(tcx + w * 0.60f, cy)
-            close()
-        }
+        // Rounded to the same radius as the pause bars, so the two states of one
+        // button are cut from the same shape language. The tip matters most: it
+        // is the sharpest angle in the transport, and the shader builds its
+        // bevel from the edge, so a point that acute beveled into a bright spike
+        // rather than an edge.
+        val tri = roundedPolygon(
+            listOf(
+                Offset(tcx - w * 0.40f, cy - h / 2f),
+                Offset(tcx + w * 0.60f, cy),
+                Offset(tcx - w * 0.40f, cy + h / 2f),
+            ),
+            cut = d * 0.046f * scale,
+        )
         drawPath(tri, color = color, blendMode = blend)
     }
+}
+
+/**
+ * A closed polygon through [points] with every corner softened.
+ *
+ * [cut] is a distance along the edges, not a circular radius: each corner backs
+ * off that far down both of its edges and curves through the vertex, so the
+ * flats stay flat and only the points go, which is what rounding a glyph means.
+ * On an acute corner the same cut takes more off the tip than it would a right
+ * angle — which is the behaviour wanted, since it is the sharp tips that need
+ * the most help.
+ *
+ * The cut is clamped to half of the shorter adjacent edge. Without that, a value
+ * larger than an edge would put two corners' curves past each other and the
+ * outline would fold back on itself — which on a punched glyph is not a soft
+ * corner but a hole in the wrong place.
+ *
+ * The same construction is written into the transport's vector drawables
+ * (`ic_glass_play` and friends), so the disc's own glyph and the mini player's
+ * are the same shape.
+ */
+private fun roundedPolygon(points: List<Offset>, cut: Float): Path {
+    val path = Path()
+    val n = points.size
+    for (i in 0 until n) {
+        val current = points[i]
+        val previous = points[(i + n - 1) % n]
+        val next = points[(i + 1) % n]
+
+        val toPrevious = previous - current
+        val toNext = next - current
+        val corner = minOf(
+            cut,
+            toPrevious.getDistance() / 2f,
+            toNext.getDistance() / 2f,
+        )
+        val start = current + toPrevious / toPrevious.getDistance().coerceAtLeast(1e-4f) * corner
+        val end = current + toNext / toNext.getDistance().coerceAtLeast(1e-4f) * corner
+
+        if (i == 0) path.moveTo(start.x, start.y) else path.lineTo(start.x, start.y)
+        path.quadraticBezierTo(current.x, current.y, end.x, end.y)
+    }
+    path.close()
+    return path
 }
 
 /**

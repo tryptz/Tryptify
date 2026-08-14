@@ -3,8 +3,22 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Solid triangle + bar (skip next), chunky for the 3D glass bevel. -->
+    <!--
+        Solid triangle + bar (skip next), chunky for the 3D glass bevel.
+
+        Corners are curves in the path itself — one fill, no stroke. Rounding by
+        stroking the outline was the obvious shortcut and the wrong one here:
+        these glyphs are punched out of the glass with DstOut, so a fill plus a
+        stroke is the same hole cut twice, and the two anti-aliased edges landed
+        on top of each other along every boundary. One outline cuts one hole.
+
+        Each corner backs off along both edges and curves through the vertex, so
+        the flats stay flat and only the points go. The tips matter most: they
+        are the sharpest angles in the transport, and the shader builds its bevel
+        from the edge, so a point that acute beveled into a bright spike instead
+        of an edge.
+    -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M5,5 L5,19 L15,12 Z M16.5,5 h2.5 v14 h-2.5 z" />
+        android:pathData="M6.47,6.03 Q5,5 5,6.8 L5,17.2 Q5,19 6.47,17.97 L13.53,13.03 Q15,12 13.53,10.97 Z M16.5,5.7 Q16.5,5 17.2,5 L18.3,5 Q19,5 19,5.7 L19,18.3 Q19,19 18.3,19 L17.2,19 Q16.5,19 16.5,18.3 Z" />
 </vector>
