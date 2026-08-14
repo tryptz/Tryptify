@@ -393,12 +393,9 @@ fun PlayerGlassHaze(
 
     val frostBg = androidx.compose.material3.MaterialTheme.colorScheme.background
     val isDark = frostBg.luminance() <= 0.5f
-    // The frost tint over the blur: deepen a dark ground, lighten a light one,
-    // scaled by the listener's hazeTint. The blur is the haze; this is the
-    // frost, and it is the thin part — most of what reads is the blurred art.
-    val frostTint = (
-        if (isDark) Color.Black.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.45f)
-        ).let { it.copy(alpha = (it.alpha * g.hazeTint).coerceIn(0f, 1f)) }
+    // The blur is the haze; this is the frost, and it is the thin part — most
+    // of what reads through should be the blurred art.
+    val frostTint = playerFrostTint(g, isDark)
 
     androidx.compose.foundation.layout.Box(
         modifier
@@ -413,6 +410,27 @@ fun PlayerGlassHaze(
                 ),
             ),
     )
+}
+
+/**
+ * The wash that goes over the blur — the *frost*, as opposed to the haze.
+ *
+ * One function because this recipe was written out by hand in three places
+ * (here, [tf.monochrome.android.ui.components.GlassPanel], and the player's
+ * audio-tools sheet) and they were free to drift. Every sheet of glass in the
+ * app now frosts by the same rule, scaled by the listener's own "Backdrop
+ * tint" from the Player Visuals Studio.
+ *
+ * The light-theme wash used to be nearly twice the dark one (0.45 white
+ * against 0.32 black). On a light or warm theme that is most of a solid
+ * colour laid over the blur, which is why those panels read as milky slabs
+ * rather than glass — the blurred artwork was there, just buried. The two
+ * sides are even now, and anyone who liked the heavier look can put it back
+ * by raising Backdrop tint, which reaches 2.0.
+ */
+fun playerFrostTint(glass: tf.monochrome.android.domain.model.PlayerGlassSettings, isDark: Boolean): Color {
+    val base = if (isDark) Color.Black.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.26f)
+    return base.copy(alpha = (base.alpha * glass.hazeTint).coerceIn(0f, 1f))
 }
 
 /**

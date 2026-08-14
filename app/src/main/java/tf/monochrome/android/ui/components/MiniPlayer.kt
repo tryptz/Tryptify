@@ -71,6 +71,7 @@ import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.abs
+import tf.monochrome.android.ui.player.playerFrostTint
 
 // Geometry shared between the punched holes and the tap-target overlay so they
 // stay aligned across DPI. The two controls are the rightmost fixed-size cells
@@ -247,9 +248,7 @@ fun MiniPlayer(
         if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
-            val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
-                            else Color.White.copy(alpha = 0.45f))
-                .let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
+            val frostTint = playerFrostTint(glass, isDark)
             Box(
                 Modifier
                     .matchParentSize()

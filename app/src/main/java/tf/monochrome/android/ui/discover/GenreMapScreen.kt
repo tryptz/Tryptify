@@ -136,6 +136,7 @@ import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
+import tf.monochrome.android.ui.player.playerFrostTint
 
 /**
  * The genre map — all 771 genres as one picture you can move around in.
@@ -775,9 +776,7 @@ private fun GenreCard(
             // this the map's edges and labels read straight through it and
             // fight the panel's own text.
             if (allowHaze && glass.hazeBlurDp > 0f) {
-                val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
-                    else Color.White.copy(alpha = 0.45f))
-                    .let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
+                val frostTint = playerFrostTint(glass, isDark)
                 Box(
                     Modifier
                         .matchParentSize()

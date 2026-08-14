@@ -716,7 +716,11 @@ private fun StatusOverlayPanel(
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    // The speed panel's shape and inset, so the two panes read as the same
+    // sheet of glass: GlassPanel insets 12dp and clips to MonoDimens.shapeLg,
+    // and this sheet used to be a full-bleed slab with only its top corners
+    // rounded, sitting visibly wider than the panel it sits beside.
+    val shape = tf.monochrome.android.ui.theme.MonoDimens.shapeLg
     val g = LocalPlayerGlass.current
     val useGlass = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
         g.enabled
@@ -724,6 +728,7 @@ private fun StatusOverlayPanel(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(12.dp)
             .shadow(elevation = 32.dp, shape = shape, clip = false)
             .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f),
         shape = shape,
@@ -748,9 +753,7 @@ private fun StatusOverlayPanel(
         if (useGlass && hazeState != null && profile.allowHazeBlur && g.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
-            val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
-                            else Color.White.copy(alpha = 0.45f))
-                .let { it.copy(alpha = (it.alpha * g.hazeTint).coerceIn(0f, 1f)) }
+            val frostTint = playerFrostTint(g, isDark)
             androidx.compose.foundation.layout.Box(
                 Modifier
                     .matchParentSize()
@@ -785,7 +788,10 @@ private fun StatusOverlayPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = PlayerDesignTokens.ScreenPadding)
+                // The panel itself now insets 12dp, so this sheds 12dp to
+                // leave the content exactly where it was on screen — and
+                // level with the speed panel's, which does the same.
+                .padding(horizontal = PlayerDesignTokens.ScreenPadding - 12.dp)
                 .padding(top = 12.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

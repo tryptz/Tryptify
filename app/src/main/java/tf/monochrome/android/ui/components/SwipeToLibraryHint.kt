@@ -36,6 +36,7 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.playerGlass
 import kotlin.math.floor
 import tf.monochrome.android.ui.theme.glassTint
+import tf.monochrome.android.ui.player.playerFrostTint
 
 private val SlotSpacing = 8.dp
 private val SlotRadius = 2.5.dp
@@ -144,9 +145,7 @@ fun SwipeToLibraryHint(
         if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
-            val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
-                            else Color.White.copy(alpha = 0.45f))
-                .let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
+            val frostTint = playerFrostTint(glass, isDark)
             Box(
                 Modifier
                     .matchParentSize()
