@@ -38,8 +38,12 @@ import tf.monochrome.android.radio.PLANNER_WEIGHT_MAX
 import tf.monochrome.android.radio.PLANNER_WEIGHT_MIN
 
 /**
- * Settings › Radio: connection to the optional Tryptify-Playlist planner and
- * the user-tunable recommendation weights it receives.
+ * Settings › Radio: the recommendation weights radio ranks with, and the
+ * connection to the optional Tryptify-Playlist planner.
+ *
+ * The weights are scored on-device by LocalRadioPlanner and work with no
+ * planner configured. The three under "Needs a planner" describe datasets
+ * that do not live on the device; they are only sent to the service.
  */
 @Composable
 fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
@@ -58,7 +62,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
             GroupHeader("Radio planner")
             tf.monochrome.android.ui.settings.SettingSwitchItem(
                 title = "Use remote planner",
-                subtitle = "Ask the Tryptify-Playlist service for Qobuz recommendation hints. Radio still works without it using similar-artist expansion.",
+                subtitle = "Optional. Asks the Tryptify-Playlist service for extra track suggestions. Radio and every weight below work without it — this only widens where candidates come from.",
                 checked = plannerEnabled,
                 onCheckedChange = viewModel::setPlannerEnabled
             )
@@ -103,7 +107,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
             Spacer(Modifier.height(24.dp))
             GroupHeader("Recommendation weights")
             Text(
-                text = "1.00x is neutral. Lower values down-rank a signal, higher values strengthen it.",
+                text = "1.00x is neutral. Lower values down-rank a signal, higher values strengthen it. These are scored on-device — no planner required.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -130,9 +134,6 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
             WeightSlider("Genre / tag similarity", "Genre and tag continuity.", weights.genreTagSimilarity) {
                 viewModel.updateWeights(weights.copy(genreTagSimilarity = it))
             }
-            WeightSlider("Mood continuity", "Higher keeps the station's mood steadier.", weights.moodContinuity) {
-                viewModel.updateWeights(weights.copy(moodContinuity = it))
-            }
             WeightSlider("Era consistency", "Prefer similar release periods.", weights.eraConsistency) {
                 viewModel.updateWeights(weights.copy(eraConsistency = it))
             }
@@ -142,17 +143,26 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
             WeightSlider("Discovery distance", "How far recommendations may drift from the seed.", weights.discoveryDistance) {
                 viewModel.updateWeights(weights.copy(discoveryDistance = it))
             }
+            WeightSlider("Canonical version bias", "Prefer original recordings over remasters, live takes and edits.", weights.canonicalVersionBias) {
+                viewModel.updateWeights(weights.copy(canonicalVersionBias = it))
+            }
 
             Spacer(Modifier.height(24.dp))
-            GroupHeader("MetaBrainz and identity matching")
+            GroupHeader("Needs a planner")
+            Text(
+                text = "These describe data that isn't on the device, so they only take effect when a remote planner is configured and reachable.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
             WeightSlider("MetaBrainz metadata", "MusicBrainz identity, tags, aliases, relationships.", weights.metabrainzMetadata) {
                 viewModel.updateWeights(weights.copy(metabrainzMetadata = it))
             }
             WeightSlider("ListenBrainz graph", "Co-listening patterns from ListenBrainz.", weights.listenbrainzGraph) {
                 viewModel.updateWeights(weights.copy(listenbrainzGraph = it))
             }
-            WeightSlider("Canonical version bias", "Prefer canonical recordings over remasters and duplicates.", weights.canonicalVersionBias) {
-                viewModel.updateWeights(weights.copy(canonicalVersionBias = it))
+            WeightSlider("Mood continuity", "Keeps the station's mood steady. Needs audio features the app doesn't compute.", weights.moodContinuity) {
+                viewModel.updateWeights(weights.copy(moodContinuity = it))
             }
 
             Spacer(Modifier.height(16.dp))

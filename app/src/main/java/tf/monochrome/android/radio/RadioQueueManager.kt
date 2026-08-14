@@ -26,19 +26,23 @@ import javax.inject.Singleton
 
 /**
  * The radio "queue maker" for the Qobuz (trypt-hifi) catalog: seeds from the
- * playing track, asks the Tryptify-Playlist planner for query/candidate
- * hints, resolves everything against the configured Qobuz instance, and
- * appends batches through [QueueManager]. Refills as the listener nears the
- * queue tail.
+ * playing track, gathers candidates, ranks them against the listener's
+ * recommendation weights, and appends batches through [QueueManager]. Refills
+ * as the listener nears the queue tail.
+ *
+ * Ranking is on-device, in [LocalRadioPlanner], and always runs. The remote
+ * Tryptify-Playlist planner is one optional *source* of candidates among
+ * several — it is good at naming tracks the catalog alone wouldn't surface —
+ * but it is not required for the weights to work, and radio is fully
+ * functional with it switched off. When it is configured its `source_boosts`
+ * additionally scale whole candidate sources during ranking.
  *
  * Resolution is Qobuz-first by design — `searchQobuz` registers every
  * returned id in [QobuzIdRegistry], so appended tracks play through the
- * QobuzCached path on the configured instance. The planner is advisory only:
- * candidates are always validated against the catalog, and when the planner
- * is unconfigured or down the station keeps running on Qobuz artist
- * top-tracks and similar-artist expansion. TIDAL is used only as a last
- * resort when no Qobuz instance is configured at all. This class never
- * mutates ExoPlayer; all queue changes flow through [QueueManager].
+ * QobuzCached path on the configured instance. Candidates are always
+ * validated against the catalog, whatever suggested them. TIDAL is used only
+ * as a last resort when no Qobuz instance is configured at all. This class
+ * never mutates ExoPlayer; all queue changes flow through [QueueManager].
  */
 @Singleton
 class RadioQueueManager @Inject constructor(
@@ -51,6 +55,9 @@ class RadioQueueManager @Inject constructor(
     private val qobuzIdRegistry: QobuzIdRegistry,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Ranks every batch against the user's weights, planner or no planner. */
+    private val localPlanner = LocalRadioPlanner()
 
     private val _isActive = MutableStateFlow(false)
     val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
@@ -166,7 +173,7 @@ class RadioQueueManager @Inject constructor(
         val plan = requestPlan(seed, history)
         _statusMessage.value = when {
             !qobuzConfigured -> "No Qobuz instance set — using TIDAL fallback"
-            plan == null -> "Using Qobuz similar-artist recommendations"
+            plan == null -> null
             plan.fallbackReason != null -> "Planner fallback: ${plan.fallbackReason}"
             else -> null
         }
@@ -187,35 +194,76 @@ class RadioQueueManager @Inject constructor(
                 .filter { it.isNotBlank() }
                 .take(MAX_QUERIES)
                 .map { query ->
-                    async { search(query).take(5) }
+                    async {
+                        search(query).take(5).map {
+                            RadioCandidate(it, CandidateOrigin.SEARCH, fromQobuz = qobuzConfigured)
+                        }
+                    }
                 }
-            // Deterministic backbone so radio works with the planner disabled
-            // and pads out thin planner batches. Qobuz: seed artist's top
-            // tracks + similar-artist expansion. TIDAL (unconfigured Qobuz
-            // only): catalog track radio.
+            // The on-device backbone. Radio runs on this alone when no planner
+            // is configured — Qobuz: the seed artist's top tracks plus
+            // similar-artist expansion; TIDAL (unconfigured Qobuz only):
+            // catalog track radio.
             val backbone = async {
-                if (qobuzConfigured) qobuzBackbone(seed)
-                else repository.getRecommendations(seed.id).getOrDefault(emptyList())
+                if (qobuzConfigured) {
+                    qobuzBackbone(seed)
+                } else {
+                    repository.getRecommendations(seed.id).getOrDefault(emptyList()).map {
+                        RadioCandidate(it, CandidateOrigin.SEARCH, fromQobuz = false)
+                    }
+                }
             }
-            val hints = hintResults.mapNotNull { it.await() }
-            val queries = queryResults.flatMap { it.await() }
-            // Hints are the planner's strongest signal; the backbone next;
-            // broad query results last.
-            hints + backbone.await() + queries
+            val hints = hintResults.mapNotNull { it.await() }.map {
+                RadioCandidate(it, CandidateOrigin.PLANNER_HINT, fromQobuz = qobuzConfigured)
+            }
+            hints + backbone.await() + queryResults.flatMap { it.await() }
         }
 
-        val historyIds = history.map { it.id }.toSet()
-        val historyKeys = history.map { titleKey(it) }.toSet()
-        return candidates
+        // Rank on-device against the user's weights. This is what makes those
+        // sliders mean something with no planner configured — previously the
+        // order was just hints, then backbone, then queries, and the weights
+        // were only ever read by the remote service.
+        val libraryKeys = libraryKeys()
+        val ranked = localPlanner.rank(
+            candidates = candidates.map { it.copy(inLibrary = titleKey(it.track) in libraryKeys) },
+            context = RadioTasteContext(
+                seed = seed,
+                historyKeys = history.map { titleKey(it) },
+                libraryKeys = libraryKeys,
+                // Previously decoded and thrown away; now it scales whole
+                // sources when a planner has an opinion about them.
+                sourceBoosts = plan?.sourceBoosts.orEmpty(),
+            ),
+            weights = preferences.radioPlannerWeights.first(),
+        )
+
+        // History is no longer filtered out outright — "avoid recently played"
+        // is a weight, and a hard filter is the one setting of it the user
+        // cannot change. It is a strong penalty instead, so recent tracks sink
+        // to the bottom of the pool and only resurface when the alternative is
+        // an empty batch, which is what used to stop the station dead.
+        return ranked
             .asSequence()
+            .map { it.candidate.track }
             .filter { it.id != seed.id }
-            .filter { it.id !in seenTrackIds && it.id !in historyIds }
-            .filter { titleKey(it) !in seenTitleKeys && titleKey(it) !in historyKeys }
+            .filter { it.id !in seenTrackIds }
+            .filter { titleKey(it) !in seenTitleKeys }
             .distinctBy { it.id }
             .distinctBy { titleKey(it) }
             .take(BATCH_SIZE)
             .toList()
     }
+
+    /**
+     * Songs the listener already holds on-device — favourites and completed
+     * downloads — as dedupe keys, for the "local library" weight.
+     */
+    private suspend fun libraryKeys(): Set<String> = runCatching {
+        val favorites = libraryRepository.getFavoriteTracks().first().map { titleKey(it) }
+        val downloads = libraryRepository.getDownloadedTracks().first()
+            .map { keyOf(it.artistName, it.title) }
+        (favorites + downloads).toSet()
+    }.getOrDefault(emptySet())
 
     /**
      * Qobuz on-device backbone: the seed artist's top tracks plus the top
@@ -224,23 +272,39 @@ class RadioQueueManager @Inject constructor(
      * playback), padded with a plain artist search when the seed's Qobuz
      * artist id isn't known.
      */
-    private suspend fun qobuzBackbone(seed: Track): List<Track> = coroutineScope {
+    private suspend fun qobuzBackbone(seed: Track): List<RadioCandidate> = coroutineScope {
         val artistId = seedQobuzArtistId(seed)
         val detail = artistId?.let { repository.getQobuzArtist(it).getOrNull() }
+        // Position in the similar-artist list IS the distance from the seed —
+        // the signal both "artist similarity" and "discovery distance" score
+        // against — so it is captured here rather than lost in a flat list.
         val similarTops = detail?.similarArtists.orEmpty()
             .take(MAX_SIMILAR_ARTISTS)
-            .map { artist ->
+            .mapIndexed { index, artist ->
                 async {
                     repository.getQobuzArtist(artist.id).getOrNull()
                         ?.topTracks.orEmpty().take(TOP_TRACKS_PER_ARTIST)
+                        .map {
+                            RadioCandidate(
+                                it,
+                                CandidateOrigin.SIMILAR_ARTIST,
+                                artistDistance = index + 1,
+                            )
+                        }
                 }
             }
         val artistSearch = async {
             val artistName = seed.displayArtist
-            if (artistName.isBlank()) emptyList()
-            else searchQobuzTracks(artistName).take(TOP_TRACKS_PER_ARTIST)
+            if (artistName.isBlank()) {
+                emptyList()
+            } else {
+                searchQobuzTracks(artistName).take(TOP_TRACKS_PER_ARTIST).map {
+                    RadioCandidate(it, CandidateOrigin.SEARCH, artistDistance = 0)
+                }
+            }
         }
-        detail?.topTracks.orEmpty().take(TOP_TRACKS_PER_ARTIST) +
+        detail?.topTracks.orEmpty().take(TOP_TRACKS_PER_ARTIST)
+            .map { RadioCandidate(it, CandidateOrigin.SEED_ARTIST, artistDistance = 0) } +
             similarTops.flatMap { it.await() } +
             artistSearch.await()
     }
@@ -322,8 +386,10 @@ class RadioQueueManager @Inject constructor(
         seenTitleKeys += titleKey(track)
     }
 
-    private fun titleKey(track: Track): String =
-        "${track.displayArtist}|${track.title}".lowercase().filter { it.isLetterOrDigit() || it == '|' }
+    private fun titleKey(track: Track): String = keyOf(track.displayArtist, track.title)
+
+    private fun keyOf(artist: String, title: String): String =
+        "$artist|$title".lowercase().filter { it.isLetterOrDigit() || it == '|' }
 
     companion object {
         private const val TAG = "RadioQueueManager"
