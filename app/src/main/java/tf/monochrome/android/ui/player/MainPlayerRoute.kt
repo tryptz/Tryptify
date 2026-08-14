@@ -55,6 +55,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import androidx.compose.ui.graphics.graphicsLayer
@@ -239,6 +241,7 @@ fun MainPlayerRoute(
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
     HandleFullscreenInsets(isFullscreenActive)
+    PlayerSystemBarAppearance(blendedColors.dominant)
 
     // --- Sheets ---
     if (showLyricsSheet) {
@@ -723,6 +726,53 @@ fun MainPlayerRoute(
     }
 }
 
+
+/**
+ * Hand the status and navigation bars to the player's own background.
+ *
+ * The app sets their appearance once, from the theme's background. That is
+ * right for every other screen and wrong for this one: the player does not use
+ * the theme's background, it paints the album colour washed into black. On a
+ * light theme the system went on drawing dark icons, and the home indicator
+ * vanished into the bottom of the gradient.
+ *
+ * Each bar is judged against the pixels actually under it rather than one
+ * verdict for the screen, because the two ends of [dynamicPlayerBackground] are
+ * nothing like each other: the top carries the album wash, the bottom is flat
+ * [PlayerDesignTokens.BackgroundBlack]. Both stops are translucent, so they are
+ * composited over that same black before being measured — reading the stop
+ * colour neat would call a half-transparent wash far brighter than it lands.
+ *
+ * The blurred-artwork background, when it is on, only ever darkens both ends
+ * further (black at 0.58 over the top, 0.72 over the bottom), so the gradient
+ * alone is the bright case and deciding from it cannot leave a bar too light.
+ *
+ * Restored on the way out rather than left set, or backing out to a light theme
+ * would keep the player's icons and the rest of the app would lose its own.
+ */
+@Composable
+private fun PlayerSystemBarAppearance(albumDominant: Color) {
+    val view = LocalView.current
+    val window = (view.context as? android.app.Activity)?.window
+
+    val ground = PlayerDesignTokens.BackgroundBlack
+    val wash = lerp(albumDominant, Color.Black, 0.5f)
+    // `lightBars` in the platform's sense: dark icons, for a light background.
+    val lightStatus = lerp(ground, wash, wash.alpha * 0.5f).luminance() > 0.5f
+    val lightNav = ground.luminance() > 0.5f
+
+    DisposableEffect(lightStatus, lightNav, window, view) {
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val hadLightStatus = controller?.isAppearanceLightStatusBars
+        val hadLightNav = controller?.isAppearanceLightNavigationBars
+        controller?.isAppearanceLightStatusBars = lightStatus
+        controller?.isAppearanceLightNavigationBars = lightNav
+        onDispose {
+            hadLightStatus?.let { controller?.isAppearanceLightStatusBars = it }
+            hadLightNav?.let { controller?.isAppearanceLightNavigationBars = it }
+        }
+    }
+}
 
 @Composable
 private fun HandleFullscreenInsets(isFullscreenActive: Boolean) {
