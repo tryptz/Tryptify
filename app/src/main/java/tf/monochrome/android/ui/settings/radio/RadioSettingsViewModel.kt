@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
@@ -20,8 +21,25 @@ class RadioSettingsViewModel @Inject constructor(
     private val plannerClient: RadioPlannerClient,
 ) : ViewModel() {
 
-    val weights: StateFlow<RadioPlannerWeights> = preferences.radioPlannerWeights
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RadioPlannerWeights.DEFAULT)
+    // An in-memory working copy drives the weight sliders, so a drag updates
+    // instantly with no I/O. Persisting each frame wrote all fourteen float
+    // keys to DataStore, and the flow those sliders read from is DataStore's
+    // own — so every frame of a drag also re-emitted and recomposed the whole
+    // tab. Writes are debounced to the tail of the gesture instead.
+    private val _weights = MutableStateFlow(RadioPlannerWeights.DEFAULT)
+    val weights: StateFlow<RadioPlannerWeights> = _weights.asStateFlow()
+
+    private var userTouched = false
+    private var weightsPersistJob: kotlinx.coroutines.Job? = null
+
+    init {
+        viewModelScope.launch {
+            // Seed once; after the user starts tuning, the in-memory copy leads
+            // so our own debounced writes never echo back over a live drag.
+            val stored = preferences.radioPlannerWeights.first()
+            if (!userTouched) _weights.value = stored
+        }
+    }
 
     val plannerEnabled: StateFlow<Boolean> = preferences.radioPlannerEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
@@ -40,11 +58,22 @@ class RadioSettingsViewModel @Inject constructor(
     val connectionStatus: StateFlow<String?> = _connectionStatus.asStateFlow()
 
     fun updateWeights(weights: RadioPlannerWeights) {
-        viewModelScope.launch { preferences.setRadioPlannerWeights(weights) }
+        userTouched = true
+        _weights.value = weights.clamped()
+        weightsPersistJob?.cancel()
+        weightsPersistJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(WEIGHTS_PERSIST_DEBOUNCE_MS)
+            preferences.setRadioPlannerWeights(_weights.value)
+        }
     }
 
     fun resetDefaults() {
-        viewModelScope.launch { preferences.resetRadioPlannerWeights() }
+        userTouched = true
+        _weights.value = RadioPlannerWeights.DEFAULT
+        // A tap, not a drag — write it straight through, and drop any pending
+        // drag tail that would otherwise land on top of the reset.
+        weightsPersistJob?.cancel()
+        weightsPersistJob = viewModelScope.launch { preferences.resetRadioPlannerWeights() }
     }
 
     fun setPlannerEnabled(enabled: Boolean) {
@@ -90,5 +119,10 @@ class RadioSettingsViewModel @Inject constructor(
                 _isTesting.value = false
             }
         }
+    }
+
+    private companion object {
+        /** Drag-tail delay before weight edits reach DataStore. */
+        const val WEIGHTS_PERSIST_DEBOUNCE_MS = 150L
     }
 }
