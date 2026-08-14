@@ -21,6 +21,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -204,6 +205,17 @@ fun MainPlayerScreen(
     lyricsMode: Boolean = false,
     // Full-screen blurred, stretched album-art background (Appearance setting).
     blurredBackground: Boolean = false,
+    /**
+     * Chrome the route wants drawn over the player, inside the player's own
+     * window — a slot rather than the route rendering it itself, because *where*
+     * is the whole point. It lands here as a sibling of the haze source, so a
+     * pane in it can gaussian-blur the background the way the audio-tools sheet
+     * does. A route-owned dialog or modal sheet is a separate window and can
+     * only ever show the flat tint.
+     *
+     * Drawn last, above the audio-tools sheet and its scrim.
+     */
+    overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val accent = state.albumColors.vibrant
 
@@ -574,6 +586,8 @@ fun MainPlayerScreen(
             )
             }
         }
+
+        overlay()
     }
     }
 }

@@ -4,8 +4,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -267,15 +274,10 @@ fun MainPlayerRoute(
             onDismiss = { showPresetSheet = false },
         )
     }
-    if (showSpeedSheet) {
-        SpeedSheet(
-            speed = playbackSpeed,
-            preservePitch = preservePitch,
-            onSpeedChange = playerViewModel::setPlaybackSpeed,
-            onPreservePitchChange = playerViewModel::setPreservePitch,
-            onDismiss = { showSpeedSheet = false },
-        )
-    }
+    // The speed panel is NOT called here with its siblings. It is handed to
+    // MainPlayerScreen's `overlay` slot below so it renders inside the player's
+    // own window, next to the haze source — the only place a pane can actually
+    // blur this screen. See SpeedPanel.
     val sleepRemainingMinutes = ((sleepRemainingMs + 59_999) / 60_000).toInt()
     if (showSleepSheet) {
         SleepTimerSheet(
@@ -720,6 +722,30 @@ fun MainPlayerRoute(
                 // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
                 lyricsMode = lyricsSlotWide,
                 blurredBackground = blurredBackground,
+                overlay = {
+                    SpeedPanel(
+                        visible = showSpeedSheet,
+                        speed = playbackSpeed,
+                        preservePitch = preservePitch,
+                        onSpeedChange = playerViewModel::setPlaybackSpeed,
+                        onPreservePitchChange = playerViewModel::setPreservePitch,
+                        onDismiss = { showSpeedSheet = false },
+                    )
+                },
+            )
+        }
+        // The legacy layout has no `overlay` slot and no haze source of its own,
+        // so the panel hangs here instead. LocalPlayerHaze is null on that path
+        // and GlassPanel falls back to plain translucent glass — the same pane
+        // the modal sheet used to give everyone.
+        if (legacyPlayer) {
+            SpeedPanel(
+                visible = showSpeedSheet,
+                speed = playbackSpeed,
+                preservePitch = preservePitch,
+                onSpeedChange = playerViewModel::setPlaybackSpeed,
+                onPreservePitchChange = playerViewModel::setPreservePitch,
+                onDismiss = { showSpeedSheet = false },
             )
         }
     }
@@ -800,33 +826,66 @@ private fun HandleFullscreenInsets(isFullscreenActive: Boolean) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Playback speed, on glass that actually frosts the player behind it.
+ *
+ * This was a [ModalBottomSheet], and that is why it never hazed. A modal sheet
+ * is its own window; the player's backdrop was captured into a layer belonging
+ * to the window behind it, and a haze effect cannot sample a layer from another
+ * window — handing the state across yields a pane frosting a picture it cannot
+ * read, which paints its own base colour and reads as a solid slab. There is no
+ * setting that fixes that; the pane has to move.
+ *
+ * So it lives in the player's window now, handed to [MainPlayerScreen]'s
+ * `overlay` slot, where it is a sibling of the haze source exactly as the
+ * audio-tools sheet is, and [LocalPlayerHaze] is a real backdrop to blur.
+ *
+ * The scrim and the slide are the price of leaving [ModalBottomSheet] behind.
+ * Both stay mounted while [visible] is false so the exit animation has
+ * something to play on — dropping the panel the instant it is dismissed would
+ * make it vanish rather than leave.
+ */
 @Composable
-private fun SpeedSheet(
+private fun BoxScope.SpeedPanel(
+    visible: Boolean,
     speed: Float,
     preservePitch: Boolean,
     onSpeedChange: (Float) -> Unit,
     onPreservePitchChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        // The sheet's own container steps aside so the glass inside it is the
-        // only surface. Left at its default it painted an opaque Material slab
-        // over the pane, and there was nothing to see through.
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+    // Ahead of the player's own Back handling while the panel is up, and out of
+    // the way entirely when it is not.
+    BackHandler(enabled = visible) { onDismiss() }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.matchParentSize(),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        )
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter),
     ) {
         GlassPanel(
-            // No haze, deliberately. A modal sheet is its own window and the
-            // app's backdrop layer was captured in the one behind it; handing
-            // that state across is how a pane ends up frosting a picture it
-            // cannot read and painting its own base colour instead — the flat
-            // slab. Without it the shader still relights the pane over the
-            // player showing through the transparent container above.
-            hazeState = null,
+            // The real thing at last: the player's background layer, which this
+            // pane is a sibling of rather than a descendant.
+            hazeState = LocalPlayerHaze.current,
             // The mini player's material, like every other floating pane in the
             // app that isn't the transport itself.
             glass = LocalMiniPlayerGlass.current,
