@@ -37,6 +37,7 @@ import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 import tf.monochrome.android.ui.theme.glassTint
@@ -114,7 +115,14 @@ fun GlassPanel(
                     shaderGlass -> Modifier
                     allowHaze && !flat ->
                         Modifier.liquidGlass(hazeState = hazeState, shape = MonoDimens.shapeLg)
-                    else -> Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    // Last resort: no shader, no blur. It still must not be a
+                    // fully opaque slab when the listener has asked for
+                    // see-through glass, so body opacity governs this path too
+                    // — floored so text stays readable over raw artwork.
+                    else -> Modifier.background(
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                            .copy(alpha = glass.bodyOpacity.coerceIn(0.55f, 1f)),
+                    )
                 },
             ),
     ) {
@@ -150,13 +158,10 @@ fun GlassPanel(
             // frost's own base colour as a flat pane, which is the slab this
             // whole component exists not to be.
             if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
-                // The mini player's exact frost. This panel is the same material
-                // as that bar and is usually on screen beside it, so the numbers
-                // are the same numbers rather than a second set that drifts.
-                val frostTint = (
-                    if (isDark) Color.Black.copy(alpha = 0.32f)
-                    else Color.White.copy(alpha = 0.45f)
-                    ).let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
+                // The mini player's exact frost, from the one shared recipe —
+                // this panel is the same material as that bar and is usually on
+                // screen beside it.
+                val frostTint = playerFrostTint(glass, isDark)
                 Box(
                     Modifier
                         .matchParentSize()

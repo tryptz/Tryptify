@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import tf.monochrome.android.data.preferences.PreferencesManager
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,13 +30,8 @@ class RadioPlannerClient @Inject constructor(
     private val httpClient: HttpClient,
     private val preferences: PreferencesManager,
 ) {
-    // Own Json config: encodeDefaults so neutral weights are still sent
-    // explicitly, ignoreUnknownKeys so server additions never break decoding.
-    private val json = Json {
-        encodeDefaults = true
-        ignoreUnknownKeys = true
-        explicitNulls = false
-    }
+    // See [plannerJson] for why this config is shared rather than private here.
+    private val json = plannerJson
 
     /** True when the planner is enabled and has both a URL and an API key. */
     suspend fun isConfigured(): Boolean {

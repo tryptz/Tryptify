@@ -2,6 +2,26 @@ package tf.monochrome.android.radio
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+/**
+ * The wire encoder for every planner call.
+ *
+ * `encodeDefaults` so neutral weights are still sent explicitly — a weight the
+ * user left at 1.0 still has to reach the server, because the server's own
+ * default for that signal is not necessarily neutral. `ignoreUnknownKeys` so
+ * server additions never break decoding, `explicitNulls` off so absent optional
+ * context is omitted rather than sent as null.
+ *
+ * Shared (rather than private to [RadioPlannerClient]) so tests assert against
+ * the encoder that actually produces request bodies instead of a lookalike that
+ * could drift from it.
+ */
+internal val plannerJson: Json = Json {
+    encodeDefaults = true
+    ignoreUnknownKeys = true
+    explicitNulls = false
+}
 
 /**
  * Compact identity for a track, used for MetaBrainz matching on the planner

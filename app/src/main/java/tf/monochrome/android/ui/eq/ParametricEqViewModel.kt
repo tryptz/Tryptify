@@ -28,6 +28,11 @@ class ParametricEqViewModel @Inject constructor(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    // Drag-tail persistence: one in-flight job per key, so a coalesced write
+    // can be superseded by the next edit instead of stacking up per frame.
+    private var bandsPersistJob: kotlinx.coroutines.Job? = null
+    private var preampPersistJob: kotlinx.coroutines.Job? = null
+
     private val _enabled = MutableStateFlow(false)
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
 
@@ -103,7 +108,7 @@ class ParametricEqViewModel @Inject constructor(
     fun updateBand(band: EqBand) {
         val updated = _currentBands.value.map { if (it.id == band.id) band else it }
         _currentBands.value = updated
-        saveBands(updated)
+        saveBands(updated, coalesce = true)
     }
 
     fun updateBandByDrag(bandId: Int, newFreq: Float, newGain: Float) {
@@ -117,12 +122,12 @@ class ParametricEqViewModel @Inject constructor(
             ) else b
         }
         _currentBands.value = updated
-        saveBands(updated)
+        saveBands(updated, coalesce = true)
     }
 
     fun setPreamp(preamp: Float) {
         _currentPreamp.value = preamp
-        viewModelScope.launch { preferences.setParamEqPreamp(preamp.toDouble()) }
+        persistPreamp(preamp.toDouble(), coalesce = true)
     }
 
     fun addBand() {
@@ -175,7 +180,7 @@ class ParametricEqViewModel @Inject constructor(
         _currentBands.value = flat
         _currentPreamp.value = 0f
         saveBands(flat)
-        viewModelScope.launch { preferences.setParamEqPreamp(0.0) }
+        persistPreamp(0.0)
     }
 
     fun loadPreset(presetId: String) {
@@ -190,7 +195,7 @@ class ParametricEqViewModel @Inject constructor(
             _currentPreamp.value = preset.preamp
             _selectedBandId.value = preset.bands.firstOrNull()?.id ?: -1
             preferences.setParamEqActivePreset(presetId)
-            preferences.setParamEqPreamp(preset.preamp.toDouble())
+            persistPreamp(preset.preamp.toDouble())
             saveBands(preset.bands)
         }
     }
@@ -249,7 +254,7 @@ class ParametricEqViewModel @Inject constructor(
                     // the page's own slider allows.
                     val preamp = profile.preamp.coerceIn(-24f, 24f)
                     _currentPreamp.value = preamp
-                    preferences.setParamEqPreamp(preamp.toDouble())
+                    persistPreamp(preamp.toDouble())
                     _activePreset.value = preset
                     preferences.setParamEqActivePreset(preset.id)
                     if (!_enabled.value) setEnabled(true)
@@ -289,14 +294,35 @@ class ParametricEqViewModel @Inject constructor(
         _error.value = null
     }
 
-    private fun saveBands(bands: List<EqBand>) {
-        viewModelScope.launch {
+    /**
+     * Persist the band list.
+     *
+     * [coalesce] is for the continuous edits — a band slider or a graph drag,
+     * which fire dozens of times a second. Each save JSON-encodes every band
+     * and writes DataStore, and the audio path re-applies the parametric chain
+     * off that key, so an uncoalesced drag rebuilt every filter on every frame.
+     * Structural changes (add/remove, preset load, reset) write straight
+     * through — they happen once and must not be lost to a cancel.
+     */
+    private fun saveBands(bands: List<EqBand>, coalesce: Boolean = false) {
+        bandsPersistJob?.cancel()
+        bandsPersistJob = viewModelScope.launch {
             try {
-                val bandsJson = json.encodeToString(bands)
-                preferences.setParamEqBands(bandsJson)
+                if (coalesce) kotlinx.coroutines.delay(PERSIST_DEBOUNCE_MS)
+                preferences.setParamEqBands(json.encodeToString(bands))
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _error.value = "Failed to save bands: ${e.message}"
             }
+        }
+    }
+
+    /** Single writer for the preamp, so an immediate write always beats a pending drag tail. */
+    private fun persistPreamp(value: Double, coalesce: Boolean = false) {
+        preampPersistJob?.cancel()
+        preampPersistJob = viewModelScope.launch {
+            if (coalesce) kotlinx.coroutines.delay(PERSIST_DEBOUNCE_MS)
+            preferences.setParamEqPreamp(value)
         }
     }
 
@@ -307,4 +333,9 @@ class ParametricEqViewModel @Inject constructor(
         EqBand(id = 3, type = FilterType.PEAKING, freq = 4000f, gain = 0f, q = 1.0f),
         EqBand(id = 4, type = FilterType.PEAKING, freq = 12000f, gain = 0f, q = 1.0f)
     )
+
+    private companion object {
+        /** Drag-tail delay before a continuous edit reaches DataStore. */
+        const val PERSIST_DEBOUNCE_MS = 120L
+    }
 }

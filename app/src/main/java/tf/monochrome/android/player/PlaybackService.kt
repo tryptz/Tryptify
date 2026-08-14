@@ -29,7 +29,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -149,7 +152,7 @@ class PlaybackService : MediaSessionService() {
         )
     }
 
-    @OptIn(UnstableApi::class)
+    @OptIn(UnstableApi::class, FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
 
@@ -583,7 +586,17 @@ class PlaybackService : MediaSessionService() {
                     tone = v[5] as tf.monochrome.android.domain.model.ToneControls,
                     systemWide = v[6] as Boolean,
                 )
-            }.collect { applyEqSettings(it) }
+            }
+                // DataStore re-emits its whole Preferences on EVERY write to
+                // ANY key, so without this dedup an unrelated setting change
+                // re-decodes every band and rebuilds the entire filter chain.
+                // Same reasoning as SystemAudioEqController's observer.
+                .distinctUntilChanged()
+                // Coalesce EQ slider and graph drags. The editors already hold
+                // their writes back to the tail of a gesture; this bounds the
+                // rebuild rate for every other producer of these keys too.
+                .debounce(EQ_APPLY_DEBOUNCE_MS)
+                .collectLatest { applyEqSettings(it) }
         }
 
         // Listen to Parametric EQ changes and apply them
@@ -594,9 +607,12 @@ class PlaybackService : MediaSessionService() {
                 preferences.paramEqPreamp
             ) { enabled, bandsJson, preamp ->
                 Triple(enabled, bandsJson, preamp)
-            }.collect { (enabled, bandsJson, preamp) ->
-                applyParametricEqSettings(enabled, bandsJson, preamp)
             }
+                .distinctUntilChanged()
+                .debounce(EQ_APPLY_DEBOUNCE_MS)
+                .collectLatest { (enabled, bandsJson, preamp) ->
+                    applyParametricEqSettings(enabled, bandsJson, preamp)
+                }
         }
 
         // Restore DSP mixer state when the native engine becomes ready
@@ -1067,6 +1083,9 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /** Shared by both EQ appliers; these were built fresh on every apply. */
+    private val eqJson = Json { ignoreUnknownKeys = true }
+
     @Volatile private var lastAutoEq = AppliedEq.NONE
     @Volatile private var lastParametricEq = AppliedEq.NONE
 
@@ -1245,6 +1264,13 @@ class PlaybackService : MediaSessionService() {
     private companion object {
         /** Retries a failing position before moving past it. */
         const val MAX_CONSECUTIVE_PLAYER_ERRORS = 2
+
+        /**
+         * How long an EQ preference change settles before the filter chain is
+         * rebuilt. Short enough to read as instant on a slider release, long
+         * enough that a drag can never rebuild every biquad frame by frame.
+         */
+        const val EQ_APPLY_DEBOUNCE_MS = 60L
 
         /**
          * The same, for a live station. Far more generous, and deliberately so:
@@ -1503,10 +1529,9 @@ class PlaybackService : MediaSessionService() {
                 lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
                 return
             }
-            val json = Json { ignoreUnknownKeys = true }
             fun decode(bandsJson: String?): List<EqBand> =
                 if (cfg.enabled && !bandsJson.isNullOrEmpty()) {
-                    json.decodeFromString(bandsJson)
+                    eqJson.decodeFromString(bandsJson)
                 } else {
                     emptyList()
                 }
@@ -1548,8 +1573,7 @@ class PlaybackService : MediaSessionService() {
     private fun applyParametricEqSettings(enabled: Boolean, bandsJson: String?, preamp: Double) {
         try {
             val bands = if (!bandsJson.isNullOrEmpty()) {
-                val json = Json { ignoreUnknownKeys = true }
-                json.decodeFromString<List<EqBand>>(bandsJson)
+                eqJson.decodeFromString<List<EqBand>>(bandsJson)
             } else {
                 emptyList()
             }

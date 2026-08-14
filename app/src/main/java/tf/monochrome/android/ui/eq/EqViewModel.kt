@@ -165,6 +165,14 @@ class EqViewModel @Inject constructor(
         _toneControls.asStateFlow()
     private var tonePersistJob: kotlinx.coroutines.Job? = null
 
+    // Drag-tail persistence. One Json instance rather than one per save (these
+    // used to be constructed per call, i.e. per drag frame), and one in-flight
+    // job per key so a coalesced write can be superseded by the next edit.
+    private val persistJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    private var bandsPersistJob: kotlinx.coroutines.Job? = null
+    private var bandsRPersistJob: kotlinx.coroutines.Job? = null
+    private var preampPersistJob: kotlinx.coroutines.Job? = null
+
     private val _availableTargets = MutableStateFlow<List<EqTarget>>(FrequencyTargets.getAllTargets())
     val availableTargets: StateFlow<List<EqTarget>> = _availableTargets.asStateFlow()
 
@@ -514,7 +522,7 @@ class EqViewModel @Inject constructor(
 
             // Update preferences
             preferences.setEqActivePreset(presetId)
-            preferences.setEqPreamp(preset.preamp.toDouble())
+            persistPreamp(preset.preamp.toDouble())
             preferences.setEqTarget(preset.targetId)
 
             // Update UI
@@ -539,7 +547,7 @@ class EqViewModel @Inject constructor(
             if (indexR >= 0) {
                 updatedR[indexR] = newBand
                 _currentBandsR.value = updatedR
-                saveBandsRToPreferences(updatedR)
+                saveBandsRToPreferences(updatedR, coalesce = true)
             }
             return
         }
@@ -548,7 +556,7 @@ class EqViewModel @Inject constructor(
         if (index >= 0) {
             updatedBands[index] = newBand
             _currentBands.value = updatedBands
-            saveBandsToPreferences(updatedBands)
+            saveBandsToPreferences(updatedBands, coalesce = true)
         }
     }
 
@@ -571,8 +579,21 @@ class EqViewModel @Inject constructor(
         val headroom = (EqLimits.AUTOEQ_MAX_TOTAL_DB - peakBand).coerceAtLeast(0f)
         val clamped = preamp.coerceIn(-headroom, headroom)
         _currentPreamp.value = clamped
-        viewModelScope.launch {
-            preferences.setEqPreamp(clamped.toDouble())
+        // Same drag-tail treatment as the bands: the slider is continuous and
+        // the audio path re-applies the whole chain off this preference.
+        persistPreamp(clamped.toDouble(), coalesce = true)
+    }
+
+    /**
+     * Single writer for the preamp preference, so an immediate write (reset,
+     * preset load, auto-preamp) always cancels a drag's pending tail rather
+     * than being overwritten by it a moment later.
+     */
+    private fun persistPreamp(value: Double, coalesce: Boolean = false) {
+        preampPersistJob?.cancel()
+        preampPersistJob = viewModelScope.launch {
+            if (coalesce) kotlinx.coroutines.delay(PERSIST_DEBOUNCE_MS)
+            preferences.setEqPreamp(value)
         }
     }
 
@@ -739,7 +760,7 @@ class EqViewModel @Inject constructor(
         // briefly sets the stored preamp before the recompute lands.
         if (kotlin.math.abs(auto - _currentPreamp.value) < 0.01f) return
         _currentPreamp.value = auto
-        viewModelScope.launch { preferences.setEqPreamp(auto.toDouble()) }
+        persistPreamp(auto.toDouble())
     }
 
     /**
@@ -773,6 +794,9 @@ class EqViewModel @Inject constructor(
 
     private companion object {
         const val AUTO_PREAMP_GRID_POINTS = 96
+
+        /** Drag-tail delay before a continuous edit reaches DataStore. */
+        const val PERSIST_DEBOUNCE_MS = 120L
 
         // Canonical rate for the fit/graph response model. With matched
         // (decramped) coefficients the modeled response is rate-invariant to
@@ -812,9 +836,7 @@ class EqViewModel @Inject constructor(
             _currentBandsR.value = flatR
             saveBandsRToPreferences(flatR)
         }
-        viewModelScope.launch {
-            preferences.setEqPreamp(0.0)
-        }
+        persistPreamp(0.0)
     }
 
     /**
@@ -916,7 +938,7 @@ class EqViewModel @Inject constructor(
                     // manual preamp adopts the file's value.
                     if (!_autoPreamp.value) {
                         _currentPreamp.value = preamp
-                        preferences.setEqPreamp(preamp.toDouble())
+                        persistPreamp(preamp.toDouble())
                     }
                     // "Upload" means HEAR it — enabling beats silently
                     // importing into a bypassed EQ.
@@ -1423,10 +1445,10 @@ class EqViewModel @Inject constructor(
             )
             if (editRight) {
                 _currentBandsR.value = updatedBands
-                saveBandsRToPreferences(updatedBands)
+                saveBandsRToPreferences(updatedBands, coalesce = true)
             } else {
                 _currentBands.value = updatedBands
-                saveBandsToPreferences(updatedBands)
+                saveBandsToPreferences(updatedBands, coalesce = true)
             }
         }
     }
@@ -1626,39 +1648,48 @@ class EqViewModel @Inject constructor(
 
     // ===== Private Helpers =====
 
-    private fun saveBandsToPreferences(bands: List<EqBand>) {
-        viewModelScope.launch {
+    /**
+     * Persist the band list.
+     *
+     * [coalesce] is for the continuous edits — a slider or graph drag, which
+     * fires dozens of times a second. Each save JSON-encodes every band and
+     * writes DataStore, and the audio path listens to that key: without
+     * coalescing, one drag rebuilt the entire biquad chain (and re-read the
+     * whole preference blob everywhere else watching it) on every frame. The
+     * value still lands a beat after the finger stops. Structural changes
+     * (presets, AutoEQ results, add/remove, import) leave it off and write
+     * straight through — they happen once and must not be lost to a cancel.
+     */
+    private fun saveBandsToPreferences(bands: List<EqBand>, coalesce: Boolean = false) {
+        bandsPersistJob?.cancel()
+        bandsPersistJob = viewModelScope.launch {
             try {
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                val bandsJson = json.encodeToString(
-                    kotlinx.serialization.builtins.ListSerializer(
-                        EqBand.serializer()
-                    ),
-                    bands
-                )
-                preferences.setEqBands(bandsJson)
+                if (coalesce) kotlinx.coroutines.delay(PERSIST_DEBOUNCE_MS)
+                preferences.setEqBands(encodeBands(bands))
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _error.value = "Failed to save bands: ${e.message}"
             }
         }
     }
 
-    private fun saveBandsRToPreferences(bands: List<EqBand>) {
-        viewModelScope.launch {
+    private fun saveBandsRToPreferences(bands: List<EqBand>, coalesce: Boolean = false) {
+        bandsRPersistJob?.cancel()
+        bandsRPersistJob = viewModelScope.launch {
             try {
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                val bandsJson = json.encodeToString(
-                    kotlinx.serialization.builtins.ListSerializer(
-                        EqBand.serializer()
-                    ),
-                    bands
-                )
-                preferences.setEqBandsR(bandsJson)
+                if (coalesce) kotlinx.coroutines.delay(PERSIST_DEBOUNCE_MS)
+                preferences.setEqBandsR(encodeBands(bands))
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _error.value = "Failed to save right-channel bands: ${e.message}"
             }
         }
     }
+
+    private fun encodeBands(bands: List<EqBand>): String = persistJson.encodeToString(
+        kotlinx.serialization.builtins.ListSerializer(EqBand.serializer()),
+        bands,
+    )
 }
 
 /** Which ear a band edit or measurement load targets in 2-channel mode. */

@@ -901,8 +901,13 @@ private fun BoxScope.SpeedPanel(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // The panel takes its accents from the active theme. These were
+            // PlayerGlowMint and a fixed magenta, which read as two neon
+            // imports on every theme that isn't dark-and-cool — mint sitting
+            // on a warm amber panel being the case that prompted this.
+            val speedAccent = MaterialTheme.colorScheme.primary
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Icon(Icons.Default.Speed, contentDescription = null, tint = PlayerGlowMint)
+                Icon(Icons.Default.Speed, contentDescription = null, tint = speedAccent)
                 Text(
                     text = "  Playback speed",
                     style = MaterialTheme.typography.titleMedium,
@@ -910,7 +915,7 @@ private fun BoxScope.SpeedPanel(
                 Text(
                     text = "  ${String.format(Locale.US, "%.2fx", speed)}",
                     style = MaterialTheme.typography.titleMedium,
-                    color = PlayerGlowMint,
+                    color = speedAccent,
                 )
             }
             Slider(
@@ -918,14 +923,16 @@ private fun BoxScope.SpeedPanel(
                 onValueChange = { onSpeedChange(Math.round(it * 100f) / 100f) },
                 valueRange = 0.25f..3.0f,
                 colors = SliderDefaults.colors(
-                    thumbColor = PlayerGlowMint,
-                    activeTrackColor = PlayerGlowMint,
+                    thumbColor = speedAccent,
+                    activeTrackColor = speedAccent,
                 ),
             )
             // Cute one-tap Nightcore: 1.10x speed with pitch riding the tempo
             // (preserve-pitch off). Glows pink when active.
             val nightcoreActive = kotlin.math.abs(speed - 1.10f) < 0.01f && !preservePitch
-            val nightcorePink = Color(0xFFFF4FD8)
+            // Tertiary, so the one playful control still reads as distinct
+            // from the panel's primary accent while staying inside the theme.
+            val nightcorePink = MaterialTheme.colorScheme.tertiary
             Surface(
                 onClick = {
                     onSpeedChange(1.10f)
@@ -942,7 +949,7 @@ private fun BoxScope.SpeedPanel(
                     ),
                 shape = RoundedCornerShape(percent = 50),
                 color = if (nightcoreActive) nightcorePink.copy(alpha = 0.92f) else nightcorePink.copy(alpha = 0.14f),
-                contentColor = if (nightcoreActive) Color.Black else nightcorePink,
+                contentColor = if (nightcoreActive) MaterialTheme.colorScheme.onTertiary else nightcorePink,
                 border = BorderStroke(1.dp, nightcorePink.copy(alpha = if (nightcoreActive) 1f else 0.55f)),
             ) {
                 Row(

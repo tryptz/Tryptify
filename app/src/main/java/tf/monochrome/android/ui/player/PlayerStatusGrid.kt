@@ -56,9 +56,9 @@ fun PlayerStatusGrid(
     // but track the current artwork.
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Headphones,
@@ -76,7 +76,7 @@ fun PlayerStatusGrid(
                 onClick = onSound,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Speed,
@@ -125,15 +125,18 @@ private fun StatusCard(
         contentAlignment = Alignment.CenterStart,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            // Tightened with the sheet: it lost 24dp of width when it stopped
+            // being full-bleed, and four cards at the old padding left the
+            // labels crowding their own edges.
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = accent,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(19.dp),
             )
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(

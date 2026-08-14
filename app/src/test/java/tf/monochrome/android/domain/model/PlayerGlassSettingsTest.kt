@@ -120,6 +120,34 @@ class PlayerGlassSettingsTest {
     }
 
     @Test
+    fun `the mini progress bar is on by default`() {
+        // It is the mini player's top border as well as its readout, so the
+        // shipped bar keeps both unless the listener turns it off.
+        assertTrue(PlayerGlassSettings.DEFAULT.miniProgressBar)
+    }
+
+    @Test
+    fun `applying a theme does not switch the mini progress bar back on`() {
+        // The whole reason it is a personal field: presets do not set it, so
+        // were it material, every theme would carry the data-class default and
+        // silently re-enable a line the listener had turned off.
+        val personal = PlayerGlassSettings(miniProgressBar = false)
+        PlayerGlassSettings.PRESETS.forEach { (name, theme) ->
+            val applied = theme.withPersonalFrom(personal)
+            assertTrue("$name must not re-enable the mini progress bar", !applied.miniProgressBar)
+            // And the chip must still light despite the carried-over choice.
+            assertTrue("$name should still match its own chip", applied.matchesPreset(theme))
+        }
+    }
+
+    @Test
+    fun `the mini progress bar choice survives a share code round trip`() {
+        val off = PlayerGlassPreset("Borderless", PlayerGlassSettings(miniProgressBar = false))
+        val decoded = PlayerGlassPreset.decode(PlayerGlassPreset.encode(off))
+        assertTrue(decoded != null && !decoded.settings.miniProgressBar)
+    }
+
+    @Test
     fun `matchesPreset is false for a different material`() {
         val chrome = PlayerGlassSettings.PRESETS.first { it.first == "Chrome" }.second
         val frosted = PlayerGlassSettings.PRESETS.first { it.first == "Frosted" }.second

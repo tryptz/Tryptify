@@ -280,6 +280,21 @@ fun MainPlayerScreen(
     // gaussian-blur what's visually behind it — the same frost the mini
     // player gets from the nav host's source.
     val hazeState = rememberHazeState()
+    // A SECOND source, for the panels that sit over the whole player rather
+    // than inside it — the audio-tools sheet and the overlay slot's speed
+    // panel. It captures the backdrop *and* the player's content, so those
+    // panels frost the album art and transport actually behind them.
+    //
+    // It has to be a separate state, not a wider [hazeState]. The transport
+    // tiles frost [hazeState] from INSIDE the content column, and a haze
+    // effect cannot sample a layer it is drawn inside — folding the content
+    // into the state those tiles read would break them. Keeping the two apart
+    // means the tiles' behaviour is untouched and only the panels see more.
+    //
+    // Without this the panels were blurring the backdrop layers alone, which
+    // is a gradient with nothing in it: the blur ran, and the result was a
+    // flat wash that read as no blur at all.
+    val panelHaze = rememberHazeState()
     // Publish the background as a haze source to the chrome over it. The tiles
     // that read this are siblings of the source box below, not descendants of
     // it, so they blur it rather than trying to sample a layer they are part of.
@@ -287,7 +302,7 @@ fun MainPlayerScreen(
         tf.monochrome.android.ui.player.LocalPlayerHaze provides hazeState,
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(Modifier.matchParentSize().hazeSource(hazeState)) {
+        Box(Modifier.matchParentSize().hazeSource(hazeState).hazeSource(panelHaze)) {
         // Background on its own node so the dither layer wraps just the
         // gradient, not the whole screen's content.
         Box(
@@ -355,6 +370,11 @@ fun MainPlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Captured for the panels only (zIndex above the backdrop), so
+                // they frost the hero and transport as well as the wash. Not a
+                // source for [hazeState] — the tiles inside this column frost
+                // that one and cannot sample a layer they belong to.
+                .hazeSource(panelHaze, zIndex = 1f)
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .padding(horizontal = screenPad),
@@ -555,7 +575,7 @@ fun MainPlayerScreen(
             ) {
             StatusOverlayPanel(
                 accent = accent,
-                hazeState = hazeState,
+                hazeState = panelHaze,
                 outputLabel = state.outputLabel,
                 soundLabel = state.soundLabel,
                 speedLabel = state.speedLabel,
@@ -587,7 +607,13 @@ fun MainPlayerScreen(
             }
         }
 
-        overlay()
+        // The speed panel lives here and is a sibling of both sources, so it
+        // gets the one that actually has the player in it.
+        androidx.compose.runtime.CompositionLocalProvider(
+            tf.monochrome.android.ui.player.LocalPlayerHaze provides panelHaze,
+        ) {
+            overlay()
+        }
     }
     }
 }
@@ -716,7 +742,11 @@ private fun StatusOverlayPanel(
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    // The speed panel's shape and inset, so the two panes read as the same
+    // sheet of glass: GlassPanel insets 12dp and clips to MonoDimens.shapeLg,
+    // and this sheet used to be a full-bleed slab with only its top corners
+    // rounded, sitting visibly wider than the panel it sits beside.
+    val shape = tf.monochrome.android.ui.theme.MonoDimens.shapeLg
     val g = LocalPlayerGlass.current
     val useGlass = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
         g.enabled
@@ -724,6 +754,7 @@ private fun StatusOverlayPanel(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(12.dp)
             .shadow(elevation = 32.dp, shape = shape, clip = false)
             .liquidGlass(shape = shape, tintAlpha = 0.22f, borderAlpha = 0.10f),
         shape = shape,
@@ -748,9 +779,7 @@ private fun StatusOverlayPanel(
         if (useGlass && hazeState != null && profile.allowHazeBlur && g.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
-            val frostTint = (if (isDark) Color.Black.copy(alpha = 0.32f)
-                            else Color.White.copy(alpha = 0.45f))
-                .let { it.copy(alpha = (it.alpha * g.hazeTint).coerceIn(0f, 1f)) }
+            val frostTint = playerFrostTint(g, isDark)
             androidx.compose.foundation.layout.Box(
                 Modifier
                     .matchParentSize()
@@ -785,9 +814,12 @@ private fun StatusOverlayPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = PlayerDesignTokens.ScreenPadding)
-                .padding(top = 12.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                // The panel itself now insets 12dp, so this sheds 12dp to
+                // leave the content exactly where it was on screen — and
+                // level with the speed panel's, which does the same.
+                .padding(horizontal = PlayerDesignTokens.ScreenPadding - 12.dp)
+                .padding(top = 10.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Tap the handle (or swipe the sheet down / tap the scrim) to close.
@@ -821,7 +853,7 @@ private fun StatusOverlayPanel(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, top = 12.dp),
+                            .padding(start = 12.dp, top = 10.dp),
                     ) {
                         ToggleRow(
                             "System-wide",
@@ -855,7 +887,7 @@ private fun StatusOverlayPanel(
             // Monitoring row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 OverlayAction(Icons.Default.Animation, "Visualizer", accent, visualizerActive, onVisualizer)
                 OverlayAction(Icons.Default.GraphicEq, "Waveform", accent, waveformActive, onWaveform)
@@ -892,9 +924,9 @@ private fun RowScope.OverlayAction(
                 tintAlpha = if (active) PlayerDesignTokens.GlassTintStrong else PlayerDesignTokens.GlassTintSoft,
                 borderAlpha = PlayerDesignTokens.GlassTintSoft,
             )
-            .padding(vertical = 12.dp),
+            .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
             imageVector = icon,
@@ -939,7 +971,7 @@ private fun ToggleRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+            Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Color.White)
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
