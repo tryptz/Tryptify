@@ -135,6 +135,13 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     section = LOOK,
+                    title = "Set how fast the colours change",
+                    body = "A slider under Light paper, in seconds, for how long the album's " +
+                        "colours take to cross over on a track change — from instant to eight " +
+                        "seconds. Left alone it keeps step with Blend Between Tracks as before.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
                     title = "The home bar stops disappearing",
                     body = "On a light theme the gesture pill was drawn dark against the black " +
                         "foot of the player and vanished into it. The player sets the system " +

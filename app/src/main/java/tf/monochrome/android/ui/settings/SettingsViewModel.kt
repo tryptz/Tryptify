@@ -119,6 +119,12 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val dynamicColorKeepBackground: StateFlow<Boolean> = preferences.dynamicColorKeepBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val colorTransitionMs: StateFlow<Int> = preferences.colorTransitionMs
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND,
+        )
     val fontScale: StateFlow<Float> = preferences.fontScale
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
     val fontScaleFollowSystem: StateFlow<Boolean> = preferences.fontScaleFollowSystem
@@ -432,6 +438,9 @@ class SettingsViewModel @Inject constructor(
     }
     fun setDynamicColorKeepBackground(enabled: Boolean) {
         viewModelScope.launch { preferences.setDynamicColorKeepBackground(enabled) }
+    }
+    fun setColorTransitionMs(millis: Int) {
+        viewModelScope.launch { preferences.setColorTransitionMs(millis) }
     }
     fun setFontScale(scale: Float) { viewModelScope.launch { preferences.setFontScale(scale) } }
     fun setFontScaleFollowSystem(enabled: Boolean) {

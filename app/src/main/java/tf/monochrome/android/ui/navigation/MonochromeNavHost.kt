@@ -204,7 +204,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // does — both come off "Blend Between Tracks" — and tells a skip from a
     // song ending the same way the full player does.
     val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
-    val miniBlendMs = tf.monochrome.android.ui.theme.motionMillis(ColorBlend.millisFor(blendSeconds))
+    val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
+    val miniBlendMs = tf.monochrome.android.ui.theme.motionMillis(
+        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+    )
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
 
     // Position/duration tick every 250 ms. Keep them as State<Long> and read

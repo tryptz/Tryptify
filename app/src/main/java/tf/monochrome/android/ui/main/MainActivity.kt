@@ -169,6 +169,8 @@ class MainActivity : ComponentActivity() {
             // blended transition doesn't have the colours land on the new track
             // while the old one is still playing.
             val blendSeconds by preferences.crossfadeDuration.collectAsStateWithLifecycle(initialValue = 0)
+            val colorTransitionMs by preferences.colorTransitionMs
+                .collectAsStateWithLifecycle(initialValue = ColorBlend.MATCH_BLEND)
             val dynamicPalette by rememberDynamicPalette(
                 coverUrl = currentTrack?.coverUrl,
                 enabled = dynamicColorsEnabled,
@@ -176,7 +178,7 @@ class MainActivity : ComponentActivity() {
                 // continuous cross-fade, not a one-off transition, so it keeps
                 // the theme recomposing for the whole blend window.
                 blendMillis = if (lowPerformance.disableAnimations) 0
-                else ColorBlend.millisFor(blendSeconds),
+                else ColorBlend.millisFor(blendSeconds, colorTransitionMs),
             )
 
             // Handles both a bundled `asset:` font and an imported file path —

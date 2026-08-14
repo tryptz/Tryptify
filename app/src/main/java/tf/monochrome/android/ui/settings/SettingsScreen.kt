@@ -148,6 +148,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.border
 import tf.monochrome.android.ui.theme.lightSchemeFor
 import tf.monochrome.android.ui.theme.Paper
+import tf.monochrome.android.ui.theme.ColorBlend
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Box
 import kotlinx.coroutines.delay
 
@@ -568,6 +570,10 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     val dynamicColors by viewModel.dynamicColors.collectAsStateWithLifecycle()
     val dynamicColorMenus by viewModel.dynamicColorMenus.collectAsStateWithLifecycle()
     val dynamicColorKeepBackground by viewModel.dynamicColorKeepBackground.collectAsStateWithLifecycle()
+    val colorTransitionMs by viewModel.colorTransitionMs.collectAsStateWithLifecycle()
+    // Only to show what "Match blend" currently works out to; the slider does
+    // not change it.
+    val crossfadeSeconds by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val themePaper by viewModel.themePaper.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
@@ -602,6 +608,15 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         LightPaperSetting(
             paper = themePaper,
             onPaperChange = { viewModel.setThemePaper(it) },
+        )
+
+        // Directly under the paper swatches, because it is the other half of the
+        // same question: what the app looks like, and how long it takes to get
+        // there when the track changes.
+        ColorTransitionSetting(
+            millis = colorTransitionMs,
+            blendSeconds = crossfadeSeconds,
+            onMillisChange = { viewModel.setColorTransitionMs(it) },
         )
 
         // Custom colours. When on, the two swatches below build the whole app's
@@ -3706,6 +3721,85 @@ private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
                 modifier = Modifier.weight(1f),
             )
         }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+/**
+ * How long the album's colours take to cross over, as a slider that says the
+ * time in seconds.
+ *
+ * Its first stop is **Match blend**, not zero, and that is the default. Left
+ * there the app keeps deriving the fade from "Blend Between Tracks", which is
+ * the pairing [ColorBlend] exists to hold: with a blend set, the queue advances
+ * at `duration - blend`, so a fade of exactly that length lands on the last
+ * sample of the outgoing track. Any number here breaks that on purpose, which is
+ * a fine thing to want and a poor thing to do by accident — hence a stop that
+ * means "leave it alone" rather than a number that happens to match today.
+ *
+ * The label shows what Match blend currently works out to, because "match blend"
+ * on its own does not tell you whether that is 0.6 s or twelve seconds.
+ *
+ * The value is committed on release rather than on every pixel of the drag: it
+ * is written to disk and read by the player, the mini player and the theme, and
+ * a drag across the whole track would otherwise be forty writes.
+ */
+@Composable
+private fun ColorTransitionSetting(
+    millis: Int,
+    blendSeconds: Int,
+    onMillisChange: (Int) -> Unit,
+) {
+    val stops = ColorBlend.steps
+    // An unrecognised stored value (an older build's, a hand-edited one) lands
+    // on Match blend rather than off the end of the track.
+    val stored = stops.indexOf(millis).coerceAtLeast(0)
+    var position by remember(stored) { mutableFloatStateOf(stored.toFloat()) }
+    val selected = stops[position.roundToInt().coerceIn(stops.indices)]
+
+    fun seconds(ms: Int) = String.format(Locale.US, "%.2f s", ms / 1000f)
+    val readout = when {
+        selected == ColorBlend.MATCH_BLEND ->
+            "Match blend · ${seconds(ColorBlend.millisFor(blendSeconds))}"
+        selected == 0 -> "Instant"
+        else -> seconds(selected)
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().settingsAnchor("Color transition")) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Color transition",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = readout,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            text = "How long the album's colours take to cross over when the track changes. " +
+                "Match blend keeps them in step with Blend Between Tracks.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = position,
+            onValueChange = { position = it },
+            onValueChangeFinished = {
+                onMillisChange(stops[position.roundToInt().coerceIn(stops.indices)])
+            },
+            valueRange = 0f..(stops.size - 1).toFloat(),
+            // One detent per stop. Slider counts the points *between* the ends,
+            // so it is two fewer than there are stops.
+            steps = stops.size - 2,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(12.dp))
     }
 }
