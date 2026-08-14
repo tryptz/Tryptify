@@ -127,72 +127,75 @@ fun FrequencyResponseGraph(
         } else targetCurve
     }
 
+    // ── The shared evaluation axis ────────────────────────────────────────
+    // Every curve below is a sum of the same per-band biquad responses over the
+    // same frequencies, so the axis and its phase tables are built ONCE and the
+    // band responses are computed ONCE per band. Previously each curve walked
+    // its own grid calling the per-point entry point, which redesigns the
+    // filter (sin/cos/pow/sqrt + an allocation) for every single point: a drag
+    // frame with a 500-point measurement and 10 bands re-derived ~15,000
+    // biquads on the main thread, three times over for the three curves.
+    //
+    // The measurement's own frequencies when there is one, otherwise a log grid
+    // (parametric mode). The per-band profile lines used to fall back to a
+    // coarser 96-point grid of their own; they share this one now — same span,
+    // smoother lines, and no second axis to evaluate against.
+    val gridFreqs = remember(originalCurve) { buildGrid(originalCurve) }
+    val grid = remember(gridFreqs, sampleRate) { AutoEqEngine.ResponseGrid(gridFreqs, sampleRate) }
+
+    // Per-band dB response on that axis. Keyed on the BANDS alone: the preamp
+    // and the normalization offset only shift the sum, so dragging the preamp
+    // no longer redesigns a single filter.
+    val bandResponses = remember(grid, eqBands) {
+        eqBands.filter { it.enabled }.map { it to grid.response(it) }
+    }
+    val eqSum = remember(bandResponses, grid) {
+        FloatArray(grid.size).also { out ->
+            for ((_, response) in bandResponses) {
+                for (i in out.indices) out[i] += response[i]
+            }
+        }
+    }
+
     // Calculate corrected curve.
     //  - With measurement: measurement + EQ bands + preamp
     //  - Without measurement (parametric EQ mode): pure EQ response + preamp around the zero baseline
-    val correctedCurve = remember(originalCurve, eqBands, preamp, sampleRate, zeroOffset) {
-        if (originalCurve.isNotEmpty()) {
-            originalCurve.map { point ->
-                var correctedGain = point.gain + preamp
-                eqBands.forEach { band ->
-                    if (band.enabled) {
-                        correctedGain += AutoEqEngine.calculateBiquadResponse(point.freq, band, sampleRate)
-                    }
-                }
-                FrequencyPoint(point.freq, correctedGain)
-            }.filter { it.gain.isFinite() }
-        } else {
-            // Synthesize a smooth EQ response curve across the log-frequency axis
-            val samples = 256
-            val logMin = log10(MIN_FREQ)
-            val logMax = log10(MAX_FREQ)
-            (0 until samples).map { i ->
-                val freq = 10f.pow(logMin + i.toFloat() / (samples - 1) * (logMax - logMin))
-                var g = preamp + zeroOffset
-                eqBands.forEach { band ->
-                    if (band.enabled) g += AutoEqEngine.calculateBiquadResponse(freq, band, sampleRate)
-                }
-                FrequencyPoint(freq, g)
-            }.filter { it.gain.isFinite() }
-        }
+    val correctedCurve = remember(gridFreqs, originalCurve, eqSum, preamp, zeroOffset) {
+        val hasMeasurement = originalCurve.isNotEmpty()
+        List(gridFreqs.size) { i ->
+            val base = if (hasMeasurement) originalCurve[i].gain else zeroOffset
+            FrequencyPoint(gridFreqs[i], base + preamp + eqSum[i])
+        }.filter { it.gain.isFinite() }
     }
 
     // Secondary (other-ear) corrected curve, mirroring correctedCurve. Falls
     // back to the primary measurement when the other ear has no curve of its
     // own yet, so the overlay still shows what that ear's bands would do.
+    val secondaryFreqs = remember(secondaryMeasurement, gridFreqs) {
+        if (secondaryMeasurement.isNotEmpty()) {
+            FloatArray(secondaryMeasurement.size) { secondaryMeasurement[it].freq }
+        } else {
+            gridFreqs
+        }
+    }
+    val secondaryGrid = remember(secondaryFreqs, sampleRate, grid) {
+        if (secondaryFreqs === gridFreqs) grid else AutoEqEngine.ResponseGrid(secondaryFreqs, sampleRate)
+    }
     val secondaryCorrected = remember(
-        secondaryMeasurement, secondaryBands, originalCurve, preamp, sampleRate, zeroOffset,
+        secondaryGrid, secondaryFreqs, secondaryBands, secondaryMeasurement, originalCurve,
+        preamp, zeroOffset,
     ) {
         val bands = secondaryBands
-        if (bands == null) {
+        val hasBase = secondaryMeasurement.isNotEmpty() || originalCurve.isNotEmpty()
+        if (bands == null || (!hasBase && bands.isEmpty())) {
             emptyList()
         } else {
-            val base = secondaryMeasurement.ifEmpty { originalCurve }
-            if (base.isNotEmpty()) {
-                base.map { point ->
-                    var g = point.gain + preamp
-                    bands.forEach { band ->
-                        if (band.enabled) {
-                            g += AutoEqEngine.calculateBiquadResponse(point.freq, band, sampleRate)
-                        }
-                    }
-                    FrequencyPoint(point.freq, g)
-                }.filter { it.gain.isFinite() }
-            } else if (bands.isNotEmpty()) {
-                val samples = 256
-                val logMin = log10(MIN_FREQ)
-                val logMax = log10(MAX_FREQ)
-                (0 until samples).map { i ->
-                    val freq = 10f.pow(logMin + i.toFloat() / (samples - 1) * (logMax - logMin))
-                    var g = preamp + zeroOffset
-                    bands.forEach { band ->
-                        if (band.enabled) g += AutoEqEngine.calculateBiquadResponse(freq, band, sampleRate)
-                    }
-                    FrequencyPoint(freq, g)
-                }.filter { it.gain.isFinite() }
-            } else {
-                emptyList()
-            }
+            val baseCurve = secondaryMeasurement.ifEmpty { originalCurve }
+            val sum = secondaryGrid.sum(bands)
+            List(secondaryFreqs.size) { i ->
+                val base = if (baseCurve.isNotEmpty()) baseCurve[i].gain else zeroOffset
+                FrequencyPoint(secondaryFreqs[i], base + preamp + sum[i])
+            }.filter { it.gain.isFinite() }
         }
     }
 
@@ -220,17 +223,12 @@ fun FrequencyResponseGraph(
     val latestOnBandDragged by rememberUpdatedState(onBandDragged)
 
     // Per-band contribution curves for the profile-line pass (drawn behind the
-    // response). Memoized: 31 bands × a few hundred grid points of biquad
-    // response is too much to recompute inside every Canvas frame during a
-    // drag. Falls back to a log grid when there's no measurement to anchor on.
-    val bandContributions = remember(eqBands, sampleRate, zeroOffset, originalCurve) {
-        val grid: List<Float> =
-            if (originalCurve.isNotEmpty()) originalCurve.map { it.freq }
-            else List(96) { i -> (20.0 * 1000.0.pow(i / 95.0)).toFloat() }
-        eqBands.filter { it.enabled && it.gain != 0f }.map { band ->
-            band to grid.map { f ->
-                FrequencyPoint(f, zeroOffset + AutoEqEngine.calculateBiquadResponse(f, band, sampleRate))
-            }
+    // response). These are the same per-band responses the corrected curve is
+    // summed from, just offset to the baseline instead of added together — so
+    // the profile pass costs a list wrap, not a second round of filter design.
+    val bandContributions = remember(bandResponses, gridFreqs, zeroOffset) {
+        bandResponses.filter { (band, _) -> band.gain != 0f }.map { (band, response) ->
+            band to List(response.size) { i -> FrequencyPoint(gridFreqs[i], zeroOffset + response[i]) }
         }
     }
 
@@ -670,6 +668,23 @@ fun EqProfileMiniGraph(
     }
 }
 
+/**
+ * The frequency axis every band response is evaluated on: the measurement's own
+ * points when there is a measurement, otherwise a log-spaced grid spanning the
+ * graph (parametric mode, where there is nothing to anchor to).
+ */
+private fun buildGrid(measurement: List<FrequencyPoint>): FloatArray {
+    if (measurement.isNotEmpty()) {
+        return FloatArray(measurement.size) { measurement[it].freq }
+    }
+    val samples = 256
+    val logMin = log10(MIN_FREQ)
+    val logMax = log10(MAX_FREQ)
+    return FloatArray(samples) { i ->
+        10f.pow(logMin + i.toFloat() / (samples - 1) * (logMax - logMin))
+    }
+}
+
 private fun buildFreqSamples(minF: Float, maxF: Float, count: Int): List<Float> {
     val logMin = log10(minF)
     val logMax = log10(maxF)
@@ -791,17 +806,30 @@ private fun findNearestBand(
     return nearest
 }
 
+/**
+ * Linear interpolation of [curve] at [freq]. Binary search, not a scan: the
+ * band dots call this once per band inside the draw pass, and the gap shading
+ * calls it 258 times, all against a curve that can run to several hundred
+ * points — the scan made those passes quadratic in the measurement's length.
+ * Measurement curves are ascending in frequency, which is what makes the
+ * search valid; the scan relied on the same ordering.
+ */
 private fun interpolateGain(freq: Float, curve: List<FrequencyPoint>): Float {
     if (curve.isEmpty()) return 0f
     if (freq <= curve.first().freq) return curve.first().gain
     if (freq >= curve.last().freq) return curve.last().gain
-    for (i in 0 until curve.size - 1) {
-        if (freq >= curve[i].freq && freq <= curve[i + 1].freq) {
-            val t = (freq - curve[i].freq) / (curve[i + 1].freq - curve[i].freq)
-            return curve[i].gain + t * (curve[i + 1].gain - curve[i].gain)
-        }
+    // Largest index whose frequency is <= freq; the guards above put it in
+    // 0..size-2, so `hi` is always a valid right-hand neighbour.
+    var lo = 0
+    var hi = curve.size - 1
+    while (hi - lo > 1) {
+        val mid = (lo + hi) ushr 1
+        if (curve[mid].freq <= freq) lo = mid else hi = mid
     }
-    return 0f
+    val span = curve[hi].freq - curve[lo].freq
+    if (span <= 0f) return curve[lo].gain
+    val t = (freq - curve[lo].freq) / span
+    return curve[lo].gain + t * (curve[hi].gain - curve[lo].gain)
 }
 
 // ===== Drawing functions =====

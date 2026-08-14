@@ -88,6 +88,55 @@ object AutoEqEngine {
     }
 
     /**
+     * A fixed frequency axis with its cos(φ)/cos(2φ) tables precomputed, for
+     * evaluating whole band curves at once.
+     *
+     * [calculateBiquadResponse] is the per-point entry point, and it redesigns
+     * the filter on every call — sin/cos/pow/sqrt plus an allocation for ONE
+     * frequency. Drawing a band's curve through it costs that whole design pass
+     * per pixel, and the UI draws every band over a several-hundred-point grid
+     * on every drag frame, so a single slider drag was re-deriving thousands of
+     * biquads a second on the main thread.
+     *
+     * The coefficients are fixed per band and the phase terms are fixed per
+     * frequency, which is the same split the optimizer's refinement pass
+     * already exploits: design once per band, then a transcendental-free
+     * magnitude per point against the shared tables. Results are identical to
+     * calling [calculateBiquadResponse] per point — this only stops repeating
+     * work whose inputs never changed.
+     */
+    class ResponseGrid(freqs: FloatArray, private val sampleRate: Float = DEFAULT_SAMPLE_RATE) {
+        private val cosPhi = DoubleArray(freqs.size)
+        private val cos2Phi = DoubleArray(freqs.size)
+
+        val size: Int get() = cosPhi.size
+
+        init {
+            for (i in freqs.indices) {
+                val phi = 2.0 * PI * freqs[i].toDouble() / sampleRate.toDouble()
+                cosPhi[i] = cos(phi)
+                cos2Phi[i] = cos(2.0 * phi)
+            }
+        }
+
+        /** Adds [band]'s dB response onto [out] in place. Disabled bands are a no-op. */
+        fun accumulate(band: EqBand, out: FloatArray) {
+            if (!band.enabled) return
+            val c = AutoEqEngine.coeffsFor(band, sampleRate)
+            for (i in out.indices) {
+                out[i] += AutoEqEngine.magnitudeDb(c, cosPhi[i], cos2Phi[i]).toFloat()
+            }
+        }
+
+        /** This band's dB response across the whole axis. */
+        fun response(band: EqBand): FloatArray = FloatArray(size).also { accumulate(band, it) }
+
+        /** The summed dB response of [bands] across the whole axis. */
+        fun sum(bands: List<EqBand>): FloatArray =
+            FloatArray(size).also { out -> bands.forEach { accumulate(it, out) } }
+    }
+
+    /**
      * Normalized RBJ coefficients for a band. Split out of the response
      * calculation because they are FIXED per band — only the phase term varies
      * per evaluation frequency. The refinement pass exploits this: coefficients

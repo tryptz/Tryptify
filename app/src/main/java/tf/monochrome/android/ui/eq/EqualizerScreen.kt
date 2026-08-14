@@ -54,6 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -292,6 +293,14 @@ fun EqualizerScreen(
                     // Discrete fractional-octave steps, applied to the
                     // measurement before the optimizer runs. Displayed curves
                     // smooth along with it so what you see is what gets EQ'd.
+                    //
+                    // Committed on release, not per frame. Every value change
+                    // re-smooths BOTH ears' measurements (a triangular window
+                    // whose radius reaches 40 points at 100 %) and hands the
+                    // graph fresh curve objects, which re-derives the whole
+                    // response — far too much to run at drag rate. A local
+                    // float keeps the thumb and the % label live meanwhile.
+                    var smoothingDrag by remember(smoothing) { mutableFloatStateOf(smoothing) }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -305,16 +314,15 @@ fun EqualizerScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Slider(
-                            value = smoothing,
-                            onValueChange = {
-                                // 1 % increments, SeapEngine's scale.
-                                viewModel.setSmoothing(it.roundToInt().toFloat().coerceIn(0f, 100f))
-                            },
+                            value = smoothingDrag,
+                            // 1 % increments, SeapEngine's scale.
+                            onValueChange = { smoothingDrag = it.roundToInt().toFloat().coerceIn(0f, 100f) },
+                            onValueChangeFinished = { viewModel.setSmoothing(smoothingDrag) },
                             valueRange = 0f..100f,
                             modifier = Modifier.weight(1f).height(28.dp)
                         )
                         Text(
-                            "${smoothing.roundToInt()}%",
+                            "${smoothingDrag.roundToInt()}%",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
