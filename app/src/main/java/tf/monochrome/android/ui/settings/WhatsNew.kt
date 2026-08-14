@@ -352,6 +352,48 @@ object WhatsNew {
                 ),
             ),
         ),
+        // Written after the fact, from the commits between the 1.8.1 and 1.8.3
+        // releases. 1.8.3 shipped without notes — the entry above it was written
+        // to cover "the whole cycle that produced 1.8.4", which is all 1.8.4
+        // work, so none of this was ever described anywhere a listener looks.
+        WhatsNewRelease(
+            versionCode = 183,
+            versionName = "1.8.3",
+            entries = listOf(
+                WhatsNewEntry(
+                    title = "Correct each ear separately",
+                    body = "AutoEQ gains a stereo mode: pick a measurement for the left ear and " +
+                        "another for the right, and tune the bands per side. The preamp stays " +
+                        "shared, so it still guards both ears' headroom rather than letting one " +
+                        "side clip.",
+                ),
+                WhatsNewEntry(
+                    title = "Import an EqualizerAPO profile",
+                    body = "Point it at a .txt from EqualizerAPO or AutoEq and it becomes bands " +
+                        "you can edit. Anything it has to clamp or skip is listed before you " +
+                        "commit, and handing it a measurement curve by mistake sends you to the " +
+                        "right importer instead of failing.",
+                ),
+                WhatsNewEntry(
+                    title = "Surround folds down properly",
+                    body = "Multichannel music played in stereo used the ITU BS.775 fold, which " +
+                        "pulls the surrounds toward the middle. It uses a fixed hard-pan matrix " +
+                        "now, so the sides stay at the sides — and 16-channel 9.1.6 tracks are " +
+                        "understood.",
+                ),
+                WhatsNewEntry(
+                    title = "See what each effect is doing",
+                    body = "Every plugin in the FX chain draws its own visualisation from a live " +
+                        "tap of the audio passing through it, so a compressor shows its gain " +
+                        "reduction and a filter shows its curve rather than a row of numbers.",
+                ),
+                WhatsNewEntry(
+                    title = "One tip button",
+                    body = "Stripe donations are gone. There is a single Ko-fi button in " +
+                        "Settings instead.",
+                ),
+            ),
+        ),
     )
 
     /** The release the app is currently running, if it has notes. */
