@@ -127,6 +127,27 @@ object WhatsNew {
                         "the page rather than a flat colour.",
                 ),
                 WhatsNewEntry(
+                    section = LOOK,
+                    title = "Let the album repaint the whole app",
+                    body = "Dynamic Colors gains \"Tint the menus too\": the cover sets the " +
+                        "accent and background everywhere, not just the player. A second switch " +
+                        "keeps your theme's background if you only want the accent to move.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The home bar stops disappearing",
+                    body = "On a light theme the gesture pill was drawn dark against the black " +
+                        "foot of the player and vanished into it. The player sets the system " +
+                        "bars from its own background now, top and bottom judged separately.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The speed panel frosts what's behind it",
+                    body = "It was the last pane in the player painting a flat slab instead of " +
+                        "blurring the artwork — it was drawn in a window of its own, where there " +
+                        "was nothing to blur. It sits on the player now, and frosts it.",
+                ),
+                WhatsNewEntry(
                     title = "A spinning record on Discord",
                     body = "The \"Listening to\" card now turns the album art as a disc, once per " +
                         "bar at the track's own tempo, instead of drawing a spectrum across the " +

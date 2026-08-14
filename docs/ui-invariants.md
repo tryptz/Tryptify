@@ -47,6 +47,16 @@ underneath — an opaque frosted pane there gives them an opaque backdrop and th
 come out as flat slabs with the artwork nowhere in them. Haze belongs under a
 sheet that slides *over* a page, like the audio-tools sheet.
 
+**A pane that needs haze cannot live in a dialog, popup or `ModalBottomSheet.`**
+Those are separate windows. The backdrop was captured into a layer belonging to
+the window behind them, and a haze effect cannot sample a layer from another
+window — handing the state across is the same "solid slab" failure as sampling
+your own layer, and there is no setting that fixes it. The pane has to be
+rendered in the window whose background it is meant to blur, as a sibling of that
+window's haze source: `MainPlayerScreen`'s `overlay` slot exists for exactly
+this, and the speed panel goes through it. The cost is owning the scrim, the
+slide and Back by hand, and that is the cheaper half of the trade.
+
 Search bars and other app chrome take **the mini player's** settings
 (`LocalMiniPlayerGlass`), not the player's. The player route overrides
 `LocalPlayerGlass` with its own material for the transport, which is right there
@@ -103,6 +113,23 @@ used verbatim; legibility is bought by moving foregrounds.
 
 `LightSchemesTest` and `CustomSchemeTest` assert this. They are the guarantee,
 not a formality — do not loosen a threshold to make one pass.
+
+The album may repaint the menus only when the listener asks it to ("Dynamic
+Colors › Tint the menus too"), and even then the ground moves **a quarter of the
+way** toward the cover, never all of it. `customScheme` will build a light scheme
+from a bright sleeve and a dark one from the next track, so a raw album ground
+strobes the whole app between light and dark from song to song — the same class
+of bug as the globe inverting. A quarter keeps the hue plainly visible and lets
+the theme go on deciding polarity. The accent takes no such wash; an accent is
+meant to be loud, and the contrast floors catch it wherever it lands.
+`AlbumTintTest` sweeps the app's real grounds against a spread of covers and
+asserts neither direction ever flips. Do not raise `ALBUM_GROUND_MIX` to make a
+tint stronger.
+
+The tint goes through `customScheme` rather than swapping slots the way
+`DynamicColorScope` does. Slot-swapping works on the player, whose foregrounds
+are hardcoded white, and falls apart across the menus, where the album accent
+lands on surfaces the base theme derived from a different colour entirely.
 
 ### The globe
 
