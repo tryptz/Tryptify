@@ -147,6 +147,11 @@ class MainActivity : ComponentActivity() {
             val fontScale = if (followSystemFontScale) systemFontScale else storedFontScale
             val customFontPath by preferences.customFontUri.collectAsStateWithLifecycle(initialValue = null)
             val dynamicColorsEnabled by preferences.dynamicColors.collectAsStateWithLifecycle(initialValue = false)
+            // Whether that palette is also allowed to repaint the menus, and
+            // whether it gets the ground as well as the accent.
+            val dynamicColorMenus by preferences.dynamicColorMenus.collectAsStateWithLifecycle(initialValue = false)
+            val dynamicColorKeepBackground by preferences.dynamicColorKeepBackground
+                .collectAsStateWithLifecycle(initialValue = false)
             val themePaper by preferences.themePaper.collectAsStateWithLifecycle(initialValue = "crisp")
             // Custom colours override the preset when the switch is on. Read here
             // so a change repaints the whole app the same frame the store emits.
@@ -164,6 +169,8 @@ class MainActivity : ComponentActivity() {
             // blended transition doesn't have the colours land on the new track
             // while the old one is still playing.
             val blendSeconds by preferences.crossfadeDuration.collectAsStateWithLifecycle(initialValue = 0)
+            val colorTransitionMs by preferences.colorTransitionMs
+                .collectAsStateWithLifecycle(initialValue = ColorBlend.MATCH_BLEND)
             val dynamicPalette by rememberDynamicPalette(
                 coverUrl = currentTrack?.coverUrl,
                 enabled = dynamicColorsEnabled,
@@ -171,7 +178,7 @@ class MainActivity : ComponentActivity() {
                 // continuous cross-fade, not a one-off transition, so it keeps
                 // the theme recomposing for the whole blend window.
                 blendMillis = if (lowPerformance.disableAnimations) 0
-                else ColorBlend.millisFor(blendSeconds),
+                else ColorBlend.millisFor(blendSeconds, colorTransitionMs),
             )
 
             // Handles both a bundled `asset:` font and an imported file path —
@@ -217,6 +224,8 @@ class MainActivity : ComponentActivity() {
                     } else {
                         null
                     },
+                    dynamicMenus = dynamicColorsEnabled && dynamicColorMenus,
+                    dynamicMenusKeepBackground = dynamicColorKeepBackground,
                 ) {
                     // Re-apply edge-to-edge with a SystemBarStyle tuned to
                     // the current theme. Light themes need dark icons so

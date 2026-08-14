@@ -50,6 +50,10 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Appearance ──────────────────────────────────────────────────────
     entry("Theme", "Appearance", listOf("colour", "color", "dark", "light", "white")),
     entry("Light paper", "Appearance", listOf("white", "warm", "crisp", "paper", "glare")),
+    entry(
+        "Color transition", "Appearance",
+        listOf("colour", "fade", "crossfade", "blend", "album", "speed", "duration"),
+    ),
     entry("Dynamic colours", "Appearance", listOf("album", "art", "material you", "accent")),
     entry("Font scale", "Appearance", listOf("text size", "bigger", "smaller", "accessibility")),
     entry("Custom font", "Appearance", listOf("typeface", "import font")),

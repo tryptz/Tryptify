@@ -173,15 +173,6 @@ fun PlayerActionDock(
             }
         }
 
-        // The real backdrop blur, under the slab. The album art behind the dock
-        // reads *through* the glass rather than the slab merely relighting its
-        // own fill — and the four punched icon holes reveal this blur, so the
-        // glyphs are cut through frosted art, not through a flat tint.
-        tf.monochrome.android.ui.player.PlayerGlassHaze(
-            modifier = Modifier.matchParentSize(),
-            shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerLarge),
-        )
-
         // The glass slab with the four icons carved out of it. Drawn in one
         // offscreen layer so the DstOut punch clears only the glyph shapes (not
         // the whole rectangle) and can't clear the player behind the dock.

@@ -108,6 +108,14 @@ class PreferencesManager @Inject constructor(
         private val THEME = stringPreferencesKey("theme")
         private val THEME_PAPER = stringPreferencesKey("theme_paper")
         private val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
+        // Whether the album palette is allowed past the player and into the
+        // app-wide scheme, and whether it gets the ground as well as the accent.
+        private val DYNAMIC_COLORS_MENUS = booleanPreferencesKey("dynamic_colors_menus")
+        private val DYNAMIC_COLORS_KEEP_BACKGROUND =
+            booleanPreferencesKey("dynamic_colors_keep_background")
+        // How long the album colours take to cross over, in ms, or
+        // ColorBlend.MATCH_BLEND to go on following "Blend Between Tracks".
+        private val COLOR_TRANSITION_MS = intPreferencesKey("color_transition_ms")
         // Custom colours: when on, an accent and a ground the listener picked
         // replace whichever preset is selected. Stored as ARGB ints.
         private val CUSTOM_THEME_ENABLED = booleanPreferencesKey("custom_theme_enabled")
@@ -392,6 +400,7 @@ class PreferencesManager @Inject constructor(
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY,
             THEME, THEME_PAPER, DYNAMIC_COLORS,
+            DYNAMIC_COLORS_MENUS, DYNAMIC_COLORS_KEEP_BACKGROUND, COLOR_TRANSITION_MS,
             CUSTOM_THEME_ENABLED, CUSTOM_ACCENT, CUSTOM_BACKGROUND,
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
@@ -523,6 +532,44 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDynamicColors(enabled: Boolean) {
         dataStore.edit { it[DYNAMIC_COLORS] = enabled }
+    }
+
+    /**
+     * Whether the album palette also drives the app's own accent and ground,
+     * not just the player. Off by default: the menus following whatever is
+     * playing is a deliberate taste, not the sane default.
+     */
+    val dynamicColorMenus: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[DYNAMIC_COLORS_MENUS] ?: false
+    }
+
+    suspend fun setDynamicColorMenus(enabled: Boolean) {
+        dataStore.edit { it[DYNAMIC_COLORS_MENUS] = enabled }
+    }
+
+    /**
+     * The bypass for the ground half of [dynamicColorMenus]: the accent still
+     * follows the cover, the background stays where the theme put it.
+     */
+    val dynamicColorKeepBackground: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[DYNAMIC_COLORS_KEEP_BACKGROUND] ?: false
+    }
+
+    suspend fun setDynamicColorKeepBackground(enabled: Boolean) {
+        dataStore.edit { it[DYNAMIC_COLORS_KEEP_BACKGROUND] = enabled }
+    }
+
+    /**
+     * How long the album colours take to cross over, in milliseconds, or
+     * [tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND] (the default) to
+     * keep deriving it from "Blend Between Tracks".
+     */
+    val colorTransitionMs: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[COLOR_TRANSITION_MS] ?: tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND
+    }
+
+    suspend fun setColorTransitionMs(millis: Int) {
+        dataStore.edit { it[COLOR_TRANSITION_MS] = millis }
     }
 
     /**

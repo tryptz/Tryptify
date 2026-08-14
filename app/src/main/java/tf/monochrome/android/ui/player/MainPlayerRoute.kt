@@ -4,8 +4,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +62,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import tf.monochrome.android.ui.components.GlassPanel
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -213,7 +224,10 @@ fun MainPlayerRoute(
     // half the previous track. Linear for the same reason the palette is: it
     // is pacing an audio crossfade, not decorating a tap.
     val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
-    val colorBlendMs = tf.monochrome.android.ui.theme.motionMillis(ColorBlend.millisFor(blendSeconds))
+    val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
+    val colorBlendMs = tf.monochrome.android.ui.theme.motionMillis(
+        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+    )
     // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
     val animatedDominant by androidx.compose.animation.animateColorAsState(
@@ -237,6 +251,7 @@ fun MainPlayerRoute(
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
     HandleFullscreenInsets(isFullscreenActive)
+    PlayerSystemBarAppearance(blendedColors.dominant)
 
     // --- Sheets ---
     if (showLyricsSheet) {
@@ -262,15 +277,10 @@ fun MainPlayerRoute(
             onDismiss = { showPresetSheet = false },
         )
     }
-    if (showSpeedSheet) {
-        SpeedSheet(
-            speed = playbackSpeed,
-            preservePitch = preservePitch,
-            onSpeedChange = playerViewModel::setPlaybackSpeed,
-            onPreservePitchChange = playerViewModel::setPreservePitch,
-            onDismiss = { showSpeedSheet = false },
-        )
-    }
+    // The speed panel is NOT called here with its siblings. It is handed to
+    // MainPlayerScreen's `overlay` slot below so it renders inside the player's
+    // own window, next to the haze source — the only place a pane can actually
+    // blur this screen. See SpeedPanel.
     val sleepRemainingMinutes = ((sleepRemainingMs + 59_999) / 60_000).toInt()
     if (showSleepSheet) {
         SleepTimerSheet(
@@ -715,12 +725,83 @@ fun MainPlayerRoute(
                 // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
                 lyricsMode = lyricsSlotWide,
                 blurredBackground = blurredBackground,
+                overlay = {
+                    SpeedPanel(
+                        visible = showSpeedSheet,
+                        speed = playbackSpeed,
+                        preservePitch = preservePitch,
+                        onSpeedChange = playerViewModel::setPlaybackSpeed,
+                        onPreservePitchChange = playerViewModel::setPreservePitch,
+                        onDismiss = { showSpeedSheet = false },
+                    )
+                },
+            )
+        }
+        // The legacy layout has no `overlay` slot and no haze source of its own,
+        // so the panel hangs here instead. LocalPlayerHaze is null on that path
+        // and GlassPanel falls back to plain translucent glass — the same pane
+        // the modal sheet used to give everyone.
+        if (legacyPlayer) {
+            SpeedPanel(
+                visible = showSpeedSheet,
+                speed = playbackSpeed,
+                preservePitch = preservePitch,
+                onSpeedChange = playerViewModel::setPlaybackSpeed,
+                onPreservePitchChange = playerViewModel::setPreservePitch,
+                onDismiss = { showSpeedSheet = false },
             )
         }
     }
     }
 }
 
+
+/**
+ * Hand the status and navigation bars to the player's own background.
+ *
+ * The app sets their appearance once, from the theme's background. That is
+ * right for every other screen and wrong for this one: the player does not use
+ * the theme's background, it paints the album colour washed into black. On a
+ * light theme the system went on drawing dark icons, and the home indicator
+ * vanished into the bottom of the gradient.
+ *
+ * Each bar is judged against the pixels actually under it rather than one
+ * verdict for the screen, because the two ends of [dynamicPlayerBackground] are
+ * nothing like each other: the top carries the album wash, the bottom is flat
+ * [PlayerDesignTokens.BackgroundBlack]. Both stops are translucent, so they are
+ * composited over that same black before being measured — reading the stop
+ * colour neat would call a half-transparent wash far brighter than it lands.
+ *
+ * The blurred-artwork background, when it is on, only ever darkens both ends
+ * further (black at 0.58 over the top, 0.72 over the bottom), so the gradient
+ * alone is the bright case and deciding from it cannot leave a bar too light.
+ *
+ * Restored on the way out rather than left set, or backing out to a light theme
+ * would keep the player's icons and the rest of the app would lose its own.
+ */
+@Composable
+private fun PlayerSystemBarAppearance(albumDominant: Color) {
+    val view = LocalView.current
+    val window = (view.context as? android.app.Activity)?.window
+
+    val ground = PlayerDesignTokens.BackgroundBlack
+    val wash = lerp(albumDominant, Color.Black, 0.5f)
+    // `lightBars` in the platform's sense: dark icons, for a light background.
+    val lightStatus = lerp(ground, wash, wash.alpha * 0.5f).luminance() > 0.5f
+    val lightNav = ground.luminance() > 0.5f
+
+    DisposableEffect(lightStatus, lightNav, window, view) {
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val hadLightStatus = controller?.isAppearanceLightStatusBars
+        val hadLightNav = controller?.isAppearanceLightNavigationBars
+        controller?.isAppearanceLightStatusBars = lightStatus
+        controller?.isAppearanceLightNavigationBars = lightNav
+        onDispose {
+            hadLightStatus?.let { controller?.isAppearanceLightStatusBars = it }
+            hadLightNav?.let { controller?.isAppearanceLightNavigationBars = it }
+        }
+    }
+}
 
 @Composable
 private fun HandleFullscreenInsets(isFullscreenActive: Boolean) {
@@ -748,22 +829,76 @@ private fun HandleFullscreenInsets(isFullscreenActive: Boolean) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Playback speed, on glass that actually frosts the player behind it.
+ *
+ * This was a [ModalBottomSheet], and that is why it never hazed. A modal sheet
+ * is its own window; the player's backdrop was captured into a layer belonging
+ * to the window behind it, and a haze effect cannot sample a layer from another
+ * window — handing the state across yields a pane frosting a picture it cannot
+ * read, which paints its own base colour and reads as a solid slab. There is no
+ * setting that fixes that; the pane has to move.
+ *
+ * So it lives in the player's window now, handed to [MainPlayerScreen]'s
+ * `overlay` slot, where it is a sibling of the haze source exactly as the
+ * audio-tools sheet is, and [LocalPlayerHaze] is a real backdrop to blur.
+ *
+ * The scrim and the slide are the price of leaving [ModalBottomSheet] behind.
+ * Both stay mounted while [visible] is false so the exit animation has
+ * something to play on — dropping the panel the instant it is dismissed would
+ * make it vanish rather than leave.
+ */
 @Composable
-private fun SpeedSheet(
+private fun BoxScope.SpeedPanel(
+    visible: Boolean,
     speed: Float,
     preservePitch: Boolean,
     onSpeedChange: (Float) -> Unit,
     onPreservePitchChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    // Ahead of the player's own Back handling while the panel is up, and out of
+    // the way entirely when it is not.
+    BackHandler(enabled = visible) { onDismiss() }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.matchParentSize(),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        )
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter),
+    ) {
+        GlassPanel(
+            // The real thing at last: the player's background layer, which this
+            // pane is a sibling of rather than a descendant.
+            hazeState = LocalPlayerHaze.current,
+            // The mini player's material, like every other floating pane in the
+            // app that isn't the transport itself.
+            glass = LocalMiniPlayerGlass.current,
+            avoidNavigationBar = false,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -861,6 +996,7 @@ private fun SpeedSheet(
                 )
             }
             TextButton(onClick = { onSpeedChange(1.0f) }) { Text("Reset to 1.0x") }
+        }
         }
     }
 }

@@ -38,6 +38,7 @@ import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -92,12 +93,6 @@ fun GlassPanel(
      * space for a bar that is nowhere near it.
      */
     avoidNavigationBar: Boolean = true,
-    /**
-     * Use the light frost — barely-there darkening — for a panel that often
-     * floats over empty space, so it reads as clear glass rather than a slab.
-     * The heavy default suits panels with bright content always behind them.
-     */
-    lightFrost: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
@@ -155,23 +150,12 @@ fun GlassPanel(
             // frost's own base colour as a flat pane, which is the slab this
             // whole component exists not to be.
             if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
-                // How hard the frost darkens is the whole "rectangle" complaint.
-                //
-                // A heavy frost (black at a third) is right for a panel with
-                // bright content always behind it — the map's station card over
-                // the globe, the mini player over a scrolling list — where the
-                // darkening is what keeps text off that brightness. It is wrong
-                // for a floating search bar: at rest there is often nothing
-                // behind it but the page, and darkening a near-black page paints
-                // the dark rounded slab this keeps being accused of being. Those
-                // callers ask for the light frost, which barely touches a dark
-                // page, so what reads is the blur — real content when there is
-                // any, the page's own colour when there isn't, never a slab.
-                val darkAlpha = if (lightFrost) 0.10f else 0.32f
-                val lightAlpha = if (lightFrost) 0.24f else 0.45f
+                // The mini player's exact frost. This panel is the same material
+                // as that bar and is usually on screen beside it, so the numbers
+                // are the same numbers rather than a second set that drifts.
                 val frostTint = (
-                    if (isDark) Color.Black.copy(alpha = darkAlpha)
-                    else Color.White.copy(alpha = lightAlpha)
+                    if (isDark) Color.Black.copy(alpha = 0.32f)
+                    else Color.White.copy(alpha = 0.45f)
                     ).let { it.copy(alpha = (it.alpha * glass.hazeTint).coerceIn(0f, 1f)) }
                 Box(
                     Modifier
@@ -192,28 +176,31 @@ fun GlassPanel(
             // be published for it or half of them are quietly ignored — the
             // panel would frost with one material and relight with another.
             CompositionLocalProvider(LocalPlayerGlass provides glass) {
+            // Solid when the shader is really coming, faint when it is not.
+            //
+            // The mini player draws this slab at full opacity and lets the AGSL
+            // turn it into glass, and that is the whole reason it looks like
+            // glass: the shader builds its bevel and rim from the alpha
+            // heightfield underneath it. This panel used to draw at a tenth of
+            // that as insurance — on a device where the shader silently no-ops,
+            // a solid fill is left on screen as an opaque rounded rectangle in
+            // the accent colour. The insurance worked and the cost was that
+            // every panel that *did* have the shader had nearly no heightfield
+            // to bevel, so it came out a soft smudge with no edge while the bar
+            // beside it was a crisp pane.
+            //
+            // Asking whether the shader will run replaces the guess, so the good
+            // case gets the mini player's fill and the bad case still cannot
+            // paint a slab.
+            val shaded = rememberLiquidGlassAvailable()
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
                     .playerGlass(tint = tint),
             ) {
                 val r = MonoDimens.radiusLg.toPx()
-                // A wash, not a fill.
-                //
-                // This drew the tint at full opacity and trusted the AGSL
-                // shader above it to turn a solid slab into glass. When the
-                // shader does not apply — it is remembered from a runCatching
-                // that returns null on any device that will not compile it, and
-                // the modifier then no-ops — what is left on screen is exactly
-                // that: an opaque rounded rectangle in the accent colour. That
-                // is the container this panel has been accused of being, and it
-                // was never the haze.
-                //
-                // At this alpha the shader still has a gradient to build its
-                // bevel from, and the failure mode is a faint tint instead of a
-                // slab.
                 drawRoundRect(
-                    color = tint.copy(alpha = if (lightFrost) 0.07f else 0.14f),
+                    color = if (shaded) tint else tint.copy(alpha = 0.14f),
                     cornerRadius = CornerRadius(r, r),
                 )
             }

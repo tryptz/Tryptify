@@ -25,16 +25,22 @@ import kotlinx.coroutines.withContext
 
 /**
  * Colors extracted from album art. Overrides a subset of the active color
- * scheme when the user has dynamic colors enabled — we intentionally only
- * touch primary/secondary slots so the rest of the chosen theme's hierarchy
- * (backgrounds, text-on-surface, outlines) stays intact.
+ * scheme when the user has dynamic colors enabled — [DynamicColorScope]
+ * intentionally only touches primary/secondary slots so the rest of the chosen
+ * theme's hierarchy (backgrounds, text-on-surface, outlines) stays intact.
+ *
+ * [background] is the one slot no scope swaps in directly. It is the cover's
+ * *dominant* colour rather than its accent — the most-present colour, which is
+ * what a whole screen wants — and it exists for "Tint the menus", which hands
+ * accent and ground to [customScheme] to rebuild a legible scheme around them.
  */
 data class DynamicPalette(
     val primary: Color,
     val onPrimary: Color,
     val primaryContainer: Color,
     val secondary: Color,
-    val onSecondary: Color
+    val onSecondary: Color,
+    val background: Color,
 )
 
 /**
@@ -51,6 +57,7 @@ internal fun lerp(start: DynamicPalette, stop: DynamicPalette, fraction: Float):
         primaryContainer = lerp(start.primaryContainer, stop.primaryContainer, fraction),
         secondary = lerp(start.secondary, stop.secondary, fraction),
         onSecondary = lerp(start.onSecondary, stop.onSecondary, fraction),
+        background = lerp(start.background, stop.background, fraction),
     )
 
 /**
@@ -106,6 +113,12 @@ object DynamicColorExtractor {
             ?: palette.lightMutedSwatch
             ?: primarySwatch
 
+        // The player's wash leads with the *dominant* colour, not the vibrant
+        // one — it fills the whole screen, so the most-present colour is the
+        // one that reads as "this album" rather than the loudest accent in it.
+        val dominant = (palette.dominantSwatch ?: palette.vibrantSwatch ?: palette.mutedSwatch)
+            ?.let { Color(it.rgb) }
+
         val scheme = primarySwatch?.let {
             DynamicPalette(
                 primary = Color(it.rgb),
@@ -113,14 +126,11 @@ object DynamicColorExtractor {
                 primaryContainer = Color(it.rgb).copy(alpha = 0.18f),
                 secondary = Color((secondarySwatch ?: it).rgb),
                 onSecondary = Color((secondarySwatch ?: it).bodyTextColor),
+                // Same reasoning as the wash, and the same colour: a ground
+                // wants the cover's bulk, not its loudest accent.
+                background = dominant ?: Color(it.rgb),
             )
         }
-
-        // The player's wash leads with the *dominant* colour, not the vibrant
-        // one — it fills the whole screen, so the most-present colour is the
-        // one that reads as "this album" rather than the loudest accent in it.
-        val dominant = (palette.dominantSwatch ?: palette.vibrantSwatch ?: palette.mutedSwatch)
-            ?.let { Color(it.rgb) }
         val vibrant = (palette.vibrantSwatch
             ?: palette.lightVibrantSwatch
             ?: palette.lightMutedSwatch

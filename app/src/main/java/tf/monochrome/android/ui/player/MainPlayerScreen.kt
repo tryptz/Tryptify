@@ -21,6 +21,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -204,6 +205,17 @@ fun MainPlayerScreen(
     lyricsMode: Boolean = false,
     // Full-screen blurred, stretched album-art background (Appearance setting).
     blurredBackground: Boolean = false,
+    /**
+     * Chrome the route wants drawn over the player, inside the player's own
+     * window — a slot rather than the route rendering it itself, because *where*
+     * is the whole point. It lands here as a sibling of the haze source, so a
+     * pane in it can gaussian-blur the background the way the audio-tools sheet
+     * does. A route-owned dialog or modal sheet is a separate window and can
+     * only ever show the flat tint.
+     *
+     * Drawn last, above the audio-tools sheet and its scrim.
+     */
+    overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val accent = state.albumColors.vibrant
 
@@ -574,6 +586,8 @@ fun MainPlayerScreen(
             )
             }
         }
+
+        overlay()
     }
     }
 }
@@ -718,6 +732,13 @@ private fun StatusOverlayPanel(
         // readability wash (the AGSL slab is nearly transparent at low
         // bodyOpacity, and the tiles sit over bright album art); the opaque
         // fill remains solely as the pre-Tiramisu / glass-off fallback.
+        //
+        // Do NOT draw the player's blurred artwork in here. It was tried, to
+        // carry that toggle onto this sheet, and PlayerBlurredArtBackground
+        // fills the maximum size it is offered — inside this Surface that is the
+        // whole screen, so the sheet stopped wrapping its content and stretched
+        // to full height with the controls stranded at the top. The frost is how
+        // this sheet relates to what is behind it.
         color = if (useGlass) PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.45f)
                 else PlayerDesignTokens.BackgroundBlack.copy(alpha = 0.92f),
     ) {

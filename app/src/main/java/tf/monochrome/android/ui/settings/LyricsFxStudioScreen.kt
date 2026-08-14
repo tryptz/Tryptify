@@ -69,6 +69,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import tf.monochrome.android.ui.components.GlassPanel
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -859,14 +863,23 @@ private fun PlayerGlassTab(
         // Live preview: the real transport buttons AND the action dock under the
         // current button glass — the dock is the same hollowed-slab glass, so it
         // tunes with these sliders exactly like the play button.
+        // The backdrop is a sibling of the pane above it, not its parent, so the
+        // pane can actually blur it — a haze effect cannot sample a layer it is
+        // drawn inside, and one that tries paints the source's flat colour.
+        val previewHaze = rememberHazeState()
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(288.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(previewBgBrush),
+                .clip(RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center,
         ) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .hazeSource(previewHaze)
+                    .background(previewBgBrush),
+            )
             CompositionLocalProvider(LocalPlayerGlass provides glass) {
                 if (previewMini) {
                     // The real mini player bar under the current glass — the exact
@@ -889,6 +902,19 @@ private fun PlayerGlassTab(
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 } else {
+                // The chrome being tuned sits on a pane of the app's own glass —
+                // the mini player's material, like every other floating panel —
+                // rather than straight onto a flat swatch. It is what the player
+                // actually looks like in use: glass over something, not shapes on
+                // a colour. The panel takes the *mini player's* settings and the
+                // transport inside it takes the player's, which is exactly the
+                // relationship on the real screen.
+                GlassPanel(
+                    hazeState = previewHaze,
+                    glass = LocalMiniPlayerGlass.current,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    avoidNavigationBar = false,
+                ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -953,6 +979,7 @@ private fun PlayerGlassTab(
                         onSeekFinished = {},
                         modifier = Modifier.fillMaxWidth(),
                     )
+                }
                 }
                 }
             }

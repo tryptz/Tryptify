@@ -39,8 +39,146 @@ object WhatsNew {
     /** The one section heading in use — the Discover page and everything under it. */
     private const val DISCOVER = "Discover (Beta)"
 
+    /** The world radio globe and everything hanging off it. */
+    private const val GLOBE = "World radio"
+
+    /** The app's own surfaces — glass, themes, search. */
+    private const val LOOK = "Look and feel"
+
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 185,
+            versionName = "1.8.5",
+            entries = listOf(
+                WhatsNewEntry(
+                    section = GLOBE,
+                    title = "Land and sea stop swapping places",
+                    body = "Turning the globe used to flip it inside out for a frame or two — " +
+                        "the sea filling in and the continents punched out of it — several " +
+                        "times a second. It looked like the theme flickering. It doesn't happen " +
+                        "any more, from any angle.",
+                ),
+                WhatsNewEntry(
+                    section = GLOBE,
+                    title = "Searching the globe finds things again",
+                    body = "Typing a station, city or country came back with nothing at all: the " +
+                        "search ran, and had nowhere to put what it found. The countries, cities " +
+                        "and stations are back under the box.",
+                ),
+                WhatsNewEntry(
+                    section = GLOBE,
+                    title = "Continents you can actually see",
+                    body = "Land is filled rather than outlined, so there's no guessing which " +
+                        "side of a coast is which, and the borders glow in your theme's colour. " +
+                        "The city you're listening to pulses so you can find it on the disc.",
+                ),
+                WhatsNewEntry(
+                    section = GLOBE,
+                    title = "The station list scrolls on the first try",
+                    body = "It used to take two or three attempts before a drag was recognised. " +
+                        "The globe underneath was swallowing them.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Pick your own colours",
+                    body = "Settings › Appearance gains a Custom colors switch: choose an accent " +
+                        "and a background and the whole app is built from them, overriding the " +
+                        "theme above. Light or dark is decided by the background you pick, and " +
+                        "text is kept readable on whatever you choose.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "A light version of every theme",
+                    body = "All fifteen themes now have a light variant, on your choice of two " +
+                        "papers — crisp white, or a warm off-white with less glare. Every one is " +
+                        "checked for contrast rather than eyeballed, so nothing comes out grey " +
+                        "on grey.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "One search bar, everywhere",
+                    body = "Every screen's search is the same bar now, opened from the icon in " +
+                        "the top bar. It floats over the page rather than pushing it down, hides " +
+                        "nothing when it appears, and the list slides under the glass as you " +
+                        "scroll.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Search your settings",
+                    body = "A search in Settings that knows where everything lives — type " +
+                        "\"crossfade\", \"scrobble\" or \"battery\" and tap the result to land on " +
+                        "the setting itself, scrolled into view, whichever tab or sub-screen it " +
+                        "is on.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Glass gives under your finger",
+                    body = "Press anything made of glass and it swells where you touched it, " +
+                        "the way the player's transport always has. Buttons, bars and cards used " +
+                        "to either do nothing or shrink like a flat rectangle.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Glass you can see through",
+                    body = "Search bars, settings rows and the mini player were sitting on solid " +
+                        "panels that defeated the point of them. The panels are gone, every " +
+                        "screen runs under the mini player, and the blur behind the glass is of " +
+                        "the page rather than a flat colour.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Let the album repaint the whole app",
+                    body = "Dynamic Colors gains \"Tint the menus too\": the cover sets the " +
+                        "accent and background everywhere, not just the player. A second switch " +
+                        "keeps your theme's background if you only want the accent to move.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Set how fast the colours change",
+                    body = "A slider under Light paper, in seconds, for how long the album's " +
+                        "colours take to cross over on a track change — from instant to eight " +
+                        "seconds. Left alone it keeps step with Blend Between Tracks as before.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The home bar stops disappearing",
+                    body = "On a light theme the gesture pill was drawn dark against the black " +
+                        "foot of the player and vanished into it. The player sets the system " +
+                        "bars from its own background now, top and bottom judged separately.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The speed panel frosts what's behind it",
+                    body = "It was the last pane in the player painting a flat slab instead of " +
+                        "blurring the artwork — it was drawn in a window of its own, where there " +
+                        "was nothing to blur. It sits on the player now, and frosts it.",
+                ),
+                WhatsNewEntry(
+                    title = "A spinning record on Discord",
+                    body = "The \"Listening to\" card now turns the album art as a disc, once per " +
+                        "bar at the track's own tempo, instead of drawing a spectrum across the " +
+                        "sleeve.",
+                ),
+                WhatsNewEntry(
+                    title = "Your own files show their artwork on Discord",
+                    body = "A track ripped from a CD showed no cover at all, because there was " +
+                        "no address Discord could fetch it from. The artwork is uploaded now, " +
+                        "the same way the animation is.",
+                ),
+                WhatsNewEntry(
+                    title = "The mixer stops resetting itself",
+                    body = "Settings would quietly revert to an earlier state when the track " +
+                        "changed. They stay put now, and there's a reset button for when you " +
+                        "actually want defaults back.",
+                ),
+                WhatsNewEntry(
+                    title = "Top 100 opens where you are",
+                    body = "Tapping it on the genre panel expands the chart in place, with " +
+                        "artwork, rather than taking you to a separate page.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 184,
             versionName = "1.8.4",
@@ -239,6 +377,48 @@ object WhatsNew {
                     body = "The player rebuilt itself four times a second for the clock alone, " +
                         "long lists redrew from any change downwards, and screens kept working " +
                         "in the background. Scrolling and navigation are smoother for it.",
+                ),
+            ),
+        ),
+        // Written after the fact, from the commits between the 1.8.1 and 1.8.3
+        // releases. 1.8.3 shipped without notes — the entry above it was written
+        // to cover "the whole cycle that produced 1.8.4", which is all 1.8.4
+        // work, so none of this was ever described anywhere a listener looks.
+        WhatsNewRelease(
+            versionCode = 183,
+            versionName = "1.8.3",
+            entries = listOf(
+                WhatsNewEntry(
+                    title = "Correct each ear separately",
+                    body = "AutoEQ gains a stereo mode: pick a measurement for the left ear and " +
+                        "another for the right, and tune the bands per side. The preamp stays " +
+                        "shared, so it still guards both ears' headroom rather than letting one " +
+                        "side clip.",
+                ),
+                WhatsNewEntry(
+                    title = "Import an EqualizerAPO profile",
+                    body = "Point it at a .txt from EqualizerAPO or AutoEq and it becomes bands " +
+                        "you can edit. Anything it has to clamp or skip is listed before you " +
+                        "commit, and handing it a measurement curve by mistake sends you to the " +
+                        "right importer instead of failing.",
+                ),
+                WhatsNewEntry(
+                    title = "Surround folds down properly",
+                    body = "Multichannel music played in stereo used the ITU BS.775 fold, which " +
+                        "pulls the surrounds toward the middle. It uses a fixed hard-pan matrix " +
+                        "now, so the sides stay at the sides — and 16-channel 9.1.6 tracks are " +
+                        "understood.",
+                ),
+                WhatsNewEntry(
+                    title = "See what each effect is doing",
+                    body = "Every plugin in the FX chain draws its own visualisation from a live " +
+                        "tap of the audio passing through it, so a compressor shows its gain " +
+                        "reduction and a filter shows its curve rather than a row of numbers.",
+                ),
+                WhatsNewEntry(
+                    title = "One tip button",
+                    body = "Stripe donations are gone. There is a single Ko-fi button in " +
+                        "Settings instead.",
                 ),
             ),
         ),
