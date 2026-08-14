@@ -104,6 +104,11 @@ fun MiniPlayer(
     // hasn't turned button glass off. Below that, keep the old haze bar + Material
     // icons — a punched slab with no shader would be an opaque block.
     val glass = LocalPlayerGlass.current
+    // The progress line is also the bar's top border. With it off the bar
+    // must close up, so the height it reserves goes to zero everywhere it is
+    // used — including the control-hole centring maths below, which would
+    // otherwise punch the play/skip holes 2dp above the icons they reveal.
+    val progressHeight = if (glass.miniProgressBar) MiniProgressHeight else 0.dp
     val useGlass = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && glass.enabled
 
     val swipeGestures = Modifier.pointerInput(Unit) {
@@ -146,7 +151,7 @@ fun MiniPlayer(
                 .clickable(interactionSource = null, indication = null, onClick = onClick)
                 .then(swipeGestures)
         ) {
-            MiniPlayerContent(track, progressProvider, blendMillis, userTrackChanges) {
+            MiniPlayerContent(track, progressProvider, blendMillis, userTrackChanges, glass.miniProgressBar) {
                 IconButton(onClick = onPlayPauseClick) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -201,13 +206,13 @@ fun MiniPlayer(
 
     val density = LocalDensity.current
     var barSize by remember { mutableStateOf(IntSize.Zero) }
-    val controlCenter = remember(barSize, lastControl) {
+    val controlCenter = remember(barSize, lastControl, progressHeight) {
         if (barSize.width == 0 || barSize.height == 0) {
             Offset(0.85f, 0.5f)
         } else with(density) {
             val cell = MiniControlCell.toPx()
             val pad = MonoDimens.spacingMd.toPx()
-            val cyPx = MiniProgressHeight.toPx() + MonoDimens.spacingSm.toPx() + cell / 2f
+            val cyPx = progressHeight.toPx() + MonoDimens.spacingSm.toPx() + cell / 2f
             val cx = barSize.width - pad - (if (lastControl == 1) 0.5f else 1.5f) * cell
             Offset((cx / barSize.width).coerceIn(0f, 1f), (cyPx / barSize.height).coerceIn(0f, 1f))
         }
@@ -286,7 +291,7 @@ fun MiniPlayer(
             val padPx = MonoDimens.spacingMd.toPx()
             // Row content centre = progress line + row top padding + half the
             // (48dp) control cell — the tallest child, so the row's content box.
-            val cy = MiniProgressHeight.toPx() + MonoDimens.spacingSm.toPx() + cellPx / 2f
+            val cy = progressHeight.toPx() + MonoDimens.spacingSm.toPx() + cellPx / 2f
             // Rightmost cell is skip-next, the one before it is play/pause; both
             // inset from the right edge by the row's horizontal padding.
             val skipCx = size.width - padPx - cellPx * 0.5f
@@ -315,7 +320,7 @@ fun MiniPlayer(
         // Transparent content overlay: progress, cover, text, and the two tap
         // targets sitting exactly over the punched holes (same trailing cells).
         // No ripple indication — the glass press-bulge is the feedback.
-        MiniPlayerContent(track, progressProvider, blendMillis, userTrackChanges) {
+        MiniPlayerContent(track, progressProvider, blendMillis, userTrackChanges, glass.miniProgressBar) {
             Box(
                 modifier = Modifier
                     .size(MiniControlCell)
@@ -351,17 +356,20 @@ private fun MiniPlayerContent(
     progressProvider: () -> Float,
     blendMillis: Int,
     userTrackChanges: Int,
+    showProgress: Boolean,
     controls: @Composable () -> Unit,
 ) {
     Column {
-        LinearProgressIndicator(
-            progress = { progressProvider().coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(MiniProgressHeight),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.outline
-        )
+        if (showProgress) {
+            LinearProgressIndicator(
+                progress = { progressProvider().coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(MiniProgressHeight),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.outline
+            )
+        }
         Row(
             modifier = Modifier.padding(horizontal = MonoDimens.spacingMd, vertical = MonoDimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically

@@ -68,6 +68,17 @@ data class PlayerGlassSettings(
     val hazeBlurDp: Float = 40f,
     /** Strength multiplier on the frost layer's luminance-picked tint (0–2). */
     val hazeTint: Float = 1f,
+    /**
+     * The mini player's thin progress line, which doubles as the bar's top
+     * border. Off drops both the line and the 2dp it occupies, so the bar
+     * closes up rather than leaving a gap where it used to be.
+     *
+     * Personal, not material: whether you want a progress readout is a
+     * preference about the bar, not part of a glass theme's optics, so
+     * [withPersonalFrom] carries it across a theme change instead of letting
+     * every preset silently switch it back on.
+     */
+    val miniProgressBar: Boolean = true,
 ) {
     fun clamped(): PlayerGlassSettings {
         val d = DEFAULT
@@ -97,13 +108,15 @@ data class PlayerGlassSettings(
 
     /**
      * The user's personal/perf settings — the chosen button-tint colour, the
-     * Studio-preview background, and the per-pixel quality — that a theme should
-     * carry over rather than overwrite. A theme changes only the glass MATERIAL.
+     * Studio-preview background, the per-pixel quality, and whether the mini
+     * player shows its progress line — that a theme should carry over rather
+     * than overwrite. A theme changes only the glass MATERIAL.
      */
     fun withPersonalFrom(other: PlayerGlassSettings): PlayerGlassSettings = copy(
         sampleRings = other.sampleRings,
         tintColor = other.tintColor,
         previewBg = other.previewBg,
+        miniProgressBar = other.miniProgressBar,
     )
 
     /**

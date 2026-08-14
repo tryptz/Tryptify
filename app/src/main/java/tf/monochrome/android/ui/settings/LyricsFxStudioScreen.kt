@@ -162,7 +162,7 @@ class LyricsFxStudioViewModel @Inject constructor(
     private var playerGlassTouched = false
     private var playerGlassPersistJob: Job? = null
 
-    /** Mini-player glass settings — the "Mini Player" tab (its own blob, same shape). */
+    /** The "UI panels" tab's glass — the mini player bar and every floating panel that shares its material (its own blob, same shape as the player's). */
     private val _miniPlayerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _miniPlayerGlass.asStateFlow()
     private var miniPlayerGlassTouched = false
@@ -382,7 +382,7 @@ fun LyricsFxStudioScreen(
     val miniPlayerGlass by viewModel.miniPlayerGlass.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // Which studio tab: 0 = Lyrics, 1 = Player Glass, 2 = Mini Player.
+    // Which studio tab: 0 = Player, 1 = UI panels, 2 = Lyrics.
     // rememberSaveable so it doesn't snap back to Lyrics after background
     // process death.
     var selectedTab by rememberSaveable { mutableStateOf(0) }
@@ -411,9 +411,14 @@ fun LyricsFxStudioScreen(
             selectedTabIndex = selectedTab,
             containerColor = Color.Transparent,
         ) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lyrics") })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Player Glass") })
-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Mini Player") })
+            // Player chrome first, then the glass shared by every floating
+            // panel, then lyrics. "UI panels" rather than "Mini Player"
+            // because this blob stopped being just the bar: it is the material
+            // for the audio-tools sheet, the speed panel, the nav pill, the
+            // search bar and the map panels too.
+            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Player") })
+            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("UI panels") })
+            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Lyrics") })
         }
 
         // With the glass switched off app-wide, every control on these tabs still
@@ -429,11 +434,11 @@ fun LyricsFxStudioScreen(
             )
         }
 
-        if (selectedTab == 1 || selectedTab == 2) {
+        if (selectedTab == 0 || selectedTab == 1) {
             // Both glass tabs share the same controls, preview, and theme pool;
             // only which settings blob they edit differs.
             val customGlassPresets by viewModel.customPlayerGlassPresets.collectAsStateWithLifecycle()
-            if (selectedTab == 1) {
+            if (selectedTab == 0) {
                 PlayerGlassTab(
                     glass = playerGlass,
                     customPresets = customGlassPresets,
@@ -1087,15 +1092,25 @@ private fun PlayerGlassTab(
         // Controls are grouped by what they affect, in paint order: what the
         // glass IS (body), its 3D form (shape & bevel), how light plays on it
         // (light & reflections), what it casts (drop shadow), then render cost.
-        StudioSection("Player Glass")
+        StudioSection(if (previewMini) "UI panels" else "Player Glass")
         FxToggle(
             "Button liquid glass", glass.enabled,
             description = "3D refractive glass on the transport buttons (needs Android 13+).",
         ) { onUpdate { g -> g.copy(enabled = it) } }
-        FxToggle(
-            "Glass progress bar", glass.progressGlass,
-            description = "Thin glass tube scrubber that fills up, with a sine-wave bulge at the playhead dot.",
-        ) { onUpdate { g -> g.copy(progressGlass = it) } }
+        if (previewMini) {
+            // The mini player's progress line doubles as the bar's top border,
+            // so this is as much a framing choice as a readout one — off, the
+            // bar loses that hairline edge and closes up by its 2dp.
+            FxToggle(
+                "Mini player progress bar", glass.miniProgressBar,
+                description = "Thin progress line along the top edge of the mini player, which also gives the bar its top border.",
+            ) { onUpdate { g -> g.copy(miniProgressBar = it) } }
+        } else {
+            FxToggle(
+                "Glass progress bar", glass.progressGlass,
+                description = "Thin glass tube scrubber that fills up, with a sine-wave bulge at the playhead dot.",
+            ) { onUpdate { g -> g.copy(progressGlass = it) } }
+        }
 
         StudioSection("Glass body")
         FxSlider(
@@ -1107,11 +1122,12 @@ private fun PlayerGlassTab(
             description = "Frosts the glass, from clear to misted.",
         ) { onUpdate { g -> g.copy(frost = it) } }
         if (previewMini) {
-            // Haze backdrop frost — only surfaces driven by the MINI glass
-            // (mini player bar, audio-tools sheet, nav pill) render it.
+            // Haze backdrop frost — only surfaces driven by this blob render
+            // it: the mini player bar, the audio-tools sheet, the speed panel,
+            // the nav pill, the search bar and the map panels.
             FxSlider(
                 "Backdrop blur", "%.0f dp".format(glass.hazeBlurDp), glass.hazeBlurDp, 0f..80f,
-                description = "Gaussian blur of whatever sits behind the bar (0 = off).",
+                description = "Gaussian blur of whatever sits behind these panels (0 = off).",
             ) { onUpdate { g -> g.copy(hazeBlurDp = it) } }
             FxSlider(
                 "Backdrop tint", "${(glass.hazeTint * 100).toInt()}%", glass.hazeTint, 0f..2f,
