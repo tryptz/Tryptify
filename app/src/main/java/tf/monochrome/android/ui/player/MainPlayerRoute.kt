@@ -55,8 +55,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import tf.monochrome.android.ui.components.GlassPanel
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -760,33 +758,12 @@ private fun SpeedSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        // The sheet's own container steps aside so the glass inside it is the
-        // only surface. Left at its default it painted an opaque Material slab
-        // over the pane, and there was nothing to see through.
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-    ) {
-        GlassPanel(
-            // No haze, deliberately. A modal sheet is its own window and the
-            // app's backdrop layer was captured in the one behind it; handing
-            // that state across is how a pane ends up frosting a picture it
-            // cannot read and painting its own base colour instead — the flat
-            // slab. Without it the shader still relights the pane over the
-            // player showing through the transparent container above.
-            hazeState = null,
-            // The mini player's material, like every other floating pane in the
-            // app that isn't the transport itself.
-            glass = LocalMiniPlayerGlass.current,
-            avoidNavigationBar = false,
-        ) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -884,7 +861,6 @@ private fun SpeedSheet(
                 )
             }
             TextButton(onClick = { onSpeedChange(1.0f) }) { Text("Reset to 1.0x") }
-        }
         }
     }
 }
