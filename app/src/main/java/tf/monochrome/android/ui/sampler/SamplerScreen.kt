@@ -2,8 +2,11 @@
 
 package tf.monochrome.android.ui.sampler
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,11 +18,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,12 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import tf.monochrome.android.domain.patterns.CaptureSource
 import tf.monochrome.android.domain.patterns.SampleRef
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
@@ -45,17 +50,17 @@ import tf.monochrome.android.ui.patterns.TransportKey
 import kotlin.math.roundToInt
 
 /**
- * Capture, trim, save.
+ * Capture, edit, save.
  *
- * The screen is arranged around the fact that the interesting moment has
- * already passed by the time the user reaches for it: they heard something,
- * and now they want it. So RECORD is the largest thing on the page, the
- * capture starts on one tap with no dialog in front of it, and everything
- * after — trim, level, name, category — is optional. Saving with none of it
- * touched produces a usable sample.
+ * Three ways in and one way out. Audio arrives by recording what is playing,
+ * by importing a file, or by re-opening something already in the library —
+ * and all three land in the same editor, so there is one set of tools to
+ * learn rather than three.
  *
- * What it is deliberately not is a waveform editor. One selection, a level, a
- * few one-tap operations. Anything more belongs in a tool built for it.
+ * The editor is built around a selection instead of a mode. Every operation
+ * acts on the selection, or on the whole buffer when there is none, which is
+ * what lets six buttons cover both "tidy up this hit" and "fix this one
+ * syllable" without a toolbar full of variants.
  */
 @Composable
 fun SamplerScreen(
@@ -67,12 +72,21 @@ fun SamplerScreen(
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val capture by viewModel.captureState.collectAsStateWithLifecycle()
     val eligibility by viewModel.eligibility.collectAsStateWithLifecycle()
+    val previewState by viewModel.previewState.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val accent = MaterialTheme.colorScheme.primary
+    val context = LocalContext.current
+
     // Deleting a sample removes a file and empties every channel that used it,
     // so it asks first. A long press that silently destroyed a sound would be
     // the worst possible thing to discover by accident.
     var pendingDelete by remember { mutableStateOf<SampleRef?>(null) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) viewModel.importFile(uri, displayNameOf(context, uri))
+    }
 
     LaunchedEffect(Unit) { viewModel.refreshEligibility() }
 
@@ -107,122 +121,30 @@ fun SamplerScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        PatternPanel {
-            PanelLabel("Capture source")
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                PatternPill(
-                    label = "Clean",
-                    active = ui.source == CaptureSource.CLEAN,
-                    accent = accent,
-                    modifier = Modifier.weight(1f),
-                    enabled = ui.stage != SamplerViewModel.Stage.RECORDING,
-                    onClick = { viewModel.setSource(CaptureSource.CLEAN) },
-                )
-                PatternPill(
-                    label = "Processed",
-                    active = ui.source == CaptureSource.PROCESSED,
-                    accent = accent,
-                    modifier = Modifier.weight(1f),
-                    enabled = ui.stage != SamplerViewModel.Stage.RECORDING,
-                    onClick = { viewModel.setSource(CaptureSource.PROCESSED) },
-                )
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = if (ui.source == CaptureSource.CLEAN) {
-                    "Decoded audio, before Tryptify's DSP."
-                } else {
-                    "After the full DSP chain — mixer, EQ and Oxford effects."
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            // The eligibility line is never hidden. A greyed-out RECORD button
-            // with no explanation is the worst version of this: the user
-            // cannot tell whether the feature is broken or the source is not
-            // allowed, and the answer is always the second one.
-            Text(
-                text = eligibility.reason,
-                style = MaterialTheme.typography.labelSmall,
-                color = if (eligibility.allowed) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.error
+        if (ui.stage != SamplerViewModel.Stage.EDITING) {
+            CapturePanel(
+                ui = ui,
+                capture = capture,
+                eligibilityReason = eligibility.reason,
+                canRecord = eligibility.allowed,
+                accent = accent,
+                onSource = viewModel::setSource,
+                onRecord = viewModel::startRecording,
+                onStop = viewModel::stopRecording,
+                onImport = {
+                    // Anything the platform can decode. Narrowing to a
+                    // whitelist of extensions only ever excludes files that
+                    // would have worked.
+                    importLauncher.launch(arrayOf("audio/*"))
                 },
             )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        when (ui.stage) {
-            SamplerViewModel.Stage.IDLE, SamplerViewModel.Stage.RECORDING -> {
-                PatternPanel {
-                    PanelLabel("Level")
-                    Spacer(Modifier.height(6.dp))
-                    CaptureMeter(peak = capture.peak, accent = accent)
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = formatDuration(capture.durationMs),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TransportKey(
-                            label = "Record",
-                            active = ui.stage == SamplerViewModel.Stage.RECORDING,
-                            accent = MaterialTheme.colorScheme.error,
-                            pulsing = ui.stage == SamplerViewModel.Stage.RECORDING,
-                            enabled = eligibility.allowed &&
-                                ui.stage != SamplerViewModel.Stage.RECORDING,
-                            modifier = Modifier.weight(1f),
-                            onClick = viewModel::startRecording,
-                        )
-                        TransportKey(
-                            label = "Stop",
-                            active = false,
-                            accent = accent,
-                            enabled = ui.stage == SamplerViewModel.Stage.RECORDING,
-                            modifier = Modifier.weight(1f),
-                            onClick = viewModel::stopRecording,
-                        )
-                    }
-                    if (capture.full) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = "Reached the capture limit.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            SamplerViewModel.Stage.EDITING -> {
-                SampleEditor(
-                    ui = ui,
-                    accent = accent,
-                    canUndo = ui.canUndo,
-                    onTrim = viewModel::setTrim,
-                    onApplyTrim = viewModel::applyTrim,
-                    onGain = viewModel::setGainDb,
-                    onNormalize = viewModel::normalize,
-                    onFadeIn = viewModel::fadeIn,
-                    onFadeOut = viewModel::fadeOut,
-                    onReverse = viewModel::reverse,
-                    onMono = viewModel::toMono,
-                    onUndo = viewModel::undo,
-                    onName = viewModel::setName,
-                    onCategory = viewModel::setCategory,
-                    onSave = { viewModel.save() },
-                    onDiscard = viewModel::cancelCapture,
-                )
-            }
+        } else {
+            WaveEditorPanel(
+                ui = ui,
+                previewState = previewState,
+                accent = accent,
+                viewModel = viewModel,
+            )
         }
 
         ui.message?.let { message ->
@@ -244,12 +166,15 @@ fun SamplerScreen(
                 selected = null,
                 accent = accent,
                 modifier = Modifier.height(280.dp),
-                onPick = { },
+                // Tapping opens the sample in the editor rather than doing
+                // nothing: the library is where you go to fix a sample, and
+                // this is the only route to that.
+                onPick = viewModel::editExisting,
                 onLongPress = { pendingDelete = it },
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Long-press a sample to delete it.",
+                text = "Tap to edit. Long-press to delete.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -281,50 +206,169 @@ fun SamplerScreen(
     }
 }
 
-/** The post-capture edit surface. Trim, level, a few one-tap operations, save. */
+// ── capture ─────────────────────────────────────────────────────────────
+
 @Composable
-private fun SampleEditor(
+private fun CapturePanel(
     ui: SamplerViewModel.UiState,
-    accent: androidx.compose.ui.graphics.Color,
-    canUndo: Boolean,
-    onTrim: (Float, Float) -> Unit,
-    onApplyTrim: () -> Unit,
-    onGain: (Float) -> Unit,
-    onNormalize: () -> Unit,
-    onFadeIn: () -> Unit,
-    onFadeOut: () -> Unit,
-    onReverse: () -> Unit,
-    onMono: () -> Unit,
-    onUndo: () -> Unit,
-    onName: (String) -> Unit,
-    onCategory: (tf.monochrome.android.domain.patterns.SampleCategory) -> Unit,
-    onSave: () -> Unit,
-    onDiscard: () -> Unit,
+    capture: tf.monochrome.android.audio.sampler.SampleCaptureEngine.CaptureState,
+    eligibilityReason: String,
+    canRecord: Boolean,
+    accent: Color,
+    onSource: (CaptureSource) -> Unit,
+    onRecord: () -> Unit,
+    onStop: () -> Unit,
+    onImport: () -> Unit,
 ) {
+    val recording = ui.stage == SamplerViewModel.Stage.RECORDING
+
     PatternPanel {
-        PanelLabel("Trim")
+        PanelLabel("Capture source")
         Spacer(Modifier.height(6.dp))
-        WaveformView(
-            peaks = ui.peaks,
-            accent = accent,
-            startFraction = ui.startFraction,
-            endFraction = ui.endFraction,
-            onTrimChange = onTrim,
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PatternPill(
+                label = "Clean",
+                active = ui.source == CaptureSource.CLEAN,
+                accent = accent,
+                modifier = Modifier.weight(1f),
+                enabled = !recording,
+                onClick = { onSource(CaptureSource.CLEAN) },
+            )
+            PatternPill(
+                label = "Processed",
+                active = ui.source == CaptureSource.PROCESSED,
+                accent = accent,
+                modifier = Modifier.weight(1f),
+                enabled = !recording,
+                onClick = { onSource(CaptureSource.PROCESSED) },
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = if (ui.source == CaptureSource.CLEAN) {
+                "Decoded audio, before Tryptify's DSP."
+            } else {
+                "After the full DSP chain — mixer, EQ and Oxford effects."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Spacer(Modifier.height(6.dp))
+        // What the capture will be attributed to. Always on screen, so the
+        // saved sample's provenance is never a surprise.
+        Text(
+            text = eligibilityReason,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(12.dp))
+        PanelLabel("Level")
+        Spacer(Modifier.height(6.dp))
+        CaptureMeter(peak = capture.peak, accent = accent)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = formatDuration(capture.durationMs),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TransportKey(
+                label = "Record",
+                active = recording,
+                accent = MaterialTheme.colorScheme.error,
+                pulsing = recording,
+                enabled = canRecord && !recording,
+                modifier = Modifier.weight(1f),
+                onClick = onRecord,
+            )
+            TransportKey(
+                label = "Stop",
+                active = false,
+                accent = accent,
+                enabled = recording,
+                modifier = Modifier.weight(1f),
+                onClick = onStop,
+            )
+        }
+
+        if (capture.full) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Reached the capture limit.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        PatternPill(
+            label = "Import a file…",
+            active = false,
+            accent = accent,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !recording,
+            onClick = onImport,
+        )
+    }
+}
+
+// ── editor ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun WaveEditorPanel(
+    ui: SamplerViewModel.UiState,
+    previewState: tf.monochrome.android.audio.sampler.SamplePreviewPlayer.State,
+    accent: Color,
+    viewModel: SamplerViewModel,
+) {
+    val buffer = ui.buffer ?: return
+
+    PatternPanel {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PanelLabel(if (ui.editingSampleId != null) "Editing sample" else "New sample")
+            Text(
+                text = formatDuration(ui.totalDurationMs),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+
+        WaveEditor(
+            peaks = ui.peaks,
+            frames = ui.frames,
+            view = ui.view,
+            accent = accent,
+            playheadFrame = previewState.frame.takeIf { previewState.playing },
+            onViewChange = viewModel::setView,
+        )
+
         Spacer(Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = formatDuration(ui.trimmedDurationMs),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                text = if (ui.view.hasSelection) {
+                    "Selected ${formatDuration(ui.selectedDurationMs)}"
+                } else {
+                    "Whole sample — drag to select"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "${(ui.startFraction * 100).roundToInt()}% – " +
-                    "${(ui.endFraction * 100).roundToInt()}%",
+                text = "Pinch to zoom",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -332,16 +376,74 @@ private fun SampleEditor(
 
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PatternPill("Crop", false, Modifier.weight(1f), accent, onClick = onApplyTrim)
-            PatternPill("Norm", false, Modifier.weight(1f), accent, onClick = onNormalize)
-            PatternPill("Fade in", false, Modifier.weight(1f), accent, onClick = onFadeIn)
-            PatternPill("Fade out", false, Modifier.weight(1f), accent, onClick = onFadeOut)
+            TransportKey(
+                label = if (previewState.playing) "Stop" else "Play",
+                active = previewState.playing,
+                accent = accent,
+                modifier = Modifier.weight(2f),
+                onClick = {
+                    if (previewState.playing) viewModel.stopPreview() else viewModel.playSelection()
+                },
+            )
+            PatternPill(
+                label = "Loop",
+                active = ui.loopPreview,
+                accent = accent,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.setLoopPreview(!ui.loopPreview) },
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        PanelLabel("View")
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PatternPill("All", false, Modifier.weight(1f), accent, onClick = viewModel::selectAll)
+            PatternPill(
+                "Zoom sel",
+                false,
+                Modifier.weight(1f),
+                accent,
+                enabled = ui.view.hasSelection,
+                onClick = viewModel::zoomToSelection,
+            )
+            PatternPill("Fit", false, Modifier.weight(1f), accent, onClick = viewModel::zoomOut)
+            PatternPill(
+                "Snap 0",
+                ui.snapToZero,
+                Modifier.weight(1f),
+                accent,
+                onClick = { viewModel.setSnapToZero(!ui.snapToZero) },
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        PanelLabel(if (ui.view.hasSelection) "Edit selection" else "Edit whole sample")
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PatternPill("Crop", false, Modifier.weight(1f), accent, onClick = viewModel::cropToSelection)
+            PatternPill("Cut", false, Modifier.weight(1f), accent, onClick = viewModel::deleteSelection)
+            PatternPill("Silence", false, Modifier.weight(1f), accent, onClick = viewModel::silenceSelection)
+            PatternPill("Norm", false, Modifier.weight(1f), accent, onClick = viewModel::normalize)
         }
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PatternPill("Reverse", false, Modifier.weight(1f), accent, onClick = onReverse)
-            PatternPill("Mono", false, Modifier.weight(1f), accent, onClick = onMono)
-            PatternPill("Undo", false, Modifier.weight(1f), accent, canUndo, onUndo)
+            PatternPill("Fade in", false, Modifier.weight(1f), accent, onClick = viewModel::fadeIn)
+            PatternPill("Fade out", false, Modifier.weight(1f), accent, onClick = viewModel::fadeOut)
+            PatternPill("Reverse", false, Modifier.weight(1f), accent, onClick = viewModel::reverse)
+            PatternPill("Mono", false, Modifier.weight(1f), accent, onClick = viewModel::toMono)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PatternPill("Trim silence", false, Modifier.weight(1f), accent, onClick = viewModel::trimSilence)
+            PatternPill(
+                "Undo",
+                false,
+                Modifier.weight(1f),
+                accent,
+                enabled = ui.canUndo,
+                onClick = viewModel::undo,
+            )
         }
 
         Spacer(Modifier.height(10.dp))
@@ -351,13 +453,22 @@ private fun SampleEditor(
             valueRange = -24f..24f,
             display = "${if (ui.gainDb >= 0) "+" else ""}${(ui.gainDb * 10).roundToInt() / 10f} dB",
             accent = accent,
-            onValueChange = onGain,
+            onValueChange = viewModel::setGainDb,
+        )
+        // Applied on save regardless; this button is for hearing it now, and
+        // for stacking it with a further move of the fader.
+        PatternPill(
+            label = "Apply gain",
+            active = false,
+            accent = accent,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = viewModel::applyGain,
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = ui.name,
-            onValueChange = onName,
+            onValueChange = viewModel::setName,
             label = { Text("Name") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -366,25 +477,47 @@ private fun SampleEditor(
         Spacer(Modifier.height(10.dp))
         PanelLabel("Category")
         Spacer(Modifier.height(6.dp))
-        CategoryStrip(selected = ui.category, accent = accent, onSelect = { onCategory(it ?: ui.category) })
+        CategoryStrip(
+            selected = ui.category,
+            accent = accent,
+            onSelect = { viewModel.setCategory(it ?: ui.category) },
+        )
 
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TransportKey(
-                label = if (ui.saving) "Saving" else "Save sample",
+                label = when {
+                    ui.saving -> "Saving"
+                    ui.editingSampleId != null -> "Save changes"
+                    else -> "Save sample"
+                },
                 active = true,
                 accent = accent,
                 enabled = !ui.saving,
                 modifier = Modifier.weight(2f),
-                onClick = onSave,
+                onClick = { viewModel.save() },
             )
             TransportKey(
                 label = "Discard",
                 active = false,
                 accent = MaterialTheme.colorScheme.error,
                 modifier = Modifier.weight(1f),
-                onClick = onDiscard,
+                onClick = viewModel::cancelCapture,
             )
         }
     }
 }
+
+/**
+ * The file's own name, for the imported sample's default.
+ *
+ * A content URI's last path segment is usually an opaque document id, so the
+ * provider is asked for the display name and the segment is only a fallback.
+ */
+private fun displayNameOf(context: android.content.Context, uri: Uri): String? =
+    runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+    }.getOrNull() ?: uri.lastPathSegment

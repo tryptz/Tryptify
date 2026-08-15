@@ -125,8 +125,17 @@ class SampleRepository @Inject constructor(
         bpm: Float? = null,
         musicalKey: String? = null,
         tags: List<String> = emptyList(),
+        /**
+         * Set to update an existing sample rather than add another. The new
+         * audio is written to its own file first and the old one is deleted
+         * only once the row points at the replacement, so an interrupted
+         * overwrite leaves the original intact rather than a row pointing at
+         * nothing.
+         */
+        replacingId: Long? = null,
     ): SampleRef? = withContext(Dispatchers.IO) {
         if (buffer.frames < SampleEdits.MIN_FRAMES) return@withContext null
+        val previous = replacingId?.let { dao.byId(it) }
 
         val safeName = sanitize(name).ifBlank { "Sample" }
         val stamp = System.currentTimeMillis()
@@ -150,6 +159,7 @@ class SampleRepository @Inject constructor(
         }.getOrNull()
 
         val entity = SampleEntity(
+            id = previous?.id ?: 0,
             name = name.trim().ifBlank { "Sample" },
             nameKey = name.trim().lowercase(),
             filePath = audioFile.absolutePath,
@@ -159,17 +169,46 @@ class SampleRepository @Inject constructor(
             frameCount = buffer.frames.toLong(),
             category = category.id,
             tags = tags.joinToString(","),
-            sourceTrackTitle = sourceTrackTitle,
-            sourceArtist = sourceArtist,
-            sourceTimestampMs = sourceTimestampMs,
-            captureSource = captureSource?.id,
-            bpm = bpm,
-            musicalKey = musicalKey,
+            // Provenance is kept from the original when re-editing: the sample
+            // still came from wherever it came from, and the edit does not
+            // change that.
+            sourceTrackTitle = sourceTrackTitle ?: previous?.sourceTrackTitle,
+            sourceArtist = sourceArtist ?: previous?.sourceArtist,
+            sourceTimestampMs = sourceTimestampMs ?: previous?.sourceTimestampMs,
+            captureSource = captureSource?.id ?: previous?.captureSource,
+            bpm = bpm ?: previous?.bpm,
+            musicalKey = musicalKey ?: previous?.musicalKey,
+            gain = previous?.gain ?: 1.0f,
             waveformPath = waveformPath,
-            createdAt = stamp,
+            favorite = previous?.favorite ?: false,
+            createdAt = previous?.createdAt ?: stamp,
         )
         val id = dao.upsert(entity)
+
+        // The row now points at the new files, so the old ones are safe to
+        // drop. Guarded against a same-path overwrite, which cannot happen with
+        // a timestamped name but would be catastrophic if it ever did.
+        previous?.let { old ->
+            if (old.filePath != audioFile.absolutePath) runCatching { File(old.filePath).delete() }
+            old.waveformPath
+                ?.takeIf { it != waveformPath }
+                ?.let { runCatching { File(it).delete() } }
+        }
+
         toRef(entity.copy(id = id))
+    }
+
+    /**
+     * Decodes an audio file without storing anything.
+     *
+     * The import path for the wave editor: the user picks a file, edits it,
+     * and only then decides whether it becomes a sample. [import] is the
+     * one-shot version that decodes and saves in a single step.
+     */
+    suspend fun decode(uri: Uri): WavCodec.Audio? = withContext(Dispatchers.IO) {
+        runCatching { PcmDecoder.decode(context, uri) }
+            .onFailure { Log.e(TAG, "could not decode $uri", it) }
+            .getOrNull()
     }
 
     /**
