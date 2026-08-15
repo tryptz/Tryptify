@@ -82,6 +82,7 @@ class PlayerViewModel @Inject constructor(
     private val bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor,
     private val sourceConsent: tf.monochrome.android.player.SourceConsent,
     private val audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor,
+    private val playbackPositions: tf.monochrome.android.player.PlaybackPositionSource,
 ) : ViewModel() {
 
     /**
@@ -541,6 +542,9 @@ class PlayerViewModel @Inject constructor(
         // other screens (the Player Visuals Studio preview) can show the real lyrics.
         viewModelScope.launch { _currentLyrics.collect { nowPlayingLyrics.setLyrics(it) } }
         viewModelScope.launch { _positionMs.collect { nowPlayingLyrics.setPosition(it) } }
+        // The sampler records where in a track a capture came from, and cannot
+        // reach a MediaController from its own view model.
+        viewModelScope.launch { _positionMs.collect { playbackPositions.update(it) } }
         viewModelScope.launch {
             downloadManager.observeAllActiveDownloads().collectLatest { active ->
                 _activeDownloads.value = active
