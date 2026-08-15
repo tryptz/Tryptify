@@ -1682,11 +1682,27 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Pattern Looper")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { navController.navigateTool(Screen.Patterns) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Patterns")
+            }
+            OutlinedButton(
+                onClick = { navController.navigateTool(Screen.Sampler) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Sampler")
+            }
+        }
+
         // One group, not two. "Spatial Audio" held nothing but the Atmos row,
-        // and that row is the multichannel renderer's own settings — channel
-        // map, downmix coefficients, binaural render. It belongs against the
-        // switch that decides whether any of it runs, so it sits directly
-        // above the downmix toggle instead of under a heading of its own.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Output")
         DspBlockSizeSelector(viewModel)

@@ -97,6 +97,13 @@ class PlaybackService : MediaSessionService() {
     // the FFmpeg decoder discards) into atmosFrameBuffer; atmosAudioProcessor
     // pairs each with the decoded bed PCM and renders objects to binaural stereo.
     @Inject lateinit var atmosAudioProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor
+    // Sampler taps + the pattern mixer. All three are inert until the user
+    // opens the Patterns or Sampler screen: the taps do one volatile read per
+    // buffer while nothing is armed, and the mixer forwards by reference while
+    // the engine is idle.
+    @Inject lateinit var cleanCaptureTap: tf.monochrome.android.audio.sampler.CleanCaptureTap
+    @Inject lateinit var processedCaptureTap: tf.monochrome.android.audio.sampler.ProcessedCaptureTap
+    @Inject lateinit var patternMixProcessor: tf.monochrome.android.audio.sampler.PatternMixProcessor
     @Inject lateinit var atmosFrameBuffer: tf.monochrome.android.audio.atmos.AtmosFrameBuffer
 
     /** Shared Atmos tap — used both as the player's factory and to wrap the
@@ -894,9 +901,21 @@ class PlaybackService : MediaSessionService() {
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
+                                // CLEAN capture point. After the fold-down so
+                                // the tap always sees stereo, but ahead of
+                                // every tonal stage — this is the "before
+                                // Tryptify processing" the Sampler offers.
+                                cleanCaptureTap,
+                                // Pattern looper sums in HERE, ahead of the
+                                // DSP, so a loop goes through the user's mix
+                                // bus, EQ and Oxford chain exactly as the
+                                // track does rather than arriving beside it.
+                                patternMixProcessor,
                                 mixBusProcessor,        // DSP engine (mixer/effects)
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
                                 parametricEqProcessor,  // Parametric EQ (after AutoEQ, stacks on top)
+                                // PROCESSED capture point: everything above has run.
+                                processedCaptureTap,
                                 spectrumAnalyzerTap,    // Passive FFT tap for the Parametric EQ editor visualizer
                                 TeeAudioProcessor(
                                     ProjectMAudioTapProcessor(audioBus)
@@ -941,9 +960,12 @@ class PlaybackService : MediaSessionService() {
                             channelDetectorProcessor,
                             atmosAudioProcessor,
                             downmixProcessor,
+                            cleanCaptureTap,
+                            patternMixProcessor,
                             mixBusProcessor,
                             autoEqProcessor,
                             parametricEqProcessor,
+                            processedCaptureTap,
                             spectrumAnalyzerTap,
                             // Transport stages last, and in the same order as
                             // TryptifyAudioProcessorChain builds them

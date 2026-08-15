@@ -17,7 +17,9 @@ import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
 import tf.monochrome.android.data.db.dao.PlayEventDao
+import tf.monochrome.android.data.db.dao.PatternDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
+import tf.monochrome.android.data.db.dao.SampleDao
 import javax.inject.Singleton
 
 @Module
@@ -89,4 +91,10 @@ object DatabaseModule {
 
     @Provides
     fun provideMixPresetDao(db: MusicDatabase): MixPresetDao = db.mixPresetDao()
+
+    @Provides
+    fun provideSampleDao(db: MusicDatabase): SampleDao = db.sampleDao()
+
+    @Provides
+    fun providePatternDao(db: MusicDatabase): PatternDao = db.patternDao()
 }
