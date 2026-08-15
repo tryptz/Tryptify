@@ -59,8 +59,8 @@ class SampleRepository @Inject constructor(
     fun observeByCategory(category: SampleCategory): Flow<List<SampleRef>> =
         dao.observeByCategory(category.id).map { it.map(::toRef) }
 
-    fun search(query: String): Flow<List<SampleRef>> =
-        dao.search(query.trim().lowercase()).map { it.map(::toRef) }
+    fun search(query: String, limit: Int = 200): Flow<List<SampleRef>> =
+        dao.search(query.trim().lowercase(), limit).map { it.map(::toRef) }
 
     fun count(): Flow<Int> = dao.count()
 

@@ -33,7 +33,7 @@ interface SampleDao {
         "SELECT * FROM sampler_samples WHERE nameKey LIKE :prefix || '%' " +
             "ORDER BY createdAt DESC LIMIT :limit"
     )
-    fun search(prefix: String, limit: Int = 200): Flow<List<SampleEntity>>
+    fun search(prefix: String, limit: Int): Flow<List<SampleEntity>>
 
     @Query("SELECT * FROM sampler_samples WHERE id = :id")
     suspend fun byId(id: Long): SampleEntity?
