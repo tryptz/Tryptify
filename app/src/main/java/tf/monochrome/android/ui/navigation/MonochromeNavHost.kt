@@ -103,6 +103,8 @@ import tf.monochrome.android.ui.crossfeed.CrossfeedScreen
 import tf.monochrome.android.ui.crossfeed.CrossfeedViewModel
 import tf.monochrome.android.ui.oxford.OxfordEffectsTabs
 import tf.monochrome.android.ui.oxford.OxfordViewModel
+import tf.monochrome.android.ui.patterns.PatternLooperScreen
+import tf.monochrome.android.ui.sampler.SamplerScreen
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
@@ -173,6 +175,13 @@ sealed class Screen(val route: String) {
     data object LyricsFxStudio : Screen("lyrics_fx_studio")
     data object AtmosRenderer : Screen("atmos_renderer")
     data object HrtfDatabase : Screen("hrtf_database")
+
+    /** The pattern looper. */
+    data object Patterns : Screen("patterns")
+
+
+    /** Sample capture, editing and the library. */
+    data object Sampler : Screen("sampler")
 }
 
 data class BottomNavItem(
@@ -557,6 +566,22 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.CarMode.route) {
                     tf.monochrome.android.devedit.DevEditScreen("car_mode") {
                         CarModeScreen(navController = navController)
+                    }
+                }
+                composable(Screen.Patterns.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("patterns") {
+                        PatternLooperScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenSampler = { navController.navigateTool(Screen.Sampler) },
+                        )
+                    }
+                }
+                composable(Screen.Sampler.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("sampler") {
+                        SamplerScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenPatterns = { navController.navigateTool(Screen.Patterns) },
+                        )
                     }
                 }
                 composable(Screen.DebugLog.route) {
