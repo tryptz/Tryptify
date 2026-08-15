@@ -1549,6 +1549,26 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Pattern Looper")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { navController.navigateTool(Screen.Patterns) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Patterns")
+            }
+            OutlinedButton(
+                onClick = { navController.navigateTool(Screen.Sampler) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Sampler")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Spatial Audio")
         SettingItem(
             title = "Atmos Renderer Configuration",

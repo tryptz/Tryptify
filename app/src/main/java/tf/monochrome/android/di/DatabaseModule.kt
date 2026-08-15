@@ -14,7 +14,9 @@ import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
 import tf.monochrome.android.data.db.dao.PlayEventDao
+import tf.monochrome.android.data.db.dao.PatternDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
+import tf.monochrome.android.data.db.dao.SampleDao
 import javax.inject.Singleton
 
 @Module
@@ -35,6 +37,7 @@ object DatabaseModule {
                 MusicDatabase.MIGRATION_10_11,
                 MusicDatabase.MIGRATION_11_12,
                 MusicDatabase.MIGRATION_12_13,
+                MusicDatabase.MIGRATION_13_14,
             )
             // Retained as a safety net for any version gap without an explicit
             // migration; the THX (8→9) and Atmos (9→10) upgrades migrate in
@@ -63,4 +66,10 @@ object DatabaseModule {
 
     @Provides
     fun provideMixPresetDao(db: MusicDatabase): MixPresetDao = db.mixPresetDao()
+
+    @Provides
+    fun provideSampleDao(db: MusicDatabase): SampleDao = db.sampleDao()
+
+    @Provides
+    fun providePatternDao(db: MusicDatabase): PatternDao = db.patternDao()
 }

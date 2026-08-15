@@ -10,8 +10,14 @@ import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
 import tf.monochrome.android.data.db.dao.PlayEventDao
+import tf.monochrome.android.data.db.dao.PatternDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
+import tf.monochrome.android.data.db.dao.SampleDao
 import tf.monochrome.android.data.db.entity.CachedLyricsEntity
+import tf.monochrome.android.data.db.entity.PatternChannelEntity
+import tf.monochrome.android.data.db.entity.PatternEntity
+import tf.monochrome.android.data.db.entity.PatternStepEntity
+import tf.monochrome.android.data.db.entity.SampleEntity
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.data.db.entity.EqPresetEntity
 import tf.monochrome.android.data.db.entity.MixPresetEntity
@@ -66,9 +72,14 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackEntity::class,
         CollectionDirectLinkEntity::class,
         CollectionTrackArtistCrossRef::class,
-        CollectionAlbumArtistCrossRef::class
+        CollectionAlbumArtistCrossRef::class,
+        // Sampler / pattern looper
+        SampleEntity::class,
+        PatternEntity::class,
+        PatternChannelEntity::class,
+        PatternStepEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -81,6 +92,8 @@ abstract class MusicDatabase : RoomDatabase() {
     abstract fun localMediaDao(): LocalMediaDao
     abstract fun collectionDao(): CollectionDao
     abstract fun mixPresetDao(): MixPresetDao
+    abstract fun sampleDao(): SampleDao
+    abstract fun patternDao(): PatternDao
 
     companion object {
         /**
@@ -193,6 +206,128 @@ abstract class MusicDatabase : RoomDatabase() {
                         "ON `local_tracks` (`titleSearchKey`)"
                 )
                 db.execSQL("UPDATE `local_tracks` SET `titleSearchKey` = lower(`title`)")
+            }
+        }
+
+        /**
+         * v13 → v14: the sampler and the pattern looper. Four new tables and
+         * nothing touched that already existed, so an upgrade keeps the whole
+         * library, every playlist and every saved preset.
+         *
+         * Every statement below has to be byte-for-byte what Room generates
+         * from the annotations on `SamplerEntities.kt`, down to the index
+         * names and the `ON UPDATE NO ACTION` clauses Room writes whether you
+         * asked for them or not. Room validates the schema on open, and the
+         * builder still carries `fallbackToDestructiveMigration` — so a
+         * mismatch here does not fail loudly, it silently drops the user's
+         * entire database. That is the same trap documented on 11→12.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sampler_samples` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`nameKey` TEXT NOT NULL, " +
+                        "`filePath` TEXT NOT NULL, " +
+                        "`durationMs` INTEGER NOT NULL, " +
+                        "`sampleRate` INTEGER NOT NULL, " +
+                        "`channelCount` INTEGER NOT NULL, " +
+                        "`frameCount` INTEGER NOT NULL, " +
+                        "`category` TEXT NOT NULL, " +
+                        "`tags` TEXT NOT NULL, " +
+                        "`sourceTrackTitle` TEXT, " +
+                        "`sourceArtist` TEXT, " +
+                        "`sourceTimestampMs` INTEGER, " +
+                        "`captureSource` TEXT, " +
+                        "`bpm` REAL, " +
+                        "`musicalKey` TEXT, " +
+                        "`gain` REAL NOT NULL, " +
+                        "`waveformPath` TEXT, " +
+                        "`favorite` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sampler_samples_category` " +
+                        "ON `sampler_samples` (`category`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sampler_samples_createdAt` " +
+                        "ON `sampler_samples` (`createdAt`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sampler_samples_nameKey` " +
+                        "ON `sampler_samples` (`nameKey`)"
+                )
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sampler_patterns` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`bankSlot` INTEGER NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`lengthSteps` INTEGER NOT NULL, " +
+                        "`stepsPerBeat` INTEGER NOT NULL, " +
+                        "`beatsPerBar` INTEGER NOT NULL, " +
+                        "`bpmOverride` REAL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_sampler_patterns_bankSlot` " +
+                        "ON `sampler_patterns` (`bankSlot`)"
+                )
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sampler_pattern_channels` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`patternId` INTEGER NOT NULL, " +
+                        "`position` INTEGER NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`sampleId` INTEGER, " +
+                        "`volume` REAL NOT NULL, " +
+                        "`pan` REAL NOT NULL, " +
+                        "`pitch` REAL NOT NULL, " +
+                        "`sampleStart` REAL NOT NULL, " +
+                        "`sampleEnd` REAL NOT NULL, " +
+                        "`attackMs` REAL NOT NULL, " +
+                        "`releaseMs` REAL NOT NULL, " +
+                        "`filterHz` REAL NOT NULL, " +
+                        "`reverse` INTEGER NOT NULL, " +
+                        "`muted` INTEGER NOT NULL, " +
+                        "`soloed` INTEGER NOT NULL, " +
+                        "`enabled` INTEGER NOT NULL, " +
+                        "`colorArgb` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`patternId`) REFERENCES `sampler_patterns`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sampler_pattern_channels_patternId` " +
+                        "ON `sampler_pattern_channels` (`patternId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sampler_pattern_channels_sampleId` " +
+                        "ON `sampler_pattern_channels` (`sampleId`)"
+                )
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sampler_pattern_steps` (" +
+                        "`channelId` INTEGER NOT NULL, " +
+                        "`stepIndex` INTEGER NOT NULL, " +
+                        "`enabled` INTEGER NOT NULL, " +
+                        "`velocity` INTEGER NOT NULL, " +
+                        "`pitch` INTEGER NOT NULL, " +
+                        "`probability` INTEGER NOT NULL, " +
+                        "`pan` INTEGER NOT NULL, " +
+                        "`sampleStart` INTEGER NOT NULL, " +
+                        "`locks` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`channelId`, `stepIndex`), " +
+                        "FOREIGN KEY(`channelId`) REFERENCES `sampler_pattern_channels`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sampler_pattern_steps_channelId` " +
+                        "ON `sampler_pattern_steps` (`channelId`)"
+                )
             }
         }
     }

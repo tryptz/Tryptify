@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+#### Pattern looper and sampler
+- **A pattern looper lives in the app now** — Settings › Audio Processing › Patterns, or from the Sampler screen. It is an FL Studio-shaped workflow rather than a timeline: a pattern is a short loop of trigs across a handful of sample channels, patterns live in a bank, and you switch between them while the loop is running. Listen, capture, save, assign, tap steps, press play.
+- **A real audio clock, not a UI timer** — the sequencer runs in C++ with a sample-accurate step clock, a fixed voice pool and a lock-free command queue. Tapping a trig while the loop plays never touches the audio thread's work, and nothing on the audio path allocates, locks or waits on Kotlin. The same pattern lands on the same samples whether the output hands it 64-frame or 4096-frame buffers, which is the property a UI-driven timer cannot have.
+- **Patterns go through your DSP, not around it** — the looper sums into the Media3 chain ahead of the mix bus, so a loop inherits the mixer, AutoEQ, the parametric EQ and the whole Oxford post-chain exactly as a track does. With nothing playing there is no chain to sum into, so it falls back to its own low-latency output — a sequencer that only worked while music was playing would not be a sequencer.
+- **Trig keys, not checkboxes** — recessed wells with caps that light from inside, velocity scaling the brightness, the playhead as a hard white rim that wins against any accent colour, and beats sitting in lighter wells so the 4/4 grid reads without labels. Two rows of eight on a phone: sixteen keys in one row gives each about 22 dp, which is half a usable touch target and the reason most mobile sequencers are unpleasant.
+- **Drag across the grid to paint a run of steps** — the value is decided by the key you start on, so starting on a lit step erases and starting on a dark one fills. Long-press a step for its editor. Both are enhancements: everything remains reachable by tapping.
+- **4, 8, 12, 16, 32 and 64-step patterns** — and shortening one hides its trigs rather than deleting them, so going back brings the second half with it.
+- **Queued pattern switching** — tap another pattern in the bank and it shows NEXT until the current loop comes round, then takes over on the boundary. There is a "Now" mode for immediate switching, but sync is the default because it is what makes switching usable while something is playing.
+- **Live recording** — REC arms and starts in one press, and hits you tap on the pads are written into the pattern quantized to 1/16, 1/8, 1/4 or not at all. The quantization is decided on the audio thread, which is the only thing that knows where the playhead was when your finger landed.
+- **Swing, metronome, count-in and tempo** — tempo is also a horizontal drag on the readout, with a tick every BPM. Swing moves offbeats only, and a swung bar is still exactly as long as an unswung one.
+- **Per-channel sound controls** — volume, pan, pitch, sample start and end, reverse, attack, release, filter, mute and exclusive solo. Every one writes straight through to the engine, so a fader moved mid-loop is audible on the next hit without a database write in the way.
+- **Three layouts, chosen by width rather than by device** — one channel at a time on a phone, channels and grid side by side on a tablet, and a workstation with the sound controls permanently open on a wide window. None of them is the phone layout stretched.
+- **A sampler that taps Tryptify's own pipeline** — capture CLEAN (decoded, before processing) or PROCESSED (after the full DSP chain), then trim, normalize, fade, reverse, name and file it. Trim handles snap to the first transient, and every saved sample gets a short edge fade so a cut that lands mid-cycle does not click on every step.
+- **Capture is limited to audio that is yours to keep** — on-device files and your own downloads. The check defaults closed, so anything whose origin cannot be established is not capturable, and it is re-checked at the moment a file would be written. This is a tap on the app's own decoder output: there is no system playback capture, no microphone path, and no way to point it at another app.
+- **A sample library with categories** — kicks, snares, hats, percussion, vocals, bass, FX, loops and user. Metadata in Room, audio on disk, and a cached peak file per sample so a browser of several hundred draws every waveform thumbnail without opening a single audio file. Samples are reusable across every pattern, and deleting one empties the channels that used it rather than deleting them.
+
+### Changed
+- The database moves to v14 with four new tables for samples, patterns, channels and steps. Nothing existing is touched — the library, playlists, downloads and presets all survive the upgrade in place.
+
 ## [1.8.5]
 
 ### Added
