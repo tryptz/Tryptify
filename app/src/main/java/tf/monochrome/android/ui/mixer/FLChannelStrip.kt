@@ -35,16 +35,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
+import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.components.toggleSemantics
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerDesignTokens
+import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 
@@ -65,21 +71,22 @@ private val FaderTravel = 280.dp
  * shader (and anything inside the strip that reads it), exactly as `GlassPanel`
  * does with the settings it is handed.
  *
- * Three tiers, per `docs/ui-invariants.md`:
- *  - shader available → a **solid** accent slab relit by `playerGlass`. Solid is
- *    the point: the shader builds its bevel and rim from the alpha heightfield
- *    beneath it, and body opacity is what makes the strip see-through.
+ * All three layers of the app's glass are here, per `docs/ui-invariants.md`:
+ * the **haze** blurs [hazeState] — the mixer's backdrop, which is the blurred
+ * album art when that switch is on — the **frost** tints that blur by the shared
+ * [playerFrostTint] recipe, and the **shader slab** is drawn at full tint
+ * opacity and relit by `playerGlass`. The frost is thin on purpose: most of what
+ * reads through a strip should be the artwork behind it.
+ *
+ * Three tiers:
+ *  - shader available → haze + frost + the **solid** slab. Solid is the point:
+ *    the shader builds its bevel and rim from the alpha heightfield beneath it,
+ *    and body opacity is what makes the strip see-through.
  *  - glass on but no shader (below API 33, or a driver that will not compile it)
- *    → the app's plain glassmorphism over the near-opaque channel gradient,
- *    which is the look this strip had before.
+ *    → the app's plain glassmorphism, blurring the same backdrop, over the
+ *    near-opaque channel gradient — the look this strip had before.
  *  - glass switched off → that gradient alone, so a low-tier device still gets a
  *    readable strip rather than controls floating on nothing.
- *
- * No haze pane goes under the slab. The strips are permanent chrome standing on
- * the mixer's own backdrop — a vertical wash plus one soft album glow — and a
- * gaussian blur of that is the same wash again, so five blur passes per frame
- * would buy nothing and an opaque frosted pane under a see-through slab is the
- * flat-slab failure that invariant exists to prevent.
  */
 @Composable
 fun FLChannelStrip(
@@ -88,6 +95,13 @@ fun FLChannelStrip(
     modifier: Modifier = Modifier,
     levels: BusLevels = BusLevels(),
     accentColor: Color = MaterialTheme.colorScheme.primary,
+    /**
+     * The backdrop to frost. Null when the caller has none, and the strip then
+     * takes the plain translucent glass rather than asking haze to blur a
+     * source that was never fed — which paints its base colour and reads as a
+     * solid container.
+     */
+    hazeState: HazeState? = null,
     /**
      * The glass material. The UI-panels settings by default: this strip is a
      * floating panel like the rest, not player chrome, so reading
@@ -124,10 +138,22 @@ fun FLChannelStrip(
     val inactiveButton = colors.surfaceContainerHighest.copy(alpha = 0.88f)
 
     // The pane's own colour. A tint chosen in the Studio wins, as it does on
-    // every other panel; with none set each channel keeps its own accent, which
-    // is the only thing telling five identical strips apart at a glance.
-    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
+    // every other panel; with none set the channel accent tints it — that
+    // colour is most of what tells five identical strips apart at a glance.
+    //
+    // Pulled well back toward the surface rather than used neat. The mini
+    // player wears its accent at full strength across a 64dp bar; a channel
+    // strip is a 60x600dp column, and the same colour over that much area
+    // stopped reading as tinted glass and started reading as a painted plastic
+    // panel — five of them side by side, each a different flat colour. The
+    // selected one carries more of it, which is the same "this one is live"
+    // signal its badge and border already give.
+    val paneAccent = lerp(colors.surfaceContainerHigh, accent, if (isSelected) 0.5f else 0.3f)
+    val tint = if (glass.tintColor != 0) Color(glass.tintColor) else paneAccent
     val flat = LocalLowPerformance.current.disableLiquidGlass
+    val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
+    val frostBg = colors.background
+    val isDark = frostBg.luminance() <= 0.5f
 
     CompositionLocalProvider(LocalPlayerGlass provides glass) {
     // Asks whether the shader is really coming (it reads the settings provided
@@ -160,6 +186,27 @@ fun FLChannelStrip(
         // Its own node so the glass is relit on its own layer and the fader,
         // meters and labels on top stay crisp instead of being refracted.
         if (shaded) {
+            // Haze first: the real gaussian blur of the backdrop, which is what
+            // you see *through* the strip. Without it the artwork reads sharp
+            // through a 0.2-opacity body and fights the fader and the labels.
+            if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeStyle(
+                                backgroundColor = frostBg,
+                                blurRadius = glass.hazeBlurDp.dp,
+                                // The app's one frost recipe, scaled by the
+                                // listener's Backdrop tint. Thin on purpose:
+                                // most of what reads through should be the art.
+                                tints = listOf(HazeTint(playerFrostTint(glass, isDark))),
+                                noiseFactor = 0f,
+                            )
+                        )
+                )
+            }
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
@@ -176,6 +223,14 @@ fun FLChannelStrip(
                     .then(
                         // liquidGlass drops itself on LOW-tier devices; the
                         // `flat` check is the listener's own "off" switch.
+                        //
+                        // Deliberately NOT handed the haze source. This tier
+                        // stands on the near-opaque channel gradient, and a
+                        // blur pane draws OVER that fill rather than through
+                        // it — the gradient would be hidden and the strip left
+                        // with only frost to be legible against. The blurred
+                        // artwork belongs to the shader tier, where the slab is
+                        // see-through by design.
                         if (flat) {
                             Modifier
                         } else {

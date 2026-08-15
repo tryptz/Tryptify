@@ -1012,7 +1012,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         )
         SettingSwitchItem(
             title = "Blurred Album Background",
-            subtitle = "Behind the lyrics (collapsed and fullscreen): the album art stretched and heavily blurred",
+            subtitle = "Behind the player and the mixer: the album art stretched and heavily blurred",
             checked = playerBlurredBackground,
             onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
         )

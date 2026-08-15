@@ -508,7 +508,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     tf.monochrome.android.devedit.DevEditScreen("mixer") {
                         MixerScreen(
                             navController = navController,
-                            viewModel = hiltViewModel()
+                            viewModel = hiltViewModel(),
+                            playerViewModel = playerViewModel
                         )
                     }
                 }

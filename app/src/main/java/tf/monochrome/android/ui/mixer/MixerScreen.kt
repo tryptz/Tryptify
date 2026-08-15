@@ -7,7 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -75,6 +77,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -83,10 +88,15 @@ import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.audio.dsp.model.MixPreset
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
+import tf.monochrome.android.ui.player.AlbumColors
 import tf.monochrome.android.ui.player.DynamicAlbumGlow
+import tf.monochrome.android.ui.player.PlayerBlurredArtBackground
 import tf.monochrome.android.ui.player.PlayerDesignTokens
+import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.player.dithered
 import tf.monochrome.android.ui.player.dynamicPlayerBackground
+import tf.monochrome.android.ui.player.rememberAlbumColors
+import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /** Curated per-bus channel colours (master keeps the album-derived primary).
@@ -125,7 +135,13 @@ private fun busAccent(dynamic: Boolean, base: Color, index: Int): Color =
 @Composable
 fun MixerScreen(
     navController: NavController,
-    viewModel: MixerViewModel
+    viewModel: MixerViewModel,
+    /**
+     * Only for what is playing — the cover the backdrop blurs, the palette it
+     * darkens with, and the two settings that govern both. The console itself
+     * is driven entirely by [viewModel].
+     */
+    playerViewModel: PlayerViewModel
 ) {
     // Frame-synced meter/tap polling: one native read per display frame, so
     // the VU meters and FX visuals update at the panel's native refresh rate
@@ -159,6 +175,40 @@ fun MixerScreen(
 
     var showInsertRack by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
+
+    // ── The backdrop the console's glass stands on ──────────────────────
+    // The same blurred, stretched album art the player shows, behind the same
+    // Appearance switch: a mixer full of glass with nothing but a flat wash
+    // behind it has nothing to be glass *of*.
+    val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
+    val blurredBackground by playerViewModel.playerBlurredBackground.collectAsStateWithLifecycle()
+    val dynamicColors by playerViewModel.dynamicColors.collectAsStateWithLifecycle()
+    val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsStateWithLifecycle()
+    // The player's own rule for whether artwork is allowed to colour anything:
+    // both the master switch and the player-specific one. With either off the
+    // scrim over the art takes the theme accent, like the rest of this screen.
+    val artColors = if (dynamicColors && playerDynamicColor) {
+        rememberAlbumColors(currentTrack?.coverUrl)
+    } else {
+        AlbumColors(dominant = accent, vibrant = accent)
+    }
+    // The cover dissolves between tracks over the listener's own blend length,
+    // so the mixer's backdrop changes track at the speed the player's does.
+    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
+    val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
+    val colorBlendMs = tf.monochrome.android.ui.theme.motionMillis(
+        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+    )
+    val blurBgAlpha by animateFloatAsState(
+        targetValue = if (blurredBackground) 1f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "mixerBlurredBg"
+    )
+    // What the console's glass blurs. The backdrop below is marked as the
+    // source and everything else on this screen is a SIBLING above it — a haze
+    // effect cannot sample a layer it is drawn inside, and one that tries
+    // paints the source's flat colour instead of a blur.
+    val mixerHaze = rememberHazeState()
 
     // ── Mixer ⇆ DSP-canvas drag-to-reveal transition ────────────────────
     // progress 0 = mixer fully shown, 1 = canvas fully shown. The two pages
@@ -259,15 +309,27 @@ fun MixerScreen(
             .fillMaxSize()
             .onSizeChanged { heightPx = it.height.toFloat() }
     ) {
-        // Background on its own node so the dither layer wraps just the
-        // gradient, not the whole screen's content.
-        Box(
-            Modifier
-                .matchParentSize()
-                .dithered()
-                .background(dynamicPlayerBackground(accent)),
-        )
-        DynamicAlbumGlow(accent)
+        // The whole backdrop — wash, artwork and glow — as one haze source, so a
+        // strip blurs all three together instead of one of them.
+        Box(Modifier.matchParentSize().hazeSource(mixerHaze)) {
+            // Background on its own node so the dither layer wraps just the
+            // gradient, not the whole screen's content.
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .dithered()
+                    .background(dynamicPlayerBackground(accent)),
+            )
+            if (blurBgAlpha > 0.001f) {
+                PlayerBlurredArtBackground(
+                    coverUrl = currentTrack?.coverUrl,
+                    albumColors = artColors,
+                    blendMillis = colorBlendMs,
+                    alpha = { blurBgAlpha },
+                )
+            }
+            DynamicAlbumGlow(accent)
+        }
         if (composeCanvas) {
             // ── DSP Canvas View (slides down from the top) ───────────────
             Box(
@@ -465,6 +527,7 @@ fun MixerScreen(
                         selectedBusIndex = selectedBusIndex,
                         accent = accent,
                         channelDynamicColor = channelDynamicColor,
+                        hazeState = mixerHaze,
                         onSelectBus = { index ->
                             viewModel.selectBus(index)
                             showInsertRack = true
@@ -633,6 +696,8 @@ private fun ChannelStripRow(
     selectedBusIndex: Int,
     accent: Color,
     channelDynamicColor: Boolean,
+    /** The screen's backdrop, for the strips to frost. */
+    hazeState: HazeState,
     onSelectBus: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -650,6 +715,7 @@ private fun ChannelStripRow(
                     isSelected = index == selectedBusIndex,
                     levels = busLevels.getOrNull(index) ?: BusLevels(),
                     accentColor = if (bus.isMaster) accent else busAccent(channelDynamicColor, accent, bus.index),
+                    hazeState = hazeState,
                     onSelect = { onSelectBus(index) },
                     onGainChange = { viewModel.setBusGain(index, it) },
                     onPanChange = { viewModel.setBusPan(index, it) },
