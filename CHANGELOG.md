@@ -18,6 +18,17 @@
 - **Three layouts, chosen by width rather than by device** — one channel at a time on a phone, channels and grid side by side on a tablet, and a workstation with the sound controls permanently open on a wide window. None of them is the phone layout stretched.
 - **A sampler that taps Tryptify's own pipeline** — capture CLEAN (decoded, before processing) or PROCESSED (after the full DSP chain), then trim, normalize, fade, reverse, name and file it. Trim handles snap to the first transient, and every saved sample gets a short edge fade so a cut that lands mid-cycle does not click on every step.
 - **Capture is limited to audio that is yours to keep** — on-device files and your own downloads. The check defaults closed, so anything whose origin cannot be established is not capturable, and it is re-checked at the moment a file would be written. This is a tap on the app's own decoder output: there is no system playback capture, no microphone path, and no way to point it at another app.
+#### Wave editor
+- **A real waveform editor** — pinch to zoom, drag to select, drag the handles to adjust. Every operation acts on the selection, or on the whole sample when there is none, so the same few buttons cover "tidy up this hit" and "cut this one syllable out" without a mode switch. Crop, cut, silence, normalize, fades, reverse, mono, trim-silence and gain, with undo behind all of them.
+- **Play what you selected** — audition with a playhead that tracks the audio, and a loop toggle for auditioning a cut you are still adjusting. It runs on its own output rather than through the sequencer: the editor needs to hear an arbitrary range of a buffer that has not been saved yet, which is not something a step sequencer is shaped to do.
+- **Edit points snap to zero crossings** — on by default, and switchable. A cut that lands mid-waveform is a step discontinuity, and a sample looped on one clicks once per repeat; snapping removes the click at source rather than hiding it under a fade.
+- **Import any audio file** — anything the platform can decode opens straight in the editor, so a sample can start life as a file on the device rather than as a capture. It is re-encoded into the library's own format on save, so the sample does not break when the original is moved or deleted.
+- **Re-open a saved sample to fix it** — tap it in the library. Saving updates that sample rather than leaving a second copy behind, and its provenance and category are carried across.
+- **Zoomed drawing costs the same as zoomed-out** — the waveform is rendered from peaks computed for exactly the window on screen, and a selection drag redraws without recomputing them.
+
+#### Capture
+- **Capture works for everything Tryptify plays** — on-device files, downloads and streams alike. What was a gate is now a label: the source is shown before you record and stored with the sample, so every capture stays attributable.
+
 - **A sample library with categories** — kicks, snares, hats, percussion, vocals, bass, FX, loops and user. Metadata in Room, audio on disk, and a cached peak file per sample so a browser of several hundred draws every waveform thumbnail without opening a single audio file. Samples are reusable across every pattern, and deleting one empties the channels that used it rather than deleting them.
 
 ### Changed
