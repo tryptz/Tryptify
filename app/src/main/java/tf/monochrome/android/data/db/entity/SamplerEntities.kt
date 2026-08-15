@@ -50,6 +50,21 @@ data class SampleEntity(
     val gain: Float = 1.0f,
     val waveformPath: String? = null,
     val favorite: Boolean = false,
+    /**
+     * Which stem this is, when it came out of the Stem Studio — one of the ids
+     * in `Stem`. Null for anything captured or imported directly.
+     */
+    val stemType: String? = null,
+    /**
+     * The sample this was derived from, if any.
+     *
+     * Deliberately not a foreign key, for the same reason `sampleId` on a
+     * channel is not: deleting the source of a stem must leave the stem alone.
+     * A stem is a finished sample in its own right the moment it is saved, and
+     * cascading here would delete four of them because the user tidied up the
+     * one they were cut from.
+     */
+    val sourceSampleId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
 )
 
