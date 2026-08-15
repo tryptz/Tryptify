@@ -206,15 +206,22 @@ object WavCodec {
         while (done < frames) {
             val n = minOf(CHUNK_FRAMES, frames - done)
             val want = n * frameBytes
-            if (!input.readFully(buffer, want)) break
-            for (i in 0 until n) {
+            val got = input.readUpTo(buffer, want)
+            // Decode whatever whole frames arrived, not only whole chunks. A
+            // file cut short — a save interrupted by a crash, a partial copy —
+            // otherwise loses everything back to the last 4096-frame boundary,
+            // which for a one-shot shorter than that means the reader returns
+            // nothing at all and the sample looks corrupt rather than short.
+            val usable = got / frameBytes
+            for (i in 0 until usable) {
                 val base = i * frameBytes
                 left[done + i] = decode(buffer, base, format, bitsPerSample)
                 if (right != null) {
                     right[done + i] = decode(buffer, base + bytesPerSample, format, bitsPerSample)
                 }
             }
-            done += n
+            done += usable
+            if (got < want) break
         }
 
         return if (done == frames) {
@@ -264,15 +271,26 @@ object WavCodec {
 
     // ── stream helpers ──────────────────────────────────────────────────
 
-    private fun InputStream.readFully(target: ByteArray, count: Int = target.size): Boolean {
+    /**
+     * Reads up to [count] bytes, returning how many actually arrived.
+     *
+     * `read` is allowed to return fewer bytes than asked for without being at
+     * the end of the stream, so a single call is never enough; and the count
+     * matters rather than a boolean, because a short read still carries usable
+     * audio.
+     */
+    private fun InputStream.readUpTo(target: ByteArray, count: Int): Int {
         var read = 0
         while (read < count) {
             val n = read(target, read, count - read)
-            if (n < 0) return false
+            if (n < 0) break
             read += n
         }
-        return true
+        return read
     }
+
+    private fun InputStream.readFully(target: ByteArray, count: Int = target.size): Boolean =
+        readUpTo(target, count) == count
 
     private fun InputStream.readFullyOrThrow(target: ByteArray, message: String) {
         if (!readFully(target)) throw IOException(message)
