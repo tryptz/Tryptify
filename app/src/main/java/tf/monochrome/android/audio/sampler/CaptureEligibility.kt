@@ -10,23 +10,21 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Decides whether what is playing may be captured and kept.
+ * Works out where what is playing came from, and labels the capture with it.
  *
- * The rule is provenance, and it is deliberately narrow: a capture may be
- * saved when the audio is already the user's own copy on their own device.
- * That is a file they added to the library, or a track they downloaded
- * through Tryptify. Everything else — streamed catalogue, live radio, an
- * item whose origin cannot be established — is not saveable.
+ * Capture is allowed for anything Tryptify is decoding. This class does not
+ * gatekeep — it *labels*, so a capture can be attributed: every saved sample
+ * records the track, artist and position it came from, and
+ * [SampleCaptureEngine.Eligibility.reason] puts that on screen. The user
+ * always knows what they are sampling.
  *
- * The important property is which way the check fails. An unknown source
- * resolves to *not allowed*, so a code path that forgets to register a track
- * makes the feature unavailable rather than making it permissive. There is no
- * override, and the same decision is re-checked inside
- * [SampleCaptureEngine.finish] before anything is written to disk.
+ * The only thing that reports "not allowed" is having nothing to capture —
+ * no track loaded. That is a statement of fact rather than a policy.
  *
- * Nothing in the app captures audio it is not itself decoding: there is no
- * system playback capture, no microphone path, and no way to point the sampler
- * at another application.
+ * Scope is bounded by construction rather than by rules: the taps read
+ * Tryptify's own decoder and DSP output, so the sampler records what this app
+ * is playing and nothing else. There is no system playback capture and no
+ * microphone path.
  */
 @Singleton
 class CaptureEligibilityResolver @Inject constructor(
@@ -46,17 +44,14 @@ class CaptureEligibilityResolver @Inject constructor(
             return
         }
 
-        val source = registry[track.id]?.source
-        val isLocalFile = source is PlaybackSource.LocalFile
+        val isLocalFile = registry[track.id]?.source is PlaybackSource.LocalFile
         val isDownloaded = runCatching { library.isDownloaded(track.id) }.getOrDefault(false)
 
-        when {
-            isLocalFile -> engine.setEligibility(true, "On-device file")
-            isDownloaded -> engine.setEligibility(true, "Downloaded to this device")
-            else -> engine.setEligibility(
-                allowed = false,
-                reason = "Only on-device files and downloads can be saved as samples",
-            )
+        val label = when {
+            isLocalFile -> "On-device file"
+            isDownloaded -> "Downloaded to this device"
+            else -> "Streaming — ${track.displayArtist}"
         }
+        engine.setEligibility(allowed = true, reason = label)
     }
 }
