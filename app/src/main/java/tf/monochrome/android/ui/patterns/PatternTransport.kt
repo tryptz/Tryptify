@@ -4,6 +4,13 @@ package tf.monochrome.android.ui.patterns
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.KeyboardType
+import tf.monochrome.android.ui.theme.MonoDimens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +61,16 @@ fun PatternHeader(
 ) {
     val haptics = LocalHapticFeedback.current
     var accumulated by remember { mutableFloatStateOf(0f) }
+    var editingBpm by remember { mutableStateOf(false) }
+
+    if (editingBpm) {
+        BpmEditorDialog(
+            bpm = transport.bpm,
+            accent = accent,
+            onDismiss = { editingBpm = false },
+            onBpmChange = onBpmChange,
+        )
+    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -71,29 +89,38 @@ fun PatternHeader(
             )
         }
 
-        // Tempo is a drag target as well as a readout. Horizontal drag is the
-        // gesture people already expect on a BPM field, and the tick every
-        // whole BPM is what makes it usable without watching the number.
+        // Tempo takes three inputs, because the three ways people arrive at a
+        // number are genuinely different. Drag is for nudging by feel while
+        // the loop runs. Tapping opens the editor, for when the number is
+        // already known — 128, or whatever the track it came from says. And
+        // the editor carries tap tempo, for when it is not known at all.
         Column(
             horizontalAlignment = Alignment.End,
-            modifier = Modifier.pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { accumulated = 0f },
-                ) { change, amount ->
-                    change.consume()
-                    accumulated += amount
-                    val steps = (accumulated / BPM_DRAG_DP).roundToInt()
-                    if (steps != 0) {
-                        accumulated -= steps * BPM_DRAG_DP
-                        PatternHaptics.pageChange(haptics)
-                        onBpmChange((transport.bpm + steps).coerceIn(20f, 300f))
+            modifier = Modifier
+                .clip(MonoDimens.shapeSm)
+                .clickable { editingBpm = true }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { accumulated = 0f },
+                    ) { change, amount ->
+                        change.consume()
+                        accumulated += amount
+                        val steps = (accumulated / BPM_DRAG_DP).roundToInt()
+                        if (steps != 0) {
+                            accumulated -= steps * BPM_DRAG_DP
+                            PatternHaptics.pageChange(haptics)
+                            onBpmChange((transport.bpm + steps).coerceIn(20f, 300f))
+                        }
                     }
                 }
-            },
+                .padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
             PanelLabel("Tempo")
             Text(
-                text = "${transport.bpm.roundToInt()} BPM",
+                // One decimal only when there is one: a tempo matched to a
+                // sampled loop is rarely whole, and 124.0 everywhere else is
+                // noise on a readout that has to be glanceable.
+                text = formatBpm(transport.bpm),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = accent,
@@ -316,5 +343,140 @@ fun PatternActionsRow(
     }
 }
 
+/**
+ * Type a tempo, nudge it, or tap it in.
+ *
+ * The text field is the point of this dialog — a tempo you already know
+ * should not have to be dragged to. It is validated but not policed: the field
+ * accepts whatever is typed and the OK key is simply unavailable until it
+ * parses, which is far less irritating than a field that fights every
+ * keystroke or silently rewrites what you entered.
+ *
+ * Tap tempo averages the last few intervals rather than using the most recent
+ * one, because a single interval carries all the jitter of one imprecise tap.
+ */
+@Composable
+fun BpmEditorDialog(
+    bpm: Float,
+    accent: Color,
+    onDismiss: () -> Unit,
+    onBpmChange: (Float) -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    var text by remember { mutableStateOf(formatBpm(bpm)) }
+    val taps = remember { mutableListOf<Long>() }
+    var tapHint by remember { mutableStateOf<String?>(null) }
+
+    val parsed = text.trim().toFloatOrNull()
+    val valid = parsed != null && parsed >= PatternScheduler.MIN_BPM && parsed <= PatternScheduler.MAX_BPM
+
+    fun commit(value: Float) {
+        val clamped = value.coerceIn(PatternScheduler.MIN_BPM, PatternScheduler.MAX_BPM)
+        text = formatBpm(clamped)
+        onBpmChange(clamped)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tempo") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("BPM") },
+                    singleLine = true,
+                    isError = text.isNotBlank() && !valid,
+                    supportingText = {
+                        Text(
+                            if (text.isNotBlank() && !valid) {
+                                "Between ${PatternScheduler.MIN_BPM.roundToInt()} and " +
+                                    "${PatternScheduler.MAX_BPM.roundToInt()}"
+                            } else {
+                                "Applies as you change it"
+                            },
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Whole-BPM nudges and halve/double. Halving and doubling
+                    // is here because a tempo detected from a loop is very
+                    // often out by exactly that factor.
+                    PatternPill("−1", false, Modifier.weight(1f), accent) {
+                        commit((parsed ?: bpm) - 1f)
+                    }
+                    PatternPill("+1", false, Modifier.weight(1f), accent) {
+                        commit((parsed ?: bpm) + 1f)
+                    }
+                    PatternPill("÷2", false, Modifier.weight(1f), accent) {
+                        commit((parsed ?: bpm) / 2f)
+                    }
+                    PatternPill("×2", false, Modifier.weight(1f), accent) {
+                        commit((parsed ?: bpm) * 2f)
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                PatternPill(
+                    label = tapHint ?: "Tap tempo",
+                    active = tapHint != null,
+                    accent = accent,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    PatternHaptics.transport(haptics)
+                    val now = System.currentTimeMillis()
+                    // A long gap means a new attempt rather than a very slow
+                    // tempo, so the history is dropped instead of averaged
+                    // with taps from a minute ago.
+                    if (taps.isNotEmpty() && now - taps.last() > TAP_RESET_MS) taps.clear()
+                    taps.add(now)
+                    if (taps.size > TAP_HISTORY) taps.removeAt(0)
+
+                    if (taps.size >= 2) {
+                        val span = (taps.last() - taps.first()).toFloat()
+                        val intervals = taps.size - 1
+                        val perBeat = span / intervals
+                        if (perBeat > 1f) {
+                            val detected = 60_000f / perBeat
+                            tapHint = "${formatBpm(detected)} — keep tapping"
+                            commit(detected)
+                        }
+                    } else {
+                        tapHint = "Keep tapping…"
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = valid,
+                onClick = {
+                    parsed?.let(::commit)
+                    onDismiss()
+                },
+            ) { Text("Set") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+    )
+}
+
+/** One decimal only when the tempo actually has one. */
+internal fun formatBpm(bpm: Float): String {
+    val rounded = (bpm * 10f).roundToInt() / 10f
+    return if (rounded % 1f == 0f) "${rounded.roundToInt()}" else "$rounded"
+}
+
 /** Roughly 6 dp of travel per BPM — fine control without feeling stuck. */
 private const val BPM_DRAG_DP = 6f
+
+/** Taps averaged together. Four covers a bar of 4/4 without lagging behind. */
+private const val TAP_HISTORY = 5
+
+/** A gap longer than this starts a new tap-tempo attempt. */
+private const val TAP_RESET_MS = 2_500L

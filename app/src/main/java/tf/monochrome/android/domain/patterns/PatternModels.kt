@@ -222,6 +222,10 @@ data class SampleRef(
     val gain: Float = 1.0f,
     val waveformPath: String? = null,
     val favorite: Boolean = false,
+    /** One of the ids in `Stem` when this came out of the Stem Studio. */
+    val stemType: String? = null,
+    /** The sample this was separated from, if any. */
+    val sourceSampleId: Long? = null,
     val createdAt: Long = 0,
 )
 

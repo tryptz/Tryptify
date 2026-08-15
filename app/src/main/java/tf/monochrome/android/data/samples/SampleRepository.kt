@@ -133,6 +133,10 @@ class SampleRepository @Inject constructor(
          * nothing.
          */
         replacingId: Long? = null,
+        /** Set when this came out of the Stem Studio. */
+        stemType: String? = null,
+        /** The sample this was separated from, if any. */
+        sourceSampleId: Long? = null,
     ): SampleRef? = withContext(Dispatchers.IO) {
         if (buffer.frames < SampleEdits.MIN_FRAMES) return@withContext null
         val previous = replacingId?.let { dao.byId(it) }
@@ -181,6 +185,8 @@ class SampleRepository @Inject constructor(
             gain = previous?.gain ?: 1.0f,
             waveformPath = waveformPath,
             favorite = previous?.favorite ?: false,
+            stemType = stemType ?: previous?.stemType,
+            sourceSampleId = sourceSampleId ?: previous?.sourceSampleId,
             createdAt = previous?.createdAt ?: stamp,
         )
         val id = dao.upsert(entity)
@@ -317,6 +323,8 @@ class SampleRepository @Inject constructor(
         gain = entity.gain,
         waveformPath = entity.waveformPath,
         favorite = entity.favorite,
+        stemType = entity.stemType,
+        sourceSampleId = entity.sourceSampleId,
         createdAt = entity.createdAt,
     )
 

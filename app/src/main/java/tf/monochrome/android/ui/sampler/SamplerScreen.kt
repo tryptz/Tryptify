@@ -145,6 +145,27 @@ fun SamplerScreen(
                 accent = accent,
                 viewModel = viewModel,
             )
+
+            Spacer(Modifier.height(10.dp))
+
+            // Below the editor rather than behind a tab: separating is
+            // something you do *to* what is on screen, and having both visible
+            // is what makes "split this, then edit the drums" one flow.
+            StemStudioPanel(
+                stems = ui.stems,
+                description = viewModel.separatorDescription,
+                accent = accent,
+                playingStem = previewState.playing,
+                onSeparate = viewModel::separateStems,
+                onCancel = viewModel::cancelStems,
+                onLevel = viewModel::setStemLevel,
+                onPlayStem = viewModel::playStem,
+                onPlayMix = viewModel::playStemMix,
+                onStopPreview = viewModel::stopPreview,
+                onEditStem = viewModel::editStem,
+                onSaveStem = { viewModel.saveStem(it) },
+                onSaveAll = viewModel::saveAllStems,
+            )
         }
 
         ui.message?.let { message ->
