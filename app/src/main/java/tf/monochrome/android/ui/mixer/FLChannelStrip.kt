@@ -352,7 +352,19 @@ fun FLChannelStrip(
         )
 
         // ── Mute / Solo ───────────────────────────────────────────────────
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Stacked, not side by side, and that is the only arrangement that
+        // fits. Each button carries the 48dp accessibility minimum, so a row of
+        // two wants 100dp; a bus strip is 60dp wide and offers 52dp of content.
+        // Row measures its children in order against what is left, so Mute took
+        // 48, the gap took 4, and Solo was measured against nothing and never
+        // drawn — the mixer had no way to solo a bus at all, and it read as
+        // deliberate because master legitimately shows one button. The tell was
+        // that master's circle sat centred while every bus's sat left of centre,
+        // parked at the start of a 52dp band.
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
             Box(
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
@@ -399,6 +411,13 @@ fun FLChannelStrip(
                         color = if (bus.soloed) onAccent else colors.onSurfaceVariant
                     )
                 }
+            } else {
+                // Master has nothing to solo, but it still holds the space, so
+                // all five strips are the same height and their faders stay
+                // level. Same modifiers as the button rather than a hardcoded
+                // height, so it reserves exactly what the button would measure
+                // whether or not the touch-target minimum is being enforced.
+                Spacer(modifier = Modifier.minimumInteractiveComponentSize().size(26.dp))
             }
         }
     }
