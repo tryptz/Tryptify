@@ -13,13 +13,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tf.monochrome.android.audio.sampler.CaptureEligibilityResolver
 import tf.monochrome.android.audio.sampler.CleanCaptureTap
 import tf.monochrome.android.audio.sampler.ProcessedCaptureTap
 import tf.monochrome.android.audio.sampler.SampleCaptureEngine
 import tf.monochrome.android.audio.sampler.SampleEdits
 import tf.monochrome.android.audio.sampler.SamplePreviewPlayer
+import tf.monochrome.android.audio.sampler.stems.Stem
+import tf.monochrome.android.audio.sampler.stems.StemProgress
+import tf.monochrome.android.audio.sampler.stems.StemQuality
+import tf.monochrome.android.audio.sampler.stems.StemSeparator
 import tf.monochrome.android.data.samples.SampleRepository
 import tf.monochrome.android.domain.patterns.CaptureSource
 import tf.monochrome.android.domain.patterns.SampleCategory
@@ -51,9 +57,27 @@ class SamplerViewModel @Inject constructor(
     private val eligibilityResolver: CaptureEligibilityResolver,
     private val positions: PlaybackPositionSource,
     private val preview: SamplePreviewPlayer,
+    private val separator: StemSeparator,
 ) : ViewModel() {
 
     enum class Stage { IDLE, RECORDING, EDITING }
+
+    /**
+     * The Stem Studio's state.
+     *
+     * [results] holds the separated audio in memory rather than on disk: a
+     * stem is not a sample until the user says so, and writing four files for
+     * a split they might discard would leave rubbish behind on every attempt.
+     */
+    data class StemsState(
+        val running: Boolean = false,
+        val progress: StemProgress = StemProgress(0f, ""),
+        val quality: StemQuality = StemQuality.BALANCED,
+        val results: Map<Stem, SampleEdits.Buffer> = emptyMap(),
+        val levels: Map<Stem, Float> = emptyMap(),
+    ) {
+        val hasResults: Boolean get() = results.isNotEmpty()
+    }
 
     data class UiState(
         val stage: Stage = Stage.IDLE,
@@ -71,6 +95,7 @@ class SamplerViewModel @Inject constructor(
         val category: SampleCategory = SampleCategory.USER,
         val saving: Boolean = false,
         val canUndo: Boolean = false,
+        val stems: StemsState = StemsState(),
         val message: String? = null,
     ) {
         val frames: Int get() = buffer?.frames ?: 0
@@ -120,6 +145,7 @@ class SamplerViewModel @Inject constructor(
 
     private val undoStack = ArrayDeque<SampleEdits.Buffer>()
     private var meterJob: Job? = null
+    private var stemJob: Job? = null
 
     init {
         refreshEligibility()
@@ -135,6 +161,7 @@ class SamplerViewModel @Inject constructor(
         capture.cancel()
         preview.stop()
         meterJob?.cancel()
+        stemJob?.cancel()
         super.onCleared()
     }
 
@@ -223,6 +250,8 @@ class SamplerViewModel @Inject constructor(
         category: SampleCategory = SampleCategory.USER,
     ) {
         undoStack.clear()
+        stemJob?.cancel()
+        stemJob = null
         val view = WaveView(
             viewStart = 0,
             viewEnd = buffer.frames,
@@ -239,6 +268,10 @@ class SamplerViewModel @Inject constructor(
             category = category,
             editingSampleId = sampleId,
             canUndo = false,
+            // Stems belong to the buffer they came from; carrying them across
+            // to a different one would offer the user a split of something
+            // they are no longer looking at.
+            stems = StemsState(),
             message = null,
         )
     }
@@ -465,6 +498,180 @@ class SamplerViewModel @Inject constructor(
             canUndo = true,
         )
     }
+
+    // ── stem studio ─────────────────────────────────────────────────────
+
+    /**
+     * Splits what is in the editor into stems.
+     *
+     * Runs on [Dispatchers.Default] and is held as a cancellable job, because
+     * separation is seconds of arithmetic and the rest of the app has to stay
+     * live through it. Cancelling drops the partial result: half-separated
+     * stems are not useful, and keeping them would mean explaining which ones
+     * finished.
+     */
+    fun separateStems(quality: StemQuality = StemQuality.BALANCED) {
+        val buffer = _ui.value.buffer ?: return
+        if (_ui.value.stems.running) return
+        preview.stop()
+
+        stemJob?.cancel()
+        _ui.value = _ui.value.copy(
+            stems = StemsState(running = true, progress = StemProgress(0f, "Starting"), quality = quality),
+        )
+        stemJob = viewModelScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.Default) {
+                    separator.separate(
+                        input = buffer,
+                        requested = separator.availableStems(buffer),
+                        quality = quality,
+                    ) { progress ->
+                        // Hop back to the view model's scope to publish; the
+                        // separator calls this from its own dispatcher.
+                        _ui.value = _ui.value.copy(
+                            stems = _ui.value.stems.copy(progress = progress),
+                        )
+                    }
+                }
+            }
+
+            if (result.isFailure) {
+                // Cancellation is not a failure the user needs told about;
+                // they asked for it.
+                if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) {
+                    _ui.value = _ui.value.copy(stems = StemsState())
+                    return@launch
+                }
+                _ui.value = _ui.value.copy(
+                    stems = StemsState(),
+                    message = "Stem separation failed",
+                )
+                return@launch
+            }
+
+            val stems = result.getOrDefault(emptyMap())
+            _ui.value = _ui.value.copy(
+                stems = StemsState(
+                    running = false,
+                    quality = quality,
+                    results = stems,
+                    // Everything audible to begin with; the mixer is for
+                    // auditioning combinations, not for hiding things.
+                    levels = stems.keys.associateWith { 1f },
+                ),
+                message = if (stems.isEmpty()) "Nothing to separate" else null,
+            )
+        }
+    }
+
+    fun cancelStems() {
+        stemJob?.cancel()
+        stemJob = null
+        _ui.value = _ui.value.copy(stems = StemsState())
+    }
+
+    fun setStemLevel(stem: Stem, level: Float) {
+        val stems = _ui.value.stems
+        _ui.value = _ui.value.copy(
+            stems = stems.copy(levels = stems.levels + (stem to level.coerceIn(0f, 1f))),
+        )
+    }
+
+    /** Auditions one stem on its own. */
+    fun playStem(stem: Stem) {
+        val buffer = _ui.value.stems.results[stem] ?: return
+        preview.play(buffer, 0, buffer.frames, looping = _ui.value.loopPreview)
+    }
+
+    /**
+     * Plays the stems mixed at their current levels.
+     *
+     * Summed here rather than by playing four previews at once: four
+     * AudioTracks would drift against each other, and the mixer's whole
+     * purpose is hearing them locked together.
+     */
+    fun playStemMix() {
+        val stems = _ui.value.stems
+        if (stems.results.isEmpty()) return
+        val first = stems.results.values.first()
+        val left = FloatArray(first.frames)
+        val right = if (first.right != null) FloatArray(first.frames) else null
+        for ((stem, buffer) in stems.results) {
+            val level = stems.levels[stem] ?: 1f
+            if (level <= 0f) continue
+            for (i in 0 until minOf(first.frames, buffer.frames)) {
+                left[i] += buffer.left[i] * level
+                right?.let { it[i] += (buffer.right?.get(i) ?: buffer.left[i]) * level }
+            }
+        }
+        preview.play(
+            SampleEdits.Buffer(left, right, first.sampleRate),
+            0,
+            first.frames,
+            looping = _ui.value.loopPreview,
+        )
+    }
+
+    /** Loads one stem into the editor, replacing what is there. */
+    fun editStem(stem: Stem) {
+        val buffer = _ui.value.stems.results[stem] ?: return
+        val base = _ui.value.name.ifBlank { "Sample" }
+        openEditor(buffer, name = "$base ${stem.label}")
+    }
+
+    /** Writes one stem to the library as a sample in its own right. */
+    fun saveStem(stem: Stem, onSaved: (SampleRef) -> Unit = {}) {
+        val buffer = _ui.value.stems.results[stem] ?: return
+        viewModelScope.launch {
+            val saved = persistStem(stem, buffer)
+            if (saved == null) {
+                _ui.value = _ui.value.copy(message = "Couldn't save ${stem.label}")
+            } else {
+                _ui.value = _ui.value.copy(message = "Saved ${saved.name}")
+                onSaved(saved)
+            }
+        }
+    }
+
+    fun saveAllStems() {
+        val stems = _ui.value.stems.results
+        if (stems.isEmpty()) return
+        viewModelScope.launch {
+            var saved = 0
+            for ((stem, buffer) in stems) {
+                if (persistStem(stem, buffer) != null) saved += 1
+            }
+            _ui.value = _ui.value.copy(message = "Added $saved stems to the library")
+        }
+    }
+
+    private suspend fun persistStem(stem: Stem, buffer: SampleEdits.Buffer): SampleRef? {
+        val state = _ui.value
+        val track = queueManager.currentTrack.value
+        val base = state.name.ifBlank { suggestName() }
+        return samples.save(
+            buffer = buffer,
+            name = "$base — ${stem.label}",
+            // Stems file themselves under the obvious category, so a drums
+            // stem lands with the drums rather than in USER with everything
+            // else the user has ever made.
+            category = when (stem) {
+                Stem.DRUMS -> SampleCategory.PERCUSSION
+                Stem.BASS -> SampleCategory.BASS
+                Stem.VOCALS -> SampleCategory.VOCALS
+                Stem.OTHER -> SampleCategory.LOOPS
+            },
+            captureSource = state.source,
+            sourceTrackTitle = track?.title,
+            sourceArtist = track?.displayArtist,
+            sourceTimestampMs = positions.positionMs(),
+            stemType = stem.id,
+            sourceSampleId = state.editingSampleId,
+        )
+    }
+
+    val separatorDescription: String get() = separator.description
 
     // ── audition ────────────────────────────────────────────────────────
 
