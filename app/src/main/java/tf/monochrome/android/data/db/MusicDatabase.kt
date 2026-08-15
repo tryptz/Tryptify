@@ -85,7 +85,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         PatternChannelEntity::class,
         PatternStepEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -395,6 +395,23 @@ abstract class MusicDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_sampler_pattern_steps_channelId` " +
                         "ON `sampler_pattern_steps` (`channelId`)"
                 )
+            }
+        }
+
+        /**
+         * v17 → v18: stem provenance. Two nullable columns on samples, saying
+         * which stem a sample is and which sample it was cut from.
+         *
+         * Both nullable with no default, so every existing row is already
+         * valid and the upgrade is two ALTERs and nothing else. `sourceSampleId`
+         * is deliberately not a foreign key — deleting the source a stem came
+         * from must not delete the stem, which by then is a finished sample of
+         * its own.
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sampler_samples` ADD COLUMN `stemType` TEXT")
+                db.execSQL("ALTER TABLE `sampler_samples` ADD COLUMN `sourceSampleId` INTEGER")
             }
         }
     }
