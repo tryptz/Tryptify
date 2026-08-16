@@ -31,7 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.domain.patterns.PatternChannel
 import tf.monochrome.android.domain.patterns.SampleRef
+import tf.monochrome.android.domain.patterns.SpeedPitchPreset
 import tf.monochrome.android.ui.sampler.SamplePickerSheet
+import kotlin.math.log2
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -68,6 +71,10 @@ fun PatternSoundEditorSheet(
     onRelease: (Float) -> Unit,
     onFilter: (Float) -> Unit,
     onReverse: (Boolean) -> Unit,
+    onSpeed: (Float) -> Unit,
+    onLinked: (Boolean) -> Unit,
+    onPreset: (SpeedPitchPreset) -> Unit,
+    onResetSpeedPitch: () -> Unit,
     onMute: () -> Unit,
     onSolo: () -> Unit,
     onAudition: () -> Unit,
@@ -155,14 +162,19 @@ fun PatternSoundEditorSheet(
                 accent = accent,
                 onValueChange = onPan,
             )
-            PatternFader(
-                label = "Pitch",
-                value = channel.pitch,
-                valueRange = -24f..24f,
-                display = "${if (channel.pitch >= 0) "+" else ""}${channel.pitch.roundToInt()} st",
+
+            Spacer(Modifier.height(10.dp))
+            SpeedPitchSection(
+                channel = channel,
                 accent = accent,
-                onValueChange = onPitch,
+                onSpeed = onSpeed,
+                onPitch = onPitch,
+                onLinked = onLinked,
+                onPreset = onPreset,
+                onReset = onResetSpeedPitch,
             )
+            Spacer(Modifier.height(10.dp))
+
             PatternFader(
                 label = "Start",
                 value = channel.sampleStart,
@@ -341,6 +353,127 @@ fun StepEditorSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/**
+ * Speed and pitch, together, because the interesting thing about them is the
+ * relationship.
+ *
+ * Two sliders and a link. Unlinked they are genuinely independent — the
+ * stretcher changes how long the sample takes without changing the note, and
+ * the pitch slider changes the note without changing the length. Linked they
+ * collapse into one varispeed factor and the readout says so, because a user
+ * who drags speed in tape mode and sees the pitch number sit still would
+ * reasonably conclude the app is broken.
+ *
+ * The speed slider runs in octaves rather than in multiples. Linear travel
+ * over 0.25 to 4.0 would put unity a fifth of the way along and squash
+ * everything below it into the first centimetre of the track; in log space
+ * unity sits dead centre and half time and double time are the same distance
+ * out on either side.
+ */
+@Composable
+private fun SpeedPitchSection(
+    channel: PatternChannel,
+    accent: Color,
+    onSpeed: (Float) -> Unit,
+    onPitch: (Float) -> Unit,
+    onLinked: (Boolean) -> Unit,
+    onPreset: (SpeedPitchPreset) -> Unit,
+    onReset: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PanelLabel("Time and pitch")
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PatternPill(
+                label = if (channel.linked) "Linked" else "Free",
+                active = channel.linked,
+                accent = accent,
+                onClick = { onLinked(!channel.linked) },
+            )
+            PatternPill(
+                label = "Reset",
+                active = false,
+                accent = accent,
+                enabled = !channel.isAtNaturalRate || channel.linked,
+                onClick = onReset,
+            )
+        }
+    }
+
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = if (channel.linked) {
+            "Tape. Faster is higher \u2014 the two move together."
+        } else {
+            "Independent. Speed does not change the note."
+        },
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(6.dp))
+
+    PatternFader(
+        label = "Speed",
+        value = log2(channel.speed.coerceIn(PatternChannel.MIN_SPEED, PatternChannel.MAX_SPEED)),
+        valueRange = -2f..2f,
+        display = formatSpeed(channel.speed),
+        accent = accent,
+        onValueChange = { onSpeed(2f.pow(it)) },
+    )
+    PatternFader(
+        label = if (channel.linked) "Pitch (follows speed)" else "Pitch",
+        value = channel.pitch,
+        valueRange = PatternChannel.MIN_PITCH..PatternChannel.MAX_PITCH,
+        display = formatSemitones(if (channel.linked) linkedSemitones(channel) else channel.pitch),
+        accent = accent,
+        onValueChange = onPitch,
+    )
+
+    Spacer(Modifier.height(8.dp))
+    // Two rows of four rather than a scrolling strip: eight is few enough to
+    // show at once, and a preset you have to hunt for is slower than the
+    // slider it was meant to save you from.
+    val presets = SpeedPitchPreset.entries
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        presets.chunked(4).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { preset ->
+                    PatternPill(
+                        label = preset.label,
+                        active = channel.speed == preset.speed &&
+                            channel.pitch == preset.semitones &&
+                            channel.linked == preset.linked,
+                        accent = accent,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onPreset(preset) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** In tape mode the audible pitch is speed and pitch multiplied together. */
+private fun linkedSemitones(channel: PatternChannel): Float =
+    channel.pitch + 12f * log2(channel.speed.coerceAtLeast(0.01f))
+
+private fun formatSpeed(speed: Float): String = when {
+    speed >= 1f -> "%.2fx".format(speed)
+    else -> "%.3fx".format(speed).trimEnd('0').trimEnd('.') + "x"
+}
+
+private fun formatSemitones(st: Float): String {
+    val sign = if (st >= 0f) "+" else ""
+    return if (kotlin.math.abs(st - st.roundToInt()) < 0.05f) {
+        "$sign${st.roundToInt()} st"
+    } else {
+        "$sign%.1f st".format(st)
     }
 }
 

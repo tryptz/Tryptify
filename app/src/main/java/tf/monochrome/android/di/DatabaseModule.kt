@@ -45,6 +45,7 @@ object DatabaseModule {
                 MusicDatabase.MIGRATION_15_16,
                 MusicDatabase.MIGRATION_16_17,
                 MusicDatabase.MIGRATION_17_18,
+                MusicDatabase.MIGRATION_18_19,
             )
             // Retained as a safety net for any version gap without an explicit
             // migration; the THX (8→9) and Atmos (9→10) upgrades migrate in

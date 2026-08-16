@@ -125,6 +125,10 @@ data class PatternChannelEntity(
     val volume: Float = 1.0f,
     val pan: Float = 0.0f,
     val pitch: Float = 0.0f,
+    /** 0.25 .. 4.0. Independent of [pitch] unless [linked]. */
+    val speed: Float = 1.0f,
+    /** Tape mode: speed and pitch move together and the stretcher is bypassed. */
+    val linked: Boolean = false,
     val sampleStart: Float = 0.0f,
     val sampleEnd: Float = 1.0f,
     val attackMs: Float = 0.0f,
@@ -150,6 +154,10 @@ data class PatternChannelEntity(
  * fields. [locks] is a bitmask saying which of them override the channel;
  * v1 writes velocity only and leaves the mask at zero, so turning locks on
  * later is a UI change rather than a schema change.
+ *
+ * [speedCode] is stored as the same exponential byte the engine uses rather
+ * than as a float, so a lock read back from the database is bit-for-bit what
+ * the audio thread will act on — no rounding step between the two.
  */
 @Entity(
     tableName = "sampler_pattern_steps",
@@ -174,4 +182,6 @@ data class PatternStepEntity(
     val pan: Int = 0,
     val sampleStart: Int = 0,
     val locks: Int = 0,
+    /** Exponential speed code; 0 means no lock. See `Step.speedFromCode`. */
+    val speedCode: Int = 0,
 )

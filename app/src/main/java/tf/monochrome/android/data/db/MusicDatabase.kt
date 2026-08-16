@@ -85,7 +85,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         PatternChannelEntity::class,
         PatternStepEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -412,6 +412,32 @@ abstract class MusicDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `sampler_samples` ADD COLUMN `stemType` TEXT")
                 db.execSQL("ALTER TABLE `sampler_samples` ADD COLUMN `sourceSampleId` INTEGER")
+            }
+        }
+
+        /**
+         * 18 → 19: independent speed per channel, and per-step speed locks.
+         *
+         * All three columns are NOT NULL with defaults that mean "unchanged" —
+         * 1.0x, not linked, no lock — so every pattern already in the library
+         * keeps playing exactly as it did. A nullable column would have been
+         * the easier migration and the wrong one: the engine would then have
+         * to decide what null means on every trig.
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `sampler_pattern_channels` " +
+                        "ADD COLUMN `speed` REAL NOT NULL DEFAULT 1.0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `sampler_pattern_channels` " +
+                        "ADD COLUMN `linked` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `sampler_pattern_steps` " +
+                        "ADD COLUMN `speedCode` INTEGER NOT NULL DEFAULT 0",
+                )
             }
         }
     }
