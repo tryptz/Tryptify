@@ -62,7 +62,9 @@ The shortlist, in the order worth attempting:
 | **MDX-Net** | per-stem | Already ships as ONNX, so it needs no export work at all |
 
 HTDemucs is the reference because its export path is proven and it is genuinely
-strong on all four stems.
+strong on all four stems. RoFormer is the quality ceiling but the hardest
+export — rotary embeddings, fused attention and dynamic sequence length all
+need rework, and no widely-used parity-verified ONNX export exists yet.
 
 ### Six stems
 
