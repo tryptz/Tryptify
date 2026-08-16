@@ -851,6 +851,45 @@ class SamplerViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Installs a model file the user already has.
+     *
+     * Reuses the install progress and message channels, so the panel shows a
+     * local import exactly as it shows a download — the user picked a file and
+     * is waiting; which code path is running is not their problem.
+     */
+    fun importModel(open: () -> java.io.InputStream) {
+        if (_ui.value.ai.installing) return
+        installJob?.cancel()
+        _ui.value = _ui.value.copy(
+            ai = _ui.value.ai.copy(installing = true, progress = null, message = null),
+        )
+
+        installJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                models.importLocal(open) { progress ->
+                    _ui.value = _ui.value.copy(ai = _ui.value.ai.copy(progress = progress))
+                }
+            }
+
+            _ui.value = _ui.value.copy(
+                ai = _ui.value.ai.copy(
+                    installing = false,
+                    progress = null,
+                    installed = models.installed(),
+                    available = null,
+                    updateAvailable = null,
+                    storageBytes = models.installedBytes(),
+                    message = when (result) {
+                        is InstallResult.Installed -> "Imported ${result.model.name}"
+                        is InstallResult.Failed -> result.reason
+                    },
+                ),
+            )
+            refreshAiState()
+        }
+    }
+
     fun deleteModel() {
         installJob?.cancel()
         viewModelScope.launch {
