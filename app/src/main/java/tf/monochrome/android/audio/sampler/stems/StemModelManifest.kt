@@ -78,6 +78,15 @@ data class StemModel(
     val sourceModel: String,
     val attribution: String?,
     val stems: Set<Stem>,
+    /**
+     * The order the model emits its stems in, which is not the order [Stem]
+     * declares them and not one anyone would guess — HTDemucs emits
+     * `drums, bass, other, vocals`. Get it wrong and separation still appears
+     * to work: every stem is produced, every level looks right, and the vocal
+     * file contains the drums. Nothing downstream can detect that, so the
+     * order travels with the model rather than being inferred.
+     */
+    val outputOrder: List<Stem> = stems.toList(),
     val modelSampleRate: Int,
     val segmentFrames: Int,
     val minimumAndroid: Int,
@@ -131,7 +140,10 @@ data class StemModel(
                 }.getOrNull().orEmpty()
 
             val id = str("id") ?: return null
-            val stems = strings("stems").mapNotNull { Stem.fromId(it) }.toSet()
+            // Kept as a list first: the array's order is the model's channel
+            // order, and collapsing straight to a set would throw away the one
+            // thing that says which output is which stem.
+            val order = strings("stems").mapNotNull { Stem.fromId(it) }
 
             return StemModel(
                 id = id,
@@ -151,7 +163,8 @@ data class StemModel(
                 // A manifest that does not say assumes the classic four.
                 // Defaulting to six would have a four-stem model advertising a
                 // piano stem it cannot produce.
-                stems = stems.ifEmpty { Stem.FOUR },
+                stems = order.toSet().ifEmpty { Stem.FOUR },
+                outputOrder = order.ifEmpty { Stem.FOUR.toList() },
                 modelSampleRate = int("modelSampleRate", 44100),
                 segmentFrames = int("segmentFrames", DEFAULT_SEGMENT_FRAMES),
                 minimumAndroid = int("minimumAndroid", 26),

@@ -88,6 +88,21 @@ fun SamplerScreen(
         if (uri != null) viewModel.importFile(uri, displayNameOf(context, uri))
     }
 
+    // A model file is hundreds of megabytes, so the URI is handed over as a
+    // function that opens it rather than as an already-open stream: the copy
+    // runs on a background dispatcher and should be the thing that decides when
+    // to start reading, not the callback the picker happens to return on.
+    val modelPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importModel {
+                context.contentResolver.openInputStream(uri)
+                    ?: error("Could not open that file")
+            }
+        }
+    }
+
     LaunchedEffect(Unit) { viewModel.refreshEligibility() }
     // Disk only — reads what is installed and which backend wins. Deliberately
     // not a catalogue fetch: a screen that phoned home on every open would be a
@@ -163,6 +178,7 @@ fun SamplerScreen(
                 onInstall = viewModel::installModel,
                 onCancelInstall = viewModel::cancelInstall,
                 onCheckForUpdate = viewModel::checkForModels,
+                onImport = { modelPicker.launch(arrayOf("*/*")) },
                 onDelete = viewModel::deleteModel,
             )
 
