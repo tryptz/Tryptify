@@ -161,8 +161,12 @@ class DspStemSeparatorTest {
     }
 
     @Test
-    fun `stereo offers every stem and mono does not`() {
-        assertEquals(Stem.entries.toSet(), separator.availableStems(mixture()))
+    fun `stereo offers the classic four and mono does not`() {
+        // Four, not every stem there is. Guitar and piano exist for six-stem
+        // models; median filtering and panning cannot tell one from the other,
+        // so this separator does not claim them.
+        assertEquals(Stem.FOUR, separator.availableStems(mixture()))
+        assertTrue(separator.availableStems(mixture()).none { it in Stem.EXTENDED })
 
         val mono = separator.availableStems(mixture(stereo = false))
         assertEquals(setOf(Stem.DRUMS, Stem.BASS, Stem.OTHER), mono)
