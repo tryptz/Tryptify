@@ -89,6 +89,10 @@ fun SamplerScreen(
     }
 
     LaunchedEffect(Unit) { viewModel.refreshEligibility() }
+    // Disk only — reads what is installed and which backend wins. Deliberately
+    // not a catalogue fetch: a screen that phoned home on every open would be a
+    // different app from the offline-after-install one the brief describes.
+    LaunchedEffect(Unit) { viewModel.refreshAiState() }
 
     Column(
         modifier = modifier
@@ -151,6 +155,19 @@ fun SamplerScreen(
             // Below the editor rather than behind a tab: separating is
             // something you do *to* what is on screen, and having both visible
             // is what makes "split this, then edit the drums" one flow.
+            // Above the studio, because "what is doing the separating" is the
+            // question you have before you press the button, not after.
+            StemAiPanel(
+                ai = ui.ai,
+                accent = accent,
+                onInstall = viewModel::installModel,
+                onCancelInstall = viewModel::cancelInstall,
+                onCheckForUpdate = viewModel::checkForModels,
+                onDelete = viewModel::deleteModel,
+            )
+
+            Spacer(Modifier.height(10.dp))
+
             StemStudioPanel(
                 stems = ui.stems,
                 description = viewModel.separatorDescription,
