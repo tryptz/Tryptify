@@ -34,6 +34,10 @@ inline PatternEngine* engineOf(jlong ptr) {
     return reinterpret_cast<PatternEngine*>(ptr);
 }
 
+inline float clampf(float v, float lo, float hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
 }  // namespace
 
 extern "C" {
@@ -104,7 +108,7 @@ JNIEXPORT jboolean JNICALL
 Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativePostStep(
     JNIEnv*, jobject, jlong ptr, jint patternIndex, jint channel, jint stepIndex,
     jint enabled, jint velocity, jint pitch, jint probability, jint pan, jint sampleStart,
-    jint locks) {
+    jint locks, jint speed) {
     auto* engine = engineOf(ptr);
     if (engine == nullptr) return JNI_FALSE;
     Command cmd;
@@ -119,6 +123,7 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativePostStep(
     cmd.step.pan = static_cast<int8_t>(pan);
     cmd.step.sampleStart = static_cast<uint8_t>(sampleStart);
     cmd.step.locks = static_cast<uint8_t>(locks);
+    cmd.step.speed = static_cast<uint8_t>(speed);
     return engine->post(cmd) ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -129,11 +134,19 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativePostStep(
  * a parser:
  *
  *   header       [lengthSteps, stepsPerBeat, beatsPerBar, channelCount]
- *   channelInts  channelCount × [sampleSlot, muted, soloed, enabled, reverse]
- *   channelFloats channelCount × [volume, pan, pitch, start, end, attack,
- *                                 release, filterHz]
+ *   channelInts  channelCount × [sampleSlot, muted, soloed, enabled, reverse,
+ *                                linked]
+ *   channelFloats channelCount × [volume, pan, pitch, speed, start, end,
+ *                                 attack, release, filterHz]
  *   steps        channelCount × kMaxSteps × 8 bytes, StepData field order
+ *
+ * The strides are named rather than spelled inline because both sides have to
+ * agree on them exactly; NativeSamplerBridge carries the same three constants.
  */
+constexpr int kIntsPerChannel = 6;
+constexpr int kFloatsPerChannel = 9;
+constexpr int kBytesPerStep = 8;
+
 JNIEXPORT jboolean JNICALL
 Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeUploadPattern(
     JNIEnv* env, jobject, jlong ptr, jint index, jintArray header, jfloat bpmOverride,
@@ -149,9 +162,9 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeUploadPattern
                                                     ? tryptify::kMaxChannels
                                                     : head[3]);
 
-    if (env->GetArrayLength(channelInts) < channelCount * 5 ||
-        env->GetArrayLength(channelFloats) < channelCount * 8 ||
-        env->GetArrayLength(steps) < channelCount * tryptify::kMaxSteps * 8) {
+    if (env->GetArrayLength(channelInts) < channelCount * kIntsPerChannel ||
+        env->GetArrayLength(channelFloats) < channelCount * kFloatsPerChannel ||
+        env->GetArrayLength(steps) < channelCount * tryptify::kMaxSteps * kBytesPerStep) {
         LOGE("nativeUploadPattern: short arrays for %d channels", channelCount);
         return JNI_FALSE;
     }
@@ -163,9 +176,10 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeUploadPattern
     state.channelCount = channelCount;
     state.bpmOverride = bpmOverride;
 
-    std::vector<jint> ints(static_cast<size_t>(channelCount) * 5);
-    std::vector<jfloat> floats(static_cast<size_t>(channelCount) * 8);
-    std::vector<jbyte> stepBytes(static_cast<size_t>(channelCount) * tryptify::kMaxSteps * 8);
+    std::vector<jint> ints(static_cast<size_t>(channelCount) * kIntsPerChannel);
+    std::vector<jfloat> floats(static_cast<size_t>(channelCount) * kFloatsPerChannel);
+    std::vector<jbyte> stepBytes(
+        static_cast<size_t>(channelCount) * tryptify::kMaxSteps * kBytesPerStep);
     if (channelCount > 0) {
         env->GetIntArrayRegion(channelInts, 0, static_cast<jsize>(ints.size()), ints.data());
         env->GetFloatArrayRegion(channelFloats, 0, static_cast<jsize>(floats.size()), floats.data());
@@ -174,25 +188,28 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeUploadPattern
 
     for (int c = 0; c < channelCount; ++c) {
         ChannelState& channel = state.channels[c];
-        const size_t i = static_cast<size_t>(c) * 5;
+        const size_t i = static_cast<size_t>(c) * kIntsPerChannel;
         channel.sampleSlot = ints[i + 0];
         channel.muted = static_cast<uint8_t>(ints[i + 1] != 0 ? 1 : 0);
         channel.soloed = static_cast<uint8_t>(ints[i + 2] != 0 ? 1 : 0);
         channel.enabled = static_cast<uint8_t>(ints[i + 3] != 0 ? 1 : 0);
         channel.reverse = static_cast<uint8_t>(ints[i + 4] != 0 ? 1 : 0);
+        channel.linked = static_cast<uint8_t>(ints[i + 5] != 0 ? 1 : 0);
 
-        const size_t f = static_cast<size_t>(c) * 8;
+        const size_t f = static_cast<size_t>(c) * kFloatsPerChannel;
         channel.volume = floats[f + 0];
         channel.pan = floats[f + 1];
         channel.pitch = floats[f + 2];
-        channel.sampleStart = floats[f + 3];
-        channel.sampleEnd = floats[f + 4];
-        channel.attackMs = floats[f + 5];
-        channel.releaseMs = floats[f + 6];
-        channel.filterHz = floats[f + 7];
+        channel.speed = clampf(floats[f + 3], tryptify::kMinSpeed, tryptify::kMaxSpeed);
+        channel.sampleStart = floats[f + 4];
+        channel.sampleEnd = floats[f + 5];
+        channel.attackMs = floats[f + 6];
+        channel.releaseMs = floats[f + 7];
+        channel.filterHz = floats[f + 8];
 
         for (int s = 0; s < tryptify::kMaxSteps; ++s) {
-            const size_t b = (static_cast<size_t>(c) * tryptify::kMaxSteps + s) * 8;
+            const size_t b =
+                (static_cast<size_t>(c) * tryptify::kMaxSteps + s) * kBytesPerStep;
             StepData& step = channel.steps[s];
             step.enabled = static_cast<uint8_t>(stepBytes[b + 0]);
             step.velocity = static_cast<uint8_t>(stepBytes[b + 1]);
@@ -201,7 +218,7 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeUploadPattern
             step.pan = static_cast<int8_t>(stepBytes[b + 4]);
             step.sampleStart = static_cast<uint8_t>(stepBytes[b + 5]);
             step.locks = static_cast<uint8_t>(stepBytes[b + 6]);
-            step.reserved = 0;
+            step.speed = static_cast<uint8_t>(stepBytes[b + 7]);
         }
     }
 
@@ -329,7 +346,7 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeReadSteps(
         ? 0
         : (state.channelCount > tryptify::kMaxChannels ? tryptify::kMaxChannels
                                                        : state.channelCount);
-    const jsize needed = channelCount * tryptify::kMaxSteps * 8;
+    const jsize needed = channelCount * tryptify::kMaxSteps * kBytesPerStep;
     if (env->GetArrayLength(out) < needed) return -1;
     if (needed == 0) return 0;
 
@@ -337,7 +354,8 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeReadSteps(
     for (int c = 0; c < channelCount; ++c) {
         for (int s = 0; s < tryptify::kMaxSteps; ++s) {
             const StepData& step = state.channels[c].steps[s];
-            const size_t b = (static_cast<size_t>(c) * tryptify::kMaxSteps + s) * 8;
+            const size_t b =
+                (static_cast<size_t>(c) * tryptify::kMaxSteps + s) * kBytesPerStep;
             bytes[b + 0] = static_cast<jbyte>(step.enabled);
             bytes[b + 1] = static_cast<jbyte>(step.velocity);
             bytes[b + 2] = static_cast<jbyte>(step.pitch);
@@ -345,7 +363,7 @@ Java_tf_monochrome_android_audio_sampler_NativeSamplerBridge_nativeReadSteps(
             bytes[b + 4] = static_cast<jbyte>(step.pan);
             bytes[b + 5] = static_cast<jbyte>(step.sampleStart);
             bytes[b + 6] = static_cast<jbyte>(step.locks);
-            bytes[b + 7] = 0;
+            bytes[b + 7] = static_cast<jbyte>(step.speed);
         }
     }
     env->SetByteArrayRegion(out, 0, needed, bytes.data());

@@ -40,6 +40,7 @@ import tf.monochrome.android.domain.patterns.PatternLength
 import tf.monochrome.android.domain.patterns.PatternLimits
 import tf.monochrome.android.domain.patterns.PatternScheduler
 import tf.monochrome.android.domain.patterns.PatternSwitchMode
+import tf.monochrome.android.domain.patterns.StretchQuality
 import tf.monochrome.android.domain.patterns.TransportState
 import kotlin.math.roundToInt
 
@@ -156,6 +157,7 @@ fun PatternHeader(
 @Composable
 fun PatternTransport(
     transport: TransportState,
+    stretchQuality: StretchQuality,
     accent: Color,
     modifier: Modifier = Modifier,
     onPlay: () -> Unit,
@@ -166,6 +168,7 @@ fun PatternTransport(
     onCountIn: (Int) -> Unit,
     onQuantize: (Int) -> Unit,
     onSwitchMode: (PatternSwitchMode) -> Unit,
+    onStretchQuality: (StretchQuality) -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
 
@@ -278,7 +281,57 @@ fun PatternTransport(
             accent = accent,
             onValueChange = onSwing,
         )
+
+        Spacer(Modifier.height(10.dp))
+        StretchQualityRow(quality = stretchQuality, accent = accent, onQuality = onStretchQuality)
     }
+}
+
+/**
+ * How much CPU the time stretcher may spend, globally.
+ *
+ * Here rather than in the per-channel editor because it is one setting for the
+ * whole engine, and here rather than buried in app settings because the
+ * trade-off is musical: the cheapest mode cannot hold a bass line together,
+ * and the person who needs to know that is the person stretching a bass line,
+ * not the person browsing preferences.
+ *
+ * The subtitle names the frequency each mode holds down to instead of saying
+ * "better quality", because that is the actual difference and it is the kind
+ * of difference someone can act on.
+ */
+@Composable
+private fun StretchQualityRow(
+    quality: StretchQuality,
+    accent: Color,
+    onQuality: (StretchQuality) -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    PanelLabel("Stretch quality")
+    Spacer(Modifier.height(6.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        StretchQuality.entries.forEach { option ->
+            PatternPill(
+                label = option.label,
+                active = option == quality,
+                accent = accent,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    PatternHaptics.pageChange(haptics)
+                    onQuality(option)
+                },
+            )
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = quality.detail,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** Pattern length, and the destructive pattern actions, in one row. */

@@ -379,11 +379,23 @@ class SamplePlaybackEngine @Inject constructor(
             pan = step.pan,
             sampleStart = step.sampleStart,
             locks = step.locks,
+            speed = step.speedCode,
         )
     }
 
     fun setChannelParam(bankSlot: Int, channel: Int, param: Int, value: Float) {
         bridge.post(NativeSamplerBridge.CMD_SET_CHANNEL_PARAM, bankSlot, channel, param, f = value)
+    }
+
+    /**
+     * Global time-stretch quality.
+     *
+     * The engine reads it when a voice starts rather than while one is
+     * running, so changing it mid-loop takes effect on the next trig instead of
+     * reconfiguring a stretcher part-way through a grain.
+     */
+    fun setStretchQuality(quality: Int) {
+        bridge.post(NativeSamplerBridge.CMD_SET_STRETCH_QUALITY, quality)
     }
 
     fun setPatternLength(bankSlot: Int, length: Int) {
@@ -453,6 +465,7 @@ class SamplePlaybackEngine @Inject constructor(
                         pan = buffer[b + 4].toInt(),
                         sampleStart = buffer[b + 5].toInt() and 0xFF,
                         locks = buffer[b + 6].toInt() and 0xFF,
+                        speedCode = buffer[b + 7].toInt() and 0xFF,
                     )
                 }
             }

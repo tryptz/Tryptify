@@ -89,6 +89,7 @@ class PatternRepository @Inject constructor(
                             pan = row.pan,
                             sampleStart = row.sampleStart,
                             locks = row.locks,
+                            speedCode = row.speedCode,
                         )
                     }
                 }
@@ -99,6 +100,8 @@ class PatternRepository @Inject constructor(
                     volume = channel.volume,
                     pan = channel.pan,
                     pitch = channel.pitch,
+                    speed = channel.speed,
+                    linked = channel.linked,
                     sampleStart = channel.sampleStart,
                     sampleEnd = channel.sampleEnd,
                     attackMs = channel.attackMs,
@@ -155,6 +158,8 @@ class PatternRepository @Inject constructor(
                 volume = channel.volume,
                 pan = channel.pan,
                 pitch = channel.pitch,
+                speed = channel.speed,
+                linked = channel.linked,
                 sampleStart = channel.sampleStart,
                 sampleEnd = channel.sampleEnd,
                 attackMs = channel.attackMs,
@@ -198,6 +203,7 @@ class PatternRepository @Inject constructor(
                         pan = step.pan,
                         sampleStart = step.sampleStart,
                         locks = step.locks,
+                        speedCode = step.speedCode,
                     )
                 }
             }
@@ -232,6 +238,7 @@ class PatternRepository @Inject constructor(
                     pan = step.pan,
                     sampleStart = step.sampleStart,
                     locks = step.locks,
+                    speedCode = step.speedCode,
                 ),
             )
         } else {

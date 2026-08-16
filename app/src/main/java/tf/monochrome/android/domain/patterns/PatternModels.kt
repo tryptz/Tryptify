@@ -67,14 +67,64 @@ data class Step(
     val pan: Int = 0,
     val sampleStart: Int = 0,
     val locks: Int = 0,
+    val speedCode: Int = 0,
 ) {
     val isLocked: Boolean get() = locks != 0
+
+    /** The locked speed as a multiplier, or 1.0 when this step has no lock. */
+    val speed: Float get() = speedFromCode(speedCode)
+
+    fun withSpeed(multiplier: Float): Step =
+        copy(locks = locks or LOCK_SPEED, speedCode = speedToCode(multiplier))
+
+    fun withoutSpeed(): Step = copy(locks = locks and LOCK_SPEED.inv(), speedCode = 0)
 
     companion object {
         const val LOCK_PITCH = 1
         const val LOCK_PAN = 2
         const val LOCK_START = 4
+        const val LOCK_SPEED = 8
         val OFF = Step()
+
+        const val MIN_SPEED = 0.25f
+        const val MAX_SPEED = 4.0f
+
+        /** Mirrors `kSpeedCodesPerOctave` in cpp/sampler/sampler_types.h. */
+        const val SPEED_CODES_PER_OCTAVE = 63
+
+        /** Four octaves above the first code. */
+        const val MAX_SPEED_CODE = 1 + 4 * SPEED_CODES_PER_OCTAVE
+
+        /**
+         * Speed is one byte per step, spaced exponentially — mirrors
+         * `stepSpeedFromCode` in cpp/sampler/sampler_types.h, and has to stay
+         * identical to it or a lock would sound different from what the editor
+         * shows.
+         *
+         * 63 codes per octave, not "255 codes spread over the range". Four
+         * octaves across all 254 usable codes is 63.5 per octave, which would
+         * leave 0.5x and 2.0x sitting exactly between two codes and rounding to
+         * something 0.55% off — about 44 ms of drift over four bars at 120 BPM,
+         * heard as flam against the loop underneath. At 63 the octave
+         * boundaries are integers: 0.25x is 1, 0.5x is 64, 1.0x is 127, 2.0x is
+         * 190, 4.0x is 253.
+         *
+         * Code 0 means "no lock, follow the channel", so the usable range
+         * starts at 1.
+         */
+        fun speedFromCode(code: Int): Float {
+            if (code <= 0) return 1f
+            val clamped = code.coerceAtMost(MAX_SPEED_CODE)
+            return MIN_SPEED *
+                Math.pow(2.0, (clamped - 1).toDouble() / SPEED_CODES_PER_OCTAVE).toFloat()
+        }
+
+        fun speedToCode(multiplier: Float): Int {
+            val clamped = multiplier.coerceIn(MIN_SPEED, MAX_SPEED)
+            val octaves = Math.log((clamped / MIN_SPEED).toDouble()) / Math.log(2.0)
+            return (Math.round(octaves * SPEED_CODES_PER_OCTAVE).toInt() + 1)
+                .coerceIn(1, MAX_SPEED_CODE)
+        }
     }
 }
 
@@ -92,6 +142,8 @@ data class PatternChannel(
     val volume: Float = 1.0f,
     val pan: Float = 0.0f,
     val pitch: Float = 0.0f,
+    val speed: Float = 1.0f,
+    val linked: Boolean = false,
     val sampleStart: Float = 0.0f,
     val sampleEnd: Float = 1.0f,
     val attackMs: Float = 0.0f,
@@ -113,10 +165,61 @@ data class PatternChannel(
 
     fun clearedSteps(): PatternChannel = copy(steps = List(PatternLimits.MAX_STEPS) { Step.OFF })
 
+    /** True when this channel is playing the sample as recorded. */
+    val isAtNaturalRate: Boolean
+        get() = kotlin.math.abs(speed - 1f) < 1e-4f && kotlin.math.abs(pitch) < 1e-4f
+
     companion object {
         /** Anything at or above this reads as "no filter" to the engine. */
         const val FILTER_OFF = 22000f
+
+        const val MIN_SPEED = 0.25f
+        const val MAX_SPEED = 4.0f
+        const val MIN_PITCH = -24f
+        const val MAX_PITCH = 24f
     }
+}
+
+/**
+ * How much CPU the time stretcher may spend per voice.
+ *
+ * Each mode is a real grain size and search radius on the native side, not a
+ * label: the radius decides the lowest frequency the stretcher can hold
+ * together, which is why the descriptions name a frequency rather than saying
+ * "better".
+ */
+enum class StretchQuality(val id: Int, val label: String, val detail: String) {
+    FAST(0, "Fast", "Cheapest. Bass below ~375 Hz drifts."),
+    BALANCED(1, "Balanced", "Holds down to ~188 Hz."),
+    HIGH(2, "High", "Holds bass to ~94 Hz. Costs the most.");
+
+    companion object {
+        fun fromId(id: Int): StretchQuality = entries.firstOrNull { it.id == id } ?: BALANCED
+    }
+}
+
+/**
+ * The speed/pitch presets offered next to the two sliders.
+ *
+ * Every one of these is reachable by dragging, so they are shortcuts rather
+ * than features. They exist because the useful values are specific — half
+ * time, double time, an octave — and finding exactly 0.5 on a slider is
+ * fiddly on a phone.
+ */
+enum class SpeedPitchPreset(
+    val label: String,
+    val speed: Float,
+    val semitones: Float,
+    val linked: Boolean,
+) {
+    HALF("Half", 0.5f, 0f, false),
+    SLOW("Slow", 0.75f, 0f, false),
+    DOUBLE("Double", 2f, 0f, false),
+    FAST_PRESET("Fast", 1.5f, 0f, false),
+    PITCH_UP("Oct up", 1f, 12f, false),
+    PITCH_DOWN("Oct down", 1f, -12f, false),
+    TAPE_DOWN("Tape down", 0.5f, 0f, true),
+    TAPE_UP("Tape up", 2f, 0f, true),
 }
 
 /**

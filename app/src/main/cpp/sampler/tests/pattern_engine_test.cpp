@@ -836,13 +836,22 @@ void testPerStepSpeedLock() {
     std::printf("per-step speed lock\n");
     // The byte mapping has to round-trip, or a lock saved from the UI would
     // come back as a different tempo.
-    CHECK_NEAR(stepSpeedFromCode(128), 1.0, 1e-5);
-    CHECK_NEAR(stepSpeedFromCode(1), 0.25, 1e-5);
-    CHECK_NEAR(stepSpeedFromCode(255), 4.0, 1e-4);
-    CHECK_EQ(stepSpeedToCode(1.0f), 128);
+    // The octave boundaries have to be exact codes, not nearby ones. Speed
+    // does not move pitch, so an inexact half-time lock shows up purely as
+    // timing drift against the loop it plays under.
+    CHECK_EQ(stepSpeedToCode(0.25f), 1);
+    CHECK_EQ(stepSpeedToCode(0.5f), 64);
+    CHECK_EQ(stepSpeedToCode(1.0f), 127);
+    CHECK_EQ(stepSpeedToCode(2.0f), 190);
+    CHECK_EQ(stepSpeedToCode(4.0f), 253);
+    CHECK_NEAR(stepSpeedFromCode(1), 0.25, 1e-6);
+    CHECK_NEAR(stepSpeedFromCode(64), 0.5, 1e-6);
+    CHECK_NEAR(stepSpeedFromCode(127), 1.0, 1e-6);
+    CHECK_NEAR(stepSpeedFromCode(190), 2.0, 1e-6);
+    CHECK_NEAR(stepSpeedFromCode(253), 4.0, 1e-5);
     for (float s : {0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f}) {
         const float back = stepSpeedFromCode(stepSpeedToCode(s));
-        CHECK_NEAR(back, s, s * 0.01);
+        CHECK_NEAR(back, s, s * 0.006);
     }
     // Code 0 is "no lock", not the bottom of the range.
     CHECK_NEAR(stepSpeedFromCode(0), 1.0, 1e-6);
