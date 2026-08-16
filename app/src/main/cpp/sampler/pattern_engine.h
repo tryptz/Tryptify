@@ -141,7 +141,13 @@ private:
     mutable std::mutex mutex_;
 
     SampleBank samples_;
-    Voice voices_[kMaxVoices];
+    // Heap, not a member array: each voice carries its own time stretcher, and
+    // a stretcher big enough for a 2048-sample grain is ~17 KB. Inline that
+    // would make PatternEngine itself over half a megabyte, which is fine on
+    // the heap and a hazard anywhere a caller puts one on the stack. Resized
+    // once in the constructor and never again, so the audio thread only ever
+    // indexes it.
+    std::vector<Voice> voices_;
     CommandQueue<1024> commands_;
 
     // Voice mix scratch. The pattern is summed here first so the master fader
@@ -162,6 +168,7 @@ private:
     std::atomic<int> countInBars_{0};
     std::atomic<int> countInRemaining_{0};
     std::atomic<int> recordQuantum_{1};
+    std::atomic<int> stretchQuality_{kStretchBalanced};
 
     int64_t globalStep_ = -1;
     double framesToNext_ = 0.0;       // countdown to the next step boundary
