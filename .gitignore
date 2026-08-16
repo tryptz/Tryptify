@@ -98,6 +98,12 @@ old_HomeViewModel.kt
 !tools/genre_source.py
 !tools/build_genre_graph.py
 !tools/validate_genre_graph.py
+# The stem model catalogue the app fetches, and the script that writes it. The
+# script is what keeps the url, size and hash off anyone's keyboard, so losing
+# it would mean hand-editing a checksum — a wrong one is indistinguishable from
+# a corrupt download once published.
+!models/model-manifest.json
+!tools/publish-model.py
 !tools/fetch_genre_history.py
 !tools/musicbrainz_genres.txt
 # The two research caches the build reads and never regenerates on its own:
