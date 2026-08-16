@@ -280,6 +280,11 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // ONNX Runtime — runs the downloaded stem separation models. Ships native
+    // libraries for every ABI, so it is a real size cost; it is here because a
+    // model the app cannot execute is not a feature.
+    implementation(libs.onnxruntime.android)
+
     // Ktor
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)

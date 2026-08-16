@@ -8,6 +8,7 @@ hilt = "2.57.1"
 room = "2.7.1"
 ktor = "3.0.3"
 coil = "3.0.4"
+onnxruntime = "1.20.0"
 supabase = "3.4.1"
 lifecycle = "2.8.7"
 navigation = "2.8.5"
@@ -79,6 +80,7 @@ room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 # Ktor
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
