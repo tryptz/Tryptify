@@ -14,6 +14,7 @@ import dagger.multibindings.IntoSet
 import tf.monochrome.android.audio.sampler.stems.DspStemBackend
 import tf.monochrome.android.audio.sampler.stems.DspStemSeparator
 import tf.monochrome.android.audio.sampler.stems.KtorModelTransport
+import tf.monochrome.android.audio.sampler.stems.OnnxStemBackend
 import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.sampler.stems.StemSeparationBackend
 import tf.monochrome.android.audio.sampler.stems.StemSeparator
@@ -76,4 +77,12 @@ abstract class StemModule {
     @Binds
     @IntoSet
     abstract fun bindDspBackend(implementation: DspStemBackend): StemSeparationBackend
+
+    /**
+     * Runs a downloaded ONNX model. Reports itself unavailable when none is
+     * installed, so binding it costs nothing until there is something to run.
+     */
+    @Binds
+    @IntoSet
+    abstract fun bindOnnxBackend(implementation: OnnxStemBackend): StemSeparationBackend
 }
