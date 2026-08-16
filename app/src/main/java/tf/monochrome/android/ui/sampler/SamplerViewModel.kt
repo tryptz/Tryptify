@@ -660,7 +660,11 @@ class SamplerViewModel @Inject constructor(
                 Stem.DRUMS -> SampleCategory.PERCUSSION
                 Stem.BASS -> SampleCategory.BASS
                 Stem.VOCALS -> SampleCategory.VOCALS
-                Stem.OTHER -> SampleCategory.LOOPS
+                // Guitar and piano come out of six-stem models as whole
+                // performances rather than one-shots, so they file with the
+                // loops. The stem's own type is kept in `stemType` either way,
+                // which is what the library actually filters on.
+                Stem.GUITAR, Stem.PIANO, Stem.OTHER -> SampleCategory.LOOPS
             },
             captureSource = state.source,
             sourceTrackTitle = track?.title,
