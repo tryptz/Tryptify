@@ -238,6 +238,104 @@ class StemModelManager(
         return InstallResult.Installed(model, target)
     }
 
+    /**
+     * Installs a model the user already has on disk.
+     *
+     * The download path can trust a manifest; this one has nothing but the
+     * bytes. So the file is hashed as it is copied and looked up in
+     * [KnownModels], and a file that matches nothing is refused.
+     *
+     * Refusing is the right answer rather than an unhelpful one. Running a
+     * separator needs its segment length, its sample rate and — the one that
+     * matters — the order it emits its stems in, and none of those can be read
+     * off the bytes. Import it on a guess and separation appears to succeed
+     * while the vocal stem contains the drums, which nothing downstream can
+     * detect. A refusal sends the user to find the right file; a bad guess
+     * sends them to a bug report.
+     *
+     * [open] is a function rather than a stream because the caller usually
+     * holds a content URI, and this is the one place that should decide when
+     * to open it.
+     */
+    suspend fun importLocal(
+        open: () -> java.io.InputStream,
+        onProgress: (InstallProgress) -> Unit = {},
+    ): InstallResult {
+        if (!root.isDirectory && !root.mkdirs()) {
+            return InstallResult.Failed("Could not create the model directory", recoverable = false)
+        }
+
+        val staging = File(root, "imported.part")
+        staging.delete()
+
+        onProgress(InstallProgress(0L, 0L, "Reading file"))
+
+        val digest = MessageDigest.getInstance("SHA-256")
+        var copied = 0L
+        val copy = runCatching {
+            open().use { input ->
+                java.io.FileOutputStream(staging).use { out ->
+                    val buffer = ByteArray(1 shl 16)
+                    while (true) {
+                        coroutineContext.ensureActive()
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        out.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
+                        copied += read
+                        onProgress(InstallProgress(copied, 0L, "Reading file"))
+                    }
+                }
+            }
+        }
+
+        copy.exceptionOrNull()?.let { error ->
+            staging.delete()
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            return InstallResult.Failed(error.message ?: "Could not read the file", recoverable = true)
+        }
+
+        if (copied == 0L) {
+            staging.delete()
+            return InstallResult.Failed("That file is empty", recoverable = true)
+        }
+
+        onProgress(InstallProgress(copied, copied, "Identifying"))
+        val sha = digest.digest().joinToString("") { "%02x".format(it) }
+
+        val match = KnownModels.recognise(sha, copied)
+        if (match == null) {
+            staging.delete()
+            return InstallResult.Failed(
+                "Not a model Tryptify knows how to run. Supported: " +
+                    KnownModels.supportedFileNames().joinToString(", "),
+                recoverable = true,
+            )
+        }
+
+        // The recorded size is the file's own, not the catalogue's, so the
+        // length check in `installed()` compares against what is actually
+        // there. They agree on an exact match and can differ on a size-only
+        // one, where the catalogue entry is the older record.
+        val model = match.model.toStemModel(url = LOCAL_URL, sha = sha)
+            .copy(sizeBytes = copied)
+
+        val target = modelFile(model)
+        if (target.exists()) target.delete()
+        if (!staging.renameTo(target)) {
+            staging.delete()
+            return InstallResult.Failed("Could not move the model into place", recoverable = false)
+        }
+
+        recordFile.writeText(recordJson(model))
+        root.listFiles()?.forEach { file ->
+            if (file != target && file != recordFile) file.delete()
+        }
+
+        onProgress(InstallProgress(copied, copied, "Ready"))
+        return InstallResult.Installed(model, target)
+    }
+
     /** Removes the model and its record. Safe to call when nothing is installed. */
     fun uninstall() {
         root.listFiles()?.forEach { it.delete() }
@@ -296,7 +394,9 @@ class StemModelManager(
         append(""""license":${quote(model.license.id)},""")
         append(""""sourceModel":${quote(model.sourceModel)},""")
         model.attribution?.let { append(""""attribution":${quote(it)},""") }
-        append(""""stems":[${model.stems.joinToString(",") { quote(it.id) }}],""")
+        // outputOrder, not stems: the set has no order, and the order is
+        // the only thing that says which channel is which stem.
+        append(""""stems":[${model.outputOrder.joinToString(",") { quote(it.id) }}],""")
         append(""""modelSampleRate":${model.modelSampleRate},""")
         append(""""segmentFrames":${model.segmentFrames},""")
         append(""""minimumAndroid":${model.minimumAndroid},""")
@@ -315,6 +415,13 @@ class StemModelManager(
     }
 
     companion object {
+        /**
+         * Marks a model that came off the user's own storage rather than a
+         * release. Not a real URL and never fetched — it exists so the record
+         * says where the file came from.
+         */
+        const val LOCAL_URL = "file://imported"
+
         fun formatBytes(bytes: Long): String = when {
             bytes >= 1_000_000_000L -> "%.1f GB".format(bytes / 1_000_000_000.0)
             bytes >= 1_000_000L -> "%.0f MB".format(bytes / 1_000_000.0)
