@@ -176,6 +176,25 @@ android {
         // letting AAPT re-compress it would only slow down runtime extraction.
         noCompress += "presets.zip"
     }
+
+    testOptions {
+        unitTests.all {
+            // Name the failures in the log.
+            //
+            // By default Gradle prints "There were failing tests. See the
+            // report at ..." and nothing else, which on CI means the one thing
+            // needed to fix the build is the one thing not in the build output
+            // — it is inside an HTML artifact you have to download and unzip.
+            // Printing the test name and the assertion turns a ten-minute
+            // round trip into reading the log.
+            it.testLogging {
+                events("failed")
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                showStackTraces = true
+                showCauses = true
+            }
+        }
+    }
 }
 
 // Compose compiler metrics and reports, off by default.
