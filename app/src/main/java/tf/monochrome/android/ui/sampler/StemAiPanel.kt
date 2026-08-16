@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tf.monochrome.android.audio.sampler.stems.BackendKind
 import tf.monochrome.android.audio.sampler.stems.BackendStatus
+import tf.monochrome.android.audio.sampler.stems.KnownModels
 import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.ui.patterns.PanelLabel
 import tf.monochrome.android.ui.patterns.PatternPanel
@@ -58,6 +59,7 @@ fun StemAiPanel(
     onInstall: () -> Unit,
     onCancelInstall: () -> Unit,
     onCheckForUpdate: () -> Unit,
+    onImport: () -> Unit,
     onDelete: () -> Unit,
 ) {
     PatternPanel(modifier = modifier) {
@@ -75,8 +77,8 @@ fun StemAiPanel(
         when {
             ai.installing -> InstallingState(ai, accent, onCancelInstall)
             ai.installed != null -> ReadyState(ai, accent, onCheckForUpdate, onDelete)
-            ai.available != null -> OfferState(ai, accent, onInstall)
-            else -> BuiltInState(ai, accent, onCheckForUpdate)
+            ai.available != null -> OfferState(ai, accent, onInstall, onImport)
+            else -> BuiltInState(ai, accent, onCheckForUpdate, onImport)
         }
 
         // The full picture, only when something better exists than what is
@@ -139,6 +141,7 @@ private fun BuiltInState(
     ai: SamplerViewModel.AiState,
     accent: Color,
     onCheckForUpdate: () -> Unit,
+    onImport: () -> Unit,
 ) {
     Text(
         text = "Separating with the built-in processor. No model needed and " +
@@ -158,13 +161,47 @@ private fun BuiltInState(
         )
     }
     Spacer(Modifier.height(8.dp))
-    PatternPill(
-        label = if (ai.checking) "Checking…" else "Check for AI model",
-        active = false,
-        accent = accent,
-        enabled = !ai.checking,
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        onClick = onCheckForUpdate,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        PatternPill(
+            label = if (ai.checking) "Checking…" else "Check online",
+            active = false,
+            accent = accent,
+            enabled = !ai.checking,
+            modifier = Modifier.weight(1f),
+            onClick = onCheckForUpdate,
+        )
+        PatternPill(
+            label = "Import file",
+            active = false,
+            accent = accent,
+            modifier = Modifier.weight(1f),
+            onClick = onImport,
+        )
+    }
+    Spacer(Modifier.height(6.dp))
+    ImportHint()
+}
+
+/**
+ * What "import" will actually accept.
+ *
+ * Named files rather than "an ONNX model", because a separator cannot be run
+ * without knowing its segment length, sample rate and the order it emits stems
+ * in, and none of that is readable from an arbitrary file. Saying which files
+ * work turns a refusal into a shopping list.
+ */
+@Composable
+private fun ImportHint() {
+    Text(
+        text = "Already have a model? Import " +
+            KnownModels.supportedFileNames().joinToString(" or ") +
+            " from your device.",
+        style = MaterialTheme.typography.labelSmall,
+        fontSize = 10.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -178,6 +215,7 @@ private fun OfferState(
     ai: SamplerViewModel.AiState,
     accent: Color,
     onInstall: () -> Unit,
+    onImport: () -> Unit,
 ) {
     val model = ai.available ?: return
     Text(
@@ -201,6 +239,14 @@ private fun OfferState(
         accent = accent,
         modifier = Modifier.fillMaxWidth(),
         onClick = onInstall,
+    )
+    Spacer(Modifier.height(6.dp))
+    PatternPill(
+        label = "Import a file instead",
+        active = false,
+        accent = accent,
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onImport,
     )
     Spacer(Modifier.height(6.dp))
     Text(
