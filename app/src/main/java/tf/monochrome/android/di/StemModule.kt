@@ -2,15 +2,22 @@
 
 package tf.monochrome.android.di
 
+import android.content.Context
+import android.os.StatFs
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import tf.monochrome.android.audio.sampler.stems.DspStemBackend
 import tf.monochrome.android.audio.sampler.stems.DspStemSeparator
+import tf.monochrome.android.audio.sampler.stems.KtorModelTransport
+import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.sampler.stems.StemSeparationBackend
 import tf.monochrome.android.audio.sampler.stems.StemSeparator
+import java.io.File
 import javax.inject.Singleton
 
 /**
@@ -28,6 +35,32 @@ import javax.inject.Singleton
  * MODEL_CARD.md for why the neural backends are not here yet — the blocker is
  * weights licensing, not inference.
  */
+@Module
+@InstallIn(SingletonComponent::class)
+object StemProvisionModule {
+
+    /**
+     * Where downloaded models live.
+     *
+     * `filesDir` rather than the cache: a cache directory is something Android
+     * may delete under storage pressure, and silently losing a model the user
+     * waited ten minutes to download is not a behaviour worth having.
+     */
+    @Provides
+    @Singleton
+    fun provideStemModelManager(
+        @ApplicationContext context: Context,
+        transport: KtorModelTransport,
+    ): StemModelManager {
+        val root = File(context.filesDir, "stem-models")
+        return StemModelManager(
+            root = root,
+            transport = transport,
+            freeBytes = { StatFs(root.parentFile?.path ?: context.filesDir.path).availableBytes },
+        )
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class StemModule {
