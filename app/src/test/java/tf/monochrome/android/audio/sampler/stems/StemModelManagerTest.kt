@@ -411,6 +411,142 @@ class StemModelManagerTest {
         assertEquals("the v1 partial should be gone", 0L, manager.resumeOffset(model))
     }
 
+    // ── local import ────────────────────────────────────────────────────
+
+    /**
+     * A recognised file becomes a model record carrying that model's channel
+     * order, not the enum's.
+     *
+     * Tested on the conversion rather than by importing a real file: the
+     * smallest known model is 136 MB, and writing that to disk to check a
+     * field mapping would be a slow test of the wrong thing.
+     */
+    @Test
+    fun `a recognised file converts with its own stem order`() {
+        val known = KnownModels.byId("htdemucs-6s")!!
+        val converted = known.toStemModel(url = StemModelManager.LOCAL_URL, sha = "ab".repeat(32))
+
+        assertEquals(known.outputOrder, converted.outputOrder)
+        assertEquals(known.stems, converted.stems)
+        assertEquals(known.segmentFrames, converted.segmentFrames)
+        assertEquals(known.modelSampleRate, converted.modelSampleRate)
+        assertEquals(StemModelManager.LOCAL_URL, converted.url)
+        // An imported model is not fetchable, so it must not claim to be
+        // installable from its url.
+        assertFalse(converted.installable(34, listOf("arm64-v8a")))
+    }
+
+    /**
+     * The order has to survive being written to the record and read back.
+     * A set would round-trip the membership and lose the mapping, which is the
+     * bug that makes a vocal stem contain drums.
+     */
+    @Test
+    fun `the record round-trips the channel order`() = runBlocking {
+        val ordered = model.copy(
+            stems = Stem.SIX,
+            outputOrder = listOf(
+                Stem.DRUMS, Stem.BASS, Stem.OTHER, Stem.VOCALS, Stem.GUITAR, Stem.PIANO,
+            ),
+        )
+        val manager = manager(FakeTransport(payload))
+        assertTrue(manager.install(ordered) is InstallResult.Installed)
+
+        val back = manager.installed()!!
+        assertEquals(ordered.outputOrder, back.outputOrder)
+        assertEquals(Stem.DRUMS, back.outputOrder.first())
+    }
+
+    /** The order the model emits, not the order the enum declares. */
+    @Test
+    fun `known models carry demucs channel order`() {
+        val six = KnownModels.byId("htdemucs-6s")!!
+        assertEquals(
+            listOf(Stem.DRUMS, Stem.BASS, Stem.OTHER, Stem.VOCALS, Stem.GUITAR, Stem.PIANO),
+            six.outputOrder,
+        )
+        assertEquals(Stem.SIX, six.stems)
+
+        val four = KnownModels.byId("htdemucs")!!
+        assertEquals(
+            listOf(Stem.DRUMS, Stem.BASS, Stem.OTHER, Stem.VOCALS),
+            four.outputOrder,
+        )
+        assertEquals(Stem.FOUR, four.stems)
+
+        // The trap this exists to avoid: alphabetical or enum order would put
+        // vocals first, and every vocal stem would contain drums.
+        assertTrue(six.outputOrder.first() != Stem.VOCALS)
+        assertEquals(343_980, six.segmentFrames)
+        assertEquals(44_100, six.modelSampleRate)
+    }
+
+    @Test
+    fun `an unrecognised file is refused rather than guessed at`() = runBlocking {
+        val manager = manager(FakeTransport(payload))
+        val result = manager.importLocal({ ByteArray(1234).inputStream() })
+
+        assertTrue("got $result", result is InstallResult.Failed)
+        assertTrue((result as InstallResult.Failed).reason.contains("Not a model"))
+        assertNull(manager.installed())
+        // No debris.
+        assertEquals(0L, manager.installedBytes())
+    }
+
+    @Test
+    fun `an empty file is refused`() = runBlocking {
+        val manager = manager(FakeTransport(payload))
+        val result = manager.importLocal({ ByteArray(0).inputStream() })
+        assertTrue("got $result", result is InstallResult.Failed)
+        assertTrue((result as InstallResult.Failed).reason.contains("empty"))
+        assertEquals(0L, manager.installedBytes())
+    }
+
+    /** Recognition is by hash first, then size — and never by file name. */
+    @Test
+    fun `recognition prefers the hash and falls back to size`() {
+        val known = KnownModels.byId("htdemucs-6s")!!
+
+        val exact = KnownModels.recognise(known.sha256, known.sizeBytes)
+        assertEquals(known.id, exact?.model?.id)
+        assertTrue(exact!!.exact)
+
+        // A re-export changes the bytes but not the model we know how to drive.
+        val bySize = KnownModels.recognise("0".repeat(64), known.sizeBytes)
+        assertEquals(known.id, bySize?.model?.id)
+        assertFalse("a size match is not an exact match", bySize!!.exact)
+
+        assertNull(KnownModels.recognise("0".repeat(64), 12345L))
+    }
+
+    /** Every entry has to be usable, or it should not be in the list. */
+    @Test
+    fun `every known model is complete and distinct`() {
+        assertTrue(KnownModels.ALL.isNotEmpty())
+        assertEquals(
+            "ids must be unique",
+            KnownModels.ALL.size,
+            KnownModels.ALL.map { it.id }.toSet().size,
+        )
+        assertEquals(
+            "sizes must be unique or size fallback is ambiguous",
+            KnownModels.ALL.size,
+            KnownModels.ALL.map { it.sizeBytes }.toSet().size,
+        )
+        for (model in KnownModels.ALL) {
+            assertEquals("${model.id} hash length", 64, model.sha256.length)
+            assertTrue("${model.id} size", model.sizeBytes > 0)
+            assertTrue("${model.id} segment", model.segmentFrames > 0)
+            assertTrue("${model.id} rate", model.modelSampleRate > 0)
+            assertTrue("${model.id} stems", model.outputOrder.isNotEmpty())
+            assertEquals(
+                "${model.id} lists a stem twice",
+                model.outputOrder.size,
+                model.outputOrder.toSet().size,
+            )
+        }
+    }
+
     @Test
     fun `byte sizes read the way a person would say them`() {
         assertEquals("512 B", StemModelManager.formatBytes(512))
