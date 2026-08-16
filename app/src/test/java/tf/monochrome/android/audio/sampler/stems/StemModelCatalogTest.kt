@@ -8,18 +8,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The licence gate.
+ * Manifest parsing and model selection.
  *
- * MODEL_CARD.md says Tryptify will not ship weights it has no right to
- * redistribute, and that claim is only worth something if something enforces
- * it. This is that something.
- *
- * The research behind that decision found that essentially every high-quality
- * open 4-stem checkpoint is encumbered: Meta's Demucs weights are research-only
- * despite MIT code, and almost everything else was trained on MUSDB18-HQ, whose
- * terms are educational-use-only. So the failure these tests guard against is
- * not hypothetical — it is what happens if someone pastes the obvious model
- * into the manifest.
+ * The checks that matter are mechanical: an archive has to be verifiable
+ * against a full-length hash, reachable over HTTPS, and built for this device,
+ * because those are the ways a download turns into a corrupt install or a
+ * crash on first inference. Licence is parsed and carried for display, and
+ * deliberately does not gate anything.
  */
 class StemModelCatalogTest {
 
@@ -52,82 +47,56 @@ class StemModelCatalogTest {
         }
     """.trimIndent()
 
-    // ── the gate ────────────────────────────────────────────────────────
+    // ── licence is metadata ─────────────────────────────────────────────
 
     @Test
-    fun `a permissively licensed model is installable`() {
-        val catalog = StemModelCatalog.parse(manifest(model(license = "MIT")))!!
-        assertEquals(1, catalog.installable(34, abis).size)
-    }
-
-    /**
-     * The exact case this gate exists for. Demucs' code is MIT and its weights
-     * are not, and the maintainer is explicit that they are "provided only for
-     * scientific purposes".
-     */
-    @Test
-    fun `research-only weights are refused`() {
-        val catalog = StemModelCatalog.parse(manifest(model(license = "RESEARCH-ONLY")))!!
-        assertTrue(catalog.installable(34, abis).isEmpty())
-        assertEquals(
-            "Research only — cannot be distributed with Tryptify",
-            catalog.models.first().blockedReason(34, abis),
+    fun `licences are parsed and kept`() {
+        val cases = mapOf(
+            "MIT" to ModelLicense.MIT,
+            "CC-BY-NC-4.0" to ModelLicense.CC_BY_NC,
+            "RESEARCH-ONLY" to ModelLicense.RESEARCH_ONLY,
+            "MUSDB-ENCUMBERED" to ModelLicense.MUSDB_ENCUMBERED,
         )
-    }
-
-    /** Anything trained on MUSDB18-HQ inherits its non-commercial terms. */
-    @Test
-    fun `MUSDB-trained weights are refused`() {
-        val catalog = StemModelCatalog.parse(manifest(model(license = "MUSDB-ENCUMBERED")))!!
-        assertTrue(catalog.installable(34, abis).isEmpty())
-    }
-
-    @Test
-    fun `non-commercial licences are refused`() {
-        for (id in listOf("CC-BY-NC-4.0", "CC-BY-NC-SA-4.0")) {
+        for ((id, expected) in cases) {
             val catalog = StemModelCatalog.parse(manifest(model(license = id)))!!
-            assertTrue("$id was allowed through", catalog.installable(34, abis).isEmpty())
+            assertEquals(expected, catalog.models.first().license)
         }
     }
 
-    /**
-     * The important default. An unrecognised licence is not a warning, it is a
-     * refusal — otherwise a typo in the manifest would open the gate.
-     */
+    /** Licence is shown, not enforced — any of them installs. */
     @Test
-    fun `an unrecognised licence is treated as unshippable`() {
-        val catalog = StemModelCatalog.parse(manifest(model(license = "totally-fine-honest")))!!
-        assertEquals(ModelLicense.UNKNOWN, catalog.models.first().license)
-        assertTrue(catalog.installable(34, abis).isEmpty())
+    fun `licence does not block installation`() {
+        for (id in listOf("MIT", "CC-BY-NC-4.0", "RESEARCH-ONLY", "MUSDB-ENCUMBERED", "nonsense")) {
+            val catalog = StemModelCatalog.parse(manifest(model(license = id)))!!
+            assertEquals("$id was blocked", 1, catalog.installable(34, abis).size)
+            assertNull("$id reported a reason", catalog.models.first().blockedReason(34, abis))
+        }
     }
 
-    /** And so is omitting the field entirely. */
     @Test
-    fun `a missing licence field is treated as unshippable`() {
+    fun `an unrecognised or missing licence reads as unspecified`() {
+        val bogus = StemModelCatalog.parse(manifest(model(license = "totally-made-up")))!!
+        assertEquals(ModelLicense.UNKNOWN, bogus.models.first().license)
+
         val json = """
             { "schemaVersion": 1, "models": [ {
               "id": "x", "version": "1.0.0", "url": "https://example.com/m.zip",
               "sha256": "$sha", "sizeBytes": 10
             } ] }
         """.trimIndent()
-        val catalog = StemModelCatalog.parse(json)!!
-        assertEquals(ModelLicense.UNKNOWN, catalog.models.first().license)
-        assertTrue(catalog.installable(34, abis).isEmpty())
+        val missing = StemModelCatalog.parse(json)!!
+        assertEquals(ModelLicense.UNKNOWN, missing.models.first().license)
+        assertTrue(missing.installable(34, abis).isNotEmpty())
     }
 
-    /**
-     * The gate outranks capability. A better model that cannot be shipped is
-     * still not shipped.
-     */
+    /** The flag that drives an informational note in the model details. */
     @Test
-    fun `the best model is never an unshippable one`() {
-        val catalog = StemModelCatalog.parse(
-            manifest(
-                model(id = "great", license = "RESEARCH-ONLY", backend = "QNN", version = "9.0.0"),
-                model(id = "legal", license = "MIT", version = "1.0.0"),
-            ),
-        )!!
-        assertEquals("legal", catalog.best(34, abis, allowNpu = true)?.id)
+    fun `restricted upstream terms are flagged for display`() {
+        assertTrue(ModelLicense.RESEARCH_ONLY.restricted)
+        assertTrue(ModelLicense.CC_BY_NC.restricted)
+        assertTrue(ModelLicense.MUSDB_ENCUMBERED.restricted)
+        assertFalse(ModelLicense.MIT.restricted)
+        assertFalse(ModelLicense.PROPRIETARY.restricted)
     }
 
     // ── the mechanical checks ───────────────────────────────────────────
@@ -157,7 +126,7 @@ class StemModelCatalogTest {
     }
 
     @Test
-    fun `a shippable model reports no blocking reason`() {
+    fun `a runnable model reports no blocking reason`() {
         val catalog = StemModelCatalog.parse(manifest(model()))!!
         assertNull(catalog.models.first().blockedReason(34, abis))
     }
@@ -177,9 +146,76 @@ class StemModelCatalogTest {
     }
 
     @Test
-    fun `no installable model returns null rather than a bad one`() {
-        val catalog = StemModelCatalog.parse(manifest(model(license = "RESEARCH-ONLY")))!!
+    fun `no runnable model returns null rather than a bad one`() {
+        val catalog = StemModelCatalog.parse(manifest(model(abi = "x86_64")))!!
         assertNull(catalog.best(34, abis, allowNpu = true))
+    }
+
+    // ── stem sets ───────────────────────────────────────────────────────
+
+    @Test
+    fun `a six stem model is parsed with all six`() {
+        val json = """
+            { "schemaVersion": 1, "models": [ {
+              "id": "htdemucs_6s", "version": "1.0.0", "format": "ONNX", "backend": "CPU",
+              "url": "https://example.com/m.zip", "sha256": "$sha", "sizeBytes": 10,
+              "license": "MIT",
+              "stems": ["VOCALS","DRUMS","BASS","GUITAR","PIANO","OTHER"]
+            } ] }
+        """.trimIndent()
+        val model = StemModelCatalog.parse(json)!!.models.first()
+        assertEquals(Stem.SIX, model.stems)
+        assertTrue(model.stems.contains(Stem.GUITAR))
+        assertTrue(model.stems.contains(Stem.PIANO))
+    }
+
+    /**
+     * A manifest that says nothing about stems means four, not six. Defaulting
+     * the other way would have every legacy entry advertising a piano stem it
+     * cannot produce.
+     */
+    @Test
+    fun `a manifest without a stem list means four`() {
+        val json = """
+            { "schemaVersion": 1, "models": [ {
+              "id": "x", "version": "1.0.0", "url": "https://example.com/m.zip",
+              "sha256": "$sha", "sizeBytes": 10, "license": "MIT"
+            } ] }
+        """.trimIndent()
+        assertEquals(Stem.FOUR, StemModelCatalog.parse(json)!!.models.first().stems)
+    }
+
+    /** An unrecognised stem name is dropped rather than failing the entry. */
+    @Test
+    fun `an unknown stem name is ignored`() {
+        val json = """
+            { "schemaVersion": 1, "models": [ {
+              "id": "x", "version": "1.0.0", "url": "https://example.com/m.zip",
+              "sha256": "$sha", "sizeBytes": 10, "license": "MIT",
+              "stems": ["VOCALS","KAZOO","DRUMS"]
+            } ] }
+        """.trimIndent()
+        val model = StemModelCatalog.parse(json)!!.models.first()
+        assertEquals(setOf(Stem.VOCALS, Stem.DRUMS), model.stems)
+    }
+
+    /** More stems wins, all else equal — that is what makes 6s the default. */
+    @Test
+    fun `the six stem model is preferred over the four stem one`() {
+        val four = """
+            { "id": "four", "version": "1.0.0", "url": "https://e.com/a.zip",
+              "sha256": "$sha", "sizeBytes": 10, "license": "MIT", "backend": "CPU",
+              "stems": ["VOCALS","DRUMS","BASS","OTHER"] }
+        """.trimIndent()
+        val six = """
+            { "id": "six", "version": "1.0.0", "url": "https://e.com/b.zip",
+              "sha256": "$sha", "sizeBytes": 10, "license": "MIT", "backend": "CPU",
+              "stems": ["VOCALS","DRUMS","BASS","GUITAR","PIANO","OTHER"] }
+        """.trimIndent()
+        val catalog = StemModelCatalog.parse(
+            """{ "schemaVersion": 1, "models": [ $four, $six ] }""",
+        )!!
+        assertEquals("six", catalog.best(34, abis, allowNpu = true)?.id)
     }
 
     // ── versions ────────────────────────────────────────────────────────

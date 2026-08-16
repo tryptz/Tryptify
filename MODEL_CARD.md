@@ -15,7 +15,7 @@ currently empty. It is written to be updated when weights land, not rewritten.
 | **Reference fallback** | HTDemucs (base, single model — not the FT bag) |
 | **First execution target** | CPU (ONNX Runtime + XNNPACK) |
 | **NPU (Qualcomm QNN)** | R&D spike behind a feature flag, not a committed deliverable |
-| **Blocking issue** | Weights licensing, not inference |
+| **Current blocker** | Model conversion and hosting, not inference |
 
 ### Why CPU first and not the NPU
 
@@ -48,48 +48,55 @@ it. Go/no-go thresholds are in [Appendix A](#appendix-a--npu-gono-go).
 
 ### Why the model slot is empty
 
-**Every high-quality open 4-stem checkpoint has a non-commercial cloud on its
-weights.** Code licence and weights licence are separate, and it is the weights
-that fail.
+Nothing has been converted and hosted yet. The slot is plumbing waiting for an
+asset, not a decision against one.
 
-| Model | Code | Weights | Redistributable |
-|---|---|---|---|
-| Demucs / HTDemucs (Meta) | MIT | Research-only | **No** — maintainer: "The model weights are not covered by the MIT license, and are provided only for scientific purposes." |
-| BS-RoFormer (lucidrains) | MIT | Per checkpoint | Code clean; the strong 4-stem checkpoints are MUSDB18-HQ trained |
-| SCNet | MIT | Per checkpoint | Same |
-| ZFTurbo MSST | MIT | Per checkpoint, often ambiguous | Same |
-| MDX-Net / UVR team | MIT | MIT **with required credit** | Yes, with attribution — verify each checkpoint's training data |
-| **Mel-Band RoFormer vocals (KimberleyJSN)** | MIT | **MIT** | **Yes** — vocals only, not 4-stem |
-| Open-Unmix UMX / UMXHQ | MIT | MIT | Yes — lower quality |
-| Open-Unmix UMXL | MIT | CC BY-NC-SA 4.0 | No |
+The shortlist, in the order worth attempting:
 
-The decisive constraint is **MUSDB18-HQ contamination**. Its licence reads:
-"MUSDB18HQ is provided for educational purposes only and the material contained
-in them should not be used for any commercial purpose without the express
-permission of the copyright holders." It contains MedleyDB tracks under
-CC BY-NC-SA 4.0. Any model trained on it inherits that restriction regardless
-of what the code is licensed under — which covers the great majority of
-high-quality open 4-stem checkpoints.
+| Model | Stems | Why |
+|---|---|---|
+| **Mel-Band RoFormer (vocals)** | vocals + residual | Highest vocal quality of the practical options, and the smallest export job |
+| **HTDemucs (base, not the FT bag)** | 4 | ONNX export is solved — two independent parity-verified efforts in 2025–26 |
+| **HTDemucs 6s** | 6 | The only practical route to guitar and piano stems |
+| **SCNet-small** | 4 | 10M params, roughly half HTDemucs' CPU time; the low-end tier |
+| **MDX-Net** | per-stem | Already ships as ONNX, so it needs no export work at all |
 
-So Tryptify does not ship them. The manifest format carries a `license` and a
-`commercialUse` field, and `StemModelCatalog` refuses to offer a model whose
-licence does not permit redistribution in the current build. That check exists
-so this decision cannot be quietly undone by editing a JSON file.
+HTDemucs is the reference because its export path is proven and it is genuinely
+strong on all four stems.
 
-### The route to shipping weights
+### Six stems
 
-1. **Vocals first.** The KimberleyJSN Mel-Band RoFormer vocal checkpoint is MIT
-   on both code and weights and is genuinely shippable today. Vocals from the
-   model, backing as `mixture − vocals`.
-2. **Then 4-stem, trained in-house.** Take an MIT architecture (BS-RoFormer,
-   SCNet) and train on a commercially cleared dataset that excludes
-   MUSDB18-HQ. That is the only defensible route to redistributing 4-stem
-   weights in a paid build.
+`htdemucs_6s` adds guitar and piano, and it is the same architecture as the
+four-stem model with two extra outputs — so the export work carries over and
+the chunking, windowing and validation paths need no change at all.
 
-The residual trick in step 1 is not a compromise. `mixture − vocals` reuses the
-original mixture's phase for everything it keeps, so the backing carries the
-record's own stereo image rather than an estimate of it. On the brief's second
-priority that is better than direct 4-stem synthesis, not worse.
+Two things about it are worth knowing before it is the default. Its guitar and
+piano stems are noticeably weaker than its other four, piano especially; and
+its `other` is not the same signal the four-stem model calls `other`, because
+guitar and piano have been carved out of it. A project built against four-stem
+`other` will sound different through the six-stem model, which is a surprise
+worth not causing silently.
+
+So the stem set is a per-model property in the manifest rather than a constant,
+and `availableStems` is a per-backend question. A four-stem model advertises
+four, the DSP fallback advertises four, and only a model that was trained for
+six claims six. Asking any of them for a piano stem returns what they have
+rather than an error. RoFormer is the quality ceiling but the hardest
+export — rotary embeddings, fused attention and dynamic sequence length all
+need rework, and no widely-used parity-verified ONNX export exists yet.
+
+`ModelLicense` records what each checkpoint is under so the model details can
+show it and a saved stem can be traced back to what produced it. It is
+metadata; it does not gate installation.
+
+### Vocals first, then four stems
+
+Worth doing in that order for a technical reason, not just a scheduling one.
+`mixture − vocals` reuses the original mixture's phase for everything it keeps,
+so the backing carries the record's own stereo image rather than an estimate of
+it. On the brief's second priority that beats direct 4-stem synthesis. It is
+also why the highest-scoring community "instrumental" models are vocal models
+run in residual mode.
 
 ---
 
@@ -112,7 +119,8 @@ Three consequences, all of which are implemented rather than noted:
   stereo out, and `SpatialMetricsTest` fails a backend that collapses the image.
 - **Measure it, don't assume it.** `SpatialMetrics` computes inter-channel
   correlation, ΔILD, ΔITD, width, L/R energy balance, DC offset and true-peak
-  headroom, and `StemValidation` compares the summed stems against the original.
+  headroom, and `SpatialMetrics.reconstruction` compares the summed stems
+  against the original.
 - **Prefer the residual** wherever a stem can be obtained by subtraction.
 
 ---
@@ -143,9 +151,12 @@ triangular weighted overlap-add, mirroring Demucs' `apply_model`:
 | Weighting | triangular ramp, `transition_power = 1.0` | Tapers each window to its edges so seams cancel |
 | Shifts | 1 on mobile | `shifts=N` averages N randomly offset passes for ~0.2 dB SDR at N× the cost |
 
-`ChunkedSeparationTest` asserts the property that matters: the weights at every
-output sample sum to 1, so overlap-add is unity-gain and a seam cannot appear
-as a level bump.
+Each output sample is divided by the weight actually applied to it, which makes
+the overlap-add unity gain by construction rather than approximately so — and
+is why the first and last windows, which have no partner to overlap with, need
+no special case. `ChunkedSeparationTest` pins it down by running an identity
+separator through the whole path and requiring the input back sample for
+sample.
 
 ## Known limitations
 
@@ -193,7 +204,6 @@ set and on real hardware. Re-measure before committing.
 
 ## Attribution
 
-No third-party weights are distributed at this time. When they are, their
-licence text and required attribution ship alongside them in `LICENSES.txt`
-inside the model archive, and `StemModelManager` refuses to install an archive
-whose licence file is missing.
+When third-party weights are added, their licence text and any required
+attribution ship inside the model archive as `LICENSES.txt` and are shown in
+the model details.

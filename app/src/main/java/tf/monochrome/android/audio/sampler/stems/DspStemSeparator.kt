@@ -56,7 +56,13 @@ class DspStemSeparator @Inject constructor() : StemSeparator {
 
     override fun availableStems(input: SampleEdits.Buffer): Set<Stem> =
         if (input.right != null) {
-            Stem.entries.toSet()
+            // Four, never six. Median filtering separates percussive from
+            // harmonic and panning separates centred from wide; neither can
+            // tell a guitar from a piano, because nothing about that
+            // distinction is spectral position or stereo placement. Claiming
+            // those two and returning something plausible-looking would be
+            // worse than not offering them.
+            Stem.FOUR
         } else {
             // Centre extraction needs two channels to compare. On mono there is
             // no panning information at all, so a vocal stem would just be
@@ -131,7 +137,7 @@ class DspStemSeparator @Inject constructor() : StemSeparator {
         var done = 0
         val steps = wanted.size.coerceAtLeast(1)
 
-        for (stem in Stem.entries) {
+        for (stem in Stem.FOUR) {
             if (stem !in wanted) continue
             currentCoroutineContext().ensureActive()
             onProgress(
@@ -151,6 +157,12 @@ class DspStemSeparator @Inject constructor() : StemSeparator {
                         Stem.DRUMS -> percussivePart
                         Stem.BASS -> harmonicPart * bassWeight
                         Stem.VOCALS -> harmonicPart * (1f - bassWeight) * central
+                        // Unreachable: availableStems never offers these, so
+                        // `wanted` cannot contain them. Spelled out rather than
+                        // left to an else so that adding a seventh stem fails
+                        // here at compile time instead of silently producing
+                        // silence.
+                        Stem.GUITAR, Stem.PIANO -> 0f
                         Stem.OTHER ->
                             if (centre == null) {
                                 // No centre information: everything tonal above

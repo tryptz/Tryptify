@@ -163,7 +163,54 @@ class StemBackendRegistryTest {
         assertEquals(BackendKind.CPU, registry.active()?.kind)
     }
 
-    // ── the real DSP backend ────────────────────────────────────────────
+    // ── stem sets ───────────────────────────────────────────────────────
+
+    @Test
+    fun `the stem sets are what they say they are`() {
+        assertEquals(4, Stem.FOUR.size)
+        assertEquals(6, Stem.SIX.size)
+        assertEquals(setOf(Stem.GUITAR, Stem.PIANO), Stem.EXTENDED)
+        assertTrue(Stem.SIX.containsAll(Stem.FOUR))
+        assertTrue(Stem.SIX.containsAll(Stem.EXTENDED))
+        assertTrue(Stem.FOUR.none { it in Stem.EXTENDED })
+        assertEquals(Stem.entries.toSet(), Stem.SIX)
+    }
+
+    /** Ids are what Room stores, so they have to survive a round trip. */
+    @Test
+    fun `every stem round-trips through its id`() {
+        for (stem in Stem.entries) assertEquals(stem, Stem.fromId(stem.id))
+        assertEquals(Stem.GUITAR, Stem.fromId("guitar"))
+        assertEquals(null, Stem.fromId("kazoo"))
+        assertEquals(null, Stem.fromId(null))
+    }
+
+    /**
+     * The DSP backend must never claim guitar or piano. Median filtering
+     * separates percussive from harmonic and panning separates centred from
+     * wide; neither can tell a guitar from a piano, so offering those two would
+     * hand back something plausible-looking and wrong.
+     */
+    @Test
+    fun `the dsp backend never offers the six-stem extras`() {
+        val backend = DspStemBackend(DspStemSeparator())
+        val stereo = SampleEdits.Buffer(FloatArray(8192), FloatArray(8192), 44100)
+        val mono = SampleEdits.Buffer(FloatArray(8192), null, 44100)
+
+        assertEquals(Stem.FOUR, backend.availableStems(stereo))
+        assertTrue(backend.availableStems(mono).none { it in Stem.EXTENDED })
+        // Mono also loses vocals: centre extraction needs two channels.
+        assertFalse(backend.availableStems(mono).contains(Stem.VOCALS))
+    }
+
+    /** Asking a four-stem backend for six returns four, not an error. */
+    @Test
+    fun `asking for more stems than a backend has is not an error`() = runBlocking {
+        val separator = DspStemSeparator()
+        val input = SampleEdits.Buffer(FloatArray(16384), FloatArray(16384), 44100)
+        val out = separator.separate(input, requested = Stem.SIX)
+        assertTrue(out.keys.none { it in Stem.EXTENDED })
+    }
 
     /**
      * The floor has to actually hold. If this backend ever reported itself

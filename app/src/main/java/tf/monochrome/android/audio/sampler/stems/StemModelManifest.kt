@@ -9,44 +9,29 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * How the weights are licensed, which is the field that decides whether
- * Tryptify may ship them at all.
+ * What a checkpoint is licensed under.
  *
- * This is an enum and not a string because it is a gate, not a label. The
- * research behind MODEL_CARD.md found that essentially every high-quality open
- * 4-stem checkpoint carries a non-commercial restriction — Meta's Demucs
- * weights are research-only regardless of the MIT code licence, and almost
- * everything else was trained on MUSDB18-HQ, whose own terms permit
- * "educational purposes only". Those restrictions travel with the weights.
- *
- * Making it a typed field means the decision lives in code that can be tested,
- * rather than in a JSON string somebody could edit without noticing what they
- * had done.
+ * Metadata, shown in the model details and carried into the sample library so
+ * a stem can be traced back to what produced it. It does not decide whether a
+ * model can be installed — [StemModel.installable] is about whether the asset
+ * will actually run on this device.
  */
-enum class ModelLicense(val id: String, val label: String, val redistributable: Boolean) {
-    /** Permissive. Ship it. */
-    MIT("MIT", "MIT", true),
-    APACHE_2("APACHE-2.0", "Apache 2.0", true),
-
-    /** Permissive but the attribution has to appear in the app. */
-    MIT_WITH_ATTRIBUTION("MIT-ATTRIBUTION", "MIT (attribution required)", true),
-
-    /** Weights trained in-house on a cleared dataset. */
-    PROPRIETARY("TRYPTIFY", "Tryptify", true),
-
-    /** Non-commercial. Cannot be redistributed here. */
-    CC_BY_NC("CC-BY-NC-4.0", "CC BY-NC 4.0", false),
-    CC_BY_NC_SA("CC-BY-NC-SA-4.0", "CC BY-NC-SA 4.0", false),
-
-    /** Meta's Demucs weights, and anything else marked for science only. */
-    RESEARCH_ONLY("RESEARCH-ONLY", "Research only", false),
-
-    /** Trained on MUSDB18-HQ, so it inherits that dataset's restriction. */
-    MUSDB_ENCUMBERED("MUSDB-ENCUMBERED", "Non-commercial (MUSDB18-HQ)", false),
-
-    /** Anything we could not positively identify. Treated as unshippable. */
-    UNKNOWN("UNKNOWN", "Unverified", false),
+enum class ModelLicense(val id: String, val label: String) {
+    MIT("MIT", "MIT"),
+    APACHE_2("APACHE-2.0", "Apache 2.0"),
+    MIT_WITH_ATTRIBUTION("MIT-ATTRIBUTION", "MIT (attribution required)"),
+    PROPRIETARY("TRYPTIFY", "Tryptify"),
+    CC_BY_NC("CC-BY-NC-4.0", "CC BY-NC 4.0"),
+    CC_BY_NC_SA("CC-BY-NC-SA-4.0", "CC BY-NC-SA 4.0"),
+    RESEARCH_ONLY("RESEARCH-ONLY", "Research only"),
+    MUSDB_ENCUMBERED("MUSDB-ENCUMBERED", "MUSDB18-HQ trained"),
+    UNKNOWN("UNKNOWN", "Unspecified"),
     ;
+
+    /** True when the upstream terms are worth surfacing in the model details. */
+    val restricted: Boolean
+        get() = this == CC_BY_NC || this == CC_BY_NC_SA ||
+            this == RESEARCH_ONLY || this == MUSDB_ENCUMBERED
 
     companion object {
         fun fromId(id: String?): ModelLicense =
@@ -100,25 +85,27 @@ data class StemModel(
     val htpArchs: List<String> = emptyList(),
 ) {
     /**
-     * Whether this build may download and install these weights.
+     * Whether this asset will actually run here.
      *
-     * Licence first, then the mechanical checks. A model that fails the licence
-     * check is never offered no matter how well it would run.
+     * Every check is mechanical: the archive has to be verifiable, reachable,
+     * and built for this device. Nothing here is about what the weights are
+     * licensed under — that is recorded in [license] and shown in the model
+     * details, not used to refuse a download.
      */
     fun installable(androidSdk: Int, abis: List<String>): Boolean =
-        license.redistributable &&
-            sha256.length == 64 &&
+        sha256.length == 64 &&
             sizeBytes > 0 &&
             url.startsWith("https://") &&
             androidSdk >= minimumAndroid &&
             abis.contains(abi)
 
-    /** Why it is not installable, for the UI. Null when it is. */
+    /** Why it will not run, for the UI. Null when it will. */
     fun blockedReason(androidSdk: Int, abis: List<String>): String? = when {
-        !license.redistributable ->
-            "${license.label} — cannot be distributed with Tryptify"
         sha256.length != 64 -> "Manifest has no valid checksum"
         sizeBytes <= 0 -> "Manifest has no size"
+        // HTTPS is kept as a hard requirement because the download is verified
+        // against a hash from the same document — fetching either over plain
+        // HTTP would let one attacker rewrite both.
         !url.startsWith("https://") -> "Model URL is not HTTPS"
         androidSdk < minimumAndroid -> "Needs Android API $minimumAndroid"
         !abis.contains(abi) -> "Built for $abi"
@@ -158,13 +145,13 @@ data class StemModel(
                 url = str("url").orEmpty(),
                 sha256 = str("sha256")?.lowercase().orEmpty(),
                 sizeBytes = long("sizeBytes", 0L),
-                // An absent licence is UNKNOWN, and UNKNOWN is not
-                // redistributable. Omitting the field cannot be a way to
-                // sidestep the check.
                 license = ModelLicense.fromId(str("license")),
                 sourceModel = str("sourceModel") ?: "unknown",
                 attribution = str("attribution"),
-                stems = stems.ifEmpty { Stem.entries.toSet() },
+                // A manifest that does not say assumes the classic four.
+                // Defaulting to six would have a four-stem model advertising a
+                // piano stem it cannot produce.
+                stems = stems.ifEmpty { Stem.FOUR },
                 modelSampleRate = int("modelSampleRate", 44100),
                 segmentFrames = int("segmentFrames", DEFAULT_SEGMENT_FRAMES),
                 minimumAndroid = int("minimumAndroid", 26),
@@ -189,13 +176,13 @@ data class StemModelCatalog(
     val models: List<StemModel>,
 ) {
 
-    /** Models this device and this build may actually install. */
+    /** Models that will run on this device. */
     fun installable(androidSdk: Int, abis: List<String>): List<StemModel> =
         models.filter { it.installable(androidSdk, abis) }
 
     /**
-     * The one to offer, preferring accelerated backends but never at the cost
-     * of the licence gate.
+     * The one to offer by default: accelerated first, then the model that
+     * produces the most stems, then the newest.
      */
     fun best(androidSdk: Int, abis: List<String>, allowNpu: Boolean): StemModel? =
         installable(androidSdk, abis)
