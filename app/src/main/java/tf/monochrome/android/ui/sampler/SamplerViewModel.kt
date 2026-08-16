@@ -22,7 +22,14 @@ import tf.monochrome.android.audio.sampler.ProcessedCaptureTap
 import tf.monochrome.android.audio.sampler.SampleCaptureEngine
 import tf.monochrome.android.audio.sampler.SampleEdits
 import tf.monochrome.android.audio.sampler.SamplePreviewPlayer
+import tf.monochrome.android.audio.sampler.stems.BackendKind
+import tf.monochrome.android.audio.sampler.stems.BackendStatus
+import tf.monochrome.android.audio.sampler.stems.InstallProgress
+import tf.monochrome.android.audio.sampler.stems.InstallResult
 import tf.monochrome.android.audio.sampler.stems.Stem
+import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
+import tf.monochrome.android.audio.sampler.stems.StemModel
+import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.sampler.stems.StemProgress
 import tf.monochrome.android.audio.sampler.stems.StemQuality
 import tf.monochrome.android.audio.sampler.stems.StemSeparator
@@ -58,6 +65,8 @@ class SamplerViewModel @Inject constructor(
     private val positions: PlaybackPositionSource,
     private val preview: SamplePreviewPlayer,
     private val separator: StemSeparator,
+    private val backends: StemBackendRegistry,
+    private val models: StemModelManager,
 ) : ViewModel() {
 
     enum class Stage { IDLE, RECORDING, EDITING }
@@ -79,6 +88,32 @@ class SamplerViewModel @Inject constructor(
         val hasResults: Boolean get() = results.isNotEmpty()
     }
 
+    /**
+     * What is separating audio, and what could be.
+     *
+     * [activeBackend] is the one actually running rather than the best one that
+     * exists, because the brief is explicit that a fallback must be visible: a
+     * job on the CPU takes many times longer than one on the NPU, and someone
+     * watching a progress bar crawl is owed the reason.
+     */
+    data class AiState(
+        val backends: List<BackendStatus> = emptyList(),
+        val activeBackend: BackendKind? = null,
+        val degraded: Boolean = false,
+        val installed: StemModel? = null,
+        /** Offered for download. Null when nothing runs on this device. */
+        val available: StemModel? = null,
+        /** A newer version of what is installed. */
+        val updateAvailable: StemModel? = null,
+        /** Why the best model in the catalogue will not run here. */
+        val blockedReason: String? = null,
+        val installing: Boolean = false,
+        val progress: InstallProgress? = null,
+        val checking: Boolean = false,
+        val storageBytes: Long = 0L,
+        val message: String? = null,
+    )
+
     data class UiState(
         val stage: Stage = Stage.IDLE,
         val source: CaptureSource = CaptureSource.CLEAN,
@@ -96,6 +131,7 @@ class SamplerViewModel @Inject constructor(
         val saving: Boolean = false,
         val canUndo: Boolean = false,
         val stems: StemsState = StemsState(),
+        val ai: AiState = AiState(),
         val message: String? = null,
     ) {
         val frames: Int get() = buffer?.frames ?: 0
@@ -146,6 +182,7 @@ class SamplerViewModel @Inject constructor(
     private val undoStack = ArrayDeque<SampleEdits.Buffer>()
     private var meterJob: Job? = null
     private var stemJob: Job? = null
+    private var installJob: Job? = null
 
     init {
         refreshEligibility()
@@ -673,6 +710,161 @@ class SamplerViewModel @Inject constructor(
             stemType = stem.id,
             sourceSampleId = state.editingSampleId,
         )
+    }
+
+    // ── the AI model ────────────────────────────────────────────────────
+
+    /**
+     * Where the catalogue lives.
+     *
+     * `releases/latest/download/` rather than a pinned tag, so publishing a new
+     * release is the whole of shipping a model update — no app change, no
+     * hard-coded version that goes stale the moment it is written.
+     */
+    private val manifestUrl =
+        "https://github.com/tryptz/Tryptify/releases/latest/download/model-manifest.json"
+
+    /** Reads what is on disk. Cheap — no network, so it is safe on screen open. */
+    fun refreshAiState() {
+        val statuses = backends.statuses()
+        val active = backends.active()?.kind
+        _ui.value = _ui.value.copy(
+            ai = _ui.value.ai.copy(
+                backends = statuses,
+                activeBackend = active,
+                degraded = backends.isDegraded(),
+                installed = models.installed(),
+                storageBytes = models.installedBytes(),
+            ),
+        )
+    }
+
+    /**
+     * Asks the catalogue what exists.
+     *
+     * Separate from [refreshAiState] because this one touches the network, and
+     * a screen that quietly phoned home every time it opened would be a
+     * different app from the one the brief describes.
+     */
+    fun checkForModels() {
+        if (_ui.value.ai.checking) return
+        _ui.value = _ui.value.copy(ai = _ui.value.ai.copy(checking = true, message = null))
+
+        viewModelScope.launch {
+            val catalog = models.fetchCatalog(manifestUrl).getOrNull()
+            val installed = models.installed()
+
+            if (catalog == null) {
+                _ui.value = _ui.value.copy(
+                    ai = _ui.value.ai.copy(
+                        checking = false,
+                        message = "Could not reach the model catalogue",
+                    ),
+                )
+                return@launch
+            }
+
+            val sdk = android.os.Build.VERSION.SDK_INT
+            val abis = android.os.Build.SUPPORTED_ABIS.toList()
+            val best = catalog.best(sdk, abis, allowNpu = true)
+
+            // When nothing is installable, say why rather than showing an empty
+            // panel. The first blocked model's reason is the useful one: an
+            // empty catalogue has nothing to explain, a blocked one does.
+            val blocked = if (best == null) {
+                catalog.models.firstNotNullOfOrNull { it.blockedReason(sdk, abis) }
+            } else {
+                null
+            }
+
+            val update = best?.takeIf { installed != null && catalog.isUpdate(installed, it) }
+
+            _ui.value = _ui.value.copy(
+                ai = _ui.value.ai.copy(
+                    checking = false,
+                    installed = installed,
+                    available = if (installed == null) best else null,
+                    updateAvailable = update,
+                    blockedReason = blocked,
+                    message = when {
+                        best == null && blocked == null -> "No AI model published yet"
+                        installed != null && update == null -> "Up to date"
+                        else -> null
+                    },
+                ),
+            )
+        }
+    }
+
+    fun installModel() {
+        val ai = _ui.value.ai
+        val model = ai.updateAvailable ?: ai.available ?: return
+        if (ai.installing) return
+
+        installJob?.cancel()
+        _ui.value = _ui.value.copy(
+            ai = ai.copy(installing = true, progress = null, message = null),
+        )
+
+        installJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                models.install(model) { progress ->
+                    _ui.value = _ui.value.copy(
+                        ai = _ui.value.ai.copy(progress = progress),
+                    )
+                }
+            }
+
+            _ui.value = _ui.value.copy(
+                ai = _ui.value.ai.copy(
+                    installing = false,
+                    progress = null,
+                    installed = models.installed(),
+                    available = null,
+                    updateAvailable = null,
+                    storageBytes = models.installedBytes(),
+                    message = when (result) {
+                        is InstallResult.Installed -> null
+                        is InstallResult.Failed -> result.reason
+                    },
+                ),
+            )
+            refreshAiState()
+        }
+    }
+
+    /**
+     * Stops the download but keeps what arrived.
+     *
+     * The manager treats a cancelled install exactly like a dropped connection,
+     * which is what makes resuming free rather than starting again.
+     */
+    fun cancelInstall() {
+        installJob?.cancel()
+        installJob = null
+        _ui.value = _ui.value.copy(
+            ai = _ui.value.ai.copy(
+                installing = false,
+                progress = null,
+                message = "Paused — resuming will pick up where it stopped",
+            ),
+        )
+    }
+
+    fun deleteModel() {
+        installJob?.cancel()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { models.uninstall() }
+            _ui.value = _ui.value.copy(
+                ai = _ui.value.ai.copy(
+                    installed = null,
+                    updateAvailable = null,
+                    storageBytes = 0L,
+                    message = "Model deleted",
+                ),
+            )
+            refreshAiState()
+        }
     }
 
     val separatorDescription: String get() = separator.description
