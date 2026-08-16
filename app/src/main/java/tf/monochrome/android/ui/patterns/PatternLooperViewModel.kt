@@ -25,7 +25,9 @@ import tf.monochrome.android.domain.patterns.PatternRepository
 import tf.monochrome.android.domain.patterns.PatternSummary
 import tf.monochrome.android.domain.patterns.PatternSwitchMode
 import tf.monochrome.android.domain.patterns.SampleRef
+import tf.monochrome.android.domain.patterns.SpeedPitchPreset
 import tf.monochrome.android.domain.patterns.Step
+import tf.monochrome.android.domain.patterns.StretchQuality
 import tf.monochrome.android.domain.patterns.TransportState
 import javax.inject.Inject
 
@@ -59,6 +61,7 @@ class PatternLooperViewModel @Inject constructor(
         val page: Int = 0,
         val editingChannel: Int? = null,
         val pendingCopy: Pattern? = null,
+        val stretchQuality: StretchQuality = StretchQuality.BALANCED,
     ) {
         val pageCount: Int
             get() {
@@ -260,6 +263,81 @@ class PatternLooperViewModel @Inject constructor(
         updateChannel(index, NativeSamplerBridge.PARAM_REVERSE, if (reverse) 1f else 0f) {
             it.copy(reverse = reverse)
         }
+
+    /**
+     * Speed, in playback rate multiples.
+     *
+     * Unlinked this is a real time stretch — the sample takes longer or less
+     * long without changing note. Linked it is tape, and the pitch readout
+     * moves with it.
+     */
+    fun setChannelSpeed(index: Int, speed: Float) {
+        val clamped = speed.coerceIn(PatternChannel.MIN_SPEED, PatternChannel.MAX_SPEED)
+        updateChannel(index, NativeSamplerBridge.PARAM_SPEED, clamped) { it.copy(speed = clamped) }
+    }
+
+    fun setChannelLinked(index: Int, linked: Boolean) =
+        updateChannel(index, NativeSamplerBridge.PARAM_LINKED, if (linked) 1f else 0f) {
+            it.copy(linked = linked)
+        }
+
+    /**
+     * Applies a preset to both controls at once.
+     *
+     * Sent as three separate parameter commands rather than a republish: the
+     * engine reads them when the next voice starts, so a preset tapped mid-loop
+     * lands on the next trig instead of interrupting the one that is sounding.
+     */
+    fun applySpeedPitchPreset(index: Int, preset: SpeedPitchPreset) {
+        val pattern = _ui.value.pattern ?: return
+        if (index !in pattern.channels.indices) return
+        val updated = pattern.withChannel(index) {
+            it.copy(speed = preset.speed, pitch = preset.semitones, linked = preset.linked)
+        }
+        _ui.value = _ui.value.copy(pattern = updated)
+        engine.setChannelParam(pattern.bankSlot, index, NativeSamplerBridge.PARAM_SPEED, preset.speed)
+        engine.setChannelParam(pattern.bankSlot, index, NativeSamplerBridge.PARAM_PITCH, preset.semitones)
+        engine.setChannelParam(
+            pattern.bankSlot, index, NativeSamplerBridge.PARAM_LINKED,
+            if (preset.linked) 1f else 0f,
+        )
+        savePattern(updated)
+    }
+
+    /** Back to playing the sample as recorded. Speed, pitch and link only. */
+    fun resetChannelSpeedPitch(index: Int) {
+        val pattern = _ui.value.pattern ?: return
+        if (index !in pattern.channels.indices) return
+        val updated = pattern.withChannel(index) {
+            it.copy(speed = 1f, pitch = 0f, linked = false)
+        }
+        _ui.value = _ui.value.copy(pattern = updated)
+        engine.setChannelParam(pattern.bankSlot, index, NativeSamplerBridge.PARAM_SPEED, 1f)
+        engine.setChannelParam(pattern.bankSlot, index, NativeSamplerBridge.PARAM_PITCH, 0f)
+        engine.setChannelParam(pattern.bankSlot, index, NativeSamplerBridge.PARAM_LINKED, 0f)
+        savePattern(updated)
+    }
+
+    /** The same, for every channel in the pattern. */
+    fun resetAllSpeedPitch() {
+        val pattern = _ui.value.pattern ?: return
+        val updated = pattern.copy(
+            channels = pattern.channels.map { it.copy(speed = 1f, pitch = 0f, linked = false) },
+        )
+        _ui.value = _ui.value.copy(pattern = updated)
+        updated.channels.indices.forEach { i ->
+            engine.setChannelParam(pattern.bankSlot, i, NativeSamplerBridge.PARAM_SPEED, 1f)
+            engine.setChannelParam(pattern.bankSlot, i, NativeSamplerBridge.PARAM_PITCH, 0f)
+            engine.setChannelParam(pattern.bankSlot, i, NativeSamplerBridge.PARAM_LINKED, 0f)
+        }
+        savePattern(updated)
+    }
+
+    /** Global. Read when a voice starts, so it lands on the next trig. */
+    fun setStretchQuality(quality: StretchQuality) {
+        _ui.value = _ui.value.copy(stretchQuality = quality)
+        engine.setStretchQuality(quality.id)
+    }
 
     fun toggleMute(index: Int) {
         val current = _ui.value.pattern?.channelAt(index) ?: return
