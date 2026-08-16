@@ -125,11 +125,50 @@ class ChunkedSeparationTest {
         assertEquals(0.5f, lo, 1e-5f)
     }
 
+    /**
+     * The ramp must not underflow, however sharp the crossfade.
+     *
+     * At transition power 4 a 2048-frame window starts at (1/1024)^4, which is
+     * about 9e-13 — and the first sample of the track is covered by that weight
+     * and nothing else. Any code that treats a weight that small as "no
+     * coverage" turns the start of every stem into silence, which is precisely
+     * what happened before [ChunkedSeparation.MIN_WEIGHT] existed.
+     */
+    @Test
+    fun `the weight ramp never underflows`() {
+        for (segment in listOf(256, 1024, 2048)) {
+            for (power in listOf(0.5f, 1f, 2f, 4f, 8f)) {
+                val w = ChunkedSeparation.triangularWeights(segment, power)
+                assertTrue(
+                    "segment=$segment power=$power first weight ${w[0]}",
+                    w[0] >= ChunkedSeparation.MIN_WEIGHT,
+                )
+                assertTrue("segment=$segment power=$power", w.all { it > 0f })
+            }
+        }
+    }
+
+    /** The audible consequence: the very ends of the track are still audio. */
+    @Test
+    fun `the track edges survive a sharp crossfade`() = runBlocking {
+        val input = noise(20000)
+        val got = ChunkedSeparation.run(
+            input = input,
+            segmentFrames = 2048,
+            stems = setOf(Stem.VOCALS),
+            transitionPower = 4f,
+            process = identity,
+        ).getValue(Stem.VOCALS)
+
+        assertEquals("first sample", input.left[0], got.left[0], 1e-5f)
+        assertEquals("last sample", input.left[19999], got.left[19999], 1e-5f)
+    }
+
     /** A sharper crossfade must not change the gain, only where it happens. */
     @Test
     fun `transition power does not affect unity gain`() = runBlocking {
         val input = noise(30000)
-        for (power in listOf(0.5f, 1f, 2f, 4f)) {
+        for (power in listOf(0.5f, 1f, 2f, 4f, 8f)) {
             val got = ChunkedSeparation.run(
                 input = input,
                 segmentFrames = 2048,
