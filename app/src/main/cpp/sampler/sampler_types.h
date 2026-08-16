@@ -10,6 +10,7 @@
 #pragma once
 
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 
 namespace tryptify {
@@ -54,12 +55,78 @@ struct StepData {
     int8_t pan = 0;           // -100..+100 → -1..+1
     uint8_t sampleStart = 0;  // 0..255 → 0..1 of the sample
     uint8_t locks = 0;        // bitmask, see kLock*
-    uint8_t reserved = 0;
+    uint8_t speed = 0;        // see stepSpeedFromCode
 };
 
 static constexpr uint8_t kLockPitch = 1 << 0;
 static constexpr uint8_t kLockPan = 1 << 1;
 static constexpr uint8_t kLockStart = 1 << 2;
+static constexpr uint8_t kLockSpeed = 1 << 3;
+
+// ── Speed ───────────────────────────────────────────────────────────────
+
+static constexpr float kMinSpeed = 0.25f;
+static constexpr float kMaxSpeed = 4.0f;
+
+/**
+ * Speed is stored per step in one byte, which has to cover 0.25× to 4.0× —
+ * four octaves of tempo — with enough resolution that a parameter lock does
+ * not sound stepped.
+ *
+ * The mapping is exponential rather than linear because speed is perceived
+ * that way: the interval from 0.5× to 1× is the same musical distance as 1× to
+ * 2×, and a linear byte would spend three quarters of its range above unity
+ * while quantising everything below it into a handful of values. Exponential
+ * spacing puts 1.0 exactly on code 128 and gives every code the same
+ * proportional step, about 1.1% — a fifth of a semitone, which is under the
+ * threshold where a tempo change reads as a staircase.
+ *
+ * Code 0 is not 0.25×; it means "no lock, follow the channel", which is why
+ * the usable range starts at 1.
+ */
+inline float stepSpeedFromCode(uint8_t code) {
+    if (code == 0) return 1.0f;
+    return kMinSpeed * std::exp2(4.0f * (static_cast<float>(code) - 1.0f) / 254.0f);
+}
+
+inline uint8_t stepSpeedToCode(float speed) {
+    if (speed < kMinSpeed) speed = kMinSpeed;
+    if (speed > kMaxSpeed) speed = kMaxSpeed;
+    const float steps = std::log2(speed / kMinSpeed) * 254.0f / 4.0f + 1.0f;
+    int code = static_cast<int>(steps + 0.5f);
+    if (code < 1) code = 1;
+    if (code > 255) code = 255;
+    return static_cast<uint8_t>(code);
+}
+
+// ── Stretch quality ─────────────────────────────────────────────────────
+
+/**
+ * How much CPU the time stretcher may spend per voice.
+ *
+ * These are not decorative labels: each one is a real grain size and search
+ * radius, and the radius sets the lowest frequency the stretcher can hold
+ * together (roughly `sampleRate / radius` — see [Wsola]). FAST gives up on
+ * bass below ~375 Hz, HIGH holds down to ~94 Hz.
+ */
+enum StretchQuality : int32_t {
+    kStretchFast = 0,
+    kStretchBalanced = 1,
+    kStretchHigh = 2,
+};
+
+struct StretchConfig {
+    int window;
+    int searchRadius;
+};
+
+inline StretchConfig stretchConfigFor(int quality) {
+    switch (quality) {
+        case kStretchFast: return {512, 128};
+        case kStretchHigh: return {2048, 512};
+        default: return {1024, 256};
+    }
+}
 
 // ── Channel ─────────────────────────────────────────────────────────────
 
@@ -69,6 +136,7 @@ struct ChannelState {
     float volume = 1.0f;      // linear, 0..2
     float pan = 0.0f;         // -1 left .. +1 right
     float pitch = 0.0f;       // semitones
+    float speed = 1.0f;       // 0.25 .. 4.0, independent of pitch unless linked
     float sampleStart = 0.0f; // 0..1
     float sampleEnd = 1.0f;   // 0..1
     float attackMs = 0.0f;
@@ -78,6 +146,13 @@ struct ChannelState {
     uint8_t soloed = 0;
     uint8_t enabled = 1;
     uint8_t reverse = 0;
+    /**
+     * Tape mode. Linked, speed and pitch multiply into a single varispeed
+     * factor and the time stretcher is bypassed — faster is higher, exactly
+     * like pushing a reel. Unlinked, the two are genuinely independent and the
+     * stretcher does the work.
+     */
+    uint8_t linked = 0;
     StepData steps[kMaxSteps];
 };
 
@@ -95,6 +170,8 @@ enum ChannelParam : int32_t {
     kParamSolo = 9,
     kParamEnabled = 10,
     kParamReverse = 11,
+    kParamSpeed = 12,
+    kParamLinked = 13,
 };
 
 // ── Pattern ─────────────────────────────────────────────────────────────
@@ -136,6 +213,7 @@ enum CommandType : int32_t {
     kCmdSetRecordQuantize, // a=steps-per-quantum (0 = off)
     kCmdSetMasterGain,     // f=linear
     kCmdStopChannel,       // a=channel
+    kCmdSetStretchQuality, // a=StretchQuality
 };
 
 enum TransportAction : int32_t {

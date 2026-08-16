@@ -605,6 +605,270 @@ void testStopSilencesAndRewinds() {
     CHECK(peak < 1e-4f);
 }
 
+// ── speed and pitch ─────────────────────────────────────────────────────
+
+/**
+ * A steady tone, which is what makes the two claims separable: a DC burst can
+ * show that a hit got longer but has no pitch to check, and the whole point of
+ * time stretching is that only one of the two moves.
+ */
+std::shared_ptr<SampleData> toneSample(int frames, double hz) {
+    auto data = std::make_shared<SampleData>();
+    data->frames = frames;
+    data->sampleRate = kRate;
+    data->gain = 1.0f;
+    data->left.resize(static_cast<size_t>(frames));
+    for (int i = 0; i < frames; ++i) {
+        data->left[static_cast<size_t>(i)] =
+            0.5f * static_cast<float>(std::sin(2.0 * M_PI * hz * i / kRate));
+    }
+    return data;
+}
+
+struct Hit {
+    std::vector<float> left;
+    int length = 0;      // samples from the first non-silent frame to the last
+    double hz = 0.0;
+};
+
+/** Triggers one channel by hand and measures what came out. */
+Hit triggerAndMeasure(PatternEngine& engine, int frames) {
+    std::vector<float> l(static_cast<size_t>(frames), 0.0f);
+    std::vector<float> r(static_cast<size_t>(frames), 0.0f);
+    post(engine, kCmdTrigger, 0, 0, 0, 1.0f);
+
+    int done = 0;
+    while (done < frames) {
+        const int n = std::min(512, frames - done);
+        engine.render(l.data() + done, r.data() + done, n, true);
+        done += n;
+    }
+
+    Hit hit;
+    hit.left = l;
+    int first = -1, last = -1;
+    for (int i = 0; i < frames; ++i) {
+        if (std::fabs(l[static_cast<size_t>(i)]) > 1e-5f) {
+            if (first < 0) first = i;
+            last = i;
+        }
+    }
+    hit.length = (first < 0) ? 0 : (last - first + 1);
+
+    // Rising zero crossings over the sustained middle, avoiding both ramps.
+    if (hit.length > 4000) {
+        const int from = first + hit.length / 4;
+        const int to = first + (hit.length * 3) / 4;
+        int crossings = 0;
+        for (int i = from + 1; i < to; ++i) {
+            if (l[static_cast<size_t>(i - 1)] <= 0.0f && l[static_cast<size_t>(i)] > 0.0f) ++crossings;
+        }
+        hit.hz = crossings * static_cast<double>(kRate) / (to - from);
+    }
+    return hit;
+}
+
+PatternState onePitchedChannel() {
+    PatternState p;
+    p.lengthSteps = 16;
+    p.channelCount = 1;
+    p.channels[0].sampleSlot = 0;
+    p.channels[0].volume = 1.0f;
+    p.channels[0].attackMs = 1.0f;
+    p.channels[0].releaseMs = 2.0f;
+    return p;
+}
+
+/**
+ * The claim the whole stretcher exists for: speed moves duration and leaves
+ * pitch alone, pitch moves pitch and leaves duration alone. A test that only
+ * checked one of the two would pass just as happily for plain resampling.
+ */
+void testSpeedAndPitchAreIndependent() {
+    std::printf("speed and pitch are independent\n");
+    PatternEngine engine(kRate);
+    engine.samples().put(0, toneSample(96000, 440.0));
+    engine.uploadPattern(0, onePitchedChannel());
+
+    const Hit unity = triggerAndMeasure(engine, 300000);
+    CHECK(unity.length > 90000);
+    CHECK_NEAR(unity.hz, 440.0, 12.0);
+
+    // Half speed: twice as long, same note.
+    post(engine, kCmdSetChannelParam, 0, 0, kParamSpeed, 0.5f);
+    const Hit slow = triggerAndMeasure(engine, 300000);
+    const double lengthRatio = static_cast<double>(slow.length) / unity.length;
+    std::printf("    half speed: %.3fx length, %.1f Hz\n", lengthRatio, slow.hz);
+    CHECK_NEAR(lengthRatio, 2.0, 0.06);
+    CHECK_NEAR(slow.hz, 440.0, 440.0 * 0.04);
+
+    // Double speed: half as long, still the same note.
+    post(engine, kCmdSetChannelParam, 0, 0, kParamSpeed, 2.0f);
+    const Hit fast = triggerAndMeasure(engine, 300000);
+    const double fastRatio = static_cast<double>(fast.length) / unity.length;
+    std::printf("    double speed: %.3fx length, %.1f Hz\n", fastRatio, fast.hz);
+    CHECK_NEAR(fastRatio, 0.5, 0.04);
+    CHECK_NEAR(fast.hz, 440.0, 440.0 * 0.04);
+
+    // An octave up at normal speed: same length, twice the frequency.
+    post(engine, kCmdSetChannelParam, 0, 0, kParamSpeed, 1.0f);
+    post(engine, kCmdSetChannelParam, 0, 0, kParamPitch, 12.0f);
+    const Hit high = triggerAndMeasure(engine, 300000);
+    const double highRatio = static_cast<double>(high.length) / unity.length;
+    std::printf("    +12 st: %.3fx length, %.1f Hz\n", highRatio, high.hz);
+    CHECK_NEAR(highRatio, 1.0, 0.06);
+    CHECK_NEAR(high.hz, 880.0, 880.0 * 0.04);
+
+    // An octave down, same again.
+    post(engine, kCmdSetChannelParam, 0, 0, kParamPitch, -12.0f);
+    const Hit low = triggerAndMeasure(engine, 300000);
+    std::printf("    -12 st: %.3fx length, %.1f Hz\n",
+                static_cast<double>(low.length) / unity.length, low.hz);
+    CHECK_NEAR(static_cast<double>(low.length) / unity.length, 1.0, 0.06);
+    CHECK_NEAR(low.hz, 220.0, 220.0 * 0.05);
+}
+
+/** Linked is tape: one knob, both effects. */
+void testLinkedModeIsVarispeed() {
+    std::printf("linked mode is varispeed\n");
+    PatternEngine engine(kRate);
+    engine.samples().put(0, toneSample(96000, 440.0));
+    engine.uploadPattern(0, onePitchedChannel());
+
+    const Hit unity = triggerAndMeasure(engine, 300000);
+
+    post(engine, kCmdSetChannelParam, 0, 0, kParamLinked, 1.0f);
+    post(engine, kCmdSetChannelParam, 0, 0, kParamSpeed, 2.0f);
+    const Hit tape = triggerAndMeasure(engine, 300000);
+
+    const double ratio = static_cast<double>(tape.length) / unity.length;
+    std::printf("    linked 2x: %.3fx length, %.1f Hz\n", ratio, tape.hz);
+    // Half the length *and* an octave up — the two move together, which is the
+    // difference between this mode and the unlinked one above.
+    CHECK_NEAR(ratio, 0.5, 0.03);
+    CHECK_NEAR(tape.hz, 880.0, 880.0 * 0.04);
+}
+
+/**
+ * When pitch and speed ask for the same factor the stretch ratio is exactly 1,
+ * and the voice should read the sample directly rather than running a
+ * stretcher to reproduce its input.
+ *
+ * Proved by sample-identical output against tape mode, which takes the bypass
+ * unconditionally. Anything else — a stretcher that runs and happens to sound
+ * close — would differ in the low bits.
+ */
+void testUnityStretchTakesTheBypass() {
+    std::printf("unity stretch bypasses\n");
+    PatternEngine engine(kRate);
+    engine.samples().put(0, toneSample(48000, 440.0));
+    engine.uploadPattern(0, onePitchedChannel());
+
+    // Unlinked, +12 st and 2x speed: P == S, so P / S == 1.
+    post(engine, kCmdSetChannelParam, 0, 0, kParamPitch, 12.0f);
+    post(engine, kCmdSetChannelParam, 0, 0, kParamSpeed, 2.0f);
+    const Hit unlinked = triggerAndMeasure(engine, 60000);
+
+    // Linked, +12 st at 1x speed: the same varispeed factor by the other road.
+    PatternEngine tapeEngine(kRate);
+    tapeEngine.samples().put(0, toneSample(48000, 440.0));
+    tapeEngine.uploadPattern(0, onePitchedChannel());
+    post(tapeEngine, kCmdSetChannelParam, 0, 0, kParamLinked, 1.0f);
+    post(tapeEngine, kCmdSetChannelParam, 0, 0, kParamPitch, 12.0f);
+    const Hit tape = triggerAndMeasure(tapeEngine, 60000);
+
+    CHECK(unlinked.length > 20000);
+    CHECK_EQ(unlinked.length, tape.length);
+    int mismatches = 0;
+    for (size_t i = 0; i < unlinked.left.size(); ++i) {
+        if (unlinked.left[i] != tape.left[i]) ++mismatches;
+    }
+    CHECK_EQ(mismatches, 0);
+}
+
+/**
+ * A sample shorter than one grain has nothing for WSOLA to work with. It must
+ * still make a sound — silence would be the worst possible answer for a short
+ * percussive hit, which is most of what a sampler plays.
+ */
+void testShortSampleFallsBackRatherThanVanishing() {
+    std::printf("short sample fallback\n");
+    PatternEngine engine(kRate);
+    engine.samples().put(0, burst(600));   // 12.5 ms, well under any grain
+    engine.uploadPattern(0, onePitchedChannel());
+
+    post(engine, kCmdSetStretchQuality, kStretchHigh);   // 2048-sample grain
+    post(engine, kCmdSetChannelParam, 0, 0, kParamSpeed, 0.5f);
+    const Hit hit = triggerAndMeasure(engine, 48000);
+
+    float peak = 0.0f;
+    for (float v : hit.left) peak = std::fmax(peak, std::fabs(v));
+    std::printf("    600-frame sample at 0.5x: %d samples, peak %.3f\n", hit.length, peak);
+    CHECK(hit.length > 100);
+    CHECK(peak > 0.3f);
+}
+
+/** Reverse cannot be stretched, so it takes speed as varispeed instead. */
+void testReverseUsesVarispeed() {
+    std::printf("reverse uses varispeed\n");
+    PatternEngine engine(kRate);
+    engine.samples().put(0, toneSample(48000, 440.0));
+
+    PatternState p = onePitchedChannel();
+    p.channels[0].reverse = 1;
+    engine.uploadPattern(0, p);
+
+    const Hit unity = triggerAndMeasure(engine, 200000);
+    CHECK(unity.length > 40000);
+
+    post(engine, kCmdSetChannelParam, 0, 0, kParamSpeed, 2.0f);
+    const Hit fast = triggerAndMeasure(engine, 200000);
+    const double ratio = static_cast<double>(fast.length) / unity.length;
+    std::printf("    reverse 2x: %.3fx length, %.1f Hz\n", ratio, fast.hz);
+    // Half the length and an octave up: the speed knob still does something,
+    // it just does the tape thing.
+    CHECK_NEAR(ratio, 0.5, 0.03);
+    CHECK_NEAR(fast.hz, 880.0, 880.0 * 0.05);
+}
+
+/** A speed lock pins one step; the rest keep following the channel. */
+void testPerStepSpeedLock() {
+    std::printf("per-step speed lock\n");
+    // The byte mapping has to round-trip, or a lock saved from the UI would
+    // come back as a different tempo.
+    CHECK_NEAR(stepSpeedFromCode(128), 1.0, 1e-5);
+    CHECK_NEAR(stepSpeedFromCode(1), 0.25, 1e-5);
+    CHECK_NEAR(stepSpeedFromCode(255), 4.0, 1e-4);
+    CHECK_EQ(stepSpeedToCode(1.0f), 128);
+    for (float s : {0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f}) {
+        const float back = stepSpeedFromCode(stepSpeedToCode(s));
+        CHECK_NEAR(back, s, s * 0.01);
+    }
+    // Code 0 is "no lock", not the bottom of the range.
+    CHECK_NEAR(stepSpeedFromCode(0), 1.0, 1e-6);
+
+    PatternEngine engine(kRate);
+    engine.samples().put(0, toneSample(96000, 440.0));
+
+    PatternState p = onePitchedChannel();
+    p.lengthSteps = 4;
+    p.stepsPerBeat = 4;
+    for (int s = 0; s < 4; ++s) {
+        p.channels[0].steps[s].enabled = 1;
+        p.channels[0].steps[s].velocity = 127;
+    }
+    // Step 2 alone plays at half speed.
+    p.channels[0].steps[2].locks = kLockSpeed;
+    p.channels[0].steps[2].speed = stepSpeedToCode(0.5f);
+    engine.uploadPattern(0, p);
+
+    PatternState back;
+    CHECK(engine.readPattern(0, back));
+    CHECK_EQ(back.channels[0].steps[2].locks & kLockSpeed, kLockSpeed);
+    CHECK_NEAR(stepSpeedFromCode(back.channels[0].steps[2].speed), 0.5, 0.01);
+    CHECK_EQ(back.channels[0].steps[0].locks & kLockSpeed, 0);
+}
+
 }  // namespace
 
 int main() {
@@ -626,6 +890,12 @@ int main() {
     testUploadWhilePlayingDoesNotTear();
     testSampleSwapIsSafeUnderVoices();
     testStopSilencesAndRewinds();
+    testSpeedAndPitchAreIndependent();
+    testLinkedModeIsVarispeed();
+    testUnityStretchTakesTheBypass();
+    testShortSampleFallsBackRatherThanVanishing();
+    testReverseUsesVarispeed();
+    testPerStepSpeedLock();
 
     std::printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

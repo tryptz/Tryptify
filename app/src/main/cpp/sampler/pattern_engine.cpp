@@ -35,6 +35,8 @@ PatternEngine::PatternEngine(int sampleRate) {
     }
     retiredPatterns_.reserve(kPatternSpares);
 
+    voices_.resize(kMaxVoices);
+
     scratchL_.assign(kMaxRenderBlock, 0.0f);
     scratchR_.assign(kMaxRenderBlock, 0.0f);
 
@@ -234,19 +236,39 @@ void PatternEngine::triggerChannel(const ChannelState& channel, int channelIndex
     Voice* voice = allocateVoice(channelIndex);
     if (voice == nullptr) return;
 
-    float pitch = channel.pitch;
-    float pan = channel.pan;
-    float start = channel.sampleStart;
+    VoiceSpec spec;
+    spec.sample = data;
+    spec.slot = channel.sampleSlot;
+    spec.generation = samples_.generation(channel.sampleSlot);
+    spec.channel = channelIndex;
+    spec.engineSampleRate = sampleRate_;
+    spec.semitones = channel.pitch;
+    spec.speed = clampFloat(channel.speed, kMinSpeed, kMaxSpeed);
+    spec.linked = channel.linked != 0;
+    spec.normalizedStart = channel.sampleStart;
+    spec.normalizedEnd = channel.sampleEnd;
+    spec.reverse = channel.reverse != 0;
+    spec.linearGain = channel.volume * clampFloat(velocity, 0.0f, 1.0f);
+    spec.pan = channel.pan;
+    spec.attackMs = channel.attackMs;
+    spec.releaseMs = channel.releaseMs;
+    spec.filterHz = channel.filterHz;
+    spec.stretch = stretchConfigFor(stretchQuality_.load(std::memory_order_relaxed));
+    spec.blockCounter = blockCounter_.load(std::memory_order_relaxed);
+
+    // Parameter locks. An unlocked value follows the channel, which is what
+    // makes moving a knob in the sound editor audible on every step that has
+    // not been individually pinned.
     if (step != nullptr) {
-        if ((step->locks & kLockPitch) != 0) pitch += static_cast<float>(step->pitch);
-        if ((step->locks & kLockPan) != 0) pan = static_cast<float>(step->pan) / 100.0f;
-        if ((step->locks & kLockStart) != 0) start = static_cast<float>(step->sampleStart) / 255.0f;
+        if ((step->locks & kLockPitch) != 0) spec.semitones += static_cast<float>(step->pitch);
+        if ((step->locks & kLockPan) != 0) spec.pan = static_cast<float>(step->pan) / 100.0f;
+        if ((step->locks & kLockStart) != 0) {
+            spec.normalizedStart = static_cast<float>(step->sampleStart) / 255.0f;
+        }
+        if ((step->locks & kLockSpeed) != 0) spec.speed = stepSpeedFromCode(step->speed);
     }
 
-    voice->start(data, channel.sampleSlot, samples_.generation(channel.sampleSlot), channelIndex,
-                 sampleRate_, pitch, start, channel.sampleEnd, channel.reverse != 0,
-                 channel.volume * clampFloat(velocity, 0.0f, 1.0f), pan, channel.attackMs,
-                 channel.releaseMs, channel.filterHz, blockCounter_.load(std::memory_order_relaxed));
+    voice->start(spec);
 
     triggerCount_[channelIndex].fetch_add(1, std::memory_order_relaxed);
 }
@@ -358,6 +380,8 @@ void PatternEngine::applyCommand(const Command& cmd) {
                 case kParamSolo: ch.soloed = cmd.f > 0.5f ? 1 : 0; break;
                 case kParamEnabled: ch.enabled = cmd.f > 0.5f ? 1 : 0; break;
                 case kParamReverse: ch.reverse = cmd.f > 0.5f ? 1 : 0; break;
+                case kParamSpeed: ch.speed = clampFloat(cmd.f, kMinSpeed, kMaxSpeed); break;
+                case kParamLinked: ch.linked = cmd.f > 0.5f ? 1 : 0; break;
                 default: break;
             }
             break;
@@ -436,6 +460,12 @@ void PatternEngine::applyCommand(const Command& cmd) {
             break;
         case kCmdSetRecordQuantize:
             recordQuantum_.store(clampInt(cmd.a, 0, 16), std::memory_order_relaxed);
+            break;
+        case kCmdSetStretchQuality:
+            // Read when a voice starts, so a change lands on the next trig
+            // rather than reconfiguring a stretcher mid-grain.
+            stretchQuality_.store(clampInt(cmd.a, kStretchFast, kStretchHigh),
+                                  std::memory_order_relaxed);
             break;
         case kCmdTransport: {
             switch (cmd.a) {
