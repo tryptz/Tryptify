@@ -62,6 +62,7 @@ class NativeSamplerBridge @Inject constructor() {
         pan: Int,
         sampleStart: Int,
         locks: Int,
+        speed: Int,
     ): Boolean
 
     private external fun nativeUploadPattern(
@@ -154,6 +155,7 @@ class NativeSamplerBridge @Inject constructor() {
         pan: Int = 0,
         sampleStart: Int = 0,
         locks: Int = 0,
+        speed: Int = 0,
     ): Boolean {
         val ptr = handle
         return ptr != 0L && nativePostStep(
@@ -165,6 +167,7 @@ class NativeSamplerBridge @Inject constructor() {
             pan.coerceIn(-100, 100),
             sampleStart.coerceIn(0, 255),
             locks,
+            speed.coerceIn(0, 255),
         )
     }
 
@@ -205,16 +208,18 @@ class NativeSamplerBridge @Inject constructor() {
             ints[i + 2] = if (channel.soloed) 1 else 0
             ints[i + 3] = if (channel.enabled) 1 else 0
             ints[i + 4] = if (channel.reverse) 1 else 0
+            ints[i + 5] = if (channel.linked) 1 else 0
 
             val f = index * FLOATS_PER_CHANNEL
             floats[f] = channel.volume
             floats[f + 1] = channel.pan
             floats[f + 2] = channel.pitch
-            floats[f + 3] = channel.sampleStart
-            floats[f + 4] = channel.sampleEnd
-            floats[f + 5] = channel.attackMs
-            floats[f + 6] = channel.releaseMs
-            floats[f + 7] = channel.filterHz
+            floats[f + 3] = channel.speed
+            floats[f + 4] = channel.sampleStart
+            floats[f + 5] = channel.sampleEnd
+            floats[f + 6] = channel.attackMs
+            floats[f + 7] = channel.releaseMs
+            floats[f + 8] = channel.filterHz
 
             for (s in 0 until PatternLimits.MAX_STEPS) {
                 val step = channel.step(s)
@@ -226,7 +231,7 @@ class NativeSamplerBridge @Inject constructor() {
                 steps[b + 4] = step.pan.coerceIn(-100, 100).toByte()
                 steps[b + 5] = step.sampleStart.coerceIn(0, 255).toByte()
                 steps[b + 6] = step.locks.toByte()
-                steps[b + 7] = 0
+                steps[b + 7] = step.speedCode.toByte()
             }
         }
 
@@ -313,8 +318,12 @@ class NativeSamplerBridge @Inject constructor() {
     companion object {
         init { SamplerNativeLoader.ensureLoaded() }
 
-        private const val INTS_PER_CHANNEL = 5
-        private const val FLOATS_PER_CHANNEL = 8
+        // Must match kIntsPerChannel / kFloatsPerChannel / kBytesPerStep in
+        // cpp/sampler/sampler_jni.cpp. The native side rejects short arrays
+        // rather than reading past them, so a mismatch here fails the upload
+        // loudly instead of corrupting a pattern.
+        private const val INTS_PER_CHANNEL = 6
+        private const val FLOATS_PER_CHANNEL = 9
         private const val BYTES_PER_STEP = 8
 
         // ── nativeReadState layout ──────────────────────────────────────
@@ -350,6 +359,7 @@ class NativeSamplerBridge @Inject constructor() {
         const val CMD_SET_RECORD_QUANTIZE = 16
         const val CMD_SET_MASTER_GAIN = 17
         const val CMD_STOP_CHANNEL = 18
+        const val CMD_SET_STRETCH_QUALITY = 19
 
         // ── ChannelParam ids ────────────────────────────────────────────
         const val PARAM_VOLUME = 0
@@ -364,6 +374,8 @@ class NativeSamplerBridge @Inject constructor() {
         const val PARAM_SOLO = 9
         const val PARAM_ENABLED = 10
         const val PARAM_REVERSE = 11
+        const val PARAM_SPEED = 12
+        const val PARAM_LINKED = 13
 
         // ── TransportAction ids ─────────────────────────────────────────
         const val TRANSPORT_STOP = 0
@@ -371,5 +383,10 @@ class NativeSamplerBridge @Inject constructor() {
         const val TRANSPORT_RECORD_ON = 2
         const val TRANSPORT_RECORD_OFF = 3
         const val TRANSPORT_REWIND = 4
+
+        // ── StretchQuality ids ──────────────────────────────────────────
+        const val STRETCH_FAST = 0
+        const val STRETCH_BALANCED = 1
+        const val STRETCH_HIGH = 2
     }
 }

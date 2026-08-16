@@ -163,6 +163,10 @@ fun PatternLooperScreen(
                 onRelease = { viewModel.setChannelRelease(index, it) },
                 onFilter = { viewModel.setChannelFilter(index, it) },
                 onReverse = { viewModel.setChannelReverse(index, it) },
+                onSpeed = { viewModel.setChannelSpeed(index, it) },
+                onLinked = { viewModel.setChannelLinked(index, it) },
+                onPreset = { viewModel.applySpeedPitchPreset(index, it) },
+                onResetSpeedPitch = { viewModel.resetChannelSpeedPitch(index) },
                 onMute = { viewModel.toggleMute(index) },
                 onSolo = { viewModel.toggleSolo(index) },
                 onAudition = { viewModel.trigger(index) },
@@ -355,6 +359,7 @@ private fun CompactLayout(
         PatternPanel {
             PatternTransport(
                 transport = transport,
+                stretchQuality = ui.stretchQuality,
                 accent = accent,
                 onPlay = viewModel::play,
                 onStop = viewModel::stop,
@@ -364,6 +369,7 @@ private fun CompactLayout(
                 onCountIn = viewModel::setCountIn,
                 onQuantize = viewModel::setRecordQuantum,
                 onSwitchMode = viewModel::setSwitchMode,
+                onStretchQuality = viewModel::setStretchQuality,
             )
         }
 
@@ -732,6 +738,7 @@ private fun BottomBar(
         PatternPanel(modifier = Modifier.width(380.dp)) {
             PatternTransport(
                 transport = transport,
+                stretchQuality = ui.stretchQuality,
                 accent = accent,
                 onPlay = viewModel::play,
                 onStop = viewModel::stop,
@@ -741,6 +748,7 @@ private fun BottomBar(
                 onCountIn = viewModel::setCountIn,
                 onQuantize = viewModel::setRecordQuantum,
                 onSwitchMode = viewModel::setSwitchMode,
+                onStretchQuality = viewModel::setStretchQuality,
             )
         }
     }
