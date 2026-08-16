@@ -88,6 +88,19 @@ object ChunkedSeparation {
     }
 
     /**
+     * Smallest weight the ramp is allowed to reach.
+     *
+     * Without a floor the edge weights vanish. The first sample of a 2048-frame
+     * window is `1/1024` of the peak, and raising that to a transition power of
+     * 4 gives 9e-13 — small enough that the normalisation below has nothing
+     * meaningful to divide by, so the first sample of the track comes out as
+     * silence instead of audio. A floor of 1e-6 is far below anything the
+     * crossfade cares about (the neighbouring window is at full level there) and
+     * leaves the default ramp untouched, whose smallest weight is 9.8e-4.
+     */
+    const val MIN_WEIGHT = 1e-6f
+
+    /**
      * The triangular weight for one window.
      *
      * Rises from 1 to the midpoint and falls back, normalised so its peak is 1
@@ -108,7 +121,7 @@ object ChunkedSeparation {
         for (w in weights) peak = max(peak, w)
         if (peak <= 0f) return FloatArray(n) { 1f }
         for (i in weights.indices) {
-            weights[i] = (weights[i] / peak).pow(transitionPower)
+            weights[i] = max((weights[i] / peak).pow(transitionPower), MIN_WEIGHT)
         }
         return weights
     }
@@ -194,8 +207,14 @@ object ChunkedSeparation {
             val dl = accL.getValue(stem)
             val dr = accR.getValue(stem)
             for (i in 0 until frames) {
+                // Any positive weight is safe to divide by, and every sample is
+                // covered by at least one window, so this only ever guards
+                // against a caller having asked for something impossible. An
+                // epsilon here rather than zero would silently leave the edges
+                // of the track un-normalised — which is exactly the bug
+                // [MIN_WEIGHT] documents.
                 val w = weightSum[i]
-                if (w > 1e-9f) {
+                if (w > 0f) {
                     dl[i] /= w
                     dr[i] /= w
                 }
