@@ -4,15 +4,38 @@ package tf.monochrome.android.audio.sampler.stems
 
 import tf.monochrome.android.audio.sampler.SampleEdits
 
-/** The parts a source can be pulled apart into. */
+/**
+ * The parts a source can be pulled apart into.
+ *
+ * [GUITAR] and [PIANO] only exist for six-stem models. No backend is obliged to
+ * produce them — which is the whole reason [StemSeparator.availableStems] is a
+ * per-backend question and not a constant. Asking a four-stem model for a piano
+ * stem gets you four stems, not an error.
+ *
+ * Note the ordering: the six-stem split does not add two new sources so much as
+ * carve them out of [OTHER], so a six-stem `other` is what is left after guitar
+ * and piano have been taken, not the same signal a four-stem model calls
+ * `other`.
+ */
 enum class Stem(val id: String, val label: String) {
     VOCALS("VOCALS", "Vocals"),
     DRUMS("DRUMS", "Drums"),
     BASS("BASS", "Bass"),
+    GUITAR("GUITAR", "Guitar"),
+    PIANO("PIANO", "Piano"),
     OTHER("OTHER", "Other");
 
     companion object {
         fun fromId(id: String?): Stem? = entries.firstOrNull { it.id.equals(id, true) }
+
+        /** The classic split every separator can do. */
+        val FOUR: Set<Stem> = setOf(VOCALS, DRUMS, BASS, OTHER)
+
+        /** The six-stem split, for models trained for it. */
+        val SIX: Set<Stem> = setOf(VOCALS, DRUMS, BASS, GUITAR, PIANO, OTHER)
+
+        /** Stems only a six-stem model produces. */
+        val EXTENDED: Set<Stem> = setOf(GUITAR, PIANO)
     }
 }
 
@@ -56,7 +79,7 @@ interface StemSeparator {
      */
     suspend fun separate(
         input: SampleEdits.Buffer,
-        requested: Set<Stem> = Stem.entries.toSet(),
+        requested: Set<Stem> = Stem.SIX,
         quality: StemQuality = StemQuality.BALANCED,
         onProgress: (StemProgress) -> Unit = {},
     ): Map<Stem, SampleEdits.Buffer>
