@@ -26,6 +26,7 @@ import tf.monochrome.android.audio.sampler.stems.BackendKind
 import tf.monochrome.android.audio.sampler.stems.BackendStatus
 import tf.monochrome.android.audio.sampler.stems.InstallProgress
 import tf.monochrome.android.audio.sampler.stems.InstallResult
+import tf.monochrome.android.audio.sampler.stems.SeparationOptions
 import tf.monochrome.android.audio.sampler.stems.Stem
 import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
 import tf.monochrome.android.audio.sampler.stems.StemModel
@@ -559,13 +560,20 @@ class SamplerViewModel @Inject constructor(
         stemJob = viewModelScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.Default) {
-                    separator.separate(
+                    // Through the registry, not straight to the DSP separator.
+                    // This is what makes installing a model do something: the
+                    // registry hands back the best backend that reports itself
+                    // available, which is the ONNX one once a model is on disk
+                    // and the built-in one otherwise.
+                    val backend = backends.active()
+                        ?: error("No separation backend is available")
+                    backend.separate(
                         input = buffer,
-                        requested = separator.availableStems(buffer),
-                        quality = quality,
+                        requested = backend.availableStems(buffer),
+                        options = SeparationOptions(quality = quality),
                     ) { progress ->
                         // Hop back to the view model's scope to publish; the
-                        // separator calls this from its own dispatcher.
+                        // backend calls this from its own dispatcher.
                         _ui.value = _ui.value.copy(
                             stems = _ui.value.stems.copy(progress = progress),
                         )
@@ -906,7 +914,19 @@ class SamplerViewModel @Inject constructor(
         }
     }
 
-    val separatorDescription: String get() = separator.description
+    /**
+     * What the active backend does, not what the DSP one does. A model that is
+     * installed and running should not be described as harmonic/percussive
+     * splitting.
+     */
+    val separatorDescription: String
+        get() = when (backends.active()?.kind) {
+            BackendKind.CPU, BackendKind.QNN ->
+                models.installed()?.let {
+                    "${it.name} — ${it.stems.size} stems, running on device."
+                } ?: separator.description
+            else -> separator.description
+        }
 
     // ── audition ────────────────────────────────────────────────────────
 
