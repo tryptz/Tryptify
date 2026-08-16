@@ -146,6 +146,10 @@ class StepSpeedCodeTest {
     fun `lock bits are distinct`() {
         val bits = listOf(Step.LOCK_PITCH, Step.LOCK_PAN, Step.LOCK_START, Step.LOCK_SPEED)
         assertEquals(listOf(1, 2, 4, 8), bits)
-        assertEquals(15, bits.fold(0) { acc, bit -> acc or bit })
+        // Hoisted out of the assert: with the fold inline, overload resolution
+        // picks JUnit's (long, long) from the literal before it knows the
+        // lambda returns an Int.
+        val combined = bits.fold(0) { acc, bit -> acc or bit }
+        assertEquals(15, combined)
     }
 }
