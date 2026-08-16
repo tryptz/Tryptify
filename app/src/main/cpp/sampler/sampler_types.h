@@ -69,6 +69,15 @@ static constexpr float kMinSpeed = 0.25f;
 static constexpr float kMaxSpeed = 4.0f;
 
 /**
+ * Codes per octave of speed. See [stepSpeedFromCode] for why it is 63 and not
+ * some rounder-looking number.
+ */
+static constexpr int kSpeedCodesPerOctave = 63;
+
+/** Highest usable code: four octaves above the first one. */
+static constexpr int kMaxSpeedCode = 1 + 4 * kSpeedCodesPerOctave;  // 253
+
+/**
  * Speed is stored per step in one byte, which has to cover 0.25× to 4.0× —
  * four octaves of tempo — with enough resolution that a parameter lock does
  * not sound stepped.
@@ -76,26 +85,41 @@ static constexpr float kMaxSpeed = 4.0f;
  * The mapping is exponential rather than linear because speed is perceived
  * that way: the interval from 0.5× to 1× is the same musical distance as 1× to
  * 2×, and a linear byte would spend three quarters of its range above unity
- * while quantising everything below it into a handful of values. Exponential
- * spacing puts 1.0 exactly on code 128 and gives every code the same
- * proportional step, about 1.1% — a fifth of a semitone, which is under the
- * threshold where a tempo change reads as a staircase.
+ * while quantising everything below it into a handful of values.
+ *
+ * The spacing is 63 codes per octave rather than "spread 255 codes over the
+ * range", and that detail is the whole point. Four octaves across all 254
+ * usable codes works out at 63.5 codes per octave, which is not a whole
+ * number — so 0.5× and 2.0× land exactly halfway between two codes and round
+ * to something 0.55% off. Unlinked speed does not change pitch, so that error
+ * shows up purely as timing: a half-time step lock would run 0.55% slow, which
+ * over four bars at 120 BPM is about 44 ms of drift against the straight loop
+ * it is playing under. Audible as flam, and exactly the kind of bug nobody
+ * would think to look for in a byte-encoding table.
+ *
+ * At 63 codes per octave every octave boundary is an integer: 0.25× is code 1,
+ * 0.5× is 64, 1.0× is 127, 2.0× is 190, 4.0× is 253. The step size is
+ * 2^(1/63), about 1.1% — a fifth of a semitone, under the threshold where a
+ * tempo sweep reads as a staircase. Codes 254 and 255 are unused.
  *
  * Code 0 is not 0.25×; it means "no lock, follow the channel", which is why
  * the usable range starts at 1.
  */
 inline float stepSpeedFromCode(uint8_t code) {
     if (code == 0) return 1.0f;
-    return kMinSpeed * std::exp2(4.0f * (static_cast<float>(code) - 1.0f) / 254.0f);
+    int c = code;
+    if (c > kMaxSpeedCode) c = kMaxSpeedCode;
+    return kMinSpeed * std::exp2(static_cast<float>(c - 1) /
+                                 static_cast<float>(kSpeedCodesPerOctave));
 }
 
 inline uint8_t stepSpeedToCode(float speed) {
     if (speed < kMinSpeed) speed = kMinSpeed;
     if (speed > kMaxSpeed) speed = kMaxSpeed;
-    const float steps = std::log2(speed / kMinSpeed) * 254.0f / 4.0f + 1.0f;
-    int code = static_cast<int>(steps + 0.5f);
+    const float octaves = std::log2(speed / kMinSpeed);
+    int code = static_cast<int>(octaves * static_cast<float>(kSpeedCodesPerOctave) + 0.5f) + 1;
     if (code < 1) code = 1;
-    if (code > 255) code = 255;
+    if (code > kMaxSpeedCode) code = kMaxSpeedCode;
     return static_cast<uint8_t>(code);
 }
 
