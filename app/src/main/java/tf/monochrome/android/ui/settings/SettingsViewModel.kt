@@ -59,6 +59,8 @@ class SettingsViewModel @Inject constructor(
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
+    private val stemModels: tf.monochrome.android.audio.sampler.stems.StemModelManager,
+    private val stemBackends: tf.monochrome.android.audio.sampler.stems.StemBackendRegistry,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -70,6 +72,70 @@ class SettingsViewModel @Inject constructor(
      *  Settings screen shows as a toast. */
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    // ── Audio AI ────────────────────────────────────────────────────────
+
+    /**
+     * What the settings screen shows about stem separation.
+     *
+     * A snapshot rather than a live flow: all of it comes from one small file
+     * and a couple of `isFile` checks, and nothing changes it while Settings is
+     * open except the actions right here, which refresh it themselves.
+     */
+    data class StemAiSummary(
+        val backendLabel: String = "Built-in",
+        val modelName: String? = null,
+        val modelVersion: String? = null,
+        val stemCount: Int = 0,
+        val storageBytes: Long = 0L,
+        val licenseLabel: String? = null,
+        val verifying: Boolean = false,
+    ) {
+        val hasModel: Boolean get() = modelName != null
+    }
+
+    private val _stemAi = MutableStateFlow(StemAiSummary())
+    val stemAi: StateFlow<StemAiSummary> = _stemAi.asStateFlow()
+
+    fun refreshStemAi() {
+        val installed = stemModels.installed()
+        _stemAi.value = StemAiSummary(
+            backendLabel = stemBackends.active()?.kind?.label ?: "Built-in",
+            modelName = installed?.name,
+            modelVersion = installed?.version,
+            stemCount = installed?.stems?.size ?: 0,
+            storageBytes = stemModels.installedBytes(),
+            licenseLabel = installed?.license?.label,
+        )
+    }
+
+    /**
+     * Re-hashes the installed model.
+     *
+     * Not done at startup — hashing hundreds of megabytes on every launch costs
+     * far more than it catches — so it lives here as the thing to reach for
+     * when separation starts behaving strangely.
+     */
+    fun verifyStemModel() {
+        if (_stemAi.value.verifying) return
+        _stemAi.value = _stemAi.value.copy(verifying = true)
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { stemModels.verifyInstalled() }
+            _stemAi.value = _stemAi.value.copy(verifying = false)
+            _messages.emit(
+                if (ok) "Model verified" else "Model failed verification — delete and reinstall",
+            )
+            refreshStemAi()
+        }
+    }
+
+    fun deleteStemModel() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { stemModels.uninstall() }
+            refreshStemAi()
+            _messages.emit("AI model deleted")
+        }
+    }
 
     /** Honest live status of the libusb exclusive-output path. */
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =

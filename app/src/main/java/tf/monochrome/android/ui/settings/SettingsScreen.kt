@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
+import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
@@ -1638,6 +1639,95 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             subtitle = "Keep original pitch when changing speed",
             checked = preservePitch,
             onCheckedChange = { viewModel.setPreservePitch(it) }
+        )
+
+        SettingsGroupHeader("Audio AI")
+        AudioAiSettings(viewModel)
+    }
+}
+
+/**
+ * Stem separation's model and backend, and the two actions that belong here
+ * rather than in the Stem Studio.
+ *
+ * The studio's panel is for choosing and installing; this is for the questions
+ * you ask when something is wrong — what is actually installed, how much space
+ * it is using, and is the file still intact. Verification in particular has no
+ * home in a creative screen: it is slow, it is diagnostic, and nobody reaches
+ * for it mid-session.
+ *
+ * Read from disk on open. All of it comes from one small file and a couple of
+ * existence checks, so there is nothing to subscribe to.
+ */
+@Composable
+private fun AudioAiSettings(viewModel: SettingsViewModel) {
+    val ai by viewModel.stemAi.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.refreshStemAi() }
+
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    SettingItem(
+        title = "Backend",
+        subtitle = if (ai.hasModel) {
+            "${ai.backendLabel} — running the installed model"
+        } else {
+            "${ai.backendLabel} — no model installed, using the built-in separator"
+        },
+    )
+
+    if (ai.hasModel) {
+        SettingItem(
+            title = "Model",
+            subtitle = buildString {
+                append(ai.modelName)
+                ai.modelVersion?.let { append(" · v").append(it) }
+                if (ai.stemCount > 0) append(" · ").append(ai.stemCount).append(" stems")
+                ai.licenseLabel?.let { append(" · ").append(it) }
+            },
+        )
+        SettingItem(
+            title = "Storage",
+            subtitle = StemModelManager.formatBytes(ai.storageBytes),
+        )
+        SettingItem(
+            title = if (ai.verifying) "Verifying…" else "Verify model",
+            subtitle = "Re-check the file against its checksum. Takes a moment.",
+            onClick = { if (!ai.verifying) viewModel.verifyStemModel() },
+        )
+        SettingItem(
+            title = "Delete model",
+            subtitle = "Frees ${StemModelManager.formatBytes(ai.storageBytes)}. " +
+                "Separation falls back to the built-in processor.",
+            onClick = { confirmDelete = true },
+        )
+    } else {
+        SettingItem(
+            title = "No AI model installed",
+            subtitle = "Install one from the Sampler's Stem Studio, or import a " +
+                "model file you already have.",
+        )
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete the AI model?") },
+            text = {
+                Text(
+                    "This removes ${StemModelManager.formatBytes(ai.storageBytes)} " +
+                        "from the device. Separation keeps working with the " +
+                        "built-in processor, and the model can be installed again.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    viewModel.deleteStemModel()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Keep") }
+            },
         )
     }
 }

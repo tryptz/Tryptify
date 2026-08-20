@@ -68,6 +68,13 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Normalisation", "Audio", listOf("loudness", "replaygain", "volume", "level")),
     entry("Playback speed", "Audio", listOf("tempo", "faster", "slower", "pitch")),
     entry("Multichannel downmix", "Audio", listOf("surround", "5.1", "atmos", "stereo")),
+    // "Stem" and "separation" are what someone types; "AI" and "model" are what
+    // the section is called. Both have to find it.
+    entry(
+        "Audio AI",
+        "Audio",
+        listOf("stem", "stems", "separation", "separate", "model", "demucs", "onnx", "vocals"),
+    ),
     entry("Spatial renderer", "Audio", listOf("atmos", "hrtf", "binaural", "spatial"))
         .at(SettingsDestination.Route("atmos_renderer")),
     entry("HRTF database", "Audio", listOf("binaural", "head", "spatial", "sofa"))
