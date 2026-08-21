@@ -70,6 +70,19 @@ class GenreShelfFilterTest {
     }
 
     @Test
+    fun `the record from the bug report is an echo, and the one beside it is not`() {
+        // Both were on the Neoclassical row. The first is what the filter was
+        // built to catch; the second is why catching it was never enough. A
+        // production-library track called "Playing with Fire" is in that row
+        // because the search ranked its album, and no amount of name filtering
+        // can tell that it is not neoclassical — which is why the genre path
+        // now asks the genre's chart instead of the genre's spelling.
+        val neoclassical = listOf("Neoclassical", "neo-classical")
+        assertTrue(echoesGenreName("Neoclassical Cello", null, neoclassical))
+        assertFalse(echoesGenreName("Playing with Fire", null, neoclassical))
+    }
+
+    @Test
     fun `an empty title or genre list is not an echo`() {
         assertFalse(echoesGenreName("", null, hardstyle))
         assertFalse(echoesGenreName("Hardstyle Fish", null, emptyList()))

@@ -108,6 +108,22 @@ class ChartsRepository @Inject constructor(
     }
 
     /**
+     * The genre's artist set if it is already in hand, and null if fetching it
+     * would cost a request.
+     *
+     * A discovery shelf wants this set to push loosely-tagged pop acts down its
+     * row, but it wants it for free. Fetching it costs a MusicBrainz page walk
+     * paced at a request a second, which is most of a shelf's budget spent on
+     * *reordering* — so a shelf asks this instead, gets the set once anything
+     * else has paid for it (a genre chart opened, an earlier shelf in the same
+     * session), and goes without until then. Never a network call, so it is
+     * safe to call on any path that is racing a clock.
+     */
+    suspend fun artistsForIfCached(genreId: String): Set<String>? = mutex.withLock {
+        artistSets[genreId]?.takeIf { it.fresh(TTL_ARTIST_SET_MS) }?.value
+    }
+
+    /**
      * What an artist is generally tagged as. Cached for a month: an artist's
      * tag cloud is a summary of a career, and it does not move in a week.
      */

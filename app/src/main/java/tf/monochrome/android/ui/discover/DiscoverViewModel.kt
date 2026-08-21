@@ -525,52 +525,68 @@ class DiscoverViewModel @Inject constructor(
             _flowExtra.value = emptyList()
             try {
                 val moods = _selectedMoods.value
-                val built = if (moods.isNotEmpty()) {
-                    discoveryFeed.buildForMoods(
+                val genreId = _selectedGenreId.value
+                    // A genre picked on the map. Matched by name so that
+                    // switching to a chip clears it, rather than the map's
+                    // choice silently outliving the label on screen.
+                    ?.takeIf { label != null && genreGraphRepo.graph[it]?.name == label }
+                val moodId = label?.let { moodIdByLabel[it] }
+                val seed = label?.let { chips.firstOrNull { chip -> chip.label == it } }
+
+                val streamed = when {
+                    moods.isNotEmpty() -> discoveryFeed.buildForMoodsFlow(
                         moodIds = moods,
                         excluded = _excludedGenres.value,
                         adventure = adventure,
                         itemsPerShelf = SHELF_SIZE,
                     )
-                } else if (label == null) {
-                    buildForYou()
-                } else {
-                    // A genre picked on the map. Matched by name so that
-                    // switching to a chip clears it, rather than the map's
-                    // choice silently outliving the label on screen.
-                    val genreId = _selectedGenreId.value
-                        ?.takeIf { genreGraphRepo.graph[it]?.name == label }
-                    val moodId = moodIdByLabel[label]
-                    val seed = chips.firstOrNull { it.label == label }
-                    when {
-                        genreId != null -> discoveryFeed.buildForGenre(
-                            genreId = genreId,
-                            adventure = adventure,
-                            itemsPerShelf = SHELF_SIZE,
-                        )
-                        // A graph mood: expands into one shelf per genre, each
-                        // with its own tempo and a reason in the mood's terms.
-                        moodId != null -> discoveryFeed.buildForMood(
-                            moodId = moodId,
-                            adventure = adventure,
-                            itemsPerShelf = SHELF_SIZE,
-                        ).ifEmpty {
-                            // The graph knew the mood but the catalogue had
-                            // nothing for it — fall back to the flat search
-                            // rather than showing an empty page.
-                            seed?.let { discoveryFeed.buildForQuery(it.label, it.query) }.orEmpty()
-                        }
-                        seed != null -> discoveryFeed.buildForQuery(seed.label, seed.query)
-                        else -> emptyList()
-                    }
+                    label == null -> discoveryFeed.buildFlow(
+                        adventure = adventure,
+                        itemsPerShelf = SHELF_SIZE,
+                        rotation = rotation,
+                    )
+                    genreId != null -> discoveryFeed.buildForGenreFlow(
+                        genreId = genreId,
+                        adventure = adventure,
+                        itemsPerShelf = SHELF_SIZE,
+                    )
+                    // A graph mood: expands into one shelf per genre, each with
+                    // its own tempo and a reason in the mood's terms.
+                    moodId != null -> discoveryFeed.buildForMoodFlow(
+                        moodId = moodId,
+                        adventure = adventure,
+                        itemsPerShelf = SHELF_SIZE,
+                    )
+                    else -> null
                 }
-                // The feed keys its lazy list on the shelf id, and ids are
-                // derived from what came back rather than from a counter: two
-                // seed artist names ("AFX", "Aphex Twin") can resolve to the
-                // same Qobuz artist and produce two `similar_to_<id>` shelves.
-                // Duplicate keys crash Compose, so the last line of defence is
-                // here, where the whole feed is in one place.
-                _shelves.value = built.distinctBy { it.id }
+
+                // "For you" leads with what is already on the device, and it
+                // can be drawn before the first request goes out.
+                val leading = if (moods.isEmpty() && label == null) favouritesShelf() else emptyList()
+                if (leading.isNotEmpty()) _shelves.value = leading
+
+                // Rows are placed as they arrive, each in the slot the feed
+                // planned for it, rather than the page appearing all at once
+                // when its slowest row finally settles.
+                val slots = sortedMapOf<Int, DiscoveryShelf>()
+                streamed?.collect { ranked ->
+                    slots[ranked.index] = ranked.shelf
+                    // The feed keys its lazy list on the shelf id, and ids are
+                    // derived from what came back rather than from a counter:
+                    // two seed artist names ("AFX", "Aphex Twin") can resolve to
+                    // the same Qobuz artist and produce two `similar_to_<id>`
+                    // shelves. Duplicate keys crash Compose, so the last line of
+                    // defence is here, where the whole feed is in one place.
+                    _shelves.value = (leading + slots.values).distinctBy { it.id }
+                }
+
+                // The flat search stays a whole-page fetch: it is one request
+                // sliced three ways, so there is nothing to stream, and it runs
+                // only when the graph path came back with nothing at all.
+                if (slots.isEmpty() && seed != null) {
+                    val flat = discoveryFeed.buildForQuery(seed.label, seed.query, SHELF_SIZE)
+                    _shelves.value = (leading + flat).distinctBy { it.id }
+                }
             } catch (cancelled: CancellationException) {
                 // A newer chip took over. Rethrow rather than swallow, and in
                 // particular do NOT clear the loading flag on the way out —
@@ -990,7 +1006,15 @@ class DiscoverViewModel @Inject constructor(
      * front. Favourites come from the local database rather than the network,
      * so the page has something real on it before any Qobuz call returns.
      */
-    private suspend fun buildForYou(): List<DiscoveryShelf> {
+    /**
+     * The part of "For you" that needs no network: the tracks already hearted.
+     *
+     * Split out from the feed proper so it can be on screen before the first
+     * catalogue request comes back. It is a local database read — making the
+     * page wait for six concurrent chart builds before showing it was spending
+     * someone's attention on nothing.
+     */
+    private suspend fun favouritesShelf(): List<DiscoveryShelf> {
         val favourites = libraryRepository.getFavoriteTracks().first()
             .take(SHELF_SIZE)
             .map { DiscoveryItem.TrackItem(it.toUnifiedTrackAuto(qobuzIdRegistry)) }
@@ -998,7 +1022,7 @@ class DiscoverViewModel @Inject constructor(
             // the card key, and a duplicate key crashes the list.
             .distinctBy { it.key }
 
-        val favouritesShelf = favourites.takeIf { it.isNotEmpty() }?.let {
+        val shelf = favourites.takeIf { it.isNotEmpty() }?.let {
             DiscoveryShelf(
                 id = "favorites",
                 title = "From your favorites",
@@ -1007,11 +1031,7 @@ class DiscoverViewModel @Inject constructor(
             )
         }
 
-        return listOfNotNull(favouritesShelf) + discoveryFeed.build(
-            adventure = adventure,
-            itemsPerShelf = SHELF_SIZE,
-            rotation = rotation,
-        )
+        return listOfNotNull(shelf)
     }
 
     private companion object {

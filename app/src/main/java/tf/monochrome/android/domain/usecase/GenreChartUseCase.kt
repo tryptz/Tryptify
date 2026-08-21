@@ -1,21 +1,26 @@
 package tf.monochrome.android.domain.usecase
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.data.charts.ChartSource
 import tf.monochrome.android.data.charts.ChartWindow
 import tf.monochrome.android.data.charts.ChartsRepository
 import tf.monochrome.android.data.charts.GenreChart
+import tf.monochrome.android.data.charts.GenrePool
 import tf.monochrome.android.data.charts.normalizeForMatch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.GenreGraphRepository
 import tf.monochrome.android.data.repository.MusicRepository
+import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -101,6 +106,79 @@ class GenreChartUseCase @Inject constructor(
         const val VERIFY_CONCURRENCY = 8
 
         /**
+         * A ceiling on catalogue lookups in flight for chart resolution across
+         * the whole app, however many shelves are building.
+         *
+         * [RESOLVE_CONCURRENCY] bounds one pool. Six shelves building at once,
+         * each bounded to eight, is forty-eight simultaneous searches at one
+         * self-hosted instance — which is not concurrency but a queue with
+         * extra steps: every shelf gets slower, they all miss their budget
+         * together, and they all fall back to searching the genre's name at
+         * the same moment. This is what makes a per-shelf timeout mean
+         * something.
+         */
+        const val RESOLVE_GATE = 16
+
+        /**
+         * How deep to read a tag chart when it is being read for the *artists*
+         * it names rather than the records.
+         *
+         * [capPerArtist] keeps any one artist to three rows, so a hundred rows
+         * is around thirty distinct artists — deep enough that paging a genre
+         * walks to new names for several pages instead of running dry. It costs
+         * nothing extra: the client always requests a hundred, and the cache is
+         * keyed on the genre rather than on the depth asked for.
+         */
+        const val ARTIST_TIER_CHART_DEPTH = 100
+
+        /**
+         * How many of a genre's artists one shelf draws on.
+         *
+         * Six at three tracks each is eighteen candidates for a twenty-card
+         * shelf. Fewer and one artist's catalogue is most of the row; more and
+         * the tier costs what the tier it exists to rescue costs.
+         */
+        const val ARTIST_TIER_ARTISTS = 6
+
+        /** Most tracks to take from one artist. Same reasoning as [MAX_PER_ARTIST]. */
+        const val ARTIST_TIER_TRACKS = 3
+
+        /**
+         * How far down the artist list to spend confirmation requests.
+         *
+         * Only the artists this tier can actually reach are worth checking, and
+         * a shelf reaches six of them.
+         */
+        const val ARTIST_TIER_VERIFY_DEPTH = 10
+
+        /**
+         * How many confirmations the check needs before its silence counts as
+         * evidence. Below this it found nothing rather than found nothing
+         * *good*, and dropping names on that would delete a genre whose artists
+         * simply are not on Last.fm.
+         */
+        const val ARTIST_TIER_MIN_CONFIRMED = 3
+
+        /**
+         * How many artist lookups to have in flight at once. Two round trips
+         * each, so this is deliberately smaller than [RESOLVE_CONCURRENCY].
+         */
+        const val ARTIST_TIER_CONCURRENCY = 6
+
+        /**
+         * How much deeper than the shelf the *feed* reads its chart.
+         *
+         * [RESOLVE_OVERREAD] exists so an ordinary catalogue miss rate still
+         * fills a pool without a second chart request, and it is the right
+         * trade for "play this genre", where a short queue is the only failure
+         * mode. A shelf has a live top-up tier beside it now, so a short pool
+         * is no longer a failure — and at twenty cards a shelf, doubling the
+         * read is twenty extra catalogue searches per shelf, six shelves at a
+         * time, which is what put the budget out of reach to begin with.
+         */
+        const val FEED_RESOLVE_OVERREAD = 1
+
+        /**
          * How long cross-checking may take before the chart is shown without it.
          *
          * A chart that never appears is worse than one that appears unverified:
@@ -124,10 +202,33 @@ class GenreChartUseCase @Inject constructor(
     private val resolved = mutableMapOf<String, UnifiedTrack?>()
     private val resolveMutex = Mutex()
 
+    /**
+     * The catalogue's top tracks per artist name, misses included, declared up
+     * here for the same reason [resolved] is.
+     *
+     * A genre and its neighbours are largely the same people — neoclassical,
+     * modern classical and film score share most of their names — so on a feed
+     * building six shelves at once, most of this is already answered by the
+     * time the third shelf asks.
+     */
+    private val artistTopTracks = mutableMapOf<String, List<UnifiedTrack>>()
+    private val artistMutex = Mutex()
+
+    /** See [RESOLVE_GATE]. Shared by every pool and every shelf in the process. */
+    private val resolveGate = Semaphore(RESOLVE_GATE)
+
+    /**
+     * @param crossCheck whether to spend requests confirming the chart's artists
+     *   really belong to the genre. The Top 100 screen wants that and can wait
+     *   for it; a discovery shelf is racing a budget it shares with the rest of
+     *   a page, and the check only ever *reorders* — see the cheap substitute
+     *   in [tagChart] below.
+     */
     suspend fun chart(
         genreId: String,
         window: ChartWindow,
         limit: Int = DEFAULT_LIMIT,
+        crossCheck: Boolean = true,
     ): GenreChart {
         val node = genreGraph.graph[genreId]
             ?: return GenreChart(
@@ -149,9 +250,19 @@ class GenreChartUseCase @Inject constructor(
             val tag = charts.tagChart(genreId, names, apiKey)
             if (tag.isEmpty()) return null
             val entries = capPerArtist(tag.take(limit), MAX_PER_ARTIST)
-            val confirmed = withTimeoutOrNull(CROSS_CHECK_BUDGET_MS) {
-                confirmChartArtists(node, entries, apiKey)
-            } ?: emptySet()
+            // Without [crossCheck], take the MusicBrainz artist set only if
+            // something has already paid for it. It is the half of the check
+            // that costs a paced page walk, and a shelf that spends its budget
+            // reordering a row it then has no time to fetch has made the page
+            // worse, not better. Warm — a genre chart opened, an earlier shelf
+            // in the same session — and the promotion is free.
+            val confirmed = if (crossCheck) {
+                withTimeoutOrNull(CROSS_CHECK_BUDGET_MS) {
+                    confirmChartArtists(node, entries, apiKey)
+                } ?: emptySet()
+            } else {
+                charts.artistsForIfCached(genreId).orEmpty()
+            }
             return GenreChart(
                 genreId = genreId,
                 genreName = node.name,
@@ -159,7 +270,10 @@ class GenreChartUseCase @Inject constructor(
                 shown = shownAs,
                 source = ChartSource.TAG_CHART,
                 entries = promoteConfirmed(entries, confirmed),
-                crossChecked = confirmed.isNotEmpty(),
+                // Only the full check earns the claim. A row promoted off a
+                // cached artist set is better ordered for it, but the screen
+                // that says "cross-checked" must mean the check it names.
+                crossChecked = crossCheck && confirmed.isNotEmpty(),
             )
         }
 
@@ -221,7 +335,7 @@ class GenreChartUseCase @Inject constructor(
     }
 
     private suspend fun confirmChartArtists(
-        node: tf.monochrome.android.domain.model.GenreNode,
+        node: GenreNode,
         entries: List<ChartEntry>,
         apiKey: String,
     ): Set<String> = confirmArtists(node, entries.map { it.artistName }, apiKey)
@@ -247,14 +361,27 @@ class GenreChartUseCase @Inject constructor(
      * and the tail is not what anyone reads or what playback opens on.
      */
     private suspend fun confirmArtists(
-        node: tf.monochrome.android.domain.model.GenreNode,
+        node: GenreNode,
         artistNames: List<String>,
         apiKey: String,
+        depth: Int = VERIFY_DEPTH,
+        payForArtistSet: Boolean = true,
     ): Set<String> {
         val relatives = relativesOf(node)
-        val fromMusicBrainz = charts.artistsFor(node.id, node.queries())
+        // The MusicBrainz half is three pages paced at a request a second, and
+        // it is the half a shelf cannot afford; the Last.fm half is one request
+        // per unseen artist, cached for a month. With [payForArtistSet] off the
+        // set is taken only if something else has already bought it, and the
+        // check runs thinner — still catching the case that matters, which is
+        // an artist whose own tag cloud says `hard rock` standing at the top of
+        // a hard techno chart.
+        val fromMusicBrainz = if (payForArtistSet) {
+            charts.artistsFor(node.id, node.queries())
+        } else {
+            charts.artistsForIfCached(node.id).orEmpty()
+        }
 
-        val artists = artistNames.take(VERIFY_DEPTH).distinctBy { normalizeForMatch(it) }
+        val artists = artistNames.take(depth).distinctBy { normalizeForMatch(it) }
 
         // Concurrent, in bounded batches. This loop was sequential, and each
         // unseen artist is a network round trip: forty of them in a row is the
@@ -291,7 +418,7 @@ class GenreChartUseCase @Inject constructor(
      * instead of a single word — while still rejecting `pop` and `reggaeton`,
      * which are nowhere near this part of the map.
      */
-    private fun relativesOf(node: tf.monochrome.android.domain.model.GenreNode): Set<String> =
+    private fun relativesOf(node: GenreNode): Set<String> =
         buildSet {
             add(node.id)
             addAll(node.parents)
@@ -324,16 +451,28 @@ class GenreChartUseCase @Inject constructor(
         window: ChartWindow = ChartWindow.ALL_TIME,
         depth: Int = POOL_DEPTH,
         skip: Int = 0,
+        overread: Int = RESOLVE_OVERREAD,
     ): List<UnifiedTrack> {
         if (depth <= 0) return emptyList()
-        val wanted = (skip + depth) * RESOLVE_OVERREAD
+        val wanted = (skip + depth) * overread
         val entries = chart(genreId, window, limit = wanted).entries.drop(skip)
-        if (entries.isEmpty()) return emptyList()
+        return resolvePool(entries, depth)
+    }
 
-        // Resolved in bounded parallel batches, stopping as soon as the pool is
-        // full. Sequentially this was one network round trip per row — thirty of
-        // them back to back, which is why only "play this genre" could afford to
-        // call it and the feed could not.
+    /**
+     * Turn chart rows into catalogue tracks, in rank order, up to [depth].
+     *
+     * Split out of [playablePool] so a caller that has already fetched the
+     * chart — the discovery feed reads the same one for its artists — can
+     * resolve from it without asking for it twice.
+     *
+     * Resolved in bounded parallel batches, stopping as soon as the pool is
+     * full. Sequentially this was one network round trip per row — thirty of
+     * them back to back, which is why only "play this genre" could afford to
+     * call it and the feed could not.
+     */
+    suspend fun resolvePool(entries: List<ChartEntry>, depth: Int): List<UnifiedTrack> {
+        if (depth <= 0 || entries.isEmpty()) return emptyList()
         val pool = LinkedHashMap<String, UnifiedTrack>(depth)
         for (batch in entries.chunked(RESOLVE_CONCURRENCY)) {
             coroutineScope { batch.map { async { resolve(it) } }.awaitAll() }
@@ -342,6 +481,177 @@ class GenreChartUseCase @Inject constructor(
             if (pool.size >= depth) break
         }
         return pool.values.take(depth)
+    }
+
+    /**
+     * A genre's popular music, by two roads at once.
+     *
+     * Both halves start from the same all-time tag chart — fetched here exactly
+     * once, so they do not race each other to the same request — and then
+     * diverge. One resolves the chart's rows into the catalogue directly, which
+     * is the strongest evidence available and the likeliest to come up short: a
+     * row the catalogue does not carry resolves to nothing rather than to
+     * something near it. The other reads the same chart for the *artists* it
+     * names and asks the catalogue for their own most-played tracks, which
+     * costs a request per artist instead of one per row and does not come up
+     * short for any genre with artists in it.
+     *
+     * They run concurrently, so a full shelf costs the slower of the two rather
+     * than the sum. In sequence this was the bug: resolution spent the whole
+     * budget, missed the floor a shelf needs, and the row fell through to a
+     * catalogue search for the genre's *name* — which ranks by how well a title
+     * matches those words, and is precisely the query production-library filler
+     * is written to win. Asking for Neoclassical returned "Neoclassical Cello".
+     *
+     * Either half may fail on its own without taking the other down; only a
+     * cancellation — the feed being replaced out from under us — travels.
+     */
+    suspend fun popularFor(
+        genreId: String,
+        depth: Int,
+        page: Int = 0,
+        variation: Int = 0,
+    ): GenrePool {
+        if (depth <= 0) return GenrePool()
+        val node = genreGraph.graph[genreId] ?: return GenrePool()
+        val apiKey = runCatching { preferences.lastFmChartsApiKey.first() }.getOrNull().orEmpty()
+        val entries = chart(
+            genreId = genreId,
+            window = ChartWindow.ALL_TIME,
+            limit = ARTIST_TIER_CHART_DEPTH,
+            crossCheck = false,
+        ).entries
+        if (entries.isEmpty()) return GenrePool()
+
+        return coroutineScope {
+            val charted = async {
+                emptyOnFailure {
+                    resolvePool(
+                        entries.drop(page * depth).take(depth * FEED_RESOLVE_OVERREAD),
+                        depth,
+                    )
+                }
+            }
+            // [variation] walks the artist list the same way another page
+            // would. It is what keeps "shuffle this genre" from dealing the
+            // same hand twice — the chart itself is a fixed ranking, so
+            // without it the only thing that differed between two plays of a
+            // genre was the order the same records came out in.
+            val byArtist = async {
+                emptyOnFailure { artistTracks(node, entries, apiKey, depth, page + variation) }
+            }
+            GenrePool(charted = charted.await(), fromArtists = byArtist.await())
+        }
+    }
+
+    /**
+     * The genre's biggest artists, as the catalogue's own most-played tracks
+     * for each of them.
+     *
+     * The genre's name is never sent to the catalogue here, and that is the
+     * whole point: a search for "Neoclassical" ranks records that *say*
+     * neoclassical, while a search for "Ólafur Arnalds" ranks records that
+     * *are* — and the tag chart has already told us which names to ask for.
+     *
+     * The membership check matters more here than anywhere else. Last.fm tags
+     * are crowd-applied, so the head of a genre's chart collects whoever is on
+     * everyone's radar — hard techno comes back led by FKA twigs. A ranked
+     * chart carries that error at one row; taking six names off the top and
+     * filling a row from their catalogues amplifies it. So the names are ranked
+     * by [confirmArtists] first, against evidence that is cheap or already
+     * bought.
+     *
+     * Round-robined, so one prolific artist doesn't take the first eight cards.
+     */
+    private suspend fun artistTracks(
+        node: GenreNode,
+        entries: List<ChartEntry>,
+        apiKey: String,
+        depth: Int,
+        page: Int,
+    ): List<UnifiedTrack> {
+        val named = chartArtists(entries)
+        if (named.isEmpty()) return emptyList()
+        val confirmed = runCatching {
+            confirmArtists(
+                node = node,
+                artistNames = named,
+                apiKey = apiKey,
+                depth = ARTIST_TIER_VERIFY_DEPTH,
+                payForArtistSet = false,
+            )
+        }.getOrDefault(emptySet())
+        val ranked = rankGenreArtists(
+            names = named,
+            confirmed = confirmed,
+            want = ARTIST_TIER_VERIFY_DEPTH,
+            minConfirmed = ARTIST_TIER_MIN_CONFIRMED,
+        )
+        val window = artistWindowFor(ranked, page, ARTIST_TIER_ARTISTS, ARTIST_TIER_TRACKS)
+        if (window.artists.isEmpty()) return emptyList()
+
+        val bands = coroutineScope {
+            window.artists.chunked(ARTIST_TIER_CONCURRENCY).flatMap { batch ->
+                batch.map { name -> async { topTracksFor(name) } }.awaitAll()
+            }
+        }
+        return roundRobin(
+            bands.map { it.drop(window.trackSkip).take(window.perArtist) },
+            depth,
+        ).distinctBy { it.id }
+    }
+
+    /**
+     * The catalogue's own most-played tracks for an artist, by name.
+     *
+     * Two requests rather than one, and worth it. A search's track list is
+     * ranked by how well a *title* matches the words of the query, so for an
+     * artist's name it hands back whichever of their records reads most like
+     * that name, along with every tribute and karaoke cover that mentions it.
+     * `ArtistDetail.topTracks` is the catalogue's own popularity ranking for
+     * that artist, which is the list this whole tier is trying to reach. The
+     * artists are fetched concurrently, so the cost is two round trips of
+     * latency rather than two per artist.
+     *
+     * Falls back to the search's own tracks, credited-artist filtered, when the
+     * artist page can't be had — a thinner answer beats an empty row.
+     *
+     * Memoised, misses included, for the same reason [resolve] is.
+     */
+    private suspend fun topTracksFor(artistName: String): List<UnifiedTrack> {
+        val key = normalizeForMatch(artistName)
+        if (key.isEmpty()) return emptyList()
+        artistMutex.withLock { artistTopTracks[key]?.let { return it } }
+
+        val tracks = resolveGate.withPermit {
+            val search = music.searchQobuz(artistName).getOrNull()
+            val credited = search?.tracks.orEmpty()
+                .filter { matchesArtistName(it.displayArtist, artistName) }
+            val seed = search?.artists?.firstOrNull { matchesArtistName(it.name, artistName) }
+            val top = seed?.let { music.getQobuzArtist(it.id).getOrNull()?.topTracks }
+                .orEmpty()
+                .filter { matchesArtistName(it.displayArtist, artistName) }
+            (top.ifEmpty { credited }).map { it.toQobuzUnifiedTrack() }
+        }
+
+        artistMutex.withLock { artistTopTracks[key] = tracks }
+        return tracks
+    }
+
+    /**
+     * Run [block], and treat any failure of its own as an empty answer.
+     *
+     * The two halves of [popularFor] share a scope, so an exception thrown by
+     * one would cancel the other and take the shelf with it. A cancellation is
+     * different in kind — it is the feed being replaced — and has to keep
+     * travelling.
+     */
+    private suspend fun <T> emptyOnFailure(block: suspend () -> List<T>): List<T> = try {
+        block()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        emptyList()
     }
 
     /**
@@ -366,14 +676,148 @@ class GenreChartUseCase @Inject constructor(
         val key = entry.matchKey
         resolveMutex.withLock { if (resolved.containsKey(key)) return resolved[key] }
 
-        val track = music.searchQobuz(entry.matchQuery).getOrNull()?.tracks
-            ?.firstOrNull { agrees(entry, it.artists.firstOrNull()?.name ?: "", it.title) }
-            ?.toQobuzUnifiedTrack()
+        // Behind the gate, and only past the memo: an answer already in hand
+        // must never queue behind six shelves' worth of network.
+        val track = resolveGate.withPermit {
+            music.searchQobuz(entry.matchQuery).getOrNull()?.tracks
+                ?.firstOrNull { agrees(entry, it.artists.firstOrNull()?.name ?: "", it.title) }
+                ?.toQobuzUnifiedTrack()
+        }
 
         resolveMutex.withLock { resolved[key] = track }
         return track
     }
 }
+
+/**
+ * The artists a chart names, strongest first, once each.
+ *
+ * Display spelling is kept. [normalizeForMatch] decides who is a duplicate and
+ * nothing else — its output is a comparison key, and handing "olafur arnalds"
+ * to a catalogue search is not the same request as handing it "Ólafur Arnalds".
+ */
+internal fun chartArtists(entries: List<ChartEntry>): List<String> = entries
+    .map { it.artistName.trim() }
+    .filter { it.isNotEmpty() && normalizeForMatch(it).isNotEmpty() }
+    .distinctBy { normalizeForMatch(it) }
+
+/**
+ * The artists a genre shelf should draw on, best evidence first.
+ *
+ * Silence where the check has no opinion, and truncation where it does — the
+ * same shape as [promoteConfirmed] and for the same reason. Below
+ * [minConfirmed] hits, the check found nothing rather than found nothing
+ * *good*, and cutting the list on that would empty out any genre whose artists
+ * are simply not well tagged. At or above it the unconfirmed tail is dropped
+ * rather than demoted, because a shelf reaches six names and a demoted name at
+ * position eleven is a name that never gets used.
+ */
+internal fun rankGenreArtists(
+    names: List<String>,
+    confirmed: Set<String>,
+    want: Int,
+    minConfirmed: Int,
+): List<String> {
+    val (yes, no) = names.partition { normalizeForMatch(it) in confirmed }
+    if (yes.size < minConfirmed) return names.take(want)
+    return yes.take(want)
+}
+
+/** Which artists a page draws on, and how far into each one's tracks. */
+internal data class ArtistWindow(
+    val artists: List<String>,
+    val trackSkip: Int,
+    val perArtist: Int,
+)
+
+/**
+ * Page a genre through its artists before paging it through their catalogues.
+ *
+ * Paging has two axes here, and page two must be neither page one nor a
+ * shorter page one. This walks the ranked artist list first, a page at a time,
+ * and only when that runs out does it lap back to the head and take a deeper
+ * slice of each artist's tracks — because somebody paging a genre wants more of
+ * the genre, and its seventh-biggest artist is more of the genre than the
+ * fourth-best track by its biggest.
+ */
+internal fun artistWindowFor(
+    ranked: List<String>,
+    page: Int,
+    artistsPerPage: Int,
+    perArtist: Int,
+): ArtistWindow {
+    if (ranked.isEmpty() || artistsPerPage <= 0 || perArtist <= 0) {
+        return ArtistWindow(emptyList(), 0, perArtist.coerceAtLeast(0))
+    }
+    val safePage = page.coerceAtLeast(0)
+    val pagesPerLap = ((ranked.size + artistsPerPage - 1) / artistsPerPage).coerceAtLeast(1)
+    val lap = safePage / pagesPerLap
+    val within = safePage % pagesPerLap
+    return ArtistWindow(
+        artists = ranked.drop(within * artistsPerPage).take(artistsPerPage),
+        trackSkip = lap * perArtist,
+        perArtist = perArtist,
+    )
+}
+
+/**
+ * Deal one from each band in turn, so no band owns the head of the result.
+ *
+ * Ragged bands are fine: a band that runs out drops out of the rounds and the
+ * rest carry on, which is what keeps a row full when one artist's catalogue is
+ * thinner than the others'.
+ */
+internal fun <T> roundRobin(bands: List<List<T>>, limit: Int): List<T> {
+    if (limit <= 0) return emptyList()
+    val out = ArrayList<T>(minOf(limit, bands.sumOf { it.size }))
+    var index = 0
+    while (out.size < limit) {
+        var dealt = false
+        for (band in bands) {
+            val item = band.getOrNull(index) ?: continue
+            out.add(item)
+            dealt = true
+            if (out.size >= limit) return out
+        }
+        if (!dealt) break
+        index++
+    }
+    return out
+}
+
+/**
+ * Whether a credited artist is the artist we asked for.
+ *
+ * Containment in either direction, because the two sides disagree in
+ * predictable, harmless ways: the catalogue credits "Ólafur Arnalds & Nils
+ * Frahm" where the chart says "Nils Frahm", and a chart says "Above & Beyond"
+ * where the catalogue says "Above and Beyond".
+ *
+ * The length floor is not decoration. Bare containment makes a two-letter act
+ * match half the catalogue, and on the artist tier this test is the only thing
+ * standing between a row and whatever else a search returned — so anything
+ * shorter than [MIN_ARTIST_MATCH_CHARS] has to match outright.
+ */
+internal fun matchesArtistName(credited: String, wanted: String): Boolean {
+    val a = normalizeForMatch(credited)
+    val b = normalizeForMatch(wanted)
+    if (a.isEmpty() || b.isEmpty()) return false
+    // Spaces removed for the equality test, because the fold turns punctuation
+    // into a separator and the two sides punctuate differently: "M.K." folds to
+    // "m k" where "MK" folds to "mk", and they are the same act.
+    if (a == b || a.replace(" ", "") == b.replace(" ", "")) return true
+    val shorter = if (a.length <= b.length) a else b
+    if (shorter.length < MIN_ARTIST_MATCH_CHARS) return false
+    return a.contains(b) || b.contains(a)
+}
+
+/**
+ * Below this many characters, a name has to match outright rather than by
+ * containment. Four is long enough to clear the initials and stage names that
+ * would otherwise match everything ("MK", "AFX") and short enough to keep the
+ * real short names that only ever appear whole.
+ */
+internal const val MIN_ARTIST_MATCH_CHARS = 4
 
 /**
  * Whether a catalogue hit is really the charted track.

@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+#### Discover rows play the genre instead of its name
+- **A genre row is the genre's popular music, not records named after it** — the Neoclassical row was "Neoclassical Cello", "Neoclassical Danger" and production-library filler, because the row was a catalogue search for the word *Neoclassical*, which ranks by how well a title or album matches those words. That is the one query machine-generated filler is written to win: putting the genre in the title is exactly how you get found by someone searching for the genre. The chart-backed path meant to prevent this existed and was losing a race — six shelves building at once, each spending its nine-second budget on a cross-check that only reorders and then forty catalogue lookups that each demand agreement on both artist and title — so every row quietly fell through to the search it was built to replace.
+- **The genre's chart is now read twice over, for records and for artists** — the same Last.fm tag chart names both, and only the records were ever used. Resolving records exactly is the strongest evidence and the likeliest to come up short, since a record the catalogue doesn't carry resolves to nothing rather than to something near it; the artists it names cost one lookup each and never come up short for a genre with artists in it. Both run at once and merge, charted records first, so a full row costs the slower of the two rather than the sum — and a genre whose records the catalogue simply doesn't stock still gets a row of its own artists rather than a row of its own name.
+- **A genre too small to chart borrows from its neighbours on the map** — Terrorcore has 866 listeners on record and no chart worth the name, so it takes gabber's, and the row says "by way of Gabber". Playing the nearest real thing and naming it is both more useful and more honest than playing whatever happens to be *called* terrorcore. Paging deeper into a row never borrows: a page five that quietly appended a neighbour's music to a row already on screen under its own reason line would be the same dishonesty by another route, so it runs out instead and says so.
+- **Every row still states its evidence** — "ranked by plays" for a chart, "its most-played artists" for the artist tier, both when a row is filled from both, "by way of X" when it is borrowed, and "matched by name" reserved for the one curated seed ("Pop hits") that names no genre at all and where a name is genuinely all there is. Six of the seven curated "Popular in …" rows now resolve through the genre map and get the same evidence every other genre row gets; "Popular in jazz" was a catalogue search for the word "jazz".
+- **Accents no longer split an artist in three** — the fold that lets two services agree a record is the same record kept diacritics, so "Ólafur Arnalds", "Olafur Arnalds" and "OLAFUR ARNALDS" were three different artists on one chart: shown three times in a row, and confirmed against a catalogue that spells it the other way exactly never.
+- **A short artist name has to match outright** — the lenient credited-artist test matched by containment in either direction, so a two-letter act matched half the catalogue. That was harmless while it only kept album rows; it is load-bearing now that a row can be built from an artist list.
+
+### Changed
+- **The feed draws itself row by row** — a page used to appear all at once, when the slowest of its six concurrent builds finished, and each of those can spend nine seconds on a chart. Rows now land as they resolve, each in the slot the feed planned for it before any request went out, so a slow row leaves a gap that fills in rather than shoving everything below it down when it arrives. "For you" leads with your hearted tracks, which are on the device and need no network at all, so the page has something real on it immediately.
+- **Chart lookups are gated across the whole app** — eight in flight per shelf and six shelves at once is forty-eight simultaneous searches at one self-hosted instance, which is not concurrency but a queue with extra steps: every shelf gets slower, they miss their budgets together, and they all fall back at the same moment. Sixteen, shared, is what makes a per-shelf timeout mean anything.
+
 ## [1.8.5]
 
 ### Added
