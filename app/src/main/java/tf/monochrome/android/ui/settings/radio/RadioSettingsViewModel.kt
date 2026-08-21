@@ -4,25 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
-import tf.monochrome.android.radio.RadioPlannerClient
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
 
 @HiltViewModel
 class RadioSettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
-    private val plannerClient: RadioPlannerClient,
 ) : ViewModel() {
 
     // An in-memory working copy drives the weight sliders, so a drag updates
-    // instantly with no I/O. Persisting each frame wrote all fourteen float
+    // instantly with no I/O. Persisting each frame wrote all eleven float
     // keys to DataStore, and the flow those sliders read from is DataStore's
     // own — so every frame of a drag also re-emitted and recomposed the whole
     // tab. Writes are debounced to the tail of the gesture instead.
@@ -41,22 +37,6 @@ class RadioSettingsViewModel @Inject constructor(
         }
     }
 
-    val plannerEnabled: StateFlow<Boolean> = preferences.radioPlannerEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
-    val plannerUrl: StateFlow<String> = preferences.radioPlannerUrl
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000),
-            PreferencesManager.DEFAULT_RADIO_PLANNER_URL
-        )
-
-    val plannerApiKey: StateFlow<String?> = preferences.radioPlannerApiKey
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    private val _connectionStatus = MutableStateFlow<String?>(null)
-    val connectionStatus: StateFlow<String?> = _connectionStatus.asStateFlow()
-
     fun updateWeights(weights: RadioPlannerWeights) {
         userTouched = true
         _weights.value = weights.clamped()
@@ -74,51 +54,6 @@ class RadioSettingsViewModel @Inject constructor(
         // drag tail that would otherwise land on top of the reset.
         weightsPersistJob?.cancel()
         weightsPersistJob = viewModelScope.launch { preferences.resetRadioPlannerWeights() }
-    }
-
-    fun setPlannerEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferences.setRadioPlannerEnabled(enabled) }
-    }
-
-    fun setPlannerUrl(url: String?) {
-        viewModelScope.launch { preferences.setRadioPlannerUrl(url) }
-    }
-
-    fun setPlannerApiKey(key: String?) {
-        viewModelScope.launch { preferences.setRadioPlannerApiKey(key) }
-    }
-
-    private var testJob: kotlinx.coroutines.Job? = null
-    private val _isTesting = MutableStateFlow(false)
-    val isTesting: StateFlow<Boolean> = _isTesting.asStateFlow()
-
-    fun testConnection() {
-        // Cancel any in-flight test so a stale earlier result can't overwrite
-        // the current one, and expose isTesting so the button disables.
-        testJob?.cancel()
-        _connectionStatus.value = "Testing…"
-        testJob = viewModelScope.launch {
-            _isTesting.value = true
-            try {
-            _connectionStatus.value = plannerClient.health().fold(
-                onSuccess = { health ->
-                    buildString {
-                        append("Connected. Planner: ${health.planner ?: "unknown"}")
-                        if (health.modelLoaded) append(", model loaded")
-                        if (health.metabrainzEnabled) {
-                            append(
-                                if (health.metabrainzIndexExists) ", MetaBrainz index ready"
-                                else ", MetaBrainz enabled (no index yet)"
-                            )
-                        }
-                    }
-                },
-                onFailure = { "Connection failed: ${it.message}" }
-            )
-            } finally {
-                _isTesting.value = false
-            }
-        }
     }
 
     private companion object {

@@ -2,7 +2,29 @@
 
 ## [Unreleased]
 
+### Removed
+
+#### The remote radio planner is gone; radio is unchanged
+- **"Use remote planner", the planner URL, the API key and Test connection are gone from Settings › Radio** — they pointed at a Tryptify-Playlist deployment that no longer exists. Radio never needed it: ranking runs on-device in `LocalRadioPlanner` and has since the weights were first honoured locally, so the station you get from a seed is the same station you got before, built from the same Qobuz backbone and ranked by the same eleven weights.
+- **Three sliders went with it** — MetaBrainz metadata, ListenBrainz graph and mood continuity described datasets that were never on the device. They were only ever serialised onto the wire, and the tab said so under a "Needs a planner" header. With no planner to send them to they could only have been sliders that move nothing, which is exactly what the last release was clearing out.
+- **The keys stop syncing** — the planner switch, its URL and the three removed weights leave the settings sync payload. An older backup that still carries them simply no longer matches them; nothing needs migrating, and the eleven remaining weight keys are untouched, so your tuning survives the update.
+- **A wire test was carrying a second job, and it has been handed on** — the weights are written out field by field in three parallel blocks, and the test that checked they all reached the server was also the only thing catching a copy-paste slip between them. Its replacement reads `PreferencesManager` and fails if a weight is never read, never written, or read and written under different keys — the failure mode being a slider that moves and then will not stick. It was checked against both slips before being kept.
+
+### Added
+
+#### Full screen
+- **Settings › System › Display › Full screen hides the notification bar and the bottom gesture bar** — everywhere in the app, the way a game does, with a swipe in from an edge to bring them back for a moment. Nothing had to move to make room: every screen already pads from the system-bar insets, and those go to zero when the bars are hidden, so the content grows into the space on its own.
+- **Leaving the visualiser no longer hands the bars back** — the player's own fullscreen mode had the same mechanism and showed the bars unconditionally on the way out, which would have cancelled the app-wide setting the first time you closed a visualiser. Both go through one place now, and it restores to whatever the setting says rather than to visible.
+- **It stays on this device**, like the frame-rate and resolution settings beside it. Which bars a phone has and whether you want them is a property of the phone, not of the account.
+
 ### Fixed
+
+#### The Account screen is centred
+- **The avatar, your name and your email sat against the left margin** while every button under them ran the full width, which read as a half-finished screen. The header is a `Box` that was handed the full width with a wrap-width column inside it, and a box puts its content at the top left unless told otherwise, so the parent's instruction to centre never reached it.
+- **Sign Out matches the two buttons above it**, and the 32dp of space above the avatar is gone: inside a column that already centres itself, it only pushed the whole block low.
+
+#### The mini player stops covering Oxford's controls
+- **CLIP 0 dB, BAND SPLIT and EFFECT IN sit at the bottom of the fader column on both the Compressor and Inflator tabs**, and the mini player was drawn over them. It hides on those two screens now, the way it already did on the player and the mixer, and the space it was reserving goes back to the faders. Every other screen keeps it exactly as it was.
 
 #### Your EQ profiles and mixer presets sync with your account
 - **AutoEQ profiles, parametric EQ profiles and mixer presets now travel with you** — they were the two things in the app that take longest to build by hand and the only ones that lived and died on one device. What makes it odd rather than merely missing is that the cloud side was already there: both tables existed with their keys and their access rules, and the app carried push functions for both. Every one of those functions had no callers, so the tables sat empty and one of them was being *read* on every launch by a pull that filled nothing.
