@@ -22,9 +22,11 @@ import javax.inject.Singleton
  * dangerous part; having no way back was.
  *
  * Runs on every sign-in and on every launch that starts already signed in.
- * That is safe to repeat because the pull is built out of insert-if-not-exists
- * — it can only add rows the device is missing, and local data wins every
- * conflict — and it is bounded, because the automatic pass leaves the thousand
+ * That is safe to repeat: most of the pull is insert-if-not-exists, so it only
+ * adds rows the device is missing, and the one exception is deliberate — EQ and
+ * mixer presets take whichever copy was edited most recently, because a preset
+ * that can never be overwritten is a preset whose edits never leave the device
+ * that made them. It is bounded too: the automatic pass leaves the thousand
  * scrobbles of play history to the manual sync.
  *
  * Failures are logged and dropped. A restore is a repair, so a device that is

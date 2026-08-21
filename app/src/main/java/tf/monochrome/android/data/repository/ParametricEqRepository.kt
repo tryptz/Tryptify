@@ -9,6 +9,11 @@ import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.entity.EqPresetEntity
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.EqPreset
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,22 +23,45 @@ import javax.inject.Singleton
  */
 @Singleton
 class ParametricEqRepository @Inject constructor(
-    private val eqPresetDao: EqPresetDao
+    private val eqPresetDao: EqPresetDao,
+    private val supabaseSync: SupabaseSyncRepository,
 ) {
+    /**
+     * Fire-and-forget cloud sync, a no-op when the user isn't signed in. Saving
+     * a preset must not wait on the network, and must not fail because of it.
+     */
+    private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val json = Json { ignoreUnknownKeys = true }
 
     fun getAllPresets(): Flow<List<EqPreset>> =
         eqPresetDao.getAllParametricPresets().map { list -> list.map { it.toDomain() } }
 
+    /**
+     * A parametric preset by id, re-emitting if it arrives later.
+     *
+     * The one-shot [getPresetById] races the cloud pull on a fresh device: the
+     * active-preset id travels in the settings blob and the preset itself
+     * travels as a row, and whichever lands second decides whether the screen
+     * comes up with an active preset or with nothing.
+     */
+    fun getPresetByIdFlow(presetId: String): Flow<EqPreset?> =
+        eqPresetDao.getPresetByIdFlow(presetId).map { entity ->
+            entity?.takeIf { it.eqType == 1 }?.toDomain()
+        }
+
     suspend fun getPresetById(presetId: String): EqPreset? =
         eqPresetDao.getPresetById(presetId)?.takeIf { it.eqType == 1 }?.toDomain()
 
     suspend fun savePreset(preset: EqPreset) {
-        eqPresetDao.insertPreset(preset.toEntity())
+        val entity = preset.toEntity()
+        eqPresetDao.insertPreset(entity)
+        syncScope.launch { supabaseSync.pushEqPreset(entity) }
     }
 
     suspend fun deletePreset(presetId: String) {
         eqPresetDao.deletePreset(presetId)
+        syncScope.launch { supabaseSync.deleteEqPreset(presetId) }
     }
 
     fun searchPresets(query: String): Flow<List<EqPreset>> =

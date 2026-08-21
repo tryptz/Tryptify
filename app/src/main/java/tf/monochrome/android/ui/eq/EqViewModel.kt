@@ -3,6 +3,8 @@ package tf.monochrome.android.ui.eq
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -306,7 +308,16 @@ class EqViewModel @Inject constructor(
             val presetId = preferences.eqActivePresetId.first()
 
             if (presetId != null) {
+                // The id and the preset it names arrive by different roads on a
+                // fresh device: the id inside the synced settings blob, the
+                // preset as a row the library pull writes. Read first, and only
+                // wait if it is genuinely not here yet. Bounded, because a
+                // preset deleted on another device is never coming, and the
+                // headphone and measurement restores below still have to run.
                 val preset = eqRepository.getPresetById(presetId)
+                    ?: withTimeoutOrNull(PRESET_RESTORE_WAIT_MS) {
+                        eqRepository.getPresetByIdFlow(presetId).filterNotNull().first()
+                    }
                 _activePreset.value = preset
                 if (preset != null) {
                     _currentBands.value = preset.bands
@@ -793,6 +804,8 @@ class EqViewModel @Inject constructor(
     }
 
     private companion object {
+        const val PRESET_RESTORE_WAIT_MS = 8_000L
+
         const val AUTO_PREAMP_GRID_POINTS = 96
 
         /** Drag-tail delay before a continuous edit reaches DataStore. */

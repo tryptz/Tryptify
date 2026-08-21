@@ -12,6 +12,11 @@ import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.entity.EqPresetEntity
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.EqPreset
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +29,14 @@ import javax.inject.Singleton
 @Singleton
 class EqRepository @Inject constructor(
     private val eqPresetDao: EqPresetDao
-) {
+,
+    private val supabaseSync: SupabaseSyncRepository) {
+    /**
+     * Fire-and-forget cloud sync, a no-op when the user isn't signed in. Saving
+     * a preset must not wait on the network, and must not fail because of it.
+     */
+    private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
@@ -80,6 +92,10 @@ class EqRepository @Inject constructor(
     suspend fun savePreset(preset: EqPreset) {
         val entity = preset.toEntity()
         eqPresetDao.insertPreset(entity)
+        // Pushed on save rather than only when someone finds the Sync button,
+        // so a profile tuned on the phone is already in the account by the time
+        // the tablet next opens.
+        syncScope.launch { supabaseSync.pushEqPreset(entity) }
     }
 
     /**
@@ -88,6 +104,7 @@ class EqRepository @Inject constructor(
     suspend fun updatePreset(preset: EqPreset) {
         val entity = preset.toEntity()
         eqPresetDao.updatePreset(entity)
+        syncScope.launch { supabaseSync.pushEqPreset(entity) }
     }
 
     /**
@@ -96,6 +113,9 @@ class EqRepository @Inject constructor(
     suspend fun deletePreset(presetId: String) {
         // Can only delete custom presets from database
         eqPresetDao.deletePreset(presetId)
+        // Deleting here deletes it everywhere. A delete made offline never
+        // reaches the cloud, and that preset comes back on the next pull.
+        syncScope.launch { supabaseSync.deleteEqPreset(presetId) }
     }
 
     /**
