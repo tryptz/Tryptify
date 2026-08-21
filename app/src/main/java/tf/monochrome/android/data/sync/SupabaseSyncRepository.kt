@@ -616,12 +616,37 @@ class SupabaseSyncRepository @Inject constructor(
     // ─── Full initial sync (pull from cloud → merge into Room) ───────────────
 
     /**
-     * Called once after sign-in. Pulls all cloud data and merges it into Room.
-     * Existing local data wins on conflict — we don't overwrite local with cloud.
+     * Everything the cloud holds, merged into Room. Existing local data wins on
+     * conflict — every insert here is insert-if-not-exists, so a pull can be run
+     * as often as you like and never overwrites something local.
+     *
+     * This is the manual "Sync now" pull. [pullLibrary] is the same thing minus
+     * the two expensive, least-repairing sections, and is what runs by itself.
      */
-    suspend fun pullAll(): List<String> {
+    suspend fun pullAll(): List<String> =
+        pullLibrary(includePlayEvents = true) + pullSettingsSection()
+
+    /**
+     * The library half of a pull: favourites, mix presets and playlists.
+     *
+     * Split out so it can run unattended on every launch. The whole reason this
+     * exists is that a device which loses library rows had no way back: app
+     * settings have healed themselves on sign-in ever since
+     * [SettingsSyncCoordinator] landed, while playlists and favourites were
+     * pushed on every edit and pulled only when somebody found the Sync button
+     * on the profile screen. One half of the same account's data repaired
+     * itself and the other half did not, which is how a full set of playlists
+     * can sit intact in the cloud while the device that owns them shows an
+     * empty list.
+     *
+     * @param includePlayEvents whether to pull the last thousand scrobbles too.
+     *   They are the heaviest section by far and the least worth repeating on a
+     *   launch — nothing on screen is missing without them — so the automatic
+     *   path leaves them to the manual sync.
+     */
+    suspend fun pullLibrary(includePlayEvents: Boolean = true): List<String> {
         val uid = userId() ?: return listOf("not signed in")
-        Log.d(TAG, "Starting full cloud pull for user $uid")
+        Log.d(TAG, "Starting cloud pull for user $uid (playEvents=$includePlayEvents)")
         val failed = mutableListOf<String>()
 
         // Favorites
@@ -734,7 +759,7 @@ class SupabaseSyncRepository @Inject constructor(
         // Play events — pull the most recent 1000 and merge into Room so stats
         // come across on a new device. Skip events already present (same track
         // + same playedAt) to avoid duplicating scrobbles if pull runs twice.
-        runCatching {
+        if (includePlayEvents) runCatching {
             val events = supabase.postgrest["play_events"]
                 .select {
                     filter { eq("user_id", uid) }
@@ -765,13 +790,25 @@ class SupabaseSyncRepository @Inject constructor(
             }
         }.onFailure { failed += "play_events"; Log.e(TAG, "pull play_events: ${it.message}") }
 
-        // App settings — apply the cloud snapshot to local DataStore.
-        runCatching { pullSettings() }
-            .onFailure { failed += "settings"; Log.e(TAG, "pull settings: ${it.message}") }
-
         Log.d(TAG, "Cloud pull complete (${failed.size} failed sections)")
         return failed
     }
+
+    /**
+     * App settings, applied to local DataStore.
+     *
+     * Kept out of [pullLibrary] because [SettingsSyncCoordinator] already owns
+     * this on sign-in, and it owns it carefully: it holds an applyingRemote
+     * flag while the snapshot lands so the writes it causes don't echo straight
+     * back as a push. A second, unguarded pull racing that one is how the
+     * ping-pong it was written to prevent gets back in.
+     */
+    private suspend fun pullSettingsSection(): List<String> =
+        runCatching { pullSettings() }
+            .fold(onSuccess = { emptyList() }, onFailure = {
+                Log.e(TAG, "pull settings: ${it.message}")
+                listOf("settings")
+            })
 
     // ─── Full push (local → cloud) after import ─────────────────────────────
 
