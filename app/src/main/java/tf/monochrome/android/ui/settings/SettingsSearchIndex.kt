@@ -107,11 +107,15 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     // ── Radio ───────────────────────────────────────────────────────────
     entry("AI radio", "Radio", listOf("station", "recommend", "queue", "seed")),
-    entry("Radio planner", "Radio", listOf("station", "queue", "url")),
     entry("Radio weights", "Radio", listOf("tuning", "similarity", "novelty", "familiarity")),
 
     // ── System ──────────────────────────────────────────────────────────
     entry("Performance", "System", listOf("battery", "fps", "low power", "glass", "blur")),
+    entry(
+        "Full screen",
+        "System",
+        listOf("immersive", "hide status bar", "notification bar", "navigation bar", "gesture bar"),
+    ),
     entry("Debug log", "System", listOf("logs", "diagnostics", "report", "crash"))
         .at(SettingsDestination.Route("debug_log")),
     entry("Developer mode", "System", listOf("dev", "advanced", "hidden")),

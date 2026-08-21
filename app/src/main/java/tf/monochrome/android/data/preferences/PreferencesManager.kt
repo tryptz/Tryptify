@@ -181,6 +181,10 @@ class PreferencesManager @Inject constructor(
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
         private val APP_TARGET_FPS = intPreferencesKey("app_target_fps")
         private val APP_RENDER_RESOLUTION = intPreferencesKey("app_render_resolution")
+        // Device-local, like the two above it: which bars a panel has and
+        // whether you want them is a property of the phone in your hand, not of
+        // the account. Deliberately absent from SETTINGS_SYNC_KEYS.
+        private val IMMERSIVE_FULL_SCREEN = booleanPreferencesKey("immersive_full_screen")
 
         // Low performance mode. The automatic DeviceTier already trims effects on
         // weak hardware; these are the user's own override, for a flagship on a
@@ -1989,6 +1993,13 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setAppRenderResolution(shortSide: Int) {
         dataStore.edit { it[APP_RENDER_RESOLUTION] = shortSide }
+    }
+
+    /** Hide the status and navigation bars app-wide; a swipe reveals them. */
+    val immersiveFullScreen: Flow<Boolean> =
+        dataStore.data.map { it[IMMERSIVE_FULL_SCREEN] ?: false }
+    suspend fun setImmersiveFullScreen(enabled: Boolean) {
+        dataStore.edit { it[IMMERSIVE_FULL_SCREEN] = enabled }
     }
 
     // --- Discover ---

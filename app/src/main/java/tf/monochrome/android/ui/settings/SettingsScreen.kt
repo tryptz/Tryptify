@@ -2862,6 +2862,19 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Display")
+
+        // Game-style full screen: no status bar, no gesture bar. Every screen
+        // pads from WindowInsets, so hiding the bars collapses those insets and
+        // the content grows into the space on its own.
+        val immersiveFullScreen by viewModel.immersiveFullScreen.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = "Full screen",
+            subtitle = "Hides the notification bar and the bottom gesture bar everywhere in the app. Swipe in from an edge to bring them back for a moment.",
+            checked = immersiveFullScreen,
+            onCheckedChange = { viewModel.setImmersiveFullScreen(it) }
+        )
+
         val appFps by viewModel.appTargetFps.collectAsStateWithLifecycle()
         val appResolution by viewModel.appRenderResolution.collectAsStateWithLifecycle()
         // App-wide frame rate and panel resolution, applied by selecting a

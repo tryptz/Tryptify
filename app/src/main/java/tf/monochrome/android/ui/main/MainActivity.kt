@@ -159,6 +159,12 @@ class MainActivity : ComponentActivity() {
             val customAccent by preferences.customAccentColor.collectAsStateWithLifecycle(initialValue = 0xFF5865F2.toInt())
             val customBackground by preferences.customBackgroundColor.collectAsStateWithLifecycle(initialValue = 0xFF101014.toInt())
             val currentTrack by queueManager.currentTrack.collectAsStateWithLifecycle()
+            // Settings › System › Display › Full screen. Published as a
+            // composition local as well as applied here, so the visualiser's
+            // own fullscreen mode knows not to show the bars again on its way
+            // out — see SystemBarsHidden.
+            val immersiveFullScreen by preferences.immersiveFullScreen
+                .collectAsStateWithLifecycle(initialValue = false)
             // The user's manual low-performance overrides, from Settings ›
             // System › Performance.
             val showExplicitBadges by preferences.showExplicitBadges
@@ -208,6 +214,7 @@ class MainActivity : ComponentActivity() {
                 LocalPerformanceProfile provides effectiveProfile,
                 tf.monochrome.android.performance.LocalLowPerformance provides lowPerformance,
                 tf.monochrome.android.ui.theme.LocalShowExplicitBadges provides showExplicitBadges,
+                LocalImmersiveFullScreen provides immersiveFullScreen,
             ) {
                 MonochromeTheme(
                     themeName = themeName,
@@ -248,6 +255,7 @@ class MainActivity : ComponentActivity() {
                             navigationBarStyle = style
                         )
                     }
+                    SystemBarsHidden(immersiveFullScreen)
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background

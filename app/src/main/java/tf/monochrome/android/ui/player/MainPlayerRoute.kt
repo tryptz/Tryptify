@@ -73,8 +73,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
+import tf.monochrome.android.ui.main.LocalImmersiveFullScreen
+import tf.monochrome.android.ui.main.SystemBarsHidden
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.SourceType
@@ -250,7 +250,9 @@ fun MainPlayerRoute(
     val spectrumColor = MaterialTheme.colorScheme.primary
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
-    HandleFullscreenInsets(isFullscreenActive)
+    // OR'd with the app-wide setting so leaving the visualiser doesn't hand the
+    // status bar back to someone who asked for full screen everywhere.
+    SystemBarsHidden(isFullscreenActive || LocalImmersiveFullScreen.current)
     PlayerSystemBarAppearance(blendedColors.dominant)
 
     // --- Sheets ---
@@ -799,32 +801,6 @@ private fun PlayerSystemBarAppearance(albumDominant: Color) {
         onDispose {
             hadLightStatus?.let { controller?.isAppearanceLightStatusBars = it }
             hadLightNav?.let { controller?.isAppearanceLightNavigationBars = it }
-        }
-    }
-}
-
-@Composable
-private fun HandleFullscreenInsets(isFullscreenActive: Boolean) {
-    val view = LocalView.current
-    val window = (view.context as? android.app.Activity)?.window
-    LaunchedEffect(isFullscreenActive) {
-        if (window != null) {
-            val controller = WindowCompat.getInsetsController(window, view)
-            if (isFullscreenActive) {
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            } else {
-                controller.show(WindowInsetsCompat.Type.systemBars())
-            }
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            if (window != null) {
-                WindowCompat.getInsetsController(window, view)
-                    .show(WindowInsetsCompat.Type.systemBars())
-            }
         }
     }
 }
