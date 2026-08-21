@@ -237,14 +237,9 @@ Several JVM tests exist specifically to hold the UI invariants in `docs/ui-invar
 
 ## Known Review Targets
 
-Re-verified against `main` on 2026-08-21; every item below was still true at that commit. Re-check again before acting — and treat each as a candidate for its own focused pull request, not as a batch.
+Re-verified against `main` on 2026-08-21; every item was true at that commit. The first has since been fixed and is kept here as the worked example. Re-check the rest before acting — and treat each as a candidate for its own focused pull request, not as a batch.
 
-**Glass Surfaces — the shipped skill contradicts the model.** `.claude/skills/player-visuals-themes/` is what an agent is pointed at for theme work, and four of its statements are wrong against `domain/model/PlayerGlassSettings.kt` and `domain/model/LyricsFxSettings.kt`:
-
-- `hazeBlurDp` (clamped `0f..80f`, default `40f`) and `hazeTint` (`0f..2f`, default `1f`) appear nowhere in `SKILL.md` or in the validator's `GLS_RANGES`, so nothing checks them.
-- `miniProgressBar` is carried by `withPersonalFrom`, but the validator's `GLS_PERSONAL` set is `{sampleRings, tintColor, previewBg}`. The validator therefore treats a personal field as material — the exact class of mistake the Glass Surfaces gate "presets do not overwrite unrelated fields" exists to catch.
-- `LYR_RANGES` carries `popAmount` (0, 0.2), which no longer exists on `LyricsFxSettings`; the real field is `pumpAmount`, and that one *is* validated correctly at (0, 0.25). The stale key is dead weight rather than a live failure, but it is what the skill's prose still documents.
-- `GLS_RANGES` floors `bodyOpacity` at `0.2`, while `PlayerGlassSettings.clamped()` allows `0f..1f` and the shipped default *is* `0.2f` — a ghost-thin body is the documented intent of the field, so the validator rejects legitimate themes at the low end. The floor is correct for the Lyrics FX sibling `glassBodyOpacity`, which the model really does clamp to `0.2f..1f`; it looks copied across. `SKILL.md` separately states the `bodyOpacity` default as `0.5`.
+**Glass Surfaces — resolved.** The `player-visuals-themes` skill's tables and its `validate_theme_ranges.py` had drifted from the model: fourteen wrong Player Glass defaults, `hazeBlurDp`/`hazeTint` undocumented, `miniProgressBar` missing from the personal set, a `popAmount` field that no longer exists, and a `bodyOpacity` floor copied from the Lyrics FX sibling. The validator now reads the bounds, the personal set and the defaults **out of the Kotlin** and checks `SKILL.md`'s tables against them, so the drift cannot recur silently — a field it cannot check is reported, and an unreadable model exits 2 rather than passing. Run it alongside `./gradlew :app:testDebugUnitTest --tests '*LyricsFxSettingsTest' --tests '*PlayerGlassSettingsTest'`.
 
 **Instrumentation coverage is absent.** `app/src/` contains only `main` and `test`; there is no `androidTest` source set at all. Navigation, settings persistence and session integration have no device-level coverage.
 
