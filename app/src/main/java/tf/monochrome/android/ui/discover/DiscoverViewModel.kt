@@ -258,16 +258,6 @@ class DiscoverViewModel @Inject constructor(
     private val _familiarArtists = MutableStateFlow<Set<String>>(emptySet())
     private val familiarArtists: StateFlow<Set<String>> = _familiarArtists.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            _familiarArtists.value = runCatching {
-                libraryRepository.getSeedArtistNames(FAMILIAR_ARTISTS)
-                    .map { it.lowercase() }
-                    .toSet()
-            }.getOrDefault(emptySet())
-        }
-    }
-
     // ── The genre rail ──────────────────────────────────────────────────
 
     /**
@@ -350,16 +340,28 @@ class DiscoverViewModel @Inject constructor(
     /** Shelves whose genre has no more to give, so the grid stops asking. */
     private val exhaustedShelves = mutableSetOf<String>()
 
-    // Everything above is read *synchronously* by [rebuild], which the init
-    // block below calls during construction, so it has to be declared above
-    // that init — Kotlin runs initializers in declaration order, and a field
-    // declared later is still null when the constructor reaches it. These two
-    // sets were originally written down beside loadMoreInShelf, at the bottom
-    // of the class, and every launch of Discover died on `.clear()` here. The
-    // compiler can't see it: the read happens through a method call. State that
-    // rebuild only touches inside its `viewModelScope.launch` is exempt — that
-    // body resumes after construction has finished — which is why the older
-    // fields further down the file get away with it.
+    // Field order used to be load-bearing here: [rebuild] is called during
+    // construction, Kotlin runs initializers in declaration order, and a field
+    // declared later is still null when the constructor reaches it. The two
+    // sets above were originally written down beside loadMoreInShelf, at the
+    // bottom of the class, and every launch of Discover died on `.clear()`.
+    //
+    // The note that used to sit here said state touched only inside rebuild's
+    // `viewModelScope.launch` was exempt, because that body "resumes after
+    // construction has finished". That is not true, and it cost a crash on
+    // every cold launch of the tab. viewModelScope dispatches on
+    // Dispatchers.Main.immediate, and a ViewModel is constructed on the main
+    // thread, so the launch body does not wait to be posted: it runs inline,
+    // inside the constructor, right up to its first real suspension point.
+    // Anything it reads before suspending is read mid-construction. The feed
+    // survived only because the read of _selectedGenreId sat in a branch the
+    // init path never took; hoisting it to the top of the body was enough to
+    // dereference a field 500 lines below and take the app down.
+    //
+    // So the ordering rule is no longer a rule anyone has to keep: the init
+    // block that kicks the first build off now lives at the very bottom of the
+    // class, after every property. Declaration order cannot bite this class
+    // again, wherever a field is declared and whenever the body reads it.
 
     /**
      * The feed with dismissals applied. Everything on screen reads this rather
@@ -502,10 +504,6 @@ class DiscoverViewModel @Inject constructor(
         while (builtPages.size > MAX_REMEMBERED_PAGES) {
             builtPages.remove(builtPages.keys.first())
         }
-    }
-
-    init {
-        selectChip(null)
     }
 
     fun selectChip(label: String?) {
@@ -1107,6 +1105,39 @@ class DiscoverViewModel @Inject constructor(
         }
 
         return listOfNotNull(shelf)
+    }
+
+    /**
+     * Load the artists that count as familiar for the "For you" sort.
+     *
+     * Down here with the build below for the same reason: an init block runs
+     * where it is written, and this one's body starts inline in the
+     * constructor. Nothing it touches can be declared after it if it is the
+     * last thing in the class.
+     */
+    init {
+        viewModelScope.launch {
+            _familiarArtists.value = runCatching {
+                libraryRepository.getSeedArtistNames(FAMILIAR_ARTISTS)
+                    .map { it.lowercase() }
+                    .toSet()
+            }.getOrDefault(emptySet())
+        }
+    }
+
+    /**
+     * Build the first page.
+     *
+     * Deliberately the last thing in the class. [rebuild] launches on
+     * viewModelScope, which dispatches on Dispatchers.Main.immediate, and a
+     * ViewModel is constructed on the main thread — so that launch does not get
+     * posted for later, it runs inline inside this constructor until it
+     * suspends. Everything it touches on the way has to be initialized already,
+     * and the only way to guarantee that for a class this size is to start it
+     * once every property above has run. See the note beside [exhaustedShelves].
+     */
+    init {
+        selectChip(null)
     }
 
     private companion object {

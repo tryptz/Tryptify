@@ -4,6 +4,11 @@
 
 ### Fixed
 
+#### Discover no longer crashes on the first launch of the tab
+- **Opening Discover took the app down with a null pointer** — the tab's first build reads which genre the map has selected, and that field is declared five hundred lines further down the class than the code reading it. The read used to sit in a branch the first build never entered; hoisting it to the top of the coroutine body, while rearranging the feed, was enough to dereference a field that had not been initialized yet.
+- **The comment that licensed it was wrong, and is now the opposite** — it said state touched only inside the build's `viewModelScope.launch` was exempt from the class's field-order rule, because that body "resumes after construction has finished". It does not. viewModelScope dispatches on `Dispatchers.Main.immediate` and a ViewModel is built on the main thread, so the launch runs *inline inside the constructor* up to its first real suspension point, and everything it reads before then is read mid-construction.
+- **The ordering rule is now nobody's job to remember** — both init blocks moved to the very bottom of the class, after every property, so declaration order cannot bite this class again wherever a field is added. A unit test reads the source and fails if a property is ever declared after them, naming the offenders; it was checked against the broken layout first, because a guard that passes on the bug it is meant to catch is worse than none.
+
 #### Settings say what they actually do
 - **Four settings that did nothing are gone** — "Confirm Before Clearing Queue" never gated any queue-clearing path, and none of "Scan on App Open", "Minimum Track Duration" or "Background Scan Interval" was read by the scanner: nothing scanned at app open, no file was ever skipped for being short, and no background scan was ever scheduled. Each one stored a preference, synced it to the cloud and changed nothing. "Rescan Library Now", which does work, stays where it was.
 - **"Show Explicit Badges" works now** — the track row drew the E badge on any explicit track and never looked at the preference, so the switch had no effect in either position. The badge reads it ambiently, the way the low-performance switches are read, since the row that draws it is reached from every list in the app and is handed a track and nothing else.
