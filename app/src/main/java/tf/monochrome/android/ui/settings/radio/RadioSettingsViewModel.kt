@@ -103,7 +103,7 @@ class RadioSettingsViewModel @Inject constructor(
             _connectionStatus.value = plannerClient.health().fold(
                 onSuccess = { health ->
                     buildString {
-                        append("Connected — planner: ${health.planner ?: "unknown"}")
+                        append("Connected. Planner: ${health.planner ?: "unknown"}")
                         if (health.modelLoaded) append(", model loaded")
                         if (health.metabrainzEnabled) {
                             append(

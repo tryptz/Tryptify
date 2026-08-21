@@ -87,9 +87,6 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Spectrum analyzer", "Equalizer", listOf("fft", "visualiser", "frequency", "meter")),
 
     // ── Library ─────────────────────────────────────────────────────────
-    entry("Scan on app open", "Library", listOf("local", "files", "refresh", "index")),
-    entry("Minimum track duration", "Library", listOf("skip", "short", "interlude", "filter")),
-    entry("Background scan interval", "Library", listOf("local", "files", "automatic")),
     entry("Library tab order", "Library", listOf("reorder", "tabs", "layout")),
     entry("Local folders", "Library", listOf("storage", "saf", "sd card", "path")),
 

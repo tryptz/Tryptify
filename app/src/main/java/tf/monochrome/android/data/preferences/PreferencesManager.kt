@@ -217,7 +217,6 @@ class PreferencesManager @Inject constructor(
         private val UPDATE_LATEST_URL = stringPreferencesKey("update_latest_url")
         private val UPDATE_DISMISSED_VERSION = stringPreferencesKey("update_dismissed_version")
         private val SHOW_EXPLICIT_BADGES = booleanPreferencesKey("show_explicit_badges")
-        private val CONFIRM_CLEAR_QUEUE = booleanPreferencesKey("confirm_clear_queue")
 
         // Audio extras
         private val NORMALIZATION_ENABLED = booleanPreferencesKey("normalization_enabled")
@@ -340,10 +339,7 @@ class PreferencesManager @Inject constructor(
         private val PARAM_EQ_BANDS_JSON = stringPreferencesKey("param_eq_bands_json")
 
         // Library / Local Media
-        private val SCAN_ON_APP_OPEN = booleanPreferencesKey("scan_on_app_open")
-        private val MIN_TRACK_DURATION_MS = longPreferencesKey("min_track_duration_ms")
         private val EXCLUDED_PATHS_JSON = stringPreferencesKey("excluded_paths_json")
-        private val BACKGROUND_SCAN_INTERVAL = stringPreferencesKey("background_scan_interval")
         private val USER_FOLDER_ROOTS_JSON = stringPreferencesKey("user_folder_roots_json")
 
         // DSP Mixer
@@ -403,7 +399,7 @@ class PreferencesManager @Inject constructor(
             DYNAMIC_COLORS_MENUS, DYNAMIC_COLORS_KEEP_BACKGROUND, COLOR_TRANSITION_MS,
             CUSTOM_THEME_ENABLED, CUSTOM_ACCENT, CUSTOM_BACKGROUND,
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
-            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
+            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
@@ -424,7 +420,6 @@ class PreferencesManager @Inject constructor(
             EQ_BANDS_R_JSON, EQ_STEREO_MODE,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
-            SCAN_ON_APP_OPEN, MIN_TRACK_DURATION_MS, BACKGROUND_SCAN_INTERVAL,
             LIBRARY_TAB_ORDER, CAR_MODE_BAND_COUNT,
             AI_RADIO_ENABLED, RADIO_PLANNER_ENABLED, RADIO_PLANNER_URL,
             RADIO_WEIGHT_LOCAL_LIBRARY, RADIO_WEIGHT_QOBUZ, RADIO_WEIGHT_SPOTIFY_DISCOVERY,
@@ -969,12 +964,6 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[SHOW_EXPLICIT_BADGES] = enabled }
     }
 
-    val confirmClearQueue: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[CONFIRM_CLEAR_QUEUE] ?: true
-    }
-    suspend fun setConfirmClearQueue(enabled: Boolean) {
-        dataStore.edit { it[CONFIRM_CLEAR_QUEUE] = enabled }
-    }
 
     // --- Audio extras ---
     val normalizationEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
@@ -1670,16 +1659,6 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Library / Local Media ---
-    val scanOnAppOpen: Flow<Boolean> = dataStore.data.map { it[SCAN_ON_APP_OPEN] ?: true }
-    suspend fun setScanOnAppOpen(enabled: Boolean) {
-        dataStore.edit { it[SCAN_ON_APP_OPEN] = enabled }
-    }
-
-    val minTrackDurationMs: Flow<Long> = dataStore.data.map { it[MIN_TRACK_DURATION_MS] ?: 30_000L }
-    suspend fun setMinTrackDurationMs(durationMs: Long) {
-        dataStore.edit { it[MIN_TRACK_DURATION_MS] = durationMs }
-    }
-
     val excludedPathsJson: Flow<String> = dataStore.data.map { it[EXCLUDED_PATHS_JSON] ?: "[]" }
     suspend fun setExcludedPaths(pathsJson: String) {
         dataStore.edit { it[EXCLUDED_PATHS_JSON] = pathsJson }
@@ -1709,13 +1688,6 @@ class PreferencesManager @Inject constructor(
                 ?: return@edit
             prefs[USER_FOLDER_ROOTS_JSON] = json.encodeToString(current - path)
         }
-    }
-
-    val backgroundScanInterval: Flow<String> = dataStore.data.map {
-        it[BACKGROUND_SCAN_INTERVAL] ?: "daily"
-    }
-    suspend fun setBackgroundScanInterval(interval: String) {
-        dataStore.edit { it[BACKGROUND_SCAN_INTERVAL] = interval }
     }
 
     // --- Library tab order ---

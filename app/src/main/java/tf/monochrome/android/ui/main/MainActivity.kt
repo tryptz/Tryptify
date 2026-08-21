@@ -161,6 +161,8 @@ class MainActivity : ComponentActivity() {
             val currentTrack by queueManager.currentTrack.collectAsStateWithLifecycle()
             // The user's manual low-performance overrides, from Settings ›
             // System › Performance.
+            val showExplicitBadges by preferences.showExplicitBadges
+                .collectAsStateWithLifecycle(initialValue = true)
             val lowPerformance by preferences.lowPerformanceSettings
                 .collectAsStateWithLifecycle(
                     initialValue = tf.monochrome.android.performance.LowPerformanceSettings()
@@ -205,6 +207,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(
                 LocalPerformanceProfile provides effectiveProfile,
                 tf.monochrome.android.performance.LocalLowPerformance provides lowPerformance,
+                tf.monochrome.android.ui.theme.LocalShowExplicitBadges provides showExplicitBadges,
             ) {
                 MonochromeTheme(
                     themeName = themeName,

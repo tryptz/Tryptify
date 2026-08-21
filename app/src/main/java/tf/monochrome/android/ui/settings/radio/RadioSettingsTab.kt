@@ -62,7 +62,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
             GroupHeader("Radio planner")
             tf.monochrome.android.ui.settings.SettingSwitchItem(
                 title = "Use remote planner",
-                subtitle = "Optional. Asks the Tryptify-Playlist service for extra track suggestions. Radio and every weight below work without it — this only widens where candidates come from.",
+                subtitle = "Optional. Asks the Tryptify-Playlist service for extra track suggestions. Radio and every weight below work without it. This only widens where candidates come from.",
                 checked = plannerEnabled,
                 onCheckedChange = viewModel::setPlannerEnabled
             )
@@ -107,7 +107,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
             Spacer(Modifier.height(24.dp))
             GroupHeader("Recommendation weights")
             Text(
-                text = "1.00x is neutral. Lower values down-rank a signal, higher values strengthen it. These are scored on-device — no planner required.",
+                text = "1.00x is neutral. Lower values down-rank a signal, higher values strengthen it. These are scored on-device, no planner required.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
