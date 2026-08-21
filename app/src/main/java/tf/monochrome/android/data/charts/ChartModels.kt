@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.charts
 
+import kotlinx.serialization.Serializable
 import java.text.Normalizer
 import tf.monochrome.android.domain.model.UnifiedTrack
 
@@ -49,7 +50,14 @@ enum class ChartSource {
     WINDOWED_LISTENS,
 }
 
-/** One row of a genre chart. */
+/**
+ * One row of a genre chart.
+ *
+ * Serializable because a tag chart outlives the process that fetched it — see
+ * [tf.monochrome.android.data.charts.DiscoveryCache]. The two computed
+ * properties below are derived from the fields and are not written out.
+ */
+@Serializable
 data class ChartEntry(
     val rank: Int,
     val title: String,

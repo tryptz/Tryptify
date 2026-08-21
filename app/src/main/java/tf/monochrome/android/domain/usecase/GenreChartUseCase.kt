@@ -1,8 +1,8 @@
 package tf.monochrome.android.domain.usecase
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -14,8 +14,11 @@ import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.data.charts.ChartSource
 import tf.monochrome.android.data.charts.ChartWindow
 import tf.monochrome.android.data.charts.ChartsRepository
+import tf.monochrome.android.data.charts.DiscoveryCache
 import tf.monochrome.android.data.charts.GenreChart
 import tf.monochrome.android.data.charts.GenrePool
+import tf.monochrome.android.data.charts.SingleFlight
+import tf.monochrome.android.data.charts.mapConcurrent
 import tf.monochrome.android.data.charts.normalizeForMatch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.GenreGraphRepository
@@ -44,6 +47,7 @@ class GenreChartUseCase @Inject constructor(
     private val genreGraph: GenreGraphRepository,
     private val preferences: PreferencesManager,
     private val music: MusicRepository,
+    private val disk: DiscoveryCache,
 ) {
     companion object {
         /**
@@ -187,6 +191,19 @@ class GenreChartUseCase @Inject constructor(
          * lands in the cache for the next visit.
          */
         const val CROSS_CHECK_BUDGET_MS = 4_000L
+
+        /**
+         * How long a catalogue answer is worth keeping across sessions.
+         *
+         * Within a session these are held for the life of the process and not
+         * expired at all, because a chart row is a fixed pair of strings and
+         * the catalogue's answer for it does not change while the app is open.
+         * Across sessions it can: a record gets added, a licence lapses. A week
+         * is long enough that reopening Discover is free all week and short
+         * enough that the catalogue is re-asked about a genre roughly as often
+         * as its chart moves.
+         */
+        const val TTL_CATALOGUE_MS = 7L * 24 * 60 * 60 * 1000
     }
 
     /**
@@ -199,7 +216,7 @@ class GenreChartUseCase @Inject constructor(
      * so the late declaration was harmless — but it is the same shape that took
      * DiscoverViewModel down, and the fix costs nothing.
      */
-    private val resolved = mutableMapOf<String, UnifiedTrack?>()
+    private val resolved = mutableMapOf<String, Stamped<UnifiedTrack?>>()
     private val resolveMutex = Mutex()
 
     /**
@@ -211,11 +228,64 @@ class GenreChartUseCase @Inject constructor(
      * building six shelves at once, most of this is already answered by the
      * time the third shelf asks.
      */
-    private val artistTopTracks = mutableMapOf<String, List<UnifiedTrack>>()
+    private val artistTopTracks = mutableMapOf<String, Stamped<List<UnifiedTrack>>>()
     private val artistMutex = Mutex()
 
     /** See [RESOLVE_GATE]. Shared by every pool and every shelf in the process. */
     private val resolveGate = Semaphore(RESOLVE_GATE)
+
+    /**
+     * One lookup per question, however many shelves ask it at once.
+     *
+     * The memos above are check-then-fetch, which is a cache in sequence and
+     * not one under concurrency: six shelves start together, all six look
+     * before any of them has answered, and all six spend a permit on the same
+     * search. That is the case the memos were written for — the comment on
+     * [resolved] says a genre and its neighbours overlap heavily — and it is
+     * exactly the case they were missing.
+     */
+    private val resolveFlight = SingleFlight<String, UnifiedTrack?>()
+    private val artistFlight = SingleFlight<String, List<UnifiedTrack>>()
+
+    /** Last session's catalogue answers, folded in once. See [DiscoveryCache]. */
+    private val restoreMutex = Mutex()
+
+    @Volatile
+    private var restored = false
+
+    /** A remembered answer and when it was learned. */
+    private class Stamped<T>(val value: T, val at: Long = System.currentTimeMillis()) {
+        fun fresh(ttlMs: Long) = System.currentTimeMillis() - at < ttlMs
+    }
+
+    /**
+     * Seed the catalogue memos from what the last session learned.
+     *
+     * These are the expensive half of a genre row — a search per charted record
+     * and two per artist, all of them behind [RESOLVE_GATE] — and they were
+     * thrown away on every process death, so the second time you opened
+     * Discover today it cost exactly what the first time cost. Restored, it
+     * costs nothing: the answers are what the row is made of, and the catalogue
+     * does not change its mind about which record "AIROD Acid Storm" is.
+     */
+    private suspend fun restore() {
+        if (restored) return
+        restoreMutex.withLock {
+            if (restored) return
+            val snapshot = disk.restore()
+            resolveMutex.withLock {
+                snapshot.resolved.forEach { (key, held) ->
+                    if (key !in resolved) resolved[key] = Stamped(held.value, held.at)
+                }
+            }
+            artistMutex.withLock {
+                snapshot.artistTopTracks.forEach { (key, held) ->
+                    if (key !in artistTopTracks) artistTopTracks[key] = Stamped(held.value, held.at)
+                }
+            }
+            restored = true
+        }
+    }
 
     /**
      * @param crossCheck whether to spend requests confirming the chart's artists
@@ -383,28 +453,24 @@ class GenreChartUseCase @Inject constructor(
 
         val artists = artistNames.take(depth).distinctBy { normalizeForMatch(it) }
 
-        // Concurrent, in bounded batches. This loop was sequential, and each
-        // unseen artist is a network round trip: forty of them in a row is the
-        // ten-to-twenty seconds of spinner the chart screen was showing before
-        // it rendered anything. The work is entirely I/O-bound and the requests
-        // are independent, so the only reason it was serial was that it was
-        // written as a for loop.
-        return coroutineScope {
-            artists.chunked(VERIFY_CONCURRENCY).flatMap { batch ->
-                batch.map { artist ->
-                    async {
-                        val key = normalizeForMatch(artist)
-                        when {
-                            key in fromMusicBrainz -> key
-                            charts.artistTags(artist, apiKey).any { tag ->
-                                genreGraph.graph.resolve(tag)?.id in relatives
-                            } -> key
-                            else -> null
-                        }
-                    }
-                }.awaitAll()
-            }.filterNotNull().toSet()
-        }
+        // Concurrent, and bounded by permits rather than by batches. This loop
+        // was sequential, and each unseen artist is a network round trip: forty
+        // of them in a row is the ten-to-twenty seconds of spinner the chart
+        // screen was showing before it rendered anything. Batching fixed most
+        // of that and left the rest — a batch of eight finishes at the pace of
+        // its slowest member, so seven lookups' worth of capacity waits out the
+        // eighth before the ninth artist is even asked about. Here a finished
+        // lookup hands its permit straight to the next name.
+        return artists.mapConcurrent(VERIFY_CONCURRENCY) { artist ->
+            val key = normalizeForMatch(artist)
+            when {
+                key in fromMusicBrainz -> key
+                charts.artistTags(artist, apiKey).any { tag ->
+                    genreGraph.graph.resolve(tag)?.id in relatives
+                } -> key
+                else -> null
+            }
+        }.filterNotNull().toSet()
     }
 
     /**
@@ -474,11 +540,37 @@ class GenreChartUseCase @Inject constructor(
     suspend fun resolvePool(entries: List<ChartEntry>, depth: Int): List<UnifiedTrack> {
         if (depth <= 0 || entries.isEmpty()) return emptyList()
         val pool = LinkedHashMap<String, UnifiedTrack>(depth)
-        for (batch in entries.chunked(RESOLVE_CONCURRENCY)) {
-            coroutineScope { batch.map { async { resolve(it) } }.awaitAll() }
-                .filterNotNull()
-                .forEach { track -> if (!pool.containsKey(track.id)) pool[track.id] = track }
-            if (pool.size >= depth) break
+        coroutineScope {
+            // A sliding window rather than fixed batches. Batching awaited all
+            // eight lookups before starting the ninth, so the whole pool
+            // advanced at the pace of the slowest row in each batch — and with
+            // [RESOLVE_GATE] shared across a page, the permits those finished
+            // lookups were still holding are permits another shelf is blocked
+            // waiting for. Here each row that lands starts the next one.
+            val inFlight = ArrayDeque<Deferred<UnifiedTrack?>>()
+            var next = 0
+            fun start() {
+                if (next >= entries.size) return
+                val entry = entries[next++]
+                inFlight.addLast(async { resolve(entry) })
+            }
+            repeat(RESOLVE_CONCURRENCY) { start() }
+
+            // Awaited in rank order, because a chart is a ranking and the pool
+            // is the chart: taking rows as they happen to return would reorder
+            // it by whichever search was quickest.
+            while (inFlight.isNotEmpty()) {
+                val track = inFlight.removeFirst().await()
+                if (track != null && !pool.containsKey(track.id)) pool[track.id] = track
+                if (pool.size >= depth) {
+                    // Full. The rows still in flight are the tail this would
+                    // have discarded anyway, and cancelling them hands their
+                    // permits back to whichever shelf is waiting on one.
+                    inFlight.forEach { it.cancel() }
+                    break
+                }
+                start()
+            }
         }
         return pool.values.take(depth)
     }
@@ -590,11 +682,7 @@ class GenreChartUseCase @Inject constructor(
         val window = artistWindowFor(ranked, page, ARTIST_TIER_ARTISTS, ARTIST_TIER_TRACKS)
         if (window.artists.isEmpty()) return emptyList()
 
-        val bands = coroutineScope {
-            window.artists.chunked(ARTIST_TIER_CONCURRENCY).flatMap { batch ->
-                batch.map { name -> async { topTracksFor(name) } }.awaitAll()
-            }
-        }
+        val bands = window.artists.mapConcurrent(ARTIST_TIER_CONCURRENCY) { topTracksFor(it) }
         return roundRobin(
             bands.map { it.drop(window.trackSkip).take(window.perArtist) },
             depth,
@@ -621,22 +709,36 @@ class GenreChartUseCase @Inject constructor(
     private suspend fun topTracksFor(artistName: String): List<UnifiedTrack> {
         val key = normalizeForMatch(artistName)
         if (key.isEmpty()) return emptyList()
-        artistMutex.withLock { artistTopTracks[key]?.let { return it } }
+        restore()
+        memoisedArtistTracks(key)?.let { return it }
 
-        val tracks = resolveGate.withPermit {
-            val search = music.searchQobuz(artistName).getOrNull()
-            val credited = search?.tracks.orEmpty()
-                .filter { matchesArtistName(it.displayArtist, artistName) }
-            val seed = search?.artists?.firstOrNull { matchesArtistName(it.name, artistName) }
-            val top = seed?.let { music.getQobuzArtist(it.id).getOrNull()?.topTracks }
-                .orEmpty()
-                .filter { matchesArtistName(it.displayArtist, artistName) }
-            (top.ifEmpty { credited }).map { it.toQobuzUnifiedTrack() }
+        return artistFlight.run(key) {
+            memoisedArtistTracks(key)?.let { return@run it }
+
+            val tracks = resolveGate.withPermit {
+                val search = music.searchQobuz(artistName).getOrNull()
+                val credited = search?.tracks.orEmpty()
+                    .filter { matchesArtistName(it.displayArtist, artistName) }
+                val seed = search?.artists?.firstOrNull { matchesArtistName(it.name, artistName) }
+                val top = seed?.let { music.getQobuzArtist(it.id).getOrNull()?.topTracks }
+                    .orEmpty()
+                    .filter { matchesArtistName(it.displayArtist, artistName) }
+                (top.ifEmpty { credited }).map { it.toQobuzUnifiedTrack() }
+            }
+
+            val held = Stamped(tracks)
+            artistMutex.withLock { artistTopTracks[key] = held }
+            // An empty answer stays in memory but off the disk. In this session
+            // it is a real answer and worth not asking twice; carried into the
+            // next one it would pin an artist the instance happened to be
+            // unable to serve for a week.
+            if (tracks.isNotEmpty()) disk.putArtistTopTracks(key, held.value, held.at)
+            tracks
         }
-
-        artistMutex.withLock { artistTopTracks[key] = tracks }
-        return tracks
     }
+
+    private suspend fun memoisedArtistTracks(key: String): List<UnifiedTrack>? =
+        artistMutex.withLock { artistTopTracks[key]?.takeIf { it.fresh(TTL_CATALOGUE_MS) }?.value }
 
     /**
      * Run [block], and treat any failure of its own as an empty answer.
@@ -674,19 +776,41 @@ class GenreChartUseCase @Inject constructor(
      */
     suspend fun resolve(entry: ChartEntry): UnifiedTrack? {
         val key = entry.matchKey
-        resolveMutex.withLock { if (resolved.containsKey(key)) return resolved[key] }
+        restore()
+        memoisedResolution(key)?.let { return it.value }
 
-        // Behind the gate, and only past the memo: an answer already in hand
-        // must never queue behind six shelves' worth of network.
-        val track = resolveGate.withPermit {
-            music.searchQobuz(entry.matchQuery).getOrNull()?.tracks
+        return resolveFlight.run(key) {
+            memoisedResolution(key)?.let { return@run it.value }
+
+            // Behind the gate, and only past the memo: an answer already in hand
+            // must never queue behind six shelves' worth of network.
+            val answered = resolveGate.withPermit { music.searchQobuz(entry.matchQuery) }
+            val track = answered.getOrNull()?.tracks
                 ?.firstOrNull { agrees(entry, it.artists.firstOrNull()?.name ?: "", it.title) }
                 ?.toQobuzUnifiedTrack()
-        }
 
-        resolveMutex.withLock { resolved[key] = track }
-        return track
+            val held = Stamped(track)
+            resolveMutex.withLock { resolved[key] = held }
+            // A miss travels to the next session only when the catalogue
+            // actually answered. In memory the two are worth treating alike —
+            // an unreachable instance now is unreachable for the rest of this
+            // page — but on disk they are not: "nobody stocks this record" is
+            // still true tomorrow, while "the instance was down when you opened
+            // Discover on the train" would pin a record as missing for a week.
+            if (track != null || answered.isSuccess) {
+                disk.putResolved(key, held.value, held.at)
+            }
+            track
+        }
     }
+
+    /**
+     * The memo's holder rather than its contents, because the contents are
+     * legitimately null: "the catalogue does not carry this row" is an answer,
+     * and one worth remembering for as long as a hit is.
+     */
+    private suspend fun memoisedResolution(key: String): Stamped<UnifiedTrack?>? =
+        resolveMutex.withLock { resolved[key]?.takeIf { it.fresh(TTL_CATALOGUE_MS) } }
 }
 
 /**

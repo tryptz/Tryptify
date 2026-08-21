@@ -460,6 +460,50 @@ class DiscoverViewModel @Inject constructor(
     // same list, and the slower one wins whichever chip the user is looking at.
     private var feedJob: Job? = null
 
+    /**
+     * Pages already built this session, by everything that decides what is on
+     * them.
+     *
+     * Every chip tap rebuilt from nothing, including a tap back onto a chip
+     * that was on screen ten seconds ago — six shelves, a chart apiece, dozens
+     * of catalogue lookups, to arrive at a page we had already assembled and
+     * thrown away. The rail is a set of tabs and people use it like one, so the
+     * common gesture is precisely the one that was most expensive.
+     *
+     * A page is kept as it was built rather than rebuilt in the background,
+     * because a rail that reshuffles a row while you are looking at it has
+     * lost you your place. Pull-to-refresh is what asks for new music, and it
+     * drops this first.
+     *
+     * Insertion-ordered and capped: the rail has more chips than anyone visits
+     * in a session, and holding every page one ever opened is holding every
+     * track it showed.
+     */
+    private val builtPages = LinkedHashMap<String, List<DiscoveryShelf>>()
+
+    /** What a built page is filed under. Anything that changes the page is in it. */
+    private fun pageKey(
+        label: String?,
+        moods: List<String>,
+        excluded: Set<String>,
+        genreId: String?,
+    ): String = listOf(
+        label.orEmpty(),
+        moods.joinToString(","),
+        excluded.sorted().joinToString(","),
+        genreId.orEmpty(),
+        rotation.toString(),
+    ).joinToString("|")
+
+    private fun remember(key: String, shelves: List<DiscoveryShelf>) {
+        if (shelves.isEmpty()) return
+        builtPages.remove(key)
+        builtPages[key] = shelves
+        while (builtPages.size > MAX_REMEMBERED_PAGES) {
+            builtPages.remove(builtPages.keys.first())
+        }
+    }
+
     init {
         selectChip(null)
     }
@@ -519,17 +563,32 @@ class DiscoverViewModel @Inject constructor(
         shelvesLoadingMore.clear()
         exhaustedShelves.clear()
         feedJob = viewModelScope.launch {
+            val moods = _selectedMoods.value
+            val genreId = _selectedGenreId.value
+                // A genre picked on the map. Matched by name so that
+                // switching to a chip clears it, rather than the map's
+                // choice silently outliving the label on screen.
+                ?.takeIf { label != null && genreGraphRepo.graph[it]?.name == label }
+            val key = pageKey(label, moods, _excludedGenres.value, genreId)
+
+            // A page we have already built is a page we can put back up now.
+            // Note what is *not* here: no spinner, no clearing the list first,
+            // and no background rebuild behind the restored one. This is the
+            // page the listener was last looking at, and the fastest honest
+            // thing to do with it is show it.
+            builtPages[key]?.let { built ->
+                _shelves.value = built
+                _flowExtra.value = emptyList()
+                _loading.value = false
+                _refreshing.value = false
+                return@launch
+            }
+
             _loading.value = true
             _shelves.value = emptyList()
             // The tail was fetched to continue a feed that no longer exists.
             _flowExtra.value = emptyList()
             try {
-                val moods = _selectedMoods.value
-                val genreId = _selectedGenreId.value
-                    // A genre picked on the map. Matched by name so that
-                    // switching to a chip clears it, rather than the map's
-                    // choice silently outliving the label on screen.
-                    ?.takeIf { label != null && genreGraphRepo.graph[it]?.name == label }
                 val moodId = label?.let { moodIdByLabel[it] }
                 val seed = label?.let { chips.firstOrNull { chip -> chip.label == it } }
 
@@ -583,9 +642,20 @@ class DiscoverViewModel @Inject constructor(
                 // The flat search stays a whole-page fetch: it is one request
                 // sliced three ways, so there is nothing to stream, and it runs
                 // only when the graph path came back with nothing at all.
+                var flatShelves = emptyList<DiscoveryShelf>()
                 if (slots.isEmpty() && seed != null) {
-                    val flat = discoveryFeed.buildForQuery(seed.label, seed.query, SHELF_SIZE)
-                    _shelves.value = (leading + flat).distinctBy { it.id }
+                    flatShelves = discoveryFeed.buildForQuery(seed.label, seed.query, SHELF_SIZE)
+                    _shelves.value = (leading + flatShelves).distinctBy { it.id }
+                }
+
+                // Filed only once the build has run to the end, and only if it
+                // brought something back. A page kept half-built would be
+                // restored as though it were the whole thing; a "For you" that
+                // reached nothing but the hearted tracks already on the device
+                // would be filed as a one-row feed and never asked again this
+                // session, which turns one unreachable moment into a session.
+                if (slots.isNotEmpty() || flatShelves.isNotEmpty()) {
+                    remember(key, _shelves.value)
                 }
             } catch (cancelled: CancellationException) {
                 // A newer chip took over. Rethrow rather than swallow, and in
@@ -969,6 +1039,11 @@ class DiscoverViewModel @Inject constructor(
 
     fun refresh() {
         _refreshing.value = true
+        // The gesture means "go and look again", so the pages built earlier
+        // stop counting. Without this the restore path would hand the same
+        // page straight back and pull-to-refresh would be a spinner that
+        // changed nothing.
+        builtPages.clear()
         selectChip(_selectedChip.value)
     }
 
@@ -1048,6 +1123,13 @@ class DiscoverViewModel @Inject constructor(
 
         /** How many library artists count as "familiar" for the For you sort. */
         const val FAMILIAR_ARTISTS = 60
+
+        /**
+         * How many built pages to keep. Enough to cover the chips a session
+         * actually moves between, and small enough that it is a handful of
+         * rows rather than a copy of the catalogue.
+         */
+        private const val MAX_REMEMBERED_PAGES = 8
 
         /** Seed rotation per page of the personalized feed. */
         const val PAGE_ROTATION = 3
