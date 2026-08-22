@@ -178,6 +178,14 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("crossfeed")),
     entry("Mixer", R.string.status_mixer, "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
+    entry(
+        "Glyph", null,
+        "Audio",
+        listOf(
+            "stepmania", "rhythm", "chart", "ssc", "dance", "arrows",
+            "training ground", "practice", "simfile", "ddr", "itg",
+        ),
+    ).at(SettingsDestination.Route("glyph")),
     entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data", "tidal", "qobuz", "deezer", "aac", "mp3", "flac", "hi-res", "dolby", "atmos")),
     // The switch itself, so "atmos" lands on it rather than on the header,
     // whose text reads "Download quality" while the tab shows downloads.

@@ -110,6 +110,7 @@ import tf.monochrome.android.ui.debug.DebugLogScreen
 import tf.monochrome.android.ui.crossfeed.CrossfeedScreen
 import tf.monochrome.android.ui.crossfeed.CrossfeedViewModel
 import tf.monochrome.android.ui.oxford.OxfordEffectsTabs
+import tf.monochrome.android.ui.glyph.GlyphRoute
 import tf.monochrome.android.ui.oxford.OxfordViewModel
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
@@ -207,6 +208,9 @@ sealed class Screen(val route: String) {
 
     /** Sample capture, editing and the library. */
     data object Sampler : Screen("sampler")
+
+    /** StepMania Glyph: generated charts, gameplay and Training Ground. */
+    data object Glyph : Screen("glyph")
 }
 
 // The NavHost destinations the swipeable page list is drawn on. These are stubs
@@ -224,14 +228,17 @@ private val pagerRoutes =
 // mini player would sit on top of them. The player and the mixer are the
 // transport itself; Oxford puts CLIP / BAND SPLIT / EFFECT IN under the
 // compressor and inflator faders; car mode is a full-screen driving surface
-// with its own transport. Everywhere else the chrome stays — on pushed screens
-// too, the way Apple Music keeps its tab bar — and this list is the whole
-// exception.
+// with its own transport. Glyph owns the whole screen: a mini player over the
+// receptor row would cover the one part of it the player is looking at, and its
+// transport is not the one driving the chart. Everywhere else the chrome stays —
+// on pushed screens too, the way Apple Music keeps its tab bar — and this list
+// is the whole exception.
 internal val chromeHiddenRoutes = setOf(
     Screen.NowPlaying.route,
     Screen.Mixer.route,
     Screen.Oxford.route,
     Screen.CarMode.route,
+    Screen.Glyph.route,
 )
 
 @Composable
@@ -826,7 +833,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         SamplerScreen(
                             onBack = { navController.popBackStack() },
                             onOpenPatterns = { navController.navigateTool(Screen.Patterns) },
+                            onOpenGlyph = { navController.navigateTool(Screen.Glyph) },
                         )
+                    }
+                }
+                composable(Screen.Glyph.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("glyph") {
+                        GlyphRoute(onBack = { navController.popBackStack() })
                     }
                 }
                 composable(Screen.DebugLog.route) {
