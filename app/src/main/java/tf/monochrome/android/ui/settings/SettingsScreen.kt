@@ -1638,6 +1638,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             ) {
                 Text("Sampler")
             }
+            OutlinedButton(
+                onClick = { navController.navigateTool(Screen.Glyph) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Glyph")
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

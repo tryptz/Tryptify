@@ -102,6 +102,7 @@ import tf.monochrome.android.ui.debug.DebugLogScreen
 import tf.monochrome.android.ui.crossfeed.CrossfeedScreen
 import tf.monochrome.android.ui.crossfeed.CrossfeedViewModel
 import tf.monochrome.android.ui.oxford.OxfordEffectsTabs
+import tf.monochrome.android.ui.glyph.GlyphRoute
 import tf.monochrome.android.ui.oxford.OxfordViewModel
 import tf.monochrome.android.ui.patterns.PatternLooperScreen
 import tf.monochrome.android.ui.sampler.SamplerScreen
@@ -182,6 +183,9 @@ sealed class Screen(val route: String) {
 
     /** Sample capture, editing and the library. */
     data object Sampler : Screen("sampler")
+
+    /** StepMania Glyph: generated charts, gameplay and Training Ground. */
+    data object Glyph : Screen("glyph")
 }
 
 data class BottomNavItem(
@@ -210,6 +214,10 @@ private val miniPlayerHiddenRoutes = setOf(
     Screen.NowPlaying.route,
     Screen.Mixer.route,
     Screen.Oxford.route,
+    // Glyph owns the whole screen: a mini player over the receptor row would
+    // cover the one part of it the player is looking at, and its transport is
+    // not the one driving the chart.
+    Screen.Glyph.route,
 )
 
 @Composable
@@ -581,7 +589,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         SamplerScreen(
                             onBack = { navController.popBackStack() },
                             onOpenPatterns = { navController.navigateTool(Screen.Patterns) },
+                            onOpenGlyph = { navController.navigateTool(Screen.Glyph) },
                         )
+                    }
+                }
+                composable(Screen.Glyph.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("glyph") {
+                        GlyphRoute(onBack = { navController.popBackStack() })
                     }
                 }
                 composable(Screen.DebugLog.route) {
