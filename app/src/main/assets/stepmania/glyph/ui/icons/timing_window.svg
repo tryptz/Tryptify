@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Timing Window</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6 V18 M20 6 V18 M8 9 V15 M16 9 V15"/><path d="M11 12 H13" stroke-width="4"/>
+  </g>
+</svg>

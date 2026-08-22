@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Hitbox</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 3 V7 M15 3 V7 M9 17 V21 M15 17 V21 M3 9 H7 M17 9 H21 M3 15 H7 M17 15 H21"/>
+  </g>
+</svg>

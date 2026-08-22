@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Metronome</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 20 H16 L14 4 H10 Z"/><path d="M12 15 L16 7"/><path d="M6 20 H18"/>
+  </g>
+</svg>

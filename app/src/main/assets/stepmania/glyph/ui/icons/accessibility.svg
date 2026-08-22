@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Accessibility</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="4" r="2"/><path d="M5 8 H19 M12 8 V14 M8 21 L12 14 L16 21"/>
+  </g>
+</svg>

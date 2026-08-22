@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>Active down receptor</title>
+  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#58D9FF" stroke-width="7" opacity="0.18"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#58D9FF" stroke-width="4" opacity="0.42"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#58D9FF" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#58D9FF"/>
+  </g>
+</svg>

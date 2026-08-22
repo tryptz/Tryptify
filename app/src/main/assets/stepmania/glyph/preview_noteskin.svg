@@ -1,0 +1,508 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1500" role="img">
+  <title>noteskin contact sheet</title>
+  <rect width="1080" height="1500" fill="#0B1020"/>
+  <rect x="6" y="6" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 12.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#FF74C8" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#FF74C8"/>
+  </g></g>
+  <text x="90.0" y="126" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_left</text>
+  <rect x="186" y="6" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 12.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#FF74C8" stroke-width="7" opacity="0.18"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#FF74C8" stroke-width="4" opacity="0.42"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#FF74C8" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#FF74C8"/>
+  </g></g>
+  <text x="270.0" y="126" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_left_active</text>
+  <rect x="366" y="6" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 12.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="450.0" y="126" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_4th</text>
+  <rect x="546" y="6" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 12.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="630.0" y="126" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_8th</text>
+  <rect x="726" y="6" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 12.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#A77BFF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="810.0" y="126" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_12th</text>
+  <rect x="906" y="6" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 12.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FFD95A" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="126" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_16th</text>
+  <rect x="6" y="156" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 162.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="90.0" y="276" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_24th</text>
+  <rect x="186" y="156" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 162.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF9659" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="270.0" y="276" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_32nd</text>
+  <rect x="366" y="156" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 162.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#52E6D8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="450.0" y="276" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_48th</text>
+  <rect x="546" y="156" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 162.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#63F2A2" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="630.0" y="276" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left_64th</text>
+  <rect x="726" y="156" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 162.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="810.0" y="276" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_left</text>
+  <rect x="906" y="156" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 162.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="276" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">hold_head_left</text>
+  <rect x="6" y="306" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 312.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(-90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+    <path d="M25 19 L39 33 M21 27 L39 45" stroke="#0B1020" stroke-width="3" opacity="0.65"/>
+  </g></g>
+  <text x="90.0" y="426" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">roll_head_left</text>
+  <rect x="186" y="306" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 312.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#58D9FF" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#58D9FF"/>
+  </g></g>
+  <text x="270.0" y="426" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_down</text>
+  <rect x="366" y="306" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 312.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#58D9FF" stroke-width="7" opacity="0.18"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#58D9FF" stroke-width="4" opacity="0.42"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#58D9FF" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#58D9FF"/>
+  </g></g>
+  <text x="450.0" y="426" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_down_active</text>
+  <rect x="546" y="306" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 312.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="630.0" y="426" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_4th</text>
+  <rect x="726" y="306" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 312.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="810.0" y="426" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_8th</text>
+  <rect x="906" y="306" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 312.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#A77BFF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="426" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_12th</text>
+  <rect x="6" y="456" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 462.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FFD95A" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="90.0" y="576" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_16th</text>
+  <rect x="186" y="456" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 462.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="270.0" y="576" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_24th</text>
+  <rect x="366" y="456" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 462.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF9659" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="450.0" y="576" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_32nd</text>
+  <rect x="546" y="456" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 462.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#52E6D8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="630.0" y="576" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_48th</text>
+  <rect x="726" y="456" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 462.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#63F2A2" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="810.0" y="576" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down_64th</text>
+  <rect x="906" y="456" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 462.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="576" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_down</text>
+  <rect x="6" y="606" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 612.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="90.0" y="726" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">hold_head_down</text>
+  <rect x="186" y="606" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 612.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(180 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+    <path d="M25 19 L39 33 M21 27 L39 45" stroke="#0B1020" stroke-width="3" opacity="0.65"/>
+  </g></g>
+  <text x="270.0" y="726" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">roll_head_down</text>
+  <rect x="366" y="606" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 612.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#63F2A2" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#63F2A2"/>
+  </g></g>
+  <text x="450.0" y="726" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_up</text>
+  <rect x="546" y="606" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 612.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#63F2A2" stroke-width="7" opacity="0.18"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#63F2A2" stroke-width="4" opacity="0.42"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#63F2A2" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#63F2A2"/>
+  </g></g>
+  <text x="630.0" y="726" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_up_active</text>
+  <rect x="726" y="606" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 612.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="810.0" y="726" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_4th</text>
+  <rect x="906" y="606" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 612.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="726" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_8th</text>
+  <rect x="6" y="756" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 762.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#A77BFF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="90.0" y="876" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_12th</text>
+  <rect x="186" y="756" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 762.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FFD95A" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="270.0" y="876" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_16th</text>
+  <rect x="366" y="756" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 762.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="450.0" y="876" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_24th</text>
+  <rect x="546" y="756" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 762.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF9659" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="630.0" y="876" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_32nd</text>
+  <rect x="726" y="756" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 762.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#52E6D8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="810.0" y="876" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_48th</text>
+  <rect x="906" y="756" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 762.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#63F2A2" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="876" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up_64th</text>
+  <rect x="6" y="906" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 912.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="90.0" y="1026" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_up</text>
+  <rect x="186" y="906" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 912.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="270.0" y="1026" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">hold_head_up</text>
+  <rect x="366" y="906" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 912.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(0 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+    <path d="M25 19 L39 33 M21 27 L39 45" stroke="#0B1020" stroke-width="3" opacity="0.65"/>
+  </g></g>
+  <text x="450.0" y="1026" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">roll_head_up</text>
+  <rect x="546" y="906" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 912.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#FFD95A" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#FFD95A"/>
+  </g></g>
+  <text x="630.0" y="1026" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_right</text>
+  <rect x="726" y="906" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 912.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#FFD95A" stroke-width="7" opacity="0.18"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="none" stroke="#FFD95A" stroke-width="4" opacity="0.42"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" fill-opacity="0.72" stroke="#F8FAFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="none" stroke="#FFD95A" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="3" fill="#FFD95A"/>
+  </g></g>
+  <text x="810.0" y="1026" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">receptor_right_active</text>
+  <rect x="906" y="906" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 912.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="1026" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_4th</text>
+  <rect x="6" y="1056" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 1062.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="90.0" y="1176" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_8th</text>
+  <rect x="186" y="1056" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 1062.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#A77BFF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="270.0" y="1176" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_12th</text>
+  <rect x="366" y="1056" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 1062.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FFD95A" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="450.0" y="1176" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_16th</text>
+  <rect x="546" y="1056" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 1062.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="630.0" y="1176" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_24th</text>
+  <rect x="726" y="1056" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 1062.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF9659" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="810.0" y="1176" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_32nd</text>
+  <rect x="906" y="1056" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 1062.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#52E6D8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="990.0" y="1176" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_48th</text>
+  <rect x="6" y="1206" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 1212.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#63F2A2" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="90.0" y="1326" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right_64th</text>
+  <rect x="186" y="1206" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 1212.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF5F6D" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="270.0" y="1326" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">tap_right</text>
+  <rect x="366" y="1206" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 1212.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#58D9FF" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g></g>
+  <text x="450.0" y="1326" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">hold_head_right</text>
+  <rect x="546" y="1206" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 1212.00) scale(1.3750)" color="#F8FAFF">  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FF74C8" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+    <path d="M25 19 L39 33 M21 27 L39 45" stroke="#0B1020" stroke-width="3" opacity="0.65"/>
+  </g></g>
+  <text x="630.0" y="1326" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">roll_head_right</text>
+  <rect x="726" y="1206" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 1212.00) scale(1.3750)" color="#F8FAFF">  <rect x="17" width="30" height="64" fill="#0B1020" opacity="0.86"/>
+  <rect x="20" width="24" height="64" fill="#58D9FF"/>
+  <rect x="26" width="12" height="64" fill="#F8FAFF" opacity="0.25"/>
+  <path d="M25 13 L32 6 L39 13 M25 37 L32 30 L39 37 M25 61 L32 54 L39 61" fill="none" stroke="#F8FAFF" stroke-width="3" opacity="0.75"/></g>
+  <text x="810.0" y="1326" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">hold_body</text>
+  <rect x="906" y="1206" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 1212.00) scale(1.3750)" color="#F8FAFF">  <path d="M17 0 H47 V35 Q47 55 32 60 Q17 55 17 35 Z" fill="#0B1020" opacity="0.86"/>
+  <path d="M20 0 H44 V34 Q44 50 32 55 Q20 50 20 34 Z" fill="#58D9FF" stroke="#F8FAFF" stroke-width="2"/>
+  <path d="M26 0 H38 V39 Q37 46 32 49 Q27 46 26 39 Z" fill="#F8FAFF" opacity="0.25"/></g>
+  <text x="990.0" y="1326" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">hold_tail</text>
+  <rect x="6" y="1356" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(46.00 1362.00) scale(1.3750)" color="#F8FAFF">  <rect x="17" width="30" height="64" fill="#0B1020" opacity="0.86"/>
+  <rect x="20" width="24" height="64" fill="#FF74C8"/>
+  <path d="M20 12 L44 0 M20 30 L44 18 M20 48 L44 36 M20 66 L44 54" stroke="#0B1020" stroke-width="5" opacity="0.55"/>
+  <path d="M25 14 L32 7 L39 14 M25 50 L32 43 L39 50" fill="none" stroke="#F8FAFF" stroke-width="3"/></g>
+  <text x="90.0" y="1476" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">roll_body</text>
+  <rect x="186" y="1356" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(226.00 1362.00) scale(1.3750)" color="#F8FAFF">  <path d="M17 0 H47 V35 Q47 55 32 60 Q17 55 17 35 Z" fill="#0B1020" opacity="0.86"/>
+  <path d="M20 0 H44 V34 Q44 50 32 55 Q20 50 20 34 Z" fill="#FF74C8" stroke="#F8FAFF" stroke-width="2"/>
+  <path d="M20 18 L44 6 M20 36 L43 24 M23 51 L41 42" stroke="#0B1020" stroke-width="5" opacity="0.55"/></g>
+  <text x="270.0" y="1476" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">roll_tail</text>
+  <rect x="366" y="1356" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(406.00 1362.00) scale(1.3750)" color="#F8FAFF">  <circle cx="32" cy="32" r="26" fill="#0B1020" stroke="#FF5F6D" stroke-width="3"/>
+  <path d="M32 7 L37 21 L52 16 L43 29 L57 36 L41 38 L44 54 L33 42 L22 55 L24 39 L8 37 L22 29 L12 16 L27 21 Z" fill="#FF5F6D"/>
+  <circle cx="32" cy="32" r="8" fill="#F8FAFF"/><circle cx="32" cy="32" r="3" fill="#0B1020"/></g>
+  <text x="450.0" y="1476" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">mine</text>
+  <rect x="546" y="1356" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(586.00 1362.00) scale(1.3750)" color="#F8FAFF">  <rect x="8" y="8" width="48" height="48" rx="12" fill="#0B1020" stroke="#63F2A2" stroke-width="3"/>
+  <path d="M18 37 L32 21 L46 37 M32 21 V48" fill="none" stroke="#63F2A2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M18 15 H46" stroke="#F8FAFF" stroke-width="3" stroke-linecap="round"/></g>
+  <text x="630.0" y="1476" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">lift</text>
+  <rect x="726" y="1356" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(766.00 1362.00) scale(1.3750)" color="#F8FAFF">  <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#78839C" fill-opacity="0.25" stroke="#78839C" stroke-width="3" stroke-dasharray="5 4"/>
+  <path d="M17 17 L47 47 M47 17 L17 47" stroke="#78839C" stroke-width="4" stroke-linecap="round"/></g>
+  <text x="810.0" y="1476" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">fake</text>
+  <rect x="906" y="1356" width="168" height="138" rx="12" fill="#151C30" stroke="#2B3655"/>
+  <g transform="translate(946.00 1362.00) scale(1.3750)" color="#F8FAFF">  <path d="M37 4 L14 35 H29 L25 60 L51 27 H36 Z" fill="#FFD95A" stroke="#0B1020" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M36 14 L24 32 H35 L32 45" fill="none" stroke="#F8FAFF" stroke-width="3" stroke-linecap="round"/></g>
+  <text x="990.0" y="1476" text-anchor="middle" fill="#F8FAFF" font-family="monospace" font-size="12">shock</text>
+</svg>

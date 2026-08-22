@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 16" role="img">
+  <title>Scanline divider</title>
+  <path d="M0 8 H128 L136 3 H184 L192 8 H320" fill="none" stroke="currentColor" stroke-width="2"/><path d="M0 12 H320" stroke="currentColor" stroke-width="1" opacity="0.2"/>
+</svg>

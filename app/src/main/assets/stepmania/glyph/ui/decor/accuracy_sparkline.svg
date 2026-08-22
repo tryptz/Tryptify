@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img">
+  <title>Accuracy sparkline placeholder</title>
+  <g fill="none" stroke="currentColor"><path d="M8 80 H312 M8 16 V80" opacity="0.3"/><path d="M12 60 L38 56 L64 62 L90 43 L116 48 L142 32 L168 38 L194 27 L220 35 L246 20 L272 25 L308 16" stroke-width="3"/><path d="M12 72 H308" stroke-width="1" stroke-dasharray="4 5" opacity="0.35"/></g>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>Roll body tile</title>
+  <rect x="17" width="30" height="64" fill="#0B1020" opacity="0.86"/>
+  <rect x="20" width="24" height="64" fill="#FF74C8"/>
+  <path d="M20 12 L44 0 M20 30 L44 18 M20 48 L44 36 M20 66 L44 54" stroke="#0B1020" stroke-width="5" opacity="0.55"/>
+  <path d="M25 14 L32 7 L39 14 M25 50 L32 43 L39 50" fill="none" stroke="#F8FAFF" stroke-width="3"/>
+</svg>
