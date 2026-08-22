@@ -127,6 +127,7 @@ fun MainPlayerRoute(
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by playerViewModel.preservePitch.collectAsStateWithLifecycle()
     val pitchSemitones by playerViewModel.pitchSemitones.collectAsStateWithLifecycle()
+    val speedUnitSemitones by playerViewModel.speedUnitSemitones.collectAsStateWithLifecycle()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
     val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsStateWithLifecycle()
@@ -738,6 +739,8 @@ fun MainPlayerRoute(
                         preservePitch = preservePitch,
                         pitchSemitones = pitchSemitones,
                         onPitchSemitonesChange = playerViewModel::setPitchSemitones,
+                        speedUnitSemitones = speedUnitSemitones,
+                        onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
                         onSpeedChange = playerViewModel::setPlaybackSpeed,
                         onPreservePitchChange = playerViewModel::setPreservePitch,
                         onDismiss = { showSpeedSheet = false },
@@ -756,6 +759,8 @@ fun MainPlayerRoute(
                 preservePitch = preservePitch,
                 pitchSemitones = pitchSemitones,
                 onPitchSemitonesChange = playerViewModel::setPitchSemitones,
+                speedUnitSemitones = speedUnitSemitones,
+                onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
                 onSpeedChange = playerViewModel::setPlaybackSpeed,
                 onPreservePitchChange = playerViewModel::setPreservePitch,
                 onDismiss = { showSpeedSheet = false },
@@ -839,6 +844,8 @@ private fun BoxScope.SpeedPanel(
     preservePitch: Boolean,
     pitchSemitones: Float,
     onPitchSemitonesChange: (Float) -> Unit,
+    speedUnitSemitones: Boolean,
+    onSpeedUnitChange: (Boolean) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onPreservePitchChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -898,39 +905,80 @@ private fun BoxScope.SpeedPanel(
                     text = "  Playback speed",
                     style = MaterialTheme.typography.titleMedium,
                 )
+                // Whichever unit is selected leads; the other trails in small
+                // type, because the two answer different questions — "how much
+                // faster" and "how much higher" — and the panel drives both.
                 Text(
-                    text = "  ${String.format(Locale.US, "%.2fx", speed)}",
+                    text = "  " + if (speedUnitSemitones) {
+                        "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
+                    } else {
+                        String.format(Locale.US, "%.2fx", speed)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = speedAccent,
                 )
-                // With preserve-pitch off the speed ratio *is* the interval, so
-                // name it — an exact semitone is the thing the control is for,
-                // and "1.12x" doesn't tell you whether you landed on one.
-                if (!preservePitch) {
-                    Text(
-                        text = "  " + if (PitchRatio.isOnSemitone(speed)) {
-                            "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
-                        } else {
-                            String.format(Locale.US, "%+.2f st", PitchRatio.semitonesFor(speed))
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    text = "  " + if (speedUnitSemitones) {
+                        String.format(Locale.US, "%.4fx", speed)
+                    } else if (PitchRatio.isOnSemitone(speed)) {
+                        "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
+                    } else {
+                        String.format(Locale.US, "%+.2f st", PitchRatio.semitonesFor(speed))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Slider(
-                value = speed,
-                // Was Math.round(it * 100f) / 100f, which quantised the ratio to
-                // a 0.01 grid — up to 13.5 cents off an equal-tempered interval.
-                // Full precision now, snapped onto an exact semitone only when
-                // the drag already lands within a few cents of one.
-                onValueChange = { onSpeedChange(PitchRatio.snap(it)) },
-                valueRange = PitchRatio.MIN_SPEED..PitchRatio.MAX_SPEED,
-                colors = SliderDefaults.colors(
-                    thumbColor = speedAccent,
-                    activeTrackColor = speedAccent,
-                ),
-            )
+
+            // Unit toggle. Not just a relabelling: in semitones the slider
+            // steps whole intervals at exact 2^(n/12) ratios, so every position
+            // it can reach is in tune. In multiplier units it stays continuous,
+            // for the speeds that are not intervals at all.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !speedUnitSemitones,
+                    onClick = { onSpeedUnitChange(false) },
+                    label = { Text("Multiplier") },
+                )
+                FilterChip(
+                    selected = speedUnitSemitones,
+                    onClick = { onSpeedUnitChange(true) },
+                    label = { Text("Semitones") },
+                )
+            }
+            if (speedUnitSemitones) {
+                Slider(
+                    value = PitchRatio.semitonesFor(speed)
+                        .coerceIn(
+                            PitchRatio.SEMITONE_RANGE.first.toFloat(),
+                            PitchRatio.SEMITONE_RANGE.last.toFloat(),
+                        ),
+                    onValueChange = { onSpeedChange(PitchRatio.ratioFor(it.roundToInt())) },
+                    valueRange = PitchRatio.SEMITONE_RANGE.first.toFloat()..
+                        PitchRatio.SEMITONE_RANGE.last.toFloat(),
+                    // One detent per semitone, so the slider cannot land between
+                    // two intervals at all.
+                    steps = PitchRatio.SEMITONE_RANGE.last - PitchRatio.SEMITONE_RANGE.first - 1,
+                    colors = SliderDefaults.colors(
+                        thumbColor = speedAccent,
+                        activeTrackColor = speedAccent,
+                    ),
+                )
+            } else {
+                Slider(
+                    value = speed,
+                    // Was Math.round(it * 100f) / 100f, which quantised the ratio
+                    // to a 0.01 grid — up to 13.5 cents off an equal-tempered
+                    // interval. Full precision now, snapped onto an exact
+                    // semitone only when the drag already lands near one.
+                    onValueChange = { onSpeedChange(PitchRatio.snap(it)) },
+                    valueRange = PitchRatio.MIN_SPEED..PitchRatio.MAX_SPEED,
+                    colors = SliderDefaults.colors(
+                        thumbColor = speedAccent,
+                        activeTrackColor = speedAccent,
+                    ),
+                )
+            }
             // Exact interval stepping. The slider can land anywhere; this walks
             // whole semitones at 2^(n/12) precision, which is the only way to
             // hit an interval reliably by hand.
@@ -993,15 +1041,30 @@ private fun BoxScope.SpeedPanel(
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0.5f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { preset ->
-                    FilterChip(
-                        selected = kotlin.math.abs(speed - preset) < 0.01f,
-                        onClick = { onSpeedChange(preset) },
-                        // %.2g rendered 1.25 as "1.2"; use a trimmed decimal so
-                        // the chip label matches the value it actually sets.
-                        label = { Text(String.format(Locale.US, if (preset == preset.toInt().toFloat()) "%.1fx" else "%.2fx", preset)) },
-                    )
+            if (speedUnitSemitones) {
+                // Intervals rather than round numbers: an octave down, a fourth,
+                // unison, a fifth, an octave up.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(-12, -5, 0, 7, 12).forEach { preset ->
+                        FilterChip(
+                            selected = PitchRatio.isOnSemitone(speed) &&
+                                PitchRatio.nearestSemitone(speed) == preset,
+                            onClick = { onSpeedChange(PitchRatio.ratioFor(preset)) },
+                            label = { Text("${PitchRatio.formatSemitones(preset)} st") },
+                        )
+                    }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0.5f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { preset ->
+                        FilterChip(
+                            selected = kotlin.math.abs(speed - preset) < 0.01f,
+                            onClick = { onSpeedChange(preset) },
+                            // %.2g rendered 1.25 as "1.2"; use a trimmed decimal
+                            // so the chip label matches the value it sets.
+                            label = { Text(String.format(Locale.US, if (preset == preset.toInt().toFloat()) "%.1fx" else "%.2fx", preset)) },
+                        )
+                    }
                 }
             }
             Row(

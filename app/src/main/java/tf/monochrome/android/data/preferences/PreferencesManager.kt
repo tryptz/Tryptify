@@ -234,6 +234,7 @@ class PreferencesManager @Inject constructor(
         private val PLAYBACK_SPEED = stringPreferencesKey("playback_speed")
         private val PRESERVE_PITCH = booleanPreferencesKey("preserve_pitch")
         private val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
+        private val SPEED_UNIT_SEMITONES = booleanPreferencesKey("speed_unit_semitones")
 
         // Appearance extras
         private val FONT_SCALE = floatPreferencesKey("font_scale")
@@ -396,7 +397,7 @@ class PreferencesManager @Inject constructor(
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
-            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES,
+            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
@@ -1027,6 +1028,21 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setPitchSemitones(semitones: Float) {
         dataStore.edit { it[PITCH_SEMITONES] = semitones.toString() }
+    }
+
+    /**
+     * Whether the speed control is expressed in semitones rather than as a
+     * multiplier. Presentation only — the stored speed is a ratio either way.
+     *
+     * It does change what the slider can reach, though: in semitone units it
+     * steps whole intervals at exact 2^(n/12) ratios, which is the difference
+     * between choosing a fifth and landing near one.
+     */
+    val speedUnitSemitones: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[SPEED_UNIT_SEMITONES] ?: false
+    }
+    suspend fun setSpeedUnitSemitones(enabled: Boolean) {
+        dataStore.edit { it[SPEED_UNIT_SEMITONES] = enabled }
     }
     suspend fun setPreservePitch(enabled: Boolean) {
         dataStore.edit { it[PRESERVE_PITCH] = enabled }

@@ -273,6 +273,14 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPitchSemitones(semitones) }
     }
 
+    // Whether the speed control reads in semitones or as a multiplier.
+    val speedUnitSemitones: StateFlow<Boolean> = preferences.speedUnitSemitones
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setSpeedUnitSemitones(enabled: Boolean) {
+        viewModelScope.launch { preferences.setSpeedUnitSemitones(enabled) }
+    }
+
     // --- Oxford DSP effect toggles (compressor / inflator) ---
     // The effects are @Singleton, so these flows stay in sync with the Oxford
     // screen. Compressor uses an inverted "bypass" flag; inflator uses "effectIn".
