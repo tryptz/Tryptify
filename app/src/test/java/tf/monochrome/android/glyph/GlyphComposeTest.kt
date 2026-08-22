@@ -26,10 +26,12 @@ import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.data.GlyphChartState
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.ui.glyph.GlyphEvent
+import tf.monochrome.android.ui.glyph.GlyphChipRow
 import tf.monochrome.android.ui.glyph.GlyphHomeScreen
 import tf.monochrome.android.ui.glyph.GlyphLaneInput
 import tf.monochrome.android.ui.glyph.GlyphResultsScreen
 import tf.monochrome.android.ui.glyph.GlyphResultsUi
+import tf.monochrome.android.ui.glyph.GlyphTypography
 import tf.monochrome.android.ui.glyph.GlyphSectionResult
 import tf.monochrome.android.ui.glyph.GlyphUiState
 import tf.monochrome.android.glyph.data.GlyphAttempt
@@ -323,6 +325,37 @@ class GlyphComposeTest {
             "narrow=$narrow should be about 55% of full=$full",
             narrow in (full * 50 / 100)..(full * 60 / 100),
         )
+    }
+
+    @Test
+    fun `every difficulty stays reachable in a narrow chip row`() {
+        // Five chips with their meters need roughly 450dp; a phone lane gives
+        // about 358. As a plain Row the hardest tier fell off the right edge
+        // with nothing on screen to say it existed.
+        val picked = mutableListOf<StepManiaDifficulty>()
+        compose.setContent {
+            androidx.compose.foundation.layout.Box(
+                modifier = androidx.compose.ui.Modifier.size(358.dp, 120.dp),
+            ) {
+                GlyphChipRow(
+                    options = StepManiaDifficulty.entries.toList(),
+                    selected = StepManiaDifficulty.MEDIUM,
+                    label = { "${it.sscName} ${it.meter}" },
+                    onSelect = { picked += it },
+                    typography = GlyphTypography(androidx.compose.ui.text.font.FontFamily.Monospace),
+                )
+            }
+        }
+
+        // Every tier is in the tree and can be scrolled to and chosen — the
+        // assertion that would have failed before the row could scroll.
+        for (difficulty in StepManiaDifficulty.entries) {
+            compose.onNodeWithText("${difficulty.sscName} ${difficulty.meter}")
+                .performScrollTo()
+                .assertIsDisplayed()
+        }
+        compose.onNodeWithText("Challenge 14").performScrollTo().performClick()
+        assertEquals(listOf(StepManiaDifficulty.CHALLENGE), picked)
     }
 
     // ── results ─────────────────────────────────────────────────────────
