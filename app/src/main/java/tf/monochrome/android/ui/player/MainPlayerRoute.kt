@@ -5,8 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -18,7 +16,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -51,16 +48,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,7 +76,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -864,7 +861,7 @@ private fun PlayerSystemBarAppearance(albumDominant: Color) {
  * panel goes, and letting go past a third of the panel's height, or with any
  * real downward flick, dismisses. Anything short of that springs back.
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BoxScope.SpeedPanel(
     visible: Boolean,
@@ -990,12 +987,12 @@ private fun BoxScope.SpeedPanel(
                     .background(muted.copy(alpha = 0.45f), RoundedCornerShape(percent = 50)),
             )
 
-            // Title left, value right. The old header ran all four of these
-            // inline, each padded apart with leading spaces inside the string,
-            // and the readouts ended up wherever the title's width left them.
-            // Whichever unit is selected leads; the other trails in small type,
-            // because the two answer different questions — "how much faster"
-            // and "how much higher" — and the panel drives both.
+            // Title, readout, reset. The panel used to offer four ways to set
+            // the same number at once — a slider, a semitone stepper, a row of
+            // five presets and a Nightcore pill — stacked over a second engine
+            // with a stepper of its own, and the whole thing ran most of the
+            // screen. One control per unit now: the multiplier is a slider,
+            // semitones are a stepper, and this row says where both stand.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1008,75 +1005,126 @@ private fun BoxScope.SpeedPanel(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Playback speed",
+                    text = "Speed",
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = if (speedUnitSemitones) {
-                            "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
-                        } else {
-                            String.format(Locale.US, "%.2fx", speed)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = speedAccent,
-                    )
-                    Text(
-                        text = if (speedUnitSemitones) {
-                            String.format(Locale.US, "%.2fx", speed)
-                        } else if (PitchRatio.isOnSemitone(speed)) {
-                            "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
-                        } else {
-                            String.format(Locale.US, "%+.2f st", PitchRatio.semitonesFor(speed))
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = muted,
+                // Whichever unit is selected leads; the other trails in small
+                // type, because the two answer different questions — "how much
+                // faster" and "how much higher" — and one control drives both.
+                Text(
+                    text = if (speedUnitSemitones) {
+                        "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
+                    } else {
+                        String.format(Locale.US, "%.2fx", speed)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = speedAccent,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (speedUnitSemitones) {
+                        String.format(Locale.US, "%.2fx", speed)
+                    } else if (PitchRatio.isOnSemitone(speed)) {
+                        "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
+                    } else {
+                        String.format(Locale.US, "%+.2f st", PitchRatio.semitonesFor(speed))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = muted,
+                )
+                // The reset was a "Reset to 1.0x" text button on a line of its
+                // own. It is one tap either way, and as an icon it costs the
+                // panel nothing — disabled at 1.0x, so the row does not reflow
+                // when there is nothing to undo.
+                IconButton(
+                    onClick = { onSpeedChange(1f) },
+                    enabled = abs(speed - 1f) > 0.001f,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Reset speed to 1.0x",
+                        tint = speedAccent,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
 
-            // Unit toggle. Not just a relabelling: in semitones the slider
-            // steps whole intervals at exact 2^(n/12) ratios, so every position
-            // it can reach is in tune. In multiplier units it stays continuous,
-            // for the speeds that are not intervals at all.
+            // Unit toggle, and the one preset worth a button. Not just a
+            // relabelling: in semitones the panel steps whole intervals at
+            // exact 2^(n/12) ratios, so every value it can reach is in tune;
+            // in multiplier units the slider stays continuous, for the speeds
+            // that are not intervals at all.
             //
-            // A segmented row rather than two chips, which is what the rest of
-            // the app uses for a choice of one out of two and reads as one
-            // control instead of two independent things that happen to agree.
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = !speedUnitSemitones,
-                    onClick = { onSpeedUnitChange(false) },
-                    shape = SegmentedButtonDefaults.itemShape(0, 2),
-                    label = { Text("Multiplier", maxLines = 1) },
-                )
-                SegmentedButton(
-                    selected = speedUnitSemitones,
-                    onClick = { onSpeedUnitChange(true) },
-                    shape = SegmentedButtonDefaults.itemShape(1, 2),
-                    label = { Text("Semitones", maxLines = 1) },
+            // Nightcore rides on the same line rather than filling one with a
+            // glowing pill: 1.10x with pitch following the tempo. The
+            // segmented buttons drop their selected-state checkmark to make
+            // room — the filled segment already says which unit is live, and
+            // the check was 24dp of nothing on a row that now has to fit
+            // three controls on a 360dp screen.
+            val nightcoreActive = abs(speed - 1.10f) < 0.01f && !preservePitch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
+                    SegmentedButton(
+                        selected = !speedUnitSemitones,
+                        onClick = { onSpeedUnitChange(false) },
+                        shape = SegmentedButtonDefaults.itemShape(0, 2),
+                        icon = {},
+                        label = { Text("Multiplier", maxLines = 1) },
+                    )
+                    SegmentedButton(
+                        selected = speedUnitSemitones,
+                        onClick = { onSpeedUnitChange(true) },
+                        shape = SegmentedButtonDefaults.itemShape(1, 2),
+                        icon = {},
+                        label = { Text("Semitones", maxLines = 1) },
+                    )
+                }
+                FilterChip(
+                    selected = nightcoreActive,
+                    onClick = {
+                        onSpeedChange(1.10f)
+                        onPreservePitchChange(false)
+                    },
+                    label = { Text("Nightcore", maxLines = 1) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    },
                 )
             }
+
+            // One control, chosen by the unit. Semitones step exactly, because
+            // that is the only way to hit an interval by hand; the multiplier
+            // slides, because every value between two intervals is a real
+            // speed there.
             if (speedUnitSemitones) {
-                Slider(
-                    value = PitchRatio.semitonesFor(speed)
-                        .coerceIn(
-                            PitchRatio.SEMITONE_RANGE.first.toFloat(),
-                            PitchRatio.SEMITONE_RANGE.last.toFloat(),
-                        ),
-                    onValueChange = { onSpeedChange(PitchRatio.ratioFor(it.roundToInt())) },
-                    valueRange = PitchRatio.SEMITONE_RANGE.first.toFloat()..
-                        PitchRatio.SEMITONE_RANGE.last.toFloat(),
-                    // One detent per semitone, so the slider cannot land between
-                    // two intervals at all.
-                    steps = PitchRatio.SEMITONE_RANGE.last - PitchRatio.SEMITONE_RANGE.first - 1,
-                    colors = SliderDefaults.colors(
-                        thumbColor = speedAccent,
-                        activeTrackColor = speedAccent,
-                    ),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    StepButton(
+                        label = "-1 st",
+                        accent = speedAccent,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onSpeedChange(PitchRatio.step(speed, -1)) },
+                    )
+                    StepButton(
+                        label = "+1 st",
+                        accent = speedAccent,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onSpeedChange(PitchRatio.step(speed, 1)) },
+                    )
+                }
             } else {
                 Slider(
                     value = speed,
@@ -1092,130 +1140,7 @@ private fun BoxScope.SpeedPanel(
                     ),
                 )
             }
-            // Exact interval stepping. The slider can land anywhere; this walks
-            // whole semitones at 2^(n/12) precision, which is the only way to
-            // hit an interval reliably by hand.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                StepButton(
-                    label = "-1 st",
-                    accent = speedAccent,
-                    onClick = { onSpeedChange(PitchRatio.step(speed, -1)) },
-                )
-                Text(
-                    text = if (preservePitch) "semitone steps (tempo)" else "semitone steps",
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = muted,
-                )
-                StepButton(
-                    label = "+1 st",
-                    accent = speedAccent,
-                    onClick = { onSpeedChange(PitchRatio.step(speed, 1)) },
-                )
-            }
-            // Cute one-tap Nightcore: 1.10x speed with pitch riding the tempo
-            // (preserve-pitch off). Glows pink when active. Reset rides beside
-            // it rather than sitting on a line of its own at the panel's left
-            // edge, and is disabled at 1.0x so the row does not reflow when
-            // there is nothing to reset.
-            val nightcoreActive = abs(speed - 1.10f) < 0.01f && !preservePitch
-            // Tertiary, so the one playful control still reads as distinct
-            // from the panel's primary accent while staying inside the theme.
-            val nightcorePink = MaterialTheme.colorScheme.tertiary
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            ) {
-                Surface(
-                    onClick = {
-                        onSpeedChange(1.10f)
-                        onPreservePitchChange(false)
-                    },
-                    modifier = Modifier.shadow(
-                        elevation = if (nightcoreActive) 20.dp else 10.dp,
-                        shape = RoundedCornerShape(percent = 50),
-                        ambientColor = nightcorePink,
-                        spotColor = nightcorePink,
-                        clip = false,
-                    ),
-                    shape = RoundedCornerShape(percent = 50),
-                    color = if (nightcoreActive) nightcorePink.copy(alpha = 0.92f) else nightcorePink.copy(alpha = 0.14f),
-                    contentColor = if (nightcoreActive) MaterialTheme.colorScheme.onTertiary else nightcorePink,
-                    border = BorderStroke(1.dp, nightcorePink.copy(alpha = if (nightcoreActive) 1f else 0.55f)),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            text = "Nightcore",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-                TextButton(
-                    onClick = { onSpeedChange(1.0f) },
-                    enabled = abs(speed - 1f) > 0.001f,
-                ) { Text("Reset to 1.0x") }
-            }
-            // A flow row, so a chip that does not fit moves down whole instead
-            // of wrapping its own label onto a second line inside itself, which
-            // is what "+12 st" used to do to the row's height.
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (speedUnitSemitones) {
-                    // Steps someone actually reaches for. This was an octave
-                    // down, a fourth, unison, a fifth and an octave up: musical
-                    // intervals, and useless as speed presets — a fifth up is
-                    // 1.5x and an octave is double or half speed, which is not
-                    // a listening speed, it is an effect. A tone either side
-                    // covers the real use (nudging a track into a key or off a
-                    // resonance), and the stepper above reaches everything else.
-                    listOf(-2, -1, 0, 1, 2).forEach { preset ->
-                        FilterChip(
-                            selected = PitchRatio.isOnSemitone(speed) &&
-                                PitchRatio.nearestSemitone(speed) == preset,
-                            onClick = { onSpeedChange(PitchRatio.ratioFor(preset)) },
-                            label = { Text("${PitchRatio.formatSemitones(preset)} st", maxLines = 1) },
-                        )
-                    }
-                } else {
-                    listOf(0.5f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { preset ->
-                        FilterChip(
-                            selected = abs(speed - preset) < 0.01f,
-                            onClick = { onSpeedChange(preset) },
-                            // %.2g rendered 1.25 as "1.2"; use a trimmed decimal
-                            // so the chip label matches the value it sets.
-                            label = {
-                                Text(
-                                    text = String.format(
-                                        Locale.US,
-                                        if (preset == preset.toInt().toFloat()) "%.1fx" else "%.2fx",
-                                        preset,
-                                    ),
-                                    maxLines = 1,
-                                )
-                            },
-                        )
-                    }
-                }
-            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1245,14 +1170,19 @@ private fun BoxScope.SpeedPanel(
             // within 0.18 Hz -- the analysis block is sized for that). It costs
             // about 350 ms of latency, so it is only engaged off zero.
             //
-            // The rule separates the two engines. They were stacked with the
-            // same spacing as the controls inside each, so the panel read as
-            // one long list and the pitch stepper looked like a third row of
-            // the speed control it has nothing to do with.
+            // The rule separates the two engines; the whole section is one row
+            // now — label, readout, both steppers — where it used to be a
+            // header and a stepper row of its own, which made the panel read
+            // as one long list with the speed control repeated at the bottom.
             HorizontalDivider(color = muted.copy(alpha = 0.18f))
+            // Six dp of gap and a readout at its natural width, not a weighted
+            // one: label, value, both steppers and the reset have to share a
+            // 320dp content width on a small phone, and "-24 st" given the
+            // leftovers would ellipsize rather than push the row.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(
                     Icons.Default.Tune,
@@ -1260,32 +1190,17 @@ private fun BoxScope.SpeedPanel(
                     tint = speedAccent,
                     modifier = Modifier.size(20.dp),
                 )
-                Spacer(Modifier.width(10.dp))
                 Text(
                     text = "Pitch",
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
-                if (pitchSemitones != 0f) {
-                    Text(
-                        text = "tempo unchanged",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = muted,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
                 Text(
                     text = "${PitchRatio.formatSemitones(pitchSemitones.roundToInt())} st",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = speedAccent,
                 )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
                 StepButton(
                     label = "-1 st",
                     accent = speedAccent,
@@ -1293,12 +1208,6 @@ private fun BoxScope.SpeedPanel(
                         onPitchSemitonesChange((pitchSemitones.roundToInt() - 1).coerceAtLeast(-24).toFloat())
                     },
                 )
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    TextButton(
-                        onClick = { onPitchSemitonesChange(0f) },
-                        enabled = pitchSemitones != 0f,
-                    ) { Text("Reset") }
-                }
                 StepButton(
                     label = "+1 st",
                     accent = speedAccent,
@@ -1306,6 +1215,18 @@ private fun BoxScope.SpeedPanel(
                         onPitchSemitonesChange((pitchSemitones.roundToInt() + 1).coerceAtMost(24).toFloat())
                     },
                 )
+                IconButton(
+                    onClick = { onPitchSemitonesChange(0f) },
+                    enabled = pitchSemitones != 0f,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Reset pitch",
+                        tint = speedAccent,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
         }
@@ -1316,16 +1237,24 @@ private fun BoxScope.SpeedPanel(
 /**
  * One press of the semitone steppers, on both engines.
  *
- * A bordered pill rather than the bare [TextButton] these were: the two of them
- * flank a caption, and as plain text they read as two more links in a panel
- * that already had four, with nothing to say they were the buttons that move
- * the value. The border is the accent at low alpha so they belong to the
- * control above them without competing with it.
+ * A bordered pill rather than the bare [TextButton] these were: as plain text
+ * they read as links in a panel that already had several, with nothing to say
+ * they were the buttons that move the value. The border is the accent at low
+ * alpha so they belong to the control above them without competing with it.
+ *
+ * The speed pair takes a weight so the two of them split the row; the pitch
+ * pair sits at its intrinsic width beside the readout.
  */
 @Composable
-private fun StepButton(label: String, accent: Color, onClick: () -> Unit) {
+private fun StepButton(
+    label: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     OutlinedButton(
         onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(percent = 50),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
         border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
