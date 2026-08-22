@@ -1,0 +1,847 @@
+{
+  "name": "Tryptify StepTech Glyph",
+  "version": 1,
+  "designGrid": 8,
+  "palette": {
+    "ink": "#0B1020",
+    "paper": "#F8FAFF",
+    "muted": "#78839C",
+    "beatColors": {
+      "4th": "#FF5F6D",
+      "8th": "#58D9FF",
+      "12th": "#A77BFF",
+      "16th": "#FFD95A",
+      "24th": "#FF74C8",
+      "32nd": "#FF9659",
+      "48th": "#52E6D8",
+      "64th": "#63F2A2"
+    },
+    "laneAccents": {
+      "left": "#FF74C8",
+      "down": "#58D9FF",
+      "up": "#63F2A2",
+      "right": "#FFD95A"
+    }
+  },
+  "assets": [
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_left",
+      "path": "noteskin/receptors/receptor_left.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_left_active",
+      "path": "noteskin/receptors/receptor_left_active.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_4th",
+      "path": "noteskin/taps/tap_left_4th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_8th",
+      "path": "noteskin/taps/tap_left_8th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_12th",
+      "path": "noteskin/taps/tap_left_12th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_16th",
+      "path": "noteskin/taps/tap_left_16th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_24th",
+      "path": "noteskin/taps/tap_left_24th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_32nd",
+      "path": "noteskin/taps/tap_left_32nd.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_48th",
+      "path": "noteskin/taps/tap_left_48th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_64th",
+      "path": "noteskin/taps/tap_left_64th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left",
+      "path": "noteskin/taps/tap_left.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_left",
+      "path": "noteskin/holds/hold_head_left.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_left",
+      "path": "noteskin/holds/roll_head_left.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_down",
+      "path": "noteskin/receptors/receptor_down.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_down_active",
+      "path": "noteskin/receptors/receptor_down_active.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_4th",
+      "path": "noteskin/taps/tap_down_4th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_8th",
+      "path": "noteskin/taps/tap_down_8th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_12th",
+      "path": "noteskin/taps/tap_down_12th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_16th",
+      "path": "noteskin/taps/tap_down_16th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_24th",
+      "path": "noteskin/taps/tap_down_24th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_32nd",
+      "path": "noteskin/taps/tap_down_32nd.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_48th",
+      "path": "noteskin/taps/tap_down_48th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_64th",
+      "path": "noteskin/taps/tap_down_64th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down",
+      "path": "noteskin/taps/tap_down.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_down",
+      "path": "noteskin/holds/hold_head_down.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_down",
+      "path": "noteskin/holds/roll_head_down.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_up",
+      "path": "noteskin/receptors/receptor_up.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_up_active",
+      "path": "noteskin/receptors/receptor_up_active.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_4th",
+      "path": "noteskin/taps/tap_up_4th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_8th",
+      "path": "noteskin/taps/tap_up_8th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_12th",
+      "path": "noteskin/taps/tap_up_12th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_16th",
+      "path": "noteskin/taps/tap_up_16th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_24th",
+      "path": "noteskin/taps/tap_up_24th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_32nd",
+      "path": "noteskin/taps/tap_up_32nd.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_48th",
+      "path": "noteskin/taps/tap_up_48th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_64th",
+      "path": "noteskin/taps/tap_up_64th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up",
+      "path": "noteskin/taps/tap_up.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_up",
+      "path": "noteskin/holds/hold_head_up.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_up",
+      "path": "noteskin/holds/roll_head_up.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_right",
+      "path": "noteskin/receptors/receptor_right.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_right_active",
+      "path": "noteskin/receptors/receptor_right_active.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_4th",
+      "path": "noteskin/taps/tap_right_4th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_8th",
+      "path": "noteskin/taps/tap_right_8th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_12th",
+      "path": "noteskin/taps/tap_right_12th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_16th",
+      "path": "noteskin/taps/tap_right_16th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_24th",
+      "path": "noteskin/taps/tap_right_24th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_32nd",
+      "path": "noteskin/taps/tap_right_32nd.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_48th",
+      "path": "noteskin/taps/tap_right_48th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_64th",
+      "path": "noteskin/taps/tap_right_64th.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right",
+      "path": "noteskin/taps/tap_right.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_right",
+      "path": "noteskin/holds/hold_head_right.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_right",
+      "path": "noteskin/holds/roll_head_right.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_body",
+      "path": "noteskin/holds/hold_body.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_tail",
+      "path": "noteskin/holds/hold_tail.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_body",
+      "path": "noteskin/holds/roll_body.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_tail",
+      "path": "noteskin/holds/roll_tail.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/special",
+      "name": "mine",
+      "path": "noteskin/special/mine.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/special",
+      "name": "lift",
+      "path": "noteskin/special/lift.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/special",
+      "name": "fake",
+      "path": "noteskin/special/fake.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "noteskin/special",
+      "name": "shock",
+      "path": "noteskin/special/shock.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": false
+    },
+    {
+      "category": "ui/icons",
+      "name": "arrow_back",
+      "path": "ui/icons/arrow_back.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "close",
+      "path": "ui/icons/close.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "play",
+      "path": "ui/icons/play.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "pause",
+      "path": "ui/icons/pause.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "restart",
+      "path": "ui/icons/restart.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "loop",
+      "path": "ui/icons/loop.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "loop_segment",
+      "path": "ui/icons/loop_segment.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "speed",
+      "path": "ui/icons/speed.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "metronome",
+      "path": "ui/icons/metronome.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "waveform",
+      "path": "ui/icons/waveform.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "ghost",
+      "path": "ui/icons/ghost.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "target",
+      "path": "ui/icons/target.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "hitbox",
+      "path": "ui/icons/hitbox.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "timing_window",
+      "path": "ui/icons/timing_window.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "chart",
+      "path": "ui/icons/chart.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "accuracy_graph",
+      "path": "ui/icons/accuracy_graph.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "timer",
+      "path": "ui/icons/timer.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "settings",
+      "path": "ui/icons/settings.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "filter",
+      "path": "ui/icons/filter.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "bookmark",
+      "path": "ui/icons/bookmark.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "challenge",
+      "path": "ui/icons/challenge.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "trophy",
+      "path": "ui/icons/trophy.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "calibrate",
+      "path": "ui/icons/calibrate.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "audio_stem",
+      "path": "ui/icons/audio_stem.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "music_note",
+      "path": "ui/icons/music_note.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "step_chart",
+      "path": "ui/icons/step_chart.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "mirror",
+      "path": "ui/icons/mirror.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "shuffle",
+      "path": "ui/icons/shuffle.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "chevron_left",
+      "path": "ui/icons/chevron_left.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "chevron_right",
+      "path": "ui/icons/chevron_right.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "expand",
+      "path": "ui/icons/expand.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "info",
+      "path": "ui/icons/info.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "ui/icons",
+      "name": "accessibility",
+      "path": "ui/icons/accessibility.svg",
+      "viewBox": "0 0 24 24",
+      "tintable": true
+    },
+    {
+      "category": "feedback/judgements",
+      "name": "judgement_marvelous",
+      "path": "feedback/judgements/judgement_marvelous.svg",
+      "viewBox": "0 0 320 64",
+      "tintable": false
+    },
+    {
+      "category": "feedback/judgements",
+      "name": "judgement_perfect",
+      "path": "feedback/judgements/judgement_perfect.svg",
+      "viewBox": "0 0 320 64",
+      "tintable": false
+    },
+    {
+      "category": "feedback/judgements",
+      "name": "judgement_great",
+      "path": "feedback/judgements/judgement_great.svg",
+      "viewBox": "0 0 320 64",
+      "tintable": false
+    },
+    {
+      "category": "feedback/judgements",
+      "name": "judgement_good",
+      "path": "feedback/judgements/judgement_good.svg",
+      "viewBox": "0 0 320 64",
+      "tintable": false
+    },
+    {
+      "category": "feedback/judgements",
+      "name": "judgement_boo",
+      "path": "feedback/judgements/judgement_boo.svg",
+      "viewBox": "0 0 320 64",
+      "tintable": false
+    },
+    {
+      "category": "feedback/judgements",
+      "name": "judgement_miss",
+      "path": "feedback/judgements/judgement_miss.svg",
+      "viewBox": "0 0 320 64",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_sss",
+      "path": "feedback/grades/grade_sss.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_ss",
+      "path": "feedback/grades/grade_ss.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_s",
+      "path": "feedback/grades/grade_s.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_a",
+      "path": "feedback/grades/grade_a.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_b",
+      "path": "feedback/grades/grade_b.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_c",
+      "path": "feedback/grades/grade_c.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_d",
+      "path": "feedback/grades/grade_d.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/grades",
+      "name": "grade_failed",
+      "path": "feedback/grades/grade_failed.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": false
+    },
+    {
+      "category": "feedback/effects",
+      "name": "tap_explosion",
+      "path": "feedback/effects/tap_explosion.svg",
+      "viewBox": "0 0 128 128",
+      "tintable": false
+    },
+    {
+      "category": "feedback/effects",
+      "name": "hold_glow",
+      "path": "feedback/effects/hold_glow.svg",
+      "viewBox": "0 0 128 128",
+      "tintable": false
+    },
+    {
+      "category": "feedback/effects",
+      "name": "miss_crack",
+      "path": "feedback/effects/miss_crack.svg",
+      "viewBox": "0 0 128 128",
+      "tintable": false
+    },
+    {
+      "category": "feedback/effects",
+      "name": "combo_burst",
+      "path": "feedback/effects/combo_burst.svg",
+      "viewBox": "0 0 128 128",
+      "tintable": false
+    },
+    {
+      "category": "ui/decor",
+      "name": "grid_tile",
+      "path": "ui/decor/grid_tile.svg",
+      "viewBox": "0 0 64 64",
+      "tintable": true
+    },
+    {
+      "category": "ui/decor",
+      "name": "panel_corners",
+      "path": "ui/decor/panel_corners.svg",
+      "viewBox": "0 0 320 180",
+      "tintable": true
+    },
+    {
+      "category": "ui/decor",
+      "name": "scanline_divider",
+      "path": "ui/decor/scanline_divider.svg",
+      "viewBox": "0 0 320 16",
+      "tintable": true
+    },
+    {
+      "category": "ui/decor",
+      "name": "focus_brackets",
+      "path": "ui/decor/focus_brackets.svg",
+      "viewBox": "0 0 96 96",
+      "tintable": true
+    },
+    {
+      "category": "ui/decor",
+      "name": "timeline_ticks",
+      "path": "ui/decor/timeline_ticks.svg",
+      "viewBox": "0 0 320 32",
+      "tintable": true
+    },
+    {
+      "category": "ui/decor",
+      "name": "accuracy_sparkline",
+      "path": "ui/decor/accuracy_sparkline.svg",
+      "viewBox": "0 0 320 96",
+      "tintable": true
+    }
+  ]
+}
