@@ -5,6 +5,7 @@ package tf.monochrome.android.ui.glyph
 import android.net.Uri
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.glyph.asset.GlyphLane
+import tf.monochrome.android.glyph.engine.GlyphScrollFamily
 import tf.monochrome.android.glyph.training.GlyphCountIn
 
 /**
@@ -48,6 +49,12 @@ sealed interface GlyphEvent {
     data object ToggleShuffle : GlyphEvent
     data object ToggleMetronome : GlyphEvent
     data class SetTimingWindowScale(val scale: Float) : GlyphEvent
+
+    /** Switch scroll family, keeping a sensible value for the new one. */
+    data class SetScrollFamily(val family: GlyphScrollFamily) : GlyphEvent
+
+    /** Set the value within the current family: a multiplier, or a target BPM. */
+    data class SetScrollValue(val value: Float) : GlyphEvent
     data class SetHitboxScale(val scale: Float) : GlyphEvent
 
     // ── training ────────────────────────────────────────────────────────

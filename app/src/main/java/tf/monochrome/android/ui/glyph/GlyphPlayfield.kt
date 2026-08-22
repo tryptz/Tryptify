@@ -38,7 +38,9 @@ import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.asset.GlyphSpecialNote
 import tf.monochrome.android.glyph.chart.GlyphNoteType
 import tf.monochrome.android.glyph.data.GlyphGhost
+import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
+import tf.monochrome.android.glyph.engine.GlyphScrollMode
 
 /**
  * The four-lane playfield.
@@ -66,7 +68,10 @@ fun GlyphPlayfield(
     palette: GlyphPalette?,
     positionProvider: () -> Float,
     heldLanes: Set<GlyphLane>,
-    scrollSeconds: Float,
+    /** How the chart scrolls. Decides what on-screen distance means. */
+    scrollMode: GlyphScrollMode,
+    /** The song's timing map, which XMod and MMod read and CMod ignores. */
+    timing: GlyphTiming,
     reducedMotion: Boolean,
     modifier: Modifier = Modifier,
     /** A previous run's timing, drawn as markers beside the receptors. */
@@ -143,10 +148,18 @@ fun GlyphPlayfield(
             if (!warmed) return@Canvas
 
             val position = positionProvider()
-            val lookahead = scrollSeconds
+
+            // Culling window. Taken at the chart's slowest tempo so it never
+            // under-covers: a tempo change inside the window would otherwise
+            // let a note that should be on screen be culled before it is drawn.
+            val lookahead = scrollMode
+                .visibleSeconds(timing.bpmRange.start)
+                .coerceIn(MIN_LOOKAHEAD_SECONDS, MAX_LOOKAHEAD_SECONDS)
             val visible = running.visibleNotes(position - PAST_WINDOW_SECONDS, position + lookahead)
 
-            val pixelsPerSecond = receptorYPx / lookahead
+            // One unit is a beat's worth of gap at 1×; the mode decides how many
+            // units lie between two moments, and this turns units into pixels.
+            val pixelsPerUnit = receptorYPx / GlyphScrollMode.UNITS_ON_SCREEN
 
             // Pass one: hold and roll bodies, underneath everything.
             for (entry in visible) {
@@ -157,7 +170,9 @@ fun GlyphPlayfield(
                     note = note,
                     isRoll = note.type == GlyphNoteType.ROLL,
                     position = position,
-                    pixelsPerSecond = pixelsPerSecond,
+                    scrollMode = scrollMode,
+                    timing = timing,
+                    pixelsPerUnit = pixelsPerUnit,
                     receptorYPx = receptorYPx,
                     laneWidthPx = laneWidthPx,
                     noteSizePx = noteSizePx,
@@ -211,7 +226,9 @@ fun GlyphPlayfield(
                     ghost = ghost,
                     position = position,
                     lookahead = lookahead,
-                    pixelsPerSecond = pixelsPerSecond,
+                    scrollMode = scrollMode,
+                    timing = timing,
+                    pixelsPerUnit = pixelsPerUnit,
                     receptorYPx = receptorYPx,
                     laneWidthPx = laneWidthPx,
                 )
@@ -279,8 +296,8 @@ fun GlyphPlayfield(
                 val note = entry.note
                 if (entry.isHeadJudged && note.type.isHoldLike) continue
 
-                val secondsAway = note.timeSeconds - position
-                val y = receptorYPx - secondsAway * pixelsPerSecond
+                val y = receptorYPx -
+                    scrollMode.scrollUnits(timing, position, note.timeSeconds) * pixelsPerUnit
                 if (y < -noteSizePx || y > size.height + noteSizePx) continue
 
                 val id = noteAssetFor(note.type, note.lane, note.division)
@@ -351,7 +368,9 @@ private fun DrawScope.drawGhostMarkers(
     ghost: GlyphGhost,
     position: Float,
     lookahead: Float,
-    pixelsPerSecond: Float,
+    scrollMode: GlyphScrollMode,
+    timing: GlyphTiming,
+    pixelsPerUnit: Float,
     receptorYPx: Float,
     laneWidthPx: Int,
 ) {
@@ -364,7 +383,8 @@ private fun DrawScope.drawGhostMarkers(
         val lane = ghost.lanes[index]
         if (lane !in GlyphLane.entries.indices) continue
 
-        val y = receptorYPx - (noteSeconds + offsetSeconds - position) * pixelsPerSecond
+        val y = receptorYPx -
+            scrollMode.scrollUnits(timing, position, noteSeconds + offsetSeconds) * pixelsPerUnit
         if (y < 0f || y > size.height) continue
 
         val judgement = ghost.judgementAt(index)
@@ -450,7 +470,9 @@ private fun DrawScope.drawHoldBody(
     note: tf.monochrome.android.glyph.chart.GlyphNote,
     isRoll: Boolean,
     position: Float,
-    pixelsPerSecond: Float,
+    scrollMode: GlyphScrollMode,
+    timing: GlyphTiming,
+    pixelsPerUnit: Float,
     receptorYPx: Float,
     laneWidthPx: Int,
     noteSizePx: Int,
@@ -462,8 +484,9 @@ private fun DrawScope.drawHoldBody(
     // A held note's head stops at the receptor: the tail keeps travelling while
     // the head stays put, which is what makes holding legible.
     val headSeconds = if (isHeld) minOf(note.timeSeconds, position) else note.timeSeconds
-    val headY = receptorYPx - (headSeconds - position) * pixelsPerSecond
-    val tailY = receptorYPx - (note.endTimeSeconds - position) * pixelsPerSecond
+    val headY = receptorYPx - scrollMode.scrollUnits(timing, position, headSeconds) * pixelsPerUnit
+    val tailY = receptorYPx -
+        scrollMode.scrollUnits(timing, position, note.endTimeSeconds) * pixelsPerUnit
     if (headY < tailY) return
 
     val x = note.lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f
@@ -539,3 +562,7 @@ private const val PAST_WINDOW_SECONDS = 0.35f
 private const val NOTE_SCALE = 0.82f
 
 private val RECEPTOR_INSET = 96.dp
+
+/** Culling bounds. Generous either way; culling only has to be conservative. */
+private const val MIN_LOOKAHEAD_SECONDS = 0.3f
+private const val MAX_LOOKAHEAD_SECONDS = 6f
