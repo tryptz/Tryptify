@@ -27,6 +27,7 @@ nextlibMedia3ext = "0.8.4"
 profileinstaller = "1.4.1"
 jaudiotagger = "3.0.1"
 junit = "4.13.2"
+robolectric = "4.14.1"
 
 [libraries]
 # Compose
@@ -150,6 +151,14 @@ profileinstaller = { group = "androidx.profileinstaller", name = "profileinstall
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+# Compose UI tests, run on the JVM under Robolectric rather than on a device.
+# The mode's navigation and its accessibility labels are worth a real
+# assertion, and an instrumented-only suite is one nobody runs.
+compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core-ktx", version = "1.6.1" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
