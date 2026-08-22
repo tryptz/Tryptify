@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>Hold body tile</title>
+  <rect x="17" width="30" height="64" fill="#0B1020" opacity="0.86"/>
+  <rect x="20" width="24" height="64" fill="#58D9FF"/>
+  <rect x="26" width="12" height="64" fill="#F8FAFF" opacity="0.25"/>
+  <path d="M25 13 L32 6 L39 13 M25 37 L32 30 L39 37 M25 61 L32 54 L39 61" fill="none" stroke="#F8FAFF" stroke-width="3" opacity="0.75"/>
+</svg>

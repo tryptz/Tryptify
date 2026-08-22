@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>Fake note</title>
+  <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#78839C" fill-opacity="0.25" stroke="#78839C" stroke-width="3" stroke-dasharray="5 4"/>
+  <path d="M17 17 L47 47 M47 17 L17 47" stroke="#78839C" stroke-width="4" stroke-linecap="round"/>
+</svg>
