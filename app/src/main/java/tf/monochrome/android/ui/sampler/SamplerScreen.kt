@@ -68,6 +68,7 @@ fun SamplerScreen(
     viewModel: SamplerViewModel = hiltViewModel(),
     onBack: (() -> Unit)? = null,
     onOpenPatterns: (() -> Unit)? = null,
+    onOpenGlyph: (() -> Unit)? = null,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val capture by viewModel.captureState.collectAsStateWithLifecycle()
@@ -128,6 +129,18 @@ fun SamplerScreen(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
+            if (onOpenGlyph != null) {
+                // Glyph belongs next to the sampler rather than in a menu: it
+                // consumes the same stems the separator produces, and the
+                // person who has just pulled the drums out of a track is
+                // exactly the person who wants a chart from them.
+                PatternPill(
+                    label = "Glyph",
+                    active = false,
+                    accent = accent,
+                    onClick = onOpenGlyph,
+                )
+            }
             if (onOpenPatterns != null) {
                 PatternPill(
                     label = "Patterns",

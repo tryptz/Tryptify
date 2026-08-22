@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.stepmania.StepManiaConversionService
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.audio.stepmania.StepManiaRequest
+import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphNote
@@ -61,6 +62,12 @@ class GlyphViewModel @Inject constructor(
     private val songs: GlyphSongRepository,
     private val attempts: GlyphAttemptStore,
     private val conversion: StepManiaConversionService,
+    /**
+     * Exposed rather than plumbed through navigation: the pack is a singleton
+     * whose rasters are scoped to a run, and handing it down the composable
+     * tree from the nav host would give it a lifetime nothing manages.
+     */
+    val assets: GlyphAssetRepository,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(GlyphUiState())
@@ -491,6 +498,17 @@ class GlyphViewModel @Inject constructor(
     private fun setSpeed(speed: Float) {
         updateModifiers { it.copy(speed = speed) }
         transport.setSpeed(speed, _ui.value.gameplay.modifiers.pitchLinkedToSpeed)
+    }
+
+    /**
+     * Follow the system's reduced-motion setting.
+     *
+     * Not a preference of the mode's own: the app already honours "disable
+     * animations" everywhere else, and a rhythm game is the last place to make
+     * someone opt out a second time.
+     */
+    fun setReducedMotion(reduced: Boolean) {
+        updateModifiers { it.copy(reducedMotion = reduced) }
     }
 
     private fun updateModifiers(block: (GlyphModifiers) -> GlyphModifiers) {
