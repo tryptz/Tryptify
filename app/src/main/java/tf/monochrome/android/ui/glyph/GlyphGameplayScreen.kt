@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,18 +24,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image
 import kotlinx.coroutines.coroutineScope
-import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphIcon
 import tf.monochrome.android.glyph.asset.GlyphLane
@@ -112,7 +106,7 @@ fun GlyphGameplayScreen(
         JudgementOverlay(
             judgement = gameplay.lastJudgement,
             shownAtMs = gameplay.lastJudgementAtMs,
-            assets = assets,
+            combo = gameplay.score.combo,
             reducedMotion = gameplay.modifiers.reducedMotion,
             modifier = Modifier.align(Alignment.Center),
         )
@@ -243,59 +237,45 @@ private fun modifierSummary(modifiers: GlyphModifiers): String = buildList {
 }.joinToString(" · ")
 
 /**
- * The judgement wordmark.
+ * The judgement, drawn through the lyrics FX pipeline.
  *
- * Uses the pack's own artwork, and also announces itself: the wordmarks are
- * images, so without a live region a screen-reader user gets no feedback at all.
+ * This replaced the pack's flat wordmark image. The 5x7 wordmarks are still in
+ * the pack and still the right artwork for a results sheet or a still, but on
+ * a live playfield a per-letter 3D letterform lit by the glass shader reads as
+ * an event in a way a flat sprite does not.
+ *
+ * It announces itself either way: the letterforms are graphics as far as a
+ * screen reader is concerned, so without a live region a judgement is silent.
  */
 @Composable
 private fun JudgementOverlay(
     judgement: GlyphJudgement?,
     shownAtMs: Long,
-    assets: GlyphAssetRepository,
+    combo: Int,
     reducedMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (judgement == null) return
-    val density = LocalDensity.current
-    val widthPx = with(density) { JUDGEMENT_WIDTH.roundToPx() }
-    // The pack's wordmarks are 320 × 64, and the aspect has to be preserved or
-    // the letterforms distort.
-    val heightPx = widthPx / 5
-
-    var image by remember(judgement) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(judgement, widthPx) {
-        image = assets.load(GlyphAssetCatalog.judgement(judgement.art), widthPx, heightPx)
-    }
-
     Box(
         modifier = modifier.semantics {
             liveRegion = LiveRegionMode.Polite
-            contentDescription = judgement.label
+            contentDescription = if (combo > 1) {
+                "${judgement.label}, combo $combo"
+            } else {
+                judgement.label
+            }
         },
         contentAlignment = Alignment.Center,
     ) {
-        val current = image
-        if (current != null) {
-            Image(
-                bitmap = current,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.width(JUDGEMENT_WIDTH),
-            )
-        } else {
-            // Text is a complete substitute here, which is why a missing
-            // wordmark is not worth failing over.
-            Text(
-                text = judgement.label.uppercase(),
-                style = GlyphTypography(rememberStepTechFontFamily()).readout,
-                color = GlyphTheme.Paper,
-            )
-        }
+        GlyphJudgementFx(
+            judgement = judgement,
+            shownAtMs = shownAtMs,
+            combo = combo,
+            reducedMotion = reducedMotion,
+        )
     }
 }
 
-private val JUDGEMENT_WIDTH = 200.dp
 
 /**
  * The count-in.
