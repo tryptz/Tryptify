@@ -73,6 +73,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect
     @Inject lateinit var dspManager: DspEngineManager
     @Inject lateinit var autoEqProcessor: AutoEqProcessor
+    @Inject lateinit var variRateProcessor: tf.monochrome.android.audio.resample.VariRateAudioProcessor
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
@@ -703,8 +704,17 @@ class PlaybackService : MediaSessionService() {
                     val defaultSink = DefaultAudioSink.Builder(context)
                         .setEnableFloatOutput(enableFloatOutput)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                        .setAudioProcessors(
-                            arrayOf(
+                        // Our own chain rather than setAudioProcessors, which
+                        // would wrap these in DefaultAudioProcessorChain and send
+                        // every speed change to Sonic. Sonic handles a vinyl-style
+                        // change (pitch riding the tempo) with two-point linear
+                        // interpolation and no band-limiting; this routes that
+                        // case to a windowed-sinc resampler and leaves genuine
+                        // time-stretching with Sonic. Same processor order
+                        // otherwise.
+                        .setAudioProcessorChain(
+                            tf.monochrome.android.audio.resample.TryptifyAudioProcessorChain(
+                                arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
@@ -715,6 +725,8 @@ class PlaybackService : MediaSessionService() {
                                 TeeAudioProcessor(
                                     ProjectMAudioTapProcessor(audioBus)
                                 )
+                                ),
+                                variRateProcessor,
                             )
                         )
                         .build()
