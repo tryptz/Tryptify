@@ -49,6 +49,16 @@ class GlyphGameplayEngine(
         var tailResolved = false
         var holding = false
         var lastRollTapSeconds = 0f
+
+        /**
+         * When the lane came up, or [Float.NaN] while it is still down.
+         *
+         * The grace period runs from here rather than from the head: a hold
+         * held correctly for ten seconds and released a hair early must get the
+         * same tolerance as one released immediately, and measuring from the
+         * head gives the long hold none at all.
+         */
+        var releasedAtSeconds = Float.NaN
         val isResolved: Boolean
             get() = judgement != null && (tailResolved || !note.type.hasTail)
     }
@@ -157,9 +167,12 @@ class GlyphGameplayEngine(
         val dropped = when (note.type) {
             GlyphNoteType.ROLL ->
                 songSeconds - runtime.lastRollTapSeconds > config.rollIntervalSeconds
-            else ->
+            else -> {
+                val releasedAt = runtime.releasedAtSeconds
                 !runtime.holding &&
-                    songSeconds - note.timeSeconds > config.holdGraceSeconds
+                    !releasedAt.isNaN() &&
+                    songSeconds - releasedAt > config.holdGraceSeconds
+            }
         }
 
         if (dropped) {
@@ -224,6 +237,7 @@ class GlyphGameplayEngine(
 
         if (note.type.hasTail) {
             candidate.holding = true
+            candidate.releasedAtSeconds = Float.NaN
             candidate.lastRollTapSeconds = at
             activeHold[lane.ordinal] = candidate
         } else {
@@ -238,7 +252,12 @@ class GlyphGameplayEngine(
     fun release(lane: GlyphLane, songSeconds: Float): GlyphJudgementEvent? {
         val at = songSeconds + config.audioOffsetSeconds
         laneHeld[lane.ordinal] = false
-        activeHold[lane.ordinal]?.holding = false
+        activeHold[lane.ordinal]?.let { held ->
+            held.holding = false
+            // Only the first release starts the clock; a stream of release
+            // events from a jittery digitizer must not keep resetting it.
+            if (held.releasedAtSeconds.isNaN()) held.releasedAtSeconds = at
+        }
 
         val candidate = nearestUnjudged(lane, at, liftsOnly = true) ?: return null
         val offset = at - candidate.note.timeSeconds

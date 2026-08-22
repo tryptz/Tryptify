@@ -5,17 +5,19 @@ package tf.monochrome.android.glyph.chart
 /**
  * The song's beat-to-second map.
  *
- * StepMania's `#OFFSET` is the number of seconds the *chart* leads the audio,
- * so a positive offset means beat zero happens before the file starts. The sign
- * convention is inverted here exactly once, at construction, and every caller
- * afterwards works in plain audio seconds — which is the only way to keep a
- * scoring path and a rendering path agreeing about where a note is.
+ * The sign convention is settled before anything reaches here. StepMania's
+ * `#OFFSET` counts the seconds the *chart* leads the audio, which is the
+ * opposite of what everything downstream wants; [SscParser] flips it exactly
+ * once on the way in, so [offsetSeconds] is already "where beat zero is in the
+ * audio" and this class does no further arithmetic on the sign. Inverting it in
+ * both places is a bug that cancels out in a chart starting at zero and puts
+ * every note on the wrong side of the beat in one that does not.
  *
  * Immutable and free of Android types: this is the piece that decides whether
  * a chart drifts, so it is unit-tested directly rather than through the UI.
  */
 class GlyphTiming(
-    /** Seconds the audio leads beat 0. Positive delays the first beat. */
+    /** Audio position of beat 0. Positive means the song leads the chart in. */
     val offsetSeconds: Float,
     segments: List<BpmSegment>,
     stops: List<Stop> = emptyList(),
@@ -42,7 +44,7 @@ class GlyphTiming(
      * asks this question tens of thousands of times during a single load.
      */
     private val segmentStartSeconds: FloatArray = FloatArray(this.segments.size).also { starts ->
-        var seconds = -offsetSeconds
+        var seconds = offsetSeconds
         for (index in this.segments.indices) {
             if (index > 0) {
                 val previous = this.segments[index - 1]
