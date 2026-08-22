@@ -73,8 +73,14 @@ enum class GlyphBeatDivision(
             if (rowsPerMeasure <= 0) return QUARTER
             for (division in entries) {
                 // A measure is four beats, so a subdivision of `perBeat` notes
-                // per beat repeats every rowsPerMeasure / (4 * perBeat) rows.
-                val stride = rowsPerMeasure / (4 * division.perBeat)
+                // per beat lands every rowsPerMeasure / (4 * perBeat) rows —
+                // but only when that divides exactly. Without the exactness
+                // check, integer division rounds the stride down to 1 for a
+                // subdivision the measure cannot express (12ths in a 16-row
+                // measure) and every row matches it.
+                val rowsPerNote = 4 * division.perBeat
+                if (rowsPerMeasure % rowsPerNote != 0) continue
+                val stride = rowsPerMeasure / rowsPerNote
                 if (stride >= 1 && rowInMeasure % stride == 0) return division
             }
             return SIXTY_FOURTH
