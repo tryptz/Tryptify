@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -47,6 +48,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import tf.monochrome.android.domain.model.PlayerGlassSettings
+import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
@@ -84,196 +86,185 @@ fun GlyphHomeScreen(
         if (uri != null) onEvent(GlyphEvent.GenerateChartFrom(uri))
     }
 
-    // The song list is the haze source and the panels are its SIBLINGS, never
-    // its descendants: a haze effect cannot sample a layer it is drawn inside,
-    // and doing so paints the source's flat base colour instead of a blur —
-    // which is exactly the solid slab these panels used to be.
-    val haze = rememberHazeState()
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     val glass = LocalMiniPlayerGlass.current
     val density = LocalDensity.current
 
-    // Measured on the chrome itself and handed to the list as contentPadding,
-    // so nothing is covered at rest while rows still travel up behind the
-    // glass. Padding on the container instead would clip the list at its own
-    // new top edge.
-    var topInset by remember { mutableStateOf(0.dp) }
-    var bottomInset by remember { mutableStateOf(0.dp) }
+    // The panels' backdrop is the song list. They are its SIBLINGS, never its
+    // descendants: a haze effect cannot sample a layer it is drawn inside, and
+    // doing so paints the source's flat base colour — the solid slab these were
+    // before. SearchOverlay owns a separate source for the bar, for the same
+    // reason at a different level.
+    val panelHaze = rememberHazeState()
 
-    Box(
+    var generationInset by remember { mutableStateOf(0.dp) }
+    var selectionInset by remember { mutableStateOf(0.dp) }
+
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .background(GlyphTheme.Ink),
+            .background(GlyphTheme.Ink)
+            .systemBarsPadding(),
     ) {
-        when {
-            state.isLoadingSongs -> CentredMessage("Reading the library…", typography)
-
-            state.songs.isEmpty() -> CentredMessage(
-                "No MP3 or FLAC files in your library yet. " +
-                    "Import one, or generate a chart from a file.",
-                typography,
+        // Fixed chrome, above the bar rather than under it. Back is the way out
+        // of the mode and the picker is how audio gets in; a search bar that
+        // covered either would strand someone who opened it by accident.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = GlyphTheme.Grid, vertical = GlyphTheme.Grid),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
+        ) {
+            GlyphIconButton(
+                icon = GlyphIcon.ARROW_BACK,
+                label = "Back",
+                assets = assets,
+                onClick = onBack,
             )
-
-            state.filteredSongs.isEmpty() -> CentredMessage(
-                "Nothing matches \"${state.songQuery}\".",
-                typography,
-            )
-
-            else -> LazyColumn(
+            Text(
+                text = "GLYPH",
+                style = typography.title,
+                color = GlyphTheme.Paper,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(haze),
-                contentPadding = PaddingValues(
-                    start = GlyphTheme.Grid * 2,
-                    end = GlyphTheme.Grid * 2,
-                    top = topInset,
-                    bottom = bottomInset,
-                ),
-                verticalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
-            ) {
-                items(state.filteredSongs, key = { it.trackId }) { song ->
-                    SongRow(
-                        song = song,
-                        selected = song.trackId == state.selectedSong?.trackId,
-                        typography = typography,
-                        onClick = { onEvent(GlyphEvent.SelectSong(song.trackId)) },
+                    .weight(1f)
+                    .semantics { heading() },
+            )
+            GlyphIconButton(
+                // The pack ships no magnifier; filter is the honest one of what
+                // it does have, and the label says what it is for.
+                icon = GlyphIcon.FILTER,
+                label = if (searchOpen) "Close search" else "Search songs",
+                assets = assets,
+                active = searchOpen,
+                onClick = {
+                    searchOpen = !searchOpen
+                    if (!searchOpen) onEvent(GlyphEvent.Search(""))
+                },
+            )
+            GlyphIconButton(
+                icon = GlyphIcon.AUDIO_STEM,
+                label = "Generate a chart from a file",
+                assets = assets,
+                onClick = { picker.launch(arrayOf("audio/mpeg", "audio/flac", "audio/x-flac")) },
+            )
+        }
+
+        SearchOverlay(
+            open = searchOpen,
+            query = state.songQuery,
+            onQueryChange = { onEvent(GlyphEvent.Search(it)) },
+            placeholder = "Search songs",
+            onClose = {
+                searchOpen = false
+                onEvent(GlyphEvent.Search(""))
+            },
+            modifier = Modifier.weight(1f),
+        ) { searchInset ->
+            Box(modifier = Modifier.fillMaxSize()) {
+                when {
+                    state.isLoadingSongs -> CentredMessage("Reading the library…", typography)
+
+                    state.songs.isEmpty() -> CentredMessage(
+                        "No MP3 or FLAC files in your library yet. " +
+                            "Import one, or generate a chart from a file.",
+                        typography,
                     )
+
+                    state.filteredSongs.isEmpty() -> CentredMessage(
+                        "Nothing matches \"${state.songQuery}\".",
+                        typography,
+                    )
+
+                    else -> LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hazeSource(panelHaze),
+                        // Content padding, not padding on the container: it
+                        // starts the rows below the glass while leaving them
+                        // free to travel up behind it. Padding the container
+                        // moves its top edge and the list clips there instead.
+                        contentPadding = PaddingValues(
+                            start = GlyphTheme.Grid * 2,
+                            end = GlyphTheme.Grid * 2,
+                            top = searchInset + generationInset + GlyphTheme.Grid,
+                            bottom = selectionInset + GlyphTheme.Grid,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
+                    ) {
+                        items(state.filteredSongs, key = { it.trackId }) { song ->
+                            SongRow(
+                                song = song,
+                                selected = song.trackId == state.selectedSong?.trackId,
+                                typography = typography,
+                                onClick = { onEvent(GlyphEvent.SelectSong(song.trackId)) },
+                            )
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        // Below the search bar rather than under it: both float
+                        // at the top, and stacked they would overlap.
+                        .padding(top = searchInset)
+                        .onSizeChanged {
+                            generationInset = with(density) { it.height.toDp() }
+                        },
+                ) {
+                    val generation = state.generation
+                    if (generation != null) {
+                        GenerationPanel(
+                            generation = generation,
+                            typography = typography,
+                            haze = panelHaze,
+                            glass = glass,
+                            onCancel = { onEvent(GlyphEvent.CancelGeneration) },
+                        )
+                    }
+
+                    state.error?.let { message ->
+                        Text(
+                            text = message,
+                            style = typography.body,
+                            color = GlyphTheme.Negative,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onEvent(GlyphEvent.DismissError) }
+                                .padding(
+                                    horizontal = GlyphTheme.Grid * 2,
+                                    vertical = GlyphTheme.Grid,
+                                ),
+                        )
+                    }
+                }
+
+                val selected = state.selectedSong
+                if (selected != null) {
+                    SelectionPanel(
+                        song = selected,
+                        state = state,
+                        assets = assets,
+                        typography = typography,
+                        haze = panelHaze,
+                        glass = glass,
+                        onEvent = onEvent,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .onSizeChanged {
+                                selectionInset = with(density) { it.height.toDp() }
+                            },
+                    )
+                } else {
+                    LaunchedEffect(Unit) { selectionInset = 0.dp }
                 }
             }
         }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .systemBarsPadding()
-                .onSizeChanged { topInset = with(density) { it.height.toDp() } + GlyphTheme.Grid },
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = GlyphTheme.Grid, vertical = GlyphTheme.Grid),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
-            ) {
-                GlyphIconButton(
-                    icon = GlyphIcon.ARROW_BACK,
-                    label = "Back",
-                    assets = assets,
-                    onClick = onBack,
-                )
-                Text(
-                    text = "GLYPH",
-                    style = typography.title,
-                    color = GlyphTheme.Paper,
-                    modifier = Modifier
-                        .weight(1f)
-                        .semantics { heading() },
-                )
-                GlyphIconButton(
-                    icon = GlyphIcon.AUDIO_STEM,
-                    label = "Generate a chart from a file",
-                    assets = assets,
-                    onClick = { picker.launch(arrayOf("audio/mpeg", "audio/flac", "audio/x-flac")) },
-                )
-            }
-
-            SearchField(
-                query = state.songQuery,
-                onQueryChange = { onEvent(GlyphEvent.Search(it)) },
-                typography = typography,
-                modifier = Modifier.padding(horizontal = GlyphTheme.Grid * 2),
-            )
-
-            val generation = state.generation
-            if (generation != null) {
-                GenerationPanel(
-                    generation = generation,
-                    typography = typography,
-                    haze = haze,
-                    glass = glass,
-                    onCancel = { onEvent(GlyphEvent.CancelGeneration) },
-                )
-            }
-
-            state.error?.let { message ->
-                Text(
-                    text = message,
-                    style = typography.body,
-                    color = GlyphTheme.Negative,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onEvent(GlyphEvent.DismissError) }
-                        .padding(horizontal = GlyphTheme.Grid * 2, vertical = GlyphTheme.Grid),
-                )
-            }
-        }
-
-        val selected = state.selectedSong
-        if (selected != null) {
-            SelectionPanel(
-                song = selected,
-                state = state,
-                assets = assets,
-                typography = typography,
-                haze = haze,
-                glass = glass,
-                onEvent = onEvent,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .onSizeChanged {
-                        bottomInset = with(density) { it.height.toDp() } + GlyphTheme.Grid
-                    },
-            )
-        } else {
-            LaunchedEffect(Unit) { bottomInset = 0.dp }
-        }
     }
 }
 
-@Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    typography: GlyphTypography,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .clip(RoundedCornerShape(GlyphTheme.Grid))
-            .background(GlyphTheme.InkPanel),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = typography.mono.copy(color = GlyphTheme.Paper),
-            cursorBrush = SolidColor(GlyphTheme.Paper),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .semantics { contentDescription = "Search songs" },
-        )
-        if (query.isEmpty()) {
-            Text(
-                text = "Search songs",
-                style = typography.mono,
-                color = GlyphTheme.Muted,
-                modifier = Modifier.padding(horizontal = 12.dp),
-            )
-        }
-    }
-}
-
-/**
- * One song.
- *
- * Chart availability is stated in words as well as being implied by the
- * difficulty chips: "No chart" is the row's most important fact when it is
- * true, and leaving it to the absence of something is not a way to say it.
- */
 @Composable
 private fun SongRow(
     song: GlyphSong,
@@ -373,8 +364,14 @@ private fun SelectionPanel(
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    GlassPanel(hazeState = haze, glass = glass, modifier = modifier) {
-      Column {
+    GlassPanel(
+        hazeState = haze,
+        glass = glass,
+        // GlassPanel's own 12dp is an outer margin; the rows below sit 16dp
+        // from the screen edge, so 4 more lines the panel up with them.
+        modifier = modifier.padding(horizontal = 4.dp),
+    ) {
+      Column(modifier = Modifier.padding(GlyphTheme.Grid * 2)) {
         Text(
             text = song.title,
             style = typography.title,
@@ -394,7 +391,7 @@ private fun SelectionPanel(
                             "and reads the rhythm off them; it runs offline and takes a while."
                 },
                 style = typography.body,
-                color = GlyphTheme.Muted,
+                color = GlyphTheme.Paper,
             )
             Spacer(Modifier.height(GlyphTheme.Grid + 4.dp))
             GlyphPrimaryButton(
@@ -469,9 +466,9 @@ private fun GenerationPanel(
         hazeState = haze,
         glass = glass,
         avoidNavigationBar = false,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp),
     ) {
-      Column {
+      Column(modifier = Modifier.padding(GlyphTheme.Grid * 2)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = generation.failure ?: generation.stage,
@@ -502,7 +499,7 @@ private fun GenerationPanel(
             Text(
                 text = "Cancel",
                 style = typography.mono,
-                color = GlyphTheme.Muted,
+                color = GlyphTheme.Paper,
                 modifier = Modifier
                     .clickable(onClickLabel = "Cancel chart generation", onClick = onCancel)
                     .padding(vertical = 8.dp),
