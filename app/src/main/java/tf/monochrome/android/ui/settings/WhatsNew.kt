@@ -45,8 +45,148 @@ object WhatsNew {
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
 
+    /** The playback speed panel and the two engines behind it. */
+    private const val SPEED = "Speed and pitch"
+
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 186,
+            versionName = "1.8.6",
+            entries = listOf(
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Change key without changing tempo",
+                    body = "The speed panel gains a Pitch control that moves a track up or down " +
+                        "in semitones and leaves the tempo exactly where it was — up to two " +
+                        "octaves either way. It costs about a third of a second of delay, so it " +
+                        "only switches on when you move it off zero.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Speed in semitones, if you'd rather",
+                    body = "A unit toggle at the top of the panel. In semitones it steps whole " +
+                        "intervals, so every speed it can reach is in tune; in multipliers it " +
+                        "stays a free slider. Whichever you pick leads the readout and the other " +
+                        "follows underneath, so you can always see both.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "A speed panel with one control on it",
+                    body = "It offered four ways to set the same number at once — a slider, a " +
+                        "stepper, five preset chips and a Nightcore pill — and ran most of the " +
+                        "screen. Now it's the one control that matches the unit you chose, and " +
+                        "the panel is about half the height.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Playing faster doesn't sound harsh any more",
+                    body = "Speeding a track up folded everything above the top of your hearing " +
+                        "back down into it as a metallic whistle over the cymbals. A 15 kHz tone " +
+                        "at double speed came through 3 dB under full scale; it is now 108 dB " +
+                        "under.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Speeds you can actually tune to",
+                    body = "The sliders rounded to hundredths, which is nowhere near fine enough " +
+                        "to land on a musical interval — most of the scale was audibly out of " +
+                        "tune, the worst by a seventh of a semitone. Every semitone is now the " +
+                        "exact ratio it should be.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "AutoEQ follows the pitch",
+                    body = "With preserve-pitch off, a speed change dragged your headphone " +
+                        "correction off the resonances it was measured against and cut a hole in " +
+                        "clean sound beside them. It now moves with the music, sliding along as " +
+                        "you drag the control.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Push the panel down to close it",
+                    body = "It slid up from the bottom edge and could only be dismissed by " +
+                        "tapping the sliver of screen above it or pressing Back. It follows your " +
+                        "finger down now, and closes on a flick.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "Rows play the genre, not its name",
+                    body = "The Neoclassical row was \"Neoclassical Cello\" and production " +
+                        "filler, because it searched the catalogue for the word. A row is built " +
+                        "from what people play in a genre now — its charted records and its " +
+                        "most-played artists — and it says which.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "It opens on what it already found",
+                    body = "What the feed learned is kept between sessions instead of thrown " +
+                        "away when you close the app, and tapping back onto a genre you just " +
+                        "left is instant rather than a full rebuild. Pull down to refresh when " +
+                        "you do want new music.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "Rows appear as they're ready",
+                    body = "A page used to wait for its slowest shelf and then arrive all at " +
+                        "once. Each row now lands in its own slot as it resolves, and \"For " +
+                        "you\" leads with your liked tracks, which need no connection at all.",
+                ),
+                WhatsNewEntry(
+                    section = DISCOVER,
+                    title = "Opening the tab no longer closes the app",
+                    body = "The first launch of Discover could take the whole app down. It " +
+                        "doesn't, and a test now holds the class in the shape that prevents it.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Full screen",
+                    body = "Settings › System › Display gains a Full screen switch: the " +
+                        "notification bar and the gesture bar go away app-wide, the way they do " +
+                        "in a game, and a swipe in from an edge brings them back for a moment. " +
+                        "Every screen grows into the space on its own.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The mixer is made of the same glass as the app",
+                    body = "Its channel strips were drawn on their own flat panels. They use the " +
+                        "app's glass now, with the artwork behind them, like every other surface.",
+                ),
+                WhatsNewEntry(
+                    title = "Your EQ profiles and mixer presets follow your account",
+                    body = "AutoEQ profiles, parametric EQ profiles and mixer presets now travel " +
+                        "with you instead of living and dying on one device — the two things in " +
+                        "the app that take longest to build by hand. Whichever copy you edited " +
+                        "most recently wins.",
+                ),
+                WhatsNewEntry(
+                    title = "Your library comes back on its own",
+                    body = "A signed-in device restores its own playlists, favourites and mixes " +
+                        "at launch. They were saved to your account all along and only came back " +
+                        "if you found the Sync button, so an empty Playlists tab could sit there " +
+                        "for weeks.",
+                ),
+                WhatsNewEntry(
+                    title = "Settings that did nothing are gone",
+                    body = "Four switches stored a preference and changed nothing: Confirm " +
+                        "Before Clearing Queue, Scan on App Open, Minimum Track Duration and " +
+                        "Background Scan Interval. Show Explicit Badges was one of them, and " +
+                        "works now instead.",
+                ),
+                WhatsNewEntry(
+                    title = "The remote radio planner is gone",
+                    body = "It pointed at a server that no longer exists. Radio is unchanged — " +
+                        "the ranking has always run on your device, from the same eleven " +
+                        "weights, which are all still there.",
+                ),
+                WhatsNewEntry(
+                    title = "The mini player stops covering Oxford's controls",
+                    body = "CLIP 0 dB, BAND SPLIT and EFFECT IN sit at the foot of the fader " +
+                        "column on the Compressor and Inflator tabs, and the mini player was " +
+                        "drawn over them.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 185,
             versionName = "1.8.5",

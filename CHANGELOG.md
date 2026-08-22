@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.8.6]
 
 ### Removed
 
@@ -11,6 +11,12 @@
 - **A wire test was carrying a second job, and it has been handed on** — the weights are written out field by field in three parallel blocks, and the test that checked they all reached the server was also the only thing catching a copy-paste slip between them. Its replacement reads `PreferencesManager` and fails if a weight is never read, never written, or read and written under different keys — the failure mode being a slider that moves and then will not stick. It was checked against both slips before being kept.
 
 ### Added
+
+#### Pitch, without moving the tempo
+- **The speed panel gains a Pitch control** — plus or minus 24 semitones, tempo untouched. Neither engine the app had could do it: resampling drags the tempo along with the pitch, and Sonic's WSOLA only stretches time, searching for its pitch period between 65 Hz and 400 Hz, which is the human voice and not music. A phase vocoder (signalsmith-stretch, MIT, vendored headers under `third_party/signalsmith-stretch`) maps frequency and time together in one spectral step.
+- **The analysis block is sized for half a hertz, not for the library default** — a vocoder's accuracy is bounded by how finely it resolves a partial, and measured worst case over semitones -12..+12 and fundamentals 82 Hz..3.5 kHz at 48 kHz, the default 0.12 s block is 1.348 Hz out. 0.35 s is the smallest block holding the error inside half a hertz with margin (0.179 Hz, pinned by `cpp/stretch/tests/stretch_precision_test.cpp`); past it the return collapses while latency keeps growing.
+- **It is only engaged off zero**, because 0.35 s of block is 350 ms of latency. That latency is also why the AutoEQ pre-warp glide is now driven by the active pitch stage rather than a fixed constant: the pre-warp is applied upstream of the vocoder, so an instantaneous re-warp reaches the output a third of a second before the pitch change it compensates for.
+- **The processor is inert when the library cannot load** — `isActive()` is false and audio passes through untouched, which is both the JVM test path and what a device missing the ABI gets.
 
 #### Full screen
 - **Settings › System › Display › Full screen hides the notification bar and the bottom gesture bar** — everywhere in the app, the way a game does, with a swipe in from an edge to bring them back for a moment. Nothing had to move to make room: every screen already pads from the system-bar insets, and those go to zero when the bars are hidden, so the content grows into the space on its own.
@@ -66,6 +72,32 @@
 - **Tapping back onto a chip you just left is instant** — every chip tap rebuilt from nothing, including a tap back onto the page that was on screen ten seconds ago: six shelves, a chart apiece, dozens of catalogue lookups, to arrive at a page we had already assembled and thrown away. The rail is a set of tabs and gets used like one, so the commonest gesture was the most expensive one. Pages are kept as they were built rather than quietly rebuilt behind you, because a row that reshuffles while you are looking at it has lost you your place — pull-to-refresh is what asks for new music, and it drops them first.
 
 ### Changed
+
+#### The speed panel is one control, not four
+- **A slider, a semitone stepper, five preset chips and a Nightcore pill all set the same number**, stacked over a second engine with a stepper and reset of its own, and the panel ran most of the screen for a control that moves one value. It is now the one control that matches the selected unit: semitones step +/-1 st, the multiplier slides. The preset chips are gone — the stepper reaches every one of them — the reset is an icon in the header, Nightcore is a chip beside the unit toggle, and the pitch engine is a single row.
+- **The segmented buttons drop their selected-state checkmark.** The filled segment already says which unit is live, and the check was 24dp of nothing on a row that now has to fit the toggle and the Nightcore chip inside a 320dp content width. The pitch row spaces at 6dp with its readout at natural width for the same reason: label, value, both steppers and the reset have to share that width, and a weighted "-24 st" would ellipsize rather than push the row.
+
+#### The speed control reads in semitones or multipliers
+- **The panel drives two questions with one number** — how much faster, and how much higher — and a multiplier only answers the first. "1.12x" does not tell you it is two semitones, and nothing on the control let you ask for two semitones directly. In semitone units the panel steps whole intervals at exact 2^(n/12) ratios, so every value it can reach is in tune; multiplier units keep the continuous slider, for the speeds that are not intervals at all. The stored value is a ratio either way, and the choice persists.
+- **Whichever unit is selected leads the readout and the other trails in small type**, so the conversion is always visible.
+
+#### The panel closes the way it opened
+- **It arrives by sliding up from the bottom edge and could only be dismissed by the scrim or by Back** — on a tall phone that scrim is a thin strip at the top of the screen, a long reach for the gesture the thumb is already making. It follows the finger downward now, thins the scrim as it goes, and closes on a flick or past a third of its own height; anything short of that springs back, and a grab bar says so before the gesture is tried.
+- **The gesture lives on the panel's content, not on the box around it.** `GlassPanel` floors a bottom sibling that consumes every pointer event its children did not want, so a handler outside the panel is handed nothing but already-consumed changes and never crosses touch slop.
+
+#### Speed changes are band-limited, and land in tune
+- **Speeding up folded everything above the new Nyquist back into the audible range.** Sonic splits a speed change as `s = speed / pitch` and `r = rate * pitch`; when pitch rides the tempo, `s` is exactly 1.0, lands inside Sonic's 0.99999..1.00001 dead zone, and the entire effect is `adjustRate()`, whose kernel blends two adjacent samples linearly. That is a first-order interpolator with no band-limiting at all: a 15 kHz tone at 2x, which maps to 30 kHz and should be gone, came through at -3.0 dBFS. It also drooped to -3.0 dB at 12 kHz at the worst-case read offset, right where a headphone correction is usually adding treble.
+- **That case is routed to a windowed-sinc polyphase resampler**, cutoff following the ratio so it band-limits before decimating. The same 15 kHz tone now measures -107.9 dBFS and the passband is flat to within 0.001 dB out to 14 kHz. Kaiser beta 9, 64 taps, 256 phases with linear interpolation between rows, each phase normalised to unity DC gain so tap-sum differences do not become a gain ripple tracking the fraction. Kernels are designed on the caller's thread when the ratio changes; the audio thread only multiplies and accumulates.
+- **Time-stretching is a different problem and stays with Sonic**, which needs a chain that can route the two modes separately — hence `TryptifyAudioProcessorChain` in place of `setAudioProcessors`, which would have wrapped everything in `DefaultAudioProcessorChain` and sent it all to Sonic. Processor order is otherwise unchanged, so AutoEQ stays upstream of the pitch change. The USB exclusive path is deliberately untouched: it bypasses the sink's chain to stay bit-perfect.
+- **Both speed sliders stored `Math.round(v * 100) / 100f`**, and that grid is far too coarse to land on an equal-tempered interval: +2 semitones is 1.122462 and 1.12 is 3.8 cents flat, +5 is 6.3 cents flat, and the worst case inside an octave is -9 semitones, where 0.594604 rounds to 0.59 — 13.5 cents. The just-noticeable difference for beating between two tones is 2-3 cents, so most of the scale was audibly out of tune. Ratios are stored at full float precision now and snapped onto an exact semitone only when a drag already lands near one.
+
+#### AutoEQ stays aligned when the pitch rides the speed
+- **Media3 appends Sonic after the app's own processors**, so AutoEQ runs upstream of the pitch shift and Sonic scales everything it produced by the playback ratio — the correction curve included. With preserve-pitch off that slides every band off the resonance it was measured against and digs a matching hole in clean spectrum beside it, worst exactly where AutoEQ works hardest: a high-Q treble notch has a half-gain bandwidth around 0.36 octaves, against 0.32 for a 1.25x shift.
+- **Each band is pre-warped to `freq / ratio`** so Sonic's multiplication lands it back on `freq`. Q is left alone — a pitch shift is a rigid translation on a log frequency axis, which preserves bandwidth in octaves — and so is the preamp, since a translation does not change peak gain. At ratio 1.0 the warp is the identity and costs nothing. The two pitch stages compound, so the warp inverts their product.
+- **The warp glides rather than snapping**, chasing the live target with a one-pole in the log-frequency domain, so dragging the speed control sweeps the correction with it. That moved coefficient design off the audio thread: the matched shelf design allocates and runs a scored tournament, affordable only while "shelves change rarely", which a glide breaks. The glide loop designs at control rate and publishes an immutable snapshot; the audio thread installs it with five float stores per band via `EqBiquad.retune`, leaving filter memory running so the sweep is continuous.
+- **Blend copies are seeded with the live ratio** so a crossfade under a pitch shift does not briefly lose the alignment, and speed/pitch reaches the player through one function so a caller cannot set it without telling the EQ.
+
+#### Discover
 - **The feed draws itself row by row** — a page used to appear all at once, when the slowest of its six concurrent builds finished, and each of those can spend nine seconds on a chart. Rows now land as they resolve, each in the slot the feed planned for it before any request went out, so a slow row leaves a gap that fills in rather than shoving everything below it down when it arrives. "For you" leads with your hearted tracks, which are on the device and need no network at all, so the page has something real on it immediately.
 - **Chart lookups are gated across the whole app** — eight in flight per shelf and six shelves at once is forty-eight simultaneous searches at one self-hosted instance, which is not concurrency but a queue with extra steps: every shelf gets slower, they miss their budgets together, and they all fall back at the same moment. Sixteen, shared, is what makes a per-shelf timeout mean anything.
 
