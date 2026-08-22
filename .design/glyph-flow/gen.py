@@ -161,7 +161,7 @@ files["Entry.dc.html"] = dc(shell(
                             ("Vocals",1.0,"#A77BFF"),("Other",1.0,MUTED)))
         + '</div>'
         + f'<div style="height:12px"></div>'
-        + mono("Separated by ONNX HTDemucs", MUTED, 11))
+        + mono("Separated by CPU &middot; htdemucs", MUTED, 11))
     + f'<div style="height:4px"></div>'
     + panel(
         f'<div style="display:flex;align-items:center;gap:10px">{icon(I_STEM, POSITIVE, 22)}'
@@ -228,7 +228,7 @@ files["Generate.dc.html"] = dc(shell(
         f'<div style="flex:1;font-size:14px;color:{PAPER}">Separating drums</div>'
         f'{mono("62%", MUTED)}</div>'
         f'<div style="height:8px"></div>{meter(0.62, POSITIVE)}'
-        f'<div style="height:8px"></div>{label("Separated by ONNX HTDemucs")}'
+        f'<div style="height:8px"></div>{label("Separated by CPU &middot; htdemucs")}'
         f'<div style="height:8px"></div>{mono("Cancel", MUTED)}')
     + f'<div style="height:4px"></div>'
     + panel(
@@ -257,6 +257,7 @@ files["Ready.dc.html"] = dc(shell(
         + f'<div style="height:8px"></div>'
         + f'<div style="display:flex;gap:8px;flex-wrap:wrap">'
         + chip("Beginner 3") + chip("Easy 5") + chip("Medium 8", sel=True) + chip("Hard 11")
+        + chip("Challenge 14")
         + '</div>'
         + f'<div style="height:12px"></div>'
         + f'<div style="display:flex;gap:8px">{primary("Play")}{secondary("Training Ground")}</div>'
@@ -366,11 +367,11 @@ files["Results.dc.html"] = dc(shell(
         f'<div style="width:76px;height:76px;border-radius:38px;border:3px solid {POSITIVE};'
         f'display:flex;align-items:center;justify-content:center;font-size:28px;'
         f'font-weight:700;color:{POSITIVE}">S</div>'
-        f'<div><div style="font-size:28px;font-weight:700;letter-spacing:-0.5px;color:{PAPER}">93.41%</div>'
-        f'{label("934,120 points &middot; Hard")}</div></div>'
+        f'<div><div style="font-size:28px;font-weight:700;letter-spacing:-0.5px;color:{PAPER}">93.78%</div>'
+        f'{label("937,820 points &middot; Hard")}</div></div>'
         f'<div style="height:16px"></div>'
         f'<div style="display:flex;justify-content:space-between">'
-        f'{stat("Max combo","312")}{stat("Mean","7 ms")}{stat("Spread","&plusmn;21 ms")}</div>'
+        f'{stat("Max combo","118")}{stat("Mean","7 ms")}{stat("Spread","&plusmn;21 ms")}</div>'
         f'<div style="height:8px"></div>{label("New best, up 34,120 points", POSITIVE)}')
     + panel(
         label("Judgements") + '<div style="height:6px"></div>'
@@ -419,7 +420,7 @@ files["Training.dc.html"] = dc(shell(
     + '</div></div>'
     + panel(
         f'<div style="display:flex;justify-content:space-between">'
-        f'{stat("Offset","12 ms early",EARLY)}{stat("Spread","&plusmn;18 ms")}'
+        f'{stat("Offset","12 ms late",LATE)}{stat("Spread","&plusmn;18 ms")}'
         f'{stat("Accuracy","94.2%")}{stat("Pass","7")}</div>'
         f'<div style="height:8px"></div>'
         f'<div style="display:flex"><div style="flex:1">{label("Early 40", EARLY)}</div>'
