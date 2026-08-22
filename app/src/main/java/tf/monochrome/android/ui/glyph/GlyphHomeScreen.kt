@@ -68,7 +68,7 @@ fun GlyphHomeScreen(
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        if (uri != null) onEvent(GlyphEvent.GenerateChartFrom(uri, uri.lastPathSegment ?: "audio"))
+        if (uri != null) onEvent(GlyphEvent.GenerateChartFrom(uri))
     }
 
     Column(

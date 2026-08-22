@@ -56,6 +56,29 @@ class GlyphSongRepository @Inject constructor(
     suspend fun song(trackId: String): GlyphSong? =
         songs().first().firstOrNull { it.trackId == trackId }
 
+    /**
+     * [song] with its chart fields re-read from disk.
+     *
+     * The song list is a Room flow over the library, and generating a chart
+     * writes a file into app storage — which Room knows nothing about, so the
+     * flow does not re-emit and every cached row keeps saying "No chart" after
+     * a successful generation. Anything that needs the current answer asks
+     * here instead of trusting the cached row.
+     */
+    suspend fun withCurrentChart(song: GlyphSong): Pair<GlyphSong, GlyphSimfile?> {
+        val simfile = simfile(song.trackId)
+        val exists = withContext(Dispatchers.IO) { simfileFile(song.trackId).exists() }
+        return song.copy(
+            bpm = simfile?.timing?.startBpm ?: song.bpm,
+            difficulties = simfile?.availableDifficulties.orEmpty(),
+            chartState = when {
+                simfile != null -> GlyphChartState.READY
+                exists -> GlyphChartState.UNREADABLE
+                else -> GlyphChartState.NOT_GENERATED
+            },
+        ) to simfile
+    }
+
     /** Where the simfile for [trackId] is, whether or not it exists yet. */
     fun simfileFile(trackId: String): File = File(chartRoot, "${chartId(trackId)}.ssc")
 
