@@ -54,7 +54,10 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
    `matchesPreset`.
    - Lyrics FX personal: `customFont`, `customFontPath`, `bluetoothDelayMs`,
      `glassSampleRings`, `fxaa`, `fxaaStrength`, `glowBehindArt`.
-   - Player Glass personal: `sampleRings`, `tintColor`, `previewBg`.
+   - Player Glass personal: `sampleRings`, `tintColor`, `previewBg`,
+     `miniProgressBar`. The last one is a preference about the bar, not part of
+     a glass theme's optics — three unit tests pin that a theme cannot switch it
+     back on.
 3. **Set every field you want to differ from `DEFAULT`.** `matchesPreset` compares
    the full non-personal field set with `==`; any field you omit inherits the
    data-class default (listed below), which may not be the look you intend.
@@ -62,8 +65,7 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
    - Lyrics `rotationDegrees ≤ 0.05` → the entire per-letter 3D path is off, so
      `waveSpeed` / `wavePhaseStep` / `waveTravelDp` / `shadowDepth` do nothing.
    - Lyrics `bassReact ≤ 0.01` → the analyzer is off, so `pumpAmount` / `attackMs`
-     / `releaseMs` / `bounce` / `popAmount` / `glowRadiusDp` / `glowBrightness` do
-     nothing.
+     / `releaseMs` / `bounce` / `glowRadiusDp` / `glowBrightness` do nothing.
 5. **Don't rename or remove these preset names — tests look them up by name:**
    Lyrics FX `Voltage`; Player Glass `Neon`, `Chrome`, `Frosted`. **Appending new
    names is safe** — no test pins preset count or order.
@@ -84,10 +86,14 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
 
 ## Where to add a preset
 
-- Lyrics FX: append inside `PRESETS = listOf(…)` in `LyricsFxSettings.kt` (after
-  the `"Static"` / *Studio Pack* entries).
+Both lists currently run …`Halo`, `Ticker`, `Static` and end there; append after
+`"Static"` in each.
+
+- Lyrics FX: append inside `PRESETS = listOf(…)` in `LyricsFxSettings.kt`
+  (17 presets today).
 - Player Glass: append inside `PRESETS = listOf(…)` in `PlayerGlassSettings.kt`
-  (after `"Mirror"` / *Studio Pack* entries).
+  (16 today — this list opens with `"Default" to DEFAULT`, which the Lyrics one
+  does not).
 
 ## Lyrics FX parameter reference
 
@@ -114,35 +120,47 @@ Personal fields are omitted here — never set them in a preset.
 | `attackMs` | 4..60 | 12 | Pulse attack — how fast it snaps onto a kick. Low = snappy, high = soft swell. |
 | `releaseMs` | 40..500 | 150 | Pulse release — how long it holds. Low = staccato, high = sustained/drone. |
 | `bounce` | 0..1 | 0.7 | Spring damping. 0 = stiff/mechanical, 1 = rubbery overshoot. |
-| `popAmount` | 0..0.2 | 0.08 | Size swing when a new line activates. |
 | `glowRadiusDp` | 0..160 | 44 | Reactive bloom radius behind the active line. 160 = supernova. |
 | `glowBrightness` | 0..0.6 | 0.22 | Bloom peak alpha. |
 
 ## Player Glass parameter reference
 
-Personal fields (`sampleRings`, `tintColor`, `previewBg`) omitted — leave at
-default (2 / 0 / 0).
+Personal fields (`sampleRings`, `tintColor`, `previewBg`, `miniProgressBar`)
+omitted — leave at default (3 / 0 / 0 / true).
+
+The defaults below are the *shipped* look and several of them sit at a bound —
+the pinning test is `defaults reproduce the shipped glass`. Read them before
+relying on hard rule 3: a field you omit inherits these, not a tidy midpoint.
 
 | Field | Range | Default | Visual effect |
 |---|---|---|---|
 | `enabled` | bool | true | Master button-glass toggle. **False = flat buttons.** |
-| `bodyOpacity` | 0..1 | 0.5 | Glass body see-through amount. Low = ghost/invisible-ink; 0 = body fully invisible (edges/rim remain). |
-| `refraction` | 0..0.4 | 0.16 | Bevel lensing of the backdrop. 0.4 + high depth/dispersion = diamond. |
-| `rimBrightness` | 0..2 | 1.3 | Lit specular rim brightness. |
-| `dispersion` | 0..2 | 1.2 | Chromatic aberration at edges. |
-| `roundness` | 0.5..2 | 1 | Bevel shoulder width. Higher = rounder/softer; low + high depth = faceted gem. |
-| `depth` | 0.5..2 | 1 | Bevel relief steepness. |
-| `shadowDepth` | 0..1 | 0.45 | Drop-shadow darkness (Compose). 1 = deeply floated/levitating. |
-| `reflection` | 0..2 | 1 | Room/environment reflection strength. 2 = mirror. |
-| `gloss` | 0..1 | 0.4 | Highlight polish. 0 = soft frosted-wide, 1 = tight mirror. |
-| `surfaceMotion` | 0..1 | 0.25 | Living-liquid undulation. 1 + frost = molten/lava-lamp. |
-| `tiltReactivity` | 0..1.5 | 0.7 | Device-tilt light sway. 0 = locked studio, 1.5 = gyro/holo. |
-| `lightAngleDeg` | 0..360 | 135 | Key-light direction. 25 = raking sunset, 90 = top, 270 = underlit. |
-| `edgeWidth` | 0..1 | 0.4 | Reflective shoulder width. Wide + low gloss = soap. |
-| `frost` | 0..1 | 0 | Frosted roughness. 0.9–1 = sea-glass/etched. |
-| `shadowSoftness` | 0..1 | 0.4 | Drop-shadow blur/spread. |
+| `bodyOpacity` | 0..1 | 0.2 | Glass body see-through amount. Low = ghost/invisible-ink; 0 = body fully invisible (edges/rim remain). **The shipped default is already ghost-thin.** |
+| `refraction` | 0..0.4 | 0.4 | Bevel lensing of the backdrop, and the interior slab parallax. **Default is the maximum** — flat faces lens, not just bevels. |
+| `rimBrightness` | 0..2 | 0.2633547 | Lit specular rim brightness. Default is dim; 2 = blazing edge. |
+| `dispersion` | 0..2 | 1.8702691 | Chromatic aberration at edges. Default is heavy. |
+| `roundness` | 0.5..2 | 2 | Bevel shoulder width. Higher = rounder/softer; low + high depth = faceted gem. **Default is the maximum.** |
+| `depth` | 0.5..2 | 1.0025804 | Bevel relief steepness. Default is neutral. |
+| `shadowDepth` | 0..1 | 0.20475428 | Drop-shadow darkness (Compose). 1 = deeply floated/levitating. |
+| `reflection` | 0..2 | 2 | Room/environment reflection strength. **Default is the maximum** — mirror-strong. |
+| `gloss` | 0..1 | 1 | Highlight polish. 0 = soft frosted-wide, 1 = tight mirror. **Default is the maximum.** |
+| `surfaceMotion` | 0..1 | 0.53 | Living-liquid undulation — face swell, edge shimmer, travelling light sheet, glint twinkle. 1 + frost = molten/lava-lamp. |
+| `tiltReactivity` | 0..1.5 | 0 | Device-tilt light sway. **Default is 0** — a locked studio light. 1.5 = gyro/holo. |
+| `lightAngleDeg` | 0..360 | 215.1965 | Key-light direction. 25 = raking sunset, 90 = top, 270 = underlit. |
+| `edgeWidth` | 0..1 | 0 | Reflective shoulder width. **Default is 0** — a hairline edge. Wide + low gloss = soap. |
+| `frost` | 0..1 | 0 | Frosted surface roughness (shader). 0.9–1 = sea-glass/etched. Distinct from `hazeBlurDp`, which blurs the *backdrop*. |
+| `shadowSoftness` | 0..1 | 0.01565171 | Drop-shadow blur/spread. Default is very tight. |
 | `shadowTint` | 0..1 | 0 | 0 = neutral black … 1 = accent-tinted glow halo. |
 | `progressGlass` | bool | true | Glass thermometer scrubber vs plain slider. |
+| `hazeBlurDp` | 0..80 | 40 | Backdrop (Haze) frost blur radius, in dp, for surfaces that gaussian-blur what is behind them. 0 disables the frost layer entirely. Studio slider: *Backdrop blur*. |
+| `hazeTint` | 0..2 | 1 | Strength multiplier on the frost layer's luminance-picked tint. Studio slider: *Backdrop tint*. |
+
+`hazeBlurDp` / `hazeTint` reach further than the rest of this table. They style
+every surface that blurs its backdrop — the mini player bar, the player's
+audio-tools sheet, the nav pill, the genre map, the mixer strips — so a theme
+that sets them is restyling app chrome, not just the now-playing screen. They
+are material (not personal), so a preset may set them and a user who moves
+either slider stops matching every chip.
 
 ## Recipe for a new coordinated theme
 
@@ -154,16 +172,26 @@ default (2 / 0 / 0).
    DEFAULT; respect the gates; keep in range.
 3. **Author the Player Glass preset** with the **same name** and a matching mood.
 4. Append both to their `PRESETS` lists.
-5. **Validate ranges + colour-safety** with the helper (no Gradle needed):
+5. **Validate ranges + colour-safety** with the helper — a second, no-Gradle
+   check, not a replacement for the tests:
    ```bash
    python3 .claude/skills/player-visuals-themes/scripts/validate_theme_ranges.py
    ```
-   It parses both `PRESETS` lists and flags any out-of-range value, any preset that
-   sets `tintColor`/`previewBg`, and any duplicate name.
-6. Confirm names are unique and each preset's values differ from its siblings.
-7. **Build caveat:** this environment can't run Gradle (the Gradle 9 host is
-   blocked and only 8.14.3 is installed while AGP needs 9). Verify the look on a
-   physical device — tilt/motion/light-angle fields are invisible in previews.
+   It reads the bounds and the personal-field set **out of the Kotlin** and flags
+   any out-of-range value, any preset that sets a personal field, any field the
+   data class doesn't have, and any duplicate name. Exit 2 means it could not
+   read the model and checked nothing — treat that as a failure, not a pass.
+6. **Run the unit tests.** They are the real gate:
+   ```bash
+   ./gradlew :app:testDebugUnitTest --tests '*LyricsFxSettingsTest' \
+                                    --tests '*PlayerGlassSettingsTest'
+   ```
+   (The wrapper pins Gradle 9.1.0, which matches AGP 9 — an older note in this
+   file claimed Gradle couldn't run here and it was wrong. `assembleDebug` is
+   the thing that needs the git submodules; the unit tests do not.)
+7. Confirm names are unique and each preset's values differ from its siblings.
+8. **Verify the look on a physical device** — tilt/motion/light-angle fields are
+   invisible in previews and emulators.
 
 ## Adding a brand-new FIELD (not just a preset)
 

@@ -1,7 +1,10 @@
 package tf.monochrome.android.di
 
 import android.content.Context
+import android.util.Log
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,6 +43,25 @@ object DatabaseModule {
             // migration; the THX (8→9) and Atmos (9→10) upgrades migrate in
             // place above.
             .fallbackToDestructiveMigration(dropAllTables = true)
+            // …and it says so when it fires. This drops every table the user
+            // owns — playlists, favourites, history, presets — and it did it
+            // silently, so the app came back looking like a fresh install with
+            // no record anywhere of why. A dropped database is recoverable for
+            // a signed-in listener (LibraryRestoreCoordinator pulls it back)
+            // and unrecoverable for everyone else, and either way it is the
+            // single most destructive thing this app does to its own data. It
+            // does not get to be quiet about it.
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
+                    Log.e(
+                        "MusicDatabase",
+                        "Destructive migration: every local table was dropped " +
+                            "(schema mismatch or a version gap with no migration). " +
+                            "Local library data is gone; a signed-in account will " +
+                            "restore from the cloud on next launch.",
+                    )
+                }
+            })
             .build()
     }
 

@@ -203,10 +203,14 @@ private fun SignedInView(
     onOpenStats: () -> Unit,
     onSignOut: () -> Unit
 ) {
-    Spacer(modifier = Modifier.height(32.dp))
-
+    // DevEditable is a plain Box, so the modifier it is handed stretches the box
+    // and nothing centres what is inside it — the header Column has to fill the
+    // width itself or it parks against the left edge.
     tf.monochrome.android.devedit.DevEditable("profile_header", Modifier.fillMaxWidth()) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Icon(
                 Icons.Default.AccountCircle,
                 contentDescription = "Profile",
@@ -286,6 +290,8 @@ private fun SignedInView(
 
     OutlinedButton(
         onClick = onSignOut,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
     ) {
         Text("Sign Out")
@@ -315,7 +321,10 @@ private fun SignedOutView(
     var passwordVisible by remember { mutableStateOf(false) }
 
     tf.monochrome.android.devedit.DevEditable("signin_header", Modifier.fillMaxWidth()) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Icon(
                 Icons.Default.AccountCircle,
                 contentDescription = null,

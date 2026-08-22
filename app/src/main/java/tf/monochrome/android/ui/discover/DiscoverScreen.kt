@@ -325,7 +325,9 @@ fun DiscoverScreen(
             }
 
             // The paging footer. PullToRefreshBox owns the *top* indicator, so
-            // this one only ever speaks for the fetch happening below.
+            // this one only ever speaks for the fetch happening below — either
+            // the next page, or the rest of a page that is still drawing itself
+            // row by row.
             if (shelves.isNotEmpty()) {
                 item(key = "paging_footer") {
                     Box(
@@ -333,7 +335,7 @@ fun DiscoverScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         when {
-                            loadingMore -> CircularProgressIndicator(
+                            loadingMore || loading -> CircularProgressIndicator(
                                 modifier = Modifier.size(26.dp),
                                 strokeWidth = 2.5.dp,
                             )

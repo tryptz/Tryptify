@@ -758,7 +758,7 @@ fun LyricsFxStudioScreen(
                 ) { viewModel.update { s -> s.copy(releaseMs = it) } }
                 FxSlider(
                     "Bounce", "${(fx.bounce * 100).toInt()}%", fx.bounce, 0f..1f,
-                    description = "Spring overshoot — 0 tracks stiffly, 100 rings like rubber.",
+                    description = "Spring overshoot: 0 tracks stiffly, 100 rings like rubber.",
                 ) { viewModel.update { s -> s.copy(bounce = it) } }
             }
 
@@ -1146,7 +1146,7 @@ private fun PlayerGlassTab(
         ) { onUpdate { g -> g.copy(roundness = it) } }
         FxSlider(
             "Depth (profondeur)", "%.2f".format(glass.depth), glass.depth, 0.5f..2f,
-            description = "How thick and deep the relief reads — higher pops the buttons more in 3D.",
+            description = "How thick and deep the relief reads; higher pops the buttons more in 3D.",
         ) { onUpdate { g -> g.copy(depth = it) } }
         FxSlider(
             "Refraction", "%.2f".format(glass.refraction), glass.refraction, 0f..0.4f,
@@ -1160,7 +1160,7 @@ private fun PlayerGlassTab(
         StudioSection("Light & reflections")
         FxSlider(
             "Light angle", "${glass.lightAngleDeg.toInt()}°", glass.lightAngleDeg, 0f..360f,
-            description = "Direction the key light comes from — where the highlights sit.",
+            description = "Direction the key light comes from, and where the highlights sit.",
         ) { onUpdate { g -> g.copy(lightAngleDeg = it) } }
         FxSlider(
             "Tilt reactivity", "${(glass.tiltReactivity * 100).toInt()}%", glass.tiltReactivity, 0f..1.5f,
@@ -1186,7 +1186,7 @@ private fun PlayerGlassTab(
         StudioSection("Drop shadow")
         FxSlider(
             "Shadow depth", "${(glass.shadowDepth * 100).toInt()}%", glass.shadowDepth, 0f..1f,
-            description = "Drop shadow under the glass buttons and dock — lifts them off the surface.",
+            description = "Drop shadow under the glass buttons and dock, lifting them off the surface.",
         ) { onUpdate { g -> g.copy(shadowDepth = it) } }
         FxSlider(
             "Shadow softness", "${(glass.shadowSoftness * 100).toInt()}%", glass.shadowSoftness, 0f..1f,
@@ -1595,7 +1595,7 @@ private fun FontPicker(
 ) {
     if (fonts.isEmpty()) {
         Text(
-            text = "No imported fonts yet — add them in Settings › Appearance › Font Library.",
+            text = "No imported fonts yet. Add them in Settings › Appearance › Font Library.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),

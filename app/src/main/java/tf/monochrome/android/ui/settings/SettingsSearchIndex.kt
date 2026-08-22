@@ -87,9 +87,6 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Spectrum analyzer", "Equalizer", listOf("fft", "visualiser", "frequency", "meter")),
 
     // ── Library ─────────────────────────────────────────────────────────
-    entry("Scan on app open", "Library", listOf("local", "files", "refresh", "index")),
-    entry("Minimum track duration", "Library", listOf("skip", "short", "interlude", "filter")),
-    entry("Background scan interval", "Library", listOf("local", "files", "automatic")),
     entry("Library tab order", "Library", listOf("reorder", "tabs", "layout")),
     entry("Local folders", "Library", listOf("storage", "saf", "sd card", "path")),
 
@@ -110,11 +107,15 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     // ── Radio ───────────────────────────────────────────────────────────
     entry("AI radio", "Radio", listOf("station", "recommend", "queue", "seed")),
-    entry("Radio planner", "Radio", listOf("station", "queue", "url")),
     entry("Radio weights", "Radio", listOf("tuning", "similarity", "novelty", "familiarity")),
 
     // ── System ──────────────────────────────────────────────────────────
     entry("Performance", "System", listOf("battery", "fps", "low power", "glass", "blur")),
+    entry(
+        "Full screen",
+        "System",
+        listOf("immersive", "hide status bar", "notification bar", "navigation bar", "gesture bar"),
+    ),
     entry("Debug log", "System", listOf("logs", "diagnostics", "report", "crash"))
         .at(SettingsDestination.Route("debug_log")),
     entry("Developer mode", "System", listOf("dev", "advanced", "hidden")),

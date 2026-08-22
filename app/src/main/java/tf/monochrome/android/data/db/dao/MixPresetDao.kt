@@ -16,6 +16,20 @@ interface MixPresetDao {
     @Query("SELECT * FROM mix_presets WHERE id = :id")
     suspend fun getPresetById(id: Long): MixPresetEntity?
 
+    /** Every preset at one moment, for the cloud push. */
+    @Query("SELECT * FROM mix_presets ORDER BY updatedAt DESC")
+    suspend fun getAllPresetsSnapshot(): List<MixPresetEntity>
+
+    /**
+     * A preset by its creation time, which is the identity it syncs under.
+     *
+     * The row id is Room's autoGenerate Long and means nothing outside this
+     * device, so it cannot be what the cloud matches on; createdAt is fixed at
+     * the moment of saving and never rewritten.
+     */
+    @Query("SELECT * FROM mix_presets WHERE createdAt = :createdAt LIMIT 1")
+    suspend fun getByCreatedAt(createdAt: Long): MixPresetEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(preset: MixPresetEntity): Long
 

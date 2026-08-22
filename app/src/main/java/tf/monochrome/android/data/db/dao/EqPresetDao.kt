@@ -46,6 +46,10 @@ interface EqPresetDao {
     /**
      * Insert a new preset or update if exists
      */
+    /** Every preset of both kinds at one moment, for the cloud push. */
+    @Query("SELECT * FROM eq_presets ORDER BY updatedAt DESC")
+    suspend fun getAllPresetsSnapshot(): List<EqPresetEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPreset(preset: EqPresetEntity)
 

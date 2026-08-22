@@ -6,11 +6,10 @@ import org.junit.Test
 class RadioPlannerWeightsTest {
 
     @Test
-    fun `defaults match the plan's recommended values`() {
+    fun `defaults match the shipped values`() {
         val w = RadioPlannerWeights.DEFAULT
         assertEquals(1.20f, w.localLibrary, 0f)
         assertEquals(1.00f, w.qobuz, 0f)
-        assertEquals(0.90f, w.listenbrainzGraph, 0f)
         assertEquals(1.20f, w.canonicalVersionBias, 0f)
         assertEquals(1.30f, w.avoidRecentlyPlayed, 0f)
         assertEquals(0.70f, w.eraConsistency, 0f)
@@ -28,11 +27,11 @@ class RadioPlannerWeightsTest {
         val w = RadioPlannerWeights(
             localLibrary = Float.NaN,
             qobuz = Float.POSITIVE_INFINITY,
-            moodContinuity = Float.NEGATIVE_INFINITY,
+            eraConsistency = Float.NEGATIVE_INFINITY,
         ).clamped()
         assertEquals(RadioPlannerWeights.DEFAULT.localLibrary, w.localLibrary, 0f)
         assertEquals(RadioPlannerWeights.DEFAULT.qobuz, w.qobuz, 0f)
-        assertEquals(RadioPlannerWeights.DEFAULT.moodContinuity, w.moodContinuity, 0f)
+        assertEquals(RadioPlannerWeights.DEFAULT.eraConsistency, w.eraConsistency, 0f)
     }
 
     @Test

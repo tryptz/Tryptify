@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.BuildConfig
+import tf.monochrome.android.audio.PitchRatio
 import java.util.Locale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
@@ -625,7 +626,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         // contrast against it, so even a poorly chosen pair stays legible.
         SettingSwitchItem(
             title = "Custom colors",
-            subtitle = "Pick your own accent and background — overrides the theme above",
+            subtitle = "Pick your own accent and background. Overrides the theme above",
             checked = customThemeEnabled,
             onCheckedChange = { viewModel.setCustomThemeEnabled(it) },
         )
@@ -666,7 +667,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         }
         SettingSwitchItem(
             title = "Dynamic Colors",
-            subtitle = "Tint the player, mini player and lyrics from album art — the menus keep the theme color. Off = everything uses the theme color",
+            subtitle = "Tint the player, mini player and lyrics from album art. The menus keep the theme color. Off, everything uses the theme color",
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
@@ -684,7 +685,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                 AnimatedVisibility(visible = dynamicColorMenus) {
                     SettingSwitchItem(
                         title = "Keep the theme background",
-                        subtitle = "Accent only — the background stays the color your theme chose",
+                        subtitle = "Accent only. The background stays the color your theme chose",
                         checked = dynamicColorKeepBackground,
                         onCheckedChange = { viewModel.setDynamicColorKeepBackground(it) },
                     )
@@ -906,7 +907,6 @@ private fun FontRow(
 @Composable
 private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavController) {
     val explicit by viewModel.showExplicitBadges.collectAsStateWithLifecycle()
-    val confirmQueue by viewModel.confirmClearQueue.collectAsStateWithLifecycle()
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
     val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
@@ -1029,7 +1029,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         SettingsGroupHeader("Spectrum Analyzer")
         SettingSwitchItem(
             title = "Show Spectrum Analyzer",
-            subtitle = "Display live audio spectrum on the player and EQ screens",
+            subtitle = "Display live audio spectrum on the player and the parametric EQ screen",
             checked = spectrumEnabled,
             onCheckedChange = { viewModel.setSpectrumAnalyzerEnabled(it) }
         )
@@ -1157,7 +1157,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
 
         SettingSwitchItem(
             title = "Disable vsync",
-            subtitle = "Let the visualizer exceed display refresh (capped by Target FPS). Increases battery and heat — Adreno honours this; some GPUs ignore it.",
+            subtitle = "Let the visualizer exceed display refresh (capped by Target FPS). Increases battery and heat. Adreno honours this; some GPUs ignore it.",
             checked = !vsyncEnabled,
             onCheckedChange = { viewModel.setVisualizerVsyncEnabled(!it) }
         )
@@ -1210,13 +1210,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Queue")
-        SettingSwitchItem(
-            title = "Confirm Before Clearing Queue",
-            subtitle = "Ask before replacing the current queue",
-            checked = confirmQueue,
-            onCheckedChange = { viewModel.setConfirmClearQueue(it) }
-        )
     
 }
 
@@ -1307,7 +1300,7 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Genre charts don't need this — they read public data " +
+                        "Genre charts don't need this. They read public data " +
                             "with a key built into the app. Entering one here " +
                             "makes charts use yours instead.",
                         style = MaterialTheme.typography.bodySmall,
@@ -1379,13 +1372,13 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
         title = "Your API key",
         subtitle = when {
             apiKey.isNotBlank() && apiSecret.isNotBlank() ->
-                "Set — scrobbling can sign as you"
+                "Set. Scrobbling can sign as you"
             apiKey.isNotBlank() ->
-                "Key set, secret missing — scrobbling still can't sign"
+                "Key set, secret missing. Scrobbling still can't sign"
             chartsKeyAvailable ->
-                "Not set — charts use the built-in key; scrobbling needs yours"
+                "Not set. Charts use the built-in key; scrobbling needs yours"
             else ->
-                "Not set — needed for scrobbling and for all-time charts"
+                "Not set. Needed for scrobbling and for all-time charts"
         },
         onClick = { showApiKeyDialog = true }
     )
@@ -1394,7 +1387,7 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
         subtitle = when {
             lastFmEnabled -> "Connected as ${lastFmUsername ?: "user"}"
             lastFmConnecting -> "Waiting for Last.fm…"
-            else -> "Not connected — tap to authorise in your browser"
+            else -> "Not connected. Tap to authorise in your browser"
         },
         // No text box. A session key is not something a person has — it comes
         // out of auth.getSession, which needs the browser handshake this
@@ -1583,11 +1576,16 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             Slider(
                 value = playbackSpeed,
                 onValueChange = { newSpeed ->
-                    val rounded = (Math.round(newSpeed * 100) / 100f)
-                    speedText = String.format(Locale.US, "%.2f", rounded)
-                    viewModel.setPlaybackSpeed(rounded)
+                    // Was rounded to 0.01 before storing, which put an exact
+                    // equal-tempered interval as much as 13.5 cents out. Store
+                    // the ratio at full precision and snap it onto a semitone
+                    // only when the drag is already within a few cents of one;
+                    // the field keeps showing two decimals.
+                    val exact = PitchRatio.snap(newSpeed)
+                    speedText = String.format(Locale.US, "%.2f", exact)
+                    viewModel.setPlaybackSpeed(exact)
                 },
-                valueRange = 0.25f..3.0f,
+                valueRange = PitchRatio.MIN_SPEED..PitchRatio.MAX_SPEED,
                 modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
@@ -1611,6 +1609,24 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             }) {
                 Text("Reset")
             }
+        }
+
+        // With preserve-pitch off the speed ratio is also the interval, so
+        // name it — landing on an exact semitone is the point of the snapping
+        // above, and "1.12x" alone doesn't say whether you did.
+        if (!preservePitch) {
+            Text(
+                text = if (PitchRatio.isOnSemitone(playbackSpeed)) {
+                    "Pitch: ${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(playbackSpeed))} semitones (exact)"
+                } else {
+                    String.format(
+                        Locale.US, "Pitch: %+.2f semitones", PitchRatio.semitonesFor(playbackSpeed),
+                    )
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
         }
 
         SettingSwitchItem(
@@ -1676,7 +1692,7 @@ private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
         subtitle = if (enabled) {
             "Multichannel tracks fold into stereo (fixed matrix) and run through DSP/EQ."
         } else {
-            "Off — multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
+            "Off. Multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
         },
         checked = enabled,
         onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
@@ -1756,7 +1772,7 @@ private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
     val s = state
     if (s == null) {
         Text(
-            text = "Idle — play a track to detect its channel layout.",
+            text = "Idle. Play a track to detect its channel layout.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1847,9 +1863,9 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     SettingSwitchItem(
         title = "USB DAC bit-perfect routing",
         subtitle = when {
-            !enabled -> "Off — uses system audio output."
+            !enabled -> "Off. Uses system audio output."
             deviceName != null -> "On → $deviceName"
-            else -> "On — plug in a USB DAC to start routing."
+            else -> "On. Plug in a USB DAC to start routing."
         },
         checked = enabled,
         onCheckedChange = { viewModel.setUsbBitPerfectEnabled(it) },
@@ -2035,7 +2051,7 @@ private fun exclusiveSubtitle(
     failure: tf.monochrome.android.audio.usb.StartFailure?,
 ): String {
     if (!enabled) {
-        return "Off — UAPP-style libusb output. Needs Developer Options " +
+        return "Off. UAPP-style libusb output. Needs Developer Options " +
             "→ Disable USB audio routing → ON, otherwise Android's audio " +
             "HAL will keep grabbing the DAC and fight us for it."
     }
@@ -2045,9 +2061,9 @@ private fun exclusiveSubtitle(
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.NoDevice ->
             "On, waiting for a USB DAC to be plugged in."
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.AwaitingPermission ->
-            "DAC detected — accept the system USB-permission prompt."
+            "DAC detected. Accept the system USB-permission prompt."
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.DeviceOpen ->
-            "DAC handle acquired ✓ — bypass engages on the next " +
+            "DAC handle acquired ✓. Bypass engages on the next " +
             "track (or skip the current track to engage now)."
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.InterfaceClaimed ->
             "Streaming interface claimed ✓"
@@ -2061,7 +2077,7 @@ private fun exclusiveSubtitle(
         // happen but: defensive), fall back to the old text.
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Error ->
             failure?.actionableMessage()?.takeIf { it.isNotBlank() }
-                ?: ("Bypass couldn't engage — see logcat tagged " +
+                ?: ("Bypass couldn't engage. See logcat tagged " +
                     "'LibusbUacDriver' for details.")
     }
 }
@@ -2114,7 +2130,7 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         SettingSwitchItem(
             title = "Auto-Download Liked Songs",
             subtitle = "Keep a copy of every song you like from now on. " +
-                "Songs you liked earlier are left alone — turning this on " +
+                "Songs you liked earlier are left alone. Turning this on " +
                 "never starts a bulk download.",
             checked = autoDownloadLiked,
             onCheckedChange = { viewModel.setAutoDownloadLikedSongs(it) }
@@ -2228,14 +2244,14 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
                         "With a channel set, the spectrum is drawn across the album " +
                             "art itself instead of in the small circle. That means an " +
                             "image per track, and Discord only shows images it can " +
-                            "fetch — so each one is posted here as an attachment and " +
+                            "fetch, so each one is posted here as an attachment and " +
                             "the card points at it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Use a channel you don't mind filling up — a private server of " +
+                        "Use a channel you don't mind filling up. A private server of " +
                             "your own is the usual answer. Enable Developer Mode in " +
                             "Discord, then right-click the channel and Copy Channel ID. " +
                             "Leave it empty to keep the plain cover and the circle.",
@@ -2315,7 +2331,7 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Album art needs an application ID — a presence set this way can " +
+                        "Album art needs an application ID. A presence set this way can " +
                             "only show an image Discord itself hosts, and an application " +
                             "is what turns a cover URL into one. Without it you still get " +
                             "the track, artist, album and progress bar.",
@@ -2340,11 +2356,11 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
     SettingItem(
         title = "Token",
         subtitle = when {
-            token.isBlank() -> "Not set — needed to show what you're playing"
+            token.isBlank() -> "Not set. Needed to show what you're playing"
             discordUser != null && applicationId.isBlank() ->
-                "$discordUser — album art off (no application ID)"
+                "$discordUser, album art off (no application ID)"
             discordUser != null -> "$discordUser"
-            applicationId.isBlank() -> "Set — album art off (no application ID)"
+            applicationId.isBlank() -> "Set. Album art off (no application ID)"
             else -> "Set"
         },
         onClick = { showDialog = true }
@@ -2354,12 +2370,12 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
         subtitle = when {
             token.isBlank() -> "Add a token first"
             status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTED ->
-                "On — your profile is showing the current track"
+                "On. Your profile is showing the current track"
             status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTING ->
                 "Connecting…"
             status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.FAILED ->
                 "Couldn't connect"
-            enabled -> "On — connects when something plays"
+            enabled -> "On. Connects when something plays"
             else -> "Off"
         },
         checked = enabled,
@@ -2368,7 +2384,7 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
     SettingItem(
         title = "Spectrum over the artwork",
         subtitle = if (uploadChannel.isBlank()) {
-            "Off — the spectrum sits in the small circle"
+            "Off. The spectrum sits in the small circle"
         } else {
             "Posting to channel $uploadChannel"
         },
@@ -2579,7 +2595,7 @@ private fun CatalogControls(viewModel: SettingsViewModel) {
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Your own Tidal HiFi server — used for search, browse, and streaming.",
+                text = "Your own Tidal HiFi server, used for search, browse, and streaming.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -2870,6 +2886,19 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Display")
+
+        // Game-style full screen: no status bar, no gesture bar. Every screen
+        // pads from WindowInsets, so hiding the bars collapses those insets and
+        // the content grows into the space on its own.
+        val immersiveFullScreen by viewModel.immersiveFullScreen.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = "Full screen",
+            subtitle = "Hides the notification bar and the bottom gesture bar everywhere in the app. Swipe in from an edge to bring them back for a moment.",
+            checked = immersiveFullScreen,
+            onCheckedChange = { viewModel.setImmersiveFullScreen(it) }
+        )
+
         val appFps by viewModel.appTargetFps.collectAsStateWithLifecycle()
         val appResolution by viewModel.appRenderResolution.collectAsStateWithLifecycle()
         // App-wide frame rate and panel resolution, applied by selecting a
@@ -2914,7 +2943,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
         SettingItem(
             title = "Resolution",
-            subtitle = "Whole app: ${resolutionLabel(appResolution)} — nearest panel mode is used",
+            subtitle = "Whole app: ${resolutionLabel(appResolution)}. Nearest panel mode is used",
             onClick = { showResDropdown = true }
         )
         DropdownMenu(expanded = showResDropdown, onDismissRequest = { showResDropdown = false }) {
@@ -2930,7 +2959,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         SettingsGroupHeader("Diagnostics")
         SettingItem(
             title = "View debug log",
-            subtitle = "Live logcat stream for this process — copy or export as a file for bug reports",
+            subtitle = "Live logcat stream for this process. Copy or export as a file for bug reports",
             onClick = { navController.navigateTool(Screen.DebugLog) },
         )
 
@@ -3236,9 +3265,6 @@ fun SettingSwitchItem(title: String, subtitle: String, checked: Boolean, onCheck
 // ─── Tab 5: Library Settings ──────────────────────────────────────────
 @Composable
 private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
-    val scanOnAppOpen by viewModel.scanOnAppOpen.collectAsStateWithLifecycle()
-    val minTrackDuration by viewModel.minTrackDuration.collectAsStateWithLifecycle()
-    val backgroundScanInterval by viewModel.backgroundScanInterval.collectAsStateWithLifecycle()
     val libraryTabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
 
     // Every other tab wraps in SettingsTabContent; this one rolled its own
@@ -3248,62 +3274,6 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
     // stable DevEdit ids like everywhere else.
     SettingsTabContent {
         SettingsGroupHeader("Local Media Scanning")
-        SettingSwitchItem(
-            title = "Scan on App Open",
-            subtitle = "Automatically scan for new music when the app opens",
-            checked = scanOnAppOpen,
-            onCheckedChange = { viewModel.setScanOnAppOpen(it) }
-        )
-
-        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            Text(
-                "Minimum Track Duration",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                "Skip files shorter than ${minTrackDuration / 1000} seconds",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Slider(
-                value = minTrackDuration.toFloat(),
-                onValueChange = { viewModel.setMinTrackDuration(it.toLong()) },
-                valueRange = 0f..120_000f,
-                steps = 11,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        var expanded by remember { mutableStateOf(false) }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(vertical = 12.dp)
-        ) {
-            Text(
-                "Background Scan Interval",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                backgroundScanInterval.replaceFirstChar { it.titlecase(Locale.getDefault()) },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                listOf("never", "hourly", "daily").forEach { interval ->
-                    DropdownMenuItem(
-                        text = { Text(interval.replaceFirstChar { it.titlecase(Locale.getDefault()) }) },
-                        onClick = {
-                            viewModel.setBackgroundScanInterval(interval)
-                            expanded = false
-                        }
-                    )
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(8.dp))
         val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
@@ -3504,7 +3474,7 @@ private fun PlaylistImportSection() {
         // leaving Settings.
         Text(
             if (spotifyConnected) {
-                "Connected as ${spotifyUserName ?: "…"} — paste a playlist link, or pick from your library."
+                "Connected as ${spotifyUserName ?: "…"}. Paste a playlist link, or pick from your library."
             } else {
                 "Connect Spotify on the Connections tab to import your playlists."
             },
@@ -3561,7 +3531,7 @@ private fun PlaylistImportSection() {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "Matching ${progress.current}/${progress.total} — ${progress.matched} found",
+                    "Matching ${progress.current}/${progress.total}, ${progress.matched} found",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

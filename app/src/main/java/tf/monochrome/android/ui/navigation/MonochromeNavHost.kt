@@ -187,6 +187,16 @@ data class BottomNavItem(
 private val tabRoutes =
     listOf(Screen.Home.route, Screen.Discover.route, Screen.Library.route)
 
+// Screens whose own controls run to the bottom edge, where the mini player would
+// sit on top of them. The player and the mixer are the transport itself; Oxford
+// puts CLIP / BAND SPLIT / EFFECT IN under the compressor and inflator faders.
+// Everywhere else the mini player stays — this list is the whole exception.
+private val miniPlayerHiddenRoutes = setOf(
+    Screen.NowPlaying.route,
+    Screen.Mixer.route,
+    Screen.Oxford.route,
+)
+
 @Composable
 fun MonochromeNavHost(initialRoute: String? = null) {
     val navController = rememberNavController()
@@ -227,8 +237,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val isOnMainTab = currentDestination?.route in tabRoutes
 
     val showMiniPlayer = currentTrack != null
-        && currentDestination?.route != Screen.NowPlaying.route
-        && currentDestination?.route != Screen.Mixer.route
+        && currentDestination?.route !in miniPlayerHiddenRoutes
 
     // Pager state for the main tabs
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabRoutes.size })

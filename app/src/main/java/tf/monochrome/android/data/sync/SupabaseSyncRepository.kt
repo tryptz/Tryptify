@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import tf.monochrome.android.data.auth.SupabaseAuthManager
+import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
@@ -38,10 +39,24 @@ data class SbEqPreset(
     val name: String,
     val description: String = "",
     val bands: String = "[]",   // JSON-serialized List<EqBand>
+    /** Right-ear bands. Null is a mono preset whose left list drives both ears. */
+    val bands_r: String? = null,
     val preamp: Float = 0f,
     val target_id: String = "",
     val target_name: String = "",
     val is_custom: Boolean = true,
+    /**
+     * 0 = AutoEQ, 1 = Parametric, mirroring [EqPresetEntity.eqType].
+     *
+     * One Room table serves both EQ screens and this is the only thing telling
+     * them apart. Without it a pull hands every parametric preset to the AutoEQ
+     * screen and vice versa, which is not a display bug: the two carry
+     * different band shapes.
+     */
+    val eq_type: Int = 0,
+    /** Device clock at the user's last edit. See [cloudCopyIsNewer]. */
+    val created_at_ms: Long = 0,
+    val updated_at_ms: Long = 0,
     val created_at: String? = null,
     val updated_at: String? = null
 )
@@ -50,10 +65,14 @@ data class SbEqPreset(
 data class SbMixPreset(
     val id: String? = null,
     val user_id: String? = null,
+    /** The preset's creation time in epoch milliseconds. See [mixPushPayload]. */
     val local_id: String,
     val name: String,
     val state_json: String,
     val is_custom: Boolean = true,
+    /** Device clock at the user's last edit. See [cloudCopyIsNewer]. */
+    val created_at_ms: Long = 0,
+    val updated_at_ms: Long = 0,
     val created_at: String? = null,
     val updated_at: String? = null
 )
@@ -197,6 +216,7 @@ class SupabaseSyncRepository @Inject constructor(
     private val authManager: SupabaseAuthManager,
     private val favoritesDao: FavoriteDao,
     private val historyDao: HistoryDao,
+    private val eqPresetDao: EqPresetDao,
     private val mixPresetDao: MixPresetDao,
     private val playlistDao: PlaylistDao,
     private val playEventDao: PlayEventDao,
@@ -237,22 +257,18 @@ class SupabaseSyncRepository @Inject constructor(
 
     // ─── EQ Presets ──────────────────────────────────────────────────────────
 
+    /**
+     * Upload one EQ preset, AutoEQ or parametric.
+     *
+     * A no-op when signed out, like every other push here, so callers on a save
+     * path do not have to check first.
+     */
     suspend fun pushEqPreset(preset: EqPresetEntity) {
         val uid = userId() ?: return
         runCatching {
-            supabase.postgrest["eq_presets"].upsert(
-                SbEqPreset(
-                    user_id = uid,
-                    local_id = preset.id,
-                    name = preset.name,
-                    description = preset.description,
-                    bands = preset.bandsJson,
-                    preamp = preset.preamp,
-                    target_id = preset.targetId,
-                    target_name = preset.targetName,
-                    is_custom = preset.isCustom
-                )
-            ) { onConflict = "user_id,local_id" }
+            supabase.postgrest["eq_presets"].upsert(eqPushPayload(preset, uid)) {
+                onConflict = "user_id,local_id"
+            }
         }.onFailure { Log.e(TAG, "pushEqPreset failed: ${it.message}") }
     }
 
@@ -266,26 +282,28 @@ class SupabaseSyncRepository @Inject constructor(
 
     // ─── Mix Presets ─────────────────────────────────────────────────────────
 
+    /** Upload one mixer preset. Keyed on its creation time — see [toCloudRow]. */
     suspend fun pushMixPreset(preset: MixPresetEntity) {
         val uid = userId() ?: return
         runCatching {
-            supabase.postgrest["mix_presets"].upsert(
-                SbMixPreset(
-                    user_id = uid,
-                    local_id = preset.id.toString(),
-                    name = preset.name,
-                    state_json = preset.stateJson,
-                    is_custom = preset.isCustom
-                )
-            ) { onConflict = "user_id,local_id" }
+            supabase.postgrest["mix_presets"].upsert(mixPushPayload(preset, uid)) {
+                onConflict = "user_id,local_id"
+            }
         }.onFailure { Log.e(TAG, "pushMixPreset failed: ${it.message}") }
     }
 
-    suspend fun deleteMixPreset(localId: Long) {
+    /**
+     * Remove a mixer preset from the cloud, so deleting it on one device
+     * removes it everywhere.
+     *
+     * [createdAt] rather than the row id, because that is the identity the
+     * cloud knows this preset by.
+     */
+    suspend fun deleteMixPreset(createdAt: Long) {
         val uid = userId() ?: return
         runCatching {
             supabase.postgrest["mix_presets"]
-                .delete { filter { eq("user_id", uid); eq("local_id", localId.toString()) } }
+                .delete { filter { eq("user_id", uid); eq("local_id", createdAt.toString()) } }
         }.onFailure { Log.e(TAG, "deleteMixPreset failed: ${it.message}") }
     }
 
@@ -616,12 +634,49 @@ class SupabaseSyncRepository @Inject constructor(
     // ─── Full initial sync (pull from cloud → merge into Room) ───────────────
 
     /**
-     * Called once after sign-in. Pulls all cloud data and merges it into Room.
-     * Existing local data wins on conflict — we don't overwrite local with cloud.
+     * Everything the cloud holds, merged into Room. Safe to run as often as you
+     * like: see [pullLibrary] for what each section does on a conflict.
+     *
+     * This is the manual "Sync now" pull. [pullLibrary] is the same thing minus
+     * the two expensive, least-repairing sections, and is what runs by itself.
+     *
+     * The order is deliberate. The library lands before the settings, so the
+     * preset rows exist by the time `EQ_ACTIVE_PRESET_ID` arrives in DataStore
+     * naming one of them.
      */
-    suspend fun pullAll(): List<String> {
+    suspend fun pullAll(): List<String> =
+        pullLibrary(includePlayEvents = true) + pullSettingsSection()
+
+    /**
+     * The library half of a pull: favourites, mix presets and playlists.
+     *
+     * Split out so it can run unattended on every launch. The whole reason this
+     * exists is that a device which loses library rows had no way back: app
+     * settings have healed themselves on sign-in ever since
+     * [SettingsSyncCoordinator] landed, while playlists and favourites were
+     * pushed on every edit and pulled only when somebody found the Sync button
+     * on the profile screen. One half of the same account's data repaired
+     * itself and the other half did not, which is how a full set of playlists
+     * can sit intact in the cloud while the device that owns them shows an
+     * empty list.
+     *
+     * Two conflict policies live here, on purpose. Favourites, playlists and
+     * scrobbles are set membership: add and remove are the whole vocabulary and
+     * a re-add is idempotent, so those sections insert-if-not-exists and local
+     * data always wins. Presets are mutable documents under a stable key, and
+     * that rule would freeze each one at the first version ever pushed: tune a
+     * profile on the phone and the tablet keeps the old curve for ever. Those
+     * two sections take the newer edit instead, compared as described on
+     * [cloudCopyIsNewer].
+     *
+     * @param includePlayEvents whether to pull the last thousand scrobbles too.
+     *   They are the heaviest section by far and the least worth repeating on a
+     *   launch — nothing on screen is missing without them — so the automatic
+     *   path leaves them to the manual sync.
+     */
+    suspend fun pullLibrary(includePlayEvents: Boolean = true): List<String> {
         val uid = userId() ?: return listOf("not signed in")
-        Log.d(TAG, "Starting full cloud pull for user $uid")
+        Log.d(TAG, "Starting cloud pull for user $uid (playEvents=$includePlayEvents)")
         val failed = mutableListOf<String>()
 
         // Favorites
@@ -679,20 +734,37 @@ class SupabaseSyncRepository @Inject constructor(
             }
         }.onFailure { failed += "favorite_artists"; Log.e(TAG, "pull favorite_artists: ${it.message}") }
 
+        // EQ presets, AutoEQ and parametric alike. These are the reason the
+        // settings blob's EQ_ACTIVE_PRESET_ID used to name a preset that did
+        // not exist on a fresh device: the id travelled and the preset it
+        // pointed at did not.
+        runCatching {
+            val presets = supabase.postgrest["eq_presets"]
+                .select { filter { eq("user_id", uid) } }
+                .decodeList<SbEqPreset>()
+            presets.forEach { p ->
+                val local = eqPresetDao.getPresetById(p.local_id)
+                if (cloudCopyIsNewer(local?.updatedAt, p.updated_at_ms)) {
+                    eqPresetDao.insertPreset(p.toEntity())
+                }
+            }
+        }.onFailure { failed += "eq_presets"; Log.e(TAG, "pull eq_presets: ${it.message}") }
+
         // Mix Presets
         runCatching {
             val mixPresets = supabase.postgrest["mix_presets"]
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbMixPreset>()
             mixPresets.forEach { p ->
-                mixPresetDao.insertIfNotExists(
-                    MixPresetEntity(
-                        id = p.local_id.toLongOrNull() ?: 0L,
-                        name = p.name,
-                        stateJson = p.state_json,
-                        isCustom = p.is_custom
-                    )
-                )
+                // Matched on creation time, which is what local_id holds. The
+                // code here used to assign local_id straight to the primary
+                // key, so every incoming preset landed on row 0 and the last
+                // one won.
+                val createdAt = p.local_id.toLongOrNull()
+                val local = createdAt?.let { mixPresetDao.getByCreatedAt(it) }
+                if (cloudCopyIsNewer(local?.updatedAt, p.updated_at_ms)) {
+                    mixPresetDao.upsert(p.toEntity(existingId = local?.id ?: 0L))
+                }
             }
         }.onFailure { failed += "mix_presets"; Log.e(TAG, "pull mix_presets: ${it.message}") }
 
@@ -734,7 +806,7 @@ class SupabaseSyncRepository @Inject constructor(
         // Play events — pull the most recent 1000 and merge into Room so stats
         // come across on a new device. Skip events already present (same track
         // + same playedAt) to avoid duplicating scrobbles if pull runs twice.
-        runCatching {
+        if (includePlayEvents) runCatching {
             val events = supabase.postgrest["play_events"]
                 .select {
                     filter { eq("user_id", uid) }
@@ -765,13 +837,25 @@ class SupabaseSyncRepository @Inject constructor(
             }
         }.onFailure { failed += "play_events"; Log.e(TAG, "pull play_events: ${it.message}") }
 
-        // App settings — apply the cloud snapshot to local DataStore.
-        runCatching { pullSettings() }
-            .onFailure { failed += "settings"; Log.e(TAG, "pull settings: ${it.message}") }
-
         Log.d(TAG, "Cloud pull complete (${failed.size} failed sections)")
         return failed
     }
+
+    /**
+     * App settings, applied to local DataStore.
+     *
+     * Kept out of [pullLibrary] because [SettingsSyncCoordinator] already owns
+     * this on sign-in, and it owns it carefully: it holds an applyingRemote
+     * flag while the snapshot lands so the writes it causes don't echo straight
+     * back as a push. A second, unguarded pull racing that one is how the
+     * ping-pong it was written to prevent gets back in.
+     */
+    private suspend fun pullSettingsSection(): List<String> =
+        runCatching { pullSettings() }
+            .fold(onSuccess = { emptyList() }, onFailure = {
+                Log.e(TAG, "pull settings: ${it.message}")
+                listOf("settings")
+            })
 
     // ─── Full push (local → cloud) after import ─────────────────────────────
 
@@ -807,6 +891,19 @@ class SupabaseSyncRepository @Inject constructor(
                 pushPlaylist(playlist)
                 playlistDao.getPlaylistTracksSnapshot(playlist.id).forEach { track -> pushPlaylistTrack(track) }
             }
+        }
+        // Only custom presets: the built-ins ship with the app, are identical
+        // on every device, and would be a table full of noise that the pull
+        // then writes back over the local originals.
+        section("eq_presets") {
+            eqPresetDao.getAllPresetsSnapshot()
+                .filter { it.isCustom }
+                .forEach { pushEqPreset(it) }
+        }
+        section("mix_presets") {
+            mixPresetDao.getAllPresetsSnapshot()
+                .filter { it.isCustom }
+                .forEach { pushMixPreset(it) }
         }
         section("settings") { pushSettings() }
 

@@ -74,9 +74,19 @@ class DspChain private constructor(
         crossfeedState: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedState,
         blockSize: Int,
         dspEnabled: Boolean,
+        autoEqPitchRatio: Float,
     ) {
         pendingDspState = dspStateJson?.takeIf { it.isNotBlank() && it != "{}" }
         autoEq.applyBands(autoEqBandsL, autoEqBandsR, autoEqPreamp, autoEqEnabled)
+
+        // The AutoEQ bands are pre-warped against the playback pitch ratio (see
+        // AutoEqProcessor), and this copy starts at the identity. Without the
+        // ratio it would correct as if pitch were 1.0 while the tail is in fact
+        // being pitch-shifted downstream — so a blend under Nightcore would
+        // briefly lose exactly the alignment the pre-warp exists to hold.
+        // Seeded immediately rather than glided: a fresh chain has no current
+        // alignment to slide away from, and the tail is already sounding.
+        autoEq.setPitchRatio(autoEqPitchRatio, immediate = true)
         parametricEq.applyBands(parametricBands, parametricPreamp, parametricEnabled)
 
         // A fresh MixBusProcessor starts at its 1024 default and nothing else
@@ -151,6 +161,9 @@ class DspChain private constructor(
         engineReadyJob?.cancel()
         engineReadyJob = null
         processors.forEach { runCatching { it.reset() } }
+        // Stops this copy's coefficient-design loop. The injected singleton
+        // never gets this call — it lives as long as the process.
+        runCatching { autoEq.release() }
         // These hold native handles of their own, outside the mix engine.
         runCatching { inflator.release() }
         runCatching { compressor.release() }

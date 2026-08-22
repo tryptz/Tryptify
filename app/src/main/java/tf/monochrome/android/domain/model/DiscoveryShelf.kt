@@ -57,3 +57,15 @@ data class DiscoveryShelf(
      */
     val depth: Int = 0,
 )
+
+/**
+ * A shelf, with the position the feed planned for it.
+ *
+ * The discovery feed is emitted as its rows come back rather than all at once,
+ * and rows do not come back in the order they were asked for — a genre with a
+ * warm cache answers instantly while its neighbour spends nine seconds on a
+ * chart. Carrying the planned index means arrival order never becomes reading
+ * order: the collector places each shelf in its slot, and a slow row leaves a
+ * gap that fills in instead of shoving the rows below it down when it lands.
+ */
+data class RankedShelf(val index: Int, val shelf: DiscoveryShelf)

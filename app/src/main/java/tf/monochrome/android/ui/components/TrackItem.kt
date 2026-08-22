@@ -129,7 +129,7 @@ fun TrackItem(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                if (track.explicit) {
+                if (track.explicit && tf.monochrome.android.ui.theme.showExplicitBadges()) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Default.Explicit,

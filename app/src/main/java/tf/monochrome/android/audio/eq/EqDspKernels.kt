@@ -209,6 +209,93 @@ internal fun matchedShelfCoefficients(
     return best
 }
 
+/**
+ * Designs normalized [b0, b1, b2, a1, a2] for one biquad section.
+ *
+ * Split out of [EqBiquad.configure] so the design can run off the audio
+ * thread. It is not audio-thread safe and never should be: the matched
+ * shelf design allocates and runs a scored tournament over candidate
+ * constructions (see [matchedShelfCoefficients]), which is fine at control
+ * rate and completely unacceptable per block.
+ *
+ * [matched] selects decramped coefficients: Vicanek matched-Z for PEAKING
+ * bands, tournament-picked (never worse than RBJ) for shelves. Degenerate
+ * input falls back to plain RBJ, and a degenerate RBJ falls back to
+ * passthrough rather than emitting NaN/Inf audio.
+ */
+internal fun designBiquadCoefficients(
+    type: EqBiquadType,
+    sr: Double,
+    freq: Double,
+    q: Double,
+    gainDb: Double,
+    matched: Boolean = false,
+): FloatArray {
+    if (matched) {
+        val c = when (type) {
+            EqBiquadType.PEAKING -> matchedPeakingCoefficients(sr, freq, q, gainDb)
+            EqBiquadType.LOW_SHELF -> matchedShelfCoefficients(sr, freq, q, gainDb, high = false)
+            EqBiquadType.HIGH_SHELF -> matchedShelfCoefficients(sr, freq, q, gainDb, high = true)
+        }
+        if (c != null) {
+            return floatArrayOf(
+                c[0].toFloat(), c[1].toFloat(), c[2].toFloat(),
+                c[3].toFloat(), c[4].toFloat(),
+            )
+        }
+        // fall through to RBJ on degenerate input
+    }
+    val w0 = 2.0 * Math.PI * freq / sr
+    val cosw0 = cos(w0)
+    val sinw0 = sin(w0)
+    val alpha = sinw0 / (2.0 * q)
+    val nb0: Double; val nb1: Double; val nb2: Double
+    val na0: Double; val na1: Double; val na2: Double
+
+    when (type) {
+        EqBiquadType.PEAKING -> {
+            val a = 10.0.pow(gainDb / 40.0)
+            nb0 = 1.0 + alpha * a; nb1 = -2.0 * cosw0; nb2 = 1.0 - alpha * a
+            na0 = 1.0 + alpha / a; na1 = -2.0 * cosw0; na2 = 1.0 - alpha / a
+        }
+        EqBiquadType.LOW_SHELF -> {
+            val a = 10.0.pow(gainDb / 40.0)
+            val sq = 2.0 * sqrt(a) * alpha
+            nb0 = a * ((a + 1) - (a - 1) * cosw0 + sq)
+            nb1 = 2.0 * a * ((a - 1) - (a + 1) * cosw0)
+            nb2 = a * ((a + 1) - (a - 1) * cosw0 - sq)
+            na0 = (a + 1) + (a - 1) * cosw0 + sq
+            na1 = -2.0 * ((a - 1) + (a + 1) * cosw0)
+            na2 = (a + 1) + (a - 1) * cosw0 - sq
+        }
+        EqBiquadType.HIGH_SHELF -> {
+            val a = 10.0.pow(gainDb / 40.0)
+            val sq = 2.0 * sqrt(a) * alpha
+            nb0 = a * ((a + 1) + (a - 1) * cosw0 + sq)
+            nb1 = -2.0 * a * ((a - 1) + (a + 1) * cosw0)
+            nb2 = a * ((a + 1) + (a - 1) * cosw0 - sq)
+            na0 = (a + 1) - (a - 1) * cosw0 + sq
+            na1 = 2.0 * ((a - 1) - (a + 1) * cosw0)
+            na2 = (a + 1) - (a - 1) * cosw0 - sq
+        }
+    }
+    if (abs(na0) < 1e-20 || !na0.isFinite()) {
+        // Degenerate coefficient — fall back to passthrough instead of emitting NaN/Inf audio.
+        return floatArrayOf(1f, 0f, 0f, 0f, 0f)
+    }
+    val nb0f = (nb0 / na0).toFloat()
+    val nb1f = (nb1 / na0).toFloat()
+    val nb2f = (nb2 / na0).toFloat()
+    val na1f = (na1 / na0).toFloat()
+    val na2f = (na2 / na0).toFloat()
+    return if (!nb0f.isFinite() || !nb1f.isFinite() || !nb2f.isFinite() ||
+        !na1f.isFinite() || !na2f.isFinite()) {
+        floatArrayOf(1f, 0f, 0f, 0f, 0f)
+    } else {
+        floatArrayOf(nb0f, nb1f, nb2f, na1f, na2f)
+    }
+}
+
 /** RBJ biquad (Transposed Direct Form II) with NaN/degenerate-coefficient guards. */
 internal class EqBiquad {
     private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
@@ -216,6 +303,8 @@ internal class EqBiquad {
     private var z1 = 0f; private var z2 = 0f
 
     /**
+     * Designs and installs coefficients, clearing the filter memory.
+     *
      * [matched] selects decramped coefficients: Vicanek matched-Z for PEAKING
      * bands, tournament-picked (never worse than RBJ) for shelves. Degenerate
      * input falls back to plain RBJ.
@@ -228,72 +317,26 @@ internal class EqBiquad {
         gainDb: Double,
         matched: Boolean = false,
     ) {
-        if (matched) {
-            val c = when (type) {
-                EqBiquadType.PEAKING -> matchedPeakingCoefficients(sr, freq, q, gainDb)
-                EqBiquadType.LOW_SHELF -> matchedShelfCoefficients(sr, freq, q, gainDb, high = false)
-                EqBiquadType.HIGH_SHELF -> matchedShelfCoefficients(sr, freq, q, gainDb, high = true)
-            }
-            if (c != null) {
-                b0 = c[0].toFloat(); b1 = c[1].toFloat(); b2 = c[2].toFloat()
-                a1 = c[3].toFloat(); a2 = c[4].toFloat()
-                z1 = 0f; z2 = 0f
-                return
-            }
-            // fall through to RBJ on degenerate input
-        }
-        val w0 = 2.0 * Math.PI * freq / sr
-        val cosw0 = cos(w0)
-        val sinw0 = sin(w0)
-        val alpha = sinw0 / (2.0 * q)
-        var nb0: Double; var nb1: Double; var nb2: Double
-        var na0: Double; var na1: Double; var na2: Double
-
-        when (type) {
-            EqBiquadType.PEAKING -> {
-                val a = 10.0.pow(gainDb / 40.0)
-                nb0 = 1.0 + alpha * a; nb1 = -2.0 * cosw0; nb2 = 1.0 - alpha * a
-                na0 = 1.0 + alpha / a; na1 = -2.0 * cosw0; na2 = 1.0 - alpha / a
-            }
-            EqBiquadType.LOW_SHELF -> {
-                val a = 10.0.pow(gainDb / 40.0)
-                val sq = 2.0 * sqrt(a) * alpha
-                nb0 = a * ((a + 1) - (a - 1) * cosw0 + sq)
-                nb1 = 2.0 * a * ((a - 1) - (a + 1) * cosw0)
-                nb2 = a * ((a + 1) - (a - 1) * cosw0 - sq)
-                na0 = (a + 1) + (a - 1) * cosw0 + sq
-                na1 = -2.0 * ((a - 1) + (a + 1) * cosw0)
-                na2 = (a + 1) + (a - 1) * cosw0 - sq
-            }
-            EqBiquadType.HIGH_SHELF -> {
-                val a = 10.0.pow(gainDb / 40.0)
-                val sq = 2.0 * sqrt(a) * alpha
-                nb0 = a * ((a + 1) + (a - 1) * cosw0 + sq)
-                nb1 = -2.0 * a * ((a - 1) + (a + 1) * cosw0)
-                nb2 = a * ((a + 1) + (a - 1) * cosw0 - sq)
-                na0 = (a + 1) - (a - 1) * cosw0 + sq
-                na1 = 2.0 * ((a - 1) - (a + 1) * cosw0)
-                na2 = (a + 1) - (a - 1) * cosw0 - sq
-            }
-        }
-        if (abs(na0) < 1e-20 || !na0.isFinite()) {
-            // Degenerate coefficient — fall back to passthrough instead of emitting NaN/Inf audio.
-            b0 = 1f; b1 = 0f; b2 = 0f; a1 = 0f; a2 = 0f
-            z1 = 0f; z2 = 0f
-            return
-        }
-        val nb0f = (nb0 / na0).toFloat()
-        val nb1f = (nb1 / na0).toFloat()
-        val nb2f = (nb2 / na0).toFloat()
-        val na1f = (na1 / na0).toFloat()
-        val na2f = (na2 / na0).toFloat()
-        if (!nb0f.isFinite() || !nb1f.isFinite() || !nb2f.isFinite() ||
-            !na1f.isFinite() || !na2f.isFinite()) {
-            b0 = 1f; b1 = 0f; b2 = 0f; a1 = 0f; a2 = 0f
-        } else {
-            b0 = nb0f; b1 = nb1f; b2 = nb2f; a1 = na1f; a2 = na2f
-        }
+        retune(designBiquadCoefficients(type, sr, freq, q, gainDb, matched))
         z1 = 0f; z2 = 0f
+    }
+
+    /**
+     * Installs pre-designed coefficients and leaves the filter memory running.
+     *
+     * [configure] zeroes z1/z2, which is right for a one-off retune but wrong
+     * for a glide — clearing the memory on every update mutes and restarts the
+     * filter, so a swept band would buzz rather than sweep. Transposed Direct
+     * Form II is the well-behaved structure for coefficient modulation (its
+     * state holds output history, not raw input), so stepping the coefficients
+     * between blocks moves the response continuously.
+     *
+     * Cheap enough for the audio thread by construction: five float stores,
+     * with all the transcendental design work already done by
+     * [designBiquadCoefficients] at control rate.
+     */
+    fun retune(c: FloatArray) {
+        b0 = c[0]; b1 = c[1]; b2 = c[2]; a1 = c[3]; a2 = c[4]
     }
 
     fun processBlock(data: FloatArray, n: Int) {
