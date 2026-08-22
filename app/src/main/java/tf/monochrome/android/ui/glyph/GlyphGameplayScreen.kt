@@ -41,6 +41,7 @@ import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphIcon
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
+import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 
@@ -67,6 +68,9 @@ fun GlyphGameplayScreen(
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
     val gameplay = state.gameplay
+    // A chart that failed to load still has to draw something rather than
+    // crash; a steady map is the harmless stand-in.
+    val timing = state.simfile?.timing ?: remember { GlyphTiming.constant(120f) }
 
     Box(
         modifier = modifier
@@ -79,7 +83,8 @@ fun GlyphGameplayScreen(
             palette = palette,
             positionProvider = positionProvider,
             heldLanes = gameplay.heldLanes,
-            scrollSeconds = scrollSecondsFor(gameplay.modifiers.speed),
+            scrollMode = gameplay.modifiers.scrollMode,
+            timing = timing,
             reducedMotion = gameplay.modifiers.reducedMotion,
             explosionProvider = explosionProvider,
             comboBurstProvider = comboBurstProvider,
@@ -137,17 +142,6 @@ fun GlyphGameplayScreen(
     }
 }
 
-/**
- * How far ahead the playfield shows.
- *
- * Scaled by the practice speed so the arrows travel at the same visual rate
- * whatever the tempo: without it, a 0.6× pass would crawl and the spacing a
- * player is learning to read would be a different spacing entirely.
- */
-private fun scrollSecondsFor(speed: Float): Float =
-    (BASE_SCROLL_SECONDS * speed).coerceIn(0.35f, 3f)
-
-private const val BASE_SCROLL_SECONDS = 1.1f
 
 /**
  * The readouts.
@@ -209,6 +203,14 @@ private fun GameplayHud(
             )
             Text(
                 text = gameplay.sectionLabel,
+                style = typography.label,
+                color = GlyphTheme.Muted,
+            )
+            // The scroll mode is the first thing a player checks when a chart
+            // reads wrong, so it stays on screen rather than living two taps
+            // away in the pause panel.
+            Text(
+                text = gameplay.modifiers.scrollMode.label,
                 style = typography.label,
                 color = GlyphTheme.Muted,
             )
@@ -337,6 +339,15 @@ private fun PauseOverlay(
     ) {
         GlyphPanel(modifier = Modifier.padding(GlyphTheme.Grid * 3)) {
             Text("PAUSED", style = typography.title, color = GlyphTheme.Paper)
+            Spacer(Modifier.height(GlyphTheme.Grid * 2))
+
+            GlyphScrollControl(
+                mode = state.gameplay.modifiers.scrollMode,
+                typography = typography,
+                onFamily = { onEvent(GlyphEvent.SetScrollFamily(it)) },
+                onValue = { onEvent(GlyphEvent.SetScrollValue(it)) },
+            )
+
             Spacer(Modifier.height(GlyphTheme.Grid * 2))
 
             GlyphSpeedControl(

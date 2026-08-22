@@ -32,6 +32,7 @@ import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphNote
+import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphAttemptStore
 import tf.monochrome.android.glyph.data.GlyphGhost
@@ -42,6 +43,8 @@ import tf.monochrome.android.glyph.engine.GlyphAudioTransport
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphJudgementEvent
+import tf.monochrome.android.glyph.engine.GlyphScrollFamily
+import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.engine.GlyphTimingWindows
 import tf.monochrome.android.glyph.training.GlyphCountIn
 import tf.monochrome.android.glyph.training.GlyphGauntletFinder
@@ -189,6 +192,8 @@ class GlyphViewModel @Inject constructor(
                 rebuildEngine()
             }
             GlyphEvent.ToggleMetronome -> updateModifiers { it.copy(metronome = !it.metronome) }
+            is GlyphEvent.SetScrollFamily -> setScrollFamily(event.family)
+            is GlyphEvent.SetScrollValue -> setScrollValue(event.value)
             is GlyphEvent.SetTimingWindowScale -> {
                 updateModifiers { it.copy(timingWindowScale = event.scale) }
                 rebuildEngine()
@@ -720,6 +725,61 @@ class GlyphViewModel @Inject constructor(
     fun setReducedMotion(reduced: Boolean) {
         updateModifiers { it.copy(reducedMotion = reduced) }
     }
+
+    /**
+     * Switch family, carrying a sensible value across.
+     *
+     * A multiplier and a target BPM are not the same kind of number, so moving
+     * between them keeps the *reading speed* rather than the digits: leaving
+     * C400 for XMod should not land on 400×.
+     */
+    private fun setScrollFamily(family: GlyphScrollFamily) {
+        val current = _ui.value.gameplay.modifiers.scrollMode
+        val maxBpm = chartMaxBpm()
+        val referenceBpm = _ui.value.simfile?.timing?.startBpm ?: GlyphTiming.DEFAULT_BPM
+        // What the current mode reads as, in BPM, at this chart's tempo.
+        val effectiveBpm = when (current) {
+            is GlyphScrollMode.CMod -> current.targetBpm
+            is GlyphScrollMode.XMod -> referenceBpm * current.multiplier
+            is GlyphScrollMode.MMod -> current.targetBpm
+        }
+
+        val next = when (family) {
+            GlyphScrollFamily.C ->
+                GlyphScrollMode.CMod(nearest(GlyphScrollMode.C_STEPS, effectiveBpm))
+            GlyphScrollFamily.M ->
+                GlyphScrollMode.MMod(nearest(GlyphScrollMode.M_STEPS, effectiveBpm), maxBpm)
+            GlyphScrollFamily.X -> GlyphScrollMode.XMod(
+                nearest(
+                    GlyphScrollMode.X_STEPS,
+                    if (referenceBpm > 0f) effectiveBpm / referenceBpm else 1f,
+                ),
+            )
+        }
+        updateModifiers { it.copy(scrollMode = next) }
+    }
+
+    private fun setScrollValue(value: Float) {
+        val maxBpm = chartMaxBpm()
+        val next = when (_ui.value.gameplay.modifiers.scrollMode) {
+            is GlyphScrollMode.CMod -> GlyphScrollMode.CMod(value)
+            is GlyphScrollMode.MMod -> GlyphScrollMode.MMod(value, maxBpm)
+            is GlyphScrollMode.XMod -> GlyphScrollMode.XMod(value)
+        }
+        updateModifiers { it.copy(scrollMode = next) }
+    }
+
+    /**
+     * The chart's fastest tempo, which MMod solves its multiplier against.
+     *
+     * Read from the timing map rather than stored, so a chart whose tempo list
+     * was re-read cannot leave MMod solving against a stale ceiling.
+     */
+    private fun chartMaxBpm(): Float =
+        _ui.value.simfile?.timing?.bpmRange?.endInclusive ?: GlyphTiming.DEFAULT_BPM
+
+    private fun nearest(steps: List<Float>, value: Float): Float =
+        steps.minByOrNull { kotlin.math.abs(it - value) } ?: value
 
     private fun updateModifiers(block: (GlyphModifiers) -> GlyphModifiers) {
         _ui.value = _ui.value.copy(

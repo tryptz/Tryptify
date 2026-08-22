@@ -42,7 +42,10 @@ import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphDecor
 import tf.monochrome.android.glyph.asset.GlyphIcon
 import tf.monochrome.android.glyph.asset.GlyphPalette
+import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
+import tf.monochrome.android.glyph.engine.GlyphScrollFamily
+import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.training.GlyphCountIn
 import tf.monochrome.android.glyph.training.GlyphGauntlets
 
@@ -122,7 +125,8 @@ fun GlyphTrainingScreen(
                 palette = palette,
                 positionProvider = positionProvider,
                 heldLanes = gameplay.heldLanes,
-                scrollSeconds = (1.1f * gameplay.modifiers.speed).coerceIn(0.35f, 3f),
+                scrollMode = gameplay.modifiers.scrollMode,
+                timing = state.simfile?.timing ?: GlyphTiming.constant(120f),
                 reducedMotion = gameplay.modifiers.reducedMotion,
                 ghost = if (state.training.ghostEnabled) ghost else null,
                 explosionProvider = explosionProvider,
@@ -156,6 +160,13 @@ fun GlyphTrainingScreen(
                 typography = typography,
                 assets = assets,
                 isLoading = training.isWaveformLoading,
+            )
+
+            GlyphScrollControl(
+                mode = gameplay.modifiers.scrollMode,
+                typography = typography,
+                onFamily = { onEvent(GlyphEvent.SetScrollFamily(it)) },
+                onValue = { onEvent(GlyphEvent.SetScrollValue(it)) },
             )
 
             GlyphSpeedControl(
@@ -440,6 +451,72 @@ fun GlyphSpeedControl(
 }
 
 private val SPEED_STEPS = listOf(0.6f, 0.7f, 0.8f, 0.9f, 1.0f, 1.1f, 1.25f)
+
+/**
+ * Scroll family and value — StepMania's XMod / CMod / MMod.
+ *
+ * Two rows rather than one long list, because the two choices are different in
+ * kind: the family decides what on-screen distance *means*, and the value only
+ * scales it. Flattening them into one row of chips would put "2.0x" and "C400"
+ * side by side as if they were comparable settings.
+ *
+ * Kept separate from playback speed above it, which they are constantly
+ * confused with: speed changes the music, scroll changes only the reading.
+ */
+@Composable
+fun GlyphScrollControl(
+    mode: GlyphScrollMode,
+    typography: GlyphTypography,
+    onFamily: (GlyphScrollFamily) -> Unit,
+    onValue: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val family = when (mode) {
+        is GlyphScrollMode.XMod -> GlyphScrollFamily.X
+        is GlyphScrollMode.CMod -> GlyphScrollFamily.C
+        is GlyphScrollMode.MMod -> GlyphScrollFamily.M
+    }
+    val steps = when (family) {
+        GlyphScrollFamily.X -> GlyphScrollMode.X_STEPS
+        GlyphScrollFamily.C -> GlyphScrollMode.C_STEPS
+        GlyphScrollFamily.M -> GlyphScrollMode.M_STEPS
+    }
+    val value = when (mode) {
+        is GlyphScrollMode.XMod -> mode.multiplier
+        is GlyphScrollMode.CMod -> mode.targetBpm
+        is GlyphScrollMode.MMod -> mode.targetBpm
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("SCROLL", style = typography.label, color = GlyphTheme.Muted)
+            Spacer(Modifier.weight(1f))
+            Text(mode.label, style = typography.mono, color = GlyphTheme.Paper)
+        }
+        Spacer(Modifier.height(GlyphTheme.Grid))
+        GlyphChipRow(
+            options = GlyphScrollFamily.entries.toList(),
+            selected = family,
+            label = { it.label },
+            onSelect = onFamily,
+            typography = typography,
+        )
+        Spacer(Modifier.height(GlyphTheme.Grid))
+        GlyphChipRow(
+            options = steps,
+            selected = steps.minByOrNull { abs(it - value) },
+            label = { step ->
+                if (family == GlyphScrollFamily.X) "%.1fx".format(step) else step.toInt().toString()
+            },
+            onSelect = onValue,
+            typography = typography,
+        )
+        Spacer(Modifier.height(4.dp))
+        // Says what the family does, not what it is called. "CMod" alone tells
+        // someone who does not already know exactly nothing.
+        Text(mode.summary, style = typography.label, color = GlyphTheme.Muted)
+    }
+}
 
 @Composable
 private fun PractiseToggles(
