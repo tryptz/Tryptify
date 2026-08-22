@@ -10,6 +10,7 @@ import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphScoreSnapshot
+import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.training.GlyphCountIn
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
@@ -100,6 +101,12 @@ data class GlyphGameplayUi(
  */
 data class GlyphModifiers(
     val speed: Float = 1f,
+    /**
+     * Scroll family and value. Not scoring-relevant — how fast the notes travel
+     * changes how hard a chart is to read, not what it is worth — so it is
+     * deliberately absent from [altersScoring].
+     */
+    val scrollMode: GlyphScrollMode = GlyphScrollMode.DEFAULT,
     val pitchLinkedToSpeed: Boolean = true,
     val mirror: Boolean = false,
     val shuffle: Boolean = false,
