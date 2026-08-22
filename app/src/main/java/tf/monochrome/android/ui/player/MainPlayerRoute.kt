@@ -81,6 +81,7 @@ import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
+import tf.monochrome.android.audio.PitchRatio
 import java.util.Locale
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
@@ -893,16 +894,54 @@ private fun BoxScope.SpeedPanel(
                     style = MaterialTheme.typography.titleMedium,
                     color = speedAccent,
                 )
+                // With preserve-pitch off the speed ratio *is* the interval, so
+                // name it — an exact semitone is the thing the control is for,
+                // and "1.12x" doesn't tell you whether you landed on one.
+                if (!preservePitch) {
+                    Text(
+                        text = "  " + if (PitchRatio.isOnSemitone(speed)) {
+                            "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
+                        } else {
+                            String.format(Locale.US, "%+.2f st", PitchRatio.semitonesFor(speed))
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Slider(
                 value = speed,
-                onValueChange = { onSpeedChange(Math.round(it * 100f) / 100f) },
-                valueRange = 0.25f..3.0f,
+                // Was Math.round(it * 100f) / 100f, which quantised the ratio to
+                // a 0.01 grid — up to 13.5 cents off an equal-tempered interval.
+                // Full precision now, snapped onto an exact semitone only when
+                // the drag already lands within a few cents of one.
+                onValueChange = { onSpeedChange(PitchRatio.snap(it)) },
+                valueRange = PitchRatio.MIN_SPEED..PitchRatio.MAX_SPEED,
                 colors = SliderDefaults.colors(
                     thumbColor = speedAccent,
                     activeTrackColor = speedAccent,
                 ),
             )
+            // Exact interval stepping. The slider can land anywhere; this walks
+            // whole semitones at 2^(n/12) precision, which is the only way to
+            // hit an interval reliably by hand.
+            Row(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(onClick = { onSpeedChange(PitchRatio.step(speed, -1)) }) {
+                    Text("-1 st")
+                }
+                Text(
+                    text = if (preservePitch) "semitone steps (tempo)" else "semitone steps",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { onSpeedChange(PitchRatio.step(speed, 1)) }) {
+                    Text("+1 st")
+                }
+            }
             // Cute one-tap Nightcore: 1.10x speed with pitch riding the tempo
             // (preserve-pitch off). Glows pink when active.
             val nightcoreActive = kotlin.math.abs(speed - 1.10f) < 0.01f && !preservePitch

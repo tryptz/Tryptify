@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.BuildConfig
+import tf.monochrome.android.audio.PitchRatio
 import java.util.Locale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
@@ -1575,11 +1576,16 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             Slider(
                 value = playbackSpeed,
                 onValueChange = { newSpeed ->
-                    val rounded = (Math.round(newSpeed * 100) / 100f)
-                    speedText = String.format(Locale.US, "%.2f", rounded)
-                    viewModel.setPlaybackSpeed(rounded)
+                    // Was rounded to 0.01 before storing, which put an exact
+                    // equal-tempered interval as much as 13.5 cents out. Store
+                    // the ratio at full precision and snap it onto a semitone
+                    // only when the drag is already within a few cents of one;
+                    // the field keeps showing two decimals.
+                    val exact = PitchRatio.snap(newSpeed)
+                    speedText = String.format(Locale.US, "%.2f", exact)
+                    viewModel.setPlaybackSpeed(exact)
                 },
-                valueRange = 0.25f..3.0f,
+                valueRange = PitchRatio.MIN_SPEED..PitchRatio.MAX_SPEED,
                 modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
@@ -1603,6 +1609,24 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             }) {
                 Text("Reset")
             }
+        }
+
+        // With preserve-pitch off the speed ratio is also the interval, so
+        // name it — landing on an exact semitone is the point of the snapping
+        // above, and "1.12x" alone doesn't say whether you did.
+        if (!preservePitch) {
+            Text(
+                text = if (PitchRatio.isOnSemitone(playbackSpeed)) {
+                    "Pitch: ${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(playbackSpeed))} semitones (exact)"
+                } else {
+                    String.format(
+                        Locale.US, "Pitch: %+.2f semitones", PitchRatio.semitonesFor(playbackSpeed),
+                    )
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
         }
 
         SettingSwitchItem(
