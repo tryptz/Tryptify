@@ -329,6 +329,34 @@ class GlyphGameplayEngine(
     }
 
     /**
+     * Clear every judgement and start the chart again.
+     *
+     * What a loop wrap needs. Without it the second pass through a practice
+     * segment has nothing to hit: the notes are still marked resolved from the
+     * first pass, so they are skipped and the player taps into silence — which
+     * is the whole feature failing on its second iteration.
+     *
+     * Scoring resets with it. Accuracy accumulated across passes is not a
+     * number anyone can act on; per-pass is what tells a player whether this
+     * repetition went better than the last.
+     */
+    fun reset() {
+        for (runtime in runtimes) {
+            runtime.judgement = null
+            runtime.tailResolved = false
+            runtime.holding = false
+            runtime.releasedAtSeconds = Float.NaN
+            runtime.lastRollTapSeconds = 0f
+        }
+        cursor = 0
+        events.clear()
+        score.reset()
+        java.util.Arrays.fill(laneHeld, false)
+        java.util.Arrays.fill(activeHold, null)
+        positionSeconds = 0f
+    }
+
+    /**
      * Notes overlapping the window the playfield is about to draw.
      *
      * Returned as a list of [GlyphVisibleNote] rather than raw notes so the

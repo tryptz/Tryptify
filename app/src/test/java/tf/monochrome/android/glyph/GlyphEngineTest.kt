@@ -337,6 +337,50 @@ class GlyphEngineTest {
         assertEquals(0f, event.offsetSeconds!!, 1e-5f)
     }
 
+    @Test
+    fun resettingMakesEveryNoteHittableAgain() {
+        // What a loop wrap needs. Without it the second pass through a practice
+        // segment has nothing to hit: the notes are still marked resolved from
+        // the first pass, so the player taps into silence.
+        val engine = GlyphGameplayEngine(chart(note(1f), note(2f)))
+
+        engine.advanceTo(0.9f)
+        engine.press(GlyphLane.LEFT, 1f)
+        engine.advanceTo(2.5f)
+        assertEquals(2, engine.scoreSnapshot.judged)
+        assertTrue(engine.isFinished)
+
+        engine.reset()
+
+        assertEquals("scoring restarts with the pass", 0, engine.scoreSnapshot.judged)
+        assertEquals(0, engine.scoreSnapshot.combo)
+        assertEquals(0, engine.scoreSnapshot.maxCombo)
+        assertTrue("the chart is playable again", !engine.isFinished)
+
+        engine.advanceTo(0.9f)
+        val event = engine.press(GlyphLane.LEFT, 1f)
+        assertNotNull("the first note must be hittable on the second pass", event)
+        assertEquals(GlyphJudgement.MARVELOUS, event!!.judgement)
+    }
+
+    @Test
+    fun resettingClearsHeldLanesAndOpenHolds() {
+        val engine = GlyphGameplayEngine(
+            chart(note(1f, type = GlyphNoteType.HOLD, endSeconds = 5f)),
+        )
+        engine.advanceTo(0.9f)
+        engine.press(GlyphLane.LEFT, 1f)
+        assertTrue(engine.isHeld(GlyphLane.LEFT))
+
+        engine.reset()
+
+        // A lane left "down" across a wrap would light its receptor for the
+        // whole of the next pass and hold a note nobody is touching.
+        assertTrue(!engine.isHeld(GlyphLane.LEFT))
+        engine.advanceTo(0.9f)
+        assertNotNull(engine.press(GlyphLane.LEFT, 1f))
+    }
+
     // ── the clock ───────────────────────────────────────────────────────
 
     @Test

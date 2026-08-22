@@ -141,6 +141,21 @@ class GlyphScore(
         holdsDropped += 1
     }
 
+    /** Back to zero, for a fresh loop pass or a restart. */
+    fun reset() {
+        java.util.Arrays.fill(counts, 0)
+        weightSum = 0f
+        offsetSum = 0.0
+        offsetSquareSum = 0.0
+        offsetSamples = 0
+        combo = 0
+        maxCombo = 0
+        early = 0
+        late = 0
+        minesHit = 0
+        holdsDropped = 0
+    }
+
     /** A snapshot for the UI. Cheap enough to take every frame. */
     fun snapshot(): GlyphScoreSnapshot = GlyphScoreSnapshot(
         score = score,
