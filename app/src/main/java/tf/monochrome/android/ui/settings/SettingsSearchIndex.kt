@@ -151,6 +151,14 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("crossfeed")),
     entry("Mixer", "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
+    entry(
+        "Glyph",
+        "Audio",
+        listOf(
+            "stepmania", "rhythm", "chart", "ssc", "dance", "arrows",
+            "training ground", "practice", "simfile", "ddr", "itg",
+        ),
+    ).at(SettingsDestination.Route("glyph")),
     entry("Streaming quality", "Audio", listOf("bitrate", "wifi", "cellular", "data")),
     entry("Preserve Pitch", "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
     entry("Never Resample Between Tracks", "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),

@@ -1701,6 +1701,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             ) {
                 Text("Sampler")
             }
+            OutlinedButton(
+                onClick = { navController.navigateTool(Screen.Glyph) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Glyph")
+            }
         }
 
         // One group, not two. "Spatial Audio" held nothing but the Atmos row,

@@ -1,0 +1,381 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package tf.monochrome.android.ui.glyph
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import kotlinx.coroutines.coroutineScope
+import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
+import tf.monochrome.android.glyph.asset.GlyphAssetRepository
+import tf.monochrome.android.glyph.asset.GlyphIcon
+import tf.monochrome.android.glyph.asset.GlyphLane
+import tf.monochrome.android.glyph.asset.GlyphPalette
+import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
+import tf.monochrome.android.glyph.engine.GlyphJudgement
+
+/**
+ * The play screen: a HUD, the playfield, and the lane input over it.
+ *
+ * The playfield is given the whole area and the readouts sit above and below it
+ * rather than beside it, so the four lanes stay as wide as the device allows.
+ * Nothing overlaps the receptor row, which is the one part of the screen the
+ * player is actually looking at.
+ */
+@Composable
+fun GlyphGameplayScreen(
+    state: GlyphUiState,
+    engine: GlyphGameplayEngine?,
+    assets: GlyphAssetRepository,
+    palette: GlyphPalette?,
+    positionProvider: () -> Float,
+    onEvent: (GlyphEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val fontFamily = rememberStepTechFontFamily()
+    val typography = GlyphTypography(fontFamily)
+    val gameplay = state.gameplay
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(GlyphTheme.Ink),
+    ) {
+        GlyphPlayfield(
+            engine = engine,
+            assets = assets,
+            palette = palette,
+            positionProvider = positionProvider,
+            heldLanes = gameplay.heldLanes,
+            scrollSeconds = scrollSecondsFor(gameplay.modifiers.speed),
+            reducedMotion = gameplay.modifiers.reducedMotion,
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        // The lane input sits over the playfield rather than under a row of
+        // buttons: the whole lane is the target, which is what makes the mode
+        // playable with thumbs.
+        LaneInput(
+            onPress = { onEvent(GlyphEvent.LanePressed(it)) },
+            onRelease = { onEvent(GlyphEvent.LaneReleased(it)) },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        JudgementOverlay(
+            judgement = gameplay.lastJudgement,
+            shownAtMs = gameplay.lastJudgementAtMs,
+            assets = assets,
+            reducedMotion = gameplay.modifiers.reducedMotion,
+            modifier = Modifier.align(Alignment.Center),
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .systemBarsPadding(),
+        ) {
+            GameplayHud(
+                state = state,
+                typography = typography,
+                assets = assets,
+                onEvent = onEvent,
+            )
+        }
+
+        if (gameplay.isPaused) {
+            PauseOverlay(
+                state = state,
+                typography = typography,
+                onEvent = onEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
+ * How far ahead the playfield shows.
+ *
+ * Scaled by the practice speed so the arrows travel at the same visual rate
+ * whatever the tempo: without it, a 0.6× pass would crawl and the spacing a
+ * player is learning to read would be a different spacing entirely.
+ */
+private fun scrollSecondsFor(speed: Float): Float =
+    (BASE_SCROLL_SECONDS * speed).coerceIn(0.35f, 3f)
+
+private const val BASE_SCROLL_SECONDS = 1.1f
+
+/**
+ * The readouts.
+ *
+ * Kept to one row plus a progress line. Everything here changes constantly and
+ * every extra number is something competing with the lanes for attention.
+ */
+@Composable
+private fun GameplayHud(
+    state: GlyphUiState,
+    typography: GlyphTypography,
+    assets: GlyphAssetRepository,
+    onEvent: (GlyphEvent) -> Unit,
+) {
+    val gameplay = state.gameplay
+    val score = gameplay.score
+
+    Column(modifier = Modifier.padding(horizontal = GlyphTheme.Grid * 2)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid * 2),
+        ) {
+            GlyphStat(
+                label = "Score",
+                value = "%,d".format(score.score),
+                typography = typography,
+            )
+            GlyphStat(
+                label = "Combo",
+                value = score.combo.toString(),
+                valueColor = if (score.combo > 0) GlyphTheme.Positive else GlyphTheme.Muted,
+                typography = typography,
+            )
+            GlyphStat(
+                label = "Accuracy",
+                value = "%.1f%%".format(score.accuracy * 100),
+                typography = typography,
+            )
+            Spacer(Modifier.weight(1f))
+            GlyphIconButton(
+                icon = if (gameplay.isPaused) GlyphIcon.PLAY else GlyphIcon.PAUSE,
+                label = if (gameplay.isPaused) "Resume" else "Pause",
+                assets = assets,
+                onClick = { onEvent(GlyphEvent.TogglePause) },
+            )
+        }
+
+        Spacer(Modifier.height(GlyphTheme.Grid))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
+        ) {
+            Text(
+                text = "${gameplay.bpm.toInt()} BPM",
+                style = typography.label,
+                color = GlyphTheme.Muted,
+            )
+            Text(
+                text = gameplay.sectionLabel,
+                style = typography.label,
+                color = GlyphTheme.Muted,
+            )
+            if (gameplay.modifiers.altersScoring) {
+                // A modified run is not comparable with a clean one, and the
+                // player should be able to see that while playing rather than
+                // discover it on the results screen.
+                Text(
+                    text = modifierSummary(gameplay.modifiers),
+                    style = typography.label,
+                    color = GlyphTheme.Warning,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        GlyphMeter(
+            fraction = gameplay.progress,
+            color = GlyphTheme.Paper.copy(alpha = 0.6f),
+            description = "Song progress, ${(gameplay.progress * 100).toInt()} percent",
+        )
+    }
+}
+
+private fun modifierSummary(modifiers: GlyphModifiers): String = buildList {
+    if (modifiers.speed != 1f) add("%.2f×".format(modifiers.speed))
+    if (modifiers.mirror) add("Mirror")
+    if (modifiers.shuffle) add("Shuffle")
+    if (modifiers.timingWindowScale != 1f) add("Windows %.2f×".format(modifiers.timingWindowScale))
+}.joinToString(" · ")
+
+/**
+ * Four full-height touch zones.
+ *
+ * Multitouch is handled per pointer rather than per zone, so a jump lands as two
+ * presses instead of the second finger being ignored. Each zone carries its
+ * lane's name so a screen reader can say which is which — the arrows are the
+ * only other cue and they are artwork, not text.
+ */
+@Composable
+private fun LaneInput(
+    onPress: (GlyphLane) -> Unit,
+    onRelease: (GlyphLane) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier) {
+        for (lane in GlyphLane.entries) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .semantics { contentDescription = "${lane.label} lane" }
+                    .pointerInput(lane) {
+                        // awaitPointerEventScope rather than detectTapGestures:
+                        // a rhythm game needs the down and the up as they
+                        // happen, not a synthesised tap after the gesture ends.
+                        coroutineScope {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    for (change in event.changes) {
+                                        if (change.pressed && change.previousPressed.not()) {
+                                            onPress(lane)
+                                            change.consume()
+                                        } else if (!change.pressed && change.previousPressed) {
+                                            onRelease(lane)
+                                            change.consume()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+            )
+        }
+    }
+}
+
+/**
+ * The judgement wordmark.
+ *
+ * Uses the pack's own artwork, and also announces itself: the wordmarks are
+ * images, so without a live region a screen-reader user gets no feedback at all.
+ */
+@Composable
+private fun JudgementOverlay(
+    judgement: GlyphJudgement?,
+    shownAtMs: Long,
+    assets: GlyphAssetRepository,
+    reducedMotion: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (judgement == null) return
+    val density = LocalDensity.current
+    val widthPx = with(density) { JUDGEMENT_WIDTH.roundToPx() }
+    // The pack's wordmarks are 320 × 64, and the aspect has to be preserved or
+    // the letterforms distort.
+    val heightPx = widthPx / 5
+
+    var image by remember(judgement) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(judgement, widthPx) {
+        image = assets.load(GlyphAssetCatalog.judgement(judgement.art), widthPx, heightPx)
+    }
+
+    Box(
+        modifier = modifier.semantics {
+            liveRegion = LiveRegionMode.Polite
+            contentDescription = judgement.label
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        val current = image
+        if (current != null) {
+            Image(
+                bitmap = current,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.width(JUDGEMENT_WIDTH),
+            )
+        } else {
+            // Text is a complete substitute here, which is why a missing
+            // wordmark is not worth failing over.
+            Text(
+                text = judgement.label.uppercase(),
+                style = GlyphTypography(rememberStepTechFontFamily()).readout,
+                color = GlyphTheme.Paper,
+            )
+        }
+    }
+}
+
+private val JUDGEMENT_WIDTH = 200.dp
+
+/** Pause: the practice controls, and the two ways out. */
+@Composable
+private fun PauseOverlay(
+    state: GlyphUiState,
+    typography: GlyphTypography,
+    onEvent: (GlyphEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.background(GlyphTheme.Ink.copy(alpha = 0.94f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        GlyphPanel(modifier = Modifier.padding(GlyphTheme.Grid * 3)) {
+            Text("PAUSED", style = typography.title, color = GlyphTheme.Paper)
+            Spacer(Modifier.height(GlyphTheme.Grid * 2))
+
+            GlyphSpeedControl(
+                speed = state.gameplay.modifiers.speed,
+                pitchLinked = state.gameplay.modifiers.pitchLinkedToSpeed,
+                typography = typography,
+                onSpeedChange = { onEvent(GlyphEvent.SetSpeed(it)) },
+                onPitchLinkChange = { onEvent(GlyphEvent.SetPitchLinked(it)) },
+            )
+
+            Spacer(Modifier.height(GlyphTheme.Grid * 2))
+            Row(horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid)) {
+                GlyphPrimaryButton(
+                    text = "Resume",
+                    typography = typography,
+                    onClick = { onEvent(GlyphEvent.TogglePause) },
+                    modifier = Modifier.weight(1f),
+                )
+                GlyphSecondaryButton(
+                    text = "Restart",
+                    typography = typography,
+                    onClick = { onEvent(GlyphEvent.Restart) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(GlyphTheme.Grid))
+            GlyphSecondaryButton(
+                text = "Quit to songs",
+                typography = typography,
+                accent = GlyphTheme.Muted,
+                onClick = { onEvent(GlyphEvent.Quit) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
