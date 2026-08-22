@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>Right 16th tap note</title>
+  <g transform="rotate(90 32 32)">
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#0B1020" opacity="0.85" transform="translate(0 2)"/>
+    <path d="M32 4 L59 31 Q61 33 59 35 L47 47 Q45 49 43 47 L39 43 V57 Q39 60 36 60 H28 Q25 60 25 57 V43 L21 47 Q19 49 17 47 L5 35 Q3 33 5 31 Z" fill="#FFD95A" opacity="1" stroke="#F8FAFF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 14 L50 32 L43 39 L35 31 V51 H29 V31 L21 39 L14 32 Z" fill="#F8FAFF" opacity="0.30"/>
+    <path d="M20 33 H44" stroke="#0B1020" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <rect x="29" y="27" width="6" height="6" rx="1" fill="#F8FAFF" opacity="0.9" transform="rotate(45 32 30)"/>
+  </g>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Expand</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 3 H3 V8 M16 3 H21 V8 M8 21 H3 V16 M16 21 H21 V16"/><path d="M3 3 L9 9 M21 3 L15 9 M3 21 L9 15 M21 21 L15 15"/>
+  </g>
+</svg>
