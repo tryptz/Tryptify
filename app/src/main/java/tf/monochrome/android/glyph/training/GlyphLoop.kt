@@ -31,20 +31,38 @@ data class GlyphLoopSegment(
     /**
      * The position [seconds] maps to inside the loop.
      *
-     * Exact for any number of passes, including a position far past the end —
-     * which happens when the app is backgrounded and the audio runs on.
+     * Two details carry the no-drift property, and both are easy to lose:
+     *
+     * The modulo runs in double. A float carries about seven digits, so after
+     * a few dozen passes of a song-length position the remainder is wrong in
+     * the third decimal — audible as a loop that creeps.
+     *
+     * A remainder within [BOUNDARY_EPSILON_SECONDS] of the full length is
+     * snapped to the start. Arithmetic on a position that should land exactly
+     * on a wrap point lands a hair either side of it, and without the snap the
+     * "hair before" case plays a residual sliver of the segment's end before
+     * restarting — which is exactly the stutter a seamless loop must not have.
      */
     fun wrap(seconds: Float): Float {
         if (seconds < startSeconds) return startSeconds
-        val elapsed = seconds - startSeconds
-        val within = elapsed % lengthSeconds
-        return startSeconds + within
+        val length = lengthSeconds.toDouble()
+        val elapsed = seconds.toDouble() - startSeconds.toDouble()
+        var within = elapsed % length
+        if (within < 0.0) within += length
+        if (within >= length - BOUNDARY_EPSILON_SECONDS || within <= BOUNDARY_EPSILON_SECONDS) {
+            return startSeconds
+        }
+        return (startSeconds.toDouble() + within).toFloat()
     }
 
     /** How many complete passes have finished by [seconds]. */
     fun passesAt(seconds: Float): Int {
         if (seconds <= startSeconds) return 0
-        return ((seconds - startSeconds) / lengthSeconds).toInt()
+        val length = lengthSeconds.toDouble()
+        val elapsed = seconds.toDouble() - startSeconds.toDouble()
+        // Nudged by the same epsilon, so a position that rounded to a hair
+        // short of a boundary still counts the pass it has plainly finished.
+        return ((elapsed + BOUNDARY_EPSILON_SECONDS) / length).toInt()
     }
 
     /** Clamp to a song of [durationSeconds], keeping at least [MINIMUM_SECONDS]. */
@@ -57,6 +75,14 @@ data class GlyphLoopSegment(
     companion object {
         /** Shorter than this is not a practice segment, it is a stutter. */
         const val MINIMUM_SECONDS = 1.0f
+
+        /**
+         * How close to a boundary counts as being on it: a tenth of a
+         * millisecond, some five samples at 48 kHz. Far below anything audible
+         * and far above the error the arithmetic can accumulate.
+         */
+        const val BOUNDARY_EPSILON_SECONDS = 1e-4
+
     }
 }
 
