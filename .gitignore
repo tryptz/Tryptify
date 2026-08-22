@@ -143,6 +143,10 @@ tools/cities15000.zip
 CLAUDE.md
 tools/__pycache__/
 
+# Seeded design canvases are 2MB+ build output; the .dc.html sources beside
+# them are the thing worth keeping.
+.design/**/*.html
+
 # The snapin defaults table both the native host test and the Kotlin unit
 # test check against (see app/src/main/cpp/dsp/tests/snapin_defaults_test.cpp).
 # The blanket *.csv above would drop it.
