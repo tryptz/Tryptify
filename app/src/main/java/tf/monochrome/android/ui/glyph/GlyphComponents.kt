@@ -3,6 +3,8 @@
 package tf.monochrome.android.ui.glyph
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -276,7 +278,14 @@ fun GlyphMeter(
     }
 }
 
-/** A row of chips where exactly one is selected. */
+/**
+ * A row of chips where exactly one is selected.
+ *
+ * Scrolls horizontally rather than clipping. Five difficulty chips with their
+ * meters ("Challenge 14") need about 450 dp, and a phone lane gives them ~358 —
+ * so the hardest tier fell off the right edge with nothing to say it was there.
+ * The same happens to the six CMod values on a narrow device.
+ */
 @Composable
 fun <T> GlyphChipRow(
     options: List<T>,
@@ -287,7 +296,7 @@ fun <T> GlyphChipRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
     ) {
         for (option in options) {
