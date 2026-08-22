@@ -62,6 +62,7 @@ fun GlyphGameplayScreen(
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
     explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
+    comboBurstProvider: () -> Long = { 0L },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
@@ -81,15 +82,17 @@ fun GlyphGameplayScreen(
             scrollSeconds = scrollSecondsFor(gameplay.modifiers.speed),
             reducedMotion = gameplay.modifiers.reducedMotion,
             explosionProvider = explosionProvider,
+            comboBurstProvider = comboBurstProvider,
             modifier = Modifier.fillMaxSize(),
         )
 
         // The lane input sits over the playfield rather than under a row of
         // buttons: the whole lane is the target, which is what makes the mode
         // playable with thumbs.
-        LaneInput(
+        GlyphLaneInput(
             onPress = { onEvent(GlyphEvent.LanePressed(it)) },
             onRelease = { onEvent(GlyphEvent.LaneReleased(it)) },
+            hitboxScale = gameplay.modifiers.hitboxScale,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -236,53 +239,6 @@ private fun modifierSummary(modifiers: GlyphModifiers): String = buildList {
     if (modifiers.shuffle) add("Shuffle")
     if (modifiers.timingWindowScale != 1f) add("Windows %.2f×".format(modifiers.timingWindowScale))
 }.joinToString(" · ")
-
-/**
- * Four full-height touch zones.
- *
- * Multitouch is handled per pointer rather than per zone, so a jump lands as two
- * presses instead of the second finger being ignored. Each zone carries its
- * lane's name so a screen reader can say which is which — the arrows are the
- * only other cue and they are artwork, not text.
- */
-@Composable
-private fun LaneInput(
-    onPress: (GlyphLane) -> Unit,
-    onRelease: (GlyphLane) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(modifier = modifier) {
-        for (lane in GlyphLane.entries) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .semantics { contentDescription = "${lane.label} lane" }
-                    .pointerInput(lane) {
-                        // awaitPointerEventScope rather than detectTapGestures:
-                        // a rhythm game needs the down and the up as they
-                        // happen, not a synthesised tap after the gesture ends.
-                        coroutineScope {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    for (change in event.changes) {
-                                        if (change.pressed && change.previousPressed.not()) {
-                                            onPress(lane)
-                                            change.consume()
-                                        } else if (!change.pressed && change.previousPressed) {
-                                            onRelease(lane)
-                                            change.consume()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-            )
-        }
-    }
-}
 
 /**
  * The judgement wordmark.

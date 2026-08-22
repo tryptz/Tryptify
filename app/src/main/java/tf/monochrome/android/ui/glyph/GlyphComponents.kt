@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -79,6 +82,49 @@ fun GlyphImage(
         // Holds the layout while the raster is produced, so a row does not jump
         // when its icon arrives. Also the permanent state for a missing asset.
         Box(modifier = modifier.size(size))
+    }
+}
+
+/**
+ * A wide piece of decor, rasterized to the width it is given.
+ *
+ * Separate from [GlyphImage] because the decor artwork is not square — a
+ * timeline ruler is 320 × 32 — and rasterizing it into a square box would
+ * letterbox it into a fraction of the space with the padding the pack asks be
+ * preserved turned into empty margin.
+ */
+@Composable
+fun GlyphImageStrip(
+    id: GlyphAssetId,
+    assets: GlyphAssetRepository,
+    aspect: Float,
+    modifier: Modifier = Modifier,
+    tint: Color = GlyphTheme.Muted,
+    contentDescription: String? = null,
+) {
+    var image by remember(id, tint) { mutableStateOf<ImageBitmap?>(null) }
+    var widthPx by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(id, widthPx, tint) {
+        if (widthPx > 0) {
+            image = assets.load(id, widthPx, (widthPx / aspect).toInt().coerceAtLeast(1), tint)
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .aspectRatio(aspect)
+            .onSizeChanged { widthPx = it.width },
+    ) {
+        val current = image
+        if (current != null) {
+            Image(
+                bitmap = current,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxWidth(),
+                contentScale = ContentScale.FillWidth,
+            )
+        }
     }
 }
 

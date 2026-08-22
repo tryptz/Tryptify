@@ -78,6 +78,7 @@ fun GlyphRoute(
     // recomposition would put the note positions a frame behind the music.
     val positionProvider = remember(viewModel) { { viewModel.transport.positionNow() } }
     val explosionProvider = remember(viewModel) { { viewModel.flashes() } }
+    val comboBurstProvider = remember(viewModel) { { viewModel.comboBurstNanos() } }
 
     when (state.screen) {
         GlyphScreen.HOME -> GlyphHomeScreen(
@@ -96,6 +97,7 @@ fun GlyphRoute(
             positionProvider = positionProvider,
             onEvent = viewModel::onEvent,
             explosionProvider = explosionProvider,
+            comboBurstProvider = comboBurstProvider,
             modifier = modifier.fillMaxSize(),
         )
 
@@ -108,6 +110,7 @@ fun GlyphRoute(
             onEvent = viewModel::onEvent,
             ghost = viewModel.activeGhost,
             explosionProvider = explosionProvider,
+            comboBurstProvider = comboBurstProvider,
             modifier = modifier.fillMaxSize(),
         )
 
