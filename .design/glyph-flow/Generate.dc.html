@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin:0; font-family:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+            background:#0B1020; color:#F8FAFF; -webkit-font-smoothing:antialiased; }
+    * { box-sizing:border-box; }
+    a { color:#58D9FF; } a:hover { color:#F8FAFF; }
+  </style>
+</helmet>
+<div style="width:390px;height:844px;background:#0B1020;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:16px;box-sizing:border-box"><div style="display:flex;align-items:center;gap:8px;height:48px;flex:0 0 auto"><div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#F8FAFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M15 5 L8 12 L15 19"/></svg></div><div style="flex:1;font-size:18px;font-weight:600;color:#F8FAFF">GLYPH</div></div><div style="border-radius:12px;background:#10162A;border:1px solid rgba(248,250,255,0.10);padding:16px;"><div style="display:flex;align-items:center"><div style="flex:1;font-size:14px;color:#F8FAFF">Separating drums</div><div style="font-size:13px;font-weight:500;color:#78839C">62%</div></div><div style="height:8px"></div><div style="height:4px;border-radius:2px;background:#141A2E;overflow:hidden"><div style="width:62%;height:100%;border-radius:2px;background:#63F2A2"></div></div><div style="height:8px"></div><div style="font-size:11px;font-weight:500;letter-spacing:0.8px;text-transform:uppercase;color:#78839C">Separated by ONNX HTDemucs</div><div style="height:8px"></div><div style="font-size:13px;font-weight:500;color:#78839C">Cancel</div></div><div style="height:4px"></div><div style="border-radius:12px;background:#10162A;border:1px solid rgba(248,250,255,0.10);padding:16px;"><div style="font-size:11px;font-weight:500;letter-spacing:0.8px;text-transform:uppercase;color:#78839C">Pipeline</div><div style="height:6px"></div><div style="display:flex;align-items:center;gap:10px;padding:6px 0"><div style="width:14px;height:14px;border-radius:7px;border:2px solid #63F2A2;background:#63F2A2;flex:0 0 auto"></div><div style="flex:1;font-size:13px;color:#78839C">Decode the file to PCM</div><div style="font-size:11px;font-weight:500;color:#78839C">1</div></div><div style="display:flex;align-items:center;gap:10px;padding:6px 0"><div style="width:14px;height:14px;border-radius:7px;border:2px solid #F8FAFF;background:transparent;flex:0 0 auto"></div><div style="flex:1;font-size:13px;color:#F8FAFF">Separate the drum stem</div><div style="font-size:11px;font-weight:500;color:#78839C">2</div></div><div style="display:flex;align-items:center;gap:10px;padding:6px 0"><div style="width:14px;height:14px;border-radius:7px;border:2px solid #141A2E;background:transparent;flex:0 0 auto"></div><div style="flex:1;font-size:13px;color:#78839C">Read the rhythm off the transients</div><div style="font-size:11px;font-weight:500;color:#78839C">3</div></div><div style="display:flex;align-items:center;gap:10px;padding:6px 0"><div style="width:14px;height:14px;border-radius:7px;border:2px solid #141A2E;background:transparent;flex:0 0 auto"></div><div style="flex:1;font-size:13px;color:#78839C">Write five difficulties to an SSC</div><div style="font-size:11px;font-weight:500;color:#78839C">4</div></div></div><div style="height:4px"></div><div style="border-radius:12px;background:#10162A;border:1px solid rgba(248,250,255,0.10);padding:16px;"><div style="font-size:14px;line-height:1.55;color:#78839C">It runs offline and reuses the sampler's decoder and stem registry. Nothing here is a second audio path.</div></div><div style="flex:1"></div></div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>
