@@ -20,7 +20,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import tf.monochrome.android.audio.sampler.PcmDecoder
+import tf.monochrome.android.audio.sampler.SampleEdits
 import tf.monochrome.android.audio.stepmania.StepManiaConversionService
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.audio.stepmania.StepManiaRequest
@@ -30,6 +34,7 @@ import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphNote
 import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphAttemptStore
+import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.data.GlyphGhostRecorder
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.glyph.data.GlyphSongRepository
@@ -39,7 +44,9 @@ import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphJudgementEvent
 import tf.monochrome.android.glyph.engine.GlyphTimingWindows
 import tf.monochrome.android.glyph.training.GlyphCountIn
+import tf.monochrome.android.glyph.training.GlyphGauntletFinder
 import tf.monochrome.android.glyph.training.GlyphGauntlets
+import tf.monochrome.android.glyph.training.GlyphMetronome
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
 /**
@@ -87,7 +94,32 @@ class GlyphViewModel @Inject constructor(
     val transport = GlyphAudioTransport(context)
 
     private val ghostRecorder = GlyphGhostRecorder()
+    private val metronome = GlyphMetronome()
+
+    /**
+     * The ghost being played back, if any.
+     *
+     * Held here rather than in the state for the same reason the engine is: it
+     * is read while drawing, and a few thousand entries have no business
+     * travelling through recomposition.
+     */
+    var activeGhost: GlyphGhost? = null
+        private set
+
+    /**
+     * The latest judgement per lane, for the receptor explosion.
+     *
+     * A plain mutable map read inside the playfield's draw scope rather than
+     * state pushed through recomposition: it changes several times a second
+     * during a stream and none of it is worth a recomposition.
+     */
+    private val laneFlashes = java.util.EnumMap<GlyphLane, LaneFlash>(GlyphLane::class.java)
+
+    fun flashes(): Map<GlyphLane, LaneFlash> = laneFlashes
+
     private var tickJob: Job? = null
+    private var waveformJob: Job? = null
+    private var countInEndsAtSeconds: Float? = null
     private var generationJob: Job? = null
     private var runStartedAtMs = 0L
 
@@ -193,6 +225,50 @@ class GlyphViewModel @Inject constructor(
                 hasGhost = attempts.latestGhost(songs.chartId(trackId)) != null,
             ),
         )
+        loadWaveform(song)
+    }
+
+    /**
+     * Decode a coarse envelope for the segment picker.
+     *
+     * Deliberately coarse and deliberately capped: the picker exists so a
+     * passage can be found by eye, and two hundred bars does that as well as
+     * ten thousand. The decode is the expensive part, so it runs once per song
+     * and is cancelled if the player moves on before it finishes.
+     */
+    private fun loadWaveform(song: GlyphSong) {
+        waveformJob?.cancel()
+        if (song.filePath.isBlank()) return
+
+        waveformJob = viewModelScope.launch {
+            _ui.value = _ui.value.copy(
+                training = _ui.value.training.copy(isWaveformLoading = true, waveform = emptyList()),
+            )
+            val bars = withContext(Dispatchers.Default) {
+                runCatching {
+                    val decoded = PcmDecoder.decode(
+                        context = context,
+                        uri = Uri.fromFile(File(song.filePath)),
+                        maxFrames = WAVEFORM_MAX_FRAMES,
+                    )
+                    val buffer = SampleEdits.Buffer(decoded.left, decoded.right, decoded.sampleRate)
+                    // peaks() alternates min and max per bucket; the picker
+                    // draws a symmetric bar, so the two are folded into one
+                    // magnitude here rather than at draw time.
+                    val peaks = SampleEdits.peaks(buffer, WAVEFORM_BARS)
+                    List(peaks.size / 2) { index ->
+                        val low = peaks[index * 2]
+                        val high = peaks[index * 2 + 1]
+                        maxOf(kotlin.math.abs(low), kotlin.math.abs(high)).coerceIn(0f, 1f)
+                    }
+                }.onFailure {
+                    Log.w(TAG, "waveform for ${song.title} failed: ${it.message}")
+                }.getOrDefault(emptyList())
+            }
+            _ui.value = _ui.value.copy(
+                training = _ui.value.training.copy(waveform = bars, isWaveformLoading = false),
+            )
+        }
     }
 
     private fun generateForSelected() {
@@ -282,6 +358,7 @@ class GlyphViewModel @Inject constructor(
         }
 
         ghostRecorder.clear()
+        laneFlashes.clear()
         engine = buildEngine(chart)
         runStartedAtMs = System.currentTimeMillis()
 
@@ -291,7 +368,9 @@ class GlyphViewModel @Inject constructor(
             _ui.value.gameplay.modifiers.pitchLinkedToSpeed,
         )
         transport.loop = if (training) _ui.value.training.loop else null
-        transport.seekTo(transport.loop?.startSeconds ?: 0f)
+        val from = transport.loop?.startSeconds ?: 0f
+        transport.seekTo(from)
+        armCountIn(training, from)
         transport.play()
 
         _ui.value = _ui.value.copy(
@@ -367,6 +446,23 @@ class GlyphViewModel @Inject constructor(
             while (isActive) {
                 val position = transport.pump()
                 val running = engine
+
+                // Count-in: the music plays but nothing is judged until it is
+                // over, so the player hears the tempo before the first note
+                // matters. Advancing the engine during it would let the notes
+                // under the count-in time out as misses.
+                val countInEnd = countInEndsAtSeconds
+                if (countInEnd != null) {
+                    if (position < countInEnd) {
+                        publishCountIn(position, countInEnd)
+                        delay(TICK_MILLIS)
+                        continue
+                    }
+                    countInEndsAtSeconds = null
+                }
+
+                tickMetronome(position)
+
                 if (running != null) {
                     running.advanceTo(position)
                     // Drained exactly once. Draining again inside publish would
@@ -374,6 +470,14 @@ class GlyphViewModel @Inject constructor(
                     // appear, so the events are passed along instead.
                     val judged = running.drainEvents()
                     for (event in judged) {
+                        // A tail completing is not a new hit and should not
+                        // re-fire the explosion its head already produced.
+                        if (!event.isTail) {
+                            laneFlashes[event.lane] = LaneFlash(
+                                atNanos = System.nanoTime(),
+                                isHit = event.judgement.isHit,
+                            )
+                        }
                         ghostRecorder.record(
                             songSeconds = event.songSeconds,
                             lane = event.lane.ordinal,
@@ -395,6 +499,35 @@ class GlyphViewModel @Inject constructor(
     private fun stopTick() {
         tickJob?.cancel()
         tickJob = null
+    }
+
+    /** Beats left before play begins, for the on-screen count. */
+    private fun publishCountIn(position: Float, endsAt: Float) {
+        val bpm = _ui.value.simfile?.timing?.startBpm ?: return
+        if (bpm <= 0f) return
+        val remaining = ((endsAt - position) / (60f / bpm)).toInt() + 1
+        tickMetronome(position)
+        _ui.value = _ui.value.copy(
+            gameplay = _ui.value.gameplay.copy(
+                positionSeconds = position,
+                countInBeatsRemaining = remaining.coerceAtLeast(0),
+            ),
+        )
+    }
+
+    /**
+     * Click on beat changes.
+     *
+     * Driven from the beat number rather than a timer, so the metronome follows
+     * the same audio clock the notes do and cannot drift away from the music.
+     */
+    private fun tickMetronome(position: Float) {
+        if (!_ui.value.gameplay.modifiers.metronome) {
+            metronome.reset()
+            return
+        }
+        val timing = _ui.value.simfile?.timing ?: return
+        metronome.tick(timing.secondsToBeat(position).toInt())
     }
 
     /**
@@ -470,9 +603,12 @@ class GlyphViewModel @Inject constructor(
     private fun restart() {
         val chart = _ui.value.chart ?: return
         ghostRecorder.clear()
+        laneFlashes.clear()
         engine = buildEngine(chart)
         runStartedAtMs = System.currentTimeMillis()
-        transport.seekTo(transport.loop?.startSeconds ?: 0f)
+        val from = transport.loop?.startSeconds ?: 0f
+        transport.seekTo(from)
+        armCountIn(_ui.value.screen == GlyphScreen.TRAINING, from)
         transport.play()
         _ui.value = _ui.value.copy(
             gameplay = _ui.value.gameplay.copy(
@@ -484,6 +620,29 @@ class GlyphViewModel @Inject constructor(
             ),
         )
         startTick()
+    }
+
+    /**
+     * Set the point at which judging begins.
+     *
+     * Only in training: a count-in on a scored run would put the first notes
+     * of the chart out of reach. Expressed in beats and converted here, so it
+     * stays four beats long at any practice speed.
+     */
+    private fun armCountIn(training: Boolean, fromSeconds: Float) {
+        metronome.reset()
+        val countIn = _ui.value.training.countIn
+        val bpm = _ui.value.simfile?.timing?.startBpm ?: 0f
+        countInEndsAtSeconds = if (training && countIn.beats > 0 && bpm > 0f) {
+            fromSeconds + countIn.seconds(bpm)
+        } else {
+            null
+        }
+        _ui.value = _ui.value.copy(
+            gameplay = _ui.value.gameplay.copy(
+                countInBeatsRemaining = if (countInEndsAtSeconds != null) countIn.beats else 0,
+            ),
+        )
     }
 
     private fun quit() {
@@ -529,21 +688,56 @@ class GlyphViewModel @Inject constructor(
 
     private fun setGhostEnabled(enabled: Boolean) = viewModelScope.launch {
         val chartId = _ui.value.selectedSong?.chartId
-        val ghost = if (enabled && chartId != null) attempts.latestGhost(chartId) else null
+        val stored = if (chartId != null) attempts.latestGhost(chartId) else null
+        // A ghost whose arrays disagree is treated as absent rather than played
+        // — reading past the end of a shorter one mid-song would be a crash.
+        val usable = stored?.takeIf { it.isConsistent && it.size > 0 }
+        activeGhost = if (enabled) usable else null
         _ui.value = _ui.value.copy(
             training = _ui.value.training.copy(
-                ghostEnabled = enabled && ghost != null,
-                hasGhost = ghost != null,
+                ghostEnabled = enabled && usable != null,
+                hasGhost = usable != null,
             ),
         )
     }
 
+    /**
+     * Start a drill on the passage of this chart it is about.
+     *
+     * The gauntlets are selection criteria over the player's own chart, not
+     * authored exercises: practising the densest stream in the song you are
+     * stuck on beats practising a synthetic one. A chart with none of that
+     * pattern says so rather than looping an arbitrary passage.
+     */
     private fun startGauntlet(id: String) {
         val gauntlet = GlyphGauntlets.byId(id) ?: return
+        val chart = _ui.value.chart ?: return
+        val segment = GlyphGauntletFinder.findSegment(chart, id)
+
+        if (segment == null) {
+            _ui.value = _ui.value.copy(
+                error = "This chart has no ${gauntlet.name.lowercase()} passage to drill.",
+            )
+            return
+        }
+
+        transport.loop = segment
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.TRAINING,
-            training = _ui.value.training.copy(gauntlet = gauntlet),
+            training = _ui.value.training.copy(
+                gauntlet = gauntlet,
+                loop = segment,
+                passCount = 0,
+            ),
+            // The drill's target is tighter than the standard windows, which is
+            // the point of the timing one in particular.
+            gameplay = _ui.value.gameplay.copy(
+                modifiers = _ui.value.gameplay.modifiers.copy(
+                    timingWindowScale = if (id == "timing") 0.7f else 1f,
+                ),
+            ),
         )
+        start(training = true)
     }
 
     /** Open a weak section as a loop and go straight to Training Ground. */
@@ -652,6 +846,7 @@ class GlyphViewModel @Inject constructor(
 
     override fun onCleared() {
         stopTick()
+        metronome.release()
         transport.release()
         super.onCleared()
     }
@@ -670,5 +865,11 @@ class GlyphViewModel @Inject constructor(
 
         const val TARGET_SECTIONS = 16
         const val MIN_SECTION_SECONDS = 4f
+
+        /** Enough bars to find a passage by eye; more would be wasted work. */
+        const val WAVEFORM_BARS = 220
+
+        /** Ten minutes at 48 kHz — the same guard the conversion service uses. */
+        const val WAVEFORM_MAX_FRAMES = 48_000 * 60 * 10
     }
 }
