@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Shuffle</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 7 H7 C11 7 13 17 17 17 H20 M17 14 L20 17 L17 20 M4 17 H7 C9 17 10 15 11 13 M13 10 C14 8 15 7 17 7 H20 M17 4 L20 7 L17 10"/>
+  </g>
+</svg>
