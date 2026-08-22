@@ -1,0 +1,121 @@
+{
+  "artboards": [
+    {
+      "file": "Entry.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Generate.dc.html",
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Ready.dc.html",
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Gameplay.dc.html",
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Results.dc.html",
+      "x": 2350,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Pause.dc.html",
+      "x": 1880,
+      "y": 964,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Training.dc.html",
+      "x": 2350,
+      "y": 964,
+      "w": 390,
+      "h": 844
+    }
+  ],
+  "annotations": [
+    {
+      "id": "a-entry",
+      "x": 0,
+      "y": -150,
+      "w": 390,
+      "text": "1 \u00b7 ENTRY\nGlyph is reached from the Sampler's header, beside Patterns.\nIt consumes the stems the separator just produced."
+    },
+    {
+      "id": "a-main",
+      "x": 470,
+      "y": -150,
+      "w": 390,
+      "text": "2 \u00b7 CHOOSE A SONG\nLocal MP3 and FLAC only \u2014 the two formats the conversion\nservice is specified for. Each row states its chart status:\ntempo and tiers when ready, 'No chart' when not."
+    },
+    {
+      "id": "a-gen",
+      "x": 940,
+      "y": -150,
+      "w": 390,
+      "text": "3 \u00b7 GENERATE\nDecode, separate the drums, read the rhythm off the\ntransients, write five difficulties to an SSC. Offline, and\nit reports which backend actually ran."
+    },
+    {
+      "id": "a-ready",
+      "x": 1410,
+      "y": -150,
+      "w": 390,
+      "text": "4 \u00b7 PICK A TIER\nDefaults to the middle of what exists, not the hardest.\nPlay and Training Ground are peers \u2014 practice is not an\nadvanced option hidden behind a first run."
+    },
+    {
+      "id": "a-play",
+      "x": 1880,
+      "y": -150,
+      "w": 390,
+      "text": "5 \u00b7 PLAY\nFour lanes, receptors above the notes, explosions above\nthose. The scroll mode sits in the HUD because it is the\nfirst thing checked when a chart reads wrong."
+    },
+    {
+      "id": "a-results",
+      "x": 2350,
+      "y": -150,
+      "w": 390,
+      "text": "6 \u00b7 RESULTS\nThe graph is the point: the weakest section is one tap\nfrom becoming a practice loop, with the chart still loaded."
+    },
+    {
+      "id": "a-pause",
+      "x": 1880,
+      "y": 834,
+      "w": 390,
+      "text": "PAUSE \u2014 scroll and speed\nXMod / CMod / MMod. Scroll changes only the reading;\nspeed changes the music. They are constantly confused,\nso they are separate controls with separate labels."
+    },
+    {
+      "id": "a-training",
+      "x": 2350,
+      "y": 834,
+      "w": 390,
+      "text": "TRAINING GROUND \u2014 the loop back\nSegment handles on the waveform, live early/late and\nspread, ghost of the last run, and gauntlets that find the\npassage in this chart rather than a synthetic one."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
