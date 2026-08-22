@@ -137,3 +137,7 @@ tools/cities15000.zip
 # Local Claude Code guidance (untracked by request)
 CLAUDE.md
 tools/__pycache__/
+
+# Seeded design canvases are 2MB+ build output; the .dc.html sources beside
+# them are the thing worth keeping.
+.design/**/*.html
