@@ -133,6 +133,7 @@ class GlyphViewModel @Inject constructor(
 
     private var tickJob: Job? = null
     private var waveformJob: Job? = null
+    private var selectionJob: Job? = null
     private var lastPublishNanos = 0L
     private var countInEndsAtSeconds: Float? = null
     private var generationJob: Job? = null
@@ -162,7 +163,7 @@ class GlyphViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(selectedDifficulty = event.difficulty)
 
             GlyphEvent.GenerateChart -> generateForSelected()
-            is GlyphEvent.GenerateChartFrom -> generate(event.uri, event.displayName, null)
+            is GlyphEvent.GenerateChartFrom -> generate(event.uri, displayNameOf(event.uri), null)
             GlyphEvent.CancelGeneration -> {
                 generationJob?.cancel()
                 _ui.value = _ui.value.copy(generation = null)
@@ -226,23 +227,57 @@ class GlyphViewModel @Inject constructor(
 
     // ── selection and generation ────────────────────────────────────────
 
-    private fun selectSong(trackId: String) = viewModelScope.launch {
-        val song = _ui.value.songs.firstOrNull { it.trackId == trackId } ?: return@launch
-        val simfile = songs.simfile(trackId)
+    /**
+     * Select a song.
+     *
+     * The selection is written **synchronously**, before any disk read. It used
+     * to be set at the end of a coroutine that first loaded the chart and the
+     * ghost off disk, which left a window where the UI showed one song selected
+     * and `selectedSong` still held the previous one — tap a song, tap Generate
+     * quickly, and the conversion ran against the song you had selected before.
+     * That is the whole reason this is split in two.
+     */
+    private fun selectSong(trackId: String) {
+        val song = _ui.value.songs.firstOrNull { it.trackId == trackId } ?: return
         _ui.value = _ui.value.copy(
             selectedSong = song,
-            simfile = simfile,
-            // Default to the middle of what exists rather than the hardest: the
-            // player who wants Challenge will pick it, and the one who does not
-            // should not be dropped into it.
-            selectedDifficulty = simfile?.availableDifficulties?.let { available ->
-                available.getOrNull(available.size / 2) ?: available.firstOrNull()
-            },
-            training = _ui.value.training.copy(
-                hasGhost = attempts.latestGhost(songs.chartId(trackId)) != null,
-            ),
+            // Cleared rather than left pointing at the last song's chart, which
+            // would let Play start the wrong difficulty of the wrong song.
+            simfile = null,
+            selectedDifficulty = null,
         )
-        loadWaveform(song)
+        loadSelection(song)
+    }
+
+    /** Fill in what has to be read from disk, and refresh the chart state. */
+    private fun loadSelection(song: GlyphSong) {
+        selectionJob?.cancel()
+        selectionJob = viewModelScope.launch {
+            val (refreshed, simfile) = songs.withCurrentChart(song)
+            // A later selection may have landed while this was reading; its
+            // result must not be overwritten by this one arriving late.
+            if (_ui.value.selectedSong?.trackId != song.trackId) return@launch
+
+            _ui.value = _ui.value.copy(
+                selectedSong = refreshed,
+                // The cached row comes from a Room flow that cannot see a chart
+                // file being written, so the list is corrected here too.
+                songs = _ui.value.songs.map {
+                    if (it.trackId == refreshed.trackId) refreshed else it
+                },
+                simfile = simfile,
+                // Default to the middle of what exists rather than the hardest:
+                // the player who wants Challenge will pick it, and the one who
+                // does not should not be dropped into it.
+                selectedDifficulty = simfile?.availableDifficulties?.let { available ->
+                    available.getOrNull(available.size / 2) ?: available.firstOrNull()
+                },
+                training = _ui.value.training.copy(
+                    hasGhost = attempts.latestGhost(refreshed.chartId) != null,
+                ),
+            )
+            loadWaveform(refreshed)
+        }
     }
 
     /**
@@ -286,6 +321,30 @@ class GlyphViewModel @Inject constructor(
                 training = _ui.value.training.copy(waveform = bars, isWaveformLoading = false),
             )
         }
+    }
+
+    /**
+     * The file name behind a picked document.
+     *
+     * `Uri.lastPathSegment` is not it: a Storage Access Framework URI ends in a
+     * document id — `primary:Music/Song.mp3`, or `msf:1234` on some providers —
+     * so using it named the chart after an opaque id and wrote that id into the
+     * simfile's title and #MUSIC tag. The provider knows the real name and this
+     * asks it, falling back only when it will not answer.
+     */
+    private fun displayNameOf(uri: Uri): String {
+        val resolved = runCatching {
+            context.contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null, null, null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
+            }
+        }.getOrNull()
+        return resolved?.takeIf { it.isNotBlank() }
+            ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+            ?: "audio"
     }
 
     private fun generateForSelected() {
@@ -347,7 +406,9 @@ class GlyphViewModel @Inject constructor(
                             backendName = success.backendName,
                         ),
                     )
-                    if (song != null) selectSong(song.trackId).join()
+                    // Re-read from disk rather than waiting for the library
+                    // flow, which never fires for a file written into app storage.
+                    if (song != null) loadSelection(song)
                 },
                 onFailure = { failure ->
                     Log.w(TAG, "chart generation failed: ${failure.message}")

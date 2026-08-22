@@ -27,7 +27,7 @@ sealed interface GlyphEvent {
     data object GenerateChart : GlyphEvent
 
     /** Generate from a file the player picked, for audio not in the library. */
-    data class GenerateChartFrom(val uri: Uri, val displayName: String) : GlyphEvent
+    data class GenerateChartFrom(val uri: Uri) : GlyphEvent
     data object CancelGeneration : GlyphEvent
     data object DismissError : GlyphEvent
 
