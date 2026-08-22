@@ -93,6 +93,16 @@ class GlyphAudioTransport(context: Context) {
     }
 
     /**
+     * True when the last [pump] crossed the loop's end.
+     *
+     * Read by the caller so it can restart the engine for the new pass. A wrap
+     * that only moved the audio would leave the notes marked resolved from the
+     * previous pass and the second iteration would have nothing to hit.
+     */
+    var didWrap: Boolean = false
+        private set
+
+    /**
      * Take a real position reading and wrap the loop if one is set.
      *
      * Called from the gameplay tick. The wrap happens here, on an authoritative
@@ -104,9 +114,11 @@ class GlyphAudioTransport(context: Context) {
     fun pump(): Float {
         val now = System.nanoTime()
         val actual = player.currentPosition / 1000f
+        didWrap = false
 
         val segment = loop
         if (segment != null && actual >= segment.endSeconds) {
+            didWrap = true
             // Seek rather than let the position run on: the audio has to move
             // too, and the clock follows the audio.
             seekTo(segment.startSeconds)
