@@ -263,6 +263,16 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPreservePitch(enabled) }
     }
 
+    // Transposition that leaves the tempo alone, applied by the phase vocoder
+    // rather than by resampling. Independent of playbackSpeed on purpose: the
+    // two are different operations with different trade-offs.
+    val pitchSemitones: StateFlow<Float> = preferences.pitchSemitones
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+
+    fun setPitchSemitones(semitones: Float) {
+        viewModelScope.launch { preferences.setPitchSemitones(semitones) }
+    }
+
     // --- Oxford DSP effect toggles (compressor / inflator) ---
     // The effects are @Singleton, so these flows stay in sync with the Oxford
     // screen. Compressor uses an inverted "bypass" flag; inflator uses "effectIn".

@@ -137,6 +137,21 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     /** Set by [setPitchRatio] to make the next pass jump instead of glide. */
     @Volatile private var snapToTarget = false
 
+    /**
+     * One-pole time constant for the warp glide, in milliseconds.
+     *
+     * Set from the latency of whatever stage is actually applying the pitch
+     * downstream. The pre-warp is applied *upstream* of that stage, so a step
+     * change here reaches the output before the pitch change it compensates
+     * for does — with the resampler that gap is under a millisecond and does
+     * not matter, but the phase vocoder runs about 350 ms behind, and an
+     * instant re-warp would audibly correct for a pitch the listener has not
+     * heard yet. Spreading the glide across the same window keeps the two
+     * roughly in step and turns a hard misalignment into a brief, smoothly
+     * varying one.
+     */
+    @Volatile private var glideTauMs: Double = DEFAULT_GLIDE_TAU_MS
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
@@ -187,8 +202,17 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
      * for seeding a freshly built chain (a crossfade copy) that has no current
      * alignment to slide away from.
      */
-    fun setPitchRatio(ratio: Float, immediate: Boolean = false) {
+    @JvmOverloads
+    fun setPitchRatio(
+        ratio: Float,
+        immediate: Boolean = false,
+        glideMillis: Int = DEFAULT_GLIDE_MILLIS,
+    ) {
         if (!ratio.isFinite() || ratio <= 0f) return
+        // A one-pole settles to within a thousandth in about 5 tau, so the tau
+        // that spans a given transition window is that window over five.
+        glideTauMs = (glideMillis.toDouble() / 5.0)
+            .coerceIn(MIN_GLIDE_TAU_MS, MAX_GLIDE_TAU_MS)
         // Generous sanity clamp — not the UI's range, just a guard against a
         // pathological value turning every band's frequency into a NaN.
         targetRatio = ratio.coerceIn(MIN_RATIO, MAX_RATIO)
@@ -241,7 +265,10 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                 publishDesign()
                 return
             }
-            glidedOctaves += delta * GLIDE_ALPHA
+            // Recomputed per tick: the window tracks the active pitch stage,
+            // which can change under us when the user switches modes.
+            val alpha = (1.0 - exp(-GLIDE_TICK_MS / glideTauMs)).toFloat()
+            glidedOctaves += delta * alpha
             publishDesign()
             delay(GLIDE_TICK_MS)
         }
@@ -510,11 +537,18 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         /** Glide tick, ~60 Hz: fine enough that each coefficient step is small. */
         const val GLIDE_TICK_MS = 16L
 
-        /** One-pole time constant; a full move settles in roughly 5x this. */
-        const val GLIDE_TAU_MS = 140.0
+        /**
+         * Transition window used when the caller does not name one — the
+         * resampler's latency is negligible, so this is chosen for feel rather
+         * than for alignment.
+         */
+        const val DEFAULT_GLIDE_MILLIS = 700
 
-        /** Per-tick approach fraction for that time constant. */
-        val GLIDE_ALPHA = (1.0 - exp(-GLIDE_TICK_MS / GLIDE_TAU_MS)).toFloat()
+        const val DEFAULT_GLIDE_TAU_MS = 140.0
+
+        /** Fast enough to still be a glide; slow enough to stay a transition. */
+        const val MIN_GLIDE_TAU_MS = 20.0
+        const val MAX_GLIDE_TAU_MS = 600.0
 
         /**
          * Snap-to-target threshold. 0.0005 octaves is ~0.03% in Hz — orders of

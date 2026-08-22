@@ -233,6 +233,7 @@ class PreferencesManager @Inject constructor(
         // Playback speed
         private val PLAYBACK_SPEED = stringPreferencesKey("playback_speed")
         private val PRESERVE_PITCH = booleanPreferencesKey("preserve_pitch")
+        private val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
 
         // Appearance extras
         private val FONT_SCALE = floatPreferencesKey("font_scale")
@@ -395,7 +396,7 @@ class PreferencesManager @Inject constructor(
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
-            PLAYBACK_SPEED, PRESERVE_PITCH,
+            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
@@ -1010,6 +1011,22 @@ class PreferencesManager @Inject constructor(
 
     val preservePitch: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[PRESERVE_PITCH] ?: true
+    }
+
+    /**
+     * Transposition applied independently of the tempo, in semitones.
+     *
+     * Separate from [playbackSpeed] because it is a different operation: speed
+     * resamples (exact ratio, tempo moves with it), this transposes through a
+     * phase vocoder (tempo stays, accuracy bounded by the analysis block).
+     * Stored as a string for the same reason the speed is — a float rendered
+     * through DataStore's own encoding would round-trip lossily.
+     */
+    val pitchSemitones: Flow<Float> = dataStore.data.map { prefs ->
+        prefs[PITCH_SEMITONES]?.toFloatOrNull() ?: 0f
+    }
+    suspend fun setPitchSemitones(semitones: Float) {
+        dataStore.edit { it[PITCH_SEMITONES] = semitones.toString() }
     }
     suspend fun setPreservePitch(enabled: Boolean) {
         dataStore.edit { it[PRESERVE_PITCH] = enabled }

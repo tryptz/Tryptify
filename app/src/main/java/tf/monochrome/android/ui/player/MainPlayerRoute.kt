@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -82,6 +83,7 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.audio.PitchRatio
+import kotlin.math.roundToInt
 import java.util.Locale
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
@@ -124,6 +126,7 @@ fun MainPlayerRoute(
     val blurredBackground by playerViewModel.playerBlurredBackground.collectAsStateWithLifecycle()
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by playerViewModel.preservePitch.collectAsStateWithLifecycle()
+    val pitchSemitones by playerViewModel.pitchSemitones.collectAsStateWithLifecycle()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
     val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsStateWithLifecycle()
@@ -733,6 +736,8 @@ fun MainPlayerRoute(
                         visible = showSpeedSheet,
                         speed = playbackSpeed,
                         preservePitch = preservePitch,
+                        pitchSemitones = pitchSemitones,
+                        onPitchSemitonesChange = playerViewModel::setPitchSemitones,
                         onSpeedChange = playerViewModel::setPlaybackSpeed,
                         onPreservePitchChange = playerViewModel::setPreservePitch,
                         onDismiss = { showSpeedSheet = false },
@@ -749,6 +754,8 @@ fun MainPlayerRoute(
                 visible = showSpeedSheet,
                 speed = playbackSpeed,
                 preservePitch = preservePitch,
+                pitchSemitones = pitchSemitones,
+                onPitchSemitonesChange = playerViewModel::setPitchSemitones,
                 onSpeedChange = playerViewModel::setPlaybackSpeed,
                 onPreservePitchChange = playerViewModel::setPreservePitch,
                 onDismiss = { showSpeedSheet = false },
@@ -830,6 +837,8 @@ private fun BoxScope.SpeedPanel(
     visible: Boolean,
     speed: Float,
     preservePitch: Boolean,
+    pitchSemitones: Float,
+    onPitchSemitonesChange: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onPreservePitchChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -1018,6 +1027,48 @@ private fun BoxScope.SpeedPanel(
                 )
             }
             TextButton(onClick = { onSpeedChange(1.0f) }) { Text("Reset to 1.0x") }
+
+            // Transposition without tempo. A different engine from the speed
+            // control above: that one resamples (exact ratio, tempo follows),
+            // this runs a phase vocoder (tempo stays put, and pitch lands
+            // within 0.18 Hz -- the analysis block is sized for that). It costs
+            // about 350 ms of latency, so it is only engaged off zero.
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Icon(Icons.Default.Tune, contentDescription = null, tint = speedAccent)
+                Text(
+                    text = "  Pitch",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "  ${PitchRatio.formatSemitones(pitchSemitones.roundToInt())} st",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = speedAccent,
+                )
+                if (pitchSemitones != 0f) {
+                    Text(
+                        text = "  tempo unchanged",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(
+                    onClick = {
+                        onPitchSemitonesChange((pitchSemitones.roundToInt() - 1).coerceAtLeast(-24).toFloat())
+                    },
+                ) { Text("-1 st") }
+                TextButton(onClick = { onPitchSemitonesChange(0f) }) { Text("Reset") }
+                TextButton(
+                    onClick = {
+                        onPitchSemitonesChange((pitchSemitones.roundToInt() + 1).coerceAtMost(24).toFloat())
+                    },
+                ) { Text("+1 st") }
+            }
         }
         }
     }

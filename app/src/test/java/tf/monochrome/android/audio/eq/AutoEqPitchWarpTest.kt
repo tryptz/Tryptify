@@ -181,6 +181,33 @@ class AutoEqPitchWarpTest {
     }
 
     @Test
+    fun `a short glide window settles sooner than a long one`() {
+        // The window is set from the latency of whichever stage applies the
+        // pitch downstream, so it has to actually change the transition.
+        val ratio = semitones(5.0)
+        val target = 3000.0 / ratio
+
+        fun settleMillis(glideMillis: Int): Long {
+            val proc = processor(band)
+            val startedAt = System.nanoTime()
+            proc.setPitchRatio(ratio, glideMillis = glideMillis)
+            val deadline = startedAt + 8_000_000_000L
+            while (System.nanoTime() < deadline) {
+                if (abs(db(measure(proc, target, frames = 4096)) - 10.0) < 0.3) break
+                Thread.sleep(5)
+            }
+            return (System.nanoTime() - startedAt) / 1_000_000
+        }
+
+        val quick = settleMillis(120)
+        val slow = settleMillis(2500)
+        assertTrue(
+            "quick=${quick}ms should settle well before slow=${slow}ms",
+            quick < slow,
+        )
+    }
+
+    @Test
     fun `degenerate ratios are ignored`() {
         val proc = processor(band)
         proc.setPitchRatio(1.0f, immediate = true)

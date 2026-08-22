@@ -8,6 +8,7 @@ import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToLong
 
 /**
@@ -33,6 +34,7 @@ import kotlin.math.roundToLong
 class TryptifyAudioProcessorChain(
     appProcessors: Array<AudioProcessor>,
     private val resampler: VariRateAudioProcessor,
+    private val stretch: tf.monochrome.android.audio.stretch.StretchAudioProcessor,
 ) : AudioProcessorChain {
 
     private val silenceSkipping = SilenceSkippingAudioProcessor()
@@ -50,7 +52,7 @@ class TryptifyAudioProcessorChain(
      * instead of to this chain, which no processor ordering can reach.
      */
     private val processors: Array<AudioProcessor> =
-        appProcessors + arrayOf<AudioProcessor>(silenceSkipping, resampler, sonic)
+        appProcessors + arrayOf<AudioProcessor>(silenceSkipping, resampler, stretch, sonic)
 
     override fun getAudioProcessors(): Array<AudioProcessor> = processors
 
@@ -92,6 +94,30 @@ class TryptifyAudioProcessorChain(
     }
 
     override fun getSkippedOutputFrameCount(): Long = silenceSkipping.skippedFrames
+
+    /**
+     * Total factor by which everything downstream of the app's own processors
+     * will scale frequency: the vinyl-style resampling ratio and the
+     * independent transposition compound, because both sit after them.
+     *
+     * This is what the AutoEQ pre-warp has to invert.
+     */
+    fun downstreamPitchRatio(): Float {
+        val fromSpeed = resampler.getRatio()
+        val fromTranspose = 2f.pow(stretch.getSemitones() / 12f)
+        return fromSpeed * fromTranspose
+    }
+
+    /**
+     * How long the slowest engaged pitch stage lags by, in milliseconds — the
+     * window a dependent transition should be spread over. The resampler's own
+     * latency is a few dozen samples and is deliberately ignored.
+     */
+    fun pitchLatencyMillis(sampleRate: Int): Int {
+        if (sampleRate <= 0) return 0
+        val frames = stretch.latencyFrames()
+        return (frames * 1000L / sampleRate).toInt()
+    }
 
     private companion object {
         /** Sonic's own threshold for treating a factor as unity. */
