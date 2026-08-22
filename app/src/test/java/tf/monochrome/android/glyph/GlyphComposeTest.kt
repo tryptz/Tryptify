@@ -24,10 +24,12 @@ import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.data.GlyphChartState
+import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.ui.glyph.GlyphEvent
 import tf.monochrome.android.ui.glyph.GlyphChipRow
 import tf.monochrome.android.ui.glyph.GlyphHomeScreen
+import tf.monochrome.android.ui.glyph.GlyphJudgementFx
 import tf.monochrome.android.ui.glyph.GlyphLaneInput
 import tf.monochrome.android.ui.glyph.GlyphResultsScreen
 import tf.monochrome.android.ui.glyph.GlyphResultsUi
@@ -356,6 +358,38 @@ class GlyphComposeTest {
         }
         compose.onNodeWithText("Challenge 14").performScrollTo().performClick()
         assertEquals(listOf(StepManiaDifficulty.CHALLENGE), picked)
+    }
+
+    @Test
+    fun `a judgement announces itself with its combo`() {
+        // The letterforms are graphics to a screen reader, so without a live
+        // region a judgement lands silently. The old flat wordmark had the
+        // same problem and the same fix; the FX path must not lose it.
+        compose.setContent {
+            GlyphJudgementFx(
+                judgement = GlyphJudgement.MARVELOUS,
+                shownAtMs = 1L,
+                combo = 48,
+                reducedMotion = true,
+            )
+        }
+        compose.onNodeWithText("MARVELOUS").assertIsDisplayed()
+        compose.onNodeWithText("48").assertIsDisplayed()
+    }
+
+    @Test
+    fun `reduced motion still says what was hit`() {
+        // The flat path drops the wave, the glass and the frame clock. What it
+        // must not drop is the word.
+        compose.setContent {
+            GlyphJudgementFx(
+                judgement = GlyphJudgement.MISS,
+                shownAtMs = 1L,
+                combo = 0,
+                reducedMotion = true,
+            )
+        }
+        compose.onNodeWithText("MISS").assertIsDisplayed()
     }
 
     // ── results ─────────────────────────────────────────────────────────
