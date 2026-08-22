@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -36,7 +37,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
+import tf.monochrome.android.glyph.asset.GlyphDecor
 import tf.monochrome.android.glyph.asset.GlyphIcon
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
@@ -64,6 +67,7 @@ fun GlyphTrainingScreen(
     ghost: tf.monochrome.android.glyph.data.GlyphGhost? = null,
     explosionProvider: () -> Map<tf.monochrome.android.glyph.asset.GlyphLane, LaneFlash> =
         { emptyMap() },
+    comboBurstProvider: () -> Long = { 0L },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
@@ -122,11 +126,13 @@ fun GlyphTrainingScreen(
                 reducedMotion = gameplay.modifiers.reducedMotion,
                 ghost = if (state.training.ghostEnabled) ghost else null,
                 explosionProvider = explosionProvider,
+                comboBurstProvider = comboBurstProvider,
                 modifier = Modifier.fillMaxSize(),
             )
-            LaneTouchZones(
+            GlyphLaneInput(
                 onPress = { onEvent(GlyphEvent.LanePressed(it)) },
                 onRelease = { onEvent(GlyphEvent.LaneReleased(it)) },
+                hitboxScale = gameplay.modifiers.hitboxScale,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -148,6 +154,8 @@ fun GlyphTrainingScreen(
                 positionSeconds = gameplay.positionSeconds,
                 onLoopChange = { start, end -> onEvent(GlyphEvent.SetLoop(start, end)) },
                 typography = typography,
+                assets = assets,
+                isLoading = training.isWaveformLoading,
             )
 
             GlyphSpeedControl(
@@ -280,6 +288,8 @@ private fun SegmentPicker(
     positionSeconds: Float,
     onLoopChange: (Float, Float) -> Unit,
     typography: GlyphTypography,
+    assets: GlyphAssetRepository,
+    isLoading: Boolean,
 ) {
     if (durationSeconds <= 0f) return
 
@@ -289,6 +299,10 @@ private fun SegmentPicker(
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("SEGMENT", style = typography.label, color = GlyphTheme.Muted)
+            if (isLoading) {
+                Spacer(Modifier.width(GlyphTheme.Grid))
+                Text("reading…", style = typography.label, color = GlyphTheme.Muted)
+            }
             Spacer(Modifier.weight(1f))
             Text(
                 text = "${timeLabel(start)} – ${timeLabel(end)}",
@@ -297,6 +311,17 @@ private fun SegmentPicker(
             )
         }
         Spacer(Modifier.height(GlyphTheme.Grid))
+
+        // The pack ships a timeline ruler; using it beats hand-rolling ticks
+        // that would drift out of step with the rest of the artwork.
+        GlyphImageStrip(
+            id = GlyphAssetCatalog.decor(GlyphDecor.TIMELINE_TICKS),
+            assets = assets,
+            aspect = 320f / 32f,
+            tint = GlyphTheme.Muted,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(4.dp))
 
         Box(
             modifier = Modifier
@@ -520,20 +545,33 @@ private fun WindowSliders(
         )
 
         Spacer(Modifier.height(GlyphTheme.Grid))
-        Text("HITBOX", style = typography.label, color = GlyphTheme.Muted)
+        Text("LANE HITBOX", style = typography.label, color = GlyphTheme.Muted)
         Spacer(Modifier.height(GlyphTheme.Grid))
         GlyphChipRow(
             options = HITBOX_STEPS,
             selected = HITBOX_STEPS.minByOrNull { abs(it - hitboxScale) },
-            label = { "%.2f×".format(it) },
+            label = { scale ->
+                if (scale >= 1f) "Full lane" else "%.0f%% lane".format(scale * 100)
+            },
             onSelect = onHitboxChange,
             typography = typography,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            // Says which way the setting goes, because "narrower" is the only
+            // direction available and a bare multiplier suggests otherwise.
+            text = "Narrowing leaves dead gutters between lanes, so a thumb " +
+                "landing between two no longer counts as either.",
+            style = typography.label,
+            color = GlyphTheme.Muted,
         )
     }
 }
 
 private val WINDOW_STEPS = listOf(0.6f, 0.8f, 1.0f, 1.3f, 1.6f)
-private val HITBOX_STEPS = listOf(0.85f, 1.0f, 1.25f, 1.5f)
+// Four lanes already tile the width, so there is nothing above 1.0 to widen
+// into. The steps go the one way the setting can actually go.
+private val HITBOX_STEPS = listOf(0.55f, 0.7f, 0.85f, 1.0f)
 
 @Composable
 private fun GauntletRow(
@@ -564,37 +602,3 @@ private fun GauntletRow(
     }
 }
 
-/** Same four zones as the play screen, extracted so both share the behaviour. */
-@Composable
-private fun LaneTouchZones(
-    onPress: (tf.monochrome.android.glyph.asset.GlyphLane) -> Unit,
-    onRelease: (tf.monochrome.android.glyph.asset.GlyphLane) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(modifier = modifier) {
-        for (lane in tf.monochrome.android.glyph.asset.GlyphLane.entries) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize()
-                    .semantics { contentDescription = "${lane.label} lane" }
-                    .pointerInput(lane) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                for (change in event.changes) {
-                                    if (change.pressed && !change.previousPressed) {
-                                        onPress(lane)
-                                        change.consume()
-                                    } else if (!change.pressed && change.previousPressed) {
-                                        onRelease(lane)
-                                        change.consume()
-                                    }
-                                }
-                            }
-                        }
-                    },
-            )
-        }
-    }
-}

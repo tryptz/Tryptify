@@ -4,9 +4,12 @@ package tf.monochrome.android.glyph
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.performScrollTo
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -19,10 +22,12 @@ import org.robolectric.annotation.Config
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
+import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.data.GlyphChartState
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.ui.glyph.GlyphEvent
 import tf.monochrome.android.ui.glyph.GlyphHomeScreen
+import tf.monochrome.android.ui.glyph.GlyphLaneInput
 import tf.monochrome.android.ui.glyph.GlyphResultsScreen
 import tf.monochrome.android.ui.glyph.GlyphResultsUi
 import tf.monochrome.android.ui.glyph.GlyphSectionResult
@@ -266,6 +271,58 @@ class GlyphComposeTest {
         compose.onNodeWithText("Separating drums").assertIsDisplayed()
         // The meter carries its reading, so progress is not width-only.
         compose.onNodeWithContentDescription("Separating drums, 42 percent").assertIsDisplayed()
+    }
+
+    @Test
+    fun `each lane is reachable and named`() {
+        val pressed = mutableListOf<GlyphLane>()
+        compose.setContent {
+            GlyphLaneInput(onPress = { pressed += it }, onRelease = {})
+        }
+        // The lanes are unlabelled touch zones over artwork; without these
+        // names there is no way to tell them apart without sight.
+        for (lane in GlyphLane.entries) {
+            compose.onNodeWithContentDescription("${lane.label} lane").assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun `narrowing the hitbox leaves gutters between the lanes`() {
+        // The setting only goes one way: four lanes already tile the width, so
+        // there is nothing to widen into and narrowing is the real knob. This
+        // pins that a narrowed zone is genuinely smaller than a full one, which
+        // is what makes the control more than a stored number.
+        //
+        // Both scales are composed at once because the rule allows one
+        // setContent per test; the two "Left lane" nodes come back in
+        // composition order.
+        compose.setContent {
+            androidx.compose.foundation.layout.Column {
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier.size(400.dp, 100.dp),
+                ) {
+                    GlyphLaneInput(onPress = {}, onRelease = {}, hitboxScale = 0.55f)
+                }
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier.size(400.dp, 100.dp),
+                ) {
+                    GlyphLaneInput(onPress = {}, onRelease = {}, hitboxScale = 1f)
+                }
+            }
+        }
+
+        val zones = compose.onAllNodesWithContentDescription("Left lane")
+        val narrow = zones[0].fetchSemanticsNode().size.width
+        val full = zones[1].fetchSemanticsNode().size.width
+
+        assertTrue("narrow=$narrow full=$full", narrow < full)
+        // The narrow zone is 55% of the lane, so it lands near 55% of the full
+        // one. A range rather than an equality: the width is rounded to whole
+        // pixels at whatever density the test host reports.
+        assertTrue(
+            "narrow=$narrow should be about 55% of full=$full",
+            narrow in (full * 50 / 100)..(full * 60 / 100),
+        )
     }
 
     // ── results ─────────────────────────────────────────────────────────
