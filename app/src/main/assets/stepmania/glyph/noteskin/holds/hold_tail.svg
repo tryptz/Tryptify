@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>Hold tail</title>
+  <path d="M17 0 H47 V35 Q47 55 32 60 Q17 55 17 35 Z" fill="#0B1020" opacity="0.86"/>
+  <path d="M20 0 H44 V34 Q44 50 32 55 Q20 50 20 34 Z" fill="#58D9FF" stroke="#F8FAFF" stroke-width="2"/>
+  <path d="M26 0 H38 V39 Q37 46 32 49 Q27 46 26 39 Z" fill="#F8FAFF" opacity="0.25"/>
+</svg>

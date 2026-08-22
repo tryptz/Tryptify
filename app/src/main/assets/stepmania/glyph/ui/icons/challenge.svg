@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Challenge</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 5 H19 V19 H5 Z"/><path d="M9 5 V3 M15 5 V3 M9 21 V19 M15 21 V19 M3 9 H5 M19 9 H21 M3 15 H5 M19 15 H21"/><path d="M13 7 L8 13 H12 L11 17 L16 11 H12 Z" fill="currentColor" stroke="none"/>
+  </g>
+</svg>

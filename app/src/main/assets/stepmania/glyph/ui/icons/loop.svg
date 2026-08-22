@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">
+  <title>Loop</title>
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 7 H17 L14 4 M17 17 H7 L10 20 M19 9 V13 M5 15 V11"/>
+  </g>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>Lift note</title>
+  <rect x="8" y="8" width="48" height="48" rx="12" fill="#0B1020" stroke="#63F2A2" stroke-width="3"/>
+  <path d="M18 37 L32 21 L46 37 M32 21 V48" fill="none" stroke="#63F2A2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M18 15 H46" stroke="#F8FAFF" stroke-width="3" stroke-linecap="round"/>
+</svg>
