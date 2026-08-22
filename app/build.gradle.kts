@@ -171,6 +171,15 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged resources and the manifest to
+            // inflate anything; without this a Compose test fails on the first
+            // theme lookup rather than on an assertion.
+            isIncludeAndroidResources = true
+        }
+    }
+
     androidResources {
         // Lists the app's languages for the system, from the values-* folders,
         // so Android 13+ offers it under Settings › App languages. Needs
@@ -405,4 +414,12 @@ dependencies {
 
     // Testing
     testImplementation(libs.junit)
+    // Compose tests run on the JVM under Robolectric so `testDebugUnitTest`
+    // covers them. A separate instrumented suite would need a device and would
+    // therefore not run on most changes.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
