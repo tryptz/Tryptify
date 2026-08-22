@@ -32,10 +32,12 @@ import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetId
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
+import tf.monochrome.android.glyph.asset.GlyphEffectArt
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.asset.GlyphSpecialNote
 import tf.monochrome.android.glyph.chart.GlyphNoteType
+import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 
 /**
@@ -67,6 +69,13 @@ fun GlyphPlayfield(
     scrollSeconds: Float,
     reducedMotion: Boolean,
     modifier: Modifier = Modifier,
+    /** A previous run's timing, drawn as markers beside the receptors. */
+    ghost: GlyphGhost? = null,
+    /**
+     * The most recent judgement per lane, for the receptor explosion. Read
+     * inside the draw scope, so it is a provider rather than a value.
+     */
+    explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -91,6 +100,15 @@ fun GlyphPlayfield(
                 ids = GlyphAssetCatalog.playfieldAssets(engine.chart.divisionsUsed),
                 widthPx = noteSizePx,
                 heightPx = noteSizePx,
+            )
+            // The explosion is drawn larger than a note — the pack's effects
+            // are 128-unit artwork with deliberate padding — so it needs its
+            // own warm size. Warming it at the note size and scaling up would
+            // throw away the resolution the pack exists to provide.
+            assets.prewarm(
+                ids = GlyphEffectArt.entries.map(GlyphAssetCatalog::effect),
+                widthPx = noteSizePx * 2,
+                heightPx = noteSizePx * 2,
             )
             warmed = true
         }
@@ -158,6 +176,50 @@ fun GlyphPlayfield(
                 )
             }
 
+            // Ghost markers, between the receptors and the notes. Drawn as a
+            // thin bar per past judgement rather than as a second set of
+            // arrows: two overlapping note streams are unreadable, and what the
+            // player needs from a ghost is where the *timing* went, not a
+            // replay of the chart they can already see.
+            if (ghost != null && ghost.isConsistent) {
+                drawGhostMarkers(
+                    ghost = ghost,
+                    position = position,
+                    lookahead = lookahead,
+                    pixelsPerSecond = pixelsPerSecond,
+                    receptorYPx = receptorYPx,
+                    laneWidthPx = laneWidthPx,
+                )
+            }
+
+            // Explosions, above the receptors: feedback must never be hidden
+            // by the thing that produced it. Skipped entirely under reduced
+            // motion, which is also the most expensive drawing on screen
+            // during a dense chart.
+            if (!reducedMotion) {
+                val now = System.nanoTime()
+                for ((lane, flash) in explosionProvider()) {
+                    val age = (now - flash.atNanos) / 1_000_000_000f
+                    if (age < 0f || age > EXPLOSION_SECONDS) continue
+                    val art = if (flash.isHit) {
+                        GlyphEffectArt.TAP_EXPLOSION
+                    } else {
+                        GlyphEffectArt.MISS_CRACK
+                    }
+                    val image = assets.image(
+                        GlyphAssetCatalog.effect(art), noteSizePx * 2, noteSizePx * 2,
+                    ) ?: continue
+                    drawExplosion(
+                        image = image,
+                        laneOrdinal = lane.ordinal,
+                        laneWidthPx = laneWidthPx,
+                        sizePx = noteSizePx * 2,
+                        receptorYPx = receptorYPx,
+                        progress = age / EXPLOSION_SECONDS,
+                    )
+                }
+            }
+
             // Pass three: heads and taps, above the receptors.
             for (entry in visible) {
                 val note = entry.note
@@ -187,6 +249,88 @@ fun GlyphPlayfield(
         }
     }
 }
+
+/**
+ * One lane's most recent judgement, for the receptor flash.
+ *
+ * Carries the wall-clock instant rather than a song position: the explosion is
+ * decoration and should fade in real time even while the song is paused, unlike
+ * everything else on the playfield.
+ */
+data class LaneFlash(val atNanos: Long, val isHit: Boolean)
+
+/** Fades and grows slightly over its life. Cheap: one alpha, one size. */
+private fun DrawScope.drawExplosion(
+    image: ImageBitmap,
+    laneOrdinal: Int,
+    laneWidthPx: Int,
+    sizePx: Int,
+    receptorYPx: Float,
+    progress: Float,
+) {
+    val eased = progress.coerceIn(0f, 1f)
+    val scale = 1f + eased * 0.25f
+    val drawn = (sizePx * scale).toInt()
+    val x = laneOrdinal * laneWidthPx + (laneWidthPx - drawn) / 2f
+    drawImage(
+        image = image,
+        dstOffset = IntOffset(x.roundToInt(), (receptorYPx - drawn / 2f).roundToInt()),
+        dstSize = IntSize(drawn, drawn),
+        alpha = (1f - eased).coerceIn(0f, 1f),
+    )
+}
+
+private const val EXPLOSION_SECONDS = 0.28f
+
+/**
+ * A previous run's judgements, as markers on the lane.
+ *
+ * Each is placed at the time the note was due and offset by how far off the
+ * ghost was, so a bar sitting above the receptor line means that run was late
+ * there. Colour carries the judgement and position carries the error, and
+ * neither is the only cue: the marker's distance from the line is readable
+ * without distinguishing the colours at all.
+ */
+private fun DrawScope.drawGhostMarkers(
+    ghost: GlyphGhost,
+    position: Float,
+    lookahead: Float,
+    pixelsPerSecond: Float,
+    receptorYPx: Float,
+    laneWidthPx: Int,
+) {
+    val fromMs = ((position - PAST_WINDOW_SECONDS) * 1000f).toInt()
+    val toMs = ((position + lookahead) * 1000f).toInt()
+
+    for (index in ghost.between(fromMs, toMs)) {
+        val noteSeconds = ghost.timesMs[index] / 1000f
+        val offsetSeconds = ghost.offsetsMs[index] / 1000f
+        val lane = ghost.lanes[index]
+        if (lane !in GlyphLane.entries.indices) continue
+
+        val y = receptorYPx - (noteSeconds + offsetSeconds - position) * pixelsPerSecond
+        if (y < 0f || y > size.height) continue
+
+        val judgement = ghost.judgementAt(index)
+        val left = lane * laneWidthPx + laneWidthPx * 0.08f
+        drawRect(
+            color = ghostColor(judgement),
+            topLeft = Offset(left, y - 1.5f),
+            size = Size(laneWidthPx * 0.84f, 3f),
+        )
+    }
+}
+
+private fun ghostColor(judgement: tf.monochrome.android.glyph.engine.GlyphJudgement): Color =
+    when (judgement) {
+        tf.monochrome.android.glyph.engine.GlyphJudgement.MARVELOUS,
+        tf.monochrome.android.glyph.engine.GlyphJudgement.PERFECT,
+        -> GlyphTheme.Positive.copy(alpha = 0.55f)
+        tf.monochrome.android.glyph.engine.GlyphJudgement.GREAT,
+        tf.monochrome.android.glyph.engine.GlyphJudgement.GOOD,
+        -> GlyphTheme.Warning.copy(alpha = 0.5f)
+        else -> GlyphTheme.Negative.copy(alpha = 0.5f)
+    }
 
 /**
  * A frame ticker that redraws without recomposing.
