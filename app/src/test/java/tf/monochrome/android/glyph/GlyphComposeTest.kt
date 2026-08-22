@@ -68,6 +68,27 @@ class GlyphComposeTest {
         Json { ignoreUnknownKeys = true; isLenient = true },
     )
 
+
+    /**
+     * Render [content] with glass switched off.
+     *
+     * The home screen's panels are real glass over a haze source, and haze
+     * invalidates continuously — Compose never reports idle, so the test times
+     * out rather than fails. Switching it off takes the same flat path a
+     * low-tier device takes, which is a path worth covering anyway; what these
+     * tests assert is the panels' content, not their material.
+     */
+    private fun setFlatContent(content: @androidx.compose.runtime.Composable () -> Unit) {
+        compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(
+                tf.monochrome.android.performance.LocalLowPerformance provides
+                    tf.monochrome.android.performance.LowPerformanceSettings(
+                        disableLiquidGlass = true,
+                    ),
+            ) { content() }
+        }
+    }
+
     private fun song(
         title: String = "Test Song",
         state: GlyphChartState = GlyphChartState.READY,
@@ -197,7 +218,7 @@ class GlyphComposeTest {
     @Test
     fun `the selection panel offers both ways to start`() {
         val events = mutableListOf<GlyphEvent>()
-        compose.setContent {
+        setFlatContent {
             GlyphHomeScreen(
                 state = GlyphUiState(
                     songs = listOf(song()),
@@ -221,7 +242,7 @@ class GlyphComposeTest {
     fun `a song without a chart offers generation instead of play`() {
         val events = mutableListOf<GlyphEvent>()
         val ungenerated = song(state = GlyphChartState.NOT_GENERATED)
-        compose.setContent {
+        setFlatContent {
             GlyphHomeScreen(
                 state = GlyphUiState(
                     songs = listOf(ungenerated),
@@ -256,7 +277,7 @@ class GlyphComposeTest {
 
     @Test
     fun `generation progress is announced with its stage and percentage`() {
-        compose.setContent {
+        setFlatContent {
             GlyphHomeScreen(
                 state = GlyphUiState(
                     isLoadingSongs = false,
