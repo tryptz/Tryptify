@@ -464,7 +464,7 @@ class PlaybackService : MediaSessionService() {
             ) { speed, preservePitch ->
                 Pair(speed, preservePitch)
             }.collect { (speed, preservePitch) ->
-                player.playbackParameters = PlaybackParameters(speed, if (preservePitch) 1.0f else speed)
+                pushPlaybackParameters(speed, preservePitch)
             }
         }
 
@@ -1001,16 +1001,38 @@ class PlaybackService : MediaSessionService() {
     }
 
     fun setPlaybackSpeed(speed: Float, preservePitch: Boolean) {
-        player.playbackParameters = PlaybackParameters(speed, if (preservePitch) 1.0f else speed)
+        pushPlaybackParameters(speed, preservePitch)
     }
 
     private fun applyPlaybackSpeed() {
         serviceScope.launch {
-            val speed = preferences.playbackSpeed.first()
-            val preservePitch = preferences.preservePitch.first()
-            player.playbackParameters = PlaybackParameters(speed, if (preservePitch) 1.0f else speed)
+            pushPlaybackParameters(
+                preferences.playbackSpeed.first(),
+                preferences.preservePitch.first(),
+            )
         }
     }
+
+    /**
+     * The single place speed/pitch reaches the player.
+     *
+     * Media3 runs its pitch shift (SonicAudioProcessor) at the *end* of the
+     * sink's processor chain, downstream of our EQ — so a pitch that rides the
+     * tempo scales the AutoEQ correction along with the music, sliding every
+     * band off the headphone resonance it was measured against. AutoEqProcessor
+     * pre-warps its bands by the inverse to cancel that, which only works if it
+     * is told the same ratio the player got. Centralised here so a new caller
+     * can't set one without the other.
+     */
+    private fun pushPlaybackParameters(speed: Float, preservePitch: Boolean) {
+        val pitch = if (preservePitch) 1.0f else speed
+        player.playbackParameters = PlaybackParameters(speed, pitch)
+        autoEqProcessor.setPitchRatio(pitch)
+        lastPitchRatio = pitch
+    }
+
+    /** Mirrors what [pushPlaybackParameters] last sent, for seeding blend copies. */
+    @Volatile private var lastPitchRatio = 1.0f
 
     // Volume has two independent inputs — the user slider and the crossfade
     // ramp — and both would otherwise want to own player.volume outright.
@@ -1114,6 +1136,7 @@ class PlaybackService : MediaSessionService() {
             crossfeedState = crossfeedEffect.state.value,
             blockSize = dspBlockSize,
             dspEnabled = dspEnabled,
+            autoEqPitchRatio = lastPitchRatio,
         )
         // The copy's native engine only exists once ExoPlayer configures it
         // with a format, which is after the blend has started.
