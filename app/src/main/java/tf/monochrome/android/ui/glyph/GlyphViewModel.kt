@@ -119,6 +119,7 @@ class GlyphViewModel @Inject constructor(
 
     private var tickJob: Job? = null
     private var waveformJob: Job? = null
+    private var lastPublishNanos = 0L
     private var countInEndsAtSeconds: Float? = null
     private var generationJob: Job? = null
     private var runStartedAtMs = 0L
@@ -359,6 +360,7 @@ class GlyphViewModel @Inject constructor(
 
         ghostRecorder.clear()
         laneFlashes.clear()
+        lastPublishNanos = 0L
         engine = buildEngine(chart)
         runStartedAtMs = System.currentTimeMillis()
 
@@ -461,6 +463,17 @@ class GlyphViewModel @Inject constructor(
                     countInEndsAtSeconds = null
                 }
 
+                // A loop wrapped: the pass is over, so the engine starts the
+                // segment again. Without this the notes stay marked resolved
+                // from the first pass and the player taps into silence.
+                if (transport.didWrap && running != null) {
+                    running.reset()
+                    metronome.reset()
+                    ghostRecorder.clear()
+                    laneFlashes.clear()
+                    lastPublishNanos = 0L
+                }
+
                 tickMetronome(position)
 
                 if (running != null) {
@@ -485,7 +498,18 @@ class GlyphViewModel @Inject constructor(
                             judgement = event.judgement,
                         )
                     }
-                    publish(position, running, judged)
+                    // The engine ticks at 8 ms so a miss lands within a frame,
+                    // but the readouts do not need 125 updates a second — each
+                    // one recomposes the HUD. They are published at about 30 Hz,
+                    // and immediately whenever something was judged so the
+                    // wordmark is never late.
+                    val now = System.nanoTime()
+                    if (judged.isNotEmpty() ||
+                        now - lastPublishNanos >= PUBLISH_INTERVAL_NANOS
+                    ) {
+                        lastPublishNanos = now
+                        publish(position, running, judged)
+                    }
                     if (running.isFinished && transport.loop == null) {
                         finish()
                         return@launch
@@ -862,6 +886,14 @@ class GlyphViewModel @Inject constructor(
          * judgement window.
          */
         const val TICK_MILLIS = 8L
+
+        /**
+         * How often the readouts are pushed into state — about 30 Hz. The
+         * numbers on screen change no faster than an eye can follow them, and
+         * recomposing the HUD at the tick rate would cost more than the
+         * playfield does.
+         */
+        const val PUBLISH_INTERVAL_NANOS = 33_000_000L
 
         const val TARGET_SECTIONS = 16
         const val MIN_SECTION_SECONDS = 4f
