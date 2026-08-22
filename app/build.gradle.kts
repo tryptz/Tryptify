@@ -160,6 +160,15 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged resources and the manifest to
+            // inflate anything; without this a Compose test fails on the first
+            // theme lookup rather than on an assertion.
+            isIncludeAndroidResources = true
+        }
+    }
+
     androidResources {
         // Stored as-is in the APK; the zip's entries are already deflated, so
         // letting AAPT re-compress it would only slow down runtime extraction.
@@ -353,4 +362,12 @@ dependencies {
 
     // Testing
     testImplementation(libs.junit)
+    // Compose tests run on the JVM under Robolectric so `testDebugUnitTest`
+    // covers them. A separate instrumented suite would need a device and would
+    // therefore not run on most changes.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
