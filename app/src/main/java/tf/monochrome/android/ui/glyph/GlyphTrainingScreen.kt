@@ -61,6 +61,9 @@ fun GlyphTrainingScreen(
     positionProvider: () -> Float,
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
+    ghost: tf.monochrome.android.glyph.data.GlyphGhost? = null,
+    explosionProvider: () -> Map<tf.monochrome.android.glyph.asset.GlyphLane, LaneFlash> =
+        { emptyMap() },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
@@ -117,6 +120,8 @@ fun GlyphTrainingScreen(
                 heldLanes = gameplay.heldLanes,
                 scrollSeconds = (1.1f * gameplay.modifiers.speed).coerceIn(0.35f, 3f),
                 reducedMotion = gameplay.modifiers.reducedMotion,
+                ghost = if (state.training.ghostEnabled) ghost else null,
+                explosionProvider = explosionProvider,
                 modifier = Modifier.fillMaxSize(),
             )
             LaneTouchZones(

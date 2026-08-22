@@ -61,6 +61,7 @@ fun GlyphGameplayScreen(
     positionProvider: () -> Float,
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
+    explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
@@ -79,6 +80,7 @@ fun GlyphGameplayScreen(
             heldLanes = gameplay.heldLanes,
             scrollSeconds = scrollSecondsFor(gameplay.modifiers.speed),
             reducedMotion = gameplay.modifiers.reducedMotion,
+            explosionProvider = explosionProvider,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -90,6 +92,14 @@ fun GlyphGameplayScreen(
             onRelease = { onEvent(GlyphEvent.LaneReleased(it)) },
             modifier = Modifier.fillMaxSize(),
         )
+
+        if (gameplay.countInBeatsRemaining > 0) {
+            CountIn(
+                beatsRemaining = gameplay.countInBeatsRemaining,
+                typography = typography,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
 
         JudgementOverlay(
             judgement = gameplay.lastJudgement,
@@ -328,6 +338,34 @@ private fun JudgementOverlay(
 }
 
 private val JUDGEMENT_WIDTH = 200.dp
+
+/**
+ * The count-in.
+ *
+ * A number, announced. The music is already playing during the count, so
+ * without something on screen saying why nothing is being judged yet, the first
+ * bar reads as the game having failed to start.
+ */
+@Composable
+private fun CountIn(
+    beatsRemaining: Int,
+    typography: GlyphTypography,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.semantics {
+            liveRegion = LiveRegionMode.Assertive
+            contentDescription = "Starting in $beatsRemaining"
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = beatsRemaining.toString(),
+            style = typography.readout,
+            color = GlyphTheme.Paper,
+        )
+    }
+}
 
 /** Pause: the practice controls, and the two ways out. */
 @Composable
