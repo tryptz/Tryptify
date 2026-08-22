@@ -138,6 +138,17 @@ tools/cities15000.zip
 CLAUDE.md
 tools/__pycache__/
 
-# Seeded design canvases are 2MB+ build output; the .dc.html sources beside
-# them are the thing worth keeping.
+# The Glyph pack's manifest. Every asset in the mode is resolved through it, so
+# the blanket *.json rule above silently shipped a pack the runtime cannot read
+# — a fresh clone drew fallback squares for every note. GlyphAssetCatalogTest
+# is what catches this if it is ever dropped again.
+!app/src/main/assets/stepmania/glyph/manifest.json
+
+# Design canvas sources. The seeded .html is 2 MB of build output and stays
+# ignored; the .dc.html artboards, the generator and the layout are the inputs
+# that rebuild it, and they are caught by the blanket *.html / *.py / *.json
+# rules above without these.
 .design/**/*.html
+!.design/**/*.dc.html
+!.design/**/canvas.json
+!.design/**/gen.py

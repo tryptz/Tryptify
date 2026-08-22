@@ -35,7 +35,30 @@ class GlyphAssetCatalogTest {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private val manifest: GlyphManifest by lazy {
-        json.decodeFromString<GlyphManifest>(File(root, "manifest.json").readText())
+        val file = File(root, "manifest.json")
+        // Names the cause rather than leaving a bare FileNotFoundException.
+        // This has already happened once: the repository ignores *.json
+        // wholesale and needs a negation per committed asset, so the pack was
+        // pushed without the one file every lookup goes through — a fresh
+        // clone drew fallback squares for every note and only CI noticed.
+        assertTrue(
+            "${'$'}{file.path} is missing. It is committed, so this usually means a " +
+                "blanket .gitignore rule swallowed it — check for a matching " +
+                "negation (!${'$'}{file.path}).",
+            file.isFile,
+        )
+        json.decodeFromString<GlyphManifest>(file.readText())
+    }
+
+    @Test
+    fun theWholePackIsPresentOnDiskNotJustTheManifest() {
+        // The manifest and the artwork are ignored by different .gitignore
+        // rules, so one can ship without the other in either direction.
+        assertTrue("the pack directory is missing entirely", root.isDirectory)
+        val svgs = root.walkTopDown()
+            .filter { it.isFile && it.extension == "svg" && !it.name.startsWith("preview_") }
+            .count()
+        assertEquals("production SVGs on disk", 117, svgs)
     }
 
     @Test
