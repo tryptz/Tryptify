@@ -213,6 +213,44 @@ class GlyphComposeTest {
         assertEquals(listOf(GlyphEvent.SelectSong("local_1")), events)
     }
 
+    @Test
+    fun `the search bar is closed until it is asked for`() {
+        // A bar that is part of the screen holds a permanent gap and throws the
+        // keyboard up on arrival. This one is summoned, so at rest there is
+        // nothing but the toggle — labelled, because it is a bare pack glyph.
+        setFlatContent {
+            GlyphHomeScreen(
+                state = GlyphUiState(songs = listOf(song()), isLoadingSongs = false),
+                assets = assets,
+                onEvent = {},
+                onBack = {},
+            )
+        }
+        compose.onNodeWithContentDescription("Search songs").assertIsDisplayed()
+        // The song under it is not covered while the bar is shut.
+        compose.onNodeWithContentDescription(
+            "Test Song, Tryptify, 3:34, FLAC, 148 BPM, 3 difficulties",
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun `closing the search clears what was typed`() {
+        // Leaving a stale query behind means reopening the bar shows a filtered
+        // list with no visible reason for it.
+        val events = mutableListOf<GlyphEvent>()
+        setFlatContent {
+            GlyphHomeScreen(
+                state = GlyphUiState(songs = listOf(song()), isLoadingSongs = false),
+                assets = assets,
+                onEvent = { events += it },
+                onBack = {},
+            )
+        }
+        compose.onNodeWithContentDescription("Search songs").performClick()
+        compose.onNodeWithContentDescription("Close search").performClick()
+        assertTrue(events.contains(GlyphEvent.Search("")))
+    }
+
     // ── navigation ──────────────────────────────────────────────────────
 
     @Test
