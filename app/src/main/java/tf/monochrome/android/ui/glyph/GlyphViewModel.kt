@@ -117,6 +117,17 @@ class GlyphViewModel @Inject constructor(
 
     fun flashes(): Map<GlyphLane, LaneFlash> = laneFlashes
 
+    /**
+     * When the combo last crossed a milestone, for the burst.
+     *
+     * Milestones rather than every hit: a burst on each note would be constant
+     * through a stream and would stop reading as an event at all.
+     */
+    private var comboBurstNanos = 0L
+    private var lastComboMilestone = 0
+
+    fun comboBurstNanos(): Long = comboBurstNanos
+
     private var tickJob: Job? = null
     private var waveformJob: Job? = null
     private var lastPublishNanos = 0L
@@ -183,7 +194,7 @@ class GlyphViewModel @Inject constructor(
                 rebuildEngine()
             }
             is GlyphEvent.SetHitboxScale ->
-                updateModifiers { it.copy(hitboxScale = event.scale.coerceIn(0.75f, 1.75f)) }
+                updateModifiers { it.copy(hitboxScale = event.scale.coerceIn(MIN_HITBOX, MAX_HITBOX)) }
 
             is GlyphEvent.SetLoop -> setLoop(event.startSeconds, event.endSeconds)
             GlyphEvent.ClearLoop -> {
@@ -361,6 +372,8 @@ class GlyphViewModel @Inject constructor(
         ghostRecorder.clear()
         laneFlashes.clear()
         lastPublishNanos = 0L
+        comboBurstNanos = 0L
+        lastComboMilestone = 0
         engine = buildEngine(chart)
         runStartedAtMs = System.currentTimeMillis()
 
@@ -472,6 +485,8 @@ class GlyphViewModel @Inject constructor(
                     ghostRecorder.clear()
                     laneFlashes.clear()
                     lastPublishNanos = 0L
+                    comboBurstNanos = 0L
+                    lastComboMilestone = 0
                 }
 
                 tickMetronome(position)
@@ -498,6 +513,16 @@ class GlyphViewModel @Inject constructor(
                             judgement = event.judgement,
                         )
                     }
+
+                    val combo = running.scoreSnapshot.combo
+                    val milestone = combo / COMBO_MILESTONE
+                    if (milestone > lastComboMilestone) {
+                        comboBurstNanos = System.nanoTime()
+                    }
+                    // Tracked rather than compared against the previous combo,
+                    // so a break resets the ladder and the next 50 bursts again
+                    // instead of the counter having to climb past its old peak.
+                    lastComboMilestone = milestone
                     // The engine ticks at 8 ms so a miss lands within a frame,
                     // but the readouts do not need 125 updates a second — each
                     // one recomposes the HUD. They are published at about 30 Hz,
@@ -628,6 +653,8 @@ class GlyphViewModel @Inject constructor(
         val chart = _ui.value.chart ?: return
         ghostRecorder.clear()
         laneFlashes.clear()
+        comboBurstNanos = 0L
+        lastComboMilestone = 0
         engine = buildEngine(chart)
         runStartedAtMs = System.currentTimeMillis()
         val from = transport.loop?.startSeconds ?: 0f
@@ -885,6 +912,9 @@ class GlyphViewModel @Inject constructor(
          * offers. Eight milliseconds is comfortably under the tightest
          * judgement window.
          */
+        /** Every this many combo, the playfield marks it. */
+        const val COMBO_MILESTONE = 50
+
         const val TICK_MILLIS = 8L
 
         /**

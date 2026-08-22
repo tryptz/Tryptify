@@ -76,6 +76,8 @@ fun GlyphPlayfield(
      * inside the draw scope, so it is a provider rather than a value.
      */
     explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
+    /** When the last combo milestone was reached, for the burst. */
+    comboBurstProvider: () -> Long = { 0L },
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -163,6 +165,29 @@ fun GlyphPlayfield(
                 )
             }
 
+            // Hold glow, under the receptors: a lane that is actively holding
+            // gets a sustained mark, which is the only feedback distinguishing
+            // "holding correctly" from "the head was hit and then nothing".
+            if (!reducedMotion) {
+                val holding = visible.filter { it.isHeld }.map { it.note.lane }.toSet()
+                for (lane in holding) {
+                    val glow = assets.image(
+                        GlyphAssetCatalog.effect(GlyphEffectArt.HOLD_GLOW),
+                        noteSizePx * 2, noteSizePx * 2,
+                    ) ?: continue
+                    drawImage(
+                        image = glow,
+                        dstOffset = IntOffset(
+                            (lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx * 2) / 2f)
+                                .roundToInt(),
+                            (receptorYPx - noteSizePx).roundToInt(),
+                        ),
+                        dstSize = IntSize(noteSizePx * 2, noteSizePx * 2),
+                        alpha = 0.7f,
+                    )
+                }
+            }
+
             // Pass two: receptors, above the bodies so a hold reads as passing
             // through the target rather than over it.
             for (lane in GlyphLane.entries) {
@@ -217,6 +242,35 @@ fun GlyphPlayfield(
                         receptorYPx = receptorYPx,
                         progress = age / EXPLOSION_SECONDS,
                     )
+                }
+            }
+
+            // Combo burst: one mark across the playfield at a milestone, not
+            // one per note. A burst on every hit would be constant during a
+            // stream and would stop reading as an event at all.
+            if (!reducedMotion) {
+                val burstAt = comboBurstProvider()
+                if (burstAt > 0L) {
+                    val age = (System.nanoTime() - burstAt) / 1_000_000_000f
+                    if (age in 0f..COMBO_BURST_SECONDS) {
+                        val burst = assets.image(
+                            GlyphAssetCatalog.effect(GlyphEffectArt.COMBO_BURST),
+                            noteSizePx * 2, noteSizePx * 2,
+                        )
+                        if (burst != null) {
+                            val eased = age / COMBO_BURST_SECONDS
+                            val drawn = (noteSizePx * 2 * (1f + eased * 0.6f)).toInt()
+                            drawImage(
+                                image = burst,
+                                dstOffset = IntOffset(
+                                    ((size.width - drawn) / 2f).roundToInt(),
+                                    (receptorYPx - drawn / 2f).roundToInt(),
+                                ),
+                                dstSize = IntSize(drawn, drawn),
+                                alpha = (1f - eased).coerceIn(0f, 1f),
+                            )
+                        }
+                    }
                 }
             }
 
@@ -281,6 +335,8 @@ private fun DrawScope.drawExplosion(
 }
 
 private const val EXPLOSION_SECONDS = 0.28f
+
+private const val COMBO_BURST_SECONDS = 0.55f
 
 /**
  * A previous run's judgements, as markers on the lane.
