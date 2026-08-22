@@ -77,6 +77,7 @@ fun GlyphRoute(
     // is called inside the playfield's draw scope, and routing it through
     // recomposition would put the note positions a frame behind the music.
     val positionProvider = remember(viewModel) { { viewModel.transport.positionNow() } }
+    val explosionProvider = remember(viewModel) { { viewModel.flashes() } }
 
     when (state.screen) {
         GlyphScreen.HOME -> GlyphHomeScreen(
@@ -94,6 +95,7 @@ fun GlyphRoute(
             palette = palette,
             positionProvider = positionProvider,
             onEvent = viewModel::onEvent,
+            explosionProvider = explosionProvider,
             modifier = modifier.fillMaxSize(),
         )
 
@@ -104,6 +106,8 @@ fun GlyphRoute(
             palette = palette,
             positionProvider = positionProvider,
             onEvent = viewModel::onEvent,
+            ghost = viewModel.activeGhost,
+            explosionProvider = explosionProvider,
             modifier = modifier.fillMaxSize(),
         )
 
