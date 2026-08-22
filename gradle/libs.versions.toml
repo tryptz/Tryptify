@@ -32,6 +32,7 @@ baselineprofile = "1.4.0"
 benchmark = "1.4.0"
 androidxTestJunit = "1.2.1"
 uiautomator = "2.3.0"
+robolectric = "4.14.1"
 
 [libraries]
 # Compose
@@ -161,6 +162,14 @@ room-paging = { group = "androidx.room", name = "room-paging", version.ref = "ro
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
 androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
+
+# Compose UI tests, run on the JVM under Robolectric rather than on a device.
+# The mode's navigation and its accessibility labels are worth a real
+# assertion, and an instrumented-only suite is one nobody runs.
+compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core-ktx", version = "1.6.1" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
