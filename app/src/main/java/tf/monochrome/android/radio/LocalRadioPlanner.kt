@@ -9,21 +9,15 @@ import kotlin.math.abs
  * one that fell out of a broad search — so it is carried alongside the track
  * rather than being flattened into list order.
  */
-enum class CandidateOrigin(
-    /** Key the planner service uses for this source in `source_boosts`. */
-    val boostKey: String,
-) {
+enum class CandidateOrigin {
     /** The seed artist's own top tracks. */
-    SEED_ARTIST("seed_artist"),
+    SEED_ARTIST,
 
     /** Top tracks of an artist the catalogue calls similar to the seed. */
-    SIMILAR_ARTIST("similar_artist"),
+    SIMILAR_ARTIST,
 
     /** Broad catalogue search — query expansion, artist-name search. */
-    SEARCH("search"),
-
-    /** The remote planner named this track specifically. */
-    PLANNER_HINT("planner_hint"),
+    SEARCH,
 }
 
 /**
@@ -52,12 +46,6 @@ data class RadioTasteContext(
     val historyKeys: List<String> = emptyList(),
     /** Favourites, downloads and anything else held on-device. */
     val libraryKeys: Set<String> = emptySet(),
-    /**
-     * Per-source multipliers from the remote planner's `source_boosts`, when
-     * one is configured. Absent sources default to neutral, so this is purely
-     * additive over the on-device scoring.
-     */
-    val sourceBoosts: Map<String, Float> = emptyMap(),
 )
 
 /** A candidate with its score and the per-signal breakdown that produced it. */
@@ -68,28 +56,24 @@ data class ScoredCandidate(
 )
 
 /**
- * Ranks radio candidates on-device, using the user's planner weights.
+ * Ranks radio candidates on-device, using the user's weights.
  *
- * The remote planner is a *source* of candidates, not the brain: it can name
- * tracks the catalogue alone would not have surfaced, and it is genuinely
- * better at that. But making it the only thing that reads the weights meant
- * that without a server — unconfigured, offline, or rejecting the request
- * shape — every knob in Settings › Radio did nothing, and radio fell back to
- * "the seed artist's top tracks, in catalogue order". Scoring here means the
- * weights are honoured whether or not a planner is reachable, and a reachable
- * planner just adds better raw material to rank.
+ * This is the whole brain. A remote planner used to sit in front of it as an
+ * extra source of candidates, and for a while it was the only thing that read
+ * the weights at all — which meant that without a reachable server every knob
+ * in Settings › Radio did nothing and radio fell back to "the seed artist's
+ * top tracks, in catalogue order". Scoring here fixed that, and the service
+ * has since gone; ranking never depended on it.
  *
  * Each signal below is normalized to roughly `0..1` (or `-1..1` where it cuts
  * both ways) and multiplied by its weight, so a weight of `0` silences its
  * signal, `1` is neutral, and `3` lets one signal dominate — which is exactly
  * what the slider's 0–3 range promises.
  *
- * Three weights are NOT scored here and cannot be: mood continuity needs audio
- * features the app does not compute, and the MetaBrainz and ListenBrainz
- * weights describe datasets that live off-device. They are still sent to the
- * planner when one is configured. [LOCAL_SIGNALS] names what this class
- * actually acts on, and the settings screen reads it so the UI cannot quietly
- * drift from the truth.
+ * [LOCAL_SIGNALS] names what this class acts on, and the settings screen reads
+ * it so the UI cannot quietly drift from the truth. Every weight the model
+ * carries is in there: the three that only ever described off-device datasets
+ * went out with the service rather than stay as sliders that move nothing.
  */
 class LocalRadioPlanner {
 
@@ -131,13 +115,7 @@ class LocalRadioPlanner {
             put(SIGNAL_DISCOVERY_DISTANCE, w.discoveryDistance * drift(candidate.artistDistance))
         }
 
-        // A configured planner can scale whole sources up or down; with no
-        // planner (or no opinion from it) this is 1.0 and changes nothing.
-        val boost = context.sourceBoosts[candidate.origin.boostKey]
-            ?.takeIf { it.isFinite() && it >= 0f }
-            ?: 1f
-
-        return ScoredCandidate(candidate, signals.values.sum() * boost, signals)
+        return ScoredCandidate(candidate, signals.values.sum(), signals)
     }
 
     // ── Signals ───────────────────────────────────────────────────────────
@@ -145,7 +123,6 @@ class LocalRadioPlanner {
     /** Broad search is what "widens the pool"; targeted origins are not. */
     private fun CandidateOrigin.expansionSignal(): Float = when (this) {
         CandidateOrigin.SEARCH -> 1f
-        CandidateOrigin.PLANNER_HINT -> 0.5f
         CandidateOrigin.SEED_ARTIST, CandidateOrigin.SIMILAR_ARTIST -> 0f
     }
 

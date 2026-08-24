@@ -258,16 +258,6 @@ class DiscoverViewModel @Inject constructor(
     private val _familiarArtists = MutableStateFlow<Set<String>>(emptySet())
     private val familiarArtists: StateFlow<Set<String>> = _familiarArtists.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            _familiarArtists.value = runCatching {
-                libraryRepository.getSeedArtistNames(FAMILIAR_ARTISTS)
-                    .map { it.lowercase() }
-                    .toSet()
-            }.getOrDefault(emptySet())
-        }
-    }
-
     // ── The genre rail ──────────────────────────────────────────────────
 
     /**
@@ -350,16 +340,28 @@ class DiscoverViewModel @Inject constructor(
     /** Shelves whose genre has no more to give, so the grid stops asking. */
     private val exhaustedShelves = mutableSetOf<String>()
 
-    // Everything above is read *synchronously* by [rebuild], which the init
-    // block below calls during construction, so it has to be declared above
-    // that init — Kotlin runs initializers in declaration order, and a field
-    // declared later is still null when the constructor reaches it. These two
-    // sets were originally written down beside loadMoreInShelf, at the bottom
-    // of the class, and every launch of Discover died on `.clear()` here. The
-    // compiler can't see it: the read happens through a method call. State that
-    // rebuild only touches inside its `viewModelScope.launch` is exempt — that
-    // body resumes after construction has finished — which is why the older
-    // fields further down the file get away with it.
+    // Field order used to be load-bearing here: [rebuild] is called during
+    // construction, Kotlin runs initializers in declaration order, and a field
+    // declared later is still null when the constructor reaches it. The two
+    // sets above were originally written down beside loadMoreInShelf, at the
+    // bottom of the class, and every launch of Discover died on `.clear()`.
+    //
+    // The note that used to sit here said state touched only inside rebuild's
+    // `viewModelScope.launch` was exempt, because that body "resumes after
+    // construction has finished". That is not true, and it cost a crash on
+    // every cold launch of the tab. viewModelScope dispatches on
+    // Dispatchers.Main.immediate, and a ViewModel is constructed on the main
+    // thread, so the launch body does not wait to be posted: it runs inline,
+    // inside the constructor, right up to its first real suspension point.
+    // Anything it reads before suspending is read mid-construction. The feed
+    // survived only because the read of _selectedGenreId sat in a branch the
+    // init path never took; hoisting it to the top of the body was enough to
+    // dereference a field 500 lines below and take the app down.
+    //
+    // So the ordering rule is no longer a rule anyone has to keep: the init
+    // block that kicks the first build off now lives at the very bottom of the
+    // class, after every property. Declaration order cannot bite this class
+    // again, wherever a field is declared and whenever the body reads it.
 
     /**
      * The feed with dismissals applied. Everything on screen reads this rather
@@ -460,8 +462,48 @@ class DiscoverViewModel @Inject constructor(
     // same list, and the slower one wins whichever chip the user is looking at.
     private var feedJob: Job? = null
 
-    init {
-        selectChip(null)
+    /**
+     * Pages already built this session, by everything that decides what is on
+     * them.
+     *
+     * Every chip tap rebuilt from nothing, including a tap back onto a chip
+     * that was on screen ten seconds ago — six shelves, a chart apiece, dozens
+     * of catalogue lookups, to arrive at a page we had already assembled and
+     * thrown away. The rail is a set of tabs and people use it like one, so the
+     * common gesture is precisely the one that was most expensive.
+     *
+     * A page is kept as it was built rather than rebuilt in the background,
+     * because a rail that reshuffles a row while you are looking at it has
+     * lost you your place. Pull-to-refresh is what asks for new music, and it
+     * drops this first.
+     *
+     * Insertion-ordered and capped: the rail has more chips than anyone visits
+     * in a session, and holding every page one ever opened is holding every
+     * track it showed.
+     */
+    private val builtPages = LinkedHashMap<String, List<DiscoveryShelf>>()
+
+    /** What a built page is filed under. Anything that changes the page is in it. */
+    private fun pageKey(
+        label: String?,
+        moods: List<String>,
+        excluded: Set<String>,
+        genreId: String?,
+    ): String = listOf(
+        label.orEmpty(),
+        moods.joinToString(","),
+        excluded.sorted().joinToString(","),
+        genreId.orEmpty(),
+        rotation.toString(),
+    ).joinToString("|")
+
+    private fun remember(key: String, shelves: List<DiscoveryShelf>) {
+        if (shelves.isEmpty()) return
+        builtPages.remove(key)
+        builtPages[key] = shelves
+        while (builtPages.size > MAX_REMEMBERED_PAGES) {
+            builtPages.remove(builtPages.keys.first())
+        }
     }
 
     fun selectChip(label: String?) {
@@ -519,58 +561,100 @@ class DiscoverViewModel @Inject constructor(
         shelvesLoadingMore.clear()
         exhaustedShelves.clear()
         feedJob = viewModelScope.launch {
+            val moods = _selectedMoods.value
+            val genreId = _selectedGenreId.value
+                // A genre picked on the map. Matched by name so that
+                // switching to a chip clears it, rather than the map's
+                // choice silently outliving the label on screen.
+                ?.takeIf { label != null && genreGraphRepo.graph[it]?.name == label }
+            val key = pageKey(label, moods, _excludedGenres.value, genreId)
+
+            // A page we have already built is a page we can put back up now.
+            // Note what is *not* here: no spinner, no clearing the list first,
+            // and no background rebuild behind the restored one. This is the
+            // page the listener was last looking at, and the fastest honest
+            // thing to do with it is show it.
+            builtPages[key]?.let { built ->
+                _shelves.value = built
+                _flowExtra.value = emptyList()
+                _loading.value = false
+                _refreshing.value = false
+                return@launch
+            }
+
             _loading.value = true
             _shelves.value = emptyList()
             // The tail was fetched to continue a feed that no longer exists.
             _flowExtra.value = emptyList()
             try {
-                val moods = _selectedMoods.value
-                val built = if (moods.isNotEmpty()) {
-                    discoveryFeed.buildForMoods(
+                val moodId = label?.let { moodIdByLabel[it] }
+                val seed = label?.let { chips.firstOrNull { chip -> chip.label == it } }
+
+                val streamed = when {
+                    moods.isNotEmpty() -> discoveryFeed.buildForMoodsFlow(
                         moodIds = moods,
                         excluded = _excludedGenres.value,
                         adventure = adventure,
                         itemsPerShelf = SHELF_SIZE,
                     )
-                } else if (label == null) {
-                    buildForYou()
-                } else {
-                    // A genre picked on the map. Matched by name so that
-                    // switching to a chip clears it, rather than the map's
-                    // choice silently outliving the label on screen.
-                    val genreId = _selectedGenreId.value
-                        ?.takeIf { genreGraphRepo.graph[it]?.name == label }
-                    val moodId = moodIdByLabel[label]
-                    val seed = chips.firstOrNull { it.label == label }
-                    when {
-                        genreId != null -> discoveryFeed.buildForGenre(
-                            genreId = genreId,
-                            adventure = adventure,
-                            itemsPerShelf = SHELF_SIZE,
-                        )
-                        // A graph mood: expands into one shelf per genre, each
-                        // with its own tempo and a reason in the mood's terms.
-                        moodId != null -> discoveryFeed.buildForMood(
-                            moodId = moodId,
-                            adventure = adventure,
-                            itemsPerShelf = SHELF_SIZE,
-                        ).ifEmpty {
-                            // The graph knew the mood but the catalogue had
-                            // nothing for it — fall back to the flat search
-                            // rather than showing an empty page.
-                            seed?.let { discoveryFeed.buildForQuery(it.label, it.query) }.orEmpty()
-                        }
-                        seed != null -> discoveryFeed.buildForQuery(seed.label, seed.query)
-                        else -> emptyList()
-                    }
+                    label == null -> discoveryFeed.buildFlow(
+                        adventure = adventure,
+                        itemsPerShelf = SHELF_SIZE,
+                        rotation = rotation,
+                    )
+                    genreId != null -> discoveryFeed.buildForGenreFlow(
+                        genreId = genreId,
+                        adventure = adventure,
+                        itemsPerShelf = SHELF_SIZE,
+                    )
+                    // A graph mood: expands into one shelf per genre, each with
+                    // its own tempo and a reason in the mood's terms.
+                    moodId != null -> discoveryFeed.buildForMoodFlow(
+                        moodId = moodId,
+                        adventure = adventure,
+                        itemsPerShelf = SHELF_SIZE,
+                    )
+                    else -> null
                 }
-                // The feed keys its lazy list on the shelf id, and ids are
-                // derived from what came back rather than from a counter: two
-                // seed artist names ("AFX", "Aphex Twin") can resolve to the
-                // same Qobuz artist and produce two `similar_to_<id>` shelves.
-                // Duplicate keys crash Compose, so the last line of defence is
-                // here, where the whole feed is in one place.
-                _shelves.value = built.distinctBy { it.id }
+
+                // "For you" leads with what is already on the device, and it
+                // can be drawn before the first request goes out.
+                val leading = if (moods.isEmpty() && label == null) favouritesShelf() else emptyList()
+                if (leading.isNotEmpty()) _shelves.value = leading
+
+                // Rows are placed as they arrive, each in the slot the feed
+                // planned for it, rather than the page appearing all at once
+                // when its slowest row finally settles.
+                val slots = sortedMapOf<Int, DiscoveryShelf>()
+                streamed?.collect { ranked ->
+                    slots[ranked.index] = ranked.shelf
+                    // The feed keys its lazy list on the shelf id, and ids are
+                    // derived from what came back rather than from a counter:
+                    // two seed artist names ("AFX", "Aphex Twin") can resolve to
+                    // the same Qobuz artist and produce two `similar_to_<id>`
+                    // shelves. Duplicate keys crash Compose, so the last line of
+                    // defence is here, where the whole feed is in one place.
+                    _shelves.value = (leading + slots.values).distinctBy { it.id }
+                }
+
+                // The flat search stays a whole-page fetch: it is one request
+                // sliced three ways, so there is nothing to stream, and it runs
+                // only when the graph path came back with nothing at all.
+                var flatShelves = emptyList<DiscoveryShelf>()
+                if (slots.isEmpty() && seed != null) {
+                    flatShelves = discoveryFeed.buildForQuery(seed.label, seed.query, SHELF_SIZE)
+                    _shelves.value = (leading + flatShelves).distinctBy { it.id }
+                }
+
+                // Filed only once the build has run to the end, and only if it
+                // brought something back. A page kept half-built would be
+                // restored as though it were the whole thing; a "For you" that
+                // reached nothing but the hearted tracks already on the device
+                // would be filed as a one-row feed and never asked again this
+                // session, which turns one unreachable moment into a session.
+                if (slots.isNotEmpty() || flatShelves.isNotEmpty()) {
+                    remember(key, _shelves.value)
+                }
             } catch (cancelled: CancellationException) {
                 // A newer chip took over. Rethrow rather than swallow, and in
                 // particular do NOT clear the loading flag on the way out —
@@ -953,6 +1037,11 @@ class DiscoverViewModel @Inject constructor(
 
     fun refresh() {
         _refreshing.value = true
+        // The gesture means "go and look again", so the pages built earlier
+        // stop counting. Without this the restore path would hand the same
+        // page straight back and pull-to-refresh would be a spinner that
+        // changed nothing.
+        builtPages.clear()
         selectChip(_selectedChip.value)
     }
 
@@ -990,7 +1079,15 @@ class DiscoverViewModel @Inject constructor(
      * front. Favourites come from the local database rather than the network,
      * so the page has something real on it before any Qobuz call returns.
      */
-    private suspend fun buildForYou(): List<DiscoveryShelf> {
+    /**
+     * The part of "For you" that needs no network: the tracks already hearted.
+     *
+     * Split out from the feed proper so it can be on screen before the first
+     * catalogue request comes back. It is a local database read — making the
+     * page wait for six concurrent chart builds before showing it was spending
+     * someone's attention on nothing.
+     */
+    private suspend fun favouritesShelf(): List<DiscoveryShelf> {
         val favourites = libraryRepository.getFavoriteTracks().first()
             .take(SHELF_SIZE)
             .map { DiscoveryItem.TrackItem(it.toUnifiedTrackAuto(qobuzIdRegistry)) }
@@ -998,7 +1095,7 @@ class DiscoverViewModel @Inject constructor(
             // the card key, and a duplicate key crashes the list.
             .distinctBy { it.key }
 
-        val favouritesShelf = favourites.takeIf { it.isNotEmpty() }?.let {
+        val shelf = favourites.takeIf { it.isNotEmpty() }?.let {
             DiscoveryShelf(
                 id = "favorites",
                 title = "From your favorites",
@@ -1007,11 +1104,40 @@ class DiscoverViewModel @Inject constructor(
             )
         }
 
-        return listOfNotNull(favouritesShelf) + discoveryFeed.build(
-            adventure = adventure,
-            itemsPerShelf = SHELF_SIZE,
-            rotation = rotation,
-        )
+        return listOfNotNull(shelf)
+    }
+
+    /**
+     * Load the artists that count as familiar for the "For you" sort.
+     *
+     * Down here with the build below for the same reason: an init block runs
+     * where it is written, and this one's body starts inline in the
+     * constructor. Nothing it touches can be declared after it if it is the
+     * last thing in the class.
+     */
+    init {
+        viewModelScope.launch {
+            _familiarArtists.value = runCatching {
+                libraryRepository.getSeedArtistNames(FAMILIAR_ARTISTS)
+                    .map { it.lowercase() }
+                    .toSet()
+            }.getOrDefault(emptySet())
+        }
+    }
+
+    /**
+     * Build the first page.
+     *
+     * Deliberately the last thing in the class. [rebuild] launches on
+     * viewModelScope, which dispatches on Dispatchers.Main.immediate, and a
+     * ViewModel is constructed on the main thread — so that launch does not get
+     * posted for later, it runs inline inside this constructor until it
+     * suspends. Everything it touches on the way has to be initialized already,
+     * and the only way to guarantee that for a class this size is to start it
+     * once every property above has run. See the note beside [exhaustedShelves].
+     */
+    init {
+        selectChip(null)
     }
 
     private companion object {
@@ -1028,6 +1154,13 @@ class DiscoverViewModel @Inject constructor(
 
         /** How many library artists count as "familiar" for the For you sort. */
         const val FAMILIAR_ARTISTS = 60
+
+        /**
+         * How many built pages to keep. Enough to cover the chips a session
+         * actually moves between, and small enough that it is a handful of
+         * rows rather than a copy of the catalogue.
+         */
+        private const val MAX_REMEMBERED_PAGES = 8
 
         /** Seed rotation per page of the personalized feed. */
         const val PAGE_ROTATION = 3

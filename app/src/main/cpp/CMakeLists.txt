@@ -187,3 +187,32 @@ target_compile_options(monochrome_atmos_jni PRIVATE
 # libmonochrome_atmos_jni.so (loadable by that name), like the sibling libs.
 set_target_properties(monochrome_atmos_jni PROPERTIES DEBUG_POSTFIX "")
 target_link_libraries(monochrome_atmos_jni monochrome_atmos mysofa log)
+
+# ── Pitch shifter (signalsmith-stretch) ──────────────────────────────────
+# Independent transposition: pitch that moves without dragging tempo with it,
+# which resampling cannot do and Sonic's speech-tuned WSOLA does badly on music.
+# Header-only and vendored, so this target depends on nothing but the NDK — it
+# does not need either git submodule to configure.
+add_library(monochrome_stretch SHARED
+    stretch/stretch_jni.cpp
+)
+
+target_include_directories(monochrome_stretch PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/signalsmith-stretch
+)
+
+target_compile_features(monochrome_stretch PRIVATE cxx_std_17)
+
+# Same reasoning as monochrome_atmos_jni: the engine is header-only, so it is
+# compiled into this translation unit. A debug build at -O0 would run an FFT
+# per hop on the audio thread and miss the deadline.
+target_compile_options(monochrome_stretch PRIVATE
+    -O3 -fno-exceptions -fno-rtti
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-march=armv8-a+simd>
+)
+
+# Cancel projectM's global CMAKE_DEBUG_POSTFIX "d" so the lib ships under the
+# name Kotlin loads it by, as the sibling libs do.
+set_target_properties(monochrome_stretch PROPERTIES DEBUG_POSTFIX "")
+
+target_link_libraries(monochrome_stretch log)

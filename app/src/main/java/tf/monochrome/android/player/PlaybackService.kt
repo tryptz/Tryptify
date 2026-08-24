@@ -11,6 +11,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackParameters
+import kotlin.math.pow
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
@@ -73,6 +74,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect
     @Inject lateinit var dspManager: DspEngineManager
     @Inject lateinit var autoEqProcessor: AutoEqProcessor
+    @Inject lateinit var variRateProcessor: tf.monochrome.android.audio.resample.VariRateAudioProcessor
+    @Inject lateinit var stretchProcessor: tf.monochrome.android.audio.stretch.StretchAudioProcessor
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
@@ -464,7 +467,19 @@ class PlaybackService : MediaSessionService() {
             ) { speed, preservePitch ->
                 Pair(speed, preservePitch)
             }.collect { (speed, preservePitch) ->
-                player.playbackParameters = PlaybackParameters(speed, if (preservePitch) 1.0f else speed)
+                pushPlaybackParameters(speed, preservePitch)
+            }
+        }
+
+        // Independent transposition. Separate from the speed flow because it is
+        // a separate operation on a separate engine, but it feeds the same
+        // AutoEQ pre-warp: both scale frequency downstream of the EQ, so the
+        // correction has to invert their product.
+        serviceScope.launch {
+            preferences.pitchSemitones.collect { semitones ->
+                lastSemitones = semitones
+                stretchProcessor.setSemitones(semitones)
+                pushAutoEqWarp()
             }
         }
 
@@ -703,8 +718,17 @@ class PlaybackService : MediaSessionService() {
                     val defaultSink = DefaultAudioSink.Builder(context)
                         .setEnableFloatOutput(enableFloatOutput)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                        .setAudioProcessors(
-                            arrayOf(
+                        // Our own chain rather than setAudioProcessors, which
+                        // would wrap these in DefaultAudioProcessorChain and send
+                        // every speed change to Sonic. Sonic handles a vinyl-style
+                        // change (pitch riding the tempo) with two-point linear
+                        // interpolation and no band-limiting; this routes that
+                        // case to a windowed-sinc resampler and leaves genuine
+                        // time-stretching with Sonic. Same processor order
+                        // otherwise.
+                        .setAudioProcessorChain(
+                            tf.monochrome.android.audio.resample.TryptifyAudioProcessorChain(
+                                arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
@@ -715,6 +739,9 @@ class PlaybackService : MediaSessionService() {
                                 TeeAudioProcessor(
                                     ProjectMAudioTapProcessor(audioBus)
                                 )
+                                ),
+                                variRateProcessor,
+                                stretchProcessor,
                             )
                         )
                         .build()
@@ -1001,16 +1028,73 @@ class PlaybackService : MediaSessionService() {
     }
 
     fun setPlaybackSpeed(speed: Float, preservePitch: Boolean) {
-        player.playbackParameters = PlaybackParameters(speed, if (preservePitch) 1.0f else speed)
+        pushPlaybackParameters(speed, preservePitch)
     }
 
     private fun applyPlaybackSpeed() {
         serviceScope.launch {
-            val speed = preferences.playbackSpeed.first()
-            val preservePitch = preferences.preservePitch.first()
-            player.playbackParameters = PlaybackParameters(speed, if (preservePitch) 1.0f else speed)
+            pushPlaybackParameters(
+                preferences.playbackSpeed.first(),
+                preferences.preservePitch.first(),
+            )
         }
     }
+
+    /**
+     * The single place speed/pitch reaches the player.
+     *
+     * Media3 runs its pitch shift (SonicAudioProcessor) at the *end* of the
+     * sink's processor chain, downstream of our EQ — so a pitch that rides the
+     * tempo scales the AutoEQ correction along with the music, sliding every
+     * band off the headphone resonance it was measured against. AutoEqProcessor
+     * pre-warps its bands by the inverse to cancel that, which only works if it
+     * is told the same ratio the player got. Centralised here so a new caller
+     * can't set one without the other.
+     */
+    private fun pushPlaybackParameters(speed: Float, preservePitch: Boolean) {
+        val pitch = if (preservePitch) 1.0f else speed
+        player.playbackParameters = PlaybackParameters(speed, pitch)
+        lastPitchRatio = pitch
+        pushAutoEqWarp()
+    }
+
+    /**
+     * Tells AutoEQ how much frequency scaling happens after it, and how long to
+     * take moving there.
+     *
+     * The two pitch stages compound: a vinyl-style speed change resamples, an
+     * independent transposition runs the phase vocoder, and both sit downstream
+     * of the EQ, so what the correction has to invert is their product.
+     *
+     * The transition window is the vocoder's own latency. The pre-warp is
+     * applied upstream of it, so an instant re-warp would land at the output
+     * about 350 ms before the pitch change it compensates for — audibly
+     * correcting for a pitch that has not arrived. Spreading it over the same
+     * window keeps them in step. With only the resampler engaged the latency is
+     * a few dozen samples, so the default feel-based window is used instead.
+     */
+    private fun pushAutoEqWarp() {
+        val total = lastPitchRatio * 2f.pow(lastSemitones / 12f)
+        val sampleRate = runCatching { player.audioFormat?.sampleRate ?: 0 }.getOrDefault(0)
+        val latencyFrames = stretchProcessor.latencyFrames()
+        val latencyMs =
+            if (sampleRate > 0 && latencyFrames > 0) {
+                (latencyFrames * 1000L / sampleRate).toInt()
+            } else {
+                0
+            }
+        if (latencyMs > 0) {
+            autoEqProcessor.setPitchRatio(total, glideMillis = latencyMs)
+        } else {
+            autoEqProcessor.setPitchRatio(total)
+        }
+    }
+
+    /** Mirrors what [pushPlaybackParameters] last sent, for seeding blend copies. */
+    @Volatile private var lastPitchRatio = 1.0f
+
+    /** Mirrors the independent transposition, for the same reason. */
+    @Volatile private var lastSemitones = 0f
 
     // Volume has two independent inputs — the user slider and the crossfade
     // ramp — and both would otherwise want to own player.volume outright.
@@ -1114,6 +1198,7 @@ class PlaybackService : MediaSessionService() {
             crossfeedState = crossfeedEffect.state.value,
             blockSize = dspBlockSize,
             dspEnabled = dspEnabled,
+            autoEqPitchRatio = lastPitchRatio * 2f.pow(lastSemitones / 12f),
         )
         // The copy's native engine only exists once ExoPlayer configures it
         // with a format, which is after the blend has started.

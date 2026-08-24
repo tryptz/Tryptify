@@ -22,6 +22,20 @@ you are not sure whether it changed, diff against it:
 git diff 5ec5b072 -- app/src/main/java/tf/monochrome/android/ui
 ```
 
+## Route the work before starting
+
+**[`docs/agent-playbook.md`](docs/agent-playbook.md)** — per-area playbooks, each
+with a workflow and completion gates: Glass Surfaces, Realtime Audio, Playback
+Routing, Radio Ranking, and the engineering gates for build upgrades, shrinking
+and intent security.
+
+Read the section that matches what you are touching before you touch it. The
+playbook also carries a re-verified list of known review targets — places where
+a shipped skill, a test target or a keep rule is already known to disagree with
+the code — so you can tell a pre-existing defect from one you just introduced.
+
+Conventions in this file override it wherever the two differ.
+
 ## Build and test
 
 ```

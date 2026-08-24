@@ -5,6 +5,13 @@ import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.util.UnstableApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.FilterType
 import java.nio.ByteBuffer
@@ -12,6 +19,9 @@ import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.log2
 import kotlin.math.pow
 
 /**
@@ -22,6 +32,51 @@ import kotlin.math.pow
  * Uses decramped biquads (peaking, low shelf, high shelf): Vicanek matched-Z
  * peaking and tournament-matched shelves, so the response lands on the analog
  * prototypes the correction curves are designed against — see EqDspKernels.
+ *
+ * ## Pitch pre-warp
+ *
+ * Media3 puts [androidx.media3.common.audio.SonicAudioProcessor] — the thing
+ * that serves `PlaybackParameters`' speed and pitch — at the *end* of
+ * `DefaultAudioSink`'s chain: `DefaultAudioProcessorChain` copies the app's
+ * processors into slots `0..n-1` and appends silence-skipping and Sonic after
+ * them. This processor therefore runs *upstream* of the pitch shift.
+ *
+ * That ordering silently breaks the correction whenever pitch rides the speed
+ * control (preserve-pitch off, e.g. the Nightcore preset). A pitch shift is a
+ * multiplicative map on frequency, so Sonic scales *everything* this EQ
+ * produced by the same ratio — including the correction curve itself. A notch
+ * cut for a 3 kHz driver resonance leaves the sink at 3 kHz x ratio: it misses
+ * the resonance it was aimed at, *and* digs a hole in clean spectrum next to
+ * it. Two errors from one. The damage tracks the slope of the correction, so
+ * it is worst exactly where AutoEQ works hardest — high-Q treble resonance
+ * notches, where a band's whole half-gain bandwidth can be ~0.36 octaves
+ * against a 1.25x shift's 0.32.
+ *
+ * The compensation is exact: tune each band to `freq / ratio` so Sonic's
+ * `x ratio` lands it back on `freq`. Q needs no adjustment — a pitch shift is
+ * a rigid translation on a log-frequency axis, which preserves bandwidth in
+ * octaves — and the preamp is untouched, since a translation does not change
+ * peak gain. At ratio 1.0 (any speed with preserve-pitch on, or 1.0x either
+ * way) the warp is the identity and this costs nothing.
+ *
+ * ## Why the warp glides
+ *
+ * Retuning the whole chain the instant the ratio changes would step every
+ * band's centre frequency at once, which is audible as a lurch. Instead the
+ * applied warp chases the target with a one-pole glide in the log-frequency
+ * domain (constant octaves per second, the musically even sweep), so the
+ * correction slides into its new alignment over [GLIDE_TAU_MS]-ish rather than
+ * jumping. Chasing a live target means dragging the speed slider sweeps the
+ * correction along with it, and letting go settles it exactly on the target —
+ * no touch/release plumbing needed, and the glide stops ticking once settled.
+ *
+ * Coefficient *design* stays off the audio thread. It has to: the matched
+ * shelf design allocates and runs a scored tournament over candidate
+ * constructions, whose own docs note the cost is only irrelevant because
+ * "shelves change rarely". Under a glide they change constantly, so the glide
+ * loop designs coefficients at control rate and publishes them as an immutable
+ * snapshot; the audio thread does five float stores per band to install them,
+ * with the filter memory left running so the sweep is continuous.
  */
 @Singleton
 @OptIn(UnstableApi::class)
@@ -36,22 +91,81 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private var scratchL = FloatArray(0)
     private var scratchR = FloatArray(0)
 
-    // UI-thread writes grouped into one immutable snapshot published atomically so the
-    // audio thread always sees a consistent (enabled, preamp, bands) triple.
-    private data class Snapshot(
+    /**
+     * A designed chain, ready to install. Published as one immutable object so
+     * the audio thread always sees a consistent (enabled, preamp, coefficients)
+     * set — never half of an old curve and half of a new one.
+     */
+    private class Design(
         val enabled: Boolean,
         val preampLinear: Float,
-        val bandsL: Array<BandState>,
-        val bandsR: Array<BandState>
+        val coefsL: Array<FloatArray>,
+        val coefsR: Array<FloatArray>,
     )
 
-    private val stateRef = AtomicReference(Snapshot(false, 1f, emptyArray(), emptyArray()))
-    private var appliedSnapshot: Snapshot? = null
+    /** The user's curve, in absolute Hz, before any pitch pre-warp. */
+    private class Source(
+        val bandsL: List<EqBand>,
+        val bandsR: List<EqBand>,
+        val preamp: Float,
+        val enabled: Boolean,
+    )
 
-    // Per-band biquad filter state (audio thread only, rebuilt when bands change)
+    private val designRef = AtomicReference(
+        Design(false, 1f, emptyArray(), emptyArray())
+    )
+    private var appliedDesign: Design? = null
+
+    // Per-band biquad filter state (audio thread only)
     private var filtersL = arrayOf<EqBiquad>()
     private var filtersR = arrayOf<EqBiquad>()
-    private var sampleRate = 44100.0
+
+    @Volatile private var source = Source(emptyList(), emptyList(), 0f, false)
+
+    /** Written by the audio thread in [flush], read by the design loop. */
+    @Volatile private var sampleRate = 44100.0
+
+    /** Where the warp is headed: the playback pitch ratio Sonic will apply. */
+    @Volatile private var targetRatio = 1f
+
+    /**
+     * Where the warp is now, in octaves. Advanced only by the design loop, but
+     * read by any thread that publishes a design synchronously.
+     */
+    @Volatile private var glidedOctaves = 0f
+
+    /** Set by [setPitchRatio] to make the next pass jump instead of glide. */
+    @Volatile private var snapToTarget = false
+
+    /**
+     * One-pole time constant for the warp glide, in milliseconds.
+     *
+     * Set from the latency of whatever stage is actually applying the pitch
+     * downstream. The pre-warp is applied *upstream* of that stage, so a step
+     * change here reaches the output before the pitch change it compensates
+     * for does — with the resampler that gap is under a millisecond and does
+     * not matter, but the phase vocoder runs about 350 ms behind, and an
+     * instant re-warp would audibly correct for a pitch the listener has not
+     * heard yet. Spreading the glide across the same window keeps the two
+     * roughly in step and turns a hard misalignment into a brief, smoothly
+     * varying one.
+     */
+    @Volatile private var glideTauMs: Double = DEFAULT_GLIDE_TAU_MS
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * Conflated: a redesign only ever needs the *latest* inputs, so a burst of
+     * slider updates collapses into one pass instead of queueing a backlog the
+     * glide would then have to replay.
+     */
+    private val redesignRequests = Channel<Unit>(Channel.CONFLATED)
+
+    init {
+        scope.launch {
+            for (unused in redesignRequests) runGlide()
+        }
+    }
 
     /** Same curve on both ears. */
     fun applyBands(bands: List<EqBand>, preamp: Float, enabled: Boolean) =
@@ -70,23 +184,154 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         preamp: Float,
         enabled: Boolean,
     ) {
-        fun List<EqBand>.toStates() = map { band ->
-            BandState(
-                freq = band.freq,
-                gain = band.gain,
-                q = band.q,
-                type = band.type,
-                enabled = band.enabled
-            )
-        }.toTypedArray()
+        source = Source(bandsL, bandsR, preamp, enabled)
+        // Published synchronously: a curve change has no glide to wait for, and
+        // callers (and tests) reasonably expect the next processed block to
+        // carry it. Any glide already in flight picks the new bands up on its
+        // next tick, since it re-reads [source] every pass.
+        publishDesign()
+    }
 
-        val snap = Snapshot(
-            enabled = enabled,
-            preampLinear = if (preamp == 0f) 1f else 10f.pow(preamp / 20f),
-            bandsL = bandsL.toStates(),
-            bandsR = bandsR.toStates()
+    /**
+     * Sets the playback pitch ratio the downstream Sonic stage will apply —
+     * `speed` when pitch rides the tempo, `1.0` when preserve-pitch is on.
+     * Bands are pre-warped by its inverse so the correction still lands on the
+     * headphone's real resonances once Sonic has scaled the signal.
+     *
+     * The warp glides to the new ratio unless [immediate] is set, which exists
+     * for seeding a freshly built chain (a crossfade copy) that has no current
+     * alignment to slide away from.
+     */
+    @JvmOverloads
+    fun setPitchRatio(
+        ratio: Float,
+        immediate: Boolean = false,
+        glideMillis: Int = DEFAULT_GLIDE_MILLIS,
+    ) {
+        if (!ratio.isFinite() || ratio <= 0f) return
+        // A one-pole settles to within a thousandth in about 5 tau, so the tau
+        // that spans a given transition window is that window over five.
+        glideTauMs = (glideMillis.toDouble() / 5.0)
+            .coerceIn(MIN_GLIDE_TAU_MS, MAX_GLIDE_TAU_MS)
+        // Generous sanity clamp — not the UI's range, just a guard against a
+        // pathological value turning every band's frequency into a NaN.
+        targetRatio = ratio.coerceIn(MIN_RATIO, MAX_RATIO)
+        // A flag rather than writing the glide's own state from here: this is
+        // called from the player thread, and glidedOctaves belongs to the
+        // design loop.
+        if (immediate) {
+            snapToTarget = true
+            redesignRequests.trySend(Unit)
+            // Seeded chains are about to be handed live audio, so don't wait a
+            // dispatch for the loop to land the first design.
+            glidedOctaves = -log2(targetRatio)
+            publishDesign()
+            return
+        }
+        redesignRequests.trySend(Unit)
+    }
+
+    /**
+     * Stops the design loop. For short-lived copies of the chain (see
+     * `DspChain`); the injected singleton lives as long as the process.
+     */
+    fun release() {
+        scope.cancel()
+        redesignRequests.close()
+    }
+
+    // ── Pre-warp glide ───────────────────────────────────────────────────
+
+    /**
+     * Walks the applied warp toward the target and republishes the chain each
+     * step, then returns once it has settled so nothing ticks at rest.
+     *
+     * Re-reads [targetRatio] every iteration rather than latching it, so a
+     * target that is still moving (a slider mid-drag) is chased rather than
+     * overshot and re-approached.
+     */
+    private suspend fun runGlide() {
+        while (true) {
+            val target = -log2(targetRatio)
+            if (snapToTarget) {
+                snapToTarget = false
+                glidedOctaves = target
+                publishDesign()
+                return
+            }
+            val delta = target - glidedOctaves
+            if (abs(delta) <= SETTLE_OCTAVES) {
+                glidedOctaves = target
+                publishDesign()
+                return
+            }
+            // Recomputed per tick: the window tracks the active pitch stage,
+            // which can change under us when the user switches modes.
+            val alpha = (1.0 - exp(-GLIDE_TICK_MS / glideTauMs)).toFloat()
+            glidedOctaves += delta * alpha
+            publishDesign()
+            delay(GLIDE_TICK_MS)
+        }
+    }
+
+    /**
+     * Designs and publishes the chain for the warp as it stands.
+     *
+     * Safe from any thread — every input is volatile and the result is one
+     * immutable object installed with a single reference store. Never call it
+     * from the audio thread: the matched shelf design allocates and runs a
+     * scored tournament (see [designBiquadCoefficients]).
+     */
+    private fun publishDesign() {
+        val src = source
+        // 2^(-log2(pitchRatio)) == 1 / pitchRatio: the inverse of what Sonic
+        // will do downstream, which is exactly the pre-warp.
+        val warpFactor = 2f.pow(glidedOctaves)
+        val sr = sampleRate
+        designRef.set(
+            Design(
+                enabled = src.enabled,
+                preampLinear = if (src.preamp == 0f) 1f else 10f.pow(src.preamp / 20f),
+                coefsL = designChain(src.bandsL, warpFactor, sr),
+                coefsR = designChain(src.bandsR, warpFactor, sr),
+            )
         )
-        stateRef.set(snap)
+    }
+
+    /**
+     * Designs one channel's chain with every band's centre pre-warped.
+     *
+     * Bands are dropped exactly as before — disabled, or zero gain, contributes
+     * nothing but a wasted biquad. The warped frequency is clamped below
+     * Nyquist: at a low pitch ratio the warp pushes bands *up*, and a treble
+     * band can land past the sample rate's ceiling, where it cannot be realised
+     * at all. Clamping degrades it to the highest band that can be, which is
+     * what the kernels' own guards would do anyway.
+     */
+    private fun designChain(
+        bands: List<EqBand>,
+        warpFactor: Float,
+        sr: Double,
+    ): Array<FloatArray> {
+        val active = bands.filter { it.enabled && it.gain != 0f }
+        if (active.isEmpty()) return emptyArray()
+        val maxHz = sr * 0.49
+        // Decramped (matched) coefficients throughout: peaking bands use
+        // Vicanek matched-Z, shelves the tournament-matched design — the top
+        // octave lands on the analog prototype with no oversampling machinery.
+        return Array(active.size) { i ->
+            val band = active[i]
+            val type = when (band.type) {
+                FilterType.LOWSHELF -> EqBiquadType.LOW_SHELF
+                FilterType.HIGHSHELF -> EqBiquadType.HIGH_SHELF
+                else -> EqBiquadType.PEAKING
+            }
+            val warped = (band.freq.toDouble() * warpFactor).coerceIn(MIN_HZ, maxHz)
+            designBiquadCoefficients(
+                type, sr, warped, band.q.toDouble(), band.gain.toDouble(),
+                matched = true,
+            )
+        }
     }
 
     // ── AudioProcessor implementation ────────────────────────────────────
@@ -166,19 +411,18 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         inputBuffer.position(startPos + numFrames * frameSize)
 
         // Apply EQ if enabled
-        val snap = stateRef.get()
-        if (snap.enabled) {
-            if (snap !== appliedSnapshot) {
-                filtersL = buildChain(snap.bandsL)
-                filtersR = buildChain(snap.bandsR)
-                appliedSnapshot = snap
+        val design = designRef.get()
+        if (design.enabled) {
+            if (design !== appliedDesign) {
+                installDesign(design)
+                appliedDesign = design
             }
             // Hard bypass when the chain is flat: with no active filters and
             // unity preamp the samples are left untouched.
             val hasWork = filtersL.isNotEmpty() || filtersR.isNotEmpty() ||
-                snap.preampLinear != 1f
+                design.preampLinear != 1f
             if (hasWork) {
-                applyEq(scratchL, scratchR, numFrames, snap.preampLinear)
+                applyEq(scratchL, scratchR, numFrames, design.preampLinear)
             }
         }
 
@@ -228,9 +472,15 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
             if (formatChanged) {
                 inputFormat = pendingFormat
                 sampleRate = inputFormat.sampleRate.toDouble()
-                // Force filter rebuild on next block (sample-rate-dependent
-                // coefficients).
-                appliedSnapshot = null
+                // Coefficients are sample-rate-dependent, so the published
+                // design is now stale. Drop the filters (which also clears
+                // their memory across the discontinuity) and ask for a
+                // redesign at the new rate; the next block runs on the old
+                // curve for the millisecond or so that takes.
+                filtersL = emptyArray()
+                filtersR = emptyArray()
+                appliedDesign = null
+                redesignRequests.trySend(Unit)
             }
             pendingFormat = AudioFormat.NOT_SET
         }
@@ -242,10 +492,31 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         inputFormat = AudioFormat.NOT_SET
         filtersL = emptyArray()
         filtersR = emptyArray()
-        appliedSnapshot = null
+        appliedDesign = null
     }
 
     // ── DSP internals ───────────────────────────────────────────────────
+
+    /**
+     * Installs a freshly designed chain.
+     *
+     * Filters are reallocated only when the band *count* changes; otherwise the
+     * existing sections are retuned in place with their memory intact. That is
+     * what makes the glide continuous — a new [EqBiquad] starts from silence,
+     * so allocating per step would restart every filter dozens of times a
+     * second. It also means a curve swap at the same band count (switching
+     * headphone profile) no longer clicks.
+     */
+    private fun installDesign(design: Design) {
+        if (filtersL.size != design.coefsL.size) {
+            filtersL = Array(design.coefsL.size) { EqBiquad() }
+        }
+        if (filtersR.size != design.coefsR.size) {
+            filtersR = Array(design.coefsR.size) { EqBiquad() }
+        }
+        for (i in filtersL.indices) filtersL[i].retune(design.coefsL[i])
+        for (i in filtersR.indices) filtersR[i].retune(design.coefsR[i])
+    }
 
     private fun applyEq(bufL: FloatArray, bufR: FloatArray, numFrames: Int, preampLinear: Float) {
         if (preampLinear != 1f) {
@@ -262,29 +533,32 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         for (i in filtersR.indices) filtersR[i].processBlock(bufR, numFrames)
     }
 
-    private fun buildChain(bands: Array<BandState>): Array<EqBiquad> {
-        val active = bands.filter { it.enabled && it.gain != 0f }
-        val chain = Array(active.size) { EqBiquad() }
-        // Decramped (matched) coefficients throughout: peaking bands use
-        // Vicanek matched-Z, shelves the tournament-matched design — the top
-        // octave lands on the analog prototype with no oversampling machinery.
-        for ((i, band) in active.withIndex()) {
-            val type = when (band.type) {
-                FilterType.LOWSHELF -> EqBiquadType.LOW_SHELF
-                FilterType.HIGHSHELF -> EqBiquadType.HIGH_SHELF
-                else -> EqBiquadType.PEAKING
-            }
-            chain[i].configure(
-                type, sampleRate, band.freq.toDouble(), band.q.toDouble(),
-                band.gain.toDouble(), matched = true
-            )
-        }
-        return chain
+    private companion object {
+        /** Glide tick, ~60 Hz: fine enough that each coefficient step is small. */
+        const val GLIDE_TICK_MS = 16L
+
+        /**
+         * Transition window used when the caller does not name one — the
+         * resampler's latency is negligible, so this is chosen for feel rather
+         * than for alignment.
+         */
+        const val DEFAULT_GLIDE_MILLIS = 700
+
+        const val DEFAULT_GLIDE_TAU_MS = 140.0
+
+        /** Fast enough to still be a glide; slow enough to stay a transition. */
+        const val MIN_GLIDE_TAU_MS = 20.0
+        const val MAX_GLIDE_TAU_MS = 600.0
+
+        /**
+         * Snap-to-target threshold. 0.0005 octaves is ~0.03% in Hz — orders of
+         * magnitude below audibility, and well inside the resolution of the
+         * measurements the correction curves come from.
+         */
+        const val SETTLE_OCTAVES = 0.0005f
+
+        const val MIN_RATIO = 0.05f
+        const val MAX_RATIO = 20f
+        const val MIN_HZ = 5.0
     }
-
-    private class BandState(
-        val freq: Float, val gain: Float, val q: Float,
-        val type: FilterType, val enabled: Boolean
-    )
-
 }

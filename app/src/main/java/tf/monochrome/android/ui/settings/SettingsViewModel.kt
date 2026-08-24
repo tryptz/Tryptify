@@ -143,8 +143,6 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showExplicitBadges: StateFlow<Boolean> = preferences.showExplicitBadges
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val confirmClearQueue: StateFlow<Boolean> = preferences.confirmClearQueue
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- Scrobbling ---
     val lastFmEnabled: StateFlow<Boolean> = preferences.lastFmEnabled
@@ -299,6 +297,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val appRenderResolution: StateFlow<Int> = preferences.appRenderResolution
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val immersiveFullScreen: StateFlow<Boolean> = preferences.immersiveFullScreen
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val lowPerformanceMode: StateFlow<Boolean> = preferences.lowPerformanceMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val disableAnimations: StateFlow<Boolean> = preferences.disableAnimations
@@ -523,7 +523,6 @@ class SettingsViewModel @Inject constructor(
     // --- Interface actions ---
     fun setGaplessPlayback(enabled: Boolean) { viewModelScope.launch { preferences.setGaplessPlayback(enabled) } }
     fun setShowExplicitBadges(enabled: Boolean) { viewModelScope.launch { preferences.setShowExplicitBadges(enabled) } }
-    fun setConfirmClearQueue(enabled: Boolean) { viewModelScope.launch { preferences.setConfirmClearQueue(enabled) } }
 
     // --- Scrobbling actions ---
     /**
@@ -596,6 +595,7 @@ class SettingsViewModel @Inject constructor(
     fun setPlayerBlurredBackground(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerBlurredBackground(enabled) } }
     fun setAppTargetFps(fps: Int) { viewModelScope.launch { preferences.setAppTargetFps(fps) } }
     fun setAppRenderResolution(shortSide: Int) { viewModelScope.launch { preferences.setAppRenderResolution(shortSide) } }
+    fun setImmersiveFullScreen(enabled: Boolean) { viewModelScope.launch { preferences.setImmersiveFullScreen(enabled) } }
     // The master writes all three; each of the three re-derives the master.
     // Both directions are single DataStore transactions, so the four switches
     // are never briefly inconsistent on screen.
@@ -621,12 +621,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     // --- Library settings ---
-    val scanOnAppOpen: StateFlow<Boolean> = preferences.scanOnAppOpen
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val minTrackDuration: StateFlow<Long> = preferences.minTrackDurationMs
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30_000L)
-    val backgroundScanInterval: StateFlow<String> = preferences.backgroundScanInterval
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "daily")
     val autoDownloadLikedSongs: StateFlow<Boolean> = preferences.autoDownloadLikedSongs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -755,9 +749,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setAutoDownloadLikedSongs(enabled) }
     }
 
-    fun setScanOnAppOpen(enabled: Boolean) { viewModelScope.launch { preferences.setScanOnAppOpen(enabled) } }
-    fun setMinTrackDuration(durationMs: Long) { viewModelScope.launch { preferences.setMinTrackDurationMs(durationMs) } }
-    fun setBackgroundScanInterval(interval: String) { viewModelScope.launch { preferences.setBackgroundScanInterval(interval) } }
     fun rescanLibrary() {
         // Route through the shared ScanCoordinator (the same guard the Library
         // tab uses), so the button actually scans instead of no-op'ing.

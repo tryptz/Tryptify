@@ -181,6 +181,10 @@ class PreferencesManager @Inject constructor(
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
         private val APP_TARGET_FPS = intPreferencesKey("app_target_fps")
         private val APP_RENDER_RESOLUTION = intPreferencesKey("app_render_resolution")
+        // Device-local, like the two above it: which bars a panel has and
+        // whether you want them is a property of the phone in your hand, not of
+        // the account. Deliberately absent from SETTINGS_SYNC_KEYS.
+        private val IMMERSIVE_FULL_SCREEN = booleanPreferencesKey("immersive_full_screen")
 
         // Low performance mode. The automatic DeviceTier already trims effects on
         // weak hardware; these are the user's own override, for a flagship on a
@@ -217,7 +221,6 @@ class PreferencesManager @Inject constructor(
         private val UPDATE_LATEST_URL = stringPreferencesKey("update_latest_url")
         private val UPDATE_DISMISSED_VERSION = stringPreferencesKey("update_dismissed_version")
         private val SHOW_EXPLICIT_BADGES = booleanPreferencesKey("show_explicit_badges")
-        private val CONFIRM_CLEAR_QUEUE = booleanPreferencesKey("confirm_clear_queue")
 
         // Audio extras
         private val NORMALIZATION_ENABLED = booleanPreferencesKey("normalization_enabled")
@@ -230,6 +233,8 @@ class PreferencesManager @Inject constructor(
         // Playback speed
         private val PLAYBACK_SPEED = stringPreferencesKey("playback_speed")
         private val PRESERVE_PITCH = booleanPreferencesKey("preserve_pitch")
+        private val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
+        private val SPEED_UNIT_SEMITONES = booleanPreferencesKey("speed_unit_semitones")
 
         // Appearance extras
         private val FONT_SCALE = floatPreferencesKey("font_scale")
@@ -270,25 +275,15 @@ class PreferencesManager @Inject constructor(
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val AI_RADIO_ENABLED = booleanPreferencesKey("ai_radio_enabled")
 
-        // Radio planner (optional Tryptify-Playlist service). No baked-in
-        // default: the deployment is personal infrastructure and doesn't belong
-        // in the source. Blank means "not configured" — RadioPlannerClient
-        // treats it as unavailable and the Radio settings tab asks for a URL.
-        const val DEFAULT_RADIO_PLANNER_URL = ""
-        private val RADIO_PLANNER_ENABLED = booleanPreferencesKey("radio_planner_enabled")
-        private val RADIO_PLANNER_URL = stringPreferencesKey("radio_planner_url")
-        private val RADIO_PLANNER_API_KEY = stringPreferencesKey("radio_planner_api_key")
+        // Radio ranking weights, all scored on-device by LocalRadioPlanner.
         private val RADIO_WEIGHT_LOCAL_LIBRARY = floatPreferencesKey("radio_weight_local_library")
         private val RADIO_WEIGHT_QOBUZ = floatPreferencesKey("radio_weight_qobuz")
         private val RADIO_WEIGHT_SPOTIFY_DISCOVERY = floatPreferencesKey("radio_weight_spotify_discovery")
-        private val RADIO_WEIGHT_METABRAINZ_METADATA = floatPreferencesKey("radio_weight_metabrainz_metadata")
-        private val RADIO_WEIGHT_LISTENBRAINZ_GRAPH = floatPreferencesKey("radio_weight_listenbrainz_graph")
         private val RADIO_WEIGHT_CANONICAL_VERSION_BIAS = floatPreferencesKey("radio_weight_canonical_version_bias")
         private val RADIO_WEIGHT_NOVELTY = floatPreferencesKey("radio_weight_novelty")
         private val RADIO_WEIGHT_FAMILIARITY = floatPreferencesKey("radio_weight_familiarity")
         private val RADIO_WEIGHT_ARTIST_SIMILARITY = floatPreferencesKey("radio_weight_artist_similarity")
         private val RADIO_WEIGHT_GENRE_TAG_SIMILARITY = floatPreferencesKey("radio_weight_genre_tag_similarity")
-        private val RADIO_WEIGHT_MOOD_CONTINUITY = floatPreferencesKey("radio_weight_mood_continuity")
         private val RADIO_WEIGHT_ERA_CONSISTENCY = floatPreferencesKey("radio_weight_era_consistency")
         private val RADIO_WEIGHT_AVOID_RECENTLY_PLAYED = floatPreferencesKey("radio_weight_avoid_recently_played")
         private val RADIO_WEIGHT_DISCOVERY_DISTANCE = floatPreferencesKey("radio_weight_discovery_distance")
@@ -340,10 +335,7 @@ class PreferencesManager @Inject constructor(
         private val PARAM_EQ_BANDS_JSON = stringPreferencesKey("param_eq_bands_json")
 
         // Library / Local Media
-        private val SCAN_ON_APP_OPEN = booleanPreferencesKey("scan_on_app_open")
-        private val MIN_TRACK_DURATION_MS = longPreferencesKey("min_track_duration_ms")
         private val EXCLUDED_PATHS_JSON = stringPreferencesKey("excluded_paths_json")
-        private val BACKGROUND_SCAN_INTERVAL = stringPreferencesKey("background_scan_interval")
         private val USER_FOLDER_ROOTS_JSON = stringPreferencesKey("user_folder_roots_json")
 
         // DSP Mixer
@@ -403,9 +395,9 @@ class PreferencesManager @Inject constructor(
             DYNAMIC_COLORS_MENUS, DYNAMIC_COLORS_KEEP_BACKGROUND, COLOR_TRANSITION_MS,
             CUSTOM_THEME_ENABLED, CUSTOM_ACCENT, CUSTOM_BACKGROUND,
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
-            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES, CONFIRM_CLEAR_QUEUE,
+            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
-            PLAYBACK_SPEED, PRESERVE_PITCH,
+            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
@@ -421,17 +413,15 @@ class PreferencesManager @Inject constructor(
             EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
             EQ_CUSTOM_TARGETS_JSON, EQ_SELECTED_HEADPHONE_ID, EQ_SELECTED_HEADPHONE_NAME,
             EQ_UPLOADED_HEADPHONES_JSON, EQ_AUTO_PREAMP,
-            EQ_BANDS_R_JSON, EQ_STEREO_MODE,
+            EQ_BANDS_R_JSON, EQ_STEREO_MODE, SYSTEM_TONE_CONTROLS_JSON,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
-            SCAN_ON_APP_OPEN, MIN_TRACK_DURATION_MS, BACKGROUND_SCAN_INTERVAL,
             LIBRARY_TAB_ORDER, CAR_MODE_BAND_COUNT,
-            AI_RADIO_ENABLED, RADIO_PLANNER_ENABLED, RADIO_PLANNER_URL,
+            AI_RADIO_ENABLED,
             RADIO_WEIGHT_LOCAL_LIBRARY, RADIO_WEIGHT_QOBUZ, RADIO_WEIGHT_SPOTIFY_DISCOVERY,
-            RADIO_WEIGHT_METABRAINZ_METADATA, RADIO_WEIGHT_LISTENBRAINZ_GRAPH,
             RADIO_WEIGHT_CANONICAL_VERSION_BIAS, RADIO_WEIGHT_NOVELTY, RADIO_WEIGHT_FAMILIARITY,
             RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
-            RADIO_WEIGHT_MOOD_CONTINUITY, RADIO_WEIGHT_ERA_CONSISTENCY,
+            RADIO_WEIGHT_ERA_CONSISTENCY,
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
             DISCOVERY_HEARTED_GENRES,
             DISCOVERY_SORT,
@@ -969,12 +959,6 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[SHOW_EXPLICIT_BADGES] = enabled }
     }
 
-    val confirmClearQueue: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[CONFIRM_CLEAR_QUEUE] ?: true
-    }
-    suspend fun setConfirmClearQueue(enabled: Boolean) {
-        dataStore.edit { it[CONFIRM_CLEAR_QUEUE] = enabled }
-    }
 
     // --- Audio extras ---
     val normalizationEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
@@ -1028,6 +1012,37 @@ class PreferencesManager @Inject constructor(
 
     val preservePitch: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[PRESERVE_PITCH] ?: true
+    }
+
+    /**
+     * Transposition applied independently of the tempo, in semitones.
+     *
+     * Separate from [playbackSpeed] because it is a different operation: speed
+     * resamples (exact ratio, tempo moves with it), this transposes through a
+     * phase vocoder (tempo stays, accuracy bounded by the analysis block).
+     * Stored as a string for the same reason the speed is — a float rendered
+     * through DataStore's own encoding would round-trip lossily.
+     */
+    val pitchSemitones: Flow<Float> = dataStore.data.map { prefs ->
+        prefs[PITCH_SEMITONES]?.toFloatOrNull() ?: 0f
+    }
+    suspend fun setPitchSemitones(semitones: Float) {
+        dataStore.edit { it[PITCH_SEMITONES] = semitones.toString() }
+    }
+
+    /**
+     * Whether the speed control is expressed in semitones rather than as a
+     * multiplier. Presentation only — the stored speed is a ratio either way.
+     *
+     * It does change what the slider can reach, though: in semitone units it
+     * steps whole intervals at exact 2^(n/12) ratios, which is the difference
+     * between choosing a fifth and landing near one.
+     */
+    val speedUnitSemitones: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[SPEED_UNIT_SEMITONES] ?: false
+    }
+    suspend fun setSpeedUnitSemitones(enabled: Boolean) {
+        dataStore.edit { it[SPEED_UNIT_SEMITONES] = enabled }
     }
     suspend fun setPreservePitch(enabled: Boolean) {
         dataStore.edit { it[PRESERVE_PITCH] = enabled }
@@ -1289,31 +1304,7 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[AI_RADIO_ENABLED] = enabled }
     }
 
-    // --- Radio planner ---
-
-    val radioPlannerEnabled: Flow<Boolean> = dataStore.data.map { it[RADIO_PLANNER_ENABLED] ?: true }
-    val radioPlannerUrl: Flow<String> = dataStore.data.map {
-        it[RADIO_PLANNER_URL] ?: DEFAULT_RADIO_PLANNER_URL
-    }
-    val radioPlannerApiKey: Flow<String?> = dataStore.data.map { it[RADIO_PLANNER_API_KEY] }
-
-    suspend fun setRadioPlannerEnabled(enabled: Boolean) {
-        dataStore.edit { it[RADIO_PLANNER_ENABLED] = enabled }
-    }
-
-    suspend fun setRadioPlannerUrl(url: String?) {
-        dataStore.edit {
-            if (url.isNullOrBlank()) it.remove(RADIO_PLANNER_URL)
-            else it[RADIO_PLANNER_URL] = url.trim().trimEnd('/')
-        }
-    }
-
-    suspend fun setRadioPlannerApiKey(key: String?) {
-        dataStore.edit {
-            if (key.isNullOrBlank()) it.remove(RADIO_PLANNER_API_KEY)
-            else it[RADIO_PLANNER_API_KEY] = key.trim()
-        }
-    }
+    // --- Radio ranking weights ---
 
     val radioPlannerWeights: Flow<RadioPlannerWeights> = dataStore.data.map { prefs ->
         val defaults = RadioPlannerWeights.DEFAULT
@@ -1321,14 +1312,11 @@ class PreferencesManager @Inject constructor(
             localLibrary = prefs[RADIO_WEIGHT_LOCAL_LIBRARY] ?: defaults.localLibrary,
             qobuz = prefs[RADIO_WEIGHT_QOBUZ] ?: defaults.qobuz,
             spotifyDiscovery = prefs[RADIO_WEIGHT_SPOTIFY_DISCOVERY] ?: defaults.spotifyDiscovery,
-            metabrainzMetadata = prefs[RADIO_WEIGHT_METABRAINZ_METADATA] ?: defaults.metabrainzMetadata,
-            listenbrainzGraph = prefs[RADIO_WEIGHT_LISTENBRAINZ_GRAPH] ?: defaults.listenbrainzGraph,
             canonicalVersionBias = prefs[RADIO_WEIGHT_CANONICAL_VERSION_BIAS] ?: defaults.canonicalVersionBias,
             novelty = prefs[RADIO_WEIGHT_NOVELTY] ?: defaults.novelty,
             familiarity = prefs[RADIO_WEIGHT_FAMILIARITY] ?: defaults.familiarity,
             artistSimilarity = prefs[RADIO_WEIGHT_ARTIST_SIMILARITY] ?: defaults.artistSimilarity,
             genreTagSimilarity = prefs[RADIO_WEIGHT_GENRE_TAG_SIMILARITY] ?: defaults.genreTagSimilarity,
-            moodContinuity = prefs[RADIO_WEIGHT_MOOD_CONTINUITY] ?: defaults.moodContinuity,
             eraConsistency = prefs[RADIO_WEIGHT_ERA_CONSISTENCY] ?: defaults.eraConsistency,
             avoidRecentlyPlayed = prefs[RADIO_WEIGHT_AVOID_RECENTLY_PLAYED] ?: defaults.avoidRecentlyPlayed,
             discoveryDistance = prefs[RADIO_WEIGHT_DISCOVERY_DISTANCE] ?: defaults.discoveryDistance,
@@ -1341,14 +1329,11 @@ class PreferencesManager @Inject constructor(
             prefs[RADIO_WEIGHT_LOCAL_LIBRARY] = clamped.localLibrary
             prefs[RADIO_WEIGHT_QOBUZ] = clamped.qobuz
             prefs[RADIO_WEIGHT_SPOTIFY_DISCOVERY] = clamped.spotifyDiscovery
-            prefs[RADIO_WEIGHT_METABRAINZ_METADATA] = clamped.metabrainzMetadata
-            prefs[RADIO_WEIGHT_LISTENBRAINZ_GRAPH] = clamped.listenbrainzGraph
             prefs[RADIO_WEIGHT_CANONICAL_VERSION_BIAS] = clamped.canonicalVersionBias
             prefs[RADIO_WEIGHT_NOVELTY] = clamped.novelty
             prefs[RADIO_WEIGHT_FAMILIARITY] = clamped.familiarity
             prefs[RADIO_WEIGHT_ARTIST_SIMILARITY] = clamped.artistSimilarity
             prefs[RADIO_WEIGHT_GENRE_TAG_SIMILARITY] = clamped.genreTagSimilarity
-            prefs[RADIO_WEIGHT_MOOD_CONTINUITY] = clamped.moodContinuity
             prefs[RADIO_WEIGHT_ERA_CONSISTENCY] = clamped.eraConsistency
             prefs[RADIO_WEIGHT_AVOID_RECENTLY_PLAYED] = clamped.avoidRecentlyPlayed
             prefs[RADIO_WEIGHT_DISCOVERY_DISTANCE] = clamped.discoveryDistance
@@ -1670,16 +1655,6 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Library / Local Media ---
-    val scanOnAppOpen: Flow<Boolean> = dataStore.data.map { it[SCAN_ON_APP_OPEN] ?: true }
-    suspend fun setScanOnAppOpen(enabled: Boolean) {
-        dataStore.edit { it[SCAN_ON_APP_OPEN] = enabled }
-    }
-
-    val minTrackDurationMs: Flow<Long> = dataStore.data.map { it[MIN_TRACK_DURATION_MS] ?: 30_000L }
-    suspend fun setMinTrackDurationMs(durationMs: Long) {
-        dataStore.edit { it[MIN_TRACK_DURATION_MS] = durationMs }
-    }
-
     val excludedPathsJson: Flow<String> = dataStore.data.map { it[EXCLUDED_PATHS_JSON] ?: "[]" }
     suspend fun setExcludedPaths(pathsJson: String) {
         dataStore.edit { it[EXCLUDED_PATHS_JSON] = pathsJson }
@@ -1709,13 +1684,6 @@ class PreferencesManager @Inject constructor(
                 ?: return@edit
             prefs[USER_FOLDER_ROOTS_JSON] = json.encodeToString(current - path)
         }
-    }
-
-    val backgroundScanInterval: Flow<String> = dataStore.data.map {
-        it[BACKGROUND_SCAN_INTERVAL] ?: "daily"
-    }
-    suspend fun setBackgroundScanInterval(interval: String) {
-        dataStore.edit { it[BACKGROUND_SCAN_INTERVAL] = interval }
     }
 
     // --- Library tab order ---
@@ -2017,6 +1985,13 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setAppRenderResolution(shortSide: Int) {
         dataStore.edit { it[APP_RENDER_RESOLUTION] = shortSide }
+    }
+
+    /** Hide the status and navigation bars app-wide; a swipe reveals them. */
+    val immersiveFullScreen: Flow<Boolean> =
+        dataStore.data.map { it[IMMERSIVE_FULL_SCREEN] ?: false }
+    suspend fun setImmersiveFullScreen(enabled: Boolean) {
+        dataStore.edit { it[IMMERSIVE_FULL_SCREEN] = enabled }
     }
 
     // --- Discover ---

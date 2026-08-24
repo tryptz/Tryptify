@@ -1,7 +1,6 @@
 package tf.monochrome.android.radio
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import tf.monochrome.android.domain.model.Album
@@ -24,9 +23,9 @@ class LocalRadioPlannerTest {
 
     /** Every weight off, so any ordering must come from the one weight raised. */
     private val silent = RadioPlannerWeights(
-        localLibrary = 0f, qobuz = 0f, spotifyDiscovery = 0f, metabrainzMetadata = 0f,
-        listenbrainzGraph = 0f, canonicalVersionBias = 0f, novelty = 0f, familiarity = 0f,
-        artistSimilarity = 0f, genreTagSimilarity = 0f, moodContinuity = 0f,
+        localLibrary = 0f, qobuz = 0f, spotifyDiscovery = 0f,
+        canonicalVersionBias = 0f, novelty = 0f, familiarity = 0f,
+        artistSimilarity = 0f, genreTagSimilarity = 0f,
         eraConsistency = 0f, avoidRecentlyPlayed = 0f, discoveryDistance = 0f,
     )
 
@@ -56,8 +55,7 @@ class LocalRadioPlannerTest {
     private fun context(
         history: List<String> = emptyList(),
         library: Set<String> = emptySet(),
-        boosts: Map<String, Float> = emptyMap(),
-    ) = RadioTasteContext(seed = seed, historyKeys = history, libraryKeys = library, sourceBoosts = boosts)
+    ) = RadioTasteContext(seed = seed, historyKeys = history, libraryKeys = library)
 
     private fun scoreOf(
         candidate: RadioCandidate,
@@ -213,10 +211,10 @@ class LocalRadioPlannerTest {
     }
 
     @Test
-    fun `every weight the planner claims to score locally has a test above`() {
-        // Guards against a signal being added to LOCAL_SIGNALS — and so
-        // advertised in the settings screen as working offline — without a
-        // test proving it changes anything.
+    fun `every weight the model carries has a test above`() {
+        // Guards against a signal being added to LOCAL_SIGNALS — and so a
+        // slider appearing in Settings › Radio — without a test proving it
+        // changes anything.
         val tested = setOf(
             SIGNAL_LOCAL_LIBRARY, SIGNAL_QOBUZ, SIGNAL_DISCOVERY_EXPANSION, SIGNAL_CANONICAL,
             SIGNAL_NOVELTY, SIGNAL_FAMILIARITY, SIGNAL_ARTIST_SIMILARITY, SIGNAL_GENRE,
@@ -225,32 +223,33 @@ class LocalRadioPlannerTest {
         assertEquals(LocalRadioPlanner.LOCAL_SIGNALS, tested)
     }
 
-    // ── The boundary: what genuinely cannot be scored on-device ───────────
-
+    /**
+     * Three weights used to sit outside [LocalRadioPlanner.LOCAL_SIGNALS]:
+     * mood continuity, which needs audio features the app does not compute,
+     * and the MetaBrainz and ListenBrainz weights, which describe datasets
+     * that live off-device. They only ever went to the remote planner, so
+     * they left with it. This pins the model to what is actually scored, so
+     * a field cannot come back without a signal behind it.
+     */
     @Test
-    fun `weights needing off-device data do not affect local scoring`() {
-        // Not a bug — mood needs audio features the app doesn't compute, and
-        // the MetaBrainz/ListenBrainz weights describe datasets that live
-        // elsewhere. Pinned so nobody "fixes" them with a fake signal, and so
-        // the settings screen's "Needs a planner" grouping stays honest.
-        val candidate = RadioCandidate(track(), CandidateOrigin.SEARCH)
-        val baseline = scoreOf(candidate, RadioPlannerWeights.DEFAULT)
-        for (loud in listOf(
-            RadioPlannerWeights.DEFAULT.copy(moodContinuity = 3f),
-            RadioPlannerWeights.DEFAULT.copy(metabrainzMetadata = 3f),
-            RadioPlannerWeights.DEFAULT.copy(listenbrainzGraph = 3f),
-        )) {
-            assertEquals(baseline, scoreOf(candidate, loud), 0f)
+    fun `the model carries no weight the planner cannot score`() {
+        val fields = RadioPlannerWeights::class.java.declaredFields
+            .filter { it.type == Float::class.javaPrimitiveType }
+            .map { it.name }
+            .toSet()
+        assertEquals(LocalRadioPlanner.LOCAL_SIGNALS.size, fields.size)
+        for (gone in listOf("moodContinuity", "metabrainzMetadata", "listenbrainzGraph")) {
+            assertTrue("$gone came back without a signal to score it", gone !in fields)
         }
     }
 
-    // ── Behaviour with no planner at all ─────────────────────────────────
+    // ── Behaviour end to end ─────────────────────────────────────────────
 
     @Test
-    fun `shipped defaults rank a plausible station with no planner`() {
-        // The realistic no-server case: default weights, a little history, and
-        // a mixed pool. The unheard canonical track by the seed artist should
-        // beat a remaster the listener just played.
+    fun `shipped defaults rank a plausible station`() {
+        // The realistic case: default weights, a little history, and a mixed
+        // pool. The unheard canonical track by the seed artist should beat a
+        // remaster the listener just played.
         val justPlayed = track(title = "Old Favourite", artist = "Seed Artist")
         val pool = listOf(
             RadioCandidate(
@@ -375,47 +374,6 @@ class LocalRadioPlannerTest {
             ),
             0f,
         )
-    }
-
-    // ── source_boosts, which used to be decoded and dropped ──────────────
-
-    @Test
-    fun `planner source boosts scale a whole source`() {
-        val weights = silent.copy(qobuz = 1f)
-        val candidate = RadioCandidate(track(), CandidateOrigin.SIMILAR_ARTIST)
-        val plain = scoreOf(candidate, weights)
-        val boosted = scoreOf(
-            candidate, weights,
-            context(boosts = mapOf(CandidateOrigin.SIMILAR_ARTIST.boostKey to 2f)),
-        )
-        assertEquals(plain * 2f, boosted, 1e-5f)
-        assertNotEquals(plain, boosted)
-    }
-
-    @Test
-    fun `a boost for another source leaves this one alone`() {
-        val weights = silent.copy(qobuz = 1f)
-        val candidate = RadioCandidate(track(), CandidateOrigin.SEED_ARTIST)
-        assertEquals(
-            scoreOf(candidate, weights),
-            scoreOf(candidate, weights, context(boosts = mapOf(CandidateOrigin.SEARCH.boostKey to 3f))),
-            0f,
-        )
-    }
-
-    @Test
-    fun `a nonsense boost is ignored rather than wrecking the batch`() {
-        val weights = silent.copy(qobuz = 1f)
-        val candidate = RadioCandidate(track(), CandidateOrigin.SEARCH)
-        val plain = scoreOf(candidate, weights)
-        for (bad in listOf(Float.NaN, Float.NEGATIVE_INFINITY, -4f)) {
-            assertEquals(
-                "boost $bad must fall back to neutral",
-                plain,
-                scoreOf(candidate, weights, context(boosts = mapOf(CandidateOrigin.SEARCH.boostKey to bad))),
-                0f,
-            )
-        }
     }
 
     @Test

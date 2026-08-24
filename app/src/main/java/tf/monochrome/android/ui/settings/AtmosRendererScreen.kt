@@ -285,7 +285,7 @@ class AtmosRendererViewModel @Inject constructor(
                         resolver.delete(ContentUris.withAppendedId(audio, id), null, null)
                     }
                 }
-                "Already in your library — refresh the Local tab to find “Tryptify Atmos Test”."
+                "Already in your library. Refresh the Local tab to find “Tryptify Atmos Test”."
             } else runCatching {
                 val values = ContentValues().apply {
                     put(MediaStore.Audio.Media.DISPLAY_NAME, name)
@@ -299,7 +299,7 @@ class AtmosRendererViewModel @Inject constructor(
                 resolver.openOutputStream(uri)?.use { out ->
                     context.assets.open("atmos_test.mp4").use { it.copyTo(out) }
                 } ?: error("cannot open output")
-                "Added “Tryptify Atmos Test” — refresh the Local library to play it."
+                "Added “Tryptify Atmos Test”. Refresh the Local library to play it."
             }.getOrElse { "Couldn't add the test track (${it.message})." }
         }
     }
@@ -362,7 +362,7 @@ fun AtmosRendererScreen(
                 if (d != null) {
                     val rate = if (d.sampleRate % 1000 == 0) "${d.sampleRate / 1000} kHz"
                     else "${d.sampleRate} Hz"
-                    "Live: ${d.layoutName} · ${d.channelCount} ch · $rate — " +
+                    "Live: ${d.layoutName} · ${d.channelCount} ch · $rate. " +
                         "each speaker glows with its channel's level."
                 } else {
                     "Speakers the current mix drives, lit on their room positions. " +
@@ -386,7 +386,7 @@ fun AtmosRendererScreen(
             SectionHeader("Test Track")
             val testStatus by viewModel.testTrackStatus.collectAsStateWithLifecycle()
             Text(
-                "A bundled E-AC-3 JOC channel check — a voice moving through the " +
+                "A bundled E-AC-3 JOC channel check: a voice moving through the " +
                     "Atmos positions. Add it to your library to hear the renderer work.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -416,7 +416,7 @@ fun AtmosRendererScreen(
                     "Multichannel tracks fold into stereo (fixed matrix) and run " +
                         "through DSP/EQ."
                 } else {
-                    "Off — multichannel passes to the device untouched; DSP/EQ " +
+                    "Off. Multichannel passes to the device untouched; DSP/EQ " +
                         "bypassed for those tracks."
                 },
                 checked = downmixEnabled,
@@ -459,7 +459,7 @@ fun AtmosRendererScreen(
                 subtitle = if (profile.hrtfEnabled) {
                     "Atmos objects are placed around your head via the HRTF below."
                 } else {
-                    "Off — Atmos tracks use the coefficient downmix renderer."
+                    "Off. Atmos tracks use the coefficient downmix renderer."
                 },
                 checked = profile.hrtfEnabled,
                 onCheckedChange = { viewModel.setSpatial(it) },
@@ -478,7 +478,7 @@ fun AtmosRendererScreen(
                     }
                     when {
                         status?.second == false -> Text(
-                            "⚠ $selectedName was REJECTED by the SOFA loader — " +
+                            "⚠ $selectedName was REJECTED by the SOFA loader. " +
                                 "the render is using the built-in KEMAR HRTF instead. " +
                                 "The file may be truncated, unsupported, or not a SOFA.",
                             style = MaterialTheme.typography.bodySmall,
@@ -490,7 +490,7 @@ fun AtmosRendererScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         else -> Text(
-                            "Selected: $selectedName — applies when playback (re)starts.",
+                            "Selected: $selectedName. Applies when playback (re)starts.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

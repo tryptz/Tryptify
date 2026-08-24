@@ -3,6 +3,8 @@ package tf.monochrome.android.ui.eq
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -86,7 +88,12 @@ class ParametricEqViewModel @Inject constructor(
             }
             val activeId = preferences.paramEqActivePresetId.first()
             if (activeId != null) {
+                // See EqViewModel: the active id and the preset row arrive by
+                // different roads, so read first and wait only if it is missing.
                 _activePreset.value = repository.getPresetById(activeId)
+                    ?: withTimeoutOrNull(PRESET_RESTORE_WAIT_MS) {
+                        repository.getPresetByIdFlow(activeId).filterNotNull().first()
+                    }
             }
             if (_currentBands.value.isNotEmpty() && _selectedBandId.value < 0) {
                 _selectedBandId.value = _currentBands.value.first().id
@@ -335,6 +342,8 @@ class ParametricEqViewModel @Inject constructor(
     )
 
     private companion object {
+        const val PRESET_RESTORE_WAIT_MS = 8_000L
+
         /** Drag-tail delay before a continuous edit reaches DataStore. */
         const val PERSIST_DEBOUNCE_MS = 120L
     }
