@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+#### The frame-rate list comes from the panel, and Unlocked means the panel's maximum
+- **Settings › System › Display › Frame Rate offers what the display actually has** — a 165 Hz phone is offered 165, a 144 Hz one 144, a 90 Hz one 90. The list was a fixed Unlocked/60/120, which on a 165 Hz panel had no way to ask for 165 and on a 90 Hz one offered a 120 that could only resolve back down to 90. Rates are rounded, because a panel that means 165 reports 164.998, and the modes below 30 Hz that LTPO panels list for always-on are left out — they are how the display holds a still frame, not a rate to render the app at.
+- **Unlocked now resolves across every mode instead of only the ones at the current resolution** — the two are not independent on real hardware: a 165 Hz phone commonly reaches 165 only at 1080p and stops at 120 on its native 1440p, so taking the fastest mode at the native resolution pinned the app to 120 while the setting read "display max". A resolution you picked yourself still wins; only Native gives way, being the absence of a request rather than a request for the sharpest mode, and where several modes tie at the top rate the sharpest of those is still chosen.
+- **The chosen rate is now also sent as `preferredRefreshRate`**, for the OEM compositors that ignore a preferred mode id and read only the older field. It is derived from the same mode, so the two cannot disagree.
+
 ## [1.8.6]
 
 ### Removed

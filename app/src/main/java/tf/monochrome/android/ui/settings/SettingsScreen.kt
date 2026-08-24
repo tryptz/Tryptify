@@ -2901,17 +2901,40 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
 
         val appFps by viewModel.appTargetFps.collectAsStateWithLifecycle()
         val appResolution by viewModel.appRenderResolution.collectAsStateWithLifecycle()
+        val context = LocalContext.current
         // App-wide frame rate and panel resolution, applied by selecting a
-        // matching display mode in MainActivity. Resolution options only list
-        // classes the panel can reach; a request maps to the nearest mode.
+        // matching display mode in MainActivity. Both lists only offer what
+        // the panel can reach; a request maps to the nearest mode.
         var showFpsDropdown by remember { mutableStateOf(false) }
+        // Read off the panel instead of a fixed 60/120, so a 165 Hz phone is
+        // offered 165 and a 90 Hz one is offered 90 rather than a 120 that can
+        // only resolve back down to 90. Rounded, because a panel that means
+        // 165 reports 164.998. Rates below 30 are dropped: an LTPO panel lists
+        // the 1 Hz and 10 Hz modes it uses for always-on and for holding a
+        // still frame, and those are not offers to render the app at. Unlocked
+        // leads; a stored value stays listed even where this panel has no such
+        // mode, since settings restored from another phone can carry one and
+        // an option absent from the list is one the user can neither see nor
+        // change.
+        val fpsOptions = remember(appFps) {
+            val panelRates =
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    context.display?.supportedModes
+                        ?.map { it.refreshRate.roundToInt() }
+                        ?.filter { it >= 30 }
+                        .orEmpty()
+                } else {
+                    emptyList<Int>()
+                }
+            (listOf(0) + panelRates.ifEmpty { listOf(60, 120) } + appFps).distinct().sorted()
+        }
         SettingItem(
             title = "Frame Rate",
             subtitle = "Whole app: " + if (appFps == 0) "Unlocked (display max)" else "${appFps}fps",
             onClick = { showFpsDropdown = true }
         )
         DropdownMenu(expanded = showFpsDropdown, onDismissRequest = { showFpsDropdown = false }) {
-            listOf(0, 60, 120).forEach { fps ->
+            fpsOptions.forEach { fps ->
                 DropdownMenuItem(
                     text = { Text(if (fps == 0) "Unlocked" else "${fps}fps") },
                     onClick = { viewModel.setAppTargetFps(fps); showFpsDropdown = false }
@@ -2919,7 +2942,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             }
         }
 
-        val context = LocalContext.current
         var showResDropdown by remember { mutableStateOf(false) }
         val nativeShortSide = remember {
             val modes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {

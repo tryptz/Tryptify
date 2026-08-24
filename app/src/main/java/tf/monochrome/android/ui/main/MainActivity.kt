@@ -285,6 +285,16 @@ class MainActivity : ComponentActivity() {
      * Panels expose a fixed mode list, so a request maps to the nearest
      * supported mode — e.g. "720p" on a panel that only exposes 1080p and
      * 1440p modes applies 1080p.
+     *
+     * Unlocked is resolved across every mode rather than inside the chosen
+     * resolution, because on real panels the two are not independent: a
+     * 165 Hz phone commonly reaches 165 only at 1080p and stops at 120 on
+     * its native 1440p. Taking the fastest mode at the native resolution
+     * therefore pinned the app to 120 while the setting read "display max",
+     * which is the whole difference between unlocked and merely unset. A
+     * resolution the user picked still wins — only Native gives way, since
+     * it is the absence of a request rather than a request for the sharpest
+     * mode — and among modes tied at the top rate the sharpest still wins.
      */
     private fun applyDisplayMode(targetFps: Int, targetShortSide: Int) {
         val modes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -294,17 +304,31 @@ class MainActivity : ComponentActivity() {
             windowManager.defaultDisplay.supportedModes
         }
         if (modes.isEmpty()) return
-        val nativeShort = modes.maxOf { minOf(it.physicalWidth, it.physicalHeight) }
-        val wantShort = if (targetShortSide <= 0) nativeShort else targetShortSide
-        val byShortSide = modes.groupBy { minOf(it.physicalWidth, it.physicalHeight) }
-        val chosenShort = byShortSide.keys.minByOrNull { kotlin.math.abs(it - wantShort) } ?: return
-        val candidates = byShortSide.getValue(chosenShort)
-        val chosen = if (targetFps <= 0) {
-            candidates.maxByOrNull { it.refreshRate }
+        val chosen = if (targetFps <= 0 && targetShortSide <= 0) {
+            // Half a hertz of tolerance because a panel that means 165 reports
+            // 164.998, and its second 165 mode need not report the same float.
+            val topRate = modes.maxOf { it.refreshRate }
+            modes.filter { it.refreshRate >= topRate - 0.5f }
+                .maxByOrNull { minOf(it.physicalWidth, it.physicalHeight) }
         } else {
-            candidates.minByOrNull { kotlin.math.abs(it.refreshRate - targetFps) }
+            val nativeShort = modes.maxOf { minOf(it.physicalWidth, it.physicalHeight) }
+            val wantShort = if (targetShortSide <= 0) nativeShort else targetShortSide
+            val byShortSide = modes.groupBy { minOf(it.physicalWidth, it.physicalHeight) }
+            val chosenShort = byShortSide.keys.minByOrNull { kotlin.math.abs(it - wantShort) } ?: return
+            val candidates = byShortSide.getValue(chosenShort)
+            if (targetFps <= 0) {
+                candidates.maxByOrNull { it.refreshRate }
+            } else {
+                candidates.minByOrNull { kotlin.math.abs(it.refreshRate - targetFps) }
+            }
         } ?: return
-        window.attributes = window.attributes.apply { preferredDisplayModeId = chosen.modeId }
+        // The mode id is the binding request. The rate is the same choice in
+        // the older form, for the compositors that ignore a mode id and read
+        // only this; it is derived from the mode, so the two cannot disagree.
+        window.attributes = window.attributes.apply {
+            preferredDisplayModeId = chosen.modeId
+            preferredRefreshRate = chosen.refreshRate
+        }
     }
 
     /**
