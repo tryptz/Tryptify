@@ -4,10 +4,10 @@
 
 ### Added
 
-#### The frame-rate list comes from the panel, and Unlocked means the panel's maximum
+#### The frame-rate list comes from the panel, and Unlocked stops overriding it
 - **Settings › System › Display › Frame Rate offers what the display actually has** — a 165 Hz phone is offered 165, a 144 Hz one 144, a 90 Hz one 90. The list was a fixed Unlocked/60/120, which on a 165 Hz panel had no way to ask for 165 and on a 90 Hz one offered a 120 that could only resolve back down to 90. Rates are rounded, because a panel that means 165 reports 164.998, and the modes below 30 Hz that LTPO panels list for always-on are left out — they are how the display holds a still frame, not a rate to render the app at.
-- **Unlocked now resolves across every mode instead of only the ones at the current resolution** — the two are not independent on real hardware: a 165 Hz phone commonly reaches 165 only at 1080p and stops at 120 on its native 1440p, so taking the fastest mode at the native resolution pinned the app to 120 while the setting read "display max". A resolution you picked yourself still wins; only Native gives way, being the absence of a request rather than a request for the sharpest mode, and where several modes tie at the top rate the sharpest of those is still chosen.
-- **The chosen rate is now also sent as `preferredRefreshRate`**, for the OEM compositors that ignore a preferred mode id and read only the older field. It is derived from the same mode, so the two cannot disagree.
+- **Unlocked stops overriding anything at all** — it used to pin the fastest mode it could find, and a pin at the ceiling is still a lock. It now clears the window's preferred mode and rate outright, so the app holds no refresh-rate vote and system policy alone decides. This is what an external per-app override needs in order to be the only voice: a vendor refresh-rate service voting 165 for this package was contested by whatever mode the window pinned, and on a panel that reaches its top rate only at a lower resolution the pinned mode was the slower of the two. A resolution you asked for is still a request, and a mode id cannot state one without also stating a rate, so that path still pins — at the fastest mode the chosen resolution has. The setting says which of the two you are getting rather than claiming "display max" for both.
+- **The chosen rate is now also sent as `preferredRefreshRate`** where a mode is pinned, for the OEM compositors that ignore a preferred mode id and read only the older field. It is derived from the same mode, so the two cannot disagree — and where nothing is pinned it is cleared alongside the mode id, so no stale rate outlives the override.
 
 ## [1.8.6]
 

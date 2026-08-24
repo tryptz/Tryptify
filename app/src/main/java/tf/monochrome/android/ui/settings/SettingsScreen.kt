@@ -2930,7 +2930,15 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
         SettingItem(
             title = "Frame Rate",
-            subtitle = "Whole app: " + if (appFps == 0) "Unlocked (display max)" else "${appFps}fps",
+            // Unlocked reads differently depending on the resolution beside
+            // it, because only one of the two combinations withdraws the
+            // window's vote; saying "display max" for both would describe an
+            // override in the one case where the point is that there is none.
+            subtitle = "Whole app: " + when {
+                appFps > 0 -> "${appFps}fps"
+                appResolution > 0 -> "Unlocked, fastest mode at the chosen resolution"
+                else -> "Unlocked, no override — the system decides"
+            },
             onClick = { showFpsDropdown = true }
         )
         DropdownMenu(expanded = showFpsDropdown, onDismissRequest = { showFpsDropdown = false }) {

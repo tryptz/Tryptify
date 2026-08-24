@@ -286,17 +286,30 @@ class MainActivity : ComponentActivity() {
      * supported mode — e.g. "720p" on a panel that only exposes 1080p and
      * 1440p modes applies 1080p.
      *
-     * Unlocked is resolved across every mode rather than inside the chosen
-     * resolution, because on real panels the two are not independent: a
-     * 165 Hz phone commonly reaches 165 only at 1080p and stops at 120 on
-     * its native 1440p. Taking the fastest mode at the native resolution
-     * therefore pinned the app to 120 while the setting read "display max",
-     * which is the whole difference between unlocked and merely unset. A
-     * resolution the user picked still wins — only Native gives way, since
-     * it is the absence of a request rather than a request for the sharpest
-     * mode — and among modes tied at the top rate the sharpest still wins.
+     * Unlocked at the native resolution is the absence of a request, and is
+     * answered by withdrawing from the question rather than by naming the
+     * fastest mode: id 0 and rate 0 clear any earlier pin, so the window
+     * holds no refresh-rate vote and system policy alone decides. That is
+     * what an external per-app override needs to be the only voice — a
+     * vendor refresh-rate service voting min = max = 165 for this package
+     * is contested by any mode this window pins, and on a panel whose top
+     * rate lives at a lower resolution the mode we would have pinned is the
+     * slower of the two. It is also the honest reading of "unlocked": a pin
+     * at the ceiling is still a lock, just a high one.
+     *
+     * A resolution the user asked for is a request, and there is no way to
+     * state it without also stating a rate — a mode id carries both — so
+     * that path still pins, at the fastest mode the requested resolution
+     * has.
      */
     private fun applyDisplayMode(targetFps: Int, targetShortSide: Int) {
+        if (targetFps <= 0 && targetShortSide <= 0) {
+            window.attributes = window.attributes.apply {
+                preferredDisplayModeId = 0
+                preferredRefreshRate = 0f
+            }
+            return
+        }
         val modes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             display?.supportedModes ?: emptyArray()
         } else {
@@ -304,23 +317,15 @@ class MainActivity : ComponentActivity() {
             windowManager.defaultDisplay.supportedModes
         }
         if (modes.isEmpty()) return
-        val chosen = if (targetFps <= 0 && targetShortSide <= 0) {
-            // Half a hertz of tolerance because a panel that means 165 reports
-            // 164.998, and its second 165 mode need not report the same float.
-            val topRate = modes.maxOf { it.refreshRate }
-            modes.filter { it.refreshRate >= topRate - 0.5f }
-                .maxByOrNull { minOf(it.physicalWidth, it.physicalHeight) }
+        val nativeShort = modes.maxOf { minOf(it.physicalWidth, it.physicalHeight) }
+        val wantShort = if (targetShortSide <= 0) nativeShort else targetShortSide
+        val byShortSide = modes.groupBy { minOf(it.physicalWidth, it.physicalHeight) }
+        val chosenShort = byShortSide.keys.minByOrNull { kotlin.math.abs(it - wantShort) } ?: return
+        val candidates = byShortSide.getValue(chosenShort)
+        val chosen = if (targetFps <= 0) {
+            candidates.maxByOrNull { it.refreshRate }
         } else {
-            val nativeShort = modes.maxOf { minOf(it.physicalWidth, it.physicalHeight) }
-            val wantShort = if (targetShortSide <= 0) nativeShort else targetShortSide
-            val byShortSide = modes.groupBy { minOf(it.physicalWidth, it.physicalHeight) }
-            val chosenShort = byShortSide.keys.minByOrNull { kotlin.math.abs(it - wantShort) } ?: return
-            val candidates = byShortSide.getValue(chosenShort)
-            if (targetFps <= 0) {
-                candidates.maxByOrNull { it.refreshRate }
-            } else {
-                candidates.minByOrNull { kotlin.math.abs(it.refreshRate - targetFps) }
-            }
+            candidates.minByOrNull { kotlin.math.abs(it.refreshRate - targetFps) }
         } ?: return
         // The mode id is the binding request. The rate is the same choice in
         // the older form, for the compositors that ignore a mode id and read
