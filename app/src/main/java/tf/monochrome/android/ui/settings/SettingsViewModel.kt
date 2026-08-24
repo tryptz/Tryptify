@@ -293,10 +293,6 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val appTargetFps: StateFlow<Int> = preferences.appTargetFps
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-    val appRenderResolution: StateFlow<Int> = preferences.appRenderResolution
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val immersiveFullScreen: StateFlow<Boolean> = preferences.immersiveFullScreen
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val lowPerformanceMode: StateFlow<Boolean> = preferences.lowPerformanceMode
@@ -593,8 +589,6 @@ class SettingsViewModel @Inject constructor(
     fun setLyricsBassReact(value: Float) { viewModelScope.launch { preferences.setLyricsBassReact(value) } }
     fun setPlayerDynamicColor(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerDynamicColor(enabled) } }
     fun setPlayerBlurredBackground(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerBlurredBackground(enabled) } }
-    fun setAppTargetFps(fps: Int) { viewModelScope.launch { preferences.setAppTargetFps(fps) } }
-    fun setAppRenderResolution(shortSide: Int) { viewModelScope.launch { preferences.setAppRenderResolution(shortSide) } }
     fun setImmersiveFullScreen(enabled: Boolean) { viewModelScope.launch { preferences.setImmersiveFullScreen(enabled) } }
     // The master writes all three; each of the three re-derives the master.
     // Both directions are single DataStore transactions, so the four switches

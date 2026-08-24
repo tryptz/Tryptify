@@ -2,12 +2,13 @@
 
 ## [Unreleased]
 
-### Added
+### Removed
 
-#### The frame-rate list comes from the panel, and Unlocked stops overriding it
-- **Settings › System › Display › Frame Rate offers what the display actually has** — a 165 Hz phone is offered 165, a 144 Hz one 144, a 90 Hz one 90. The list was a fixed Unlocked/60/120, which on a 165 Hz panel had no way to ask for 165 and on a 90 Hz one offered a 120 that could only resolve back down to 90. Rates are rounded, because a panel that means 165 reports 164.998, and the modes below 30 Hz that LTPO panels list for always-on are left out — they are how the display holds a still frame, not a rate to render the app at.
-- **Unlocked stops overriding anything at all** — it used to pin the fastest mode it could find, and a pin at the ceiling is still a lock. It now clears the window's preferred mode and rate outright, so the app holds no refresh-rate vote and system policy alone decides. This is what an external per-app override needs in order to be the only voice: a vendor refresh-rate service voting 165 for this package was contested by whatever mode the window pinned, and on a panel that reaches its top rate only at a lower resolution the pinned mode was the slower of the two. A resolution you asked for is still a request, and a mode id cannot state one without also stating a rate, so that path still pins — at the fastest mode the chosen resolution has. The setting says which of the two you are getting rather than claiming "display max" for both.
-- **The chosen rate is now also sent as `preferredRefreshRate`** where a mode is pinned, for the OEM compositors that ignore a preferred mode id and read only the older field. It is derived from the same mode, so the two cannot disagree — and where nothing is pinned it is cleared alongside the mode id, so no stale rate outlives the override.
+#### The app no longer votes on the display's refresh rate
+- **Settings › System › Display › Frame Rate and Resolution are gone** — with them, the window's `preferredDisplayModeId` and `preferredRefreshRate`. The app now holds no display-mode preference at all, so the panel is left entirely to system policy and to whatever per-app override you have installed.
+- **The reason is that a pin is a vote, and a vote can be lost or won at the wrong value** — an external per-app override asking a OnePlus panel for 165 was contested by whatever mode this window pinned, and on a display that offers its top rate only at a lower resolution the pinned mode was the slower of the two. The app was arguing its own display down. "Unlocked" was no defence either: a pin at the ceiling is still a lock, just a high one.
+- **A resolution could not be spared** — a mode id names a resolution and a refresh rate together, so there is no way to ask for one without also asserting the other. Keeping the Resolution row would have meant keeping the vote.
+- **Nothing needs migrating** — both were device-local and deliberately absent from `SETTINGS_SYNC_KEYS`, so no backup carried them and no account state refers to them. The two DataStore keys (`app_target_fps`, `app_render_resolution`) are simply no longer read; a phone that has them stored keeps the values as dead entries.
 
 ## [1.8.6]
 
