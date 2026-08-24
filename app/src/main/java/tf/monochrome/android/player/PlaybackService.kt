@@ -1073,6 +1073,7 @@ class PlaybackService : MediaSessionService() {
      * window keeps them in step. With only the resampler engaged the latency is
      * a few dozen samples, so the default feel-based window is used instead.
      */
+    @OptIn(UnstableApi::class)
     private fun pushAutoEqWarp() {
         val total = lastPitchRatio * 2f.pow(lastSemitones / 12f)
         val sampleRate = runCatching { player.audioFormat?.sampleRate ?: 0 }.getOrDefault(0)

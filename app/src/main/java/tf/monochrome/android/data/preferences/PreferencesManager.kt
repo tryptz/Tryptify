@@ -179,11 +179,9 @@ class PreferencesManager @Inject constructor(
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
-        private val APP_TARGET_FPS = intPreferencesKey("app_target_fps")
-        private val APP_RENDER_RESOLUTION = intPreferencesKey("app_render_resolution")
-        // Device-local, like the two above it: which bars a panel has and
-        // whether you want them is a property of the phone in your hand, not of
-        // the account. Deliberately absent from SETTINGS_SYNC_KEYS.
+        // Device-local: which bars a panel has and whether you want them is a
+        // property of the phone in your hand, not of the account. Deliberately
+        // absent from SETTINGS_SYNC_KEYS.
         private val IMMERSIVE_FULL_SCREEN = booleanPreferencesKey("immersive_full_screen")
 
         // Low performance mode. The automatic DeviceTier already trims effects on
@@ -1973,18 +1971,6 @@ class PreferencesManager @Inject constructor(
     val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: true }
     suspend fun setPlayerBlurredBackground(enabled: Boolean) {
         dataStore.edit { it[PLAYER_BLURRED_BACKGROUND] = enabled }
-    }
-
-    // --- Display: app-wide frame rate & panel resolution ---
-    // 0 = unlocked (display max) / native resolution. Resolution is stored as
-    // the target shortest side in px (720 / 1080 / 1440 / 2160).
-    val appTargetFps: Flow<Int> = dataStore.data.map { it[APP_TARGET_FPS] ?: 0 }
-    val appRenderResolution: Flow<Int> = dataStore.data.map { it[APP_RENDER_RESOLUTION] ?: 0 }
-    suspend fun setAppTargetFps(fps: Int) {
-        dataStore.edit { it[APP_TARGET_FPS] = fps }
-    }
-    suspend fun setAppRenderResolution(shortSide: Int) {
-        dataStore.edit { it[APP_RENDER_RESOLUTION] = shortSide }
     }
 
     /** Hide the status and navigation bars app-wide; a swipe reveals them. */

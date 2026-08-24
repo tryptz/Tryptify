@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+#### The app no longer votes on the display's refresh rate
+- **Settings › System › Display › Frame Rate and Resolution are gone** — with them, the window's `preferredDisplayModeId` and `preferredRefreshRate`. The app now holds no display-mode preference at all, so the panel is left entirely to system policy and to whatever per-app override you have installed.
+- **The reason is that a pin is a vote, and a vote can be lost or won at the wrong value** — an external per-app override asking a OnePlus panel for 165 was contested by whatever mode this window pinned, and on a display that offers its top rate only at a lower resolution the pinned mode was the slower of the two. The app was arguing its own display down. "Unlocked" was no defence either: a pin at the ceiling is still a lock, just a high one.
+- **A resolution could not be spared** — a mode id names a resolution and a refresh rate together, so there is no way to ask for one without also asserting the other. Keeping the Resolution row would have meant keeping the vote.
+- **Nothing needs migrating** — both were device-local and deliberately absent from `SETTINGS_SYNC_KEYS`, so no backup carried them and no account state refers to them. The two DataStore keys (`app_target_fps`, `app_render_resolution`) are simply no longer read; a phone that has them stored keeps the values as dead entries.
+
 ## [1.8.6]
 
 ### Removed

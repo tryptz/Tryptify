@@ -2899,62 +2899,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             onCheckedChange = { viewModel.setImmersiveFullScreen(it) }
         )
 
-        val appFps by viewModel.appTargetFps.collectAsStateWithLifecycle()
-        val appResolution by viewModel.appRenderResolution.collectAsStateWithLifecycle()
-        // App-wide frame rate and panel resolution, applied by selecting a
-        // matching display mode in MainActivity. Resolution options only list
-        // classes the panel can reach; a request maps to the nearest mode.
-        var showFpsDropdown by remember { mutableStateOf(false) }
-        SettingItem(
-            title = "Frame Rate",
-            subtitle = "Whole app: " + if (appFps == 0) "Unlocked (display max)" else "${appFps}fps",
-            onClick = { showFpsDropdown = true }
-        )
-        DropdownMenu(expanded = showFpsDropdown, onDismissRequest = { showFpsDropdown = false }) {
-            listOf(0, 60, 120).forEach { fps ->
-                DropdownMenuItem(
-                    text = { Text(if (fps == 0) "Unlocked" else "${fps}fps") },
-                    onClick = { viewModel.setAppTargetFps(fps); showFpsDropdown = false }
-                )
-            }
-        }
-
-        val context = LocalContext.current
-        var showResDropdown by remember { mutableStateOf(false) }
-        val nativeShortSide = remember {
-            val modes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                context.display?.supportedModes
-            } else null
-            modes?.maxOfOrNull { minOf(it.physicalWidth, it.physicalHeight) }
-                ?: minOf(
-                    context.resources.displayMetrics.widthPixels,
-                    context.resources.displayMetrics.heightPixels,
-                )
-        }
-        val resolutionOptions = remember(nativeShortSide) {
-            listOf(0) + listOf(720, 1080, 1440, 2160).filter { it <= nativeShortSide }
-        }
-        fun resolutionLabel(shortSide: Int) = when {
-            shortSide == 0 -> "Native"
-            shortSide >= 2160 -> "4K (2160p)"
-            shortSide >= 1440 -> "2K (1440p)"
-            shortSide >= 1080 -> "1080p"
-            else -> "720p"
-        }
-        SettingItem(
-            title = "Resolution",
-            subtitle = "Whole app: ${resolutionLabel(appResolution)}. Nearest panel mode is used",
-            onClick = { showResDropdown = true }
-        )
-        DropdownMenu(expanded = showResDropdown, onDismissRequest = { showResDropdown = false }) {
-            resolutionOptions.forEach { shortSide ->
-                DropdownMenuItem(
-                    text = { Text(resolutionLabel(shortSide)) },
-                    onClick = { viewModel.setAppRenderResolution(shortSide); showResDropdown = false }
-                )
-            }
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Diagnostics")
         SettingItem(

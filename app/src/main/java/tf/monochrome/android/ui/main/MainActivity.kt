@@ -32,7 +32,6 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.SupabaseAuthManager
@@ -116,15 +115,15 @@ class MainActivity : ComponentActivity() {
 
         FrequencyTargets.init(applicationContext)
 
-        // Apply the user's app-wide frame-rate / resolution preference by
-        // selecting a matching panel display mode. Defaults (0/0) mean
-        // unlocked refresh at native resolution — the old forced-max
-        // behaviour. Re-applies live whenever either setting changes.
-        lifecycleScope.launch {
-            combine(preferences.appTargetFps, preferences.appRenderResolution) { fps, res ->
-                fps to res
-            }.collect { (fps, res) -> applyDisplayMode(fps, res) }
-        }
+        // No display-mode preference is applied, and none should be added
+        // back: this window deliberately holds no refresh-rate or resolution
+        // vote, so the panel is left entirely to system policy and to any
+        // per-app override the user has installed. Pinning a mode here — even
+        // at the panel's ceiling — is a competing vote, and on a display whose
+        // top rate is only offered at a lower resolution it is a slower one
+        // than the override asked for, so the app ended up arguing its own
+        // display down. What used to be Settings › System › Display › Frame
+        // Rate and Resolution was removed for this reason.
 
         // Root container wrapping the Compose content. (Real glass blur is
         // handled by Haze in-Compose; no native BlurView wrapper is needed.)
@@ -277,34 +276,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    /**
-     * Picks the display mode closest to the requested short-side resolution
-     * and refresh rate; 0 means no cap (native resolution / maximum refresh).
-     * Panels expose a fixed mode list, so a request maps to the nearest
-     * supported mode — e.g. "720p" on a panel that only exposes 1080p and
-     * 1440p modes applies 1080p.
-     */
-    private fun applyDisplayMode(targetFps: Int, targetShortSide: Int) {
-        val modes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            display?.supportedModes ?: emptyArray()
-        } else {
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.supportedModes
-        }
-        if (modes.isEmpty()) return
-        val nativeShort = modes.maxOf { minOf(it.physicalWidth, it.physicalHeight) }
-        val wantShort = if (targetShortSide <= 0) nativeShort else targetShortSide
-        val byShortSide = modes.groupBy { minOf(it.physicalWidth, it.physicalHeight) }
-        val chosenShort = byShortSide.keys.minByOrNull { kotlin.math.abs(it - wantShort) } ?: return
-        val candidates = byShortSide.getValue(chosenShort)
-        val chosen = if (targetFps <= 0) {
-            candidates.maxByOrNull { it.refreshRate }
-        } else {
-            candidates.minByOrNull { kotlin.math.abs(it.refreshRate - targetFps) }
-        } ?: return
-        window.attributes = window.attributes.apply { preferredDisplayModeId = chosen.modeId }
     }
 
     /**
