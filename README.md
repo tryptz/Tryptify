@@ -227,4 +227,4 @@ A few deliberate choices keep a real-time audio app from failing silently on rea
 
 ## Author
 
-Built by **[tryptz](https://github.com/tryptz)** — self-taught Android / audio-systems developer (Kotlin · Jetpack Compose · C++/JNI DSP).
+Built by **[tryptz](https://github.com/tryptz)**
