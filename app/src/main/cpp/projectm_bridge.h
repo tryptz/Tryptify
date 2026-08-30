@@ -35,6 +35,7 @@ public:
     void SetQuality(int mesh_width, int mesh_height);
     void SetFps(int fps);
     void SetPresetDuration(int seconds);
+    void SetPresetRotationEnabled(bool enabled);
     std::string CurrentPreset() const;
 
     void Touch(float x, float y, int pressure, int touch_type);
@@ -70,6 +71,7 @@ private:
     projectm_playlist_handle playlist_ = nullptr;
     AudioRingBuffer audio_buffer_;
     bool paused_ = false;
+    bool preset_rotation_enabled_ = true;
     int brightness_ = 80;
     float smoothed_rms_ = 0.0f;
 };

@@ -22,6 +22,13 @@
 
 ### Fixed
 
+#### Preset rotation can be turned off
+- **Settings › Visualizer › Preset rotation** switches the timed preset change off. The preset you pick then stays until you change it.
+- **It uses projectM's own preset lock, not a very long timer.** A duration large enough to feel like "off" is still a timer and would move the preset eventually on a long listen; the lock stops the automatic transitions outright, hard and soft alike, while leaving a preset chosen by hand — from the browser, or Next — working exactly as before.
+- **Setting a duration is what rotation being on looks like**, so the lock is re-asserted behind it on both sides of the bridge. Without that, nudging the duration slider while rotation was off would quietly start it again.
+- **The rotation-seconds slider is hidden while it is off**, since there is no timer for it to describe.
+- **Auto-shuffle's description was wrong and now is not.** It said it rotated presets during playback, which is the timer's job; what it actually does is pick a new preset for each track and draw them in random order rather than in turn. The two are separate controls and now say so.
+
 #### Target FPS goes to 240, and now caps something
 - **The slider reaches 240** instead of stopping at 144, which was below what current panels run at.
 - **It was not capping anything.** The setting said "capped by Target FPS" and the renderer had no limiter in it; the value was only forwarded to projectM, where it is documentation for presets rather than a throttle. With vsync off the visualizer ran at whatever the GPU would give.

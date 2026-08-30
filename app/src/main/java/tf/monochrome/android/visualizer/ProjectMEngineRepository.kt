@@ -84,6 +84,7 @@ class ProjectMEngineRepository @Inject constructor(
     private var beatSensitivity: Int = 50
     private var brightness: Int = 80
     private var rotationSeconds: Int = 20
+    private var presetRotationEnabled: Boolean = true
     private var playbackPaused: Boolean = false
 
     // Track whether there is an active GL surface. Only the most recent
@@ -255,6 +256,14 @@ class ProjectMEngineRepository @Inject constructor(
                 brightness = value
                 synchronized(engineLock) {
                     if (nativeInitialized) nativeBridge.setBrightness(value)
+                }
+            }
+        }
+        scope.launch {
+            preferences.visualizerPresetRotation.collectLatest { enabled ->
+                presetRotationEnabled = enabled
+                synchronized(engineLock) {
+                    if (nativeInitialized) applyRotationLocked()
                 }
             }
         }
@@ -667,6 +676,9 @@ class ProjectMEngineRepository @Inject constructor(
         val seconds = rotationSeconds.coerceIn(5, 120)
         nativeBridge.setPresetShuffleEnabled(_autoShuffle.value)
         nativeBridge.configurePresetDuration(seconds)
+        // Last, and after the duration: setting a duration is what rotation
+        // being on looks like, so the lock has to be re-asserted behind it.
+        nativeBridge.setPresetRotationEnabled(presetRotationEnabled)
     }
 
     private fun updateCurrentPresetFromPathLocked(path: String?) {

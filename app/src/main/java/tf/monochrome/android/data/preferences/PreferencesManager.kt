@@ -259,6 +259,7 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_AUTO_SHUFFLE = booleanPreferencesKey("visualizer_auto_shuffle")
         private val VISUALIZER_PRESET_ID = stringPreferencesKey("visualizer_preset_id")
         private val VISUALIZER_ROTATION_SECONDS = intPreferencesKey("visualizer_rotation_seconds")
+        private val VISUALIZER_PRESET_ROTATION = booleanPreferencesKey("visualizer_preset_rotation")
         private val VISUALIZER_TEXTURE_SIZE = intPreferencesKey("visualizer_texture_size")
         private val VISUALIZER_MESH_X = intPreferencesKey("visualizer_mesh_x")
         private val VISUALIZER_MESH_Y = intPreferencesKey("visualizer_mesh_y")
@@ -406,7 +407,8 @@ class PreferencesManager @Inject constructor(
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
-            VISUALIZER_ROTATION_SECONDS, VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
+            VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION,
+            VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
             VISUALIZER_TOUCH_WAVEFORM, VISUALIZER_FAVORITE_PRESETS,
             SPECTRUM_ANALYZER_ENABLED, SPECTRUM_SHOW_ON_NOW_PLAYING, SPECTRUM_FFT_SIZE,
             EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
@@ -1191,6 +1193,14 @@ class PreferencesManager @Inject constructor(
     val visualizerAutoShuffle: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_AUTO_SHUFFLE] ?: true }
     val visualizerPresetId: Flow<String?> = dataStore.data.map { it[VISUALIZER_PRESET_ID] }
     val visualizerRotationSeconds: Flow<Int> = dataStore.data.map { it[VISUALIZER_ROTATION_SECONDS] ?: 20 }
+
+    /** Whether presets change on their own at all. On, as they always have. */
+    val visualizerPresetRotation: Flow<Boolean> =
+        dataStore.data.map { it[VISUALIZER_PRESET_ROTATION] ?: true }
+
+    suspend fun setVisualizerPresetRotation(enabled: Boolean) {
+        dataStore.edit { it[VISUALIZER_PRESET_ROTATION] = enabled }
+    }
     val visualizerTextureSize: Flow<Int> = dataStore.data.map { it[VISUALIZER_TEXTURE_SIZE] ?: 1024 }
     val visualizerMeshX: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_X] ?: 32 }
     val visualizerMeshY: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_Y] ?: 24 }

@@ -918,6 +918,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val autoShuffle by viewModel.visualizerAutoShuffle.collectAsStateWithLifecycle()
     val presetId by viewModel.visualizerPresetId.collectAsStateWithLifecycle()
     val rotationSeconds by viewModel.visualizerRotationSeconds.collectAsStateWithLifecycle()
+    val presetRotation by viewModel.visualizerPresetRotation.collectAsStateWithLifecycle()
     val textureSize by viewModel.visualizerTextureSize.collectAsStateWithLifecycle()
     val meshX by viewModel.visualizerMeshX.collectAsStateWithLifecycle()
     val meshY by viewModel.visualizerMeshY.collectAsStateWithLifecycle()
@@ -1093,7 +1094,8 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         )
         SettingSwitchItem(
             title = "Auto-shuffle Presets",
-            subtitle = "Rotate bundled presets automatically during playback",
+            subtitle = "Pick a new preset for each track, in random order rather " +
+                "than in turn. Separate from the timer above.",
             checked = autoShuffle,
             onCheckedChange = { viewModel.setVisualizerAutoShuffle(it) }
         )
@@ -1212,12 +1214,24 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             onClick = {}
         )
 
-        IntSettingSlider(
-            value = rotationSeconds,
-            valueRange = 5f..120f,
-            onCommit = { viewModel.setVisualizerRotationSeconds(it) },
-            label = { "Preset Rotation: ${it}s" },
+        SettingSwitchItem(
+            title = "Preset rotation",
+            subtitle = "Change preset on a timer. Off holds the current one; " +
+                "picking a preset and Next still work, and Auto-shuffle still " +
+                "changes it on a new track.",
+            checked = presetRotation,
+            onCheckedChange = { viewModel.setVisualizerPresetRotation(it) }
         )
+
+        // Only worth showing when something is on a timer.
+        if (presetRotation) {
+            IntSettingSlider(
+                value = rotationSeconds,
+                valueRange = 5f..120f,
+                onCommit = { viewModel.setVisualizerRotationSeconds(it) },
+                label = { "Preset Rotation: ${it}s" },
+            )
+        }
 
         IntSettingSlider(
             value = sensitivity,

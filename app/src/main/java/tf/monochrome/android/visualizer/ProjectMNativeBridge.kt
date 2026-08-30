@@ -142,6 +142,20 @@ class ProjectMNativeBridge {
         }
     }
 
+    /**
+     * Whether presets change on their own.
+     *
+     * Off uses projectM's preset lock rather than a duration long enough to
+     * feel like off: the lock stops the timed transitions outright, while a
+     * very long timer is still a timer and would move the preset eventually on
+     * a long listen. Choosing one by hand, and Next, work either way.
+     */
+    internal fun setPresetRotationEnabled(enabled: Boolean) {
+        if (nativeHandle != 0L) {
+            nativeSetPresetRotationEnabled(nativeHandle, enabled)
+        }
+    }
+
     internal fun configurePresetDuration(seconds: Int) {
         if (nativeHandle != 0L) {
             nativeSetPresetDuration(nativeHandle, seconds.coerceIn(5, 120))
@@ -190,6 +204,7 @@ class ProjectMNativeBridge {
     private external fun nativeSetQuality(handle: Long, meshWidth: Int, meshHeight: Int)
     private external fun nativeSetFps(handle: Long, fps: Int)
     private external fun nativeSetPresetDuration(handle: Long, seconds: Int)
+    private external fun nativeSetPresetRotationEnabled(handle: Long, enabled: Boolean)
     private external fun nativeTouch(handle: Long, x: Float, y: Float, pressure: Int, touchType: Int)
     private external fun nativeTouchDrag(handle: Long, x: Float, y: Float, pressure: Int)
     private external fun nativeTouchDestroy(handle: Long, x: Float, y: Float)

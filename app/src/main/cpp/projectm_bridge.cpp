@@ -185,6 +185,22 @@ void ProjectMBridge::SetFps(int fps) {
     }
 }
 
+/**
+ * Turn the timed preset change on or off.
+ *
+ * projectM's own preset lock, not a very long duration standing in for one: it
+ * stops the automatic transitions, hard and soft alike, while leaving a preset
+ * chosen by hand -- from the browser, or Next -- working exactly as before.
+ * A duration large enough to feel like off is still a timer, and would move the
+ * preset eventually on a long listen.
+ */
+void ProjectMBridge::SetPresetRotationEnabled(bool enabled) {
+    preset_rotation_enabled_ = enabled;
+    if (projectm_ != nullptr) {
+        projectm_set_preset_locked(projectm_, !enabled);
+    }
+}
+
 void ProjectMBridge::SetPresetDuration(int seconds) {
     if (projectm_ == nullptr) {
         return;
@@ -194,6 +210,10 @@ void ProjectMBridge::SetPresetDuration(int seconds) {
     projectm_set_soft_cut_duration(projectm_, std::min(3.0, clamped / 4.0));
     projectm_set_hard_cut_enabled(projectm_, true);
     projectm_set_hard_cut_duration(projectm_, std::max(5.0, clamped * 0.75));
+    // Re-asserted because the calls above are what rotation being *on* looks
+    // like; without this, moving the duration slider while rotation is off
+    // would quietly start it again.
+    projectm_set_preset_locked(projectm_, !preset_rotation_enabled_);
 }
 
 std::string ProjectMBridge::CurrentPreset() const {
