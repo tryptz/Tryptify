@@ -2,6 +2,7 @@ package tf.monochrome.android.ui.theme
 
 import android.content.Context
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.material3.ColorScheme
@@ -557,7 +558,12 @@ private fun darkSchemeFor(themeName: String) = when (themeName) {
  * `system_accent1_*` ramp is left untouched by a contrast change, so seeding
  * from the ramp there would read a palette that never appears to change while
  * the whole system repaints around it. Below 34 the ramp is all there is.
+ *
+ * Annotated rather than guarded again internally: the ramp does not exist below
+ * Android 12 and reading it there would throw, so the caller's early return is
+ * the real precondition and this states it where the compiler can check it.
  */
+@RequiresApi(Build.VERSION_CODES.S)
 private fun systemPaletteSeed(context: Context, dark: Boolean): Int {
     val id = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         if (dark) android.R.color.system_primary_dark else android.R.color.system_primary_light
