@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.8.7]
 
 ### Removed
 
