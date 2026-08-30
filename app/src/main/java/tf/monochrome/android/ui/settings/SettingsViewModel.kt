@@ -319,6 +319,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 32)
     val visualizerMeshY: StateFlow<Int> = preferences.visualizerMeshY
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 24)
+    val visualizerAudioDelayMs: StateFlow<Int> = preferences.visualizerAudioDelayMs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     val visualizerTargetFps: StateFlow<Int> = preferences.visualizerTargetFps
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 60)
     val visualizerVsyncEnabled: StateFlow<Boolean> = preferences.visualizerVsyncEnabled
@@ -582,6 +585,7 @@ class SettingsViewModel @Inject constructor(
     fun setVisualizerTextureSize(size: Int) { viewModelScope.launch { preferences.setVisualizerTextureSize(size) } }
     fun setVisualizerMeshX(value: Int) { viewModelScope.launch { preferences.setVisualizerMeshX(value) } }
     fun setVisualizerMeshY(value: Int) { viewModelScope.launch { preferences.setVisualizerMeshY(value) } }
+    fun setVisualizerAudioDelayMs(value: Int) { viewModelScope.launch { preferences.setVisualizerAudioDelayMs(value) } }
     fun setVisualizerTargetFps(value: Int) { viewModelScope.launch { preferences.setVisualizerTargetFps(value) } }
     fun setLyrics3dRotation(value: Float) { viewModelScope.launch { preferences.setLyrics3dRotation(value) } }
     fun setLyrics3dWaveSpeed(value: Float) { viewModelScope.launch { preferences.setLyrics3dWaveSpeed(value) } }

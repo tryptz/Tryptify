@@ -136,6 +136,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.selectableThemes
 import tf.monochrome.android.ui.theme.themeDisplayNames
+import tf.monochrome.android.visualizer.ProjectMAudioBus
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 import tf.monochrome.android.ui.navigation.navigateSafe
@@ -921,6 +922,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val meshX by viewModel.visualizerMeshX.collectAsStateWithLifecycle()
     val meshY by viewModel.visualizerMeshY.collectAsStateWithLifecycle()
     val targetFps by viewModel.visualizerTargetFps.collectAsStateWithLifecycle()
+    val audioDelayMs by viewModel.visualizerAudioDelayMs.collectAsStateWithLifecycle()
     val vsyncEnabled by viewModel.visualizerVsyncEnabled.collectAsStateWithLifecycle()
     val showFps by viewModel.visualizerShowFps.collectAsStateWithLifecycle()
     val fullscreen by viewModel.visualizerFullscreen.collectAsStateWithLifecycle()
@@ -1157,6 +1159,19 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             valueRange = 30f..144f,
             onCommit = { viewModel.setVisualizerTargetFps(it) },
             label = { if (vsyncEnabled) "Target FPS: $it" else "Target FPS: $it (vsync off)" },
+        )
+
+        // The visualizer is fed from inside the playback chain, so it always
+        // sees audio slightly before the output device plays it. Wired output
+        // hides that; Bluetooth does not.
+        IntSettingSlider(
+            value = audioDelayMs,
+            valueRange = 0f..ProjectMAudioBus.MAX_DELAY_MS.toFloat(),
+            onCommit = { viewModel.setVisualizerAudioDelayMs(it) },
+            label = { if (it == 0) "Audio delay: off" else "Audio delay: $it ms" },
+            subtitle = "Holds the visualizer back to match what you hear. Raise it " +
+                "on Bluetooth, where the headphones add their own delay; leave it " +
+                "at zero on speaker or wired.",
         )
 
         SettingSwitchItem(

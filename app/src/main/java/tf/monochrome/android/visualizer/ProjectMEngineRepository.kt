@@ -211,6 +211,14 @@ class ProjectMEngineRepository @Inject constructor(
             }
         }
         scope.launch {
+            // Straight to the bus rather than through the engine: the delay is a
+            // property of the audio reaching the visualizer, and it applies just
+            // as much before the native engine exists as after.
+            preferences.visualizerAudioDelayMs.collectLatest { ms ->
+                audioBus.setDelayMs(ms)
+            }
+        }
+        scope.launch {
             preferences.visualizerTargetFps.collectLatest { fps ->
                 targetFps = fps
                 synchronized(engineLock) {

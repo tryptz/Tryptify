@@ -263,6 +263,7 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_MESH_X = intPreferencesKey("visualizer_mesh_x")
         private val VISUALIZER_MESH_Y = intPreferencesKey("visualizer_mesh_y")
         private val VISUALIZER_TARGET_FPS = intPreferencesKey("visualizer_target_fps")
+        private val VISUALIZER_AUDIO_DELAY_MS = intPreferencesKey("visualizer_audio_delay_ms")
         private val VISUALIZER_VSYNC_ENABLED = booleanPreferencesKey("visualizer_vsync_enabled")
         private val VISUALIZER_SHOW_FPS = booleanPreferencesKey("visualizer_show_fps")
         private val VISUALIZER_FULLSCREEN = booleanPreferencesKey("visualizer_fullscreen")
@@ -403,7 +404,7 @@ class PreferencesManager @Inject constructor(
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
-            VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS,
+            VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
             VISUALIZER_ROTATION_SECONDS, VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
             VISUALIZER_TOUCH_WAVEFORM, VISUALIZER_FAVORITE_PRESETS,
@@ -1193,6 +1194,24 @@ class PreferencesManager @Inject constructor(
     val visualizerTextureSize: Flow<Int> = dataStore.data.map { it[VISUALIZER_TEXTURE_SIZE] ?: 1024 }
     val visualizerMeshX: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_X] ?: 32 }
     val visualizerMeshY: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_Y] ?: 24 }
+    /**
+     * How far behind the audio the visualizer runs, in milliseconds.
+     *
+     * The tap that feeds the visualizer sits upstream of the output device, so
+     * the picture is always a little ahead of the sound. Over a wire the gap is
+     * small; over Bluetooth the codec and the receiver's buffering make it
+     * plainly visible. Zero by default because it is a property of whatever you
+     * are listening on, and the app has no reliable way to ask Android what the
+     * current route's latency is.
+     */
+    val visualizerAudioDelayMs: Flow<Int> = dataStore.data.map {
+        it[VISUALIZER_AUDIO_DELAY_MS] ?: 0
+    }
+
+    suspend fun setVisualizerAudioDelayMs(value: Int) {
+        dataStore.edit { it[VISUALIZER_AUDIO_DELAY_MS] = value }
+    }
+
     val visualizerTargetFps: Flow<Int> = dataStore.data.map {
         // First-run / never-set → fall back to the resolved performance tier's
         // ceiling (LOW=30, MID=60, HIGH=120). Once the user touches the setting,

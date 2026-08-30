@@ -22,6 +22,13 @@
 
 ### Fixed
 
+#### An audio delay, for when the visualizer runs ahead of the sound
+- **Settings › Visualizer › Audio delay** holds the visualizer back by up to half a second so what it draws matches what you hear. Off by default.
+- **The visualizer was always slightly early, and on Bluetooth plainly so.** Its audio is tapped from inside the playback chain, upstream of the output device, so it sees each buffer before the speaker plays it. Over a wire that head start is small enough to miss; over Bluetooth the codec and the receiver's own buffering push it into the low hundreds of milliseconds. Delaying the visualizer's copy is the only side that can move — the audio itself must not be.
+- **It is a manual setting because Android will not answer the question.** There is no dependable way to ask what the current route's latency is, least of all for A2DP, so a number the app invented would be wrong in a way you would then have to correct anyway. Set it once for your headphones and back to zero for the speaker.
+- **The queue is bounded by time rather than by a frame count now**, since it has to be long enough to hold the delay — a fixed eight buffers is a fraction of a second and would have thrown audio away before it came due. That also drops an O(n) `size()` call the audio thread was making for every buffer it published.
+- **The waveform overlay is deliberately not delayed.** It draws on its own whether or not the visualizer is running, so holding its samples back would freeze it whenever nothing was consuming the queue.
+
 #### The visualizer stops changing speed with the refresh rate
 - **Presets sped up and slowed down as the panel's refresh rate moved**, most visibly when it idled from 165Hz down to 55 and everything on screen ran at roughly a third of its proper speed.
 - **projectM was being told a frame rate it was not running at.** It does not time itself from that number — its own clock is the wall clock — but it hands the value to presets, and Milkdrop presets are written per frame: the ones that mean to hold a fixed speed divide their step by `fps`. The app set it once to a hardcoded 60 and thereafter to the Target FPS slider, so a preset compensating for 120 while 165 frames arrived moved a third too fast, and moved at under half speed when the panel dropped to 55.
