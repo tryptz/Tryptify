@@ -98,7 +98,7 @@ class ProjectMEngineRepository @Inject constructor(
     //
     // Guarded by engineLock, which renderFrame already holds, so draining costs
     // one field read per frame.
-    private var pendingPreset: VisualizerPreset? = null
+    private var pendingPreset: PendingPresetRequest? = null
     private var pendingQuality: Boolean = false
 
     // Set by the GLSurfaceView so a change made while paused still gets a frame
@@ -189,7 +189,7 @@ class ProjectMEngineRepository @Inject constructor(
                 val selected = _presets.value.firstOrNull { it.id == presetId }
                 if (selected != null) {
                     _currentPreset.value = selected
-                    requestPresetOnGlThread(selected)
+                    requestPresetOnGlThread(PendingPresetRequest.Select(selected))
                 }
             }
         }
@@ -393,15 +393,16 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
+    /**
+     * Advance to the next preset in the playlist.
+     *
+     * Queued rather than run here for the same reason selectPreset is: this is
+     * called from the overlay's Next button and from the player listener when a
+     * track changes with auto-shuffle on, both on the main thread, and loading a
+     * preset needs the GL context.
+     */
     fun nextPreset() {
-        synchronized(engineLock) {
-            if (!nativeInitialized) return
-            val currentPath = nativeBridge.nextPreset() ?: return
-            updateCurrentPresetFromPathLocked(currentPath)
-            scope.launch {
-                preferences.setVisualizerPresetId(_currentPreset.value?.id)
-            }
-        }
+        requestPresetOnGlThread(PendingPresetRequest.Next)
     }
 
     fun selectPreset(preset: VisualizerPreset) {
@@ -410,7 +411,7 @@ class ProjectMEngineRepository @Inject constructor(
         scope.launch {
             preferences.setVisualizerPresetId(preset.id)
         }
-        requestPresetOnGlThread(preset)
+        requestPresetOnGlThread(PendingPresetRequest.Select(preset))
     }
 
     fun setShuffleEnabled(enabled: Boolean) {
@@ -511,19 +512,50 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     /**
+     * A preset change waiting for the render thread.
+     *
+     * One field rather than a flag per kind, so the newest request wins instead
+     * of a queued Next and a queued Select both landing on the same frame in
+     * whatever order the drain happens to check them.
+     */
+    private sealed interface PendingPresetRequest {
+        /** A preset chosen by name, from the browser or a restored preference. */
+        data class Select(val preset: VisualizerPreset) : PendingPresetRequest
+
+        /** Whatever the playlist calls next -- the Next button, or auto-shuffle. */
+        data object Next : PendingPresetRequest
+    }
+
+    /**
      * Runs the work that was waiting for a GL context. Returns whether anything
      * was applied, so the caller knows this frame has something new to show.
      */
     private fun applyPendingGlWorkLocked(): Boolean {
         var applied = false
-        pendingPreset?.let { preset ->
+        pendingPreset?.let { request ->
             pendingPreset = null
-            // A false here means the path is not in the playlist -- a preset
-            // gone since it was chosen. Left alone deliberately: the caller has
-            // already shown it as selected, and the alternative, advancing the
-            // playlist, would answer a failed request by displaying some third
-            // preset nobody asked for.
-            applied = nativeBridge.setPreset(resolveAbsolutePresetPath(preset))
+            applied = when (request) {
+                // A false here means the path is not in the playlist -- a preset
+                // gone since it was chosen. Left alone deliberately: the caller
+                // has already shown it as selected, and the alternative,
+                // advancing the playlist, would answer a failed request by
+                // displaying some third preset nobody asked for.
+                is PendingPresetRequest.Select ->
+                    nativeBridge.setPreset(resolveAbsolutePresetPath(request.preset))
+
+                // Next only knows which preset it landed on after it has moved,
+                // so unlike Select the exposed state and the stored preference
+                // are settled here rather than by the caller.
+                PendingPresetRequest.Next -> {
+                    val path = nativeBridge.nextPreset()
+                    if (path != null) {
+                        updateCurrentPresetFromPathLocked(path)
+                        val id = _currentPreset.value?.id
+                        scope.launch { preferences.setVisualizerPresetId(id) }
+                    }
+                    path != null
+                }
+            }
         }
         if (pendingQuality) {
             pendingQuality = false
@@ -541,9 +573,9 @@ class ProjectMEngineRepository @Inject constructor(
      * takes engineLock while holding that one -- calling in while holding
      * engineLock is the other half of a deadlock.
      */
-    private fun requestPresetOnGlThread(preset: VisualizerPreset) {
+    private fun requestPresetOnGlThread(request: PendingPresetRequest) {
         val trigger = synchronized(engineLock) {
-            pendingPreset = preset
+            pendingPreset = request
             if (nativeInitialized) requestRender else null
         }
         trigger?.invoke()

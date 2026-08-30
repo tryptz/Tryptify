@@ -22,6 +22,20 @@
 
 ### Fixed
 
+#### Next in the visualizer switches on the press
+- **The Next button had the same problem the preset browser did, and did not get the same fix.** Choosing a preset by name was moved onto the render thread; advancing to the next one was left calling projectM from the main thread, where there is no GL context and the load does nothing. Auto-shuffle on a track change went the same way.
+- **It is queued with everything else now.** Where picking a preset by name knows which one it wants, Next only knows where it landed after it has moved, so the exposed preset and the stored preference are settled on the render thread with it rather than by the caller.
+- **The two requests share one slot**, so a press that arrives while another is still waiting for a frame replaces it instead of both landing on the same frame in whatever order they were checked.
+
+#### The visualizer holds the display at its own frame rate
+- **It ran at full speed only while the canvas was being touched** — 165fps on a 166Hz panel with a finger down, 55 on a 55Hz panel without one. The visualizer was never the limit: it draws once per vblank, and the panel was idling down because the app tells the display nothing about what it is drawing.
+- **The visualizer's surface now asks for the panel's own top rate while it is drawing**, and gives it back the moment playback stops. This is not the display-mode vote removed above: that set `preferredDisplayModeId` on the window, and a mode id names a resolution and a rate together, so the app asserted both and argued itself down against a per-app override. This is one float on one surface, no resolution and no mode, and the system stays free to decline.
+
+#### The preset browser is glass
+- **Its search was a plain outlined field**, the one kind of search bar the app had otherwise finished removing.
+- **It is `GlassSearchBar` now, cut from the mini player's material** like every other bar in the app, and it floats over the list rather than sitting in a column above it: the bar's measured height reaches the list as content padding, so no preset is hidden at rest and the rows slide up behind the glass as soon as you scroll.
+- **The tag filter moved inside the bar's own pane**, so the field and the chips are one sheet of glass rather than a bar with a second thing floating under it.
+
 #### Choosing a visualizer preset applies straight away
 - **A preset only appeared after the visualizer was closed and reopened.** Picking one from the sheet did nothing visible; shutting the visualizer down and starting it again showed the preset you had chosen before, one step behind, forever.
 - **The switch was being made on the wrong thread.** Loading a preset compiles its shaders, so it needs the GL context — and the context belongs to the GLSurfaceView's render thread. Both paths that changed a preset, the tap and the settings observer behind it, called into projectM from the main thread, where there is no context and the load quietly does nothing. The one path that worked was the engine's own start-up, which runs on the render thread when a surface attaches, and that is exactly why closing and reopening "fixed" it.
