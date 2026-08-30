@@ -1156,9 +1156,15 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
 
         IntSettingSlider(
             value = targetFps,
-            valueRange = 30f..144f,
+            valueRange = 30f..240f,
             onCommit = { viewModel.setVisualizerTargetFps(it) },
-            label = { if (vsyncEnabled) "Target FPS: $it" else "Target FPS: $it (vsync off)" },
+            label = { "Target FPS: $it" },
+            subtitle = if (vsyncEnabled) {
+                "Applies with vsync off. While the visualizer is display-synced " +
+                    "the panel sets the rate and this is not used."
+            } else {
+                "Caps the visualizer while it is free-running."
+            },
         )
 
         // The visualizer is fed from inside the playback chain, so it always

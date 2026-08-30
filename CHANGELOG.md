@@ -22,6 +22,13 @@
 
 ### Fixed
 
+#### Target FPS goes to 240, and now caps something
+- **The slider reaches 240** instead of stopping at 144, which was below what current panels run at.
+- **It was not capping anything.** The setting said "capped by Target FPS" and the renderer had no limiter in it; the value was only forwarded to projectM, where it is documentation for presets rather than a throttle. With vsync off the visualizer ran at whatever the GPU would give.
+- **The cap is real now, and applies only with vsync off** — the case the setting was always described for. With vsync on the display already hands out one frame per refresh, and applying a ceiling there would have pulled a 165Hz panel down to whatever number happened to be sitting in the setting, which is a limit nobody asked for on the one path that was already right. The slider's caption now says which of the two is in force.
+- **A capped frame is dropped, not slept through.** Sleeping is what a limiter would rather do, but this runs while holding the engine lock and holding it through a sleep would stall every preset change waiting on the render thread, so what is saved is the GPU work rather than the loop.
+- **A preset change is never held back by the cap** — a frame with one to show is drawn regardless — and a dropped frame leaves its audio in the queue, which is bounded by age, so nothing accumulates behind it.
+
 #### An audio delay, for when the visualizer runs ahead of the sound
 - **Settings › Visualizer › Audio delay** holds the visualizer back by up to half a second so what it draws matches what you hear. Off by default.
 - **The visualizer was always slightly early, and on Bluetooth plainly so.** Its audio is tapped from inside the playback chain, upstream of the output device, so it sees each buffer before the speaker plays it. Over a wire that head start is small enough to miss; over Bluetooth the codec and the receiver's own buffering push it into the low hundreds of milliseconds. Delaying the visualizer's copy is the only side that can move — the audio itself must not be.

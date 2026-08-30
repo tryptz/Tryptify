@@ -74,6 +74,9 @@ class ProjectMEngineRepository @Inject constructor(
     private var textureSize: Int = 1024
     private var meshX: Int = 32
     private var meshY: Int = 24
+    // Volatile for the same reason vsyncEnabled is: written by the settings
+    // observer off the render thread and read by the frame cap on it.
+    @Volatile
     private var targetFps: Int = 60
     @Volatile var vsyncEnabled: Boolean = true
         private set
@@ -106,6 +109,14 @@ class ProjectMEngineRepository @Inject constructor(
     // stops, and without a nudge the queued preset would sit until something
     // else asked to draw.
     private var requestRender: (() -> Unit)? = null
+
+    /**
+     * When the last frame was actually drawn, for the Target FPS cap.
+     *
+     * Only meaningful with vsync off. With it on there is nothing to cap: the
+     * display hands out one frame per refresh and the app draws on each.
+     */
+    private var lastRenderedFrameNanos: Long = 0L
 
     private var lastPcmTimestampMs: Long = 0L
     private var fpsFrameCount = 0
@@ -363,6 +374,11 @@ class ProjectMEngineRepository @Inject constructor(
             // The one place with a current GL context, so the one place these
             // can actually take effect.
             val appliedPendingWork = applyPendingGlWorkLocked()
+            // Checked after the pending work so a preset change is never held
+            // back by the cap, and skipped entirely on a frame that has one to
+            // show. A dropped frame leaves its audio in the queue, which is
+            // bounded by age, so nothing accumulates.
+            if (!appliedPendingWork && shouldSkipForFrameCapLocked(frameTimeNanos)) return
             val frames = audioBus.drainAll()
             if (frames.isNotEmpty()) {
                 lastPcmTimestampMs = frames.last().timestampMs
@@ -408,6 +424,26 @@ class ProjectMEngineRepository @Inject constructor(
                 fpsStartTimeMs = System.currentTimeMillis()
             }
         }
+    }
+
+    /**
+     * Whether this frame should be dropped to hold the visualizer at Target FPS.
+     *
+     * Only with vsync off. With vsync on the display is already the limit and
+     * the app draws once per refresh, so applying the cap there would mean a
+     * 165Hz panel rendering at whatever number happened to be in the setting --
+     * a ceiling nobody asked for on the one path that was already correct.
+     *
+     * This drops the frame rather than sleeping on it. Sleeping is what a
+     * limiter would rather do, but this runs holding engineLock, and holding it
+     * through a sleep would stall every preset change waiting on the render
+     * thread. So the saving is the GPU work, not the loop.
+     */
+    private fun shouldSkipForFrameCapLocked(frameTimeNanos: Long): Boolean {
+        if (vsyncEnabled) return false
+        if (shouldDropFrame(frameTimeNanos, lastRenderedFrameNanos, targetFps)) return true
+        lastRenderedFrameNanos = frameTimeNanos
+        return false
     }
 
     fun setPlaybackPaused(paused: Boolean) {
@@ -664,3 +700,16 @@ class ProjectMEngineRepository @Inject constructor(
         private const val TAG = "ProjectMEngineRepository"
     }
 }
+
+/**
+ * Whether a frame arriving at [frameTimeNanos] is too soon after
+ * [lastRenderedNanos] to be drawn at [cap] frames per second.
+ *
+ * Pulled out of the repository as a plain function because the failure it
+ * guards against is silent: a cap that always says drop leaves the visualizer
+ * frozen with vsync off, and one that never says drop leaves it free-running at
+ * whatever the GPU will give, which is the state this was written to end. A cap
+ * of zero or less means no limit.
+ */
+internal fun shouldDropFrame(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int): Boolean =
+    cap > 0 && frameTimeNanos - lastRenderedNanos < 1_000_000_000L / cap
