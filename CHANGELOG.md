@@ -22,6 +22,13 @@
 
 ### Fixed
 
+#### The visualizer stops changing speed with the refresh rate
+- **Presets sped up and slowed down as the panel's refresh rate moved**, most visibly when it idled from 165Hz down to 55 and everything on screen ran at roughly a third of its proper speed.
+- **projectM was being told a frame rate it was not running at.** It does not time itself from that number — its own clock is the wall clock — but it hands the value to presets, and Milkdrop presets are written per frame: the ones that mean to hold a fixed speed divide their step by `fps`. The app set it once to a hardcoded 60 and thereafter to the Target FPS slider, so a preset compensating for 120 while 165 frames arrived moved a third too fast, and moved at under half speed when the panel dropped to 55.
+- **It now gets the rate actually being rendered**, which is what upstream asks applications to supply, and which the app was already measuring for the on-screen counter and doing nothing else with. Target FPS still writes the same field when the slider moves and is corrected within a second.
+- **The measurement window is reset across a freeze.** A paused visualizer stops drawing but the window kept running, so the first reading after a long pause divided a few frames by the length of the pause and reported nearly zero — which was harmless while it only fed a counter, and would have moved a preset dividing by it an enormous distance on the first frame back.
+- **This cannot help a preset that never compensates.** A Milkdrop preset that advances a fixed amount per frame moves with the frame rate by design, and only its author can change that. Those are the ones the display frame-rate hint above is holding steady.
+
 #### Next in the visualizer switches on the press
 - **The Next button had the same problem the preset browser did, and did not get the same fix.** Choosing a preset by name was moved onto the render thread; advancing to the next one was left calling projectM from the main thread, where there is no GL context and the load does nothing. Auto-shuffle on a track change went the same way.
 - **It is queued with everything else now.** Where picking a preset by name knows which one it wants, Next only knows where it landed after it has moved, so the exposed preset and the stored preference are settled on the render thread with it rather than by the caller.

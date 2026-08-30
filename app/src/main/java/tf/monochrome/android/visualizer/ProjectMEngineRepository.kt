@@ -378,10 +378,26 @@ class ProjectMEngineRepository @Inject constructor(
                 fpsFrameCount++
                 val now = System.currentTimeMillis()
                 if (now - fpsStartTimeMs >= 1000) {
-                    _currentFps.value = (fpsFrameCount * 1000L / (now - fpsStartTimeMs)).toInt()
+                    val measured = (fpsFrameCount * 1000L / (now - fpsStartTimeMs)).toInt()
+                    _currentFps.value = measured
+                    // Not just for the counter any more. Presets divide their
+                    // per-frame steps by this to hold a fixed speed, so a stale
+                    // or invented value is the difference between a preset
+                    // moving as written and moving at the ratio between the
+                    // rate it was told and the rate it is getting.
+                    nativeBridge.reportMeasuredFps(measured)
                     fpsFrameCount = 0
                     fpsStartTimeMs = now
                 }
+            } else {
+                // The window only means anything across frames actually drawn.
+                // Left running through a freeze it divides a handful of frames
+                // by however long the pause lasted and reports nearly zero --
+                // survivable while this only fed a counter, and not now: a
+                // preset dividing by an fps of 1 moves by an enormous step on
+                // the first frame back.
+                fpsFrameCount = 0
+                fpsStartTimeMs = System.currentTimeMillis()
             }
         }
     }
