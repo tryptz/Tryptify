@@ -20,6 +20,7 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
+import kotlin.math.floor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -237,7 +238,52 @@ private fun rememberBlendedPalette(
         progress.animateTo(1f, tween(durationMillis = blendMillis, easing = LinearEasing))
     }
 
-    return remember { derivedStateOf { blend(from.value, to.value, progress.value) } }
+    // Quantised, so frames that would land on the same colours produce an
+    // equal palette and never reach a reader. Keyed on blendMillis because the
+    // step size is derived from it and the listener can change it in Settings.
+    return remember(blendMillis) {
+        derivedStateOf {
+            blend(from.value, to.value, quantiseFraction(progress.value, blendMillis))
+        }
+    }
+}
+
+/**
+ * How often a second the cross-fade is allowed to take a new value.
+ *
+ * A colour wash is not motion. It has no edge whose position the eye can track,
+ * so unlike a moving object it does not need a sample per displayed frame — on
+ * a 120 Hz panel roughly half the frames of a fade are indistinguishable from
+ * the one before them.
+ *
+ * What they are not is free. Every distinct palette is a new object, and
+ * downstream that means a rebuilt colour scheme and a recomposition of
+ * everything reading it — which, with "Tint the menus too" on, is the whole
+ * app. Sixty is chosen to be visually lossless rather than minimal; the saving
+ * comes from the frames it removes, not from running the fade coarsely.
+ */
+internal const val PALETTE_UPDATES_PER_SECOND = 60
+
+/**
+ * [fraction] snapped down to the nearest step of a fade lasting
+ * [durationMillis].
+ *
+ * Snapped *down* rather than to the nearest step so the colour never arrives
+ * ahead of where the animation actually is; the most it ever trails by is one
+ * step, about 16 ms.
+ *
+ * Both endpoints pass through exactly. 1f in particular has to: it is the real
+ * target palette, and a fade that settled on a rounded approximation of it
+ * would leave every track very slightly the wrong colour for as long as it
+ * played. A fade too short to hold even one step is left alone, since there is
+ * nothing to remove.
+ */
+internal fun quantiseFraction(fraction: Float, durationMillis: Int): Float {
+    if (fraction <= 0f) return 0f
+    if (fraction >= 1f) return 1f
+    val steps = durationMillis * PALETTE_UPDATES_PER_SECOND / 1000
+    if (steps <= 1) return fraction
+    return (floor(fraction * steps) / steps).coerceIn(0f, 1f)
 }
 
 private fun blend(from: DynamicPalette?, to: DynamicPalette?, fraction: Float): DynamicPalette? {

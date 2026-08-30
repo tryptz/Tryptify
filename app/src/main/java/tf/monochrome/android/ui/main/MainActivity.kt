@@ -178,12 +178,17 @@ class MainActivity : ComponentActivity() {
             val blendSeconds by preferences.crossfadeDuration.collectAsStateWithLifecycle(initialValue = 0)
             val colorTransitionMs by preferences.colorTransitionMs
                 .collectAsStateWithLifecycle(initialValue = ColorBlend.MATCH_BLEND)
-            val dynamicPalette by rememberDynamicPalette(
+            // Held as state, not unwrapped: `by` here would subscribe this whole
+            // composable to a value that changes every frame of the colour
+            // cross-fade, recomposing the root and every provider under it for
+            // the length of the fade. MonochromeTheme passes it down and only
+            // the surfaces that paint with it read it.
+            val dynamicPalette = rememberDynamicPalette(
                 coverUrl = currentTrack?.coverUrl,
                 enabled = dynamicColorsEnabled,
                 // Instant colour change with animations off: the palette is a
-                // continuous cross-fade, not a one-off transition, so it keeps
-                // the theme recomposing for the whole blend window.
+                // continuous cross-fade rather than a one-off transition, so it
+                // goes on producing values for the whole blend window.
                 blendMillis = if (lowPerformance.disableAnimations) 0
                 else ColorBlend.millisFor(blendSeconds, colorTransitionMs),
             )

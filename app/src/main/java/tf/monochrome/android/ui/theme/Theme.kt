@@ -12,6 +12,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -623,7 +624,20 @@ fun MonochromeTheme(
     themeName: String = "monochrome_dark",
     fontScale: Float = 1.0f,
     customFontFamily: FontFamily? = null,
-    dynamicPalette: DynamicPalette? = null,
+    /**
+     * The album palette as its *state*, not its value.
+     *
+     * Deliberately unread here. The palette takes a new value as the cross-fade
+     * runs, and a value read in this function subscribes the whole composition
+     * root to it — every provider below, on every frame of the fade, before
+     * anything has decided the colour is even wanted. Passing the state down
+     * lets [DynamicColorScope] read it in its own scope, so with the tint off
+     * the fade touches the player and nothing else.
+     *
+     * [dynamicMenus] is the one case that must read it, and does so behind that
+     * check so the subscription only exists when the menus really do repaint.
+     */
+    dynamicPalette: State<DynamicPalette?>? = null,
     paper: Paper = Paper.Crisp,
     /**
      * The listener's own two colours. When [customColors] is set it wins over
@@ -664,7 +678,9 @@ fun MonochromeTheme(
     }
     val colorScheme = tintedByAlbum(
         base = chosen,
-        palette = dynamicPalette.takeIf { dynamicMenus },
+        // Short-circuits: with the tint off this never reads the state, so the
+        // fade does not invalidate this function at all.
+        palette = if (dynamicMenus) dynamicPalette?.value else null,
         keepBackground = dynamicMenusKeepBackground,
     )
     val family = customFontFamily ?: InterFontFamily
@@ -744,12 +760,19 @@ private fun tintedByAlbum(
 }
 
 /**
- * The album-art-derived palette for the currently playing track, or null when
- * Dynamic Colours is off / nothing is playing / extraction failed. Published by
- * [MonochromeTheme] and consumed by [DynamicColorScope]. Kept out of the global
- * MaterialTheme on purpose so the menus never pick up the album accent.
+ * The album-art-derived palette for the currently playing track, as state:
+ * whose value is null when Dynamic Colours is off, nothing is playing, or
+ * extraction failed, and the outer state is null when no source is providing
+ * one at all. Published by [MonochromeTheme] and consumed by
+ * [DynamicColorScope]. Kept out of the global MaterialTheme on purpose so the
+ * menus never pick up the album accent.
+ *
+ * The state rather than the value, so that reading it is a choice each consumer
+ * makes in its own recompose scope. It changes as the cross-fade runs, and
+ * publishing the value would have every provider between here and the player
+ * recompose on every frame of it whether or not they paint with the colour.
  */
-val LocalDynamicColorPalette = compositionLocalOf<DynamicPalette?> { null }
+val LocalDynamicColorPalette = compositionLocalOf<State<DynamicPalette?>?> { null }
 
 /**
  * What colour a sheet of glass should be tinted.
@@ -780,7 +803,10 @@ fun glassTint(explicitArgb: Int): Color {
  */
 @Composable
 fun DynamicColorScope(content: @Composable () -> Unit) {
-    val palette = LocalDynamicColorPalette.current
+    // The read that the theme root deliberately does not do. It happens here,
+    // inside a restartable scope, so a moving palette recomposes this and its
+    // content rather than the whole app.
+    val palette = LocalDynamicColorPalette.current?.value
     if (palette == null) {
         content()
         return

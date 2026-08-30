@@ -20,6 +20,15 @@
 - **From Android 14 that key is a Material 3 role colour, not the accent ramp** — Contrast moves the roles and leaves the older `system_accent1_*` ramp untouched, so a key taken from the ramp would have read as no change at all while the rest of the system repainted around it.
 - **"Tint the menus too" still wins wherever it is on**, exactly as it does over every other theme: the album rebuilds the scheme and the system palette gives way for as long as something is playing.
 
+### Fixed
+
+#### The album colour cross-fade no longer drags the whole app with it
+- **Skipping a track stuttered for the length of the colour fade** — 600ms gapless, up to eight seconds under a long blend — and it did so whether or not "Tint the menus too" was on, which is what pointed above that switch rather than inside it.
+- **The fade handed out a new palette on every displayed frame**, and `MainActivity` unwrapped it with `by` at the top of `setContent`. A value read there subscribes the composition root, so 120 times a second the root and every provider under it recomposed, before anything had decided whether the colour was wanted. The palette is now passed down as state and read by the surfaces that paint with it; with the tint off, the theme and the root are no longer touched by a fade at all.
+- **Frames that cannot look different no longer count as changes** — the fade's fraction is snapped to sixty steps a second before the palette is built, so on a 120Hz panel roughly half the frames now produce a palette equal to the one before it, and `derivedStateOf` drops them rather than waking every reader. A colour wash has no edge for the eye to track, so it does not need a sample per frame; what it did need was to stop being one new object per frame, because each one rebuilt a scheme and recomposed everything reading it.
+- **Both ends of the fade are exact.** The snap is downward, so the colour never arrives ahead of the animation, and 0 and 1 pass through untouched — a fade settling on a rounded approximation of its target would have left every track very slightly the wrong colour for as long as it played.
+- **What was measured, and what was not** — `customScheme`, which rebuilds the app-wide scheme when the menus are tinted, was the obvious suspect and is not the cause: it costs eight to thirteen microseconds against an 8.3ms frame, about a tenth of a percent, and an attempt to speed it up could not be shown to help above run-to-run noise. It was dropped rather than shipped. The cost was never the arithmetic; it was the number of things told to recompose.
+
 ## [1.8.6]
 
 ### Removed
