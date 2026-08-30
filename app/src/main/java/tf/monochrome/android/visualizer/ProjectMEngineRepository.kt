@@ -88,6 +88,25 @@ class ProjectMEngineRepository @Inject constructor(
     private var attachedSurfaceCount: Int = 0
     private var nativeInitialized: Boolean = false
 
+    // Work that has to happen with the GL context current, asked for from a
+    // thread that does not have one. Switching a preset compiles its shaders,
+    // and resizing the mesh reallocates against the context; called straight
+    // from the settings observers on the main thread they do nothing at all,
+    // which is why choosing a preset used to take effect only after the
+    // visualizer was closed and reopened and the engine rebuilt on the render
+    // thread. Both are drained at the top of renderFrame instead.
+    //
+    // Guarded by engineLock, which renderFrame already holds, so draining costs
+    // one field read per frame.
+    private var pendingPreset: VisualizerPreset? = null
+    private var pendingQuality: Boolean = false
+
+    // Set by the GLSurfaceView so a change made while paused still gets a frame
+    // to appear on: the view drops to RENDERMODE_WHEN_DIRTY when playback
+    // stops, and without a nudge the queued preset would sit until something
+    // else asked to draw.
+    private var requestRender: (() -> Unit)? = null
+
     private var lastPcmTimestampMs: Long = 0L
     private var fpsFrameCount = 0
     private var fpsStartTimeMs = 0L
@@ -170,11 +189,7 @@ class ProjectMEngineRepository @Inject constructor(
                 val selected = _presets.value.firstOrNull { it.id == presetId }
                 if (selected != null) {
                     _currentPreset.value = selected
-                    synchronized(engineLock) {
-                        if (nativeInitialized) {
-                            nativeBridge.setPreset(resolveAbsolutePresetPath(selected))
-                        }
-                    }
+                    requestPresetOnGlThread(selected)
                 }
             }
         }
@@ -186,17 +201,13 @@ class ProjectMEngineRepository @Inject constructor(
         scope.launch {
             preferences.visualizerMeshX.collectLatest { x ->
                 meshX = x
-                synchronized(engineLock) {
-                    if (nativeInitialized) nativeBridge.configureQuality(meshX, meshY)
-                }
+                requestQualityOnGlThread()
             }
         }
         scope.launch {
             preferences.visualizerMeshY.collectLatest { y ->
                 meshY = y
-                synchronized(engineLock) {
-                    if (nativeInitialized) nativeBridge.configureQuality(meshX, meshY)
-                }
+                requestQualityOnGlThread()
             }
         }
         scope.launch {
@@ -298,6 +309,14 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
+    /**
+     * Lets the view be asked for a frame. Cleared on detach so a dead surface
+     * is never poked.
+     */
+    fun setRenderTrigger(trigger: (() -> Unit)?) {
+        synchronized(engineLock) { requestRender = trigger }
+    }
+
     fun onSurfaceResized(width: Int, height: Int) {
         synchronized(engineLock) {
             if (nativeInitialized) {
@@ -333,6 +352,9 @@ class ProjectMEngineRepository @Inject constructor(
     fun renderFrame(frameTimeNanos: Long) {
         synchronized(engineLock) {
             if (!_engineEnabled.value || !nativeInitialized) return
+            // The one place with a current GL context, so the one place these
+            // can actually take effect.
+            val appliedPendingWork = applyPendingGlWorkLocked()
             val frames = audioBus.drainAll()
             if (frames.isNotEmpty()) {
                 lastPcmTimestampMs = frames.last().timestampMs
@@ -340,7 +362,12 @@ class ProjectMEngineRepository @Inject constructor(
                     nativeBridge.pushPcm(frame.samples, frame.channelCount, frame.sampleRate)
                 }
             }
-            val freezeFrame = playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
+            // A frozen frame is skipped to save power while paused, but a preset
+            // that has just been swapped in has never been drawn, so freezing
+            // through it would leave the old one on screen -- the very bug this
+            // is fixing, in a different disguise.
+            val freezeFrame = !appliedPendingWork &&
+                playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
             if (!freezeFrame) {
                 nativeBridge.renderFrame(frameTimeNanos)
                 updateStatus(
@@ -383,11 +410,7 @@ class ProjectMEngineRepository @Inject constructor(
         scope.launch {
             preferences.setVisualizerPresetId(preset.id)
         }
-        synchronized(engineLock) {
-            if (nativeInitialized) {
-                nativeBridge.setPreset(resolveAbsolutePresetPath(preset))
-            }
-        }
+        requestPresetOnGlThread(preset)
     }
 
     fun setShuffleEnabled(enabled: Boolean) {
@@ -450,6 +473,11 @@ class ProjectMEngineRepository @Inject constructor(
             nativeBridge.release()
             nativeInitialized = false
         }
+        // Queued against an engine that no longer exists. The preset is not
+        // lost: preferredPresetId still holds it, and applyPreferredPresetLocked
+        // re-applies it when the next surface attaches.
+        pendingPreset = null
+        pendingQuality = false
     }
 
     private fun ensureAssetsLocked() {
@@ -480,6 +508,53 @@ class ProjectMEngineRepository @Inject constructor(
                 message = "projectM assets failed to install: ${error.message ?: "unknown error"}"
             )
         }
+    }
+
+    /**
+     * Runs the work that was waiting for a GL context. Returns whether anything
+     * was applied, so the caller knows this frame has something new to show.
+     */
+    private fun applyPendingGlWorkLocked(): Boolean {
+        var applied = false
+        pendingPreset?.let { preset ->
+            pendingPreset = null
+            // A false here means the path is not in the playlist -- a preset
+            // gone since it was chosen. Left alone deliberately: the caller has
+            // already shown it as selected, and the alternative, advancing the
+            // playlist, would answer a failed request by displaying some third
+            // preset nobody asked for.
+            applied = nativeBridge.setPreset(resolveAbsolutePresetPath(preset))
+        }
+        if (pendingQuality) {
+            pendingQuality = false
+            nativeBridge.configureQuality(meshX, meshY)
+            applied = true
+        }
+        return applied
+    }
+
+    /**
+     * Hands [preset] to the render thread and asks for a frame to show it on.
+     *
+     * The trigger is captured under the lock but invoked outside it on purpose.
+     * GLSurfaceView.requestRender takes its own monitor, and the render thread
+     * takes engineLock while holding that one -- calling in while holding
+     * engineLock is the other half of a deadlock.
+     */
+    private fun requestPresetOnGlThread(preset: VisualizerPreset) {
+        val trigger = synchronized(engineLock) {
+            pendingPreset = preset
+            if (nativeInitialized) requestRender else null
+        }
+        trigger?.invoke()
+    }
+
+    private fun requestQualityOnGlThread() {
+        val trigger = synchronized(engineLock) {
+            pendingQuality = true
+            if (nativeInitialized) requestRender else null
+        }
+        trigger?.invoke()
     }
 
     private fun applyPreferredPresetLocked() {

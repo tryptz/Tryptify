@@ -34,10 +34,18 @@ class ProjectMRendererView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        // Lets the engine ask for a frame. Preset and mesh changes are applied
+        // on the GL thread inside renderFrame, and while playback is paused the
+        // render mode is WHEN_DIRTY -- without this a preset chosen on a paused
+        // track would be loaded but never drawn.
+        repository.setRenderTrigger(::requestRender)
         onResume()
     }
 
     override fun onDetachedFromWindow() {
+        // Dropped first: past this point the surface is going away, and a
+        // request to draw on it is at best useless.
+        repository.setRenderTrigger(null)
         // Queue the detach on the GL thread so it runs in the correct OpenGL context
         // and doesn't race with renderFrame.
         queueEvent {

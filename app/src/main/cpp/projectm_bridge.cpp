@@ -45,6 +45,7 @@ ProjectMBridge::ProjectMBridge(
     projectm_set_texture_search_paths(projectm_, texture_paths, 1);
     projectm_playlist_add_path(playlist_, preset_root_.c_str(), true, false);
     projectm_playlist_set_shuffle(playlist_, true);
+    BuildPresetIndex();
 
     if (projectm_playlist_size(playlist_) > 0) {
         projectm_playlist_set_position(playlist_, 0, true);
@@ -88,39 +89,55 @@ void ProjectMBridge::PushPcm(const float* data, size_t count, int channel_count,
     audio_buffer_.Push(data, count, channel_count, sample_rate);
 }
 
+/**
+ * Switch to [preset_path], instantly.
+ *
+ * Must be called with the GL context current -- switching compiles the
+ * preset's shaders, so off the render thread it silently does nothing and
+ * leaves whatever was on screen. See ProjectMEngineRepository, which defers
+ * every call to here into renderFrame for that reason.
+ *
+ * The old implementation walked the playlist twice and ended with a call to
+ * projectm_load_preset_file that no input could reach: a path outside the
+ * playlist returned early, and a path inside it returned from the loop. Both
+ * scans are now one hash lookup.
+ */
 bool ProjectMBridge::SetPreset(const std::string& preset_path) {
-    if (!IsReady()) {
+    if (!IsReady() || preset_path.empty()) {
         return false;
     }
-    const auto resolved = FindPresetPath(preset_path);
-    if (resolved.empty()) {
-        return false;
-    }
-    // Skip reload if already displaying this preset (avoids the
-    // double-load caused by the preferences observer).
-    if (resolved == current_preset_) {
+    // Already showing it. Both the tap and the preference observer that follows
+    // it ask for the same preset, so this is the common case, not an edge one.
+    if (preset_path == current_preset_) {
         return true;
     }
+    const auto found = preset_index_.find(preset_path);
+    if (found == preset_index_.end()) {
+        return false;
+    }
+    // hard_cut = true: the switch lands on this frame rather than being blended
+    // in over the soft-cut duration, which is what makes picking a preset feel
+    // immediate. The soft cut still applies to the automatic rotation.
+    projectm_playlist_set_position(playlist_, found->second, true);
+    current_preset_ = found->first;
+    return true;
+}
 
+void ProjectMBridge::BuildPresetIndex() {
+    preset_index_.clear();
+    if (playlist_ == nullptr) {
+        return;
+    }
     const auto playlist_size = projectm_playlist_size(playlist_);
+    preset_index_.reserve(playlist_size);
     for (uint32_t index = 0; index < playlist_size; ++index) {
         char* item = projectm_playlist_item(playlist_, index);
         if (item == nullptr) {
             continue;
         }
-        std::string item_path(item);
+        preset_index_.emplace(item, index);
         projectm_playlist_free_string(item);
-        if (item_path == resolved) {
-            projectm_playlist_set_position(playlist_, index, true);
-            current_preset_ = item_path;
-            return true;
-        }
     }
-
-    // Instant load — no smooth crossfade transition
-    projectm_load_preset_file(projectm_, resolved.c_str(), false);
-    current_preset_ = resolved;
-    return true;
 }
 
 std::string ProjectMBridge::NextPreset() {
@@ -181,25 +198,6 @@ void ProjectMBridge::SetPresetDuration(int seconds) {
 
 std::string ProjectMBridge::CurrentPreset() const {
     return current_preset_;
-}
-
-std::string ProjectMBridge::FindPresetPath(const std::string& preset_path) const {
-    if (preset_path.empty() || playlist_ == nullptr) {
-        return {};
-    }
-    const auto playlist_size = projectm_playlist_size(playlist_);
-    for (uint32_t index = 0; index < playlist_size; ++index) {
-        char* item = projectm_playlist_item(playlist_, index);
-        if (item == nullptr) {
-            continue;
-        }
-        std::string item_path(item);
-        projectm_playlist_free_string(item);
-        if (item_path == preset_path) {
-            return item_path;
-        }
-    }
-    return {};
 }
 
 std::string ProjectMBridge::ReadCurrentPreset() const {
