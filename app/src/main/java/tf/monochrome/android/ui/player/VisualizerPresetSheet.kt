@@ -41,6 +41,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.ui.components.GlassSearchBar
 import tf.monochrome.android.ui.components.liquidGlass
@@ -134,8 +136,21 @@ fun VisualizerPresetSheet(
                 var searchBarHeight by remember { mutableStateOf(0.dp) }
                 val density = LocalDensity.current
 
+                // Scoped to this sheet rather than the app-wide source. The bar
+                // is drawn inside that layer, so handing it over would have it
+                // sampling a picture it is part of -- haze has nothing valid to
+                // give and paints its base colour instead, which is a flat slab
+                // exactly where the glass should be.
+                val haze = rememberHazeState()
+
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    // The source is the list, because the list is what passes
+                    // behind the bar. Without one GlassSearchBar drops to its
+                    // no-blur tier -- tint and rim, frosting nothing -- which is
+                    // a pane that merely looks like glass.
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .hazeSource(haze),
                     // The bar's height reaches the list as contentPadding, not
                     // as padding on the list or a Spacer: rows start below the
                     // glass while staying free to travel up behind it, so
@@ -199,10 +214,7 @@ fun VisualizerPresetSheet(
                     query = query,
                     onQueryChange = { query = it },
                     placeholder = "Search presets",
-                    // No haze source inside a bottom sheet to sample, so the bar
-                    // takes the plain translucent glass rather than frosting a
-                    // backdrop it cannot see.
-                    hazeState = null,
+                    hazeState = haze,
                     // Permanent chrome of this sheet, so the trailing button has
                     // nothing to dismiss once the field is empty.
                     onClose = null,
