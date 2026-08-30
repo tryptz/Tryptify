@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.theme
 
+import android.content.Context
 import android.os.Build
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -444,9 +445,21 @@ val ClearDarkScheme = darkColorScheme(
     error = ErrorRed,
     onError = MonoBlack
 )
+/**
+ * The OS's own palette — what the system settings call "System colors".
+ *
+ * Not a palette this app owns: it is read back from the platform, which derives
+ * it from the wallpaper (or from a featured colour the listener picked) and
+ * adjusts it for the Contrast accessibility setting. Kept as a named constant
+ * because three places need to agree on the spelling and a typo in any of them
+ * fails silently as "theme not found" rather than as a build error.
+ */
+const val MATERIAL_YOU_KEY = "material_you"
+
 /** Display names for theme selection UI */
 val themeDisplayNames = mapOf(
     "system" to "System",
+    MATERIAL_YOU_KEY to "System colors",
     "monochrome_dark" to "Monochrome",
     "ocean" to "Ocean",
     "midnight" to "Midnight",
@@ -471,6 +484,29 @@ val themeDisplayNames = mapOf(
     // somebody notices six months later.
     lightVariantOf(base) to "${baseDisplayName(base)} Light"
 }
+
+/**
+ * The themes this device can actually honour, for the picker to list.
+ *
+ * [themeDisplayNames] is the full catalogue and stays that way — the Settings
+ * subtitle looks a stored key up in it, and a device that cannot *offer* the
+ * system palette must still be able to *name* it if the preference arrived from
+ * a backup or from a newer Android on the same account.
+ *
+ * What is filtered here is only what may be chosen. Below Android 12 there is no
+ * system palette to read, and [rememberMaterialYouScheme] returns null so
+ * [MonochromeTheme] falls through to Monochrome. Offering a name that silently
+ * resolves to a different theme is worse than not offering it: the listener
+ * picks "System colors", gets Monochrome, and has no way to tell whether the
+ * setting failed or their wallpaper is simply grey.
+ *
+ * [sdkInt] is a parameter rather than a direct read so this stays a pure
+ * function the JVM unit tests can drive at both sides of the boundary; the app
+ * always calls it with the default.
+ */
+fun selectableThemes(sdkInt: Int = Build.VERSION.SDK_INT): Map<String, String> =
+    if (sdkInt >= Build.VERSION_CODES.S) themeDisplayNames
+    else themeDisplayNames - MATERIAL_YOU_KEY
 
 private fun baseDisplayName(base: String): String = when (base) {
     "monochrome" -> "Monochrome"
@@ -512,15 +548,61 @@ private fun darkSchemeFor(themeName: String) = when (themeName) {
 }
 
 /**
- * Material You wallpaper-derived scheme. Only available on Android 12 (S) and
- * above — returns null on older OS versions so callers can fall back to a
- * built-in theme.
+ * One colour from the palette the scheme is about to be built from, used only as
+ * a cache key.
+ *
+ * Which resource is the right one to watch depends on which builder will run.
+ * From API 34 the scheme comes from the Material 3 *role* resources, and those
+ * are the only ones the Contrast accessibility setting moves — the older
+ * `system_accent1_*` ramp is left untouched by a contrast change, so seeding
+ * from the ramp there would read a palette that never appears to change while
+ * the whole system repaints around it. Below 34 the ramp is all there is.
+ */
+private fun systemPaletteSeed(context: Context, dark: Boolean): Int {
+    val id = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (dark) android.R.color.system_primary_dark else android.R.color.system_primary_light
+    } else {
+        android.R.color.system_accent1_500
+    }
+    return context.resources.getColor(id, context.theme)
+}
+
+/**
+ * The OS's own palette, as a scheme. Null below Android 12, where no such
+ * palette exists, so callers can fall back to a built-in theme.
+ *
+ * Deliberately a thin call into Material 3 rather than a hand-rolled read of
+ * `android.R.color.system_*`. From API 34 `dynamicDarkColorScheme` already
+ * dispatches to a builder that reads those role resources directly, which is
+ * what makes this match the rest of the system exactly — featured colours and
+ * the Contrast setting included — instead of re-deriving a palette from the
+ * older accent ramps. Reimplementing that mapping here would duplicate thirty-odd
+ * slots the library already gets right and would go stale the next time the
+ * platform adds a role.
+ *
+ * The [remember] is not an optimisation to taste. This sits at the theme root,
+ * which recomposes continuously for the whole colour cross-fade window every
+ * time the track changes (see `ColorBlend.millisFor` in MainActivity), and
+ * building a scheme allocates every slot; without it this churned one full
+ * ColorScheme per frame of every transition.
+ *
+ * Keyed on a colour read out of the palette rather than on the context, because
+ * the context is not reliably a new one when the palette moves. Changing System
+ * colors swaps a resource overlay, which normally recreates the activity — but
+ * this activity declares `uiMode` in its own `configChanges` and so survives a
+ * light/dark switch, and nothing obliges an OEM skin to deliver a contrast or
+ * palette change any differently. Re-reading one colour per recomposition costs
+ * a cached resource lookup and makes the cache self-invalidating whichever way
+ * the change arrives.
  */
 @Composable
 fun rememberMaterialYouScheme(dark: Boolean): ColorScheme? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
     val context = LocalContext.current
-    return if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val seed = systemPaletteSeed(context, dark)
+    return remember(context, dark, seed) {
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    }
 }
 
 /**
@@ -565,7 +647,7 @@ fun MonochromeTheme(
     val resolvedTheme = if (themeName == "system") {
         if (systemDark) "monochrome_dark" else lightVariantOf("monochrome")
     } else themeName
-    val materialYou = if (resolvedTheme == "material_you" && customColors == null) {
+    val materialYou = if (resolvedTheme == MATERIAL_YOU_KEY && customColors == null) {
         rememberMaterialYouScheme(dark = systemDark)
     } else null
     val chosen = when {

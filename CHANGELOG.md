@@ -10,6 +10,16 @@
 - **A resolution could not be spared** — a mode id names a resolution and a refresh rate together, so there is no way to ask for one without also asserting the other. Keeping the Resolution row would have meant keeping the vote.
 - **Nothing needs migrating** — both were device-local and deliberately absent from `SETTINGS_SYNC_KEYS`, so no backup carried them and no account state refers to them. The two DataStore keys (`app_target_fps`, `app_render_resolution`) are simply no longer read; a phone that has them stored keeps the values as dead entries.
 
+### Added
+
+#### The app can follow the phone's own colours
+- **Settings › Theme › Color Theme gains "System colors"** — the palette the system builds from your wallpaper, a featured colour picked in the system settings, and the Contrast accessibility setting. It sits directly under "System": that one follows the OS's light/dark switch, this one follows its colours as well.
+- **The palette was already implemented and unreachable** — the theme resolver has understood the key since Material You support went in, but it was never listed in `themeDisplayNames` and the picker offers exactly what that map holds. None of the scheme needed writing; it had simply never been possible to choose.
+- **Below Android 12 the entry is not offered rather than offered and quietly substituted** — there is no system palette before then, and picking it resolved to Monochrome with nothing to say so, leaving no way to tell a failed setting from a grey wallpaper. The name is still recognised, so a preference restored from a backup or carried over from a newer phone reads as "System colors" instead of as a raw key.
+- **The scheme is cached against the palette instead of rebuilt per frame** — it is read at the theme root, which recomposes continuously for the whole colour cross-fade every time the track changes, and building a scheme allocates every slot it holds. The cache key is a colour read back out of the palette, so it invalidates itself whichever way a change arrives: switching System colors swaps a resource overlay, and this activity declares `uiMode` in its own `configChanges` and so is not restarted for a light/dark switch.
+- **From Android 14 that key is a Material 3 role colour, not the accent ramp** — Contrast moves the roles and leaves the older `system_accent1_*` ramp untouched, so a key taken from the ramp would have read as no change at all while the rest of the system repainted around it.
+- **"Tint the menus too" still wins wherever it is on**, exactly as it does over every other theme: the album rebuilds the scheme and the system palette gives way for as long as something is playing.
+
 ## [1.8.6]
 
 ### Removed

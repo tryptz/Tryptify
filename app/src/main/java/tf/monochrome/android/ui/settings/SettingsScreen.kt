@@ -134,6 +134,7 @@ import tf.monochrome.android.domain.model.EqPreset
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.theme.selectableThemes
 import tf.monochrome.android.ui.theme.themeDisplayNames
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
@@ -599,7 +600,10 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         SettingsGroupHeader("Theme")
         SettingItem(title = "Color Theme", subtitle = themeDisplayNames[themeName] ?: themeName, onClick = { showThemeDropdown = true })
         DropdownMenu(expanded = showThemeDropdown, onDismissRequest = { showThemeDropdown = false }) {
-            themeDisplayNames.forEach { (key, displayName) ->
+            // What may be *chosen* is narrower than what may be *named*: the
+            // subtitle above still reads the full catalogue, so a stored key
+            // this device cannot offer is displayed rather than shown raw.
+            selectableThemes().forEach { (key, displayName) ->
                 DropdownMenuItem(text = { Text(displayName) }, onClick = { viewModel.setTheme(key); showThemeDropdown = false })
             }
         }
