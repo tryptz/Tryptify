@@ -79,6 +79,14 @@ class PreferencesManager @Inject constructor(
 ) {
     private val dataStore = context.dataStore
 
+    /**
+     * The app's one preferences file, handed to [FeatureFlagStore] so flags sit
+     * beside the settings they gate. A second `preferencesDataStore` on this
+     * name would throw, and a second file would put account-scoped flags out of
+     * reach of [SETTINGS_SYNC_KEYS].
+     */
+    internal val store: DataStore<Preferences> get() = dataStore
+
     companion object {
         private const val MAX_SEARCH_HISTORY_SIZE = 10
 
@@ -428,7 +436,12 @@ class PreferencesManager @Inject constructor(
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
             DISCOVERY_HEARTED_GENRES,
             DISCOVERY_SORT,
-        )
+        ) +
+            // Folded in from the registry rather than restated here, so the two
+            // lists cannot disagree: a flag is on the allow-list because it
+            // declares FlagSync.ACCOUNT, and a device-local one cannot arrive by
+            // being pasted into the wrong list.
+            FeatureFlag.ACCOUNT_SCOPED_KEYS
         private val SETTINGS_SYNC_KEY_NAMES: Set<String> = SETTINGS_SYNC_KEYS.map { it.name }.toSet()
     }
 
