@@ -136,6 +136,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.theme.selectableThemes
 import tf.monochrome.android.ui.theme.themeDisplayNames
+import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.ProjectMAudioBus
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
@@ -915,10 +916,9 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
     val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
-    val autoShuffle by viewModel.visualizerAutoShuffle.collectAsStateWithLifecycle()
     val presetId by viewModel.visualizerPresetId.collectAsStateWithLifecycle()
     val rotationSeconds by viewModel.visualizerRotationSeconds.collectAsStateWithLifecycle()
-    val presetRotation by viewModel.visualizerPresetRotation.collectAsStateWithLifecycle()
+    val rotationMode by viewModel.visualizerPresetRotationMode.collectAsStateWithLifecycle()
     val textureSize by viewModel.visualizerTextureSize.collectAsStateWithLifecycle()
     val meshX by viewModel.visualizerMeshX.collectAsStateWithLifecycle()
     val meshY by viewModel.visualizerMeshY.collectAsStateWithLifecycle()
@@ -1092,13 +1092,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             checked = engineEnabled,
             onCheckedChange = { viewModel.setVisualizerEngineEnabled(it) }
         )
-        SettingSwitchItem(
-            title = "Auto-shuffle Presets",
-            subtitle = "Pick a new preset for each track, in random order rather " +
-                "than in turn. Separate from the timer above.",
-            checked = autoShuffle,
-            onCheckedChange = { viewModel.setVisualizerAutoShuffle(it) }
-        )
         SettingItem(
             title = "Default Preset",
             subtitle = selectedPresetName,
@@ -1214,22 +1207,45 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             onClick = {}
         )
 
-        SettingSwitchItem(
-            title = "Preset rotation",
-            subtitle = "Change preset on a timer. Off holds the current one; " +
-                "picking a preset and Next still work, and Auto-shuffle still " +
-                "changes it on a new track.",
-            checked = presetRotation,
-            onCheckedChange = { viewModel.setVisualizerPresetRotation(it) }
+        SettingsGroupHeader("Preset rotation")
+        Text(
+            text = when (rotationMode) {
+                PresetRotationMode.Off ->
+                    "Nothing changes the preset. Picking one, and Next, still work."
+                PresetRotationMode.Timer ->
+                    "A new preset every so often, for as long as the visualizer is up."
+                PresetRotationMode.Track ->
+                    "A new preset when the track changes, and nothing in between."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            val modes = PresetRotationMode.entries
+            modes.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = rotationMode == mode,
+                    onClick = { viewModel.setVisualizerPresetRotationMode(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index, modes.size),
+                ) {
+                    Text(
+                        when (mode) {
+                            PresetRotationMode.Off -> "Off"
+                            PresetRotationMode.Timer -> "On a timer"
+                            PresetRotationMode.Track -> "Each track"
+                        }
+                    )
+                }
+            }
+        }
 
-        // Only worth showing when something is on a timer.
-        if (presetRotation) {
+        // Only the timer has an interval to set.
+        if (rotationMode == PresetRotationMode.Timer) {
             IntSettingSlider(
                 value = rotationSeconds,
                 valueRange = 5f..120f,
                 onCommit = { viewModel.setVisualizerRotationSeconds(it) },
-                label = { "Preset Rotation: ${it}s" },
+                label = { "Every ${it}s" },
             )
         }
 

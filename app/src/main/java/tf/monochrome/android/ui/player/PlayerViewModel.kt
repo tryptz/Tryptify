@@ -241,7 +241,14 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setSpectrumShowOnNowPlaying(enabled) }
     }
 
-    val visualizerAutoShuffle: StateFlow<Boolean> = projectMEngineRepository.autoShuffle
+    /**
+     * Whether anything is changing the preset, for the player's Shuffle/Manual
+     * chip. Which of the rotating modes is in force is a Settings question; the
+     * chip only asks whether one of them is.
+     */
+    val visualizerAutoShuffle: StateFlow<Boolean> = projectMEngineRepository.rotationMode
+        .map { it.isRotating }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
     val currentVisualizerPreset: StateFlow<VisualizerPreset?> = projectMEngineRepository.currentPreset
@@ -900,7 +907,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun setVisualizerShuffle(enabled: Boolean) {
-        projectMEngineRepository.setShuffleEnabled(enabled)
+        projectMEngineRepository.setRotationEnabled(enabled)
     }
 
     fun nextVisualizerPreset() {

@@ -58,8 +58,16 @@ class ProjectMEngineRepository @Inject constructor(
     private val _currentPreset = MutableStateFlow<VisualizerPreset?>(null)
     val currentPreset: StateFlow<VisualizerPreset?> = _currentPreset.asStateFlow()
 
-    private val _autoShuffle = MutableStateFlow(true)
-    val autoShuffle: StateFlow<Boolean> = _autoShuffle.asStateFlow()
+    private val _rotationMode = MutableStateFlow(PresetRotationMode.Default)
+    val rotationMode: StateFlow<PresetRotationMode> = _rotationMode.asStateFlow()
+
+    /**
+     * The mode to return to when rotation is switched back on from the player's
+     * chip, which is a two-state control over a three-state setting. Without it
+     * a listener who chose "each track" in Settings would silently land on the
+     * timer the first time they used the chip.
+     */
+    private var lastRotatingMode: PresetRotationMode = PresetRotationMode.Default
 
     private val _engineEnabled = MutableStateFlow(true)
     val engineEnabled: StateFlow<Boolean> = _engineEnabled.asStateFlow()
@@ -84,7 +92,6 @@ class ProjectMEngineRepository @Inject constructor(
     private var beatSensitivity: Int = 50
     private var brightness: Int = 80
     private var rotationSeconds: Int = 20
-    private var presetRotationEnabled: Boolean = true
     private var playbackPaused: Boolean = false
 
     // Track whether there is an active GL surface. Only the most recent
@@ -186,12 +193,11 @@ class ProjectMEngineRepository @Inject constructor(
             }
         }
         scope.launch {
-            preferences.visualizerAutoShuffle.collectLatest { enabled ->
-                _autoShuffle.value = enabled
+            preferences.visualizerPresetRotationMode.collectLatest { mode ->
+                _rotationMode.value = mode
+                if (mode.isRotating) lastRotatingMode = mode
                 synchronized(engineLock) {
-                    if (nativeInitialized) {
-                        nativeBridge.setPresetShuffleEnabled(enabled)
-                    }
+                    if (nativeInitialized) applyRotationLocked()
                 }
             }
         }
@@ -260,14 +266,6 @@ class ProjectMEngineRepository @Inject constructor(
             }
         }
         scope.launch {
-            preferences.visualizerPresetRotation.collectLatest { enabled ->
-                presetRotationEnabled = enabled
-                synchronized(engineLock) {
-                    if (nativeInitialized) applyRotationLocked()
-                }
-            }
-        }
-        scope.launch {
             preferences.visualizerRotationSeconds.collectLatest { seconds ->
                 rotationSeconds = seconds
                 synchronized(engineLock) {
@@ -325,7 +323,7 @@ class ProjectMEngineRepository @Inject constructor(
             nativeInitialized = true
             nativeBridge.configureQuality(meshX, meshY)
             nativeBridge.configureTargetFps(targetFps)
-            nativeBridge.setPresetShuffleEnabled(_autoShuffle.value)
+            nativeBridge.setPresetShuffleEnabled(_rotationMode.value.isRotating)
             nativeBridge.setBeatSensitivity(beatSensitivity)
             nativeBridge.setBrightness(brightness)
             applyRotationLocked()
@@ -483,10 +481,15 @@ class ProjectMEngineRepository @Inject constructor(
         requestPresetOnGlThread(PendingPresetRequest.Select(preset))
     }
 
-    fun setShuffleEnabled(enabled: Boolean) {
-        scope.launch {
-            preferences.setVisualizerAutoShuffle(enabled)
-        }
+    /**
+     * The player's own on/off for rotation, from the chip over the visualizer.
+     *
+     * Two states over a three-state setting, so turning it back on restores
+     * whichever rotating mode was last chosen rather than assuming the timer.
+     */
+    fun setRotationEnabled(enabled: Boolean) {
+        val mode = if (enabled) lastRotatingMode else PresetRotationMode.Off
+        scope.launch { preferences.setVisualizerPresetRotationMode(mode) }
     }
 
     fun toggleFavoritePreset(presetId: String) {
@@ -673,12 +676,15 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     private fun applyRotationLocked() {
+        val mode = _rotationMode.value
         val seconds = rotationSeconds.coerceIn(5, 120)
-        nativeBridge.setPresetShuffleEnabled(_autoShuffle.value)
+        // Random order whenever anything is choosing for you. Walking ten
+        // thousand presets in turn is not an order anybody wanted.
+        nativeBridge.setPresetShuffleEnabled(mode.isRotating)
         nativeBridge.configurePresetDuration(seconds)
-        // Last, and after the duration: setting a duration is what rotation
+        // Last, and after the duration: setting a duration is what the timer
         // being on looks like, so the lock has to be re-asserted behind it.
-        nativeBridge.setPresetRotationEnabled(presetRotationEnabled)
+        nativeBridge.setPresetRotationEnabled(mode == PresetRotationMode.Timer)
     }
 
     private fun updateCurrentPresetFromPathLocked(path: String?) {

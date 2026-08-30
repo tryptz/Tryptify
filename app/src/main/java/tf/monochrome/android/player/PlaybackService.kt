@@ -49,6 +49,7 @@ import tf.monochrome.android.data.scrobbling.ScrobblingService
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
+import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import tf.monochrome.android.widget.NowPlayingWidget
 import androidx.glance.appwidget.updateAll
@@ -422,7 +423,12 @@ class PlaybackService : MediaSessionService() {
                 val newTrackId = mediaItem?.mediaId
                 if (newTrackId != null && newTrackId != lastPresetTrackId) {
                     lastPresetTrackId = newTrackId
-                    if (projectMEngineRepository.autoShuffle.value) {
+                    // Only the per-track mode. The timer changes presets on
+                    // its own clock and does not want a second source doing it
+                    // at track boundaries as well.
+                    if (projectMEngineRepository.rotationMode.value ==
+                        PresetRotationMode.Track
+                    ) {
                         projectMEngineRepository.nextPreset()
                     }
                 }

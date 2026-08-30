@@ -27,6 +27,7 @@ import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
+import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -260,6 +261,7 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_PRESET_ID = stringPreferencesKey("visualizer_preset_id")
         private val VISUALIZER_ROTATION_SECONDS = intPreferencesKey("visualizer_rotation_seconds")
         private val VISUALIZER_PRESET_ROTATION = booleanPreferencesKey("visualizer_preset_rotation")
+        private val VISUALIZER_PRESET_ROTATION_MODE = stringPreferencesKey("visualizer_preset_rotation_mode")
         private val VISUALIZER_TEXTURE_SIZE = intPreferencesKey("visualizer_texture_size")
         private val VISUALIZER_MESH_X = intPreferencesKey("visualizer_mesh_x")
         private val VISUALIZER_MESH_Y = intPreferencesKey("visualizer_mesh_y")
@@ -406,8 +408,8 @@ class PreferencesManager @Inject constructor(
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
-            VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
-            VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION,
+            VISUALIZER_ENGINE_ENABLED, VISUALIZER_PRESET_ID,
+            VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION_MODE,
             VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
             VISUALIZER_TOUCH_WAVEFORM, VISUALIZER_FAVORITE_PRESETS,
             SPECTRUM_ANALYZER_ENABLED, SPECTRUM_SHOW_ON_NOW_PLAYING, SPECTRUM_FFT_SIZE,
@@ -1190,16 +1192,26 @@ class PreferencesManager @Inject constructor(
      */
     val autoDownloadLikedSongs: Flow<Boolean> = dataStore.data.map { it[AUTO_DOWNLOAD_LIKED] ?: false }
     val visualizerEngineEnabled: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_ENGINE_ENABLED] ?: true }
-    val visualizerAutoShuffle: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_AUTO_SHUFFLE] ?: true }
     val visualizerPresetId: Flow<String?> = dataStore.data.map { it[VISUALIZER_PRESET_ID] }
     val visualizerRotationSeconds: Flow<Int> = dataStore.data.map { it[VISUALIZER_ROTATION_SECONDS] ?: 20 }
 
-    /** Whether presets change on their own at all. On, as they always have. */
-    val visualizerPresetRotation: Flow<Boolean> =
-        dataStore.data.map { it[VISUALIZER_PRESET_ROTATION] ?: true }
+    /**
+     * When the visualizer changes preset by itself.
+     *
+     * Falls back to the pair of switches this replaced, so nobody's existing
+     * arrangement is reset by the merge. The old keys are still read for that
+     * reason; nothing writes them any more.
+     */
+    val visualizerPresetRotationMode: Flow<PresetRotationMode> = dataStore.data.map { prefs ->
+        prefs[VISUALIZER_PRESET_ROTATION_MODE]?.let(PresetRotationMode::fromKey)
+            ?: PresetRotationMode.migratedFrom(
+                timedRotation = prefs[VISUALIZER_PRESET_ROTATION] ?: true,
+                changeEachTrack = prefs[VISUALIZER_AUTO_SHUFFLE] ?: true,
+            )
+    }
 
-    suspend fun setVisualizerPresetRotation(enabled: Boolean) {
-        dataStore.edit { it[VISUALIZER_PRESET_ROTATION] = enabled }
+    suspend fun setVisualizerPresetRotationMode(mode: PresetRotationMode) {
+        dataStore.edit { it[VISUALIZER_PRESET_ROTATION_MODE] = mode.key }
     }
     val visualizerTextureSize: Flow<Int> = dataStore.data.map { it[VISUALIZER_TEXTURE_SIZE] ?: 1024 }
     val visualizerMeshX: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_X] ?: 32 }
@@ -1257,9 +1269,6 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setVisualizerEngineEnabled(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_ENGINE_ENABLED] = enabled }
-    }
-    suspend fun setVisualizerAutoShuffle(enabled: Boolean) {
-        dataStore.edit { it[VISUALIZER_AUTO_SHUFFLE] = enabled }
     }
     suspend fun setVisualizerPresetId(presetId: String?) {
         dataStore.edit {

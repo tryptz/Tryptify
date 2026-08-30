@@ -22,12 +22,13 @@
 
 ### Fixed
 
-#### Preset rotation can be turned off
-- **Settings › Visualizer › Preset rotation** switches the timed preset change off. The preset you pick then stays until you change it.
-- **It uses projectM's own preset lock, not a very long timer.** A duration large enough to feel like "off" is still a timer and would move the preset eventually on a long listen; the lock stops the automatic transitions outright, hard and soft alike, while leaving a preset chosen by hand — from the browser, or Next — working exactly as before.
-- **Setting a duration is what rotation being on looks like**, so the lock is re-asserted behind it on both sides of the bridge. Without that, nudging the duration slider while rotation was off would quietly start it again.
-- **The rotation-seconds slider is hidden while it is off**, since there is no timer for it to describe.
-- **Auto-shuffle's description was wrong and now is not.** It said it rotated presets during playback, which is the timer's job; what it actually does is pick a new preset for each track and draw them in random order rather than in turn. The two are separate controls and now say so.
+#### One preset rotation setting, and it can be turned off
+- **Settings › Visualizer › Preset rotation is now a single choice: Off, On a timer, or Each track.** It replaces two switches that each claimed the job — "Preset rotation" drove projectM's timer, while "Auto-shuffle Presets" changed the preset on every new track and described itself as rotating presets during playback, which was the other one's job. Between them there was no single answer to "stop changing my preset", because either could still be doing it.
+- **Off uses projectM's own preset lock, not a very long timer.** A duration large enough to feel like off is still a timer and would move the preset eventually on a long listen; the lock stops the automatic transitions outright, hard and soft alike, while a preset picked by hand — from the browser, or Next — keeps working.
+- **Setting a duration is what the timer being on looks like**, so the lock is re-asserted behind it on both sides of the bridge; without that, nudging the seconds slider while rotation was off would quietly start it again. The slider only appears for the timer, which is the only mode with an interval to set.
+- **Your existing arrangement carries over** rather than being reset: with no new setting stored yet, the mode is derived from the two old switches. Both on — which is what most installs had — becomes the timer, since it is the continuous behaviour of the two and the one whose absence would be noticed. Both off stays off.
+- **Random order is folded in.** The playlist is shuffled whenever something is choosing for you, because walking ten thousand presets in turn is not an order anybody wanted, and it is no longer a separate switch.
+- **The player's Shuffle/Manual chip still works as one button**, and turning it back on restores whichever rotating mode you last chose rather than assuming the timer.
 
 #### Target FPS goes to 240, and now caps something
 - **The slider reaches 240** instead of stopping at 144, which was below what current panels run at.

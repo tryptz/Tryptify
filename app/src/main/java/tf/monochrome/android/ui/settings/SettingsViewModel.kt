@@ -35,6 +35,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
+import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import java.io.File
 import java.util.Locale
@@ -307,8 +308,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
     val visualizerEngineEnabled: StateFlow<Boolean> = preferences.visualizerEngineEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val visualizerAutoShuffle: StateFlow<Boolean> = preferences.visualizerAutoShuffle
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val visualizerPresetRotationMode: StateFlow<PresetRotationMode> =
+        preferences.visualizerPresetRotationMode
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PresetRotationMode.Default)
     val visualizerPresetId: StateFlow<String?> = preferences.visualizerPresetId
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val visualizerRotationSeconds: StateFlow<Int> = preferences.visualizerRotationSeconds
@@ -319,9 +321,6 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 32)
     val visualizerMeshY: StateFlow<Int> = preferences.visualizerMeshY
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 24)
-    val visualizerPresetRotation: StateFlow<Boolean> = preferences.visualizerPresetRotation
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
     val visualizerAudioDelayMs: StateFlow<Int> = preferences.visualizerAudioDelayMs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
@@ -583,12 +582,11 @@ class SettingsViewModel @Inject constructor(
     }
     fun setNowPlayingViewMode(mode: NowPlayingViewMode) { viewModelScope.launch { preferences.setNowPlayingViewMode(mode) } }
     fun setVisualizerEngineEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerEngineEnabled(enabled) } }
-    fun setVisualizerAutoShuffle(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerAutoShuffle(enabled) } }
     fun setVisualizerRotationSeconds(seconds: Int) { viewModelScope.launch { preferences.setVisualizerRotationSeconds(seconds) } }
     fun setVisualizerTextureSize(size: Int) { viewModelScope.launch { preferences.setVisualizerTextureSize(size) } }
     fun setVisualizerMeshX(value: Int) { viewModelScope.launch { preferences.setVisualizerMeshX(value) } }
     fun setVisualizerMeshY(value: Int) { viewModelScope.launch { preferences.setVisualizerMeshY(value) } }
-    fun setVisualizerPresetRotation(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerPresetRotation(enabled) } }
+    fun setVisualizerPresetRotationMode(mode: PresetRotationMode) { viewModelScope.launch { preferences.setVisualizerPresetRotationMode(mode) } }
     fun setVisualizerAudioDelayMs(value: Int) { viewModelScope.launch { preferences.setVisualizerAudioDelayMs(value) } }
     fun setVisualizerTargetFps(value: Int) { viewModelScope.launch { preferences.setVisualizerTargetFps(value) } }
     fun setLyrics3dRotation(value: Float) { viewModelScope.launch { preferences.setLyrics3dRotation(value) } }
