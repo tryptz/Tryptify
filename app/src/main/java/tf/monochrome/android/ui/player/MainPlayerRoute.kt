@@ -371,7 +371,9 @@ fun MainPlayerRoute(
         audioQuality = currentTrack?.audioQuality,
         outputLabel = "Default",
         soundLabel = "AutoEQ",
-        speedLabel = String.format(Locale.US, "%.2fx", playbackSpeed),
+        // In the listener's own unit. This was the raw ratio, so a speed set
+        // in semitones read as "+3 st" in the panel and "1.19x" here.
+        speedLabel = PitchRatio.formatSpeed(playbackSpeed, speedUnitSemitones),
         sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
@@ -1082,11 +1084,7 @@ private fun BoxScope.SpeedPanel(
                 // type, because the two answer different questions — "how much
                 // faster" and "how much higher" — and one control drives both.
                 Text(
-                    text = if (speedUnitSemitones) {
-                        "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
-                    } else {
-                        String.format(Locale.US, "%.2fx", speed)
-                    },
+                    text = PitchRatio.formatSpeed(speed, speedUnitSemitones),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = speedAccent,
