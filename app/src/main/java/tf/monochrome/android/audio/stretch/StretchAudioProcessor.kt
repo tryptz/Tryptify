@@ -46,6 +46,15 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
 
     @Volatile private var semitones: Float = 0f
 
+    /**
+     * Whether the vocoder is actually transposing, as opposed to merely being
+     * in the chain. Distinct from [isActive] on purpose -- see there.
+     */
+    private val engaged: Boolean get() = abs(semitones) >= SEMITONE_DEADZONE
+
+    /** Engagement as the audio thread last saw it. Audio thread only. */
+    private var wasEngaged = false
+
     /** Semitones to transpose by; 0 makes the processor inactive. */
     fun setSemitones(value: Float) {
         if (!value.isFinite()) return
@@ -64,7 +73,7 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
      */
     fun latencyFrames(): Int {
         val h = handle
-        return if (h != 0L && isActive) StretchNative.nativeLatencyFrames(h) else 0
+        return if (h != 0L && engaged) StretchNative.nativeLatencyFrames(h) else 0
     }
 
     // ── AudioProcessor ───────────────────────────────────────────────────
@@ -84,16 +93,46 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         return inputAudioFormat
     }
 
+    /**
+     * Active whenever it *could* transpose, not only while it is.
+     *
+     * Media3 fixes the set of processors it will run when the pipeline is built
+     * -- `AudioProcessingPipeline` keeps the ones whose `isActive` is true at
+     * `configure` and again at `flush`, and consults it at no other time. Gating
+     * this on the current pitch therefore left the processor out of the chain
+     * for every track that started at zero semitones, which is all of them: the
+     * pitch buttons then set a field nothing was reading, and the only audible
+     * change was the AutoEQ pre-warp that rides alongside it, because that
+     * processor is always in the chain. Pitch appeared to shift the EQ and not
+     * the music.
+     *
+     * So membership is decided by what this can do, and [queueInput] passes
+     * audio through untouched while there is nothing to do. That is the same
+     * shape AutoEqProcessor uses for a flat curve, and it costs one copy per
+     * block at zero pitch in exchange for the buttons working the moment they
+     * are pressed.
+     */
     override fun isActive(): Boolean =
         StretchNative.isAvailable &&
-            (pendingFormat != AudioFormat.NOT_SET || inputFormat != AudioFormat.NOT_SET) &&
-            abs(semitones) >= SEMITONE_DEADZONE
+            (pendingFormat != AudioFormat.NOT_SET || inputFormat != AudioFormat.NOT_SET)
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val h = handle
-        if (h == 0L) {
-            outputBuffer = AudioProcessor.EMPTY_BUFFER
+        if (h == 0L || !engaged) {
+            // Nothing to do, so hand the audio on exactly as it arrived. An
+            // effect that cannot or need not run has to be inaudible, never
+            // silent: returning an empty buffer here would mute playback for
+            // every track sitting at zero pitch.
+            wasEngaged = false
+            passThrough(inputBuffer)
             return
+        }
+        if (!wasEngaged) {
+            // The engine still holds whatever it had buffered when the pitch
+            // last returned to zero. Without this, turning pitch back on plays
+            // a few hundred milliseconds of much older audio first.
+            StretchNative.nativeReset(h)
+            wasEngaged = true
         }
         val encoding = inputFormat.encoding
         val channels = inputFormat.channelCount
@@ -150,6 +189,18 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         outputBuffer.limit(totalFrames * frameSize)
     }
 
+    /** Copies the input to the output verbatim, sample for sample. */
+    private fun passThrough(inputBuffer: ByteBuffer) {
+        val remaining = inputBuffer.remaining()
+        if (remaining <= 0) {
+            outputBuffer = AudioProcessor.EMPTY_BUFFER
+            return
+        }
+        ensureOutput(remaining)
+        outputBuffer.put(inputBuffer)
+        outputBuffer.flip()
+    }
+
     override fun getOutput(): ByteBuffer {
         val buf = outputBuffer
         outputBuffer = AudioProcessor.EMPTY_BUFFER
@@ -164,6 +215,7 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
     override fun flush() {
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
+        wasEngaged = false
         if (pendingFormat != AudioFormat.NOT_SET) {
             inputFormat = pendingFormat
             pendingFormat = AudioFormat.NOT_SET
@@ -188,6 +240,7 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
     override fun reset() {
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
+        wasEngaged = false
         releaseEngine()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
