@@ -70,4 +70,58 @@ class PresetRotationModeTest {
         assertTrue(PresetRotationMode.Timer.isRotating)
         assertTrue(PresetRotationMode.Track.isRotating)
     }
+
+    @Test
+    fun `the chip restores the mode that was remembered`() {
+        assertEquals(
+            PresetRotationMode.Track,
+            PresetRotationMode.toggled(enabled = true, remembered = PresetRotationMode.Track),
+        )
+        assertEquals(
+            PresetRotationMode.Timer,
+            PresetRotationMode.toggled(enabled = true, remembered = PresetRotationMode.Timer),
+        )
+    }
+
+    @Test
+    fun `turning the chip off is Off whatever was remembered`() {
+        PresetRotationMode.entries.forEach { remembered ->
+            assertEquals(
+                "remembered=$remembered",
+                PresetRotationMode.Off,
+                PresetRotationMode.toggled(enabled = false, remembered = remembered),
+            )
+        }
+    }
+
+    @Test
+    fun `turning the chip on always starts something rotating`() {
+        // Off cannot be restored by a control whose whole purpose is to start
+        // rotation -- that would be a switch that visibly does nothing.
+        assertEquals(
+            PresetRotationMode.Default,
+            PresetRotationMode.toggled(enabled = true, remembered = PresetRotationMode.Off),
+        )
+    }
+
+    @Test
+    fun `a remembered choice survives being switched off and on`() {
+        // The bug: the remembered mode lived only in memory, and the chip
+        // writing Off meant nothing rotating ever reached it again. On the next
+        // launch it was back to its default, so "Each track" came back as "On a
+        // timer" -- the setting appearing to reset itself.
+        var stored = PresetRotationMode.Track
+        var remembered = PresetRotationMode.Track
+
+        stored = PresetRotationMode.toggled(enabled = false, remembered = remembered)
+        assertEquals(PresetRotationMode.Off, stored)
+
+        // A relaunch: everything not written down is gone. `remembered` is read
+        // back from storage rather than reconstructed from `stored`, which is
+        // Off and says nothing about what came before it.
+        assertEquals(
+            PresetRotationMode.Track,
+            PresetRotationMode.toggled(enabled = true, remembered = remembered),
+        )
+    }
 }

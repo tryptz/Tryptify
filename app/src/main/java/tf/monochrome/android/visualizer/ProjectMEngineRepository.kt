@@ -192,6 +192,16 @@ class ProjectMEngineRepository @Inject constructor(
                 }
             }
         }
+        // Seeded from storage, not from the last time the setting happened to
+        // pass through this process. Off is a mode the chip can write, and once
+        // it has, nothing rotating arrives here again -- so a field that only
+        // learns from the collector below is back at its default on the next
+        // launch, and the chip then restores the wrong thing.
+        scope.launch {
+            preferences.visualizerPresetRotationLast.collectLatest { remembered ->
+                lastRotatingMode = remembered
+            }
+        }
         scope.launch {
             preferences.visualizerPresetRotationMode.collectLatest { mode ->
                 _rotationMode.value = mode
@@ -488,7 +498,7 @@ class ProjectMEngineRepository @Inject constructor(
      * whichever rotating mode was last chosen rather than assuming the timer.
      */
     fun setRotationEnabled(enabled: Boolean) {
-        val mode = if (enabled) lastRotatingMode else PresetRotationMode.Off
+        val mode = PresetRotationMode.toggled(enabled, lastRotatingMode)
         scope.launch { preferences.setVisualizerPresetRotationMode(mode) }
     }
 

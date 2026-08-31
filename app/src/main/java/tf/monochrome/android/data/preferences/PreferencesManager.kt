@@ -277,6 +277,11 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_ROTATION_SECONDS = intPreferencesKey("visualizer_rotation_seconds")
         private val VISUALIZER_PRESET_ROTATION = booleanPreferencesKey("visualizer_preset_rotation")
         private val VISUALIZER_PRESET_ROTATION_MODE = stringPreferencesKey("visualizer_preset_rotation_mode")
+        // Which rotating mode to come back to when the player's on/off chip is
+        // switched back on. Stored rather than remembered, because the chip
+        // writing Off is exactly what makes the choice unreadable afterwards.
+        private val VISUALIZER_PRESET_ROTATION_LAST =
+            stringPreferencesKey("visualizer_preset_rotation_last")
         private val VISUALIZER_TEXTURE_SIZE = intPreferencesKey("visualizer_texture_size")
         private val VISUALIZER_MESH_X = intPreferencesKey("visualizer_mesh_x")
         private val VISUALIZER_MESH_Y = intPreferencesKey("visualizer_mesh_y")
@@ -426,6 +431,7 @@ class PreferencesManager @Inject constructor(
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_PRESET_ID,
             VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION_MODE,
+            VISUALIZER_PRESET_ROTATION_LAST,
             VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
             VISUALIZER_TOUCH_WAVEFORM, VISUALIZER_FAVORITE_PRESETS,
             SPECTRUM_ANALYZER_ENABLED, SPECTRUM_SHOW_ON_NOW_PLAYING, SPECTRUM_FFT_SIZE,
@@ -1250,8 +1256,29 @@ class PreferencesManager @Inject constructor(
             )
     }
 
+    /**
+     * The rotating mode the on/off chip restores. Falls back to whatever is
+     * currently set, so a listener who only ever used Settings still gets their
+     * own choice back rather than the default.
+     */
+    val visualizerPresetRotationLast: Flow<PresetRotationMode> = dataStore.data.map { prefs ->
+        val remembered = prefs[VISUALIZER_PRESET_ROTATION_LAST]?.let(PresetRotationMode::fromKey)
+        val current = prefs[VISUALIZER_PRESET_ROTATION_MODE]?.let(PresetRotationMode::fromKey)
+        remembered?.takeIf { it.isRotating }
+            ?: current?.takeIf { it.isRotating }
+            ?: PresetRotationMode.Default
+    }
+
+    /**
+     * Both keys in one edit: choosing a rotating mode is also the act of saying
+     * which one to come back to, and two edits would let a reader see the pair
+     * disagree.
+     */
     suspend fun setVisualizerPresetRotationMode(mode: PresetRotationMode) {
-        dataStore.edit { it[VISUALIZER_PRESET_ROTATION_MODE] = mode.key }
+        dataStore.edit { prefs ->
+            prefs[VISUALIZER_PRESET_ROTATION_MODE] = mode.key
+            if (mode.isRotating) prefs[VISUALIZER_PRESET_ROTATION_LAST] = mode.key
+        }
     }
     val visualizerTextureSize: Flow<Int> = dataStore.data.map { it[VISUALIZER_TEXTURE_SIZE] ?: 1024 }
     val visualizerMeshX: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_X] ?: 32 }

@@ -41,6 +41,26 @@ enum class PresetRotationMode(val key: String) {
          * would be noticed. Kept a pure function so the mapping is pinned by a
          * test rather than living only in a DataStore read.
          */
+        /**
+         * What the player's two-state rotation chip should store.
+         *
+         * The chip is on/off over a three-state setting, so turning it back on
+         * has to restore which rotating mode was chosen -- and [remembered] is
+         * that choice, which is why it has to be something that outlived the
+         * process. Held only in memory it reverts to [Default] on every launch,
+         * so a listener on "Each track" who switched rotation off came back to
+         * find the timer running instead.
+         *
+         * [Default] is the fallback for a [remembered] that is [Off] or absent:
+         * turning rotation on has to start something rotating.
+         */
+        fun toggled(enabled: Boolean, remembered: PresetRotationMode): PresetRotationMode =
+            when {
+                !enabled -> Off
+                remembered.isRotating -> remembered
+                else -> Default
+            }
+
         fun migratedFrom(timedRotation: Boolean, changeEachTrack: Boolean): PresetRotationMode =
             when {
                 timedRotation -> Timer
