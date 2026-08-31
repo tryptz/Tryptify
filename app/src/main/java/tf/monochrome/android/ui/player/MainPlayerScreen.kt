@@ -43,7 +43,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
@@ -504,19 +503,37 @@ fun MainPlayerScreen(
             DevEditable("topBar", Modifier.fillMaxWidth()) { topBar() }
 
             if (horizontal) {
+                // The same gap portrait leaves under the top bar, so the
+                // artwork does not start hard against it.
+                if (!lyricsExpanded) Spacer(Modifier.height(12.dp))
                 // ── Old-iTunes row: artwork left, everything else beside it ──
                 BoxWithConstraints(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 ) {
-                    // The square is bound by the row's HEIGHT, and capped at
-                    // 45% of its width so the controls beside it keep a usable
-                    // column on a very wide window.
-                    val artSide = minOf(maxHeight, maxWidth * 0.45f)
+                    // Both widths, and the slack the arrangement below has to
+                    // centre, come out of one piece of arithmetic that a test
+                    // can hold at real device sizes -- see
+                    // [PlayerLandscapeMetrics].
+                    val rowGap = if (lyricsExpanded) 0.dp else 20.dp
+                    val metrics = PlayerLandscapeMetrics.measure(
+                        rowWidth = maxWidth,
+                        rowHeight = maxHeight,
+                        gap = rowGap,
+                        chromeMax = PlayerDesignTokens.ChromeMaxWidth,
+                    )
                     Row(
                         modifier = Modifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically,
+                        // Centred as a PAIR, not packed to the left edge. The
+                        // artwork's size comes from the row's height and the
+                        // chrome's from its own cap, so on a wide window the
+                        // two together are narrower than the row -- and left
+                        // packed, all of that slack collected on the right,
+                        // which is what made the screen look like it was
+                        // leaning. Centring splits it either side of the pair.
                         horizontalArrangement = Arrangement.spacedBy(
-                            if (lyricsExpanded) 0.dp else 20.dp
+                            rowGap,
+                            Alignment.CenterHorizontally,
                         ),
                     ) {
                         // The sizing modifier goes on the direct row child:
@@ -534,32 +551,22 @@ fun MainPlayerScreen(
                             heroWantsWidth -> Box(Modifier.weight(1f).fillMaxHeight()) {
                                 hero(Modifier.fillMaxSize())
                             }
-                            else -> DevEditable("heroLandscape", Modifier.size(artSide)) {
+                            else -> DevEditable("heroLandscape", Modifier.size(metrics.artSide)) {
                                 hero(Modifier.fillMaxSize())
                             }
                         }
 
+                        // Given a width rather than told to fill. Filling is
+                        // what handed the chrome every dp the height-bound
+                        // artwork did not use -- see [ChromeMaxWidth] for what
+                        // that did to the scrubber -- and it is also what left
+                        // the arrangement above no slack to centre.
                         AnimatedVisibility(
                             visible = !lyricsExpanded,
-                            modifier = Modifier.weight(1f),
                             enter = fadeIn() + expandHorizontally(),
                             exit = fadeOut() + shrinkHorizontally(),
                         ) {
-                            // Bounded and centred rather than stretched: the
-                            // hero is bound by the row's HEIGHT, so whatever
-                            // width it leaves over goes to the chrome whether
-                            // the chrome wants it or not. See [ChromeMaxWidth].
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                chrome(
-                                    Modifier
-                                        .widthIn(max = PlayerDesignTokens.ChromeMaxWidth)
-                                        .fillMaxWidth()
-                                        .fillMaxHeight()
-                                )
-                            }
+                            chrome(Modifier.width(metrics.chromeWidth).fillMaxHeight())
                         }
                     }
                 }
