@@ -25,23 +25,31 @@ enum class PitchEngine(val nativeId: Int, val label: String, val summary: String
 }
 
 /**
- * How much CPU the WSOLA stretcher may spend, and what it can hold together.
+ * How much work either engine may spend per second of audio.
  *
- * The search radius decides the lowest frequency that survives a splice --
- * roughly `sampleRate / radius`. Below that floor a note still plays but its
- * pitch wanders, because the splices land mid-cycle and eat or add partial
- * periods: a 110 Hz bass through FAST measures about 8% flat. Ignored by
- * [PitchEngine.VOCODER], which has no grain.
+ * It means something different to each, and both are real. For WSOLA it is the
+ * grain and its search radius, and the radius decides the lowest frequency that
+ * survives a splice -- below that floor a note still plays but its pitch
+ * wanders, because the splices land mid-cycle: 110 Hz through FAST measures
+ * about 8% flat. For the vocoder it is the analysis block, which decides how
+ * finely a partial can be resolved and how large an FFT runs on every hop.
+ *
+ * That second meaning is new, and it is why this exists at all past WSOLA. The
+ * vocoder's block was picked for accuracy alone, at nearly three times
+ * upstream's own default, and the measurement that chose it never asked what it
+ * cost -- which on a phone is a dropout.
  */
 enum class PitchQuality(
     val nativeId: Int,
     val label: String,
-    /** Lowest frequency the splice search can hold together, at 48 kHz. */
+    /** WSOLA: lowest frequency the splice search can hold together, at 48 kHz. */
     val bassFloorHz: Int,
+    /** Vocoder: worst-case pitch error over 82 Hz..3.5 kHz, in hertz. */
+    val vocoderErrorHz: String,
 ) {
-    FAST(0, "Fast", 375),
-    BALANCED(1, "Balanced", 188),
-    HIGH(2, "High", 94),
+    FAST(0, "Fast", 375, "1.40 Hz"),
+    BALANCED(1, "Balanced", 188, "0.42 Hz"),
+    HIGH(2, "High", 94, "0.18 Hz"),
     ;
 
     companion object {
