@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -24,6 +22,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,8 +49,8 @@ import tf.monochrome.android.ui.components.liquidGlass
 /**
  * Utility top bar for the main player: collapse handle on the left, then an
  * output-device button, a speed chip and an overflow menu on the right. The
- * overflow hosts the secondary controls (shuffle, repeat, download, hero
- * style) that no longer live on the main transport row.
+ * overflow hosts the secondary controls (shuffle, repeat, download, add to
+ * playlist, send file) that no longer live on the main transport row.
  */
 @Composable
 fun PlayerTopBar(
@@ -59,16 +59,14 @@ fun PlayerTopBar(
     repeatMode: RepeatMode,
     isDownloaded: Boolean,
     downloadState: TrackDownloadState,
-    heroStyle: PlayerHeroStyle,
     onCollapse: () -> Unit,
     onOutputClick: () -> Unit,
     onSpeedClick: () -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onDownload: () -> Unit,
-    onCycleHeroStyle: () -> Unit,
-    onOpenVisualizer: () -> Unit,
-    onOpenEqualizer: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onSendFile: () -> Unit,
     onOpenLyricsStudio: () -> Unit,
     onOpenSettings: () -> Unit,
     onGoToArtist: (() -> Unit)? = null,
@@ -153,6 +151,11 @@ fun PlayerTopBar(
                         )
                     }
                     DropdownMenuItem(
+                        text = { Text("Add to playlist") },
+                        onClick = { onAddToPlaylist(); menuExpanded = false },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
+                    )
+                    DropdownMenuItem(
                         text = { Text(if (shuffleEnabled) "Shuffle: On" else "Shuffle: Off") },
                         onClick = { onToggleShuffle(); menuExpanded = false },
                         leadingIcon = {
@@ -199,19 +202,9 @@ fun PlayerTopBar(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (heroStyle == PlayerHeroStyle.CircularProgress) "Square art" else "Circular art") },
-                        onClick = { onCycleHeroStyle(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.Default.Album, contentDescription = null) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Visualizer") },
-                        onClick = { onOpenVisualizer(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Equalizer") },
-                        onClick = { onOpenEqualizer(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.Default.Equalizer, contentDescription = null) },
+                        text = { Text("Send file") },
+                        onClick = { onSendFile(); menuExpanded = false },
+                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     )
                     DropdownMenuItem(
                         text = { Text("Player Visuals Studio") },
