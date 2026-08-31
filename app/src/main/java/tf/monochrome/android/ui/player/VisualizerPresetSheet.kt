@@ -24,6 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -45,9 +46,8 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.ui.components.GlassSearchBar
-import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
-import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.BorderStroke
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +87,13 @@ fun VisualizerPresetSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = MonoDimens.cardAlpha),
+        // Opaque. A ModalBottomSheet is its own window, so nothing inside it can
+        // blur the player behind it -- the backdrop belongs to the window this
+        // one is drawn over. Held at cardAlpha the sheet was simply 15%
+        // see-through, and what came through was the player: its transport, its
+        // track title, and the visualizer at full brightness, all of it directly
+        // under this list's text.
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -271,17 +277,41 @@ private fun VisualizerPresetRow(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
+    // Solid, with the rim doing the work the blur cannot.
+    //
+    // This row asked liquidGlass for glass it had no way to make. It passes no
+    // haze state, so the modifier drops to its tint-and-rim tier -- and on a
+    // device where blur is off it returns the modifier untouched, leaving the
+    // row with no background at all. Either way the fill was Color.Transparent,
+    // so what sat behind the title was the projectM canvas, moving, at whatever
+    // brightness the preset happened to be.
+    //
+    // Handing it the sheet's haze state would not have helped: these rows are
+    // drawn inside the LazyColumn that *is* the haze source, and an effect
+    // cannot sample the layer it lives in.
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(shape = RoundedCornerShape(20.dp))
             .glassSqueeze(press = rememberGlassPress(), onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         color = if (selected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            MaterialTheme.colorScheme.primaryContainer
         } else {
-            Color.Transparent
-        }
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        contentColor = if (selected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        border = BorderStroke(
+            width = MonoDimens.glassBorderWidth,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            },
+        ),
     ) {
         Row(
             modifier = Modifier
@@ -294,7 +324,6 @@ private fun VisualizerPresetRow(
                 Text(
                     text = preset.displayName,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -306,7 +335,12 @@ private fun VisualizerPresetRow(
                         "$tagLine · Intensity ${preset.intensity}"
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Derived from the row's own content colour rather than
+                    // pinned to onSurfaceVariant, which is a foreground for the
+                    // surface roles and lands on primaryContainer when the row
+                    // is selected -- the one row where the subtitle would be
+                    // hardest to read.
+                    color = LocalContentColor.current.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
