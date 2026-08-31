@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -35,12 +36,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
@@ -392,71 +395,96 @@ fun MainPlayerScreen(
         // slot so the column and the row hand it the same content instead of
         // forking it. Landscape tightens the gaps: the same stack has to fit in
         // a window less than half as tall.
+        val chromeBody: @Composable ColumnScope.() -> Unit = {
+            if (!horizontal) Spacer(Modifier.height(14.dp))
+            DevEditable("trackInfo", Modifier.fillMaxWidth()) {
+                PlayerTrackInfo(
+                    track = state.track,
+                    artists = state.artists,
+                    isLiked = state.isLiked,
+                    accent = accent,
+                    onToggleLike = onToggleLike,
+                    onArtistClick = onArtistClick,
+                    isLiveStream = state.isLiveStream,
+                )
+            }
+
+            Spacer(Modifier.height(if (horizontal) 8.dp else 16.dp))
+            DevEditable("progress", Modifier.fillMaxWidth()) {
+                // Its own composable so the position tick recomposes this
+                // and nothing else.
+                PlayerProgressSection(
+                    positionState = positionState,
+                    durationState = durationState,
+                    centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
+                    accent = accent,
+                    formatTime = formatTime,
+                    onSeekCommit = onSeekCommit,
+                    isLive = state.isLiveStream,
+                )
+            }
+
+            Spacer(Modifier.height(if (horizontal) 8.dp else 20.dp))
+            DevEditable("transport", Modifier.fillMaxWidth()) {
+                PlayerTransportControls(
+                    isPlaying = state.isPlaying,
+                    accent = accent,
+                    onPrevious = onPrevious,
+                    onPlayPause = onPlayPause,
+                    onNext = onNext,
+                    isBuffering = state.isBuffering,
+                )
+            }
+
+            Spacer(Modifier.height(if (horizontal) 8.dp else 20.dp))
+            DevEditable("actionDock", Modifier.fillMaxWidth()) {
+                PlayerActionDock(
+                    accent = accent,
+                    lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
+                    timerActive = state.sleepTimerActive,
+                    onLyrics = onLyrics,
+                    onTimer = onTimer,
+                    onMixer = onMixer,
+                    onPlaylist = onPlaylist,
+                )
+            }
+        }
+
         val chrome: @Composable (Modifier) -> Unit = { chromeModifier ->
-            // The row layout gives the chrome roughly half a phone's height to
-            // stack four controls in. It fits at the tightened gaps below, but
-            // a very short window (a split-screen half, a small cover display)
-            // would clip the dock — so there it scrolls instead.
-            val chromeScroll = rememberScrollState()
-            Column(
-                modifier = chromeModifier.then(
-                    if (horizontal) Modifier.verticalScroll(chromeScroll) else Modifier
-                ),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                if (!horizontal) Spacer(Modifier.height(14.dp))
-                DevEditable("trackInfo", Modifier.fillMaxWidth()) {
-                    PlayerTrackInfo(
-                        track = state.track,
-                        artists = state.artists,
-                        isLiked = state.isLiked,
-                        accent = accent,
-                        onToggleLike = onToggleLike,
-                        onArtistClick = onArtistClick,
-                        isLiveStream = state.isLiveStream,
-                    )
+            if (horizontal) {
+                // The row gives the chrome roughly half a phone's height to
+                // stack four controls in. It fits at the tightened gaps above,
+                // but a very short window (a split-screen half, a small cover
+                // display) would clip the dock — so there it scrolls.
+                //
+                // The scroll has to be handed a floor, though. `verticalScroll`
+                // measures its content against an unbounded height, which
+                // quietly turns `Arrangement.Center` into a no-op: the stack
+                // pinned itself to the top of the row while the artwork beside
+                // it ran the full height, so the two columns shared neither a
+                // top nor a bottom and the row read as lopsided. Holding the
+                // inner column to at least the viewport gives the arrangement
+                // something to centre within, and still lets it grow — and
+                // scroll — when the window really is too short.
+                val chromeScroll = rememberScrollState()
+                BoxWithConstraints(modifier = chromeModifier) {
+                    val viewport = if (constraints.hasBoundedHeight) maxHeight else 0.dp
+                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(chromeScroll)) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = viewport),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            content = chromeBody,
+                        )
+                    }
                 }
-
-                Spacer(Modifier.height(if (horizontal) 8.dp else 16.dp))
-                DevEditable("progress", Modifier.fillMaxWidth()) {
-                    // Its own composable so the position tick recomposes this
-                    // and nothing else.
-                    PlayerProgressSection(
-                        positionState = positionState,
-                        durationState = durationState,
-                        centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
-                        accent = accent,
-                        formatTime = formatTime,
-                        onSeekCommit = onSeekCommit,
-                        isLive = state.isLiveStream,
-                    )
-                }
-
-                Spacer(Modifier.height(if (horizontal) 8.dp else 20.dp))
-                DevEditable("transport", Modifier.fillMaxWidth()) {
-                    PlayerTransportControls(
-                        isPlaying = state.isPlaying,
-                        accent = accent,
-                        onPrevious = onPrevious,
-                        onPlayPause = onPlayPause,
-                        onNext = onNext,
-                        isBuffering = state.isBuffering,
-                    )
-                }
-
-                Spacer(Modifier.height(if (horizontal) 8.dp else 20.dp))
-                DevEditable("actionDock", Modifier.fillMaxWidth()) {
-                    PlayerActionDock(
-                        accent = accent,
-                        lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
-                        timerActive = state.sleepTimerActive,
-                        onLyrics = onLyrics,
-                        onTimer = onTimer,
-                        onMixer = onMixer,
-                        onPlaylist = onPlaylist,
-                    )
-                }
+            } else {
+                Column(
+                    modifier = chromeModifier,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    content = chromeBody,
+                )
             }
         }
 
@@ -517,12 +545,27 @@ fun MainPlayerScreen(
                             enter = fadeIn() + expandHorizontally(),
                             exit = fadeOut() + shrinkHorizontally(),
                         ) {
-                            chrome(Modifier.fillMaxWidth())
+                            // Bounded and centred rather than stretched: the
+                            // hero is bound by the row's HEIGHT, so whatever
+                            // width it leaves over goes to the chrome whether
+                            // the chrome wants it or not. See [ChromeMaxWidth].
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                chrome(
+                                    Modifier
+                                        .widthIn(max = PlayerDesignTokens.ChromeMaxWidth)
+                                        .fillMaxWidth()
+                                        .fillMaxHeight()
+                                )
+                            }
                         }
                     }
                 }
-                // Same thin strip as portrait, sized down: the row has half the
-                // height to give away to the audio-tools pull handle.
+                // Clearance for the bottom-edge pull strip, which is an
+                // overlay rather than part of this column and so reserves no
+                // height of its own.
                 if (!lyricsExpanded) Spacer(Modifier.height(28.dp))
             } else {
                 Spacer(Modifier.height(12.dp))

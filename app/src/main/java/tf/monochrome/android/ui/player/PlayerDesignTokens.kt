@@ -34,6 +34,16 @@ object PlayerDesignTokens {
      */
     const val ShortWindowHeightDp = 500
 
+    /**
+     * Widest the chrome column (track info, scrubber, transport, dock) is
+     * allowed to get in the landscape row. Left to fill, it inherits whatever
+     * the height-bound artwork does not use — some six hundred dp on a phone on
+     * its side — and stretches the scrubber into a hairline the width of the
+     * screen with previous and next pushed to opposite ends. Bounded, it keeps
+     * roughly a portrait phone's measure and centres in the space instead.
+     */
+    val ChromeMaxWidth = 460.dp
+
     val HeroCorner = 28.dp
     // Aspect ratio shared by the album-art hero and the projectM visualizer so
     // the two always occupy identically proportioned slots (1:1, matching the
