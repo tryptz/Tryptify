@@ -67,6 +67,26 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
 
     fun getSemitones(): Float = semitones
 
+    @Volatile private var engine: PitchEngine = PitchEngine.VOCODER
+    @Volatile private var quality: PitchQuality = PitchQuality.BALANCED
+
+    /**
+     * Chooses the transposition algorithm. Takes effect on the next block; the
+     * engine coming in is reset, so it does not open with history from whenever
+     * it was last selected.
+     */
+    fun setEngine(engine: PitchEngine, quality: PitchQuality) {
+        if (engine == this.engine && quality == this.quality) return
+        this.engine = engine
+        this.quality = quality
+        val h = handle
+        if (h != 0L) StretchNative.nativeSetEngine(h, engine.nativeId, quality.nativeId)
+    }
+
+    fun getEngine(): PitchEngine = engine
+
+    fun getQuality(): PitchQuality = quality
+
     /**
      * Round-trip latency in frames, or 0 when the processor is not engaged.
      * Whoever changes the pitch should glide dependent state over this window.
@@ -228,6 +248,7 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
             if (handle != 0L) {
                 maxBlock = StretchNative.nativeMaxBlockFrames().coerceAtLeast(1)
                 StretchNative.nativeSetSemitones(handle, semitones)
+                StretchNative.nativeSetEngine(handle, engine.nativeId, quality.nativeId)
                 val bytes = maxBlock * inputFormat.channelCount * 4
                 nativeIn = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
                 nativeOut = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())

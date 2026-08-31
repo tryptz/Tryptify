@@ -26,6 +26,7 @@
 #include <new>
 
 #include "signalsmith-stretch.h"
+#include "../dsp/wsola_pitch.h"
 
 namespace {
 
@@ -36,8 +37,21 @@ constexpr double kIntervalSeconds = 0.03;
 // Frames accepted in one process() call. The Kotlin side chunks to this.
 constexpr int kMaxBlockFrames = 8192;
 
+/**
+ * Which algorithm transposes.
+ *
+ * Two engines with opposite failure modes rather than one compromise. The
+ * vocoder is accurate on sustained tones and smears attacks; WSOLA keeps
+ * attacks and goes phasey on sustained polyphony. Kept in one Engine so
+ * switching costs no allocation and no reconfigure of the audio path.
+ */
+enum : int32_t { kEngineVocoder = 0, kEngineWsola = 1 };
+
 struct Engine {
     signalsmith::stretch::SignalsmithStretch<float> stretch;
+    tryptify::WsolaPitchShifter wsola;
+    int engine = kEngineVocoder;
+    float semitones = 0.0f;
     int channels = 2;
     // Planar scratch. Allocated once, at construction, so process() never does.
     std::vector<float> planarIn;
@@ -49,6 +63,7 @@ struct Engine {
         const int block = static_cast<int>(sampleRate * kBlockSeconds);
         const int interval = static_cast<int>(sampleRate * kIntervalSeconds);
         stretch.configure(ch, block, interval);
+        wsola.configure(ch, sampleRate, tryptify::WsolaQuality::kBalanced);
         planarIn.assign(static_cast<size_t>(ch) * kMaxBlockFrames, 0.0f);
         planarOut.assign(static_cast<size_t>(ch) * kMaxBlockFrames, 0.0f);
         inPtrs.resize(ch);
@@ -85,13 +100,52 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeDestroy(
 JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_stretch_StretchNative_nativeSetSemitones(
         JNIEnv *, jclass, jlong handle, jfloat semitones) {
-    if (auto *e = asEngine(handle)) e->stretch.setTransposeSemitones(semitones);
+    if (auto *e = asEngine(handle)) {
+        e->semitones = semitones;
+        e->stretch.setTransposeSemitones(semitones);
+        e->wsola.setSemitones(semitones);
+    }
+}
+
+/**
+ * Chooses the algorithm, and for WSOLA its grain size.
+ *
+ * Both engines are kept configured, so this is two stores rather than a
+ * rebuild -- but the one being switched *to* is holding stale history, so it
+ * is reset here. Quality changes reconfigure the stretcher, which resets it
+ * anyway; that is audible, and the caller is expected not to do it mid-phrase.
+ */
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_stretch_StretchNative_nativeSetEngine(
+        JNIEnv *, jclass, jlong handle, jint engine, jint quality) {
+    auto *e = asEngine(handle);
+    if (!e) return;
+    const int wanted = (engine == kEngineWsola) ? kEngineWsola : kEngineVocoder;
+    const auto q = static_cast<tryptify::WsolaQuality>(
+            quality < 0 ? 0 : (quality > 2 ? 2 : quality));
+    if (wanted == kEngineWsola && e->wsola.quality() != q) {
+        e->wsola.setQuality(q);
+        e->wsola.setSemitones(e->semitones);
+    }
+    if (wanted != e->engine) {
+        e->engine = wanted;
+        if (wanted == kEngineWsola) {
+            e->wsola.reset();
+            e->wsola.setSemitones(e->semitones);
+        } else {
+            e->stretch.reset();
+            e->stretch.setTransposeSemitones(e->semitones);
+        }
+    }
 }
 
 JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_stretch_StretchNative_nativeReset(
         JNIEnv *, jclass, jlong handle) {
-    if (auto *e = asEngine(handle)) e->stretch.reset();
+    if (auto *e = asEngine(handle)) {
+        e->stretch.reset();
+        e->wsola.reset();
+    }
 }
 
 /** Total round-trip latency in frames: what the transposition change lags by. */
@@ -100,6 +154,7 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeLatencyFrames(
         JNIEnv *, jclass, jlong handle) {
     auto *e = asEngine(handle);
     if (!e) return 0;
+    if (e->engine == kEngineWsola) return e->wsola.latencyFrames();
     return e->stretch.inputLatency() + e->stretch.outputLatency();
 }
 
@@ -125,6 +180,13 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeProcess(
     auto *in = static_cast<const float *>(env->GetDirectBufferAddress(inBuf));
     auto *out = static_cast<float *>(env->GetDirectBufferAddress(outBuf));
     if (in == nullptr || out == nullptr) return 0;
+
+    if (e->engine == kEngineWsola) {
+        // Already interleaved, and it works in place, so it skips the planar
+        // round trip the vocoder needs.
+        e->wsola.process(in, out, frames);
+        return frames;
+    }
 
     const int ch = e->channels;
     for (int c = 0; c < ch; ++c) {

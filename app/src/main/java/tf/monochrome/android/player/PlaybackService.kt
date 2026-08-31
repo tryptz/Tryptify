@@ -489,6 +489,21 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        // Which algorithm does that transposition. The two have very different
+        // latencies -- tens of milliseconds for WSOLA against 350 for the
+        // vocoder -- and the AutoEQ pre-warp glide is matched to whichever is
+        // running, so the warp is re-pushed on every change.
+        serviceScope.launch {
+            kotlinx.coroutines.flow.combine(
+                preferences.pitchEngine,
+                preferences.pitchQuality,
+            ) { engine, quality -> engine to quality }
+                .collect { (engine, quality) ->
+                    stretchProcessor.setEngine(engine, quality)
+                    pushAutoEqWarp()
+                }
+        }
+
         // Multichannel handling: fold 5.1/7.1 down to stereo (default) or,
         // when the user turns the toggle off, pass multichannel PCM through
         // to AudioTrack untouched (the stereo-only processors deactivate

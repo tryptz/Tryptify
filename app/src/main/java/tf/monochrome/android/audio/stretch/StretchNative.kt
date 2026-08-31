@@ -37,6 +37,14 @@ object StretchNative {
 
     external fun nativeSetSemitones(handle: Long, semitones: Float)
 
+    /**
+     * Selects the algorithm, and the grain size when that algorithm is WSOLA.
+     * Both engines stay configured behind the one handle, so switching costs no
+     * allocation -- but the engine being switched to is holding stale history
+     * and is reset as it comes in.
+     */
+    external fun nativeSetEngine(handle: Long, engine: Int, quality: Int)
+
     external fun nativeReset(handle: Long)
 
     /**

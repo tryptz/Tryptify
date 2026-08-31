@@ -21,6 +21,8 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.BuildConfig
+import tf.monochrome.android.audio.stretch.PitchEngine
+import tf.monochrome.android.audio.stretch.PitchQuality
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
@@ -241,6 +243,11 @@ class PreferencesManager @Inject constructor(
         private val PLAYBACK_SPEED = stringPreferencesKey("playback_speed")
         private val PRESERVE_PITCH = booleanPreferencesKey("preserve_pitch")
         private val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
+        // Which algorithm transposes, and how big a grain it uses. A taste
+        // rather than a fact about the hardware, so both travel with the
+        // account like the rest of the playback settings.
+        private val PITCH_ENGINE = stringPreferencesKey("pitch_engine")
+        private val PITCH_QUALITY = stringPreferencesKey("pitch_quality")
         private val SPEED_UNIT_SEMITONES = booleanPreferencesKey("speed_unit_semitones")
 
         // Appearance extras
@@ -408,6 +415,7 @@ class PreferencesManager @Inject constructor(
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES,
+            PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
@@ -1044,6 +1052,25 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setPitchSemitones(semitones: Float) {
         dataStore.edit { it[PITCH_SEMITONES] = semitones.toString() }
+    }
+
+    /**
+     * Which pitch engine to use, and its grain size. Stored by enum name rather
+     * than by ordinal so reordering the enum cannot silently repoint an
+     * existing choice at a different algorithm.
+     */
+    val pitchEngine: Flow<PitchEngine> = dataStore.data.map { prefs ->
+        PitchEngine.fromName(prefs[PITCH_ENGINE])
+    }
+    suspend fun setPitchEngine(engine: PitchEngine) {
+        dataStore.edit { it[PITCH_ENGINE] = engine.name }
+    }
+
+    val pitchQuality: Flow<PitchQuality> = dataStore.data.map { prefs ->
+        PitchQuality.fromName(prefs[PITCH_QUALITY])
+    }
+    suspend fun setPitchQuality(quality: PitchQuality) {
+        dataStore.edit { it[PITCH_QUALITY] = quality.name }
     }
 
     /**

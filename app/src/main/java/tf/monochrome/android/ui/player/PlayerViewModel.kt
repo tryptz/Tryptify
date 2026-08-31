@@ -31,6 +31,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.audio.stretch.PitchEngine
+import tf.monochrome.android.audio.stretch.PitchQuality
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
@@ -278,6 +280,23 @@ class PlayerViewModel @Inject constructor(
 
     fun setPitchSemitones(semitones: Float) {
         viewModelScope.launch { preferences.setPitchSemitones(semitones) }
+    }
+
+    // Which algorithm does the transposing, and how big a grain it uses. Only
+    // meaningful while the pitch is off zero, which is what the panel keys the
+    // controls on.
+    val pitchEngine: StateFlow<PitchEngine> = preferences.pitchEngine
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PitchEngine.VOCODER)
+
+    fun setPitchEngine(engine: PitchEngine) {
+        viewModelScope.launch { preferences.setPitchEngine(engine) }
+    }
+
+    val pitchQuality: StateFlow<PitchQuality> = preferences.pitchQuality
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PitchQuality.BALANCED)
+
+    fun setPitchQuality(quality: PitchQuality) {
+        viewModelScope.launch { preferences.setPitchQuality(quality) }
     }
 
     // Whether the speed control reads in semitones or as a multiplier.

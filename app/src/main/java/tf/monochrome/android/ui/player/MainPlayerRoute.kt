@@ -1,6 +1,10 @@
 package tf.monochrome.android.ui.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import tf.monochrome.android.audio.stretch.PitchEngine
+import tf.monochrome.android.audio.stretch.PitchQuality
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -142,6 +146,8 @@ fun MainPlayerRoute(
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by playerViewModel.preservePitch.collectAsStateWithLifecycle()
     val pitchSemitones by playerViewModel.pitchSemitones.collectAsStateWithLifecycle()
+    val pitchEngine by playerViewModel.pitchEngine.collectAsStateWithLifecycle()
+    val pitchQuality by playerViewModel.pitchQuality.collectAsStateWithLifecycle()
     val speedUnitSemitones by playerViewModel.speedUnitSemitones.collectAsStateWithLifecycle()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
@@ -759,6 +765,10 @@ fun MainPlayerRoute(
                         preservePitch = preservePitch,
                         pitchSemitones = pitchSemitones,
                         onPitchSemitonesChange = playerViewModel::setPitchSemitones,
+                        pitchEngine = pitchEngine,
+                        onPitchEngineChange = playerViewModel::setPitchEngine,
+                        pitchQuality = pitchQuality,
+                        onPitchQualityChange = playerViewModel::setPitchQuality,
                         speedUnitSemitones = speedUnitSemitones,
                         onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
                         onSpeedChange = playerViewModel::setPlaybackSpeed,
@@ -791,6 +801,10 @@ fun MainPlayerRoute(
                 preservePitch = preservePitch,
                 pitchSemitones = pitchSemitones,
                 onPitchSemitonesChange = playerViewModel::setPitchSemitones,
+                pitchEngine = pitchEngine,
+                onPitchEngineChange = playerViewModel::setPitchEngine,
+                pitchQuality = pitchQuality,
+                onPitchQualityChange = playerViewModel::setPitchQuality,
                 speedUnitSemitones = speedUnitSemitones,
                 onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
                 onSpeedChange = playerViewModel::setPlaybackSpeed,
@@ -886,6 +900,10 @@ private fun BoxScope.SpeedPanel(
     preservePitch: Boolean,
     pitchSemitones: Float,
     onPitchSemitonesChange: (Float) -> Unit,
+    pitchEngine: PitchEngine,
+    onPitchEngineChange: (PitchEngine) -> Unit,
+    pitchQuality: PitchQuality,
+    onPitchQualityChange: (PitchQuality) -> Unit,
     speedUnitSemitones: Boolean,
     onSpeedUnitChange: (Boolean) -> Unit,
     onSpeedChange: (Float) -> Unit,
@@ -1243,6 +1261,76 @@ private fun BoxScope.SpeedPanel(
                         tint = speedAccent,
                         modifier = Modifier.size(18.dp),
                     )
+                }
+            }
+
+            // Which engine, and only once there is something to transpose.
+            //
+            // Not in the row above, which the comment there explains is already
+            // sharing 320dp between a label, a readout, two steppers and the
+            // reset; a fifth control in it would ellipsize the readout on a
+            // small phone. Not always visible either -- at zero pitch nothing
+            // here does anything, and a panel that shows three dead rows to
+            // everyone who never transposes is how a control surface turns into
+            // a wall.
+            AnimatedVisibility(
+                visible = pitchSemitones != 0f,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        PitchEngine.entries.forEachIndexed { index, engine ->
+                            SegmentedButton(
+                                selected = pitchEngine == engine,
+                                onClick = { onPitchEngineChange(engine) },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = PitchEngine.entries.size,
+                                ),
+                                label = { Text(engine.label, maxLines = 1) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = pitchEngine.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted,
+                    )
+
+                    // Grain size is a WSOLA parameter. The vocoder has no
+                    // grain, so offering the choice there would be three
+                    // buttons that change nothing.
+                    AnimatedVisibility(
+                        visible = pitchEngine == PitchEngine.WSOLA,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                PitchQuality.entries.forEachIndexed { index, quality ->
+                                    SegmentedButton(
+                                        selected = pitchQuality == quality,
+                                        onClick = { onPitchQualityChange(quality) },
+                                        shape = SegmentedButtonDefaults.itemShape(
+                                            index = index,
+                                            count = PitchQuality.entries.size,
+                                        ),
+                                        label = { Text(quality.label, maxLines = 1) },
+                                    )
+                                }
+                            }
+                            // The number that actually decides the setting:
+                            // below this the splices land mid-cycle and the
+                            // note drifts flat rather than simply sounding
+                            // rougher.
+                            Text(
+                                text = "Holds bass down to ${pitchQuality.bassFloorHz} Hz",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = muted,
+                            )
+                        }
+                    }
                 }
             }
         }
