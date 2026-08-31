@@ -17,15 +17,20 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -35,6 +40,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,21 +68,49 @@ import tf.monochrome.android.ui.components.glassSqueeze
 import tf.monochrome.android.ui.components.rememberGlassPress
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.visualizer.VisualizerPresetIndex
+
+/**
+ * Where the browser is looking. A path, not a filter, so Back walks it.
+ */
+private sealed interface PresetScope {
+    /** The list of categories, or of authors, depending on the axis. */
+    data object Roots : PresetScope
+    data class Category(val facet: VisualizerPresetIndex.Facet) : PresetScope
+    data class Sub(
+        val category: VisualizerPresetIndex.Facet,
+        val facet: VisualizerPresetIndex.Facet,
+    ) : PresetScope
+    data class Author(val facet: VisualizerPresetIndex.Facet) : PresetScope
+    data object Favorites : PresetScope
+}
+
+private enum class BrowseAxis(val label: String) { Category("Category"), Author("Author") }
 
 /**
  * The preset browser, drawn in the player's own window.
  *
  * It was a ModalBottomSheet, which is a separate window, and that is why it
  * could never be glass: the player it wanted to frost was captured into the
- * window underneath, and haze cannot sample another window's layer. Held at
- * cardAlpha the sheet was simply see-through instead -- the transport, the
- * track title and the visualizer all showing through the list rather than being
- * blurred behind it.
+ * window underneath, and haze cannot sample another window's layer. Handed to
+ * [MainPlayerScreen]'s `overlay` slot it is a sibling of the player's haze
+ * source, which is the one place a pane can actually blur this screen. The
+ * speed panel goes the same way and for the same reason.
  *
- * Handed to [MainPlayerScreen]'s `overlay` slot it is a sibling of the player's
- * haze source, which is the one place a pane can actually blur this screen. The
- * speed panel goes the same way and for the same reason. What that costs is the
- * scrim, the slide and Back, which the sheet used to get for free.
+ * ## Nine thousand seven hundred and ninety-five
+ *
+ * That is how many presets ship, and for a long time the answer to finding one
+ * was a search box and a single row of chips holding every folder name in the
+ * pack -- all one hundred and ninety-four of them, alphabetically, so "Aurora"
+ * sat beside "Automata" with nothing to say that one is a kind of Reaction and
+ * the other a kind of Fractal. Everything was reachable and nothing was
+ * findable, which is a filing cabinet with no drawers.
+ *
+ * [VisualizerPresetIndex] reads the structure that was already in the data:
+ * eleven categories over a hundred and eighty-three subcategories, and four
+ * hundred and seventy-nine authors parsed out of the file names. This walks it.
+ * Search still cuts across everything, because when you know the name you do
+ * not want to navigate to it.
  */
 @Composable
 fun BoxScope.VisualizerPresetPanel(
@@ -87,40 +123,53 @@ fun BoxScope.VisualizerPresetPanel(
     onSettingsClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // Ahead of the player's own Back while the panel is up, and out of the way
-    // when it is not.
-    BackHandler(enabled = visible) { onDismiss() }
-
     var query by remember { mutableStateOf("") }
-    var selectedTag by remember { mutableStateOf<String?>(null) }
-    // The panel stays in composition while hidden so it can animate out, so the
-    // filter has to be cleared deliberately. On the way IN rather than out:
-    // resetting on exit repopulates the list under the slide, which reads as the
-    // panel changing its mind on the way down.
+    var axis by remember { mutableStateOf(BrowseAxis.Category) }
+    var scope by remember { mutableStateOf<PresetScope>(PresetScope.Roots) }
+
+    // Back walks the path before it closes the panel: a listener four hundred
+    // authors deep expects it to come up a level, not to throw the whole
+    // browser away.
+    BackHandler(enabled = visible) {
+        when {
+            query.isNotBlank() -> query = ""
+            scope is PresetScope.Sub -> scope = PresetScope.Category((scope as PresetScope.Sub).category)
+            scope != PresetScope.Roots -> scope = PresetScope.Roots
+            else -> onDismiss()
+        }
+    }
+
+    // The panel stays composed while hidden so it can animate out, so the
+    // browser has to be put back deliberately. On the way IN rather than out:
+    // resetting on exit repopulates the list under the slide, which reads as
+    // the panel changing its mind on the way down.
     LaunchedEffect(visible) {
         if (visible) {
             query = ""
-            selectedTag = null
+            scope = PresetScope.Roots
         }
     }
 
-    val tags = remember(presets) {
-        presets.flatMap { preset -> preset.tags.map { tag -> tag.label } }
-            .distinct()
-            .sorted()
-    }
-    val filteredPresets = remember(presets, query, selectedTag) {
-        presets.filter { preset ->
-            val matchesQuery = query.isBlank() || preset.displayName.contains(query, ignoreCase = true)
-            val matchesTag = selectedTag == null || preset.tags.any { tag -> tag.label == selectedTag }
-            matchesQuery && matchesTag
+    // Indexing nine thousand names is not free, so it is keyed on the library
+    // rather than redone whenever a favourite is toggled or a chip is tapped.
+    val index = remember(presets) { VisualizerPresetIndex.build(presets) }
+
+    val searching = query.isNotBlank()
+    val visiblePresets = remember(index, scope, query, favoritePresetIds) {
+        when {
+            // Search ignores where you are standing. Knowing the name is the
+            // one case where navigating to it is a waste of time.
+            searching -> index.presets.filter { it.displayName.contains(query, ignoreCase = true) }
+            scope is PresetScope.Favorites -> index.presets.filter { it.id in favoritePresetIds }
+            scope is PresetScope.Sub -> index.presets.filter {
+                it.tags.getOrNull(0)?.id == (scope as PresetScope.Sub).category.id &&
+                    it.tags.getOrNull(1)?.id == (scope as PresetScope.Sub).facet.id
+            }
+            scope is PresetScope.Author -> index.presets.filter {
+                (scope as PresetScope.Author).facet.id in index.authorsOf(it)
+            }
+            else -> emptyList()
         }
-    }
-    val favoritePresets = remember(filteredPresets, favoritePresetIds) {
-        filteredPresets.filter { it.id in favoritePresetIds }
-    }
-    val nonFavoritePresets = remember(filteredPresets, favoritePresetIds) {
-        filteredPresets.filter { it.id !in favoritePresetIds }
     }
 
     AnimatedVisibility(
@@ -149,57 +198,30 @@ fun BoxScope.VisualizerPresetPanel(
         modifier = Modifier.align(Alignment.BottomCenter),
     ) {
         GlassPanel(
-            // The player's background layer, which this pane is a sibling of
-            // rather than a descendant -- the whole reason it can be glass.
             hazeState = LocalPlayerHaze.current,
-            // The mini player's material, like every other floating pane that
-            // is not the transport itself.
             glass = LocalMiniPlayerGlass.current,
             modifier = Modifier.fillMaxHeight(0.88f),
             avoidNavigationBar = false,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Fixed chrome, and deliberately *above* the bar rather than
-                // behind it: the same reason Settings' tab rail sits above its
-                // own search, which is that a floating pane must not cover the
-                // thing telling you where you are.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Visualizer Presets",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${filteredPresets.size} presets · ${favoritePresetIds.size} favorites",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            onDismiss()
-                            onSettingsClick()
+                PresetBrowserHeader(
+                    index = index,
+                    scope = scope,
+                    searching = searching,
+                    matches = visiblePresets.size,
+                    favorites = favoritePresetIds.size,
+                    onUp = {
+                        scope = when (val s = scope) {
+                            is PresetScope.Sub -> PresetScope.Category(s.category)
+                            else -> PresetScope.Roots
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings"
-                        )
-                    }
-                }
+                    },
+                    onSettingsClick = {
+                        onDismiss()
+                        onSettingsClick()
+                    },
+                )
 
-                // The bar floats over the list rather than sitting in the Column
-                // above it. Laid out inline it pushes the rows down and the list
-                // then clips at its own new top edge, so presets vanish at a hard
-                // line short of the glass.
                 Box(modifier = Modifier.fillMaxSize()) {
                     var searchBarHeight by remember { mutableStateOf(0.dp) }
                     val density = LocalDensity.current
@@ -207,81 +229,87 @@ fun BoxScope.VisualizerPresetPanel(
                     // Scoped to this panel rather than the player's source. The
                     // bar is drawn inside that layer, so handing it over would
                     // have it sampling a picture it is part of -- haze has
-                    // nothing valid to give and paints its base colour instead,
-                    // which is a flat slab exactly where the glass should be.
+                    // nothing valid to give and paints its base colour instead.
                     val haze = rememberHazeState()
 
                     LazyColumn(
-                        // The source is the list, because the list is what
-                        // passes behind the bar.
                         modifier = Modifier
                             .fillMaxSize()
                             .hazeSource(haze),
                         // The bar's height reaches the list as contentPadding,
                         // not as padding on the list or a Spacer: rows start
-                        // below the glass while staying free to travel up behind
-                        // it.
+                        // below the glass while staying free to travel up
+                        // behind it.
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
                             top = searchBarHeight + 8.dp,
-                            bottom = 24.dp
+                            bottom = 24.dp,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        if (favoritePresets.isNotEmpty()) {
+                        if (!searching && scope == PresetScope.Roots) {
                             item {
-                                Text(
-                                    text = "Favorites",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(bottom = 4.dp)
+                                FacetRow(
+                                    label = "Favourites",
+                                    count = favoritePresetIds.size,
+                                    onClick = { scope = PresetScope.Favorites },
                                 )
                             }
-                            items(favoritePresets, key = { "fav_${it.id}" }) { preset ->
+                            val roots = when (axis) {
+                                BrowseAxis.Category -> index.categories
+                                BrowseAxis.Author -> index.authors
+                            }
+                            items(roots, key = { "${axis.name}_${it.id}" }) { facet ->
+                                FacetRow(
+                                    label = facet.label,
+                                    count = facet.count,
+                                    onClick = {
+                                        scope = when (axis) {
+                                            BrowseAxis.Category -> PresetScope.Category(facet)
+                                            BrowseAxis.Author -> PresetScope.Author(facet)
+                                        }
+                                    },
+                                )
+                            }
+                        } else if (!searching && scope is PresetScope.Category) {
+                            val category = (scope as PresetScope.Category).facet
+                            items(
+                                index.subcategoriesOf(category.id),
+                                key = { "sub_${it.id}" },
+                            ) { facet ->
+                                FacetRow(
+                                    label = facet.label,
+                                    count = facet.count,
+                                    onClick = { scope = PresetScope.Sub(category, facet) },
+                                )
+                            }
+                        } else {
+                            items(visiblePresets, key = { it.id }) { preset ->
                                 VisualizerPresetRow(
                                     preset = preset,
+                                    title = index.titleOf(preset),
+                                    subtitle = subtitleFor(index, preset, scope),
                                     selected = preset.id == selectedPresetId,
-                                    isFavorite = true,
+                                    isFavorite = preset.id in favoritePresetIds,
                                     onClick = {
                                         onPresetSelected(preset)
                                         onDismiss()
                                     },
-                                    onToggleFavorite = { onToggleFavorite(preset.id) }
+                                    onToggleFavorite = { onToggleFavorite(preset.id) },
                                 )
                             }
-                            if (nonFavoritePresets.isNotEmpty()) {
-                                item {
-                                    Text(
-                                        text = "All Presets",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                        items(nonFavoritePresets, key = { it.id }) { preset ->
-                            VisualizerPresetRow(
-                                preset = preset,
-                                selected = preset.id == selectedPresetId,
-                                isFavorite = false,
-                                onClick = {
-                                    onPresetSelected(preset)
-                                    onDismiss()
-                                },
-                                onToggleFavorite = { onToggleFavorite(preset.id) }
-                            )
                         }
                     }
 
                     GlassSearchBar(
                         query = query,
                         onQueryChange = { query = it },
-                        placeholder = "Search presets",
+                        placeholder = "Search ${index.presets.size} presets",
                         hazeState = haze,
-                        // Permanent chrome of this panel, so the trailing button
-                        // has nothing to dismiss once the field is empty.
+                        // Permanent chrome of this panel, so the trailing
+                        // button has nothing to dismiss once the field is
+                        // empty.
                         onClose = null,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -292,31 +320,27 @@ fun BoxScope.VisualizerPresetPanel(
                             // chasing it.
                             .onSizeChanged { size ->
                                 searchBarHeight = with(density) { size.height.toDp() }
-                            }
+                            },
                     ) {
-                        // Inside the bar's own pane, so the filter and the field
-                        // are one sheet of glass instead of a bar with a second
-                        // thing floating under it.
-                        if (tags.isNotEmpty()) {
-                            Row(
+                        // The axis switch lives in the bar's own pane, so the
+                        // browser and the field are one sheet of glass. Only at
+                        // the roots: once you are inside Reaction, offering to
+                        // reinterpret that as an author is meaningless.
+                        if (!searching && scope == PresetScope.Roots) {
+                            SingleChoiceSegmentedButtonRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState())
                                     .padding(top = 10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                FilterChip(
-                                    selected = selectedTag == null,
-                                    onClick = { selectedTag = null },
-                                    label = { Text("All") }
-                                )
-                                tags.forEach { tag ->
-                                    FilterChip(
-                                        selected = selectedTag == tag,
-                                        onClick = {
-                                            selectedTag = if (selectedTag == tag) null else tag
-                                        },
-                                        label = { Text(tag) }
+                                BrowseAxis.entries.forEachIndexed { i, option ->
+                                    SegmentedButton(
+                                        selected = axis == option,
+                                        onClick = { axis = option },
+                                        shape = SegmentedButtonDefaults.itemShape(
+                                            index = i,
+                                            count = BrowseAxis.entries.size,
+                                        ),
+                                        label = { Text(option.label, maxLines = 1) },
                                     )
                                 }
                             }
@@ -328,9 +352,154 @@ fun BoxScope.VisualizerPresetPanel(
     }
 }
 
+/** Where the preset sits, which is what the row's second line is for. */
+private fun subtitleFor(
+    index: VisualizerPresetIndex,
+    preset: VisualizerPreset,
+    scope: PresetScope,
+): String {
+    // Under an author, saying the author again on every row wastes the line.
+    val credits = if (scope is PresetScope.Author) emptyList() else index.authorsOf(preset)
+    val place = preset.tags.joinToString(" · ") { it.label }
+    val author = credits.firstOrNull()?.let { id ->
+        index.authors.firstOrNull { it.id == id }?.label
+    }
+    return listOfNotNull(author, place.takeIf { it.isNotBlank() }).joinToString(" · ")
+        .ifBlank { "Uncategorised" }
+}
+
+/**
+ * The title bar, which doubles as the way back up.
+ *
+ * It reads as a breadcrumb rather than a static heading because the browser is
+ * now several levels deep, and a listener inside `Reaction / Aurora` needs to
+ * see where they are without leaving to find out.
+ */
+@Composable
+private fun PresetBrowserHeader(
+    index: VisualizerPresetIndex,
+    scope: PresetScope,
+    searching: Boolean,
+    matches: Int,
+    favorites: Int,
+    onUp: () -> Unit,
+    onSettingsClick: () -> Unit,
+) {
+    val atRoot = scope == PresetScope.Roots && !searching
+    val title = when {
+        searching -> "Search"
+        scope is PresetScope.Favorites -> "Favourites"
+        scope is PresetScope.Author -> scope.facet.label
+        scope is PresetScope.Sub -> scope.facet.label
+        scope is PresetScope.Category -> scope.facet.label
+        else -> "Visualizer Presets"
+    }
+    val detail = when {
+        searching -> "$matches of ${index.presets.size}"
+        scope is PresetScope.Roots ->
+            "${index.presets.size} presets · ${index.categories.size} categories · " +
+                "${index.authors.size} authors · $favorites favourites"
+        scope is PresetScope.Category -> "${scope.facet.count} presets in " +
+            "${index.subcategoriesOf(scope.facet.id).size} groups"
+        scope is PresetScope.Sub -> "${scope.category.label} · $matches presets"
+        else -> "$matches presets"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (!atRoot) {
+            IconButton(onClick = onUp, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+        }
+        IconButton(onClick = onSettingsClick) {
+            Icon(Icons.Default.Settings, contentDescription = "Settings")
+        }
+    }
+}
+
+/**
+ * One drawer of the cabinet: a name, how much is behind it, and an arrow.
+ *
+ * The count is the point. "Reaction" alone says nothing about whether it is
+ * worth opening; "Reaction 1,791" says it is most of the pack, and "Supernova
+ * 380" says it is a corner of it.
+ */
+@Composable
+private fun FacetRow(label: String, count: Int, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSqueeze(press = rememberGlassPress(), onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(
+            width = MonoDimens.glassBorderWidth,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                color = LocalContentColor.current.copy(alpha = 0.7f),
+            )
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = LocalContentColor.current.copy(alpha = 0.7f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun VisualizerPresetRow(
     preset: VisualizerPreset,
+    title: String,
+    subtitle: String,
     selected: Boolean,
     isFavorite: Boolean,
     onClick: () -> Unit,
@@ -381,18 +550,13 @@ private fun VisualizerPresetRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = preset.displayName,
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                val tagLine = preset.tags.joinToString(" · ") { it.label }
                 Text(
-                    text = if (tagLine.isBlank()) {
-                        "Intensity ${preset.intensity}"
-                    } else {
-                        "$tagLine · Intensity ${preset.intensity}"
-                    },
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     // Derived from the row's own content colour rather than
                     // pinned to onSurfaceVariant, which is a foreground for the
