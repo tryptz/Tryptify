@@ -61,9 +61,15 @@ data class PlayerGlassSettings(
     val progressGlass: Boolean = true,
     /**
      * Backdrop (Haze) frost blur radius in dp for surfaces that gaussian-blur
-     * what's behind them — the mini player bar, the player's audio-tools
-     * sheet, the nav pill. 0 disables the frost layer entirely. Distinct from
+     * what's behind them. 0 disables the frost layer entirely. Distinct from
      * [frost], which is the shader's surface roughness.
+     *
+     * Which surfaces depends on whose copy this is, because the app keeps two
+     * of these blobs. The UI-panel copy drives the mini player bar, the
+     * audio-tools sheet, the speed panel, the nav pill and the map panels; the
+     * player copy drives the now-playing chrome — the action dock and the play
+     * disc, whose punched glyphs open onto this blur rather than onto the raw
+     * background.
      */
     val hazeBlurDp: Float = 40f,
     /** Strength multiplier on the frost layer's luminance-picked tint (0–2). */

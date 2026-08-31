@@ -356,11 +356,18 @@ fun MainPlayerScreen(
                 alpha = { stainAlpha },
             )
         }
-        }
 
         // Reactive glow — full-screen, above the stain, behind the
         // (transparent) lyric text, so the light shows through uncut.
+        //
+        // Inside the sources, not past them. The glass over it — the dock, the
+        // play disc — is meant to blur *this*: it is the light that moves, and
+        // a frost that cannot see it is frosting a still gradient. Left
+        // outside, the reactive glow stopped dead at every panel edge, which is
+        // what gave the dock away as a shape laid on the screen rather than a
+        // sheet of glass sitting on it.
         fxUnderlay()
+        }
 
         if (isFullscreen) {
             hero(Modifier.fillMaxSize())
