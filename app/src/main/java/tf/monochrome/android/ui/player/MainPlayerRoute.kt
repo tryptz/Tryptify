@@ -40,6 +40,7 @@ import kotlin.math.abs
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -84,6 +85,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import tf.monochrome.android.ui.components.AddToPlaylistSheet
+import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import androidx.compose.ui.graphics.graphicsLayer
@@ -98,6 +101,7 @@ import tf.monochrome.android.ui.main.SystemBarsHidden
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.SourceType
+import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
@@ -133,6 +137,7 @@ fun MainPlayerRoute(
     val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsStateWithLifecycle()
     val repeatMode by playerViewModel.repeatMode.collectAsStateWithLifecycle()
     val isLiked by playerViewModel.isCurrentTrackLiked.collectAsStateWithLifecycle()
+    val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
     val downloadState by playerViewModel.currentTrackDownloadState.collectAsStateWithLifecycle()
     val isDownloadedRemote by playerViewModel.isCurrentTrackDownloaded.collectAsStateWithLifecycle()
     val isLocalTrack by playerViewModel.isCurrentTrackLocal.collectAsStateWithLifecycle()
@@ -185,12 +190,19 @@ fun MainPlayerRoute(
     }
 
     // --- Local UI state owned by the route ---
-    var heroStyle by rememberSaveable { mutableStateOf(PlayerHeroStyle.Square) }
+    // The square cover is the only hero the player offers now; the visualizer
+    // swaps it out below on its own.
+    val heroStyle = PlayerHeroStyle.Square
     var showLyricsSheet by rememberSaveable { mutableStateOf(false) }
     var showQueueSheet by rememberSaveable { mutableStateOf(false) }
     var showPresetSheet by rememberSaveable { mutableStateOf(false) }
     var showSpeedSheet by rememberSaveable { mutableStateOf(false) }
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
+    // Overflow › "Add to playlist" and the create-playlist follow-up it opens.
+    // Held as the pending track rather than a flag so the follow-up dialog
+    // still knows what to add after the picker sheet is gone.
+    var addToPlaylistFor by remember { mutableStateOf<Track?>(null) }
+    var createPlaylistFor by remember { mutableStateOf<Track?>(null) }
     // Sleep timer lives in PlayerViewModel (shared, nav-host-scoped) so the
     // countdown keeps running when this destination leaves composition.
     val sleepMinutes by playerViewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
@@ -312,6 +324,30 @@ fun MainPlayerRoute(
         )
     }
 
+    addToPlaylistFor?.let { pending ->
+        AddToPlaylistSheet(
+            playlists = playlists,
+            onDismiss = { addToPlaylistFor = null },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTrackToPlaylist(playlist.id, pending)
+                addToPlaylistFor = null
+            },
+            onCreateNew = {
+                addToPlaylistFor = null
+                createPlaylistFor = pending
+            },
+        )
+    }
+    createPlaylistFor?.let { pending ->
+        CreatePlaylistDialog(
+            onDismiss = { createPlaylistFor = null },
+            onSubmit = { name, description ->
+                playerViewModel.createPlaylist(name, description, listOf(pending))
+                createPlaylistFor = null
+            },
+        )
+    }
+
     val queueLabel = if (queue.isNotEmpty()) {
         "${(currentIndex + 1).coerceAtLeast(1)} / ${queue.size}"
     } else ""
@@ -421,22 +457,14 @@ fun MainPlayerRoute(
             repeatMode = repeatMode,
             isDownloaded = isDownloaded,
             downloadState = downloadState,
-            heroStyle = heroStyle,
             onCollapse = { navController.popBackStack() },
             onOutputClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
             onCycleRepeat = playerViewModel::cycleRepeatMode,
             onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
-            onCycleHeroStyle = {
-                heroStyle = if (heroStyle == PlayerHeroStyle.Square) {
-                    PlayerHeroStyle.CircularProgress
-                } else {
-                    PlayerHeroStyle.Square
-                }
-            },
-            onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-            onOpenEqualizer = { navController.navigateTool(Screen.Equalizer) },
+            onAddToPlaylist = { currentTrack?.let { addToPlaylistFor = it } },
+            onSendFile = { currentTrack?.let { playerViewModel.shareTrack(it) } },
             onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
             onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
@@ -517,7 +545,7 @@ fun MainPlayerRoute(
             )
         }
 
-        Box(
+        BoxWithConstraints(
             modifier = heroModifier.then(trackSwipe),
             contentAlignment = Alignment.Center,
         ) {
@@ -528,12 +556,18 @@ fun MainPlayerRoute(
                     heroStyle
                 }
                 // Keep the art a centred square whenever the slot is the
-                // full-width lyric rectangle (i.e. any time lyrics are on
-                // screen, including the fade-out). Bound it by WIDTH so the
-                // now-taller lyric slot doesn't stretch the (dissolving) art
-                // vertically; otherwise it fills the slot.
+                // lyric rectangle (i.e. any time lyrics are on screen,
+                // including the fade-out). Bound it by the SHORTER side so the
+                // dissolving art is neither stretched vertically by the taller
+                // portrait slot nor pushed past the top and bottom of the
+                // landscape row, which is wider than it is tall; otherwise it
+                // fills the slot.
                 val artMod = (if (lyricsSlotWide) {
-                    Modifier.fillMaxWidth().aspectRatio(1f)
+                    if (maxWidth <= maxHeight) {
+                        Modifier.fillMaxWidth().aspectRatio(1f)
+                    } else {
+                        Modifier.fillMaxHeight().aspectRatio(1f)
+                    }
                 } else {
                     Modifier.fillMaxSize()
                 }).let { base ->

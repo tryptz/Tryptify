@@ -7,12 +7,16 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
@@ -27,6 +31,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -62,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.shadow
@@ -367,6 +373,93 @@ fun MainPlayerScreen(
             animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
             label = "lyricsPad",
         )
+        // A short, wide window (a phone on its side) cannot run the portrait
+        // stack: `side = min(width, height)` collapses the hero to a sliver
+        // between the top bar and the controls, so the artwork disappears.
+        // There the player lays out as an old-iTunes row instead — artwork on
+        // the left, the whole chrome beside it. A tall window (tablet, unfolded
+        // foldable) keeps the stack, which has the height it wants.
+        val configuration = LocalConfiguration.current
+        val horizontal = configuration.screenWidthDp > configuration.screenHeightDp &&
+            configuration.screenHeightDp < PlayerDesignTokens.ShortWindowHeightDp
+
+        // Lyrics and the visualizer want a wide rectangle rather than a square,
+        // so in the row layout they take an equal share of the width instead of
+        // the artwork's height-bound square.
+        val heroWantsWidth = lyricsMode || state.visualizerActive
+
+        // The chrome — track info, scrubber, transport, dock — hoisted into a
+        // slot so the column and the row hand it the same content instead of
+        // forking it. Landscape tightens the gaps: the same stack has to fit in
+        // a window less than half as tall.
+        val chrome: @Composable (Modifier) -> Unit = { chromeModifier ->
+            // The row layout gives the chrome roughly half a phone's height to
+            // stack four controls in. It fits at the tightened gaps below, but
+            // a very short window (a split-screen half, a small cover display)
+            // would clip the dock — so there it scrolls instead.
+            val chromeScroll = rememberScrollState()
+            Column(
+                modifier = chromeModifier.then(
+                    if (horizontal) Modifier.verticalScroll(chromeScroll) else Modifier
+                ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                if (!horizontal) Spacer(Modifier.height(14.dp))
+                DevEditable("trackInfo", Modifier.fillMaxWidth()) {
+                    PlayerTrackInfo(
+                        track = state.track,
+                        artists = state.artists,
+                        isLiked = state.isLiked,
+                        accent = accent,
+                        onToggleLike = onToggleLike,
+                        onArtistClick = onArtistClick,
+                        isLiveStream = state.isLiveStream,
+                    )
+                }
+
+                Spacer(Modifier.height(if (horizontal) 8.dp else 16.dp))
+                DevEditable("progress", Modifier.fillMaxWidth()) {
+                    // Its own composable so the position tick recomposes this
+                    // and nothing else.
+                    PlayerProgressSection(
+                        positionState = positionState,
+                        durationState = durationState,
+                        centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
+                        accent = accent,
+                        formatTime = formatTime,
+                        onSeekCommit = onSeekCommit,
+                        isLive = state.isLiveStream,
+                    )
+                }
+
+                Spacer(Modifier.height(if (horizontal) 8.dp else 20.dp))
+                DevEditable("transport", Modifier.fillMaxWidth()) {
+                    PlayerTransportControls(
+                        isPlaying = state.isPlaying,
+                        accent = accent,
+                        onPrevious = onPrevious,
+                        onPlayPause = onPlayPause,
+                        onNext = onNext,
+                        isBuffering = state.isBuffering,
+                    )
+                }
+
+                Spacer(Modifier.height(if (horizontal) 8.dp else 20.dp))
+                DevEditable("actionDock", Modifier.fillMaxWidth()) {
+                    PlayerActionDock(
+                        accent = accent,
+                        lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
+                        timerActive = state.sleepTimerActive,
+                        onLyrics = onLyrics,
+                        onTimer = onTimer,
+                        onMixer = onMixer,
+                        onPlaylist = onPlaylist,
+                    )
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -382,131 +475,126 @@ fun MainPlayerScreen(
         ) {
             DevEditable("topBar", Modifier.fillMaxWidth()) { topBar() }
 
-            Spacer(Modifier.height(12.dp))
-            // Bound the hero to the smaller of the available width/height so a
-            // full-width square can never overflow its slot and collide with the
-            // track info below it. For expanded lyrics the same slot animates
-            // out to fill everything the hidden controls freed up.
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                val side = minOf(maxWidth, maxHeight)
-                // Full phone-screen width = the padded slot width plus the side
-                // padding the Column already subtracted.
-                val fullWidth = maxWidth + screenPad * 2
-                val heroW by animateDpAsState(
-                    targetValue = if (lyricsExpanded) maxWidth else side,
-                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
-                    label = "heroW",
-                )
-                // Lyrics get the FULL hero region height (decoupled from the album
-                // square), so the 3D letters, their glass bevels and the reactive
-                // glow have vertical room instead of being corner-cut in a short
-                // album-height band. Album art alone stays the compact square.
-                val heroH by animateDpAsState(
-                    targetValue = if (lyricsExpanded || lyricsMode) maxHeight else side,
-                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
-                    label = "heroH",
-                )
-                // Collapsed lyrics: a full-width rectangle spanning the whole hero
-                // region (requiredWidth overrides the padded slot; the centred Box
-                // lets it overflow to both edges), so lines reach the borders and
-                // have vertical breathing room. Album art keeps its padded square.
-                val heroMod = if (lyricsMode && !lyricsExpanded) {
-                    Modifier.requiredWidth(fullWidth).height(heroH)
-                } else {
-                    Modifier.size(heroW, heroH)
-                }
-                // Wrap only the square art (not the full-width slot) so the DevEdit
-                // highlight hugs the album-art ratio instead of a tall rectangle.
-                // The saved DevEdit offset/scale are tuned for the compact square;
-                // applied to the expanded/full-width lyric surface they push text
-                // past the screen borders — so those render 1:1, bypassing it.
-                if (lyricsExpanded || lyricsMode) {
-                    hero(heroMod)
-                } else {
-                    DevEditable("hero", Modifier) {
-                        hero(heroMod)
+            if (horizontal) {
+                // ── Old-iTunes row: artwork left, everything else beside it ──
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                ) {
+                    // The square is bound by the row's HEIGHT, and capped at
+                    // 45% of its width so the controls beside it keep a usable
+                    // column on a very wide window.
+                    val artSide = minOf(maxHeight, maxWidth * 0.45f)
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(
+                            if (lyricsExpanded) 0.dp else 20.dp
+                        ),
+                    ) {
+                        // The sizing modifier goes on the direct row child:
+                        // `weight` is parent data, so it is ignored if a
+                        // wrapper (DevEditable's box) sits between it and the
+                        // Row — the hero would then eat the whole row and
+                        // leave the chrome nothing.
+                        when {
+                            // Expanded lyrics take the whole row; the chrome
+                            // animates away beside them.
+                            lyricsExpanded -> hero(Modifier.fillMaxSize())
+                            // A lyric or visualizer surface is a rectangle, so
+                            // it splits the row rather than sitting in a
+                            // height-bound square.
+                            heroWantsWidth -> Box(Modifier.weight(1f).fillMaxHeight()) {
+                                hero(Modifier.fillMaxSize())
+                            }
+                            else -> DevEditable("heroLandscape", Modifier.size(artSide)) {
+                                hero(Modifier.fillMaxSize())
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = !lyricsExpanded,
+                            modifier = Modifier.weight(1f),
+                            enter = fadeIn() + expandHorizontally(),
+                            exit = fadeOut() + shrinkHorizontally(),
+                        ) {
+                            chrome(Modifier.fillMaxWidth())
+                        }
                     }
                 }
-            }
-
-            // Everything between the hero and the bottom free space is the
-            // player chrome; expanded lyrics collapse it away so the same
-            // lyric surface can take the room (no separate overlay element).
-            AnimatedVisibility(
-                visible = !lyricsExpanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                // Same thin strip as portrait, sized down: the row has half the
+                // height to give away to the audio-tools pull handle.
+                if (!lyricsExpanded) Spacer(Modifier.height(28.dp))
+            } else {
+                Spacer(Modifier.height(12.dp))
+                // Bound the hero to the smaller of the available width/height so a
+                // full-width square can never overflow its slot and collide with the
+                // track info below it. For expanded lyrics the same slot animates
+                // out to fill everything the hidden controls freed up.
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center,
                 ) {
-                Spacer(Modifier.height(14.dp))
-                DevEditable("trackInfo", Modifier.fillMaxWidth()) {
-                    PlayerTrackInfo(
-                        track = state.track,
-                        artists = state.artists,
-                        isLiked = state.isLiked,
-                        accent = accent,
-                        onToggleLike = onToggleLike,
-                        onArtistClick = onArtistClick,
-                        isLiveStream = state.isLiveStream,
+                    val side = minOf(maxWidth, maxHeight)
+                    // Full phone-screen width = the padded slot width plus the side
+                    // padding the Column already subtracted.
+                    val fullWidth = maxWidth + screenPad * 2
+                    val heroW by animateDpAsState(
+                        targetValue = if (lyricsExpanded) maxWidth else side,
+                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
+                        label = "heroW",
                     )
+                    // Lyrics get the FULL hero region height (decoupled from the album
+                    // square), so the 3D letters, their glass bevels and the reactive
+                    // glow have vertical room instead of being corner-cut in a short
+                    // album-height band. Album art alone stays the compact square.
+                    val heroH by animateDpAsState(
+                        targetValue = if (lyricsExpanded || lyricsMode) maxHeight else side,
+                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
+                        label = "heroH",
+                    )
+                    // Collapsed lyrics: a full-width rectangle spanning the whole hero
+                    // region (requiredWidth overrides the padded slot; the centred Box
+                    // lets it overflow to both edges), so lines reach the borders and
+                    // have vertical breathing room. Album art keeps its padded square.
+                    val heroMod = if (lyricsMode && !lyricsExpanded) {
+                        Modifier.requiredWidth(fullWidth).height(heroH)
+                    } else {
+                        Modifier.size(heroW, heroH)
+                    }
+                    // Wrap only the square art (not the full-width slot) so the DevEdit
+                    // highlight hugs the album-art ratio instead of a tall rectangle.
+                    // The saved DevEdit offset/scale are tuned for the compact square;
+                    // applied to the expanded/full-width lyric surface they push text
+                    // past the screen borders — so those render 1:1, bypassing it.
+                    if (lyricsExpanded || lyricsMode) {
+                        hero(heroMod)
+                    } else {
+                        DevEditable("hero", Modifier) {
+                            hero(heroMod)
+                        }
+                    }
                 }
 
-                Spacer(Modifier.height(16.dp))
-                DevEditable("progress", Modifier.fillMaxWidth()) {
-                    // Its own composable so the position tick recomposes this
-                    // and nothing else.
-                    PlayerProgressSection(
-                        positionState = positionState,
-                        durationState = durationState,
-                        centerLabel = state.queueLabel.ifBlank { state.audioQuality.orEmpty() },
-                        accent = accent,
-                        formatTime = formatTime,
-                        onSeekCommit = onSeekCommit,
-                        isLive = state.isLiveStream,
-                    )
+                // Everything between the hero and the bottom free space is the
+                // player chrome; expanded lyrics collapse it away so the same
+                // lyric surface can take the room (no separate overlay element).
+                AnimatedVisibility(
+                    visible = !lyricsExpanded,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    chrome(Modifier.fillMaxWidth())
                 }
 
-                Spacer(Modifier.height(20.dp))
-                DevEditable("transport", Modifier.fillMaxWidth()) {
-                    PlayerTransportControls(
-                        isPlaying = state.isPlaying,
-                        accent = accent,
-                        onPrevious = onPrevious,
-                        onPlayPause = onPlayPause,
-                        onNext = onNext,
-                        isBuffering = state.isBuffering,
-                    )
-                }
-
-                Spacer(Modifier.height(20.dp))
-                DevEditable("actionDock", Modifier.fillMaxWidth()) {
-                    PlayerActionDock(
-                        accent = accent,
-                        lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
-                        timerActive = state.sleepTimerActive,
-                        onLyrics = onLyrics,
-                        onTimer = onTimer,
-                        onMixer = onMixer,
-                        onPlaylist = onPlaylist,
-                    )
-                }
-                }
+                // Reserve only a thin strip below the dock for the audio-tools pull
+                // handle (a bottom-edge overlay), and let the hero (weight 1) take all
+                // the remaining height. This keeps the controls pinned to the bottom
+                // and the hero filling the screen in BOTH modes — the lyric surface
+                // when lyrics are on, and a big centred album square when they're off
+                // — instead of splitting the free space 50/50 with dead bottom space
+                // (which shrank the album and floated the controls up the screen).
+                if (!lyricsExpanded) Spacer(Modifier.height(56.dp))
             }
-
-            // Reserve only a thin strip below the dock for the audio-tools pull
-            // handle (a bottom-edge overlay), and let the hero (weight 1) take all
-            // the remaining height. This keeps the controls pinned to the bottom
-            // and the hero filling the screen in BOTH modes — the lyric surface
-            // when lyrics are on, and a big centred album square when they're off
-            // — instead of splitting the free space 50/50 with dead bottom space
-            // (which shrank the album and floated the controls up the screen).
-            if (!lyricsExpanded) Spacer(Modifier.height(56.dp))
         }
 
         // Thin bottom-edge pull strip — captures the open gesture and fades out
