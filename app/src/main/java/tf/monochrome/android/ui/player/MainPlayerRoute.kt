@@ -1298,39 +1298,38 @@ private fun BoxScope.SpeedPanel(
                         color = muted,
                     )
 
-                    // Grain size is a WSOLA parameter. The vocoder has no
-                    // grain, so offering the choice there would be three
-                    // buttons that change nothing.
-                    AnimatedVisibility(
-                        visible = pitchEngine == PitchEngine.WSOLA,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                PitchQuality.entries.forEachIndexed { index, quality ->
-                                    SegmentedButton(
-                                        selected = pitchQuality == quality,
-                                        onClick = { onPitchQualityChange(quality) },
-                                        shape = SegmentedButtonDefaults.itemShape(
-                                            index = index,
-                                            count = PitchQuality.entries.size,
-                                        ),
-                                        label = { Text(quality.label, maxLines = 1) },
-                                    )
-                                }
-                            }
-                            // The number that actually decides the setting:
-                            // below this the splices land mid-cycle and the
-                            // note drifts flat rather than simply sounding
-                            // rougher.
-                            Text(
-                                text = "Holds bass down to ${pitchQuality.bassFloorHz} Hz",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = muted,
+                    // Applies to both engines, meaning something different to
+                    // each: WSOLA's grain and search radius, the vocoder's
+                    // analysis block. Lower is lighter on both, which is the
+                    // reason it is reachable rather than a constant -- the
+                    // vocoder's block was chosen for accuracy alone and drops
+                    // out on real hardware at the top setting.
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        PitchQuality.entries.forEachIndexed { index, quality ->
+                            SegmentedButton(
+                                selected = pitchQuality == quality,
+                                onClick = { onPitchQualityChange(quality) },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = PitchQuality.entries.size,
+                                ),
+                                label = { Text(quality.label, maxLines = 1) },
                             )
                         }
                     }
+                    // The number that actually decides it, which is not the
+                    // same number for the two engines.
+                    Text(
+                        text = when (pitchEngine) {
+                            PitchEngine.WSOLA ->
+                                "Holds bass down to ${pitchQuality.bassFloorHz} Hz"
+                            PitchEngine.VOCODER ->
+                                "Within ${pitchQuality.vocoderErrorHz}. Lower settings " +
+                                    "are lighter work and less likely to stutter."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted,
+                    )
                 }
             }
         }
