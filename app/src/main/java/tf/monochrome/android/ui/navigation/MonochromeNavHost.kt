@@ -55,6 +55,9 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import tf.monochrome.android.ui.components.LocalGlassOverlayHost
+import tf.monochrome.android.ui.components.GlassOverlayLayer
+import tf.monochrome.android.ui.components.GlassOverlayHost
 import tf.monochrome.android.ui.components.liquidGlass
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -296,6 +299,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
     val hazeState = rememberHazeState()
 
+    // Where dialogs that want to be glass are drawn. They cannot be Dialog
+    // windows: haze cannot reach across a window boundary, so a pane in one
+    // blurs nothing. See GlassOverlay.
+    val glassOverlayHost = remember { GlassOverlayHost() }
+
     // System bar heights for overlapping content
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -353,6 +361,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             // an ordinary screen is the same material as the bar it sits beside
             // rather than the untouched defaults.
             LocalMiniPlayerGlass provides miniPlayerGlass,
+            LocalGlassOverlayHost provides glassOverlayHost,
         ) {
         Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
             // Pager for main tabs — fills entire screen
@@ -873,6 +882,18 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 onRetry = downloadCenter::retry,
             )
         }
+
+        // Last child of the whole screen, so it covers the mini player and the
+        // navigation bar as a modal must, and a sibling of the haze source
+        // rather than a child of it -- a pane inside that box would be asking
+        // to blur a picture it is already part of, which is the flat slab this
+        // exists to avoid. Outside `isOnMainTab` too: the playlist pane opens
+        // from album, artist and playlist detail as well as from the tabs.
+        GlassOverlayLayer(
+            host = glassOverlayHost,
+            hazeState = hazeState,
+            glass = miniPlayerGlass,
+        )
     }
 }
 

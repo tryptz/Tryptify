@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -24,7 +23,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,8 +40,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -108,115 +104,100 @@ fun CreatePlaylistDialog(
         },
     )
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        // Opaque, and it has to be.
-        //
-        // This surface used to be Color.Transparent under `liquidGlass`, which
-        // in a dialog is the "solid slab" failure in its worst form: a dialog is
-        // its own window, the backdrop was captured into the window behind it,
-        // and a haze effect cannot sample another window's layer. With no
-        // backdrop to blur, what was left was a translucent tint over the
-        // library — the playlist list read straight through the panel and
-        // through its text. There is no setting that fixes that; a pane in a
-        // separate window has to be solid, and the glass here is the material's
-        // shape and rim rather than a blur it cannot have.
-        Surface(
+    // Real glass, which means this cannot be a Dialog.
+    //
+    // A Dialog opens its own window, and a haze effect cannot sample a layer
+    // belonging to another one -- the library it wants to blur was captured
+    // into the window underneath, so the pane came out as a flat tint with the
+    // playlist list legible straight through its text. Drawn instead in the nav
+    // host's overlay slot, as a sibling of the app's haze source, it blurs the
+    // library for real. The scrim and Back come with that slot rather than with
+    // Dialog.
+    GlassOverlay(onDismiss = onDismiss) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .wrapContentHeight()
-                .padding(vertical = 24.dp),
-            shape = MonoDimens.shapeLg,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 3.dp,
+                .verticalScroll(rememberScrollState())
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            DialogField(
+                value = name,
+                onValueChange = { name = it },
+                placeholder = "Playlist name",
+                singleLine = true,
+            )
+
+            DialogField(
+                value = description,
+                onValueChange = { description = it },
+                placeholder = "Description (optional)",
+                singleLine = false,
+                modifier = Modifier.heightIn(min = 88.dp),
+            )
+
+            if (onImportCsv != null) {
+                ImportPanel(
+                    selectedFormat = selectedFormat,
+                    onFormatChange = { selectedFormat = it },
+                    selectedSource = ImportSource.entries
+                        .firstOrNull { it.name == selectedSource } ?: ImportSource.SPOTIFY,
+                    onSourceChange = { selectedSource = it.name },
+                    selectedUri = selectedUri,
+                    onPickFile = {
+                        // Apple Music writes a .txt and several exporters
+                        // send octet-stream, so the picker cannot filter on
+                        // the CSV types alone without hiding the files it is
+                        // being asked to read.
+                        filePickerLauncher.launch(
+                            arrayOf(
+                                "text/csv",
+                                "text/comma-separated-values",
+                                "text/tab-separated-values",
+                                "text/plain",
+                                "application/csv",
+                                "application/octet-stream",
+                            ),
+                        )
+                    },
+                    strictAlbumMatch = strictAlbumMatch,
+                    onStrictChange = { strictAlbumMatch = it },
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                DialogField(
-                    value = name,
-                    onValueChange = { name = it },
-                    placeholder = "Playlist name",
-                    singleLine = true,
-                )
-
-                DialogField(
-                    value = description,
-                    onValueChange = { description = it },
-                    placeholder = "Description (optional)",
-                    singleLine = false,
-                    modifier = Modifier.heightIn(min = 88.dp),
-                )
-
-                if (onImportCsv != null) {
-                    ImportPanel(
-                        selectedFormat = selectedFormat,
-                        onFormatChange = { selectedFormat = it },
-                        selectedSource = ImportSource.entries
-                            .firstOrNull { it.name == selectedSource } ?: ImportSource.SPOTIFY,
-                        onSourceChange = { selectedSource = it.name },
-                        selectedUri = selectedUri,
-                        onPickFile = {
-                            // Apple Music writes a .txt and several exporters
-                            // send octet-stream, so the picker cannot filter on
-                            // the CSV types alone without hiding the files it is
-                            // being asked to read.
-                            filePickerLauncher.launch(
-                                arrayOf(
-                                    "text/csv",
-                                    "text/comma-separated-values",
-                                    "text/tab-separated-values",
-                                    "text/plain",
-                                    "application/csv",
-                                    "application/octet-stream",
-                                ),
-                            )
-                        },
-                        strictAlbumMatch = strictAlbumMatch,
-                        onStrictChange = { strictAlbumMatch = it },
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                // Only the CSV format actually imports; a file picked while
+                // an unsupported format is selected must not silently run
+                // the CSV importer (it created garbage playlists).
+                val canImport = onImportCsv != null &&
+                    selectedUri != null && selectedFormat == "CSV"
+                Button(
+                    onClick = {
+                        if (canImport) {
+                            onImportCsv!!(selectedUri!!, strictAlbumMatch, name, description)
+                        } else {
+                            onSubmit(name, description)
+                        }
+                        onDismiss()
+                    },
+                    // A non-blank name is enough: onClick imports when a CSV
+                    // file is picked, otherwise creates a plain playlist. The
+                    // old extra conditions left the button disabled for a
+                    // plainly-named playlist in the default (upload) mode.
+                    enabled = name.isNotBlank(),
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Spacer(Modifier.width(8.dp))
-                    // Only the CSV format actually imports; a file picked while
-                    // an unsupported format is selected must not silently run
-                    // the CSV importer (it created garbage playlists).
-                    val canImport = onImportCsv != null &&
-                        selectedUri != null && selectedFormat == "CSV"
-                    Button(
-                        onClick = {
-                            if (canImport) {
-                                onImportCsv!!(selectedUri!!, strictAlbumMatch, name, description)
-                            } else {
-                                onSubmit(name, description)
-                            }
-                            onDismiss()
-                        },
-                        // A non-blank name is enough: onClick imports when a CSV
-                        // file is picked, otherwise creates a plain playlist. The
-                        // old extra conditions left the button disabled for a
-                        // plainly-named playlist in the default (upload) mode.
-                        enabled = name.isNotBlank(),
-                    ) {
-                        Text(if (canImport) "Import" else confirmLabel)
-                    }
+                    Text(if (canImport) "Import" else confirmLabel)
                 }
             }
         }
@@ -224,12 +205,12 @@ fun CreatePlaylistDialog(
 }
 
 /**
- * A panel inside the dialog: the app's glass shape and rim, drawn solid.
+ * A grouping panel *inside* the glass pane.
  *
- * Same reason as the dialog surface above — a separate window has no backdrop to
- * blur — so this is the material's *third* tier on purpose, the one `GlassPanel`
- * falls back to when there is no haze to be had. What makes it read as one of
- * the app's panes is the radius and the rim, not transparency it cannot afford.
+ * Deliberately not a second sheet of glass. The pane it sits on is already
+ * frosting the library, and stacking a blur on a blur reads as neither -- so
+ * this is a thin tint and a rim, enough to group the import controls while
+ * leaving the pane's own material visible through it.
  */
 @Composable
 private fun DialogPanel(
@@ -239,7 +220,10 @@ private fun DialogPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow, MonoDimens.shapeMd)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.30f),
+                MonoDimens.shapeMd,
+            )
             .border(
                 width = MonoDimens.glassBorderWidth,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),

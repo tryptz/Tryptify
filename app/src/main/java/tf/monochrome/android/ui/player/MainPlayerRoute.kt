@@ -288,17 +288,10 @@ fun MainPlayerRoute(
     if (showQueueSheet) {
         QueueSheet(playerViewModel = playerViewModel, onDismiss = { showQueueSheet = false })
     }
-    if (showPresetSheet) {
-        VisualizerPresetSheet(
-            presets = visualizerPresets,
-            selectedPresetId = currentVisualizerPreset?.id,
-            favoritePresetIds = visualizerFavoritePresetIds,
-            onPresetSelected = playerViewModel::selectVisualizerPreset,
-            onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
-            onSettingsClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
-            onDismiss = { showPresetSheet = false },
-        )
-    }
+    // The preset browser is NOT called here with its siblings either, and for
+    // the same reason as the speed panel below: it goes to the `overlay` slot so
+    // it renders beside the player's haze source and can blur the visualizer it
+    // is picking presets for.
     // The speed panel is NOT called here with its siblings. It is handed to
     // MainPlayerScreen's `overlay` slot below so it renders inside the player's
     // own window, next to the haze source — the only place a pane can actually
@@ -748,6 +741,18 @@ fun MainPlayerRoute(
                 lyricsMode = lyricsSlotWide,
                 blurredBackground = blurredBackground,
                 overlay = {
+                    VisualizerPresetPanel(
+                        visible = showPresetSheet,
+                        presets = visualizerPresets,
+                        selectedPresetId = currentVisualizerPreset?.id,
+                        favoritePresetIds = visualizerFavoritePresetIds,
+                        onPresetSelected = playerViewModel::selectVisualizerPreset,
+                        onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
+                        onSettingsClick = {
+                            navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
+                        },
+                        onDismiss = { showPresetSheet = false },
+                    )
                     SpeedPanel(
                         visible = showSpeedSheet,
                         speed = playbackSpeed,
@@ -768,6 +773,18 @@ fun MainPlayerRoute(
         // and GlassPanel falls back to plain translucent glass — the same pane
         // the modal sheet used to give everyone.
         if (legacyPlayer) {
+            VisualizerPresetPanel(
+                visible = showPresetSheet,
+                presets = visualizerPresets,
+                selectedPresetId = currentVisualizerPreset?.id,
+                favoritePresetIds = visualizerFavoritePresetIds,
+                onPresetSelected = playerViewModel::selectVisualizerPreset,
+                onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
+                onSettingsClick = {
+                    navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
+                },
+                onDismiss = { showPresetSheet = false },
+            )
             SpeedPanel(
                 visible = showSpeedSheet,
                 speed = playbackSpeed,
