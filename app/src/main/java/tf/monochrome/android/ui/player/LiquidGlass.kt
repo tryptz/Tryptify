@@ -13,6 +13,8 @@ import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -409,7 +411,21 @@ fun PlayerGlassHaze(
     }
     // Composed while it is still on its way out, which is what lets it fade out
     // at all: a layer removed from the tree cannot animate its own departure.
-    if (!lit && !fade.isRunning) return
+    //
+    // Gated on the value rather than on `isRunning`, which was the wrong
+    // question by exactly one frame. On the composition where `lit` goes false
+    // the previous fade has already finished, so nothing is running yet -- the
+    // LaunchedEffect body only starts afterwards -- and this returned, taking
+    // the layer out of the tree. Starting the animation then set `isRunning`,
+    // which scheduled another composition that put the layer back at full
+    // strength to fade down. The frost snapped off, blinked back on and only
+    // then faded: the cut this exists to remove, with a flash added.
+    //
+    // `derivedStateOf` so the read costs two recompositions across the whole
+    // animation rather than one per frame -- the value itself is read in the
+    // layer block below.
+    val leaving by remember { derivedStateOf { fade.value > 0.001f } }
+    if (!lit && !leaving) return
 
     val frostBg = androidx.compose.material3.MaterialTheme.colorScheme.background
     val isDark = frostBg.luminance() <= 0.5f

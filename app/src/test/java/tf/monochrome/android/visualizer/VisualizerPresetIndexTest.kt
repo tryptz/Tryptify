@@ -1,6 +1,7 @@
 package tf.monochrome.android.visualizer
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import tf.monochrome.android.domain.model.VisualizerPreset
@@ -196,5 +197,36 @@ class VisualizerPresetIndexTest {
             listOf("Aurora" to 2, "Contagion" to 1),
             index.subcategoriesOf("reaction").map { it.label to it.count },
         )
+    }
+
+    @Test
+    fun `an author id resolves to the same label the list holds`() {
+        // The row subtitle used to find this by scanning `authors` on every
+        // row it drew. Keyed lookup has to agree with the list exactly,
+        // including the case vote -- "Flexi" beat "flexi" above, and the
+        // subtitle has to say the same thing the heading does.
+        val index = VisualizerPresetIndex.build(
+            listOf(
+                preset("suksma - one", "Reaction", "Aurora", id = "1"),
+                preset("Flexi - alien", "Dancer", "Comet Mirror", id = "2"),
+                preset("flexi - bee", "Fractal", "Nested Spiral", id = "3"),
+            )
+        )
+        for (author in index.authors) {
+            assertEquals(author.label, index.authorLabel(author.id))
+        }
+        assertNull(index.authorLabel("nobody-by-that-name"))
+    }
+
+    @Test
+    fun `an empty index is usable rather than a special case`() {
+        // The browser builds one of these before it has been opened, so every
+        // accessor has to answer on it rather than throw.
+        val index = VisualizerPresetIndex.build(emptyList())
+        assertEquals(emptyList<Any>(), index.presets)
+        assertEquals(emptyList<Any>(), index.categories)
+        assertEquals(emptyList<Any>(), index.authors)
+        assertEquals(emptyList<Any>(), index.subcategoriesOf("reaction"))
+        assertNull(index.authorLabel("suksma"))
     }
 }

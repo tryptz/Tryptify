@@ -44,6 +44,19 @@ class VisualizerPresetIndex private constructor(
         authorIdsByPreset[preset.id].orEmpty()
 
     /**
+     * What to call an author id, or null if nobody holds it.
+     *
+     * Exists because the row subtitle needs it, and was reaching it by scanning
+     * [authors] -- up to four hundred and seventy-nine string comparisons per
+     * row, inside a LazyColumn item body, on the frame thread, while scrolling
+     * a category of eighteen hundred. The list is already built; this is the
+     * same data keyed the way the caller asks for it.
+     */
+    fun authorLabel(id: String): String? = authorsById[id]?.label
+
+    private val authorsById: Map<String, Facet> = authors.associateBy { it.id }
+
+    /**
      * The preset's name with the author stripped off. Two thousand presets by
      * one author all reading "suksma - …" waste the width that tells them
      * apart, and the author is already the heading they are filed under.

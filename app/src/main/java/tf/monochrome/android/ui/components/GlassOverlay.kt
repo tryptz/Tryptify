@@ -63,9 +63,6 @@ class GlassOverlayHost {
     internal var entry by mutableStateOf<Entry?>(null)
         private set
 
-    /** True while a pane is on screen — the nav host dims its chrome for it. */
-    val isShowing: Boolean get() = entry != null
-
     internal fun show(e: Entry) {
         entry = e
     }

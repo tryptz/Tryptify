@@ -664,6 +664,47 @@ fun MainPlayerRoute(
         }
     }
 
+    // The two floating panels, hoisted.
+    //
+    // Both layouts show the same two, and the glass layout takes them through
+    // MainPlayerScreen's `overlay` slot while the legacy one hangs them itself
+    // — so the wiring existed twice, fourteen identical arguments each, in two
+    // mutually exclusive branches. Adding a parameter to one and not the other
+    // compiles perfectly and silently leaves the legacy player without the
+    // control; this branch added four of them for the pitch engine, twice.
+    // `overlay` is `BoxScope.() -> Unit` and the legacy branch sits in a Box,
+    // so one lambda serves both.
+    val playerPanels: @Composable BoxScope.() -> Unit = {
+        VisualizerPresetPanel(
+            visible = showPresetSheet,
+            presets = visualizerPresets,
+            selectedPresetId = currentVisualizerPreset?.id,
+            favoritePresetIds = visualizerFavoritePresetIds,
+            onPresetSelected = playerViewModel::selectVisualizerPreset,
+            onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
+            onSettingsClick = {
+                navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
+            },
+            onDismiss = { showPresetSheet = false },
+        )
+        SpeedPanel(
+            visible = showSpeedSheet,
+            speed = playbackSpeed,
+            preservePitch = preservePitch,
+            pitchSemitones = pitchSemitones,
+            onPitchSemitonesChange = playerViewModel::setPitchSemitones,
+            pitchEngine = pitchEngine,
+            onPitchEngineChange = playerViewModel::setPitchEngine,
+            pitchQuality = pitchQuality,
+            onPitchQualityChange = playerViewModel::setPitchQuality,
+            speedUnitSemitones = speedUnitSemitones,
+            onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
+            onSpeedChange = playerViewModel::setPlaybackSpeed,
+            onPreservePitchChange = playerViewModel::setPreservePitch,
+            onDismiss = { showSpeedSheet = false },
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (legacyPlayer) {
             // Settings › System › Performance › "Legacy player" — the pre-glass
@@ -782,71 +823,15 @@ fun MainPlayerRoute(
                 // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
                 lyricsMode = lyricsSlotWide,
                 blurredBackground = blurredBackground,
-                overlay = {
-                    VisualizerPresetPanel(
-                        visible = showPresetSheet,
-                        presets = visualizerPresets,
-                        selectedPresetId = currentVisualizerPreset?.id,
-                        favoritePresetIds = visualizerFavoritePresetIds,
-                        onPresetSelected = playerViewModel::selectVisualizerPreset,
-                        onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
-                        onSettingsClick = {
-                            navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
-                        },
-                        onDismiss = { showPresetSheet = false },
-                    )
-                    SpeedPanel(
-                        visible = showSpeedSheet,
-                        speed = playbackSpeed,
-                        preservePitch = preservePitch,
-                        pitchSemitones = pitchSemitones,
-                        onPitchSemitonesChange = playerViewModel::setPitchSemitones,
-                        pitchEngine = pitchEngine,
-                        onPitchEngineChange = playerViewModel::setPitchEngine,
-                        pitchQuality = pitchQuality,
-                        onPitchQualityChange = playerViewModel::setPitchQuality,
-                        speedUnitSemitones = speedUnitSemitones,
-                        onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
-                        onSpeedChange = playerViewModel::setPlaybackSpeed,
-                        onPreservePitchChange = playerViewModel::setPreservePitch,
-                        onDismiss = { showSpeedSheet = false },
-                    )
-                },
+                overlay = playerPanels,
             )
         }
         // The legacy layout has no `overlay` slot and no haze source of its own,
-        // so the panel hangs here instead. LocalPlayerHaze is null on that path
-        // and GlassPanel falls back to plain translucent glass — the same pane
-        // the modal sheet used to give everyone.
+        // so the same panels hang here instead. LocalPlayerHaze is null on that
+        // path and GlassPanel falls back to plain translucent glass — the same
+        // pane the modal sheet used to give everyone.
         if (legacyPlayer) {
-            VisualizerPresetPanel(
-                visible = showPresetSheet,
-                presets = visualizerPresets,
-                selectedPresetId = currentVisualizerPreset?.id,
-                favoritePresetIds = visualizerFavoritePresetIds,
-                onPresetSelected = playerViewModel::selectVisualizerPreset,
-                onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
-                onSettingsClick = {
-                    navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
-                },
-                onDismiss = { showPresetSheet = false },
-            )
-            SpeedPanel(
-                visible = showSpeedSheet,
-                speed = playbackSpeed,
-                preservePitch = preservePitch,
-                pitchSemitones = pitchSemitones,
-                onPitchSemitonesChange = playerViewModel::setPitchSemitones,
-                pitchEngine = pitchEngine,
-                onPitchEngineChange = playerViewModel::setPitchEngine,
-                pitchQuality = pitchQuality,
-                onPitchQualityChange = playerViewModel::setPitchQuality,
-                speedUnitSemitones = speedUnitSemitones,
-                onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
-                onSpeedChange = playerViewModel::setPlaybackSpeed,
-                onPreservePitchChange = playerViewModel::setPreservePitch,
-                onDismiss = { showSpeedSheet = false },
-            )
+            playerPanels()
         }
     }
     }

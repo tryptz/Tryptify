@@ -83,9 +83,15 @@ inline WsolaQualityConfig wsolaConfigFor(WsolaQuality q) {
 class WsolaPitchShifter {
 public:
     /** Sizes every buffer for [channels] and the largest supported grain. */
-    void configure(int channels, int sampleRate, WsolaQuality quality) {
+    /**
+     * [sampleRate] is accepted and not used, which is worth saying out loud:
+     * the quality presets are windows in *samples*, so the same setting is a
+     * different length of time at 44.1 and at 96 kHz. Whether that should be
+     * rate-relative is a real question; today it is not, and a field quietly
+     * holding the rate only made it look answered.
+     */
+    void configure(int channels, int /*sampleRate*/, WsolaQuality quality) {
         channels_ = (channels == 2) ? 2 : 1;
-        sampleRate_ = sampleRate > 0 ? sampleRate : 48000;
         setQuality(quality);
         // Room for the grain the search may reach behind, the grain ahead that
         // `generate` requires, and a block's worth of new input on top. Sized
@@ -137,7 +143,6 @@ public:
         stretchedCount_ = 0;
         stretchedPos_ = 0.0;
         for (int i = 0; i < 4; ++i) { histL_[i] = 0.0f; histR_[i] = 0.0f; }
-        primed_ = false;
     }
 
     /**
@@ -262,7 +267,6 @@ private:
     Wsola wsola_;
     WsolaQuality quality_ = WsolaQuality::kBalanced;
     int channels_ = 2;
-    int sampleRate_ = 48000;
     double ratio_ = 1.0;
 
     std::vector<float> historyL_;
@@ -275,7 +279,6 @@ private:
     long long stretchedCount_ = 0;
     float histL_[4] = {};
     float histR_[4] = {};
-    bool primed_ = false;
 };
 
 }  // namespace tryptify

@@ -152,10 +152,29 @@ fun BoxScope.VisualizerPresetPanel(
 
     // Indexing nine thousand names is not free, so it is keyed on the library
     // rather than redone whenever a favourite is toggled or a chip is tapped.
-    val index = remember(presets) { VisualizerPresetIndex.build(presets) }
+    //
+    // And it waits for the browser to be opened at least once. This panel is
+    // composed unconditionally -- it has to be, so it can animate out -- so an
+    // eager build ran the moment the library loaded, which is when the player
+    // screen opens. Walking nine thousand seven hundred names through indexOf,
+    // substring, a Regex split and three map insertions apiece, then sorting
+    // three facet lists, on the composition thread, while the now-playing
+    // screen animates in, for a listener who may never touch the preset
+    // browser. `everShown` only ever goes true, so the index is built once and
+    // is not thrown away when the panel closes.
+    var everShown by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) { if (visible) everShown = true }
+    val index = remember(presets, everShown) {
+        VisualizerPresetIndex.build(if (everShown) presets else emptyList())
+    }
 
     val searching = query.isNotBlank()
-    val visiblePresets = remember(index, scope, query, favoritePresetIds) {
+    // Keyed on the favourites only where they are consulted. Otherwise one
+    // heart tap produced a new Set, invalidated this, and re-filtered all nine
+    // thousand seven hundred while the listener was standing in a Category, an
+    // Author or a search result -- none of which read it.
+    val favoritesKey = favoritePresetIds.takeIf { scope is PresetScope.Favorites }
+    val visiblePresets = remember(index, scope, query, favoritesKey) {
         when {
             // Search ignores where you are standing. Knowing the name is the
             // one case where navigating to it is a waste of time.
@@ -361,9 +380,7 @@ private fun subtitleFor(
     // Under an author, saying the author again on every row wastes the line.
     val credits = if (scope is PresetScope.Author) emptyList() else index.authorsOf(preset)
     val place = preset.tags.joinToString(" · ") { it.label }
-    val author = credits.firstOrNull()?.let { id ->
-        index.authors.firstOrNull { it.id == id }?.label
-    }
+    val author = credits.firstOrNull()?.let(index::authorLabel)
     return listOfNotNull(author, place.takeIf { it.isNotBlank() }).joinToString(" · ")
         .ifBlank { "Uncategorised" }
 }
