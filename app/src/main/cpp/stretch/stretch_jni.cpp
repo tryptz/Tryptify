@@ -171,14 +171,29 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeSetEngine(
     if (!e) return;
     const int wanted = (engine == kEngineWsola) ? kEngineWsola : kEngineVocoder;
     const int q = clampQuality(quality);
+
+    // Held across the whole function, not just the FFT rebuild.
+    //
+    // WSOLA's reconfigure is every bit as unsafe to run under the audio thread:
+    // Wsola::configure writes window_, hop_ and windowStride_ as three separate
+    // non-atomic stores, and generate() reads them together as
+    // `table[(hop_ + i) * stride]` against a fixed kWsolaMaxWindow Hann table.
+    // A Fast-to-High switch landing mid-grain can pair a new hop_ of 1024 with
+    // a stale stride of 4 and index 8188 of 2048 -- an out-of-bounds read, in
+    // the one place a comment said the flag had already made safe. The resets
+    // below are the same kind of tear.
+    //
+    // This is a coroutine, so spinning is allowed; process() only ever tries,
+    // and passes its block through unpitched if it finds the flag held.
+    while (e->busy.test_and_set(std::memory_order_acquire)) {}
+    struct Release {
+        Engine *e;
+        ~Release() { e->busy.clear(std::memory_order_release); }
+    } release{e};
+
     if (q != e->quality) {
         e->quality = q;
-        // Rebuilding the FFT cannot run under the audio thread's feet, so the
-        // flag is taken first. This is a coroutine, so spinning is allowed;
-        // process() only ever tries.
-        while (e->busy.test_and_set(std::memory_order_acquire)) {}
         e->configureVocoder();
-        e->busy.clear(std::memory_order_release);
         e->wsola.setQuality(static_cast<tryptify::WsolaQuality>(q));
         e->wsola.setSemitones(e->semitones);
     }
@@ -194,13 +209,22 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeSetEngine(
     }
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_tf_monochrome_android_audio_stretch_StretchNative_nativeReset(
         JNIEnv *, jclass, jlong handle) {
-    if (auto *e = asEngine(handle)) {
-        e->stretch.reset();
-        e->wsola.reset();
-    }
+    auto *e = asEngine(handle);
+    if (!e) return JNI_FALSE;
+    // Tried, never waited on -- unlike nativeSetEngine, which is a coroutine.
+    // This one is called from queueInput, on the playback thread, so spinning
+    // here would block the very thread the flag exists to keep unblocked.
+    // Returning false instead lets the caller come back on the next block; a
+    // reconfigure resets both engines on its way through anyway, so the state
+    // this wanted to clear is being cleared regardless.
+    if (e->busy.test_and_set(std::memory_order_acquire)) return JNI_FALSE;
+    e->stretch.reset();
+    e->wsola.reset();
+    e->busy.clear(std::memory_order_release);
+    return JNI_TRUE;
 }
 
 /** Total round-trip latency in frames: what the transposition change lags by. */

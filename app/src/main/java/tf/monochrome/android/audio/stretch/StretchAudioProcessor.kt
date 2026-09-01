@@ -34,7 +34,29 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    /**
+     * The buffer handed downstream, or EMPTY when nothing is pending.
+     *
+     * An alias for [buffer] rather than storage of its own -- see [ensureOutput]
+     * for why the two are separate.
+     */
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /**
+     * The one output buffer, kept across blocks.
+     *
+     * [getOutput] has to leave [outputBuffer] empty -- that is how the sink is
+     * told there is nothing more this round -- so it cannot also be where the
+     * memory lives. It used to be, and the result was that every single
+     * `ensureOutput` found capacity 0, took the allocate branch, and did an
+     * off-heap allocation plus a Cleaner registration on the audio thread. That
+     * cost was survivable while the processor was only in the chain with pitch
+     * engaged; making [isActive] unconditional put it on every callback of every
+     * track. Media3's own BaseAudioProcessor keeps the split for the same
+     * reason, and relies on the same contract: the sink drains what it was
+     * given before asking for more.
+     */
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
     private var handle = 0L
@@ -151,7 +173,15 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
             // The engine still holds whatever it had buffered when the pitch
             // last returned to zero. Without this, turning pitch back on plays
             // a few hundred milliseconds of much older audio first.
-            StretchNative.nativeReset(h)
+            //
+            // It can decline: a reconfigure holds the engine, and this is the
+            // playback thread, which does not wait for anything. Staying
+            // un-engaged means passing this block through and asking again on
+            // the next one, a few milliseconds later.
+            if (!StretchNative.nativeReset(h)) {
+                passThrough(inputBuffer)
+                return
+            }
             wasEngaged = true
         }
         val encoding = inputFormat.encoding
@@ -254,12 +284,14 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
                 nativeOut = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
             }
         } else if (handle != 0L) {
+            // Result ignored on purpose: `wasEngaged` is false either way, so
+            // queueInput asks again on the next engaged block.
             StretchNative.nativeReset(handle)
         }
     }
 
     override fun reset() {
-        outputBuffer = AudioProcessor.EMPTY_BUFFER
+        releaseOutput()
         inputEnded = false
         wasEngaged = false
         releaseEngine()
@@ -276,12 +308,18 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         nativeOut = AudioProcessor.EMPTY_BUFFER
     }
 
+    private fun releaseOutput() {
+        outputBuffer = AudioProcessor.EMPTY_BUFFER
+        buffer = AudioProcessor.EMPTY_BUFFER
+    }
+
     private fun ensureOutput(bytes: Int) {
-        if (outputBuffer.capacity() < bytes) {
-            outputBuffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
         } else {
-            outputBuffer.clear()
+            buffer.clear()
         }
+        outputBuffer = buffer
     }
 
     private companion object {

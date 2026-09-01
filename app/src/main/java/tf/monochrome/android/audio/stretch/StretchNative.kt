@@ -45,7 +45,12 @@ object StretchNative {
      */
     external fun nativeSetEngine(handle: Long, engine: Int, quality: Int)
 
-    external fun nativeReset(handle: Long)
+    /**
+     * Drops both engines' buffered history. Returns false, having done nothing,
+     * when a reconfigure is in flight -- this runs on the playback thread and
+     * will not block it, so the caller has to come back rather than wait.
+     */
+    external fun nativeReset(handle: Long): Boolean
 
     /**
      * Round-trip latency in frames. This is how far behind the audible pitch

@@ -93,8 +93,17 @@ class ProjectMAudioBus @Inject constructor() {
         while (true) {
             val head = pendingFrames.peek() ?: break
             if (head.timestampMs > dueBefore) break
-            pendingFrames.poll()
-            frames.add(head)
+            // Take what the poll actually removed, not what the peek saw.
+            //
+            // publish() trims by age on the audio thread and polls too, so
+            // between this peek and this poll the head can change. Adding the
+            // peeked frame then meant adding one that was already gone while
+            // silently destroying the one that was removed in its place -- a
+            // buffer that never reached projectM. Using the polled value costs
+            // at worst a frame drawn one position early, which the delay
+            // window absorbs; the old shape lost audio outright.
+            val taken = pendingFrames.poll() ?: break
+            frames.add(taken)
         }
         return frames
     }
