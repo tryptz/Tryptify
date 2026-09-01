@@ -34,14 +34,6 @@ enum class PresetRotationMode(val key: String) {
             entries.firstOrNull { it.key == key } ?: Default
 
         /**
-         * The single mode that best matches the pair of switches this replaced.
-         *
-         * The timer wins when both were on, which is what most installs had:
-         * it is the continuous behaviour of the two, and the one whose absence
-         * would be noticed. Kept a pure function so the mapping is pinned by a
-         * test rather than living only in a DataStore read.
-         */
-        /**
          * What the player's two-state rotation chip should store.
          *
          * The chip is on/off over a three-state setting, so turning it back on
@@ -61,11 +53,29 @@ enum class PresetRotationMode(val key: String) {
                 else -> Default
             }
 
-        fun migratedFrom(timedRotation: Boolean, changeEachTrack: Boolean): PresetRotationMode =
-            when {
-                timedRotation -> Timer
-                changeEachTrack -> Track
-                else -> Off
-            }
+        /**
+         * The mode an install upgrading from the old build lands on.
+         *
+         * There was only ever one switch to read. "Auto-shuffle Presets"
+         * gated the per-track roll; the timer ran for everybody and had no off
+         * switch at all -- `projectm_set_preset_locked` was never called. An
+         * earlier version of this took a `timedRotation` argument as well, read
+         * from a DataStore key that had never existed, so it returned [Timer]
+         * for everyone and quietly overrode the one setting there was.
+         *
+         * Switching auto-shuffle off is read here as "stop changing my preset",
+         * so it lands on [Off]. That does take away a timer the listener never
+         * had a way to decline, and it is deliberate: the off switch is the
+         * only thing they ever said, and this takes them at their word.
+         * [Timer] is therefore not reachable from migration, only from an
+         * explicit choice in Settings.
+         *
+         * A pure function so the mapping is pinned by a test rather than living
+         * only inside a DataStore read -- though the mapping was never the part
+         * that broke. See `PreferencesManager.rotationModeFrom`, which is what
+         * the test has to drive to catch a key that does not exist.
+         */
+        fun migratedFromAutoShuffle(changeEachTrack: Boolean): PresetRotationMode =
+            if (changeEachTrack) Track else Off
     }
 }

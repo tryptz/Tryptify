@@ -250,7 +250,15 @@ class PlayerViewModel @Inject constructor(
      */
     val visualizerAutoShuffle: StateFlow<Boolean> = projectMEngineRepository.rotationMode
         .map { it.isRotating }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+        // Seeded from the mode that is actually in force. A literal `true` here
+        // painted the chip as on for every listener, including the ones whose
+        // stored mode is Off, until the mapped flow got round to emitting --
+        // so it read as lit and then thought better of it.
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            projectMEngineRepository.rotationMode.value.isRotating,
+        )
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
     val currentVisualizerPreset: StateFlow<VisualizerPreset?> = projectMEngineRepository.currentPreset

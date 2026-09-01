@@ -92,6 +92,24 @@ class PreferencesManager @Inject constructor(
     companion object {
         private const val MAX_SEARCH_HISTORY_SIZE = 10
 
+        /**
+         * The stored rotation mode, or what the old build's switch implies.
+         *
+         * A named function rather than a lambda inside the flow because the
+         * mapping was never the part that broke -- the *key* was. This read
+         * used to consult `visualizer_preset_rotation`, a key no build has ever
+         * written, so it resolved to null, defaulted to true, and returned
+         * Timer for everyone regardless of what they had chosen. The enum's own
+         * test passed throughout, because a pure function over two booleans
+         * cannot see which key fed it. Driving this with a real [Preferences]
+         * is what makes the key name falsifiable.
+         */
+        internal fun rotationModeFrom(prefs: Preferences): PresetRotationMode =
+            prefs[VISUALIZER_PRESET_ROTATION_MODE]?.let(PresetRotationMode::fromKey)
+                ?: PresetRotationMode.migratedFromAutoShuffle(
+                    changeEachTrack = prefs[VISUALIZER_AUTO_SHUFFLE] ?: true,
+                )
+
         /** The app's indigo, and a near-black ground: a sane dark default pair. */
         private const val DEFAULT_CUSTOM_ACCENT = 0xFF5865F2.toInt()
         private const val DEFAULT_CUSTOM_BACKGROUND = 0xFF101014.toInt()
@@ -275,7 +293,6 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_AUTO_SHUFFLE = booleanPreferencesKey("visualizer_auto_shuffle")
         private val VISUALIZER_PRESET_ID = stringPreferencesKey("visualizer_preset_id")
         private val VISUALIZER_ROTATION_SECONDS = intPreferencesKey("visualizer_rotation_seconds")
-        private val VISUALIZER_PRESET_ROTATION = booleanPreferencesKey("visualizer_preset_rotation")
         private val VISUALIZER_PRESET_ROTATION_MODE = stringPreferencesKey("visualizer_preset_rotation_mode")
         // Which rotating mode to come back to when the player's on/off chip is
         // switched back on. Stored rather than remembered, because the chip
@@ -1244,17 +1261,12 @@ class PreferencesManager @Inject constructor(
     /**
      * When the visualizer changes preset by itself.
      *
-     * Falls back to the pair of switches this replaced, so nobody's existing
-     * arrangement is reset by the merge. The old keys are still read for that
-     * reason; nothing writes them any more.
+     * Falls back to the switch this replaced, so nobody's existing arrangement
+     * is reset by the merge. That old key is still read for that reason;
+     * nothing writes it any more.
      */
-    val visualizerPresetRotationMode: Flow<PresetRotationMode> = dataStore.data.map { prefs ->
-        prefs[VISUALIZER_PRESET_ROTATION_MODE]?.let(PresetRotationMode::fromKey)
-            ?: PresetRotationMode.migratedFrom(
-                timedRotation = prefs[VISUALIZER_PRESET_ROTATION] ?: true,
-                changeEachTrack = prefs[VISUALIZER_AUTO_SHUFFLE] ?: true,
-            )
-    }
+    val visualizerPresetRotationMode: Flow<PresetRotationMode> =
+        dataStore.data.map(::rotationModeFrom)
 
     /**
      * The rotating mode the on/off chip restores. Falls back to whatever is

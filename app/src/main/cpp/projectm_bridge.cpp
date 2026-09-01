@@ -106,6 +106,15 @@ bool ProjectMBridge::SetPreset(const std::string& preset_path) {
     if (!IsReady() || preset_path.empty()) {
         return false;
     }
+    // The cache cannot be trusted here: projectM rotates the preset on its own
+    // timer whenever it is unlocked, and nothing tells us when it does, so
+    // `current_preset_` is only correct until the first rotation. Re-reading it
+    // is what keeps the shortcut below honest -- without this, picking a preset,
+    // letting the timer move on, and picking that same preset again matched the
+    // stale cache and returned success without switching anything, leaving the
+    // browser showing a selection the screen did not agree with.
+    current_preset_ = ReadCurrentPreset();
+
     // Already showing it. Both the tap and the preference observer that follows
     // it ask for the same preset, so this is the common case, not an edge one.
     if (preset_path == current_preset_) {

@@ -411,6 +411,15 @@ class ProjectMEngineRepository @Inject constructor(
                 playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
             if (!freezeFrame) {
                 nativeBridge.renderFrame(frameTimeNanos)
+                // Stamped where the frame is actually drawn, not where the cap
+                // decided to allow one. Deciding was the wrong place twice
+                // over: `freezeFrame` below could still skip the render, and
+                // the cap would then hold the next real frame back for an
+                // interval it had never used; and a frame carrying pending work
+                // bypasses the cap entirely, so the stamp was never advanced
+                // and the frame after a preset change measured from a stale
+                // timestamp and drew back-to-back.
+                lastRenderedFrameNanos = frameTimeNanos
                 updateStatus(
                     phase = VisualizerEnginePhase.ACTIVE,
                     message = "projectM rendering bundled presets."
@@ -458,9 +467,7 @@ class ProjectMEngineRepository @Inject constructor(
      */
     private fun shouldSkipForFrameCapLocked(frameTimeNanos: Long): Boolean {
         if (vsyncEnabled) return false
-        if (shouldDropFrame(frameTimeNanos, lastRenderedFrameNanos, targetFps)) return true
-        lastRenderedFrameNanos = frameTimeNanos
-        return false
+        return shouldDropFrame(frameTimeNanos, lastRenderedFrameNanos, targetFps)
     }
 
     fun setPlaybackPaused(paused: Boolean) {
@@ -475,10 +482,22 @@ class ProjectMEngineRepository @Inject constructor(
      *
      * Queued rather than run here for the same reason selectPreset is: this is
      * called from the overlay's Next button and from the player listener when a
-     * track changes with auto-shuffle on, both on the main thread, and loading a
-     * preset needs the GL context.
+     * track changes with per-track rotation on, both on the main thread, and
+     * loading a preset needs the GL context.
+     *
+     * Dropped outright when there is no engine, which is the difference between
+     * this and [selectPreset]. The player listener calls this on every track
+     * change whether or not a surface exists, and a request queued against a
+     * dead engine is not waiting for one -- it is waiting to happen at the
+     * worst possible moment. Without this guard: close the visualizer, skip a
+     * track, reopen it, and `applyPreferredPresetLocked` restores the stored
+     * preset only for the first frame to drain a stale Next and advance
+     * straight off it. A Select survives being queued because it names what to
+     * show; a Next only says "not this one", and by the time an engine exists,
+     * "this one" is something else.
      */
     fun nextPreset() {
+        synchronized(engineLock) { if (!nativeInitialized) return }
         requestPresetOnGlThread(PendingPresetRequest.Next)
     }
 
