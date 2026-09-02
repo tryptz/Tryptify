@@ -275,14 +275,39 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     }
 
     /**
+     * Serialises [publishDesign] so a design cannot be installed out of order.
+     *
+     * Never taken on the audio thread. That thread reads [designRef] and
+     * installs what it finds; the one design-path call it makes, [flush], asks
+     * the loop for a redesign rather than designing in place. The lock-free
+     * read on the hot path is the invariant that matters, and it is untouched;
+     * this side is a player/UI-thread concern where contention is nothing.
+     */
+    private val designPublishLock = Any()
+
+    /**
      * Designs and publishes the chain for the warp as it stands.
      *
-     * Safe from any thread — every input is volatile and the result is one
-     * immutable object installed with a single reference store. Never call it
-     * from the audio thread: the matched shelf design allocates and runs a
-     * scored tournament (see [designBiquadCoefficients]).
+     * Never call it from the audio thread: the matched shelf design allocates
+     * and runs a scored tournament (see [designBiquadCoefficients]).
+     *
+     * Volatile inputs and a single reference store are *not* enough to make
+     * this safe from any thread, which is what it used to claim. They rule out
+     * a torn read; they do not rule out two publishes committing in the wrong
+     * order. [flush] asks the design loop for a redesign and returns, so a
+     * caller doing the ordinary thing -- flush, then apply a curve -- has the
+     * loop reading the pre-curve [source] while the caller writes the new one.
+     * If the loop is then descheduled between its read and its store, which a
+     * loaded machine will do, its result lands last and the curve is gone. The
+     * initial [source] is disabled, so what that installs is not a stale curve
+     * but no EQ at all: the processor drops to hard bypass and passes audio
+     * through untouched, silently, until something else republishes.
+     *
+     * Holding the lock across the read and the store makes the last publish to
+     * commit also the last one to read [source], so whichever order two
+     * publishes arrive in, both see the newest curve.
      */
-    private fun publishDesign() {
+    private fun publishDesign() = synchronized(designPublishLock) {
         val src = source
         // 2^(-log2(pitchRatio)) == 1 / pitchRatio: the inverse of what Sonic
         // will do downstream, which is exactly the pre-warp.

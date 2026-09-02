@@ -37,7 +37,20 @@ object StretchNative {
 
     external fun nativeSetSemitones(handle: Long, semitones: Float)
 
-    external fun nativeReset(handle: Long)
+    /**
+     * Selects the algorithm, and the grain size when that algorithm is WSOLA.
+     * Both engines stay configured behind the one handle, so switching costs no
+     * allocation -- but the engine being switched to is holding stale history
+     * and is reset as it comes in.
+     */
+    external fun nativeSetEngine(handle: Long, engine: Int, quality: Int)
+
+    /**
+     * Drops both engines' buffered history. Returns false, having done nothing,
+     * when a reconfigure is in flight -- this runs on the playback thread and
+     * will not block it, so the caller has to come back rather than wait.
+     */
+    external fun nativeReset(handle: Long): Boolean
 
     /**
      * Round-trip latency in frames. This is how far behind the audible pitch

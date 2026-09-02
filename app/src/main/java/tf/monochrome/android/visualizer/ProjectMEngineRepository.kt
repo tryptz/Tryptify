@@ -58,8 +58,16 @@ class ProjectMEngineRepository @Inject constructor(
     private val _currentPreset = MutableStateFlow<VisualizerPreset?>(null)
     val currentPreset: StateFlow<VisualizerPreset?> = _currentPreset.asStateFlow()
 
-    private val _autoShuffle = MutableStateFlow(true)
-    val autoShuffle: StateFlow<Boolean> = _autoShuffle.asStateFlow()
+    private val _rotationMode = MutableStateFlow(PresetRotationMode.Default)
+    val rotationMode: StateFlow<PresetRotationMode> = _rotationMode.asStateFlow()
+
+    /**
+     * The mode to return to when rotation is switched back on from the player's
+     * chip, which is a two-state control over a three-state setting. Without it
+     * a listener who chose "each track" in Settings would silently land on the
+     * timer the first time they used the chip.
+     */
+    private var lastRotatingMode: PresetRotationMode = PresetRotationMode.Default
 
     private val _engineEnabled = MutableStateFlow(true)
     val engineEnabled: StateFlow<Boolean> = _engineEnabled.asStateFlow()
@@ -74,6 +82,9 @@ class ProjectMEngineRepository @Inject constructor(
     private var textureSize: Int = 1024
     private var meshX: Int = 32
     private var meshY: Int = 24
+    // Volatile for the same reason vsyncEnabled is: written by the settings
+    // observer off the render thread and read by the frame cap on it.
+    @Volatile
     private var targetFps: Int = 60
     @Volatile var vsyncEnabled: Boolean = true
         private set
@@ -87,6 +98,33 @@ class ProjectMEngineRepository @Inject constructor(
     // onSurfaceAttached call owns the native bridge. All others become no-ops.
     private var attachedSurfaceCount: Int = 0
     private var nativeInitialized: Boolean = false
+
+    // Work that has to happen with the GL context current, asked for from a
+    // thread that does not have one. Switching a preset compiles its shaders,
+    // and resizing the mesh reallocates against the context; called straight
+    // from the settings observers on the main thread they do nothing at all,
+    // which is why choosing a preset used to take effect only after the
+    // visualizer was closed and reopened and the engine rebuilt on the render
+    // thread. Both are drained at the top of renderFrame instead.
+    //
+    // Guarded by engineLock, which renderFrame already holds, so draining costs
+    // one field read per frame.
+    private var pendingPreset: PendingPresetRequest? = null
+    private var pendingQuality: Boolean = false
+
+    // Set by the GLSurfaceView so a change made while paused still gets a frame
+    // to appear on: the view drops to RENDERMODE_WHEN_DIRTY when playback
+    // stops, and without a nudge the queued preset would sit until something
+    // else asked to draw.
+    private var requestRender: (() -> Unit)? = null
+
+    /**
+     * When the last frame was actually drawn, for the Target FPS cap.
+     *
+     * Only meaningful with vsync off. With it on there is nothing to cap: the
+     * display hands out one frame per refresh and the app draws on each.
+     */
+    private var lastRenderedFrameNanos: Long = 0L
 
     private var lastPcmTimestampMs: Long = 0L
     private var fpsFrameCount = 0
@@ -154,13 +192,22 @@ class ProjectMEngineRepository @Inject constructor(
                 }
             }
         }
+        // Seeded from storage, not from the last time the setting happened to
+        // pass through this process. Off is a mode the chip can write, and once
+        // it has, nothing rotating arrives here again -- so a field that only
+        // learns from the collector below is back at its default on the next
+        // launch, and the chip then restores the wrong thing.
         scope.launch {
-            preferences.visualizerAutoShuffle.collectLatest { enabled ->
-                _autoShuffle.value = enabled
+            preferences.visualizerPresetRotationLast.collectLatest { remembered ->
+                lastRotatingMode = remembered
+            }
+        }
+        scope.launch {
+            preferences.visualizerPresetRotationMode.collectLatest { mode ->
+                _rotationMode.value = mode
+                if (mode.isRotating) lastRotatingMode = mode
                 synchronized(engineLock) {
-                    if (nativeInitialized) {
-                        nativeBridge.setPresetShuffleEnabled(enabled)
-                    }
+                    if (nativeInitialized) applyRotationLocked()
                 }
             }
         }
@@ -170,11 +217,7 @@ class ProjectMEngineRepository @Inject constructor(
                 val selected = _presets.value.firstOrNull { it.id == presetId }
                 if (selected != null) {
                     _currentPreset.value = selected
-                    synchronized(engineLock) {
-                        if (nativeInitialized) {
-                            nativeBridge.setPreset(resolveAbsolutePresetPath(selected))
-                        }
-                    }
+                    requestPresetOnGlThread(PendingPresetRequest.Select(selected))
                 }
             }
         }
@@ -186,17 +229,21 @@ class ProjectMEngineRepository @Inject constructor(
         scope.launch {
             preferences.visualizerMeshX.collectLatest { x ->
                 meshX = x
-                synchronized(engineLock) {
-                    if (nativeInitialized) nativeBridge.configureQuality(meshX, meshY)
-                }
+                requestQualityOnGlThread()
             }
         }
         scope.launch {
             preferences.visualizerMeshY.collectLatest { y ->
                 meshY = y
-                synchronized(engineLock) {
-                    if (nativeInitialized) nativeBridge.configureQuality(meshX, meshY)
-                }
+                requestQualityOnGlThread()
+            }
+        }
+        scope.launch {
+            // Straight to the bus rather than through the engine: the delay is a
+            // property of the audio reaching the visualizer, and it applies just
+            // as much before the native engine exists as after.
+            preferences.visualizerAudioDelayMs.collectLatest { ms ->
+                audioBus.setDelayMs(ms)
             }
         }
         scope.launch {
@@ -286,7 +333,7 @@ class ProjectMEngineRepository @Inject constructor(
             nativeInitialized = true
             nativeBridge.configureQuality(meshX, meshY)
             nativeBridge.configureTargetFps(targetFps)
-            nativeBridge.setPresetShuffleEnabled(_autoShuffle.value)
+            nativeBridge.setPresetShuffleEnabled(_rotationMode.value.isRotating)
             nativeBridge.setBeatSensitivity(beatSensitivity)
             nativeBridge.setBrightness(brightness)
             applyRotationLocked()
@@ -296,6 +343,14 @@ class ProjectMEngineRepository @Inject constructor(
                 message = "projectM surface ready."
             )
         }
+    }
+
+    /**
+     * Lets the view be asked for a frame. Cleared on detach so a dead surface
+     * is never poked.
+     */
+    fun setRenderTrigger(trigger: (() -> Unit)?) {
+        synchronized(engineLock) { requestRender = trigger }
     }
 
     fun onSurfaceResized(width: Int, height: Int) {
@@ -333,6 +388,14 @@ class ProjectMEngineRepository @Inject constructor(
     fun renderFrame(frameTimeNanos: Long) {
         synchronized(engineLock) {
             if (!_engineEnabled.value || !nativeInitialized) return
+            // The one place with a current GL context, so the one place these
+            // can actually take effect.
+            val appliedPendingWork = applyPendingGlWorkLocked()
+            // Checked after the pending work so a preset change is never held
+            // back by the cap, and skipped entirely on a frame that has one to
+            // show. A dropped frame leaves its audio in the queue, which is
+            // bounded by age, so nothing accumulates.
+            if (!appliedPendingWork && shouldSkipForFrameCapLocked(frameTimeNanos)) return
             val frames = audioBus.drainAll()
             if (frames.isNotEmpty()) {
                 lastPcmTimestampMs = frames.last().timestampMs
@@ -340,9 +403,23 @@ class ProjectMEngineRepository @Inject constructor(
                     nativeBridge.pushPcm(frame.samples, frame.channelCount, frame.sampleRate)
                 }
             }
-            val freezeFrame = playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
+            // A frozen frame is skipped to save power while paused, but a preset
+            // that has just been swapped in has never been drawn, so freezing
+            // through it would leave the old one on screen -- the very bug this
+            // is fixing, in a different disguise.
+            val freezeFrame = !appliedPendingWork &&
+                playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
             if (!freezeFrame) {
                 nativeBridge.renderFrame(frameTimeNanos)
+                // Stamped where the frame is actually drawn, not where the cap
+                // decided to allow one. Deciding was the wrong place twice
+                // over: `freezeFrame` below could still skip the render, and
+                // the cap would then hold the next real frame back for an
+                // interval it had never used; and a frame carrying pending work
+                // bypasses the cap entirely, so the stamp was never advanced
+                // and the frame after a preset change measured from a stale
+                // timestamp and drew back-to-back.
+                lastRenderedFrameNanos = frameTimeNanos
                 updateStatus(
                     phase = VisualizerEnginePhase.ACTIVE,
                     message = "projectM rendering bundled presets."
@@ -351,12 +428,46 @@ class ProjectMEngineRepository @Inject constructor(
                 fpsFrameCount++
                 val now = System.currentTimeMillis()
                 if (now - fpsStartTimeMs >= 1000) {
-                    _currentFps.value = (fpsFrameCount * 1000L / (now - fpsStartTimeMs)).toInt()
+                    val measured = (fpsFrameCount * 1000L / (now - fpsStartTimeMs)).toInt()
+                    _currentFps.value = measured
+                    // Not just for the counter any more. Presets divide their
+                    // per-frame steps by this to hold a fixed speed, so a stale
+                    // or invented value is the difference between a preset
+                    // moving as written and moving at the ratio between the
+                    // rate it was told and the rate it is getting.
+                    nativeBridge.reportMeasuredFps(measured)
                     fpsFrameCount = 0
                     fpsStartTimeMs = now
                 }
+            } else {
+                // The window only means anything across frames actually drawn.
+                // Left running through a freeze it divides a handful of frames
+                // by however long the pause lasted and reports nearly zero --
+                // survivable while this only fed a counter, and not now: a
+                // preset dividing by an fps of 1 moves by an enormous step on
+                // the first frame back.
+                fpsFrameCount = 0
+                fpsStartTimeMs = System.currentTimeMillis()
             }
         }
+    }
+
+    /**
+     * Whether this frame should be dropped to hold the visualizer at Target FPS.
+     *
+     * Only with vsync off. With vsync on the display is already the limit and
+     * the app draws once per refresh, so applying the cap there would mean a
+     * 165Hz panel rendering at whatever number happened to be in the setting --
+     * a ceiling nobody asked for on the one path that was already correct.
+     *
+     * This drops the frame rather than sleeping on it. Sleeping is what a
+     * limiter would rather do, but this runs holding engineLock, and holding it
+     * through a sleep would stall every preset change waiting on the render
+     * thread. So the saving is the GPU work, not the loop.
+     */
+    private fun shouldSkipForFrameCapLocked(frameTimeNanos: Long): Boolean {
+        if (vsyncEnabled) return false
+        return shouldDropFrame(frameTimeNanos, lastRenderedFrameNanos, targetFps)
     }
 
     fun setPlaybackPaused(paused: Boolean) {
@@ -366,15 +477,28 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
+    /**
+     * Advance to the next preset in the playlist.
+     *
+     * Queued rather than run here for the same reason selectPreset is: this is
+     * called from the overlay's Next button and from the player listener when a
+     * track changes with per-track rotation on, both on the main thread, and
+     * loading a preset needs the GL context.
+     *
+     * Dropped outright when there is no engine, which is the difference between
+     * this and [selectPreset]. The player listener calls this on every track
+     * change whether or not a surface exists, and a request queued against a
+     * dead engine is not waiting for one -- it is waiting to happen at the
+     * worst possible moment. Without this guard: close the visualizer, skip a
+     * track, reopen it, and `applyPreferredPresetLocked` restores the stored
+     * preset only for the first frame to drain a stale Next and advance
+     * straight off it. A Select survives being queued because it names what to
+     * show; a Next only says "not this one", and by the time an engine exists,
+     * "this one" is something else.
+     */
     fun nextPreset() {
-        synchronized(engineLock) {
-            if (!nativeInitialized) return
-            val currentPath = nativeBridge.nextPreset() ?: return
-            updateCurrentPresetFromPathLocked(currentPath)
-            scope.launch {
-                preferences.setVisualizerPresetId(_currentPreset.value?.id)
-            }
-        }
+        synchronized(engineLock) { if (!nativeInitialized) return }
+        requestPresetOnGlThread(PendingPresetRequest.Next)
     }
 
     fun selectPreset(preset: VisualizerPreset) {
@@ -383,17 +507,18 @@ class ProjectMEngineRepository @Inject constructor(
         scope.launch {
             preferences.setVisualizerPresetId(preset.id)
         }
-        synchronized(engineLock) {
-            if (nativeInitialized) {
-                nativeBridge.setPreset(resolveAbsolutePresetPath(preset))
-            }
-        }
+        requestPresetOnGlThread(PendingPresetRequest.Select(preset))
     }
 
-    fun setShuffleEnabled(enabled: Boolean) {
-        scope.launch {
-            preferences.setVisualizerAutoShuffle(enabled)
-        }
+    /**
+     * The player's own on/off for rotation, from the chip over the visualizer.
+     *
+     * Two states over a three-state setting, so turning it back on restores
+     * whichever rotating mode was last chosen rather than assuming the timer.
+     */
+    fun setRotationEnabled(enabled: Boolean) {
+        val mode = PresetRotationMode.toggled(enabled, lastRotatingMode)
+        scope.launch { preferences.setVisualizerPresetRotationMode(mode) }
     }
 
     fun toggleFavoritePreset(presetId: String) {
@@ -450,6 +575,11 @@ class ProjectMEngineRepository @Inject constructor(
             nativeBridge.release()
             nativeInitialized = false
         }
+        // Queued against an engine that no longer exists. The preset is not
+        // lost: preferredPresetId still holds it, and applyPreferredPresetLocked
+        // re-applies it when the next surface attaches.
+        pendingPreset = null
+        pendingQuality = false
     }
 
     private fun ensureAssetsLocked() {
@@ -482,6 +612,84 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
+    /**
+     * A preset change waiting for the render thread.
+     *
+     * One field rather than a flag per kind, so the newest request wins instead
+     * of a queued Next and a queued Select both landing on the same frame in
+     * whatever order the drain happens to check them.
+     */
+    private sealed interface PendingPresetRequest {
+        /** A preset chosen by name, from the browser or a restored preference. */
+        data class Select(val preset: VisualizerPreset) : PendingPresetRequest
+
+        /** Whatever the playlist calls next -- the Next button, or auto-shuffle. */
+        data object Next : PendingPresetRequest
+    }
+
+    /**
+     * Runs the work that was waiting for a GL context. Returns whether anything
+     * was applied, so the caller knows this frame has something new to show.
+     */
+    private fun applyPendingGlWorkLocked(): Boolean {
+        var applied = false
+        pendingPreset?.let { request ->
+            pendingPreset = null
+            applied = when (request) {
+                // A false here means the path is not in the playlist -- a preset
+                // gone since it was chosen. Left alone deliberately: the caller
+                // has already shown it as selected, and the alternative,
+                // advancing the playlist, would answer a failed request by
+                // displaying some third preset nobody asked for.
+                is PendingPresetRequest.Select ->
+                    nativeBridge.setPreset(resolveAbsolutePresetPath(request.preset))
+
+                // Next only knows which preset it landed on after it has moved,
+                // so unlike Select the exposed state and the stored preference
+                // are settled here rather than by the caller.
+                PendingPresetRequest.Next -> {
+                    val path = nativeBridge.nextPreset()
+                    if (path != null) {
+                        updateCurrentPresetFromPathLocked(path)
+                        val id = _currentPreset.value?.id
+                        scope.launch { preferences.setVisualizerPresetId(id) }
+                    }
+                    path != null
+                }
+            }
+        }
+        if (pendingQuality) {
+            pendingQuality = false
+            nativeBridge.configureQuality(meshX, meshY)
+            applied = true
+        }
+        return applied
+    }
+
+    /**
+     * Hands [preset] to the render thread and asks for a frame to show it on.
+     *
+     * The trigger is captured under the lock but invoked outside it on purpose.
+     * GLSurfaceView.requestRender takes its own monitor, and the render thread
+     * takes engineLock while holding that one -- calling in while holding
+     * engineLock is the other half of a deadlock.
+     */
+    private fun requestPresetOnGlThread(request: PendingPresetRequest) {
+        val trigger = synchronized(engineLock) {
+            pendingPreset = request
+            if (nativeInitialized) requestRender else null
+        }
+        trigger?.invoke()
+    }
+
+    private fun requestQualityOnGlThread() {
+        val trigger = synchronized(engineLock) {
+            pendingQuality = true
+            if (nativeInitialized) requestRender else null
+        }
+        trigger?.invoke()
+    }
+
     private fun applyPreferredPresetLocked() {
         val presets = _presets.value
         if (presets.isEmpty()) return
@@ -497,9 +705,15 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     private fun applyRotationLocked() {
+        val mode = _rotationMode.value
         val seconds = rotationSeconds.coerceIn(5, 120)
-        nativeBridge.setPresetShuffleEnabled(_autoShuffle.value)
+        // Random order whenever anything is choosing for you. Walking ten
+        // thousand presets in turn is not an order anybody wanted.
+        nativeBridge.setPresetShuffleEnabled(mode.isRotating)
         nativeBridge.configurePresetDuration(seconds)
+        // Last, and after the duration: setting a duration is what the timer
+        // being on looks like, so the lock has to be re-asserted behind it.
+        nativeBridge.setPresetRotationEnabled(mode == PresetRotationMode.Timer)
     }
 
     private fun updateCurrentPresetFromPathLocked(path: String?) {
@@ -533,3 +747,16 @@ class ProjectMEngineRepository @Inject constructor(
         private const val TAG = "ProjectMEngineRepository"
     }
 }
+
+/**
+ * Whether a frame arriving at [frameTimeNanos] is too soon after
+ * [lastRenderedNanos] to be drawn at [cap] frames per second.
+ *
+ * Pulled out of the repository as a plain function because the failure it
+ * guards against is silent: a cap that always says drop leaves the visualizer
+ * frozen with vsync off, and one that never says drop leaves it free-running at
+ * whatever the GPU will give, which is the state this was written to end. A cap
+ * of zero or less means no limit.
+ */
+internal fun shouldDropFrame(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int): Boolean =
+    cap > 0 && frameTimeNanos - lastRenderedNanos < 1_000_000_000L / cap

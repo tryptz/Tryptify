@@ -111,6 +111,8 @@ import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.MiniPlayer
 import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.LocalPlayerHaze
+import tf.monochrome.android.ui.player.PlayerGlassHaze
 import tf.monochrome.android.ui.player.PlayerActionDock
 import tf.monochrome.android.ui.player.GlassDropShadow
 import tf.monochrome.android.ui.player.GlassProgressTube
@@ -885,7 +887,19 @@ private fun PlayerGlassTab(
                     .hazeSource(previewHaze)
                     .background(previewBgBrush),
             )
-            CompositionLocalProvider(LocalPlayerGlass provides glass) {
+            // The preview's own backdrop, published to the chrome inside it,
+            // so the dock and the play disc frost something here exactly as
+            // they frost the player's background on the real screen. Without
+            // it Backdrop blur and Backdrop tint were two sliders whose effect
+            // you had to leave the Studio to see.
+            //
+            // Safe from the sample-your-own-layer trap: the source is the
+            // swatch above, which is a sibling of this content and not an
+            // ancestor of it.
+            CompositionLocalProvider(
+                LocalPlayerGlass provides glass,
+                LocalPlayerHaze provides previewHaze,
+            ) {
                 if (previewMini) {
                     // The real mini player bar under the current glass — the exact
                     // component the nav host shows, so tuning is what-you-see.
@@ -946,6 +960,12 @@ private fun PlayerGlassTab(
                                     .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
                                 softness = glass.shadowSoftness,
                                 depth = glass.shadowDepth,
+                            )
+                            // The same frost the real disc gets, so Backdrop
+                            // blur and tint move something here too.
+                            PlayerGlassHaze(
+                                modifier = Modifier.matchParentSize(),
+                                shape = CircleShape,
                             )
                             Box(
                                 Modifier.fillMaxSize().clip(CircleShape),
@@ -1121,19 +1141,29 @@ private fun PlayerGlassTab(
             "Frosted blur", "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
             description = "Frosts the glass, from clear to misted.",
         ) { onUpdate { g -> g.copy(frost = it) } }
-        if (previewMini) {
-            // Haze backdrop frost — only surfaces driven by this blob render
-            // it: the mini player bar, the audio-tools sheet, the speed panel,
-            // the nav pill, the search bar and the map panels.
-            FxSlider(
-                "Backdrop blur", "%.0f dp".format(glass.hazeBlurDp), glass.hazeBlurDp, 0f..80f,
-                description = "Gaussian blur of whatever sits behind these panels (0 = off).",
-            ) { onUpdate { g -> g.copy(hazeBlurDp = it) } }
-            FxSlider(
-                "Backdrop tint", "${(glass.hazeTint * 100).toInt()}%", glass.hazeTint, 0f..2f,
-                description = "Strength of the frost layer's darkening/lightening wash.",
-            ) { onUpdate { g -> g.copy(hazeTint = it) } }
-        }
+        // Haze backdrop frost. Each tab's copy drives its own surfaces: the UI
+        // blob frosts the mini player bar, the audio-tools sheet, the speed
+        // panel, the nav pill, the search bar and the map panels; the player
+        // blob frosts the now-playing chrome -- the action dock and the play
+        // disc, whose punched glyphs open onto this blur.
+        //
+        // These lived on the UI tab alone for as long as the player's own copy
+        // drove nothing, which made them look like panel settings that the
+        // player was simply not entitled to. It has surfaces of its own now, so
+        // it gets the sliders that aim them.
+        FxSlider(
+            "Backdrop blur", "%.0f dp".format(glass.hazeBlurDp), glass.hazeBlurDp, 0f..80f,
+            description = if (previewMini) {
+                "Gaussian blur of whatever sits behind these panels (0 = off)."
+            } else {
+                "Gaussian blur of the artwork and reactive glow behind the dock " +
+                    "and the play button (0 = off)."
+            },
+        ) { onUpdate { g -> g.copy(hazeBlurDp = it) } }
+        FxSlider(
+            "Backdrop tint", "${(glass.hazeTint * 100).toInt()}%", glass.hazeTint, 0f..2f,
+            description = "Strength of the frost layer's darkening/lightening wash.",
+        ) { onUpdate { g -> g.copy(hazeTint = it) } }
         FxSlider(
             "Surface motion", "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
             description = "Living-liquid shimmer on the glass surface (0 = still).",

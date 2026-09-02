@@ -48,8 +48,119 @@ object WhatsNew {
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
 
+    /** The projectM visualizer, its preset browser and its rotation. */
+    private const val VISUALIZER = "Visualizer"
+
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 187,
+            versionName = "1.8.7",
+            entries = listOf(
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Pitch moved the tone controls, not the music",
+                    body = "Setting a pitch did nothing to the notes. The shifter was left out " +
+                        "of the audio chain for any track that started at zero, so the buttons " +
+                        "wrote a number nothing read, and what you heard was the EQ sliding " +
+                        "beside it. It works from the first press now.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Two pitch engines, and one is for drums",
+                    body = "Smooth resolves a note to a fraction of a hertz and softens attacks. " +
+                        "Punchy splices in the time domain, so a kick stays a kick and pads can " +
+                        "go phasey. Which suits a record is yours to pick, with Fast, Balanced " +
+                        "and High beneath it.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Pitch playback stopped stuttering",
+                    body = "The engine did a whole analysis block in one audio callback and " +
+                        "almost nothing in the next, which is the one shape a deadline cannot " +
+                        "absorb. The work is spread across calls now, and Balanced does a third " +
+                        "less of it per hop.",
+                ),
+                WhatsNewEntry(
+                    section = SPEED,
+                    title = "Speed reads in the unit you set it in",
+                    body = "Setting a speed in semitones and seeing it come back as 1.19x meant " +
+                        "doing the conversion in your head to check it had taken. The readout " +
+                        "leads with whichever unit you chose, and the other still follows " +
+                        "underneath.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The player lays out sideways",
+                    body = "Turning the phone squeezed the artwork into a sliver between the top " +
+                        "bar and the controls. A short, wide window gets an old-iTunes row " +
+                        "instead: cover on the left, everything else beside it, both sized to " +
+                        "the space rather than stretched into it.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The dock and the play button are glass",
+                    body = "They were coloured shapes laid over the artwork, their cut-out icons " +
+                        "opening onto the raw picture. They blur what is behind them now, the " +
+                        "cover and the reactive glow moving through them as it pulses, and the " +
+                        "frost fades in rather than snapping on.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The panes are glass, not slabs",
+                    body = "Create playlist, Import playlist and the preset browser were flat " +
+                        "panels. A dialog opens a window of its own and cannot blur the one " +
+                        "underneath, so they are drawn inside the player's window instead, " +
+                        "where the glass can actually be made.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The player's \u22EE carries the track, not the view",
+                    body = "It held Circular art, Visualizer and Equalizer, all a tap away " +
+                        "elsewhere, while adding the playing track to a playlist or sending the " +
+                        "file needed a list. Those two are in the menu now, beside Go to album " +
+                        "and Download.",
+                ),
+                WhatsNewEntry(
+                    section = VISUALIZER,
+                    title = "Nine thousand presets you can find",
+                    body = "The browser was one flat list. It has drawers now: by category, or " +
+                        "by author, since a Milkdrop preset is named for whoever made it and " +
+                        "Geiss looks like Geiss. Plus search, favourites, and a back button " +
+                        "that walks up a level.",
+                ),
+                WhatsNewEntry(
+                    section = VISUALIZER,
+                    title = "Preset rotation has an Off, and it stays put",
+                    body = "Two switches each claimed the job, so there was no single answer to " +
+                        "\"stop changing my preset\". It is one choice now, Off, On a timer, or " +
+                        "Each track, and it stops coming back as the timer every time you " +
+                        "relaunch.",
+                ),
+                WhatsNewEntry(
+                    section = VISUALIZER,
+                    title = "It stops rolling past the preset you picked",
+                    body = "Choosing a preset the timer had already moved past could do nothing " +
+                        "at all, and skipping a track with the visualizer closed queued a " +
+                        "change that fired the moment you reopened it, landing on something you " +
+                        "never chose.",
+                ),
+                WhatsNewEntry(
+                    title = "Playlist exports that actually import",
+                    body = "The importer read one file: Exportify's Spotify CSV. Apple Music " +
+                        "writes UTF-16 with tabs and came back as gibberish, and Spotify's own " +
+                        "byte-order mark hid the title column. Apple Music, Spotify, Soundiiz " +
+                        "and TuneMyMusic all load now.",
+                ),
+                WhatsNewEntry(
+                    title = "AutoEQ could install no correction at all",
+                    body = "A headphone profile could end up applying nothing. Not a cramped " +
+                        "curve, silence: the measured response was flat to six decimal places. " +
+                        "A late redesign was overwriting the built curve with the empty one it " +
+                        "had started from.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 186,
             versionName = "1.8.6",

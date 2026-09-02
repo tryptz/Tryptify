@@ -93,4 +93,53 @@ class PitchRatioTest {
         // 1.10x is 1.65 semitones — worth knowing it is a flavour, not an interval.
         assertTrue(abs(PitchRatio.centsOffSemitone(1.10f)) > 30f)
     }
+
+    @Test
+    fun `a speed reads in the unit that was chosen`() {
+        // The bug: the player's chip formatted the raw ratio whatever the unit
+        // was, so stepping in semitones showed "+3 st" in the panel and "1.19x"
+        // in the bar above it -- the same number, one of them stripped of the
+        // meaning that produced it.
+        val threeUp = PitchRatio.ratioFor(3)
+        assertEquals("+3 st", PitchRatio.formatSpeed(threeUp, semitoneUnit = true))
+        assertEquals("1.19x", PitchRatio.formatSpeed(threeUp, semitoneUnit = false))
+
+        val oneUp = PitchRatio.ratioFor(1)
+        assertEquals("+1 st", PitchRatio.formatSpeed(oneUp, semitoneUnit = true))
+        assertEquals("1.06x", PitchRatio.formatSpeed(oneUp, semitoneUnit = false))
+    }
+
+    @Test
+    fun `unity reads as no change in either unit`() {
+        assertEquals("0 st", PitchRatio.formatSpeed(1f, semitoneUnit = true))
+        assertEquals("1.00x", PitchRatio.formatSpeed(1f, semitoneUnit = false))
+    }
+
+    @Test
+    fun `a speed below unity keeps its sign`() {
+        val down = PitchRatio.ratioFor(-5)
+        assertEquals("-5 st", PitchRatio.formatSpeed(down, semitoneUnit = true))
+        assertEquals("0.75x", PitchRatio.formatSpeed(down, semitoneUnit = false))
+    }
+
+    @Test
+    fun `a speed between semitones rounds rather than inventing precision`() {
+        // 1.15x is about 2.4 semitones. In semitone units it has to commit to
+        // one, and the multiplier still reads exactly what it is.
+        assertEquals("+2 st", PitchRatio.formatSpeed(1.15f, semitoneUnit = true))
+        assertEquals("1.15x", PitchRatio.formatSpeed(1.15f, semitoneUnit = false))
+    }
+
+    @Test
+    fun `the readout does not depend on the device locale`() {
+        // A comma decimal separator would render "1,19x", which is not a number
+        // this app ever wrote and not one its own parsing would read back.
+        val previous = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMANY)
+            assertEquals("1.19x", PitchRatio.formatSpeed(PitchRatio.ratioFor(3), semitoneUnit = false))
+        } finally {
+            java.util.Locale.setDefault(previous)
+        }
+    }
 }

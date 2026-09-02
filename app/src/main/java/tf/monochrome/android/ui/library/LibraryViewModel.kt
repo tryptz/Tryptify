@@ -39,9 +39,17 @@ class LibraryViewModel @Inject constructor(
     fun importCsvPlaylist(uri: Uri, strictAlbumMatch: Boolean, name: String, description: String?) {
         viewModelScope.launch {
             playlistImportService.reportFetching("CSV")
-            val parsedPlaylist = csvPlaylistParser.parseFromUri(uri).getOrNull()
+            // The parser's own message says which column was missing or which
+            // export to take instead. Flattening it to "could not parse the CSV
+            // file" is why a wrong-format file and a corrupt one were
+            // indistinguishable, and neither told anyone what to do next.
+            val parsed = csvPlaylistParser.parseFromUri(uri)
+            val parsedPlaylist = parsed.getOrNull()
             if (parsedPlaylist == null) {
-                playlistImportService.reportFailure("Could not parse the CSV file")
+                playlistImportService.reportFailure(
+                    parsed.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
+                        ?: "That file could not be read as a playlist export.",
+                )
                 return@launch
             }
             playlistImportService.importTracks(name, description, parsedPlaylist.tracks, strictAlbumMatch)

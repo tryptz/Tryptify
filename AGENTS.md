@@ -55,3 +55,27 @@ threshold.
 
 Author as `tryptz`. No co-author trailers and no tool attribution in commit
 messages, PR bodies, or code comments.
+
+## Releases
+
+`.github/workflows/release.yml` is the only workflow that ships anything. It
+builds the release variant — signed, minified, never a debug APK — and publishes
+a GitHub Release with the APK, its SHA-256, and the notes for that version out of
+`CHANGELOG.md`.
+
+To cut one:
+
+1. Bump `versionCode`/`versionName` in `app/build.gradle.kts` and add the
+   matching `## [x.y.z]` section to `CHANGELOG.md`.
+2. Tag the commit with the bare version (`1.8.8`, matching the existing tags; a
+   `v` prefix is accepted) and push the tag.
+
+The workflow refuses to publish an APK that disagrees with the tag, that came out
+unsigned, that is marked debuggable, or that is signed with the committed debug
+keystore. A `workflow_dispatch` run with no tag is a dry run: it builds, signs and
+verifies, then uploads the APK as a workflow artifact without publishing.
+
+Signing comes from four repository secrets — `KEYSTORE_BASE64`,
+`KEYSTORE_STORE_PASSWORD`, `KEYSTORE_KEY_ALIAS`, `KEYSTORE_KEY_PASSWORD` — which
+the workflow writes into `keystore.properties` and deletes afterwards. A tag
+suffix (`1.9.0-rc1`) publishes as a pre-release.

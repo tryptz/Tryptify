@@ -10,7 +10,11 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -367,6 +371,9 @@ fun rememberLiquidGlassAvailable(): Boolean {
  */
 val LocalPlayerHaze = compositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }
 
+/** How long the frost takes to settle onto a surface, or to leave it. */
+private const val HAZE_FADE_MILLIS = 400
+
 /**
  * The blurred-backdrop layer that goes *under* a piece of player glass.
  *
@@ -377,9 +384,15 @@ val LocalPlayerHaze = compositionLocalOf<dev.chrisbanes.haze.HazeState?> { null 
  * the content; on the punched tiles (dock, transport) the icon holes then reveal
  * this blur rather than the raw art.
  *
- * A no-op — drawing nothing — whenever there is no source, the device can't
- * blur, glass is off, or the blur radius is zero, so callers can place it
- * unconditionally.
+ * It fades rather than appears. Glass frosting over is a thing that happens to
+ * a surface, and switching it on used to swap the artwork behind a panel for a
+ * blur of it between one frame and the next — a cut, which reads as the picture
+ * changing rather than the surface. The same fade runs backwards when the blur
+ * is turned off, so the layer leaves the way it arrived instead of blinking
+ * out; it follows the app's "Disable animations" setting like everything else.
+ *
+ * Draws nothing whenever there is no source, the device can't blur, glass is
+ * off, or the blur radius is zero, so callers can place it unconditionally.
  */
 @Composable
 fun PlayerGlassHaze(
@@ -389,7 +402,30 @@ fun PlayerGlassHaze(
     val haze = LocalPlayerHaze.current ?: return
     val g = LocalPlayerGlass.current
     val profile = tf.monochrome.android.performance.LocalPerformanceProfile.current
-    if (!profile.allowHazeBlur || !g.enabled || g.hazeBlurDp <= 0f) return
+    val lit = profile.allowHazeBlur && g.enabled && g.hazeBlurDp > 0f
+
+    val millis = tf.monochrome.android.ui.theme.motionMillis(HAZE_FADE_MILLIS)
+    val fade = remember { Animatable(0f) }
+    LaunchedEffect(lit, millis) {
+        fade.animateTo(if (lit) 1f else 0f, tween(durationMillis = millis))
+    }
+    // Composed while it is still on its way out, which is what lets it fade out
+    // at all: a layer removed from the tree cannot animate its own departure.
+    //
+    // Gated on the value rather than on `isRunning`, which was the wrong
+    // question by exactly one frame. On the composition where `lit` goes false
+    // the previous fade has already finished, so nothing is running yet -- the
+    // LaunchedEffect body only starts afterwards -- and this returned, taking
+    // the layer out of the tree. Starting the animation then set `isRunning`,
+    // which scheduled another composition that put the layer back at full
+    // strength to fade down. The frost snapped off, blinked back on and only
+    // then faded: the cut this exists to remove, with a flash added.
+    //
+    // `derivedStateOf` so the read costs two recompositions across the whole
+    // animation rather than one per frame -- the value itself is read in the
+    // layer block below.
+    val leaving by remember { derivedStateOf { fade.value > 0.001f } }
+    if (!lit && !leaving) return
 
     val frostBg = androidx.compose.material3.MaterialTheme.colorScheme.background
     val isDark = frostBg.luminance() <= 0.5f
@@ -399,6 +435,9 @@ fun PlayerGlassHaze(
 
     androidx.compose.foundation.layout.Box(
         modifier
+            // Read in the layer block, not the composition: the fade would
+            // otherwise recompose this on every frame it runs.
+            .graphicsLayer { alpha = fade.value }
             .clip(shape)
             .hazeEffect(
                 state = haze,

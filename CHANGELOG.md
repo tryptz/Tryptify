@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.8.7]
 
 ### Removed
 
@@ -9,6 +9,76 @@
 - **The reason is that a pin is a vote, and a vote can be lost or won at the wrong value** — an external per-app override asking a OnePlus panel for 165 was contested by whatever mode this window pinned, and on a display that offers its top rate only at a lower resolution the pinned mode was the slower of the two. The app was arguing its own display down. "Unlocked" was no defence either: a pin at the ceiling is still a lock, just a high one.
 - **A resolution could not be spared** — a mode id names a resolution and a refresh rate together, so there is no way to ask for one without also asserting the other. Keeping the Resolution row would have meant keeping the vote.
 - **Nothing needs migrating** — both were device-local and deliberately absent from `SETTINGS_SYNC_KEYS`, so no backup carried them and no account state refers to them. The two DataStore keys (`app_target_fps`, `app_render_resolution`) are simply no longer read; a phone that has them stored keeps the values as dead entries.
+
+### Added
+
+#### The app can follow the phone's own colours
+- **Settings › Theme › Color Theme gains "System colors"** — the palette the system builds from your wallpaper, a featured colour picked in the system settings, and the Contrast accessibility setting. It sits directly under "System": that one follows the OS's light/dark switch, this one follows its colours as well.
+- **The palette was already implemented and unreachable** — the theme resolver has understood the key since Material You support went in, but it was never listed in `themeDisplayNames` and the picker offers exactly what that map holds. None of the scheme needed writing; it had simply never been possible to choose.
+- **Below Android 12 the entry is not offered rather than offered and quietly substituted** — there is no system palette before then, and picking it resolved to Monochrome with nothing to say so, leaving no way to tell a failed setting from a grey wallpaper. The name is still recognised, so a preference restored from a backup or carried over from a newer phone reads as "System colors" instead of as a raw key.
+- **The scheme is cached against the palette instead of rebuilt per frame** — it is read at the theme root, which recomposes continuously for the whole colour cross-fade every time the track changes, and building a scheme allocates every slot it holds. The cache key is a colour read back out of the palette, so it invalidates itself whichever way a change arrives: switching System colors swaps a resource overlay, and this activity declares `uiMode` in its own `configChanges` and so is not restarted for a light/dark switch.
+- **From Android 14 that key is a Material 3 role colour, not the accent ramp** — Contrast moves the roles and leaves the older `system_accent1_*` ramp untouched, so a key taken from the ramp would have read as no change at all while the rest of the system repainted around it.
+- **"Tint the menus too" still wins wherever it is on**, exactly as it does over every other theme: the album rebuilds the scheme and the system palette gives way for as long as something is playing.
+
+### Fixed
+
+#### One preset rotation setting, and it can be turned off
+- **Settings › Visualizer › Preset rotation is now a single choice: Off, On a timer, or Each track.** It replaces two switches that each claimed the job — "Preset rotation" drove projectM's timer, while "Auto-shuffle Presets" changed the preset on every new track and described itself as rotating presets during playback, which was the other one's job. Between them there was no single answer to "stop changing my preset", because either could still be doing it.
+- **Off uses projectM's own preset lock, not a very long timer.** A duration large enough to feel like off is still a timer and would move the preset eventually on a long listen; the lock stops the automatic transitions outright, hard and soft alike, while a preset picked by hand — from the browser, or Next — keeps working.
+- **Setting a duration is what the timer being on looks like**, so the lock is re-asserted behind it on both sides of the bridge; without that, nudging the seconds slider while rotation was off would quietly start it again. The slider only appears for the timer, which is the only mode with an interval to set.
+- **Your existing arrangement carries over** rather than being reset: with no new setting stored yet, the mode is derived from the two old switches. Both on — which is what most installs had — becomes the timer, since it is the continuous behaviour of the two and the one whose absence would be noticed. Both off stays off.
+- **Random order is folded in.** The playlist is shuffled whenever something is choosing for you, because walking ten thousand presets in turn is not an order anybody wanted, and it is no longer a separate switch.
+- **The player's Shuffle/Manual chip still works as one button**, and turning it back on restores whichever rotating mode you last chose rather than assuming the timer.
+
+#### Target FPS goes to 240, and now caps something
+- **The slider reaches 240** instead of stopping at 144, which was below what current panels run at.
+- **It was not capping anything.** The setting said "capped by Target FPS" and the renderer had no limiter in it; the value was only forwarded to projectM, where it is documentation for presets rather than a throttle. With vsync off the visualizer ran at whatever the GPU would give.
+- **The cap is real now, and applies only with vsync off** — the case the setting was always described for. With vsync on the display already hands out one frame per refresh, and applying a ceiling there would have pulled a 165Hz panel down to whatever number happened to be sitting in the setting, which is a limit nobody asked for on the one path that was already right. The slider's caption now says which of the two is in force.
+- **A capped frame is dropped, not slept through.** Sleeping is what a limiter would rather do, but this runs while holding the engine lock and holding it through a sleep would stall every preset change waiting on the render thread, so what is saved is the GPU work rather than the loop.
+- **A preset change is never held back by the cap** — a frame with one to show is drawn regardless — and a dropped frame leaves its audio in the queue, which is bounded by age, so nothing accumulates behind it.
+
+#### An audio delay, for when the visualizer runs ahead of the sound
+- **Settings › Visualizer › Audio delay** holds the visualizer back by up to half a second so what it draws matches what you hear. Off by default.
+- **The visualizer was always slightly early, and on Bluetooth plainly so.** Its audio is tapped from inside the playback chain, upstream of the output device, so it sees each buffer before the speaker plays it. Over a wire that head start is small enough to miss; over Bluetooth the codec and the receiver's own buffering push it into the low hundreds of milliseconds. Delaying the visualizer's copy is the only side that can move — the audio itself must not be.
+- **It is a manual setting because Android will not answer the question.** There is no dependable way to ask what the current route's latency is, least of all for A2DP, so a number the app invented would be wrong in a way you would then have to correct anyway. Set it once for your headphones and back to zero for the speaker.
+- **The queue is bounded by time rather than by a frame count now**, since it has to be long enough to hold the delay — a fixed eight buffers is a fraction of a second and would have thrown audio away before it came due. That also drops an O(n) `size()` call the audio thread was making for every buffer it published.
+- **The waveform overlay is deliberately not delayed.** It draws on its own whether or not the visualizer is running, so holding its samples back would freeze it whenever nothing was consuming the queue.
+
+#### The visualizer stops changing speed with the refresh rate
+- **Presets sped up and slowed down as the panel's refresh rate moved**, most visibly when it idled from 165Hz down to 55 and everything on screen ran at roughly a third of its proper speed.
+- **projectM was being told a frame rate it was not running at.** It does not time itself from that number — its own clock is the wall clock — but it hands the value to presets, and Milkdrop presets are written per frame: the ones that mean to hold a fixed speed divide their step by `fps`. The app set it once to a hardcoded 60 and thereafter to the Target FPS slider, so a preset compensating for 120 while 165 frames arrived moved a third too fast, and moved at under half speed when the panel dropped to 55.
+- **It now gets the rate actually being rendered**, which is what upstream asks applications to supply, and which the app was already measuring for the on-screen counter and doing nothing else with. Target FPS still writes the same field when the slider moves and is corrected within a second.
+- **The measurement window is reset across a freeze.** A paused visualizer stops drawing but the window kept running, so the first reading after a long pause divided a few frames by the length of the pause and reported nearly zero — which was harmless while it only fed a counter, and would have moved a preset dividing by it an enormous distance on the first frame back.
+- **This cannot help a preset that never compensates.** A Milkdrop preset that advances a fixed amount per frame moves with the frame rate by design, and only its author can change that. Those are the ones the display frame-rate hint above is holding steady.
+
+#### Next in the visualizer switches on the press
+- **The Next button had the same problem the preset browser did, and did not get the same fix.** Choosing a preset by name was moved onto the render thread; advancing to the next one was left calling projectM from the main thread, where there is no GL context and the load does nothing. Auto-shuffle on a track change went the same way.
+- **It is queued with everything else now.** Where picking a preset by name knows which one it wants, Next only knows where it landed after it has moved, so the exposed preset and the stored preference are settled on the render thread with it rather than by the caller.
+- **The two requests share one slot**, so a press that arrives while another is still waiting for a frame replaces it instead of both landing on the same frame in whatever order they were checked.
+
+#### The visualizer holds the display at its own frame rate
+- **It ran at full speed only while the canvas was being touched** — 165fps on a 166Hz panel with a finger down, 55 on a 55Hz panel without one. The visualizer was never the limit: it draws once per vblank, and the panel was idling down because the app tells the display nothing about what it is drawing.
+- **The visualizer's surface now asks for the panel's own top rate while it is drawing**, and gives it back the moment playback stops. This is not the display-mode vote removed above: that set `preferredDisplayModeId` on the window, and a mode id names a resolution and a rate together, so the app asserted both and argued itself down against a per-app override. This is one float on one surface, no resolution and no mode, and the system stays free to decline.
+
+#### The preset browser is glass
+- **Its search was a plain outlined field**, the one kind of search bar the app had otherwise finished removing.
+- **It is `GlassSearchBar` now, cut from the mini player's material** like every other bar in the app, and it floats over the list rather than sitting in a column above it: the bar's measured height reaches the list as content padding, so no preset is hidden at rest and the rows slide up behind the glass as soon as you scroll.
+- **The tag filter moved inside the bar's own pane**, so the field and the chips are one sheet of glass rather than a bar with a second thing floating under it.
+
+#### Choosing a visualizer preset applies straight away
+- **A preset only appeared after the visualizer was closed and reopened.** Picking one from the sheet did nothing visible; shutting the visualizer down and starting it again showed the preset you had chosen before, one step behind, forever.
+- **The switch was being made on the wrong thread.** Loading a preset compiles its shaders, so it needs the GL context — and the context belongs to the GLSurfaceView's render thread. Both paths that changed a preset, the tap and the settings observer behind it, called into projectM from the main thread, where there is no context and the load quietly does nothing. The one path that worked was the engine's own start-up, which runs on the render thread when a surface attaches, and that is exactly why closing and reopening "fixed" it.
+- **Preset and mesh changes are now queued and applied at the top of the next frame**, on the render thread, the same way audio has always reached the engine through `ProjectMAudioBus`. A preset chosen while playback is paused also asks the view for a frame, since the visualizer drops to drawing on demand when the music stops and the new preset would otherwise be loaded and never drawn.
+- **It was also recording the switch as done.** The native side updated its idea of the current preset even though the load had not happened, so its "already showing this one" shortcut then rejected the very preset you were trying to reach — picking it a second time was a no-op, and only rebuilding the engine could clear it.
+- **Switching no longer walks ten thousand presets, twice.** Selecting a preset searched the playlist once to check the path existed and again to find its index, allocating and freeing a string for every entry both times — around twenty thousand allocations for the bundled set. That was survivable on the main thread and would not have been on the render thread, so the playlist is indexed once when it loads and a switch is now a single hash lookup.
+- **There was no transition to turn off.** The switch already asks for a hard cut, and the branch that claimed to be the instant path — `projectm_load_preset_file` with the crossfade disabled — could not be reached by any input: a path outside the playlist returned before it, and a path inside it returned from the loop above. It is gone. The soft cut still applies to the automatic rotation, which is the only place it was ever doing anything.
+
+#### The album colour cross-fade no longer drags the whole app with it
+- **Skipping a track stuttered for the length of the colour fade** — 600ms gapless, up to eight seconds under a long blend — and it did so whether or not "Tint the menus too" was on, which is what pointed above that switch rather than inside it.
+- **The fade handed out a new palette on every displayed frame**, and `MainActivity` unwrapped it with `by` at the top of `setContent`. A value read there subscribes the composition root, so 120 times a second the root and every provider under it recomposed, before anything had decided whether the colour was wanted. The palette is now passed down as state and read by the surfaces that paint with it; with the tint off, the theme and the root are no longer touched by a fade at all.
+- **Frames that cannot look different no longer count as changes** — the fade's fraction is snapped to sixty steps a second before the palette is built, so on a 120Hz panel roughly half the frames now produce a palette equal to the one before it, and `derivedStateOf` drops them rather than waking every reader. A colour wash has no edge for the eye to track, so it does not need a sample per frame; what it did need was to stop being one new object per frame, because each one rebuilt a scheme and recomposed everything reading it.
+- **Both ends of the fade are exact.** The snap is downward, so the colour never arrives ahead of the animation, and 0 and 1 pass through untouched — a fade settling on a rounded approximation of its target would have left every track very slightly the wrong colour for as long as it played.
+- **What was measured, and what was not** — `customScheme`, which rebuilds the app-wide scheme when the menus are tinted, was the obvious suspect and is not the cause: it costs eight to thirteen microseconds against an 8.3ms frame, about a tenth of a percent, and an attempt to speed it up could not be shown to help above run-to-run noise. It was dropped rather than shipped. The cost was never the arithmetic; it was the number of things told to recompose.
 
 ## [1.8.6]
 

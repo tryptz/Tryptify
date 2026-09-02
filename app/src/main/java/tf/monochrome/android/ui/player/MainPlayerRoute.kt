@@ -1,6 +1,10 @@
 package tf.monochrome.android.ui.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import tf.monochrome.android.audio.stretch.PitchEngine
+import tf.monochrome.android.audio.stretch.PitchQuality
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -36,6 +40,7 @@ import kotlin.math.abs
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -80,6 +85,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import tf.monochrome.android.ui.components.AddToPlaylistSheet
+import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import androidx.compose.ui.graphics.graphicsLayer
@@ -94,6 +101,7 @@ import tf.monochrome.android.ui.main.SystemBarsHidden
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.SourceType
+import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
@@ -129,6 +137,7 @@ fun MainPlayerRoute(
     val shuffleEnabled by playerViewModel.shuffleEnabled.collectAsStateWithLifecycle()
     val repeatMode by playerViewModel.repeatMode.collectAsStateWithLifecycle()
     val isLiked by playerViewModel.isCurrentTrackLiked.collectAsStateWithLifecycle()
+    val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
     val downloadState by playerViewModel.currentTrackDownloadState.collectAsStateWithLifecycle()
     val isDownloadedRemote by playerViewModel.isCurrentTrackDownloaded.collectAsStateWithLifecycle()
     val isLocalTrack by playerViewModel.isCurrentTrackLocal.collectAsStateWithLifecycle()
@@ -142,6 +151,8 @@ fun MainPlayerRoute(
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by playerViewModel.preservePitch.collectAsStateWithLifecycle()
     val pitchSemitones by playerViewModel.pitchSemitones.collectAsStateWithLifecycle()
+    val pitchEngine by playerViewModel.pitchEngine.collectAsStateWithLifecycle()
+    val pitchQuality by playerViewModel.pitchQuality.collectAsStateWithLifecycle()
     val speedUnitSemitones by playerViewModel.speedUnitSemitones.collectAsStateWithLifecycle()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
@@ -179,12 +190,19 @@ fun MainPlayerRoute(
     }
 
     // --- Local UI state owned by the route ---
-    var heroStyle by rememberSaveable { mutableStateOf(PlayerHeroStyle.Square) }
+    // The square cover is the only hero the player offers now; the visualizer
+    // swaps it out below on its own.
+    val heroStyle = PlayerHeroStyle.Square
     var showLyricsSheet by rememberSaveable { mutableStateOf(false) }
     var showQueueSheet by rememberSaveable { mutableStateOf(false) }
     var showPresetSheet by rememberSaveable { mutableStateOf(false) }
     var showSpeedSheet by rememberSaveable { mutableStateOf(false) }
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
+    // Overflow › "Add to playlist" and the create-playlist follow-up it opens.
+    // Held as the pending track rather than a flag so the follow-up dialog
+    // still knows what to add after the picker sheet is gone.
+    var addToPlaylistFor by remember { mutableStateOf<Track?>(null) }
+    var createPlaylistFor by remember { mutableStateOf<Track?>(null) }
     // Sleep timer lives in PlayerViewModel (shared, nav-host-scoped) so the
     // countdown keeps running when this destination leaves composition.
     val sleepMinutes by playerViewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
@@ -288,17 +306,10 @@ fun MainPlayerRoute(
     if (showQueueSheet) {
         QueueSheet(playerViewModel = playerViewModel, onDismiss = { showQueueSheet = false })
     }
-    if (showPresetSheet) {
-        VisualizerPresetSheet(
-            presets = visualizerPresets,
-            selectedPresetId = currentVisualizerPreset?.id,
-            favoritePresetIds = visualizerFavoritePresetIds,
-            onPresetSelected = playerViewModel::selectVisualizerPreset,
-            onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
-            onSettingsClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
-            onDismiss = { showPresetSheet = false },
-        )
-    }
+    // The preset browser is NOT called here with its siblings either, and for
+    // the same reason as the speed panel below: it goes to the `overlay` slot so
+    // it renders beside the player's haze source and can blur the visualizer it
+    // is picking presets for.
     // The speed panel is NOT called here with its siblings. It is handed to
     // MainPlayerScreen's `overlay` slot below so it renders inside the player's
     // own window, next to the haze source — the only place a pane can actually
@@ -310,6 +321,30 @@ fun MainPlayerRoute(
             remainingMinutes = sleepRemainingMinutes,
             onSelect = { playerViewModel.setSleepTimer(it) },
             onDismiss = { showSleepSheet = false },
+        )
+    }
+
+    addToPlaylistFor?.let { pending ->
+        AddToPlaylistSheet(
+            playlists = playlists,
+            onDismiss = { addToPlaylistFor = null },
+            onPlaylistSelected = { playlist ->
+                playerViewModel.addTrackToPlaylist(playlist.id, pending)
+                addToPlaylistFor = null
+            },
+            onCreateNew = {
+                addToPlaylistFor = null
+                createPlaylistFor = pending
+            },
+        )
+    }
+    createPlaylistFor?.let { pending ->
+        CreatePlaylistDialog(
+            onDismiss = { createPlaylistFor = null },
+            onSubmit = { name, description ->
+                playerViewModel.createPlaylist(name, description, listOf(pending))
+                createPlaylistFor = null
+            },
         )
     }
 
@@ -336,7 +371,9 @@ fun MainPlayerRoute(
         audioQuality = currentTrack?.audioQuality,
         outputLabel = "Default",
         soundLabel = "AutoEQ",
-        speedLabel = String.format(Locale.US, "%.2fx", playbackSpeed),
+        // In the listener's own unit. This was the raw ratio, so a speed set
+        // in semitones read as "+3 st" in the panel and "1.19x" here.
+        speedLabel = PitchRatio.formatSpeed(playbackSpeed, speedUnitSemitones),
         sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
@@ -422,22 +459,14 @@ fun MainPlayerRoute(
             repeatMode = repeatMode,
             isDownloaded = isDownloaded,
             downloadState = downloadState,
-            heroStyle = heroStyle,
             onCollapse = { navController.popBackStack() },
             onOutputClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
             onCycleRepeat = playerViewModel::cycleRepeatMode,
             onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
-            onCycleHeroStyle = {
-                heroStyle = if (heroStyle == PlayerHeroStyle.Square) {
-                    PlayerHeroStyle.CircularProgress
-                } else {
-                    PlayerHeroStyle.Square
-                }
-            },
-            onOpenVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
-            onOpenEqualizer = { navController.navigateTool(Screen.Equalizer) },
+            onAddToPlaylist = { currentTrack?.let { addToPlaylistFor = it } },
+            onSendFile = { currentTrack?.let { playerViewModel.shareTrack(it) } },
             onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
             onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
@@ -518,7 +547,7 @@ fun MainPlayerRoute(
             )
         }
 
-        Box(
+        BoxWithConstraints(
             modifier = heroModifier.then(trackSwipe),
             contentAlignment = Alignment.Center,
         ) {
@@ -529,12 +558,18 @@ fun MainPlayerRoute(
                     heroStyle
                 }
                 // Keep the art a centred square whenever the slot is the
-                // full-width lyric rectangle (i.e. any time lyrics are on
-                // screen, including the fade-out). Bound it by WIDTH so the
-                // now-taller lyric slot doesn't stretch the (dissolving) art
-                // vertically; otherwise it fills the slot.
+                // lyric rectangle (i.e. any time lyrics are on screen,
+                // including the fade-out). Bound it by the SHORTER side so the
+                // dissolving art is neither stretched vertically by the taller
+                // portrait slot nor pushed past the top and bottom of the
+                // landscape row, which is wider than it is tall; otherwise it
+                // fills the slot.
                 val artMod = (if (lyricsSlotWide) {
-                    Modifier.fillMaxWidth().aspectRatio(1f)
+                    if (maxWidth <= maxHeight) {
+                        Modifier.fillMaxWidth().aspectRatio(1f)
+                    } else {
+                        Modifier.fillMaxHeight().aspectRatio(1f)
+                    }
                 } else {
                     Modifier.fillMaxSize()
                 }).let { base ->
@@ -627,6 +662,47 @@ fun MainPlayerRoute(
                 )
             }
         }
+    }
+
+    // The two floating panels, hoisted.
+    //
+    // Both layouts show the same two, and the glass layout takes them through
+    // MainPlayerScreen's `overlay` slot while the legacy one hangs them itself
+    // — so the wiring existed twice, fourteen identical arguments each, in two
+    // mutually exclusive branches. Adding a parameter to one and not the other
+    // compiles perfectly and silently leaves the legacy player without the
+    // control; this branch added four of them for the pitch engine, twice.
+    // `overlay` is `BoxScope.() -> Unit` and the legacy branch sits in a Box,
+    // so one lambda serves both.
+    val playerPanels: @Composable BoxScope.() -> Unit = {
+        VisualizerPresetPanel(
+            visible = showPresetSheet,
+            presets = visualizerPresets,
+            selectedPresetId = currentVisualizerPreset?.id,
+            favoritePresetIds = visualizerFavoritePresetIds,
+            onPresetSelected = playerViewModel::selectVisualizerPreset,
+            onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
+            onSettingsClick = {
+                navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
+            },
+            onDismiss = { showPresetSheet = false },
+        )
+        SpeedPanel(
+            visible = showSpeedSheet,
+            speed = playbackSpeed,
+            preservePitch = preservePitch,
+            pitchSemitones = pitchSemitones,
+            onPitchSemitonesChange = playerViewModel::setPitchSemitones,
+            pitchEngine = pitchEngine,
+            onPitchEngineChange = playerViewModel::setPitchEngine,
+            pitchQuality = pitchQuality,
+            onPitchQualityChange = playerViewModel::setPitchQuality,
+            speedUnitSemitones = speedUnitSemitones,
+            onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
+            onSpeedChange = playerViewModel::setPlaybackSpeed,
+            onPreservePitchChange = playerViewModel::setPreservePitch,
+            onDismiss = { showSpeedSheet = false },
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -747,39 +823,15 @@ fun MainPlayerRoute(
                 // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
                 lyricsMode = lyricsSlotWide,
                 blurredBackground = blurredBackground,
-                overlay = {
-                    SpeedPanel(
-                        visible = showSpeedSheet,
-                        speed = playbackSpeed,
-                        preservePitch = preservePitch,
-                        pitchSemitones = pitchSemitones,
-                        onPitchSemitonesChange = playerViewModel::setPitchSemitones,
-                        speedUnitSemitones = speedUnitSemitones,
-                        onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
-                        onSpeedChange = playerViewModel::setPlaybackSpeed,
-                        onPreservePitchChange = playerViewModel::setPreservePitch,
-                        onDismiss = { showSpeedSheet = false },
-                    )
-                },
+                overlay = playerPanels,
             )
         }
         // The legacy layout has no `overlay` slot and no haze source of its own,
-        // so the panel hangs here instead. LocalPlayerHaze is null on that path
-        // and GlassPanel falls back to plain translucent glass — the same pane
-        // the modal sheet used to give everyone.
+        // so the same panels hang here instead. LocalPlayerHaze is null on that
+        // path and GlassPanel falls back to plain translucent glass — the same
+        // pane the modal sheet used to give everyone.
         if (legacyPlayer) {
-            SpeedPanel(
-                visible = showSpeedSheet,
-                speed = playbackSpeed,
-                preservePitch = preservePitch,
-                pitchSemitones = pitchSemitones,
-                onPitchSemitonesChange = playerViewModel::setPitchSemitones,
-                speedUnitSemitones = speedUnitSemitones,
-                onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
-                onSpeedChange = playerViewModel::setPlaybackSpeed,
-                onPreservePitchChange = playerViewModel::setPreservePitch,
-                onDismiss = { showSpeedSheet = false },
-            )
+            playerPanels()
         }
     }
     }
@@ -869,6 +921,10 @@ private fun BoxScope.SpeedPanel(
     preservePitch: Boolean,
     pitchSemitones: Float,
     onPitchSemitonesChange: (Float) -> Unit,
+    pitchEngine: PitchEngine,
+    onPitchEngineChange: (PitchEngine) -> Unit,
+    pitchQuality: PitchQuality,
+    onPitchQualityChange: (PitchQuality) -> Unit,
     speedUnitSemitones: Boolean,
     onSpeedUnitChange: (Boolean) -> Unit,
     onSpeedChange: (Float) -> Unit,
@@ -1013,11 +1069,7 @@ private fun BoxScope.SpeedPanel(
                 // type, because the two answer different questions — "how much
                 // faster" and "how much higher" — and one control drives both.
                 Text(
-                    text = if (speedUnitSemitones) {
-                        "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
-                    } else {
-                        String.format(Locale.US, "%.2fx", speed)
-                    },
+                    text = PitchRatio.formatSpeed(speed, speedUnitSemitones),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = speedAccent,
@@ -1225,6 +1277,75 @@ private fun BoxScope.SpeedPanel(
                         contentDescription = "Reset pitch",
                         tint = speedAccent,
                         modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+
+            // Which engine, and only once there is something to transpose.
+            //
+            // Not in the row above, which the comment there explains is already
+            // sharing 320dp between a label, a readout, two steppers and the
+            // reset; a fifth control in it would ellipsize the readout on a
+            // small phone. Not always visible either -- at zero pitch nothing
+            // here does anything, and a panel that shows three dead rows to
+            // everyone who never transposes is how a control surface turns into
+            // a wall.
+            AnimatedVisibility(
+                visible = pitchSemitones != 0f,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        PitchEngine.entries.forEachIndexed { index, engine ->
+                            SegmentedButton(
+                                selected = pitchEngine == engine,
+                                onClick = { onPitchEngineChange(engine) },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = PitchEngine.entries.size,
+                                ),
+                                label = { Text(engine.label, maxLines = 1) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = pitchEngine.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted,
+                    )
+
+                    // Applies to both engines, meaning something different to
+                    // each: WSOLA's grain and search radius, the vocoder's
+                    // analysis block. Lower is lighter on both, which is the
+                    // reason it is reachable rather than a constant -- the
+                    // vocoder's block was chosen for accuracy alone and drops
+                    // out on real hardware at the top setting.
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        PitchQuality.entries.forEachIndexed { index, quality ->
+                            SegmentedButton(
+                                selected = pitchQuality == quality,
+                                onClick = { onPitchQualityChange(quality) },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = PitchQuality.entries.size,
+                                ),
+                                label = { Text(quality.label, maxLines = 1) },
+                            )
+                        }
+                    }
+                    // The number that actually decides it, which is not the
+                    // same number for the two engines.
+                    Text(
+                        text = when (pitchEngine) {
+                            PitchEngine.WSOLA ->
+                                "Holds bass down to ${pitchQuality.bassFloorHz} Hz"
+                            PitchEngine.VOCODER ->
+                                "Within ${pitchQuality.vocoderErrorHz}. Lower settings " +
+                                    "are lighter work and less likely to stutter."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted,
                     )
                 }
             }

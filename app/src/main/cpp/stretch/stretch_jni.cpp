@@ -6,14 +6,21 @@
 // arithmetic. Measured on a 48 kHz stream, worst case over semitones -12..+12
 // and fundamentals 82 Hz..3.5 kHz:
 //
-//     block    bins      latency   worst error
-//     0.12 s   8.33 Hz   120 ms    1.348 Hz
-//     0.25 s   4.00 Hz   250 ms    0.419 Hz
-//     0.35 s   2.86 Hz   350 ms    0.179 Hz     <- what kBlockSeconds picks
-//     0.50 s   2.00 Hz   500 ms    0.105 Hz
+//     block    bins      latency   worst error   quality
+//     0.12 s   8.33 Hz   120 ms    1.384 Hz      Fast
+//     0.25 s   4.00 Hz   250 ms    0.419 Hz      Balanced (default)
+//     0.35 s   2.86 Hz   350 ms    0.179 Hz      High
 //
-// 0.35 s is the smallest block that holds the error inside half a hertz with
-// real margin. Going further buys little and costs latency linearly.
+// tests/stretch_precision_test.cpp measures that column and fails if a block
+// misses what its quality claims, because those figures are printed under the
+// quality buttons -- see PitchQuality.vocoderErrorHz.
+//
+// Accuracy was for a long time the only axis this file considered, which is how
+// 0.35 s came to be hard-coded for everyone: it is the smallest block holding
+// the error inside half a hertz with real margin, and on that question alone it
+// is the right answer. tests/stretch_cost_test.cpp asks the other question, and
+// there 0.35 s is a quarter of the realtime budget on a desktop core -- which
+// on a phone is all of it. Hence a control rather than a constant.
 //
 // Note the distinction: half-hertz *bin spacing* would need a two-second
 // block. Half-hertz *accuracy* needs far less, because the vocoder interpolates
@@ -22,33 +29,90 @@
 
 #include <jni.h>
 #include <cstring>
+#include <atomic>
 #include <vector>
 #include <new>
 
 #include "signalsmith-stretch.h"
+#include "../dsp/wsola_pitch.h"
 
 namespace {
 
-// Analysis block, as a fraction of the sample rate. See the table above.
-constexpr double kBlockSeconds = 0.35;
+/**
+ * Analysis block per quality, as a fraction of the sample rate. See the table
+ * above for what each buys.
+ *
+ * The table measured accuracy and said nothing about cost, and 0.35 s is
+ * nearly three times upstream's own default. A block that size is an FFT of
+ * some sixteen thousand samples every thirty-millisecond hop, and on a phone
+ * that is what a dropout sounds like. So it is the quality control's business
+ * now, for both engines rather than only for WSOLA's grain, and the middle
+ * setting is the default: 0.419 Hz worst case is under nine cents at the very
+ * bottom of the range these were measured over, which is not a thing anyone
+ * will hear, and it is a third less work per hop.
+ */
+constexpr double kVocoderBlockSeconds[3] = {0.12, 0.25, 0.35};
 // Hop between analysis frames. Upstream's own presets use 0.03 s.
 constexpr double kIntervalSeconds = 0.03;
 // Frames accepted in one process() call. The Kotlin side chunks to this.
 constexpr int kMaxBlockFrames = 8192;
 
+/**
+ * Which algorithm transposes.
+ *
+ * Two engines with opposite failure modes rather than one compromise. The
+ * vocoder is accurate on sustained tones and smears attacks; WSOLA keeps
+ * attacks and goes phasey on sustained polyphony. Kept in one Engine so
+ * switching costs no allocation and no reconfigure of the audio path.
+ */
+enum : int32_t { kEngineVocoder = 0, kEngineWsola = 1 };
+
+inline int clampQuality(int q) { return q < 0 ? 0 : (q > 2 ? 2 : q); }
+
 struct Engine {
     signalsmith::stretch::SignalsmithStretch<float> stretch;
+    tryptify::WsolaPitchShifter wsola;
+    int engine = kEngineVocoder;
+    float semitones = 0.0f;
+    int quality = 1;
     int channels = 2;
+    int sampleRate = 48000;
+    /**
+     * Held across a vocoder reconfigure, which tears down and rebuilds the
+     * FFT and so cannot run while the audio thread is inside process().
+     *
+     * The audio thread *tries* and never waits: finding it held, it passes the
+     * block through unpitched rather than blocking, which is a few
+     * milliseconds of unshifted audio during an explicit settings change and
+     * the one behaviour a realtime callback is allowed to have here. The
+     * writer is a coroutine and may spin.
+     */
+    std::atomic_flag busy = ATOMIC_FLAG_INIT;
     // Planar scratch. Allocated once, at construction, so process() never does.
     std::vector<float> planarIn;
     std::vector<float> planarOut;
     std::vector<float *> inPtrs;
     std::vector<float *> outPtrs;
 
-    Engine(int ch, int sampleRate) : channels(ch) {
-        const int block = static_cast<int>(sampleRate * kBlockSeconds);
+    /**
+     * Splits the block's work across calls instead of doing it in one burst.
+     *
+     * Without this the whole of a hop's analysis and synthesis lands in a
+     * single process() call and the rest do almost nothing, so the cost per
+     * callback is spiky in exactly the way an audio deadline cannot absorb.
+     * It costs one interval -- thirty milliseconds -- of extra output latency,
+     * which is a good trade against dropping out.
+     */
+    void configureVocoder() {
+        const int block = static_cast<int>(sampleRate * kVocoderBlockSeconds[quality]);
         const int interval = static_cast<int>(sampleRate * kIntervalSeconds);
-        stretch.configure(ch, block, interval);
+        stretch.configure(channels, block, interval, /*splitComputation=*/true);
+        stretch.setTransposeSemitones(semitones);
+    }
+
+    Engine(int ch, int rate) : channels(ch), sampleRate(rate) {
+        configureVocoder();
+        wsola.configure(ch, sampleRate, tryptify::WsolaQuality::kBalanced);
         planarIn.assign(static_cast<size_t>(ch) * kMaxBlockFrames, 0.0f);
         planarOut.assign(static_cast<size_t>(ch) * kMaxBlockFrames, 0.0f);
         inPtrs.resize(ch);
@@ -85,13 +149,82 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeDestroy(
 JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_stretch_StretchNative_nativeSetSemitones(
         JNIEnv *, jclass, jlong handle, jfloat semitones) {
-    if (auto *e = asEngine(handle)) e->stretch.setTransposeSemitones(semitones);
+    if (auto *e = asEngine(handle)) {
+        e->semitones = semitones;
+        e->stretch.setTransposeSemitones(semitones);
+        e->wsola.setSemitones(semitones);
+    }
 }
 
+/**
+ * Chooses the algorithm, and for WSOLA its grain size.
+ *
+ * Both engines are kept configured, so this is two stores rather than a
+ * rebuild -- but the one being switched *to* is holding stale history, so it
+ * is reset here. Quality changes reconfigure the stretcher, which resets it
+ * anyway; that is audible, and the caller is expected not to do it mid-phrase.
+ */
 JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_stretch_StretchNative_nativeSetEngine(
+        JNIEnv *, jclass, jlong handle, jint engine, jint quality) {
+    auto *e = asEngine(handle);
+    if (!e) return;
+    const int wanted = (engine == kEngineWsola) ? kEngineWsola : kEngineVocoder;
+    const int q = clampQuality(quality);
+
+    // Held across the whole function, not just the FFT rebuild.
+    //
+    // WSOLA's reconfigure is every bit as unsafe to run under the audio thread:
+    // Wsola::configure writes window_, hop_ and windowStride_ as three separate
+    // non-atomic stores, and generate() reads them together as
+    // `table[(hop_ + i) * stride]` against a fixed kWsolaMaxWindow Hann table.
+    // A Fast-to-High switch landing mid-grain can pair a new hop_ of 1024 with
+    // a stale stride of 4 and index 8188 of 2048 -- an out-of-bounds read, in
+    // the one place a comment said the flag had already made safe. The resets
+    // below are the same kind of tear.
+    //
+    // This is a coroutine, so spinning is allowed; process() only ever tries,
+    // and passes its block through unpitched if it finds the flag held.
+    while (e->busy.test_and_set(std::memory_order_acquire)) {}
+    struct Release {
+        Engine *e;
+        ~Release() { e->busy.clear(std::memory_order_release); }
+    } release{e};
+
+    if (q != e->quality) {
+        e->quality = q;
+        e->configureVocoder();
+        e->wsola.setQuality(static_cast<tryptify::WsolaQuality>(q));
+        e->wsola.setSemitones(e->semitones);
+    }
+    if (wanted != e->engine) {
+        e->engine = wanted;
+        if (wanted == kEngineWsola) {
+            e->wsola.reset();
+            e->wsola.setSemitones(e->semitones);
+        } else {
+            e->stretch.reset();
+            e->stretch.setTransposeSemitones(e->semitones);
+        }
+    }
+}
+
+JNIEXPORT jboolean JNICALL
 Java_tf_monochrome_android_audio_stretch_StretchNative_nativeReset(
         JNIEnv *, jclass, jlong handle) {
-    if (auto *e = asEngine(handle)) e->stretch.reset();
+    auto *e = asEngine(handle);
+    if (!e) return JNI_FALSE;
+    // Tried, never waited on -- unlike nativeSetEngine, which is a coroutine.
+    // This one is called from queueInput, on the playback thread, so spinning
+    // here would block the very thread the flag exists to keep unblocked.
+    // Returning false instead lets the caller come back on the next block; a
+    // reconfigure resets both engines on its way through anyway, so the state
+    // this wanted to clear is being cleared regardless.
+    if (e->busy.test_and_set(std::memory_order_acquire)) return JNI_FALSE;
+    e->stretch.reset();
+    e->wsola.reset();
+    e->busy.clear(std::memory_order_release);
+    return JNI_TRUE;
 }
 
 /** Total round-trip latency in frames: what the transposition change lags by. */
@@ -100,6 +233,7 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeLatencyFrames(
         JNIEnv *, jclass, jlong handle) {
     auto *e = asEngine(handle);
     if (!e) return 0;
+    if (e->engine == kEngineWsola) return e->wsola.latencyFrames();
     return e->stretch.inputLatency() + e->stretch.outputLatency();
 }
 
@@ -125,6 +259,24 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeProcess(
     auto *in = static_cast<const float *>(env->GetDirectBufferAddress(inBuf));
     auto *out = static_cast<float *>(env->GetDirectBufferAddress(outBuf));
     if (in == nullptr || out == nullptr) return 0;
+
+    // Tried, never waited on. A reconfigure is in flight, so this block goes
+    // through unpitched rather than the audio thread blocking on it.
+    if (e->busy.test_and_set(std::memory_order_acquire)) {
+        std::memcpy(out, in, sizeof(float) * static_cast<size_t>(frames) * e->channels);
+        return frames;
+    }
+    struct Release {
+        Engine *e;
+        ~Release() { e->busy.clear(std::memory_order_release); }
+    } release{e};
+
+    if (e->engine == kEngineWsola) {
+        // Already interleaved, and it works in place, so it skips the planar
+        // round trip the vocoder needs.
+        e->wsola.process(in, out, frames);
+        return frames;
+    }
 
     const int ch = e->channels;
     for (int c = 0; c < ch; ++c) {

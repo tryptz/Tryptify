@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "audio_ring_buffer.h"
@@ -34,6 +35,7 @@ public:
     void SetQuality(int mesh_width, int mesh_height);
     void SetFps(int fps);
     void SetPresetDuration(int seconds);
+    void SetPresetRotationEnabled(bool enabled);
     std::string CurrentPreset() const;
 
     void Touch(float x, float y, int pressure, int touch_type);
@@ -42,7 +44,7 @@ public:
     void TouchDestroyAll();
 
 private:
-    std::string FindPresetPath(const std::string& preset_path) const;
+    void BuildPresetIndex();
     std::string ReadCurrentPreset() const;
     void PushBufferedAudioToProjectM();
 
@@ -50,10 +52,26 @@ private:
     std::string preset_root_;
     std::string texture_root_;
     std::string current_preset_;
+    /**
+     * Playlist path -> playlist index, built once when the playlist is loaded.
+     *
+     * Selecting a preset used to walk the playlist twice, once to confirm the
+     * path existed and once to find its index, allocating and freeing a string
+     * for every entry both times. The bundled set is nearly ten thousand
+     * presets, so that is around twenty thousand allocations per switch --
+     * survivable when it ran on the main thread and simply wrong now that the
+     * switch happens on the render thread, where it would cost frames.
+     *
+     * The playlist is only ever populated once, in the constructor, so the
+     * indices cannot go stale. The cost is the paths held in memory for as
+     * long as the visualizer is open.
+     */
+    std::unordered_map<std::string, uint32_t> preset_index_;
     projectm_handle projectm_ = nullptr;
     projectm_playlist_handle playlist_ = nullptr;
     AudioRingBuffer audio_buffer_;
     bool paused_ = false;
+    bool preset_rotation_enabled_ = true;
     int brightness_ = 80;
     float smoothed_rms_ = 0.0f;
 };

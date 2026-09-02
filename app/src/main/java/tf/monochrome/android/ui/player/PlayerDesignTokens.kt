@@ -25,6 +25,24 @@ import tf.monochrome.android.ui.theme.DynamicColorExtractor
 object PlayerDesignTokens {
     val ScreenPadding = 24.dp
     val TopBarHeight = 56.dp
+    /**
+     * Below this window height (dp) the player is too short to stack a square
+     * hero over the controls, and switches to the landscape row layout — album
+     * art on the left, chrome beside it. A phone on its side is ~360-430dp
+     * tall; a tablet or unfolded foldable in landscape clears this and keeps
+     * the portrait stack, which has the height for it.
+     */
+    const val ShortWindowHeightDp = 500
+
+    /**
+     * Widest the chrome column (track info, scrubber, transport, dock) is
+     * allowed to get in the landscape row. Left to fill, it inherits whatever
+     * the height-bound artwork does not use — some six hundred dp on a phone on
+     * its side — and stretches the scrubber into a hairline the width of the
+     * screen with previous and next pushed to opposite ends. Bounded, it keeps
+     * roughly a portrait phone's measure and centres in the space instead.
+     */
+    val ChromeMaxWidth = 460.dp
 
     val HeroCorner = 28.dp
     // Aspect ratio shared by the album-art hero and the projectM visualizer so

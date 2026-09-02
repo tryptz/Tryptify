@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.theme
 
+import android.content.Context
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.material3.ColorScheme
@@ -10,6 +12,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -444,9 +447,21 @@ val ClearDarkScheme = darkColorScheme(
     error = ErrorRed,
     onError = MonoBlack
 )
+/**
+ * The OS's own palette — what the system settings call "System colors".
+ *
+ * Not a palette this app owns: it is read back from the platform, which derives
+ * it from the wallpaper (or from a featured colour the listener picked) and
+ * adjusts it for the Contrast accessibility setting. Kept as a named constant
+ * because three places need to agree on the spelling and a typo in any of them
+ * fails silently as "theme not found" rather than as a build error.
+ */
+const val MATERIAL_YOU_KEY = "material_you"
+
 /** Display names for theme selection UI */
 val themeDisplayNames = mapOf(
     "system" to "System",
+    MATERIAL_YOU_KEY to "System colors",
     "monochrome_dark" to "Monochrome",
     "ocean" to "Ocean",
     "midnight" to "Midnight",
@@ -471,6 +486,29 @@ val themeDisplayNames = mapOf(
     // somebody notices six months later.
     lightVariantOf(base) to "${baseDisplayName(base)} Light"
 }
+
+/**
+ * The themes this device can actually honour, for the picker to list.
+ *
+ * [themeDisplayNames] is the full catalogue and stays that way — the Settings
+ * subtitle looks a stored key up in it, and a device that cannot *offer* the
+ * system palette must still be able to *name* it if the preference arrived from
+ * a backup or from a newer Android on the same account.
+ *
+ * What is filtered here is only what may be chosen. Below Android 12 there is no
+ * system palette to read, and [rememberMaterialYouScheme] returns null so
+ * [MonochromeTheme] falls through to Monochrome. Offering a name that silently
+ * resolves to a different theme is worse than not offering it: the listener
+ * picks "System colors", gets Monochrome, and has no way to tell whether the
+ * setting failed or their wallpaper is simply grey.
+ *
+ * [sdkInt] is a parameter rather than a direct read so this stays a pure
+ * function the JVM unit tests can drive at both sides of the boundary; the app
+ * always calls it with the default.
+ */
+fun selectableThemes(sdkInt: Int = Build.VERSION.SDK_INT): Map<String, String> =
+    if (sdkInt >= Build.VERSION_CODES.S) themeDisplayNames
+    else themeDisplayNames - MATERIAL_YOU_KEY
 
 private fun baseDisplayName(base: String): String = when (base) {
     "monochrome" -> "Monochrome"
@@ -512,15 +550,66 @@ private fun darkSchemeFor(themeName: String) = when (themeName) {
 }
 
 /**
- * Material You wallpaper-derived scheme. Only available on Android 12 (S) and
- * above — returns null on older OS versions so callers can fall back to a
- * built-in theme.
+ * One colour from the palette the scheme is about to be built from, used only as
+ * a cache key.
+ *
+ * Which resource is the right one to watch depends on which builder will run.
+ * From API 34 the scheme comes from the Material 3 *role* resources, and those
+ * are the only ones the Contrast accessibility setting moves — the older
+ * `system_accent1_*` ramp is left untouched by a contrast change, so seeding
+ * from the ramp there would read a palette that never appears to change while
+ * the whole system repaints around it. Below 34 the ramp is all there is.
+ *
+ * Annotated rather than guarded again internally: the ramp does not exist below
+ * Android 12 and reading it there would throw, so the caller's early return is
+ * the real precondition and this states it where the compiler can check it.
+ */
+@RequiresApi(Build.VERSION_CODES.S)
+private fun systemPaletteSeed(context: Context, dark: Boolean): Int {
+    val id = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (dark) android.R.color.system_primary_dark else android.R.color.system_primary_light
+    } else {
+        android.R.color.system_accent1_500
+    }
+    return context.resources.getColor(id, context.theme)
+}
+
+/**
+ * The OS's own palette, as a scheme. Null below Android 12, where no such
+ * palette exists, so callers can fall back to a built-in theme.
+ *
+ * Deliberately a thin call into Material 3 rather than a hand-rolled read of
+ * `android.R.color.system_*`. From API 34 `dynamicDarkColorScheme` already
+ * dispatches to a builder that reads those role resources directly, which is
+ * what makes this match the rest of the system exactly — featured colours and
+ * the Contrast setting included — instead of re-deriving a palette from the
+ * older accent ramps. Reimplementing that mapping here would duplicate thirty-odd
+ * slots the library already gets right and would go stale the next time the
+ * platform adds a role.
+ *
+ * The [remember] is not an optimisation to taste. This sits at the theme root,
+ * which recomposes continuously for the whole colour cross-fade window every
+ * time the track changes (see `ColorBlend.millisFor` in MainActivity), and
+ * building a scheme allocates every slot; without it this churned one full
+ * ColorScheme per frame of every transition.
+ *
+ * Keyed on a colour read out of the palette rather than on the context, because
+ * the context is not reliably a new one when the palette moves. Changing System
+ * colors swaps a resource overlay, which normally recreates the activity — but
+ * this activity declares `uiMode` in its own `configChanges` and so survives a
+ * light/dark switch, and nothing obliges an OEM skin to deliver a contrast or
+ * palette change any differently. Re-reading one colour per recomposition costs
+ * a cached resource lookup and makes the cache self-invalidating whichever way
+ * the change arrives.
  */
 @Composable
 fun rememberMaterialYouScheme(dark: Boolean): ColorScheme? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
     val context = LocalContext.current
-    return if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val seed = systemPaletteSeed(context, dark)
+    return remember(context, dark, seed) {
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    }
 }
 
 /**
@@ -535,7 +624,20 @@ fun MonochromeTheme(
     themeName: String = "monochrome_dark",
     fontScale: Float = 1.0f,
     customFontFamily: FontFamily? = null,
-    dynamicPalette: DynamicPalette? = null,
+    /**
+     * The album palette as its *state*, not its value.
+     *
+     * Deliberately unread here. The palette takes a new value as the cross-fade
+     * runs, and a value read in this function subscribes the whole composition
+     * root to it — every provider below, on every frame of the fade, before
+     * anything has decided the colour is even wanted. Passing the state down
+     * lets [DynamicColorScope] read it in its own scope, so with the tint off
+     * the fade touches the player and nothing else.
+     *
+     * [dynamicMenus] is the one case that must read it, and does so behind that
+     * check so the subscription only exists when the menus really do repaint.
+     */
+    dynamicPalette: State<DynamicPalette?>? = null,
     paper: Paper = Paper.Crisp,
     /**
      * The listener's own two colours. When [customColors] is set it wins over
@@ -565,7 +667,7 @@ fun MonochromeTheme(
     val resolvedTheme = if (themeName == "system") {
         if (systemDark) "monochrome_dark" else lightVariantOf("monochrome")
     } else themeName
-    val materialYou = if (resolvedTheme == "material_you" && customColors == null) {
+    val materialYou = if (resolvedTheme == MATERIAL_YOU_KEY && customColors == null) {
         rememberMaterialYouScheme(dark = systemDark)
     } else null
     val chosen = when {
@@ -576,7 +678,9 @@ fun MonochromeTheme(
     }
     val colorScheme = tintedByAlbum(
         base = chosen,
-        palette = dynamicPalette.takeIf { dynamicMenus },
+        // Short-circuits: with the tint off this never reads the state, so the
+        // fade does not invalidate this function at all.
+        palette = if (dynamicMenus) dynamicPalette?.value else null,
         keepBackground = dynamicMenusKeepBackground,
     )
     val family = customFontFamily ?: InterFontFamily
@@ -656,12 +760,19 @@ private fun tintedByAlbum(
 }
 
 /**
- * The album-art-derived palette for the currently playing track, or null when
- * Dynamic Colours is off / nothing is playing / extraction failed. Published by
- * [MonochromeTheme] and consumed by [DynamicColorScope]. Kept out of the global
- * MaterialTheme on purpose so the menus never pick up the album accent.
+ * The album-art-derived palette for the currently playing track, as state:
+ * whose value is null when Dynamic Colours is off, nothing is playing, or
+ * extraction failed, and the outer state is null when no source is providing
+ * one at all. Published by [MonochromeTheme] and consumed by
+ * [DynamicColorScope]. Kept out of the global MaterialTheme on purpose so the
+ * menus never pick up the album accent.
+ *
+ * The state rather than the value, so that reading it is a choice each consumer
+ * makes in its own recompose scope. It changes as the cross-fade runs, and
+ * publishing the value would have every provider between here and the player
+ * recompose on every frame of it whether or not they paint with the colour.
  */
-val LocalDynamicColorPalette = compositionLocalOf<DynamicPalette?> { null }
+val LocalDynamicColorPalette = compositionLocalOf<State<DynamicPalette?>?> { null }
 
 /**
  * What colour a sheet of glass should be tinted.
@@ -692,7 +803,10 @@ fun glassTint(explicitArgb: Int): Color {
  */
 @Composable
 fun DynamicColorScope(content: @Composable () -> Unit) {
-    val palette = LocalDynamicColorPalette.current
+    // The read that the theme root deliberately does not do. It happens here,
+    // inside a restartable scope, so a moving palette recomposes this and its
+    // content rather than the whole app.
+    val palette = LocalDynamicColorPalette.current?.value
     if (palette == null) {
         content()
         return

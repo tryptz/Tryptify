@@ -115,9 +115,44 @@ class ProjectMNativeBridge {
         }
     }
 
+    /**
+     * The rate the output is actually rendering at.
+     *
+     * projectM does not time itself from this -- its own clock is the wall
+     * clock -- but it hands the number to presets, and Milkdrop presets are
+     * written per frame: the ones that mean to move at a fixed speed divide
+     * their step by `fps`. Told a number the renderer is not running at, those
+     * presets move at the ratio between the two, which is why the visualizer
+     * appeared to slow down when the panel dropped its refresh rate.
+     *
+     * Upstream asks applications to update this regularly with the measured,
+     * averaged rate. That is what this is for; [configureTargetFps] writes the
+     * same field from the settings slider and is corrected by this within a
+     * second.
+     */
+    internal fun reportMeasuredFps(fps: Int) {
+        if (nativeHandle != 0L) {
+            nativeSetFps(nativeHandle, fps.coerceIn(1, 1000))
+        }
+    }
+
     internal fun configureTargetFps(fps: Int) {
         if (nativeHandle != 0L) {
             nativeSetFps(nativeHandle, fps)
+        }
+    }
+
+    /**
+     * Whether presets change on their own.
+     *
+     * Off uses projectM's preset lock rather than a duration long enough to
+     * feel like off: the lock stops the timed transitions outright, while a
+     * very long timer is still a timer and would move the preset eventually on
+     * a long listen. Choosing one by hand, and Next, work either way.
+     */
+    internal fun setPresetRotationEnabled(enabled: Boolean) {
+        if (nativeHandle != 0L) {
+            nativeSetPresetRotationEnabled(nativeHandle, enabled)
         }
     }
 
@@ -169,6 +204,7 @@ class ProjectMNativeBridge {
     private external fun nativeSetQuality(handle: Long, meshWidth: Int, meshHeight: Int)
     private external fun nativeSetFps(handle: Long, fps: Int)
     private external fun nativeSetPresetDuration(handle: Long, seconds: Int)
+    private external fun nativeSetPresetRotationEnabled(handle: Long, enabled: Boolean)
     private external fun nativeTouch(handle: Long, x: Float, y: Float, pressure: Int, touchType: Int)
     private external fun nativeTouchDrag(handle: Long, x: Float, y: Float, pressure: Int)
     private external fun nativeTouchDestroy(handle: Long, x: Float, y: Float)

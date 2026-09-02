@@ -116,6 +116,14 @@ fun PlayerTransportControls(
                 softness = glass.shadowSoftness,
                 depth = glass.shadowDepth,
             )
+            // What the disc is a lens over. Same frost as the dock, clipped to
+            // the disc instead: the punched play/pause glyph then reads as a
+            // hole into blurred light rather than onto the raw background, and
+            // the (ghost-thin) body shows the blur through it.
+            PlayerGlassHaze(
+                modifier = Modifier.matchParentSize(),
+                shape = CircleShape,
+            )
             Box(
                 modifier = Modifier
                     .fillMaxSize()

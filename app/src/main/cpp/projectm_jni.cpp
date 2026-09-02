@@ -228,6 +228,19 @@ Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeSetPresetDurati
 
 extern "C"
 JNIEXPORT void JNICALL
+Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeSetPresetRotationEnabled(
+        JNIEnv* /*env*/,
+        jobject /*thiz*/,
+        jlong handle,
+        jboolean enabled) {
+    auto* bridge = FromHandle(handle);
+    if (bridge != nullptr) {
+        bridge->SetPresetRotationEnabled(enabled == JNI_TRUE);
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
 Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeTouch(
         JNIEnv* /*env*/,
         jobject /*thiz*/,

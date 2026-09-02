@@ -22,11 +22,15 @@
 namespace {
 
 constexpr double kSampleRate = 48000.0;
-// Must track kBlockSeconds / kIntervalSeconds in ../stretch_jni.cpp.
-constexpr double kBlockSeconds = 0.35;
+// Must track kVocoderBlockSeconds / kIntervalSeconds in ../stretch_jni.cpp.
+constexpr double kBlockSeconds[3] = {0.12, 0.25, 0.35};
 constexpr double kIntervalSeconds = 0.03;
-// What the block above is chosen to guarantee.
-constexpr double kToleranceHz = 0.5;
+/**
+ * What each block is claimed to guarantee -- and these are not private
+ * numbers. `PitchQuality.vocoderErrorHz` puts them under the quality buttons,
+ * so a user reads them before choosing. This is what makes them falsifiable.
+ */
+constexpr double kToleranceHz[3] = {1.40, 0.42, 0.18};
 
 int failures = 0;
 
@@ -62,9 +66,9 @@ double measureHz(const std::vector<float> &x, int start, int end) {
     return kSampleRate * cycles / (last - first);
 }
 
-double shiftedToneHz(double fundamental, double semitones) {
+double shiftedToneHz(double fundamental, double semitones, double blockSeconds) {
     signalsmith::stretch::SignalsmithStretch<float> stretch;
-    stretch.configure(1, int(kSampleRate * kBlockSeconds), int(kSampleRate * kIntervalSeconds));
+    stretch.configure(1, int(kSampleRate * blockSeconds), int(kSampleRate * kIntervalSeconds));
     stretch.setTransposeSemitones(float(semitones));
 
     const int n = int(kSampleRate * 8);
@@ -83,33 +87,38 @@ double shiftedToneHz(double fundamental, double semitones) {
 }  // namespace
 
 int main() {
-    std::printf("pitch accuracy at a %.2f s block (%.2f Hz bins)\n",
-                kBlockSeconds, kSampleRate / (kSampleRate * kBlockSeconds));
-
     const double semitones[] = {-12.0, -7.0, -5.0, 3.0, 7.0, 12.0};
     const double fundamentals[] = {82.4, 110.0, 220.0, 440.0, 880.0, 1760.0};
+    const char *names[3] = {"Fast", "Balanced", "High"};
 
-    double worstHz = 0.0;
-    for (double st : semitones) {
-        for (double f0 : fundamentals) {
-            const double expected = f0 * std::pow(2.0, st / 12.0);
-            const double got = shiftedToneHz(f0, st);
-            check(got > 0.0, "tone was not measurable");
-            const double errHz = std::fabs(got - expected);
-            if (errHz > worstHz) worstHz = errHz;
-            if (errHz > kToleranceHz) {
-                std::printf("  FAIL: %+.0f st from %.1f Hz -> expected %.4f, got %.4f (%.4f Hz off)\n",
-                            st, f0, expected, got, errHz);
-                ++failures;
+    for (int q = 0; q < 3; ++q) {
+        const double block = kBlockSeconds[q];
+        const double tolerance = kToleranceHz[q];
+        std::printf("%-8s  %.2f s block (%.2f Hz bins), claims %.2f Hz\n",
+                    names[q], block, 1.0 / block, tolerance);
+
+        double worstHz = 0.0;
+        for (double st : semitones) {
+            for (double f0 : fundamentals) {
+                const double expected = f0 * std::pow(2.0, st / 12.0);
+                const double got = shiftedToneHz(f0, st, block);
+                check(got > 0.0, "tone was not measurable");
+                const double errHz = std::fabs(got - expected);
+                if (errHz > worstHz) worstHz = errHz;
+                if (errHz > tolerance) {
+                    std::printf("  FAIL: %+.0f st from %.1f Hz -> expected %.4f, got %.4f "
+                                "(%.4f Hz off)\n", st, f0, expected, got, errHz);
+                    ++failures;
+                }
             }
         }
-    }
-    std::printf("  worst error %.4f Hz (tolerance %.2f Hz)\n", worstHz, kToleranceHz);
+        std::printf("          worst error %.4f Hz\n", worstHz);
 
-    // A transposition of zero must be a genuine no-op, not a round trip through
-    // the vocoder that happens to come back close.
-    const double unity = shiftedToneHz(440.0, 0.0);
-    check(std::fabs(unity - 440.0) < 0.01, "zero semitones did not leave the tone alone");
+        // A transposition of zero must be a genuine no-op at every quality, not
+        // a round trip through the vocoder that happens to come back close.
+        const double unity = shiftedToneHz(440.0, 0.0, block);
+        check(std::fabs(unity - 440.0) < 0.01, "zero semitones did not leave the tone alone");
+    }
 
     if (failures == 0) {
         std::printf("stretch_precision_test: OK\n");

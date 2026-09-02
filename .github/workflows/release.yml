@@ -1,25 +1,88 @@
-name: Signed Release APK
+name: Release
+
+# Cuts an actual GitHub Release: a signed, minified release APK built from the
+# tagged commit, checked for the things that make a release a release, then
+# published with notes lifted out of CHANGELOG.md.
+#
+# Nothing here touches a debug variant. The APK is signed with the release
+# keystore from secrets, and the verify step fails the run if it comes out
+# unsigned, debuggable, or carrying the committed debug key.
+#
+# Unit tests and lint are not repeated here — build.yml and gradlew.yml run
+# them on every push and pull request. Tag a commit those have already passed.
 
 on:
+  push:
+    tags:
+      # The project tags bare versions (1.8.6); `v` prefixes are accepted too.
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
     inputs:
-      version_name:
-        description: 'Optional version name suffix for the artifact (e.g. 1.0.1)'
+      tag:
+        description: 'Existing tag to release (e.g. 1.8.8). Leave empty for a dry run that builds, signs and verifies but publishes nothing.'
         required: false
         default: ''
+      prerelease:
+        description: 'Mark the GitHub Release as a pre-release'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    name: Build signed release APK
+    name: Build, sign and publish
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve release identity
+        id: rel
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="${INPUT_TAG}"
+          fi
+          if [ -n "$tag" ]; then
+            publish=true
+          else
+            publish=false
+            echo "::notice::No tag given — this is a dry run. The APK is built, signed and verified, then uploaded as a workflow artifact only."
+          fi
+          version="${tag#v}"
+          # A tag carrying a suffix (1.9.0-beta1, 1.9.0-rc2) is a pre-release
+          # whether or not the box was ticked; the checkbox can only add.
+          if [ "${INPUT_PRERELEASE}" = "true" ] || [[ "$version" == *-* ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "publish=$publish"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # The tag on a dispatch run, the tag itself on a tag push, otherwise
+          # whatever branch was chosen for the dry run.
+          ref: ${{ inputs.tag || github.ref }}
           submodules: false
 
       - name: Init submodules with retry
@@ -37,6 +100,21 @@ jobs:
             echo "::warning::Submodule init failed (attempt $attempts/$max_attempts); retrying in ${delay}s..."
             sleep "$delay"
           done
+
+      - name: Check the tag agrees with versionName
+        if: steps.rel.outputs.publish == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          set -euo pipefail
+          declared=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n 1)
+          code=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -n 1)
+          if [ "$declared" != "$VERSION" ]; then
+            echo "::error::Tag $VERSION does not match versionName $declared in app/build.gradle.kts. Bump the version and re-tag rather than shipping an APK that reports the wrong one."
+            exit 1
+          fi
+          echo "versionName=$declared versionCode=$code" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -91,21 +169,199 @@ jobs:
           EOF
 
       - name: Build signed release APK
-        run: ./gradlew assembleRelease --stacktrace
-
-      - name: Verify APK signature
+        shell: bash
         run: |
-          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
-          "$BUILD_TOOLS/apksigner" verify --verbose "$APK"
+          set -o pipefail
+          ./gradlew assembleRelease --stacktrace 2>&1 | tee gradle-release.log
 
-      - name: Upload signed APK
+      - name: Summarize build failure
+        if: failure()
+        run: |
+          echo "::group::Gradle release build failure tail"
+          tail -n 200 gradle-release.log | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::endgroup::"
+          first=$(grep -E -m 1 "^e: |FAILURE:|error:|Unresolved reference|Execution failed|CMake Error|R8|Missing class" gradle-release.log || true)
+          if [ -n "$first" ]; then
+            echo "::error::$first"
+          fi
+
+      - name: Verify the APK is a release APK
+        id: verify
+        shell: bash
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+
+          # 1. Exactly one APK, and not the unsigned fallback AGP emits when
+          #    keystore.properties is absent or incomplete.
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*.apk)
+          if [ ${#apks[@]} -ne 1 ]; then
+            echo "::error::Expected exactly one release APK, found ${#apks[@]}: ${apks[*]:-none}"
+            exit 1
+          fi
+          APK="${apks[0]}"
+          case "$APK" in
+            *-unsigned.apk)
+              echo "::error::$APK is unsigned — the release signing config did not apply. Check KEYSTORE_* secrets."
+              exit 1
+              ;;
+          esac
+
+          # 2. The signature verifies, on the schemes a modern install needs.
+          echo "::group::apksigner verify"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee apksigner.txt
+          echo "::endgroup::"
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" apksigner.txt \
+            || { echo "::error::APK is not v2-signed"; exit 1; }
+
+          # 3. Not the committed debug key. Fingerprint it from the file rather
+          #    than pinning a constant, so rotating the debug key can't quietly
+          #    turn this check off.
+          debug_fp=$(keytool -list -v -keystore app/monotrypt-debug.keystore -storepass monotrypt 2>/dev/null \
+            | grep -m 1 'SHA256:' | sed 's/.*SHA256: *//' | tr -d ': ' | tr 'A-Z' 'a-z' || true)
+          apk_fp=$(grep -m 1 -i 'certificate SHA-256 digest' apksigner.txt \
+            | sed 's/.*digest: *//' | tr -d ': ' | tr 'A-Z' 'a-z' || true)
+          if [ -z "$apk_fp" ] || [ -z "$debug_fp" ]; then
+            echo "::error::Could not read a certificate digest (apk='$apk_fp' debug='$debug_fp') — refusing to skip the debug-key check."
+            exit 1
+          fi
+          if [ "$apk_fp" = "$debug_fp" ]; then
+            echo "::error::The APK is signed with the committed debug keystore, not the release key."
+            exit 1
+          fi
+
+          # 4. Not debuggable, and reporting the version the tag claims.
+          echo "::group::aapt2 badging"
+          # Redirect rather than `| tee ... | head`: head closing the pipe early
+          # is a SIGPIPE upstream, which pipefail reports as a failed step.
+          "$BUILD_TOOLS/aapt2" dump badging "$APK" > badging.txt
+          head -n 20 badging.txt
+          echo "::endgroup::"
+          if grep -q "application-debuggable" badging.txt; then
+            echo "::error::The APK is marked debuggable."
+            exit 1
+          fi
+          apk_version=$(grep -oP "versionName='\K[^']+" badging.txt | head -n 1 || true)
+          apk_code=$(grep -oP "versionCode='\K[^']+" badging.txt | head -n 1 || true)
+          if [ -n "$VERSION" ] && [ "$apk_version" != "$VERSION" ]; then
+            echo "::error::APK reports versionName $apk_version, tag says $VERSION"
+            exit 1
+          fi
+
+          # 5. Name the file after the app and version — `app-release.apk` tells
+          #    a person who downloaded it nothing.
+          mkdir -p dist
+          name="Tryptify-${VERSION:-$apk_version}.apk"
+          cp "$APK" "dist/$name"
+          ( cd dist && sha256sum "$name" > "$name.sha256" )
+
+          {
+            echo "### Release APK"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| File | \`$name\` |"
+            echo "| Size | $(du -h "dist/$name" | cut -f1) |"
+            echo "| versionName | \`$apk_version\` |"
+            echo "| versionCode | \`$apk_code\` |"
+            echo "| Signer SHA-256 | \`$apk_fp\` |"
+            echo "| SHA-256 | \`$(cut -d' ' -f1 < "dist/$name.sha256")\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "apk=dist/$name" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        if: steps.rel.outputs.publish == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The section for this version, from its `## [1.8.7]` heading up to
+          # the next `## ` heading.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { inside = 1; next }
+            inside && /^## / { exit }
+            inside { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::warning::No '## [$VERSION]' section in CHANGELOG.md — falling back to a bare note."
+            printf 'Tryptify %s\n' "$VERSION" > notes.md
+          fi
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "Built from \`$(git rev-parse HEAD)\`. Verify the download against \`${{ steps.verify.outputs.name }}.sha256\`."
+          } >> notes.md
+
+      - name: Publish GitHub Release
+        if: steps.rel.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.rel.outputs.tag }}
+          VERSION: ${{ steps.rel.outputs.version }}
+          PRERELEASE: ${{ steps.rel.outputs.prerelease }}
+          APK: ${{ steps.verify.outputs.apk }}
+        run: |
+          set -euo pipefail
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # A re-run over an existing release replaces its assets rather than
+            # failing; the notes and title are refreshed to match this build.
+            echo "::notice::Release $TAG exists — updating it."
+            gh release edit "$TAG" --title "Tryptify $VERSION" --notes-file notes.md --prerelease="$PRERELEASE"
+            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+          else
+            gh release create "$TAG" \
+              --title "Tryptify $VERSION" \
+              --notes-file notes.md \
+              "${flags[@]}" \
+              "$APK" "$APK.sha256"
+          fi
+          echo "Published: $(gh release view "$TAG" --json url -q .url)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK as a workflow artifact
+        if: always() && steps.verify.outputs.apk != ''
         uses: actions/upload-artifact@v4
         with:
-          name: monotrypt-release${{ inputs.version_name && format('-{0}', inputs.version_name) || '' }}-${{ github.sha }}
-          path: app/build/outputs/apk/release/*.apk
+          name: tryptify-release-${{ steps.rel.outputs.version || github.sha }}
+          path: |
+            dist/*.apk
+            dist/*.sha256
           retention-days: 30
           if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-log
+          path: |
+            gradle-release.log
+            apksigner.txt
+            badging.txt
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload R8 mapping
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # R8 is on for release, so a crash report from a shipped APK is
+          # unreadable without the mapping that produced it. Keep it as long as
+          # the APK itself.
+          name: release-mapping-${{ steps.rel.outputs.version || github.sha }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Cleanup signing material
         if: always()

@@ -134,7 +134,10 @@ import tf.monochrome.android.domain.model.EqPreset
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.theme.selectableThemes
 import tf.monochrome.android.ui.theme.themeDisplayNames
+import tf.monochrome.android.visualizer.PresetRotationMode
+import tf.monochrome.android.visualizer.ProjectMAudioBus
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 import tf.monochrome.android.ui.navigation.navigateSafe
@@ -599,7 +602,10 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         SettingsGroupHeader("Theme")
         SettingItem(title = "Color Theme", subtitle = themeDisplayNames[themeName] ?: themeName, onClick = { showThemeDropdown = true })
         DropdownMenu(expanded = showThemeDropdown, onDismissRequest = { showThemeDropdown = false }) {
-            themeDisplayNames.forEach { (key, displayName) ->
+            // What may be *chosen* is narrower than what may be *named*: the
+            // subtitle above still reads the full catalogue, so a stored key
+            // this device cannot offer is displayed rather than shown raw.
+            selectableThemes().forEach { (key, displayName) ->
                 DropdownMenuItem(text = { Text(displayName) }, onClick = { viewModel.setTheme(key); showThemeDropdown = false })
             }
         }
@@ -910,13 +916,14 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
     val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
-    val autoShuffle by viewModel.visualizerAutoShuffle.collectAsStateWithLifecycle()
     val presetId by viewModel.visualizerPresetId.collectAsStateWithLifecycle()
     val rotationSeconds by viewModel.visualizerRotationSeconds.collectAsStateWithLifecycle()
+    val rotationMode by viewModel.visualizerPresetRotationMode.collectAsStateWithLifecycle()
     val textureSize by viewModel.visualizerTextureSize.collectAsStateWithLifecycle()
     val meshX by viewModel.visualizerMeshX.collectAsStateWithLifecycle()
     val meshY by viewModel.visualizerMeshY.collectAsStateWithLifecycle()
     val targetFps by viewModel.visualizerTargetFps.collectAsStateWithLifecycle()
+    val audioDelayMs by viewModel.visualizerAudioDelayMs.collectAsStateWithLifecycle()
     val vsyncEnabled by viewModel.visualizerVsyncEnabled.collectAsStateWithLifecycle()
     val showFps by viewModel.visualizerShowFps.collectAsStateWithLifecycle()
     val fullscreen by viewModel.visualizerFullscreen.collectAsStateWithLifecycle()
@@ -1085,12 +1092,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             checked = engineEnabled,
             onCheckedChange = { viewModel.setVisualizerEngineEnabled(it) }
         )
-        SettingSwitchItem(
-            title = "Auto-shuffle Presets",
-            subtitle = "Rotate bundled presets automatically during playback",
-            checked = autoShuffle,
-            onCheckedChange = { viewModel.setVisualizerAutoShuffle(it) }
-        )
         SettingItem(
             title = "Default Preset",
             subtitle = selectedPresetName,
@@ -1150,9 +1151,28 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
 
         IntSettingSlider(
             value = targetFps,
-            valueRange = 30f..144f,
+            valueRange = 30f..240f,
             onCommit = { viewModel.setVisualizerTargetFps(it) },
-            label = { if (vsyncEnabled) "Target FPS: $it" else "Target FPS: $it (vsync off)" },
+            label = { "Target FPS: $it" },
+            subtitle = if (vsyncEnabled) {
+                "Applies with vsync off. While the visualizer is display-synced " +
+                    "the panel sets the rate and this is not used."
+            } else {
+                "Caps the visualizer while it is free-running."
+            },
+        )
+
+        // The visualizer is fed from inside the playback chain, so it always
+        // sees audio slightly before the output device plays it. Wired output
+        // hides that; Bluetooth does not.
+        IntSettingSlider(
+            value = audioDelayMs,
+            valueRange = 0f..ProjectMAudioBus.MAX_DELAY_MS.toFloat(),
+            onCommit = { viewModel.setVisualizerAudioDelayMs(it) },
+            label = { if (it == 0) "Audio delay: off" else "Audio delay: $it ms" },
+            subtitle = "Holds the visualizer back to match what you hear. Raise it " +
+                "on Bluetooth, where the headphones add their own delay; leave it " +
+                "at zero on speaker or wired.",
         )
 
         SettingSwitchItem(
@@ -1187,12 +1207,47 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             onClick = {}
         )
 
-        IntSettingSlider(
-            value = rotationSeconds,
-            valueRange = 5f..120f,
-            onCommit = { viewModel.setVisualizerRotationSeconds(it) },
-            label = { "Preset Rotation: ${it}s" },
+        SettingsGroupHeader("Preset rotation")
+        Text(
+            text = when (rotationMode) {
+                PresetRotationMode.Off ->
+                    "Nothing changes the preset. Picking one, and Next, still work."
+                PresetRotationMode.Timer ->
+                    "A new preset every so often, for as long as the visualizer is up."
+                PresetRotationMode.Track ->
+                    "A new preset when the track changes, and nothing in between."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            val modes = PresetRotationMode.entries
+            modes.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = rotationMode == mode,
+                    onClick = { viewModel.setVisualizerPresetRotationMode(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index, modes.size),
+                ) {
+                    Text(
+                        when (mode) {
+                            PresetRotationMode.Off -> "Off"
+                            PresetRotationMode.Timer -> "On a timer"
+                            PresetRotationMode.Track -> "Each track"
+                        }
+                    )
+                }
+            }
+        }
+
+        // Only the timer has an interval to set.
+        if (rotationMode == PresetRotationMode.Timer) {
+            IntSettingSlider(
+                value = rotationSeconds,
+                valueRange = 5f..120f,
+                onCommit = { viewModel.setVisualizerRotationSeconds(it) },
+                label = { "Every ${it}s" },
+            )
+        }
 
         IntSettingSlider(
             value = sensitivity,

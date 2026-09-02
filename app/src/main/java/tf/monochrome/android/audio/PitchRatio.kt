@@ -1,5 +1,6 @@
 package tf.monochrome.android.audio
 
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.log2
 import kotlin.math.pow
@@ -88,4 +89,21 @@ object PitchRatio {
     /** "+2" / "-5" / "0", for a semitone readout. */
     fun formatSemitones(semitones: Int): String =
         if (semitones > 0) "+$semitones" else semitones.toString()
+
+    /**
+     * How a speed reads on screen, in the unit the listener picked.
+     *
+     * One function because there were two. The panel honoured the unit and the
+     * player's own chip did not -- it formatted the raw ratio and nothing else
+     * -- so stepping the speed in semitones showed "+3 st" in the panel and
+     * "1.19x" in the bar above it, for the same number. 1.19 is not a value
+     * anyone chose; it is 2^(3/12) with its meaning stripped off, which is the
+     * one thing a readout must not do.
+     */
+    fun formatSpeed(ratio: Float, semitoneUnit: Boolean): String =
+        if (semitoneUnit) {
+            "${formatSemitones(nearestSemitone(ratio))} st"
+        } else {
+            String.format(Locale.US, "%.2fx", ratio)
+        }
 }

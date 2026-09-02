@@ -173,6 +173,20 @@ fun PlayerActionDock(
             }
         }
 
+        // The blurred backdrop this slab is a sheet of glass over: the album
+        // art and the reactive glow behind the player, gaussian-blurred at the
+        // listener's Backdrop blur and washed by their Backdrop tint.
+        //
+        // Clipped to the slab's own shape, and drawn after the shadow so it
+        // covers the slab's footprint -- glass does not show the shadow it
+        // casts on itself -- while the spill still reads around the edges.
+        // Under the punched slab, so the four icon holes now open onto blurred
+        // light instead of onto the raw background.
+        PlayerGlassHaze(
+            modifier = Modifier.matchParentSize(),
+            shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerLarge),
+        )
+
         // The glass slab with the four icons carved out of it. Drawn in one
         // offscreen layer so the DstOut punch clears only the glyph shapes (not
         // the whole rectangle) and can't clear the player behind the dock.

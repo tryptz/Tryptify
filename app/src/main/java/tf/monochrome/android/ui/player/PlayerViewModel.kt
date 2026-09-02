@@ -31,6 +31,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.audio.stretch.PitchEngine
+import tf.monochrome.android.audio.stretch.PitchQuality
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
@@ -241,7 +243,22 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setSpectrumShowOnNowPlaying(enabled) }
     }
 
-    val visualizerAutoShuffle: StateFlow<Boolean> = projectMEngineRepository.autoShuffle
+    /**
+     * Whether anything is changing the preset, for the player's Shuffle/Manual
+     * chip. Which of the rotating modes is in force is a Settings question; the
+     * chip only asks whether one of them is.
+     */
+    val visualizerAutoShuffle: StateFlow<Boolean> = projectMEngineRepository.rotationMode
+        .map { it.isRotating }
+        // Seeded from the mode that is actually in force. A literal `true` here
+        // painted the chip as on for every listener, including the ones whose
+        // stored mode is Off, until the mapped flow got round to emitting --
+        // so it read as lit and then thought better of it.
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            projectMEngineRepository.rotationMode.value.isRotating,
+        )
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
     val currentVisualizerPreset: StateFlow<VisualizerPreset?> = projectMEngineRepository.currentPreset
@@ -271,6 +288,23 @@ class PlayerViewModel @Inject constructor(
 
     fun setPitchSemitones(semitones: Float) {
         viewModelScope.launch { preferences.setPitchSemitones(semitones) }
+    }
+
+    // Which algorithm does the transposing, and how big a grain it uses. Only
+    // meaningful while the pitch is off zero, which is what the panel keys the
+    // controls on.
+    val pitchEngine: StateFlow<PitchEngine> = preferences.pitchEngine
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PitchEngine.VOCODER)
+
+    fun setPitchEngine(engine: PitchEngine) {
+        viewModelScope.launch { preferences.setPitchEngine(engine) }
+    }
+
+    val pitchQuality: StateFlow<PitchQuality> = preferences.pitchQuality
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PitchQuality.BALANCED)
+
+    fun setPitchQuality(quality: PitchQuality) {
+        viewModelScope.launch { preferences.setPitchQuality(quality) }
     }
 
     // Whether the speed control reads in semitones or as a multiplier.
@@ -900,7 +934,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun setVisualizerShuffle(enabled: Boolean) {
-        projectMEngineRepository.setShuffleEnabled(enabled)
+        projectMEngineRepository.setRotationEnabled(enabled)
     }
 
     fun nextVisualizerPreset() {

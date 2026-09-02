@@ -21,12 +21,15 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.BuildConfig
+import tf.monochrome.android.audio.stretch.PitchEngine
+import tf.monochrome.android.audio.stretch.PitchQuality
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
+import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -78,8 +81,34 @@ class PreferencesManager @Inject constructor(
 ) {
     private val dataStore = context.dataStore
 
+    /**
+     * The app's one preferences file, handed to [FeatureFlagStore] so flags sit
+     * beside the settings they gate. A second `preferencesDataStore` on this
+     * name would throw, and a second file would put account-scoped flags out of
+     * reach of [SETTINGS_SYNC_KEYS].
+     */
+    internal val store: DataStore<Preferences> get() = dataStore
+
     companion object {
         private const val MAX_SEARCH_HISTORY_SIZE = 10
+
+        /**
+         * The stored rotation mode, or what the old build's switch implies.
+         *
+         * A named function rather than a lambda inside the flow because the
+         * mapping was never the part that broke -- the *key* was. This read
+         * used to consult `visualizer_preset_rotation`, a key no build has ever
+         * written, so it resolved to null, defaulted to true, and returned
+         * Timer for everyone regardless of what they had chosen. The enum's own
+         * test passed throughout, because a pure function over two booleans
+         * cannot see which key fed it. Driving this with a real [Preferences]
+         * is what makes the key name falsifiable.
+         */
+        internal fun rotationModeFrom(prefs: Preferences): PresetRotationMode =
+            prefs[VISUALIZER_PRESET_ROTATION_MODE]?.let(PresetRotationMode::fromKey)
+                ?: PresetRotationMode.migratedFromAutoShuffle(
+                    changeEachTrack = prefs[VISUALIZER_AUTO_SHUFFLE] ?: true,
+                )
 
         /** The app's indigo, and a near-black ground: a sane dark default pair. */
         private const val DEFAULT_CUSTOM_ACCENT = 0xFF5865F2.toInt()
@@ -232,6 +261,11 @@ class PreferencesManager @Inject constructor(
         private val PLAYBACK_SPEED = stringPreferencesKey("playback_speed")
         private val PRESERVE_PITCH = booleanPreferencesKey("preserve_pitch")
         private val PITCH_SEMITONES = stringPreferencesKey("pitch_semitones")
+        // Which algorithm transposes, and how big a grain it uses. A taste
+        // rather than a fact about the hardware, so both travel with the
+        // account like the rest of the playback settings.
+        private val PITCH_ENGINE = stringPreferencesKey("pitch_engine")
+        private val PITCH_QUALITY = stringPreferencesKey("pitch_quality")
         private val SPEED_UNIT_SEMITONES = booleanPreferencesKey("speed_unit_semitones")
 
         // Appearance extras
@@ -259,10 +293,17 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_AUTO_SHUFFLE = booleanPreferencesKey("visualizer_auto_shuffle")
         private val VISUALIZER_PRESET_ID = stringPreferencesKey("visualizer_preset_id")
         private val VISUALIZER_ROTATION_SECONDS = intPreferencesKey("visualizer_rotation_seconds")
+        private val VISUALIZER_PRESET_ROTATION_MODE = stringPreferencesKey("visualizer_preset_rotation_mode")
+        // Which rotating mode to come back to when the player's on/off chip is
+        // switched back on. Stored rather than remembered, because the chip
+        // writing Off is exactly what makes the choice unreadable afterwards.
+        private val VISUALIZER_PRESET_ROTATION_LAST =
+            stringPreferencesKey("visualizer_preset_rotation_last")
         private val VISUALIZER_TEXTURE_SIZE = intPreferencesKey("visualizer_texture_size")
         private val VISUALIZER_MESH_X = intPreferencesKey("visualizer_mesh_x")
         private val VISUALIZER_MESH_Y = intPreferencesKey("visualizer_mesh_y")
         private val VISUALIZER_TARGET_FPS = intPreferencesKey("visualizer_target_fps")
+        private val VISUALIZER_AUDIO_DELAY_MS = intPreferencesKey("visualizer_audio_delay_ms")
         private val VISUALIZER_VSYNC_ENABLED = booleanPreferencesKey("visualizer_vsync_enabled")
         private val VISUALIZER_SHOW_FPS = booleanPreferencesKey("visualizer_show_fps")
         private val VISUALIZER_FULLSCREEN = booleanPreferencesKey("visualizer_fullscreen")
@@ -396,6 +437,7 @@ class PreferencesManager @Inject constructor(
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES,
+            PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
@@ -403,9 +445,11 @@ class PreferencesManager @Inject constructor(
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
-            VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS,
-            VISUALIZER_ENGINE_ENABLED, VISUALIZER_AUTO_SHUFFLE, VISUALIZER_PRESET_ID,
-            VISUALIZER_ROTATION_SECONDS, VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
+            VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
+            VISUALIZER_ENGINE_ENABLED, VISUALIZER_PRESET_ID,
+            VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION_MODE,
+            VISUALIZER_PRESET_ROTATION_LAST,
+            VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
             VISUALIZER_TOUCH_WAVEFORM, VISUALIZER_FAVORITE_PRESETS,
             SPECTRUM_ANALYZER_ENABLED, SPECTRUM_SHOW_ON_NOW_PLAYING, SPECTRUM_FFT_SIZE,
             EQ_ENABLED, EQ_ACTIVE_PRESET_ID, EQ_TARGET_ID, EQ_PREAMP, EQ_BANDS_JSON,
@@ -423,7 +467,12 @@ class PreferencesManager @Inject constructor(
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
             DISCOVERY_HEARTED_GENRES,
             DISCOVERY_SORT,
-        )
+        ) +
+            // Folded in from the registry rather than restated here, so the two
+            // lists cannot disagree: a flag is on the allow-list because it
+            // declares FlagSync.ACCOUNT, and a device-local one cannot arrive by
+            // being pasted into the wrong list.
+            FeatureFlag.ACCOUNT_SCOPED_KEYS
         private val SETTINGS_SYNC_KEY_NAMES: Set<String> = SETTINGS_SYNC_KEYS.map { it.name }.toSet()
     }
 
@@ -1029,6 +1078,25 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
+     * Which pitch engine to use, and its grain size. Stored by enum name rather
+     * than by ordinal so reordering the enum cannot silently repoint an
+     * existing choice at a different algorithm.
+     */
+    val pitchEngine: Flow<PitchEngine> = dataStore.data.map { prefs ->
+        PitchEngine.fromName(prefs[PITCH_ENGINE])
+    }
+    suspend fun setPitchEngine(engine: PitchEngine) {
+        dataStore.edit { it[PITCH_ENGINE] = engine.name }
+    }
+
+    val pitchQuality: Flow<PitchQuality> = dataStore.data.map { prefs ->
+        PitchQuality.fromName(prefs[PITCH_QUALITY])
+    }
+    suspend fun setPitchQuality(quality: PitchQuality) {
+        dataStore.edit { it[PITCH_QUALITY] = quality.name }
+    }
+
+    /**
      * Whether the speed control is expressed in semitones rather than as a
      * multiplier. Presentation only — the stored speed is a ratio either way.
      *
@@ -1187,12 +1255,64 @@ class PreferencesManager @Inject constructor(
      */
     val autoDownloadLikedSongs: Flow<Boolean> = dataStore.data.map { it[AUTO_DOWNLOAD_LIKED] ?: false }
     val visualizerEngineEnabled: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_ENGINE_ENABLED] ?: true }
-    val visualizerAutoShuffle: Flow<Boolean> = dataStore.data.map { it[VISUALIZER_AUTO_SHUFFLE] ?: true }
     val visualizerPresetId: Flow<String?> = dataStore.data.map { it[VISUALIZER_PRESET_ID] }
     val visualizerRotationSeconds: Flow<Int> = dataStore.data.map { it[VISUALIZER_ROTATION_SECONDS] ?: 20 }
+
+    /**
+     * When the visualizer changes preset by itself.
+     *
+     * Falls back to the switch this replaced, so nobody's existing arrangement
+     * is reset by the merge. That old key is still read for that reason;
+     * nothing writes it any more.
+     */
+    val visualizerPresetRotationMode: Flow<PresetRotationMode> =
+        dataStore.data.map(::rotationModeFrom)
+
+    /**
+     * The rotating mode the on/off chip restores. Falls back to whatever is
+     * currently set, so a listener who only ever used Settings still gets their
+     * own choice back rather than the default.
+     */
+    val visualizerPresetRotationLast: Flow<PresetRotationMode> = dataStore.data.map { prefs ->
+        val remembered = prefs[VISUALIZER_PRESET_ROTATION_LAST]?.let(PresetRotationMode::fromKey)
+        val current = prefs[VISUALIZER_PRESET_ROTATION_MODE]?.let(PresetRotationMode::fromKey)
+        remembered?.takeIf { it.isRotating }
+            ?: current?.takeIf { it.isRotating }
+            ?: PresetRotationMode.Default
+    }
+
+    /**
+     * Both keys in one edit: choosing a rotating mode is also the act of saying
+     * which one to come back to, and two edits would let a reader see the pair
+     * disagree.
+     */
+    suspend fun setVisualizerPresetRotationMode(mode: PresetRotationMode) {
+        dataStore.edit { prefs ->
+            prefs[VISUALIZER_PRESET_ROTATION_MODE] = mode.key
+            if (mode.isRotating) prefs[VISUALIZER_PRESET_ROTATION_LAST] = mode.key
+        }
+    }
     val visualizerTextureSize: Flow<Int> = dataStore.data.map { it[VISUALIZER_TEXTURE_SIZE] ?: 1024 }
     val visualizerMeshX: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_X] ?: 32 }
     val visualizerMeshY: Flow<Int> = dataStore.data.map { it[VISUALIZER_MESH_Y] ?: 24 }
+    /**
+     * How far behind the audio the visualizer runs, in milliseconds.
+     *
+     * The tap that feeds the visualizer sits upstream of the output device, so
+     * the picture is always a little ahead of the sound. Over a wire the gap is
+     * small; over Bluetooth the codec and the receiver's buffering make it
+     * plainly visible. Zero by default because it is a property of whatever you
+     * are listening on, and the app has no reliable way to ask Android what the
+     * current route's latency is.
+     */
+    val visualizerAudioDelayMs: Flow<Int> = dataStore.data.map {
+        it[VISUALIZER_AUDIO_DELAY_MS] ?: 0
+    }
+
+    suspend fun setVisualizerAudioDelayMs(value: Int) {
+        dataStore.edit { it[VISUALIZER_AUDIO_DELAY_MS] = value }
+    }
+
     val visualizerTargetFps: Flow<Int> = dataStore.data.map {
         // First-run / never-set → fall back to the resolved performance tier's
         // ceiling (LOW=30, MID=60, HIGH=120). Once the user touches the setting,
@@ -1228,9 +1348,6 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setVisualizerEngineEnabled(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_ENGINE_ENABLED] = enabled }
-    }
-    suspend fun setVisualizerAutoShuffle(enabled: Boolean) {
-        dataStore.edit { it[VISUALIZER_AUTO_SHUFFLE] = enabled }
     }
     suspend fun setVisualizerPresetId(presetId: String?) {
         dataStore.edit {
