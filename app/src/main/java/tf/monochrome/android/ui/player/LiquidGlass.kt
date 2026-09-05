@@ -43,7 +43,8 @@ import tf.monochrome.android.performance.LocalLowPerformance
  * see-through, the smooth album-tinted backdrop is reconstructed and *lensed*
  * through that bevel (with chromatic aberration), and a bright specular rim
  * rides the beveled edge. The light direction follows device tilt (gravity
- * sensor) plus a slow autonomous drift, and a light sheet sweeps the surface.
+ * sensor) plus a slow autonomous drift. Nothing travels across the surface:
+ * the living motion undulates in place, so the glass never draws the eye.
  *
  * [tint] is the album colour the reconstructed backdrop and the glass frost are
  * tinted with — pass the active accent so the refraction matches what's behind
@@ -261,9 +262,9 @@ private fun liquidGlassModifier(
  *
  * Apply it to a Box that already has a rounded, translucent fill: the shader
  * bevels that fill's edges into a lit, tilt-reactive refractive rim (with
- * chromatic dispersion and the animated light sweep) over a see-through,
- * album-tinted body. Place it BEHIND the panel's content so the buttons and
- * labels sitting on the glass stay crisp and untouched.
+ * chromatic dispersion) over a see-through, album-tinted body. Place it BEHIND
+ * the panel's content so the buttons and labels sitting on the glass stay crisp
+ * and untouched.
  *
  * Unlike [liquidGlass] it is NOT gated on the lyric-FX toggle (player chrome is
  * always glass) and is tuned for a panel: a more present body and a stronger
@@ -723,9 +724,10 @@ half4 main(float2 frag) {
 //  - liquid: fast edge shimmer (edge-gated, three interfering octaves with a
 //    slow breath) + a slow ~600px face swell (ungated, far too broad to
 //    lattice a button disc);
-//  - shine: a light sheet sweeps the pane every ~7s and the glint twinkles in
-//    hash-staggered 4px cells with a slowly cycling chromatic spread — all
-//    scaled by uLiquid so surfaceMotion = 0 presets stay perfectly still.
+//  - shine: the glint twinkles in hash-staggered 4px cells with a slowly
+//    cycling chromatic spread — scaled by uLiquid so surfaceMotion = 0 presets
+//    stay perfectly still. No pass travels across the pane; see the shader's
+//    own note where the light sheet used to be.
 private const val LIQUID_GLASS_SRC = """
 uniform shader content;
 uniform float2 uSize;
@@ -990,21 +992,19 @@ half4 main(float2 p) {
     float3 col3 = mix(bodyCol, refl * uReflection, clamp(fres * 1.1, 0.0, 1.0));
     col3 += float3(specR, spec, specB) * uRimGain * fres * glintGain;
 
-    // Traveling light sheet: the classic "shine" pass — a soft diagonal band
-    // gliding across the surface every ~7s, then resting (the sweep occupies
-    // ~60% of the cycle before the band exits the pane; the gaussian tail is
-    // negligible while parked). Fresnel-weighted so it flares the bevel rim
-    // as it crosses, with a 0.3 face floor so flat panes catch it too; scaled
-    // by uLiquid and uRimGain so calm or dim presets stay calm and dim.
-    float sweepT = fract(uTime * 0.14);
-    float sweepPos = mix(-0.4, 1.4, smoothstep(0.0, 0.6, sweepT));
-    float track = uv.x * 0.72 + uv.y * 0.28;
-    float sd = (track - sweepPos) * 8.0;
-    float sheetI = exp(-sd * sd) * uLiquid * (0.30 + 0.70 * fres);
-    col3 += float3(1.0, 0.985, 0.95) * sheetI * 0.5 * uRimGain;
+    // There is deliberately no traveling light sheet here. A soft diagonal band
+    // used to glide across every pane every ~7s — the classic "shine" pass — and
+    // it was the one motion here you could not look away from: it crosses the
+    // whole pane, it is the brightest thing on it while it does, and unlike the
+    // shimmer and the swell it has somewhere to be, so the eye tracks it off the
+    // edge and then waits for the next one. Removed rather than damped: at any
+    // brightness a band crossing the pane still reads as an event, and glass is
+    // meant to be a surface, not a signal. The other liquid terms stay — they
+    // undulate in place, so they read as material rather than as something
+    // happening. Do not reintroduce a sweep here without asking.
 
     // Highlight shoulder: every edge term above stacks additively in the same
-    // 1-2px band (Fresnel rim + glint + sheet, each gained by its own knob), and
+    // 1-2px band (Fresnel rim + glint, each gained by its own knob), and
     // the premultiply clamp below used to flatten any overflow into a solid
     // max-brightness line — the over-sharpened halo look when several edge
     // settings run hot. Roll intensities above the knee off asymptotically
@@ -1016,11 +1016,9 @@ half4 main(float2 p) {
     // Transparent face, opaque bright rim: alpha is low across the body (backdrop
     // reads through) and climbs to full where Fresnel and the glint peak, so the
     // rim highlight reads as a crisp glass edge rather than being clamped away.
-    // The light sheet lifts alpha too — without that, the shine pass would be
-    // clamped invisible on see-through faces (premultiplied rgb <= alpha).
     // Same shoulder as the colour: the outline saturates to opaque gradually
     // instead of snapping, so the rim doesn't etch a hard 1px contour.
-    float rimSum = fres * 1.2 + spec + sheetI * 0.6;
+    float rimSum = fres * 1.2 + spec;
     float rim = min(rimSum, 0.82) + 0.18 * (1.0 - exp(-max(rimSum - 0.82, 0.0) / 0.18));
     float outA = clamp(a * (uBodyOpacity + (1.0 - uBodyOpacity) * rim), 0.0, a);
 

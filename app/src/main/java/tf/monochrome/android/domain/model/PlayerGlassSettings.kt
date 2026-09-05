@@ -145,8 +145,9 @@ data class PlayerGlassSettings(
          * Tuned for the reworked glass optics: `refraction` now also drives the
          * interior slab parallax (flat faces lens, not just bevels) and
          * `surfaceMotion` scales the whole living layer — face swell, edge
-         * shimmer, the traveling light sheet and the glint twinkle — so 0 is
-         * truly still and 1 is fully alive.
+         * shimmer and the glint twinkle — so 0 is truly still and 1 is fully
+         * alive. It no longer drives a traveling light sheet; nothing crosses
+         * the pane, so the values below read as material, never as an event.
          */
         val PRESETS: List<Pair<String, PlayerGlassSettings>> = listOf(
             // The shipped look.

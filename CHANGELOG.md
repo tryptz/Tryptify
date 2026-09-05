@@ -4,6 +4,13 @@
 
 ### Removed
 
+#### The glass no longer has a light sweeping across it
+- **The traveling light sheet is gone from every glass surface** — the lyric glass, the player chrome, the transport disc, the action dock, the mini player and the Studio preview. A soft diagonal band used to glide across each pane every ~7 seconds, and it is the one thing on that surface you could not look away from.
+- **It was removed rather than dimmed because a band that crosses the pane is an event, not a texture.** It travels the full width, it is the brightest thing on the glass while it does, and unlike the shimmer and the swell it has somewhere to be — so the eye follows it off the edge and then waits for the next one. At a quarter of the brightness it is still a thing that happens, just fainter.
+- **Surface motion still does the rest of its job.** Face swell, edge shimmer and the glint twinkle all stay, and all of them undulate in place, so the setting still runs from perfectly still at 0 to fully alive at 1 and every shipped theme keeps its character. The slider's caption now says what it actually drives.
+- **Two surfaces were never obeying the slider anyway.** The lyric glass and the player panel pin the shader's motion uniform to 1, so the sweep ran at full strength on them no matter where Surface motion sat — turning the setting to 0 could not stop it. With the pass gone that discrepancy stops mattering, and those surfaces are still free to keep their own liquid at full.
+- **The rim is very slightly calmer as a result.** The sheet also lifted the glass's alpha as it passed, so a see-through face would show the shine at all; without it the edge highlight is the Fresnel rim and the glint alone, which is what "Edge highlight" was always meant to control.
+
 #### The app no longer votes on the display's refresh rate
 - **Settings › System › Display › Frame Rate and Resolution are gone** — with them, the window's `preferredDisplayModeId` and `preferredRefreshRate`. The app now holds no display-mode preference at all, so the panel is left entirely to system policy and to whatever per-app override you have installed.
 - **The reason is that a pin is a vote, and a vote can be lost or won at the wrong value** — an external per-app override asking a OnePlus panel for 165 was contested by whatever mode this window pinned, and on a display that offers its top rate only at a lower resolution the pinned mode was the slower of the two. The app was arguing its own display down. "Unlocked" was no defence either: a pin at the ceiling is still a lock, just a high one.
