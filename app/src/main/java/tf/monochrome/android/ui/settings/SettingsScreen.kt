@@ -429,13 +429,9 @@ private fun EqualizerTab(
                     checked = systemWideAutoEq,
                     onCheckedChange = viewModel::setSystemWideAutoEq,
                     badge = "Beta",
-                    caution = "Hands your correction to the device. The in-app EQ steps " +
-                        "aside and a global effect applies a coarse graphic-EQ " +
-                        "approximation of your exact parametric curve instead, so " +
-                        "Tryptify itself usually sounds WORSE, not better. On phones " +
-                        "whose audio driver ignores global effects it does nothing at " +
-                        "all — leaving you with no correction rather than the accurate " +
-                        "one. Turn it on to fix OTHER apps, not this one.",
+                    caution = "Swaps the app's exact correction for a coarser global " +
+                        "one, and some devices ignore it entirely. Turn it on to " +
+                        "correct other apps.",
                 )
             }
         }

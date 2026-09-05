@@ -1011,9 +1011,8 @@ private fun StatusOverlayPanel(
                             accent,
                             onSystemWideAutoEqToggle,
                             badge = "Beta",
-                            caution = "Usually sounds worse here — the in-app EQ steps " +
-                                "aside for a coarser global one, and some phones ignore " +
-                                "it entirely. It is for fixing other apps.",
+                            caution = "Swaps the app's exact correction for a coarser " +
+                                "global one. For correcting other apps.",
                         )
                     }
                 }
