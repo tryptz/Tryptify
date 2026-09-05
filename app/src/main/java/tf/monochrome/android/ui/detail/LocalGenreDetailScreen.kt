@@ -248,7 +248,8 @@ private fun GenreTrackRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
+                .height(MonoDimens.listRowHeight)
+                .padding(horizontal = MonoDimens.listItemPaddingH),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (track.artworkUri != null) {

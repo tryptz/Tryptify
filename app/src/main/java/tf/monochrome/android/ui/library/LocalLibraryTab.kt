@@ -620,8 +620,9 @@ fun ArtistList(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(MonoDimens.listRowHeight)
                     .bounceClick(onClick = { onArtistClick(artist) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingMd),
+                    .padding(horizontal = MonoDimens.listItemPaddingH),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (artist.artworkUri != null) {
@@ -683,7 +684,8 @@ fun SongList(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
+                        .height(MonoDimens.listRowHeight)
+                        .padding(horizontal = MonoDimens.listItemPaddingH),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Music-note placeholder sits underneath the artwork: if the
@@ -769,8 +771,9 @@ fun GenreList(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(MonoDimens.listRowHeight)
                     .bounceClick(onClick = { onGenreClick(genre) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = 14.dp),
+                    .padding(horizontal = MonoDimens.listItemPaddingH),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -807,8 +810,9 @@ fun FolderList(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(MonoDimens.listRowHeight)
                     .bounceClick(onClick = { onFolderClick(path) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = 14.dp),
+                    .padding(horizontal = MonoDimens.listItemPaddingH),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(

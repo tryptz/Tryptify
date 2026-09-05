@@ -101,6 +101,33 @@ width) is for picking one icon out of a row, like the transport and dock.
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
 
+### List rows
+
+**Every list row is one shared height**, `MonoDimens.listRowHeight`, applied with
+`Modifier.height(...)` in place of vertical padding. Songs, artists, genres,
+folders, `TrackItem`, search results, the folder browser and the genre detail
+list all take it, so a scroll reads as an even column.
+
+Rows used to size themselves to their content, and library content is not
+uniform. Three things moved the height: a subtitle whose artist and album did not
+both fit wrapped to a second line; a linkable artist carried `linkHitBoxV`'s
+inset where a plain "Unknown Artist" did not; and a row whose text was shorter
+than its artwork was sized by the artwork instead. Neighbouring rows differed by
+up to a whole line.
+
+The height is **derived from the typography, not a dp constant**. The app ships
+its own text-size setting (0.85x..1.5x) and rebuilds the type scale from it, and
+that multiplies with the system font scale. 64dp is correct at 1.0x and clips the
+subtitle above it. `ListRowHeightTest` walks both scales and checks every row
+shape against the budget; if you raise a line height in `Type.kt` or add a taller
+row, that test is where it surfaces.
+
+**The subtitle is capped at one line** in both `ClickableArtists` and
+`TrackArtistAlbumLine` — the outer `FlowRow` too, not just the inner one. The
+album segment is appended outside `ClickableArtists`, so capping only the inner
+row still let "artist • album" wrap. With a fixed row height a second line is
+clipped rather than shown, so the cap is what keeps the text intact.
+
 ### Themes
 
 Light variants are **generated**, never hand-written, and every foreground is

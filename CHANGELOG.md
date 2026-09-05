@@ -29,6 +29,13 @@
 
 ### Fixed
 
+#### Every list row is now the same height
+- **Songs, Artists, Genres, Folders, search results, playlists, album and genre track lists and the folder browser all lay their rows out at one shared height.** A scrolling list reads as an even column instead of a ragged one.
+- **Three things used to move the height, and all three were invisible in the code.** A subtitle whose artist and album did not both fit wrapped onto a second line and made that one row a whole line taller. A track whose artist is a tappable link carried the link's hit-box inset, where a plain "Unknown Artist" did not — so linked rows sat 8dp taller than unlinked ones. And a row whose text was shorter than its 48dp cover was sized by the cover instead, so rows with and without artwork disagreed.
+- **The subtitle is capped at one line now.** It was already capped for *many artists*, but the album is appended outside that component, so "artist • album" that did not fit still wrapped. Both rows are capped, and the album ellipsizes rather than dropping to a second line.
+- **The height follows your text size rather than being a fixed 64dp.** The app scales its own type from Settings › Theme, and that multiplies with the system font scale — a hardcoded row would be right at the default and clip the subtitle at "Larger" and "Largest". It is derived from the line heights instead, so rows grow together and stay equal at any size.
+- **A test holds it.** `ListRowHeightTest` walks every text-size preset against the system scale and checks each row shape the app renders — cover, title, linked subtitle, badge pills, the search row's extra gap, the folder browser's smaller artwork — so a line height raised in the type scale or a trimmed row height fails there rather than on a phone.
+
 #### One preset rotation setting, and it can be turned off
 - **Settings › Visualizer › Preset rotation is now a single choice: Off, On a timer, or Each track.** It replaces two switches that each claimed the job — "Preset rotation" drove projectM's timer, while "Auto-shuffle Presets" changed the preset on every new track and described itself as rotating presets during playback, which was the other one's job. Between them there was no single answer to "stop changing my preset", because either could still be doing it.
 - **Off uses projectM's own preset lock, not a very long timer.** A duration large enough to feel like off is still a timer and would move the preset eventually on a long listen; the lock stops the automatic transitions outright, hard and soft alike, while a preset picked by hand — from the browser, or Next — keeps working.
