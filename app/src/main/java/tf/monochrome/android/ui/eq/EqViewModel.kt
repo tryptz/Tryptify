@@ -475,6 +475,7 @@ class EqViewModel @Inject constructor(
         viewModelScope.launch {
             preferences.setEqEnabled(newState)
             _eqEnabled.value = newState
+            if (!newState) clearSystemWide()
         }
     }
 
@@ -495,7 +496,24 @@ class EqViewModel @Inject constructor(
         viewModelScope.launch {
             preferences.setEqEnabled(false)
             _eqEnabled.value = false
+            clearSystemWide()
         }
+    }
+
+    /**
+     * System-wide AutoEQ is a sub-toggle of the equalizer: it is only offered
+     * while the EQ is on, and it publishes the same correction to the device's
+     * global output mix. Turning the equalizer off therefore has to clear it, or
+     * [SystemAudioEqController] — which watches only the system-wide flag, never
+     * `eqEnabled` — keeps the session-0 effect attached with nothing on screen
+     * left to switch it off.
+     *
+     * `PlayerViewModel.setAutoEqEnabled` has always done this; the Settings and
+     * Equalizer-screen toggles write the same preference and did not, so turning
+     * the EQ off from either of those left the global effect running.
+     */
+    private suspend fun clearSystemWide() {
+        preferences.setSystemWideAutoEqEnabled(false)
     }
 
     /**

@@ -409,24 +409,36 @@ private fun EqualizerTab(
     SettingsTabContent {
         SettingsGroupHeader("Equalizer")
         SettingSwitchItem(
-            title = "System-wide AutoEQ",
-            subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
-            checked = systemWideAutoEq,
-            onCheckedChange = viewModel::setSystemWideAutoEq,
-            badge = "Beta",
-            caution = "This usually makes Tryptify sound WORSE, not better. Your own " +
-                "playback is already corrected in the app, and this corrects it a " +
-                "second time on the way out — so the curve is applied twice. It is " +
-                "also a coarse graphic-EQ approximation of the exact parametric " +
-                "curve, and whether it reaches other apps at all is up to your " +
-                "device. Turn it on to fix OTHER apps, not this one.",
-        )
-        SettingSwitchItem(
             title = "Enable Equalizer",
             subtitle = "Apply EQ processing to playback",
             checked = eqEnabled,
             onCheckedChange = { eqViewModel.toggleEq() }
         )
+        // System-wide is a sub-toggle of the equalizer, not a peer of it: it
+        // publishes the same correction to the device's global mix, so it means
+        // nothing with the EQ off. It sat ABOVE "Enable Equalizer" as an equal,
+        // which read as the bigger, better switch of the two. Nested and revealed
+        // under its parent, exactly as the player's audio-tools panel does it —
+        // and `toggleEq` clears the flag on the way out, so the effect cannot
+        // keep running behind a row that is no longer on screen.
+        AnimatedVisibility(visible = eqEnabled) {
+            Column(modifier = Modifier.fillMaxWidth().padding(start = 12.dp)) {
+                SettingSwitchItem(
+                    title = "System-wide AutoEQ",
+                    subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
+                    checked = systemWideAutoEq,
+                    onCheckedChange = viewModel::setSystemWideAutoEq,
+                    badge = "Beta",
+                    caution = "Hands your correction to the device. The in-app EQ steps " +
+                        "aside and a global effect applies a coarse graphic-EQ " +
+                        "approximation of your exact parametric curve instead, so " +
+                        "Tryptify itself usually sounds WORSE, not better. On phones " +
+                        "whose audio driver ignores global effects it does nothing at " +
+                        "all — leaving you with no correction rather than the accurate " +
+                        "one. Turn it on to fix OTHER apps, not this one.",
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 

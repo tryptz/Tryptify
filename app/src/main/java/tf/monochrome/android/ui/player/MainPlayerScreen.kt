@@ -1011,8 +1011,9 @@ private fun StatusOverlayPanel(
                             accent,
                             onSystemWideAutoEqToggle,
                             badge = "Beta",
-                            caution = "Usually sounds worse here — this app's audio " +
-                                "ends up corrected twice. It is for fixing other apps.",
+                            caution = "Usually sounds worse here — the in-app EQ steps " +
+                                "aside for a coarser global one, and some phones ignore " +
+                                "it entirely. It is for fixing other apps.",
                         )
                     }
                 }
