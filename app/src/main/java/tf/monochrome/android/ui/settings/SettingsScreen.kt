@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -412,6 +413,13 @@ private fun EqualizerTab(
             subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
             checked = systemWideAutoEq,
             onCheckedChange = viewModel::setSystemWideAutoEq,
+            badge = "Beta",
+            caution = "This usually makes Tryptify sound WORSE, not better. Your own " +
+                "playback is already corrected in the app, and this corrects it a " +
+                "second time on the way out — so the curve is applied twice. It is " +
+                "also a coarse graphic-EQ approximation of the exact parametric " +
+                "curve, and whether it reaches other apps at all is up to your " +
+                "device. Turn it on to fix OTHER apps, not this one.",
         )
         SettingSwitchItem(
             title = "Enable Equalizer",
@@ -3246,18 +3254,89 @@ fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) 
 }
 
 @Composable
-fun SettingSwitchItem(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun SettingSwitchItem(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    badge: String? = null,
+    caution: String? = null,
+) {
+    // [badge] and [caution] sit beside and under the row rather than being folded
+    // into [title] and [subtitle]: the title is the anchor id that settings search
+    // scrolls to and the DevEdit element id, so a "(beta)" spliced into it would
+    // quietly move both. A caution also has to out-shout a subtitle to do its job
+    // — the whole point is that it is read BEFORE the switch is flipped.
     tf.monochrome.android.devedit.DevEditable("sw_${devSlug(title)}", Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().settingsAnchor(title).padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-                Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.fillMaxWidth().settingsAnchor(title)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                        if (badge != null) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            SettingBadge(badge)
+                        }
+                    }
+                    Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = checked, onCheckedChange = onCheckedChange)
             }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+            if (caution != null) SettingCaution(caution)
         }
+    }
+}
+
+/** A small pill beside a setting's title — "BETA" and the like. */
+@Composable
+private fun SettingBadge(text: String) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.20f),
+    ) {
+        Text(
+            text = text.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.tertiary,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+        )
+    }
+}
+
+/**
+ * The warning under a setting that can make things worse rather than better.
+ *
+ * Deliberately not a subtitle: a subtitle describes what a switch does and gets
+ * skimmed past on the way to the switch. This is for the ones where the honest
+ * answer is "most people should leave this alone", and it has to be legible
+ * enough to stop that hand.
+ */
+@Composable
+private fun SettingCaution(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 8.dp, end = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Icon(
+            Icons.Default.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+        )
     }
 }
 

@@ -27,6 +27,16 @@
 - **From Android 14 that key is a Material 3 role colour, not the accent ramp** — Contrast moves the roles and leaves the older `system_accent1_*` ramp untouched, so a key taken from the ramp would have read as no change at all while the rest of the system repainted around it.
 - **"Tint the menus too" still wins wherever it is on**, exactly as it does over every other theme: the album rebuilds the scheme and the system palette gives way for as long as something is playing.
 
+### Changed
+
+#### System-wide AutoEQ is marked beta, and says what it costs
+- **Settings › Equalizer › System-wide AutoEQ now carries a Beta badge and a warning**, and so does the "System-wide" sub-toggle in the player's audio tools. It was presented as a plain switch alongside the ordinary ones, which read as a free upgrade.
+- **For this app it usually sounds worse, and now it says so.** Tryptify's own playback is already corrected by the in-app AutoEQ engine; the system-wide effect attaches to the global output mix and corrects it a *second* time on the way out, so the curve lands twice. Nothing bypasses the in-app pass while the global one is running.
+- **It is also a coarser curve than the one it copies.** A global effect can only be a graphic EQ, so what it applies is a many-band approximation of the exact parametric correction, not the correction itself.
+- **And it may do nothing at all.** Whether a session-0 effect reaches every stream is up to the device's audio HAL; on some ROMs it is silently inert, which is why the switch has always said "device-permitting".
+- **The point of the setting is other apps**, and the wording now says that outright rather than leaving people to turn it on because it sounded like more of a good thing.
+- **The badge and the warning are their own fields on the row**, not text spliced into the title, because the title is the anchor settings search scrolls to and the row's stable DevEdit id — folding "(beta)" into it would have moved both.
+
 ### Fixed
 
 #### Every list row is now the same height

@@ -1000,12 +1000,19 @@ private fun StatusOverlayPanel(
                             .fillMaxWidth()
                             .padding(start = 12.dp, top = 10.dp),
                     ) {
+                        // Short form of the Settings caution — the sheet has no
+                        // room for the full reasoning, but this is where the
+                        // toggle is actually reachable mid-listen, so it cannot
+                        // be the one place that stays silent about it.
                         ToggleRow(
                             "System-wide",
                             "Apply to all device audio",
                             systemWideAutoEqEnabled,
                             accent,
                             onSystemWideAutoEqToggle,
+                            badge = "Beta",
+                            caution = "Usually sounds worse here — this app's audio " +
+                                "ends up corrected twice. It is for fixing other apps.",
                         )
                     }
                 }
@@ -1098,6 +1105,8 @@ private fun ToggleRow(
     accent: Color,
     onCheckedChange: (Boolean) -> Unit,
     onLongPress: (() -> Unit)? = null,
+    badge: String? = null,
+    caution: String? = null,
 ) {
     val rowModifier = if (onLongPress != null) {
         Modifier
@@ -1110,27 +1119,51 @@ private fun ToggleRow(
     } else {
         Modifier.fillMaxWidth()
     }
-    Row(
-        modifier = rowModifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Color.White)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = rowModifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                    if (badge != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = badge.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.75f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.White.copy(alpha = 0.14f))
+                                .padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                )
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.Black,
+                    checkedTrackColor = accent,
+                ),
             )
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Black,
-                checkedTrackColor = accent,
-            ),
-        )
+        if (caution != null) {
+            Text(
+                text = caution,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFFB4A9),
+                modifier = Modifier.padding(top = 4.dp, end = 48.dp),
+            )
+        }
     }
 }
 
