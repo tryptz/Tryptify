@@ -88,7 +88,7 @@ import tf.monochrome.android.ui.home.HomeScreen
 import tf.monochrome.android.ui.mixer.MixerScreen
 import tf.monochrome.android.ui.library.LibraryScreen
 import tf.monochrome.android.ui.library.LIBRARY_SECTION_NAMES
-import tf.monochrome.android.ui.library.librarySections
+import tf.monochrome.android.ui.library.legacyLibrarySections
 import tf.monochrome.android.ui.library.DownloadsScreen
 import tf.monochrome.android.ui.library.PlaylistScreen
 import tf.monochrome.android.ui.player.NowPlayingScreen
@@ -253,7 +253,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // plus each Library section — instead of only the Home↔Library split.
     val settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel()
     val libraryTabOrder by settingsViewModel.libraryTabOrder.collectAsStateWithLifecycle()
-    val librarySectionIds = remember(libraryTabOrder) { librarySections(libraryTabOrder) }
+    val librarySectionIds = remember(libraryTabOrder) { legacyLibrarySections(libraryTabOrder) }
     val librarySectionPager = rememberPagerState(pageCount = { librarySectionIds.size })
 
     // One-shot landing route handed over by onboarding ("library" lands on

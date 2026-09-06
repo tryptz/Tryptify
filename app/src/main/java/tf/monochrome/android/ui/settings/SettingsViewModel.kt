@@ -16,6 +16,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import tf.monochrome.android.ui.navigation.APP_PAGE_TITLES
+import tf.monochrome.android.ui.navigation.DEFAULT_PAGE_ORDER
+import tf.monochrome.android.ui.navigation.canTogglePageVisibility
+import tf.monochrome.android.ui.navigation.resolvePageOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
@@ -783,6 +787,56 @@ class SettingsViewModel @Inject constructor(
             val item = current.removeAt(fromIndex)
             current.add(toIndex, item)
             setLibraryTabOrder(current)
+        }
+    }
+
+    // --- Page order & visibility (the one flat swipe list) ---
+    // Same in-memory mirror as the tab order above, for the same reason: a
+    // second tap that reads a DataStore-lagged value moves the wrong page. It
+    // applies to the visibility toggle too — double-tapping the last visible
+    // page's eye would otherwise read "two visible" twice and hide both.
+    private val _pageOrder = MutableStateFlow(DEFAULT_PAGE_ORDER)
+    val pageOrder: StateFlow<List<String>> = _pageOrder.asStateFlow()
+    private val _hiddenPages = MutableStateFlow(emptySet<String>())
+    val hiddenPages: StateFlow<Set<String>> = _hiddenPages.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            // libraryTabOrder is the legacy key, read only so an install that
+            // predates page_order lands on the pages it was already looking at.
+            combine(preferences.pageOrderRaw, preferences.libraryTabOrder, ::resolvePageOrder)
+                .collect { _pageOrder.value = it }
+        }
+        viewModelScope.launch {
+            preferences.hiddenPages.collect { _hiddenPages.value = it }
+        }
+    }
+
+    fun setPageOrder(order: List<String>) {
+        _pageOrder.value = order
+        viewModelScope.launch { preferences.setPageOrder(order) }
+    }
+
+    fun movePage(fromIndex: Int, toIndex: Int) {
+        val current = _pageOrder.value.toMutableList()
+        if (fromIndex in current.indices && toIndex in current.indices) {
+            val item = current.removeAt(fromIndex)
+            current.add(toIndex, item)
+            setPageOrder(current)
+        }
+    }
+
+    fun setPageVisible(id: String, visible: Boolean) {
+        val order = _pageOrder.value
+        val hidden = _hiddenPages.value
+        if (!visible && !canTogglePageVisibility(order, hidden, id)) return
+        val next = if (visible) hidden - id else hidden + id
+        _hiddenPages.value = next
+        // Prune ids this build has no page for on WRITE, never on read: pruning
+        // on read would fight a device that is still syncing an older page list,
+        // clearing hidden state this device was only holding on its behalf.
+        viewModelScope.launch {
+            preferences.setHiddenPages(next.filterTo(mutableSetOf()) { it in APP_PAGE_TITLES })
         }
     }
  

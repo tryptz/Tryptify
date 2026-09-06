@@ -396,6 +396,18 @@ class PreferencesManager @Inject constructor(
         // Library tab order
         private val LIBRARY_TAB_ORDER = stringPreferencesKey("library_tab_order")
 
+        // The flat page order, and the pages grayed out of it.
+        //
+        // LIBRARY_TAB_ORDER above is neither reused nor retired. It is still read
+        // once, to work out what an install that predates PAGE_ORDER was already
+        // looking at, and an older build of the app on another device still syncs
+        // and honours it. Writing the seven flat ids into it instead would hand
+        // that older build "home" and "discover" as library sections — silently
+        // dropped there, then written back without them, at which point this
+        // device's migration would fire again and drag Home back to the front.
+        private val PAGE_ORDER = stringPreferencesKey("page_order")
+        private val HIDDEN_PAGES = stringSetPreferencesKey("hidden_pages")
+
         // Library sort selections (serialized "<KEY>:asc" / "<KEY>:desc")
         private val SONG_SORT = stringPreferencesKey("library_song_sort")
         private val ALBUM_SORT = stringPreferencesKey("library_album_sort")
@@ -458,7 +470,7 @@ class PreferencesManager @Inject constructor(
             EQ_BANDS_R_JSON, EQ_STEREO_MODE, SYSTEM_TONE_CONTROLS_JSON,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
-            LIBRARY_TAB_ORDER, CAR_MODE_BAND_COUNT,
+            LIBRARY_TAB_ORDER, PAGE_ORDER, HIDDEN_PAGES, CAR_MODE_BAND_COUNT,
             AI_RADIO_ENABLED,
             RADIO_WEIGHT_LOCAL_LIBRARY, RADIO_WEIGHT_QOBUZ, RADIO_WEIGHT_SPOTIFY_DISCOVERY,
             RADIO_WEIGHT_CANONICAL_VERSION_BIAS, RADIO_WEIGHT_NOVELTY, RADIO_WEIGHT_FAMILIARITY,
@@ -1808,6 +1820,24 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setLibraryTabOrder(order: List<String>) {
         dataStore.edit { it[LIBRARY_TAB_ORDER] = order.joinToString(",") }
+    }
+
+    // --- Page order & visibility (the one flat swipe list) ---
+    // Deliberately no default here. Null means "never set", which is the signal
+    // the migration needs to tell a fresh install from one carrying a
+    // library_tab_order; a default baked in at this layer would erase it.
+    // Defaults, reconciliation and the legacy migration all live together in
+    // ui/navigation/AppPages.kt so they can be tested without DataStore.
+    val pageOrderRaw: Flow<List<String>?> = dataStore.data.map { prefs ->
+        prefs[PAGE_ORDER]?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }
+    }
+    suspend fun setPageOrder(order: List<String>) {
+        dataStore.edit { it[PAGE_ORDER] = order.joinToString(",") }
+    }
+
+    val hiddenPages: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_PAGES] ?: emptySet() }
+    suspend fun setHiddenPages(hidden: Set<String>) {
+        dataStore.edit { it[HIDDEN_PAGES] = hidden }
     }
 
     // --- Library sort selections (persist Songs/Albums/Artists sort order) ---

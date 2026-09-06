@@ -66,6 +66,7 @@ import tf.monochrome.android.ui.components.TrackSort
 import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
+import tf.monochrome.android.ui.navigation.APP_PAGE_TITLES
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -90,15 +91,17 @@ internal val LIBRARY_SECTION_NAMES = mapOf(
 )
 
 /**
- * Library's pages in order: the local library first, then whatever the user has
- * left in their configured section order.
+ * How the Library pager ordered its sections before the flat page list: Local
+ * pinned to the front regardless of what the user had actually set, which is why
+ * moving Local in Settings never did anything.
  *
- * Shared with the nav host, which owns the `PagerState` for these pages so the
- * top-bar indicator can count and track every one of them — Home plus each
- * Library section — rather than just Home vs Library.
+ * Kept ONLY to migrate a stored `library_tab_order` into the flat page order,
+ * which has to reproduce what that install was seeing rather than what its CSV
+ * said. Nothing renders from this any more and Local is genuinely movable now —
+ * do not reintroduce the pin.
  */
-internal fun librarySections(order: List<String>): List<String> =
-    listOf(LOCAL_SECTION) + order.filter { it != LOCAL_SECTION && it in LIBRARY_SECTION_NAMES }
+internal fun legacyLibrarySections(order: List<String>): List<String> =
+    listOf("local") + order.filter { it != "local" && it in APP_PAGE_TITLES }
 
 /**
  * Lazy list keys for Library's two mixed pages.
