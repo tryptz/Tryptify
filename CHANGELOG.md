@@ -29,6 +29,16 @@
 
 ### Changed
 
+#### Discover can be moved, and any page can be hidden
+- **Settings › Library › Page Order now lists every page you swipe between** — Home, Discover, Local, Overview, Playlists, Favorites and Downloads — and each one can be moved anywhere in the sequence. It was "Library Tab Order" and it listed five, because Discover was not in the same pager as the others.
+- **There were two nested pagers, and now there is one.** An outer one hardcoded to Home / Discover / Library, and an inner one over the Library's sections driven by the setting. Only the inner one was reorderable. The dot indicator had been flattening the two into a single strip of seven for a while, so the app was already presenting one sequence — this makes it one.
+- **Each page has a visibility toggle.** Hiding one grays its row out and drops it from the swipe; it keeps its slot in the order, so turning it back on puts it back where it was rather than at the end. The last visible page cannot be hidden, refused in three separate places — the last of which exists because a hidden set can arrive from another device's settings sync without this device's UI ever seeing it.
+- **Discover has a Settings button now.** It was the only top bar without one, which with hiding would have made "Discover is the only visible page" a three-tap way to strand yourself: no bottom nav, no drawer, and Settings the only place to bring a page back.
+- **"Local" can finally be moved.** It was pinned to the front in code regardless of the stored order, so moving it in Settings had never done anything and its arrows were decorative.
+- **Your existing order carries over as what you were seeing**, not as what was stored. The old setting's list started with Overview, but the pin meant Local was the page you actually landed on, so an upgrade puts Home and Discover first and Local after them — rather than appending the two pages you start on to the far end of a seven-page swipe.
+- **A page added in a future version will now show up for you.** The old order could not do that: any install that had ever touched the setting kept its five-entry list forever and never saw anything added later. New pages are inserted where they belong in the sequence rather than dropped at the end, which is where nobody finds one.
+- **One thing resets once on upgrade:** each page keeps its own saved scroll position now instead of sharing one with the rest of the Library, so those start from the top on the first launch after updating.
+
 #### The equalizer's master switch says it covers AutoEQ
 - **Settings › Equalizer › "Enable Equalizer" is now "Enable AutoEQ/Equalizer".** The same switch is the master for the AutoEQ headphone correction, the tone shelves and the graphic bands — Target Curve and Headphone directly under it are both downstream of it — and the old name only claimed one of those.
 

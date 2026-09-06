@@ -87,8 +87,6 @@ import tf.monochrome.android.ui.discover.GenreMapScreen
 import tf.monochrome.android.ui.home.HomeScreen
 import tf.monochrome.android.ui.mixer.MixerScreen
 import tf.monochrome.android.ui.library.LibraryScreen
-import tf.monochrome.android.ui.library.LIBRARY_SECTION_NAMES
-import tf.monochrome.android.ui.library.legacyLibrarySections
 import tf.monochrome.android.ui.library.DownloadsScreen
 import tf.monochrome.android.ui.library.PlaylistScreen
 import tf.monochrome.android.ui.player.NowPlayingScreen
@@ -184,11 +182,16 @@ data class BottomNavItem(
     val unselectedIcon: ImageVector
 )
 
-// The three main tab screens, in pager order. Discover sits between Home and
-// Library because it is the browsing step between "what am I doing now" and
-// "what do I already own".
-private val tabRoutes =
-    listOf(Screen.Home.route, Screen.Discover.route, Screen.Library.route)
+// The NavHost destinations the swipeable page list is drawn on. These are stubs
+// (their `composable {}` bodies are empty) — the pager below draws the pages, and
+// which page you are on is the pager's business, not the NavController's.
+//
+// This used to be the page list itself, hardcoded to Home / Discover / Library,
+// with the Library sections in a second pager nested inside it. All three routes
+// are kept even though only Home is ever navigated to now, so a back stack
+// restored after process death onto "discover" or "library" still shows a pager.
+private val pagerRoutes =
+    setOf(Screen.Home.route, Screen.Discover.route, Screen.Library.route)
 
 // Screens whose own controls run to the bottom edge, where the mini player would
 // sit on top of them. The player and the mixer are the transport itself; Oxford
@@ -236,61 +239,73 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         }
     }
 
-    // True when the user is on one of the three main tab screens
-    val isOnMainTab = currentDestination?.route in tabRoutes
+    // True when the user is on a destination the page pager is drawn on, rather
+    // than a detail or tool screen pushed over it.
+    val isOnMainTab = currentDestination?.route in pagerRoutes
 
     val showMiniPlayer = currentTrack != null
         && currentDestination?.route !in miniPlayerHiddenRoutes
 
-    // Pager state for the main tabs
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabRoutes.size })
     val scope = rememberCoroutineScope()
-    // Tab changes slide normally; with "Disable animations" on they jump.
+    // Page changes slide normally; with "Disable animations" on they jump.
     val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
 
-    // Library's own section pager lives up here rather than inside LibraryScreen
-    // so the top-bar indicator can count and track every page in the app — Home
-    // plus each Library section — instead of only the Home↔Library split.
+    // One pager over one flat list of pages. There used to be two — an outer one
+    // hardcoded to Home / Discover / Library and an inner one over the Library's
+    // sections — which is why Discover could not be reordered and why the
+    // indicator below had to fold two axes onto one by hand.
     val settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel()
-    val libraryTabOrder by settingsViewModel.libraryTabOrder.collectAsStateWithLifecycle()
-    val librarySectionIds = remember(libraryTabOrder) { legacyLibrarySections(libraryTabOrder) }
-    val librarySectionPager = rememberPagerState(pageCount = { librarySectionIds.size })
+    val pageOrder by settingsViewModel.pageOrder.collectAsStateWithLifecycle()
+    val hiddenPages by settingsViewModel.hiddenPages.collectAsStateWithLifecycle()
+    val pages = remember(pageOrder, hiddenPages) { visiblePages(pageOrder, hiddenPages) }
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { pages.size })
 
-    // One-shot landing route handed over by onboarding ("library" lands on
-    // the Library pager tab; anything else is a plain navigation target).
+    // Keep the user on the same PAGE, not the same index, when the list changes
+    // under them: hiding a page shortens it, so the index they were on now points
+    // somewhere else or past the end, and reordering moves it. Both edits happen
+    // in Settings with the pager off screen, so this lands before it is seen.
+    var lastPageId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(pages) {
+        pagerState.scrollToPage(restoredPageIndex(pages, lastPageId))
+    }
+    LaunchedEffect(pagerState.currentPage, pages) {
+        lastPageId = pages.getOrNull(pagerState.currentPage)
+    }
+
+    // One-shot landing route handed over by onboarding. Keyed on Unit and not on
+    // `pages`: keying it there would re-run the landing every time the user
+    // reordered or hid a page and yank them back to it.
+    //
+    // On the very first frame `pages` is still the default order, before DataStore
+    // has emitted. This only fires straight out of onboarding, on an install whose
+    // order IS the default unless settings sync raced it down — the same exposure
+    // the previous version had.
     LaunchedEffect(Unit) {
-        when (initialRoute) {
-            null -> Unit
-            Screen.Library.route -> {
-                pagerState.scrollToPage(tabRoutes.indexOf(Screen.Library.route))
-                navController.navigate(Screen.Library.route) {
-                    popUpTo(Screen.Home.route) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
-            else -> navController.navigateSafe(initialRoute)
-        }
+        val route = initialRoute ?: return@LaunchedEffect
+        val page = landingPageIndex(pages, route)
+        if (page != null) pagerState.scrollToPage(page) else navController.navigateSafe(route)
     }
 
-    // When the user swipes the pager, keep the NavController in sync.
-    LaunchedEffect(pagerState.currentPage) {
-        if (isOnMainTab) {
-            val route = tabRoutes[pagerState.currentPage]
-            if (currentDestination?.route != route) {
-                navController.navigate(route) {
-                    popUpTo(Screen.Home.route) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
-        }
-    }
+    // There is deliberately no swipe->NavController sync any more. It existed so
+    // `tabRoutes[currentPage]` matched the current destination, and nothing read
+    // that correspondence: no code outside this file navigates to the Discover or
+    // Library routes, and `isOnMainTab`, `miniPlayerHiddenRoutes` and
+    // `fullBleedRoute` only ask which KIND of destination this is. The NavHost
+    // now simply stays on "home" while you swipe, and the pager state — declared
+    // outside the `if (isOnMainTab)` block, so it survives the pager being torn
+    // down for a detail screen — is the sole record of which page you are on.
+    // That is already how the inner section pager worked.
 
-    // Back on a non-first main tab returns the pager to Home instead of popping
-    // the nav out from under it. Previously back on the Library tab popped the
-    // NavController to Home while the pager stayed on Library — visually nothing
-    // happened, and the next back exited the app with Library still on screen.
+    // Back on any page but the first returns the pager to page 0 — whichever page
+    // the user has put there — instead of popping the nav out from under it.
+    // Previously back on the Library tab popped the NavController to Home while
+    // the pager stayed on Library: visually nothing happened, and the next back
+    // exited the app with Library still on screen.
+    //
+    // This is composed before the pager content below, so it registers first and
+    // LibraryScreen's selection handler — composed later, inside a page — wins the
+    // first back press while a selection is active. That ordering used to be
+    // enforced within LibraryScreen; it is spread across two files now.
     BackHandler(enabled = isOnMainTab && pagerState.currentPage != 0) {
         scope.launch { pagerState.goToPage(0, animateTabs) }
     }
@@ -371,28 +386,36 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     modifier = Modifier.fillMaxSize(),
                     beyondViewportPageCount = 0
                 ) { page ->
-                    // Key by route, not page index — `Screen.Home.route` /
-                    // `Screen.Library.route` survive even if the pager order
-                    // ever changes. SaveableStateProvider persists every
-                    // rememberSaveable inside the lambda across pager recreate.
-                    val key = tabRoutes[page]
-                    tabStateHolder.SaveableStateProvider(key) {
-                        when (page) {
-                            0 -> tf.monochrome.android.devedit.DevEditScreen("home") {
-                                HomeScreen(navController = navController, playerViewModel = playerViewModel)
-                            }
-                            1 -> tf.monochrome.android.devedit.DevEditScreen("discover") {
-                                DiscoverScreen(
+                    // getOrNull, not [page]: `pages` shrinks when a page is
+                    // hidden, and the content lambda can be invoked for a stale
+                    // index in the frame before the pager clamps currentPage to
+                    // the new count. The old code indexed directly and got away
+                    // with it only because reordering never changed the size.
+                    val pageId = pages.getOrNull(page) ?: return@HorizontalPager
+                    // Key and content both come off `pageId`. They used to be
+                    // derived separately — the key from tabRoutes[page], the
+                    // content from a `when (page)` — so a change to one silently
+                    // desynced the other's saved state. SaveableStateProvider
+                    // persists every rememberSaveable inside across recreation.
+                    tabStateHolder.SaveableStateProvider(pageId) {
+                        tf.monochrome.android.devedit.DevEditScreen(pageId) {
+                            when (pageId) {
+                                Screen.Home.route ->
+                                    HomeScreen(navController = navController, playerViewModel = playerViewModel)
+                                Screen.Discover.route ->
+                                    DiscoverScreen(
+                                        navController = navController,
+                                        playerViewModel = playerViewModel,
+                                    )
+                                // Everything else is a Library page.
+                                // reconcilePageOrder drops ids this build does
+                                // not know, so nothing else can arrive here.
+                                else -> LibraryScreen(
                                     navController = navController,
                                     playerViewModel = playerViewModel,
-                                )
-                            }
-                            2 -> tf.monochrome.android.devedit.DevEditScreen("library") {
-                                LibraryScreen(
-                                    navController = navController,
-                                    playerViewModel = playerViewModel,
-                                    sections = librarySectionIds,
-                                    sectionPager = librarySectionPager,
+                                    sectionId = pageId,
+                                    pages = pages,
+                                    pager = pagerState,
                                 )
                             }
                         }
@@ -410,7 +433,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 popEnterTransition = { fadeIn() },
                 popExitTransition = { fadeOut() }
             ) {
-                // Tab stubs – content is rendered by the pager above
+                // Pager hosts – content is drawn by the page list above.
                 composable(Screen.Home.route) { }
                 composable(Screen.Discover.route) { }
                 composable(Screen.GenreMap.route) {
@@ -709,55 +732,25 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             CompositionLocalProvider(
                 tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
             ) {
-                // Home, Discover, then one slot per Library section.
-                val libraryPage = tabRoutes.lastIndex
-                val indicatorPages = libraryPage + librarySectionIds.size
+                // One slot per visible page. This used to fold an outer
+                // Home/Discover/Library pager and an inner section pager onto
+                // one axis by hand, fading the inner one in by how far the outer
+                // crossing had got. There is one pager now, so the indicator is
+                // just its position.
+                val next = (pagerState.currentPage + 1) % pages.size.coerceAtLeast(1)
                 SwipeToLibraryHint(
-                    pageCount = indicatorPages,
+                    pageCount = pages.size,
+                    // Stays a lambda: it is read in a DrawScope, not in
+                    // composition, so the worm follows the finger without
+                    // recomposing on every frame of the swipe.
                     progressProvider = {
-                        // Flattens the two nested pagers onto one axis: Home 0,
-                        // Discover 1, the local library 2, each further section
-                        // 3, 4, … The inner pager only contributes once the
-                        // outer one is on Library, and it is faded in by how far
-                        // that crossing has got, so the worm stays continuous
-                        // through the swipe instead of jumping when Library was
-                        // left on a later section.
-                        val outer = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                        val inner = librarySectionPager.currentPage +
-                            librarySectionPager.currentPageOffsetFraction
-                        outer + inner * (outer - (libraryPage - 1)).coerceIn(0f, 1f)
+                        pagerState.currentPage + pagerState.currentPageOffsetFraction
                     },
-                    // Tap walks forward one page and wraps at the end. Both
-                    // pagers animate, so the worm plays the same way it does
-                    // under a finger.
-                    onClick = {
-                        scope.launch {
-                            when {
-                                pagerState.currentPage < libraryPage -> {
-                                    if (pagerState.currentPage + 1 == libraryPage) {
-                                        librarySectionPager.scrollToPage(0)
-                                    }
-                                    pagerState.goToPage(pagerState.currentPage + 1, animateTabs)
-                                }
-                                librarySectionPager.currentPage + 1 < librarySectionIds.size ->
-                                    librarySectionPager.goToPage(
-                                        librarySectionPager.currentPage + 1,
-                                        animateTabs,
-                                    )
-                                else -> pagerState.goToPage(0, animateTabs)
-                            }
-                        }
-                    },
-                    onClickLabel = when {
-                        pagerState.currentPage < libraryPage ->
-                            "Open " + (tabRoutes.getOrNull(pagerState.currentPage + 1)
-                                ?.replaceFirstChar { it.uppercase() } ?: "next tab")
-                        librarySectionPager.currentPage + 1 < librarySectionIds.size ->
-                            "Open " + (LIBRARY_SECTION_NAMES[
-                                librarySectionIds[librarySectionPager.currentPage + 1]
-                            ] ?: "next section")
-                        else -> "Open Home"
-                    },
+                    // Tap walks forward one page and wraps at the end.
+                    onClick = { scope.launch { pagerState.goToPage(next, animateTabs) } },
+                    onClickLabel = pages.getOrNull(next)
+                        ?.let { "Open " + (APP_PAGE_TITLES[it] ?: it) }
+                        ?: "Open next page",
                     hazeState = hazeState,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -765,7 +758,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         // 64.dp tall, so this drops the pill onto its centre.
                         .padding(top = statusBarHeight + (64.dp - SwipeHintPillHeight) / 2)
                         .size(
-                            width = swipeHintPillWidth(indicatorPages),
+                            width = swipeHintPillWidth(pages.size),
                             height = SwipeHintPillHeight,
                         ),
                 )

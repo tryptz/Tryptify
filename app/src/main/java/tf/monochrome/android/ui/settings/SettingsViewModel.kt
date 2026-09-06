@@ -759,36 +759,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { scanCoordinator.runFullScan() }
     }
 
-    // --- Library tab order ---
-    // Backed by an in-memory MutableStateFlow (mirrored from prefs) rather than
-    // stateIn: moveLibraryTab used to read the prefs-backed StateFlow's .value,
-    // which lags the DataStore write, so rapid up/down taps all read the same
-    // stale order and lost or scrambled moves. The local flow updates
-    // synchronously so successive moves compound correctly.
-    private val _libraryTabOrder = MutableStateFlow(
-        listOf("overview", "local", "playlists", "favorites", "downloads")
-    )
-    val libraryTabOrder: StateFlow<List<String>> = _libraryTabOrder.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            preferences.libraryTabOrder.collect { _libraryTabOrder.value = it }
-        }
-    }
-
-    fun setLibraryTabOrder(order: List<String>) {
-        _libraryTabOrder.value = order
-        viewModelScope.launch { preferences.setLibraryTabOrder(order) }
-    }
-
-    fun moveLibraryTab(fromIndex: Int, toIndex: Int) {
-        val current = _libraryTabOrder.value.toMutableList()
-        if (fromIndex in current.indices && toIndex in current.indices) {
-            val item = current.removeAt(fromIndex)
-            current.add(toIndex, item)
-            setLibraryTabOrder(current)
-        }
-    }
+    // The library_tab_order surface that used to live here is gone: the flat page
+    // order below replaced it and nothing reads it any more. The PREFERENCE is
+    // still read, once, by resolvePageOrder — it is how an upgrade lands on the
+    // pages it was already looking at.
 
     // --- Page order & visibility (the one flat swipe list) ---
     // Same in-memory mirror as the tab order above, for the same reason: a

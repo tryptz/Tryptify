@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -95,6 +96,7 @@ import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.swallowHorizontalScroll
 import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.openCatalogAlbum
 import tf.monochrome.android.ui.navigation.openCatalogArtist
@@ -189,6 +191,16 @@ fun DiscoverScreen(
                 }
                 IconButton(onClick = { viewModel.showSomethingElse() }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Show me something else")
+                }
+                // Every page can now be the only visible one, so every page has
+                // to be a way into Settings — which is the only place to make
+                // another page visible again. Discover was the one top bar
+                // without this, which made "hide everything but Discover" a
+                // three-tap way to strand yourself.
+                IconButton(onClick = {
+                    navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
+                }) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings")
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),

@@ -62,6 +62,10 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import tf.monochrome.android.ui.navigation.APP_PAGE_TITLES
+import tf.monochrome.android.ui.navigation.canTogglePageVisibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -3301,6 +3305,70 @@ fun SettingSwitchItem(
     }
 }
 
+/**
+ * One page in Settings › Library › Page Order: its name, whether it is shown,
+ * and the controls to move it or gray it out.
+ *
+ * Not [SettingSwitchItem]: that row gives its whole width to a title, a subtitle
+ * and one switch, and this one needs a title plus three controls. An eye rather
+ * than a Switch for the same reason — a Switch wedged between a label and two
+ * arrows crowds a narrow screen.
+ *
+ * The arrows stay live on a hidden row. A page you cannot move is a page whose
+ * position you cannot fix before showing it again.
+ */
+@Composable
+private fun PageOrderRow(
+    title: String,
+    visible: Boolean,
+    canToggle: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+    onToggleVisible: () -> Unit,
+) {
+    val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+    tf.monochrome.android.devedit.DevEditable("page_${devSlug(title)}", Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().settingsAnchor(title).padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+                    .copy(alpha = if (visible) 1f else 0.38f),
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onToggleVisible, enabled = canToggle) {
+                Icon(
+                    if (visible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    // Disabled only on the last visible page: hiding it would
+                    // leave a pager with nothing in it, and every way into
+                    // Settings is a page's top bar.
+                    contentDescription = if (visible) "Hide $title" else "Show $title",
+                    tint = if (canToggle) MaterialTheme.colorScheme.onSurface else dim,
+                )
+            }
+            IconButton(onClick = onUp, enabled = canMoveUp) {
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Move $title up",
+                    tint = if (canMoveUp) MaterialTheme.colorScheme.onSurface else dim,
+                )
+            }
+            IconButton(onClick = onDown, enabled = canMoveDown) {
+                Icon(
+                    Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Move $title down",
+                    tint = if (canMoveDown) MaterialTheme.colorScheme.onSurface else dim,
+                )
+            }
+        }
+    }
+}
+
 /** A small pill beside a setting's title — "BETA" and the like. */
 @Composable
 private fun SettingBadge(text: String) {
@@ -3354,7 +3422,8 @@ private fun SettingCaution(text: String) {
 // ─── Tab 5: Library Settings ──────────────────────────────────────────
 @Composable
 private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
-    val libraryTabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
+    val pageOrder by viewModel.pageOrder.collectAsStateWithLifecycle()
+    val hiddenPages by viewModel.hiddenPages.collectAsStateWithLifecycle()
 
     // Every other tab wraps in SettingsTabContent; this one rolled its own
     // LazyColumn and its own section headings, so its groups sat at a
@@ -3380,54 +3449,34 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
             Text(if (isScanning) "Scanning…" else "Rescan Library Now")
         }
 
-        if (libraryTabOrder.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            SettingsGroupHeader("Library Tab Order")
-            Text(
-                "Reorder the tabs shown in the Library screen",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+        Spacer(modifier = Modifier.height(16.dp))
+        // Was "Library Tab Order", when the five Library sections were the only
+        // pages this list could reach. It covers Home and Discover now, neither
+        // of which is a library tab. The entry in SettingsSearchIndex has to be
+        // renamed with it — a test greps these files for every index title.
+        SettingsGroupHeader("Page Order")
+        Text(
+            "Reorder the pages you swipe between, and gray out the ones you don't use.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
-            libraryTabOrder.forEachIndexed { index, sectionId ->
-                val displayName = sectionId.replaceFirstChar { it.titlecase(Locale.getDefault()) }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = displayName,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(
-                        onClick = { viewModel.moveLibraryTab(index, index - 1) },
-                        enabled = index > 0
-                    ) {
-                        Icon(
-                            Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Move up",
-                            tint = if (index > 0) MaterialTheme.colorScheme.onSurface
-                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.moveLibraryTab(index, index + 1) },
-                        enabled = index < libraryTabOrder.size - 1
-                    ) {
-                        Icon(
-                            Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Move down",
-                            tint = if (index < libraryTabOrder.size - 1) MaterialTheme.colorScheme.onSurface
-                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
-                    }
-                }
-            }
+        // The FULL order, hidden pages included: the arrows move within this
+        // list, so the indices these rows hand back are the indices the stored
+        // order uses. A hidden page also keeps its slot, so showing it again
+        // puts it back where it was rather than at the end.
+        pageOrder.forEachIndexed { index, pageId ->
+            PageOrderRow(
+                title = APP_PAGE_TITLES[pageId] ?: pageId,
+                visible = pageId !in hiddenPages,
+                canToggle = canTogglePageVisibility(pageOrder, hiddenPages, pageId),
+                canMoveUp = index > 0,
+                canMoveDown = index < pageOrder.lastIndex,
+                onUp = { viewModel.movePage(index, index - 1) },
+                onDown = { viewModel.movePage(index, index + 1) },
+                onToggleVisible = { viewModel.setPageVisible(pageId, pageId in hiddenPages) },
+            )
         }
 
         // Moved off System, where it sat between the app sign-in and the

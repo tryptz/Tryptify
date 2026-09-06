@@ -101,6 +101,33 @@ width) is for picking one icon out of a row, like the transport and dock.
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
 
+### Pages
+
+**The app has ONE pager over one flat list of pages** — Home, Discover and the
+five former Library sections — held in `APP_PAGES` (`ui/navigation/AppPages.kt`)
+and ordered by the `page_order` preference. There used to be two nested pagers,
+an outer Home/Discover/Library and an inner one over the Library's sections, and
+the whole indicator existed to fold them onto one axis by hand. Do not
+reintroduce a second pager, and do not pin any page to an index: `local` was
+pinned to page 0 for a long time, which is why moving it in Settings did nothing
+and why its arrows were decorative.
+
+**Every page's top bar is a way into Settings.** Pages can be hidden, so any page
+can be the only visible one — and Settings is the only place to make another
+visible again. Discover shipped without a Settings button, which made "hide
+everything but Discover" a three-tap way to strand yourself with no bottom nav
+and no drawer to fall back on. A new page without that button is the same bug.
+
+**Never let the visible page list reach zero.** Three layers stop it — Settings
+disables the last eye, the view model refuses the write, and `visiblePages()`
+returns one page regardless — because a pager with no pages is a blank screen
+with no top bar and therefore no way back. The third layer is not redundant: a
+hidden set can arrive from another device's settings sync without either of the
+first two ever running on this one.
+
+**The indicator counts visible pages and nothing else.** One slot per page,
+position straight off the single pager.
+
 ### List rows
 
 **Every list row is one shared height**, `MonoDimens.listRowHeight`, applied with
