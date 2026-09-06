@@ -408,15 +408,18 @@ private fun EqualizerTab(
 
     SettingsTabContent {
         SettingsGroupHeader("Equalizer")
+        // "Enable Equalizer" undersold it: the same switch is the master for the
+        // AutoEQ headphone correction, the tone shelves and the graphic bands —
+        // Target Curve and Headphone below it are all downstream of this one.
         SettingSwitchItem(
-            title = "Enable Equalizer",
+            title = "Enable AutoEQ/Equalizer",
             subtitle = "Apply EQ processing to playback",
             checked = eqEnabled,
             onCheckedChange = { eqViewModel.toggleEq() }
         )
         // System-wide is a sub-toggle of the equalizer, not a peer of it: it
         // publishes the same correction to the device's global mix, so it means
-        // nothing with the EQ off. It sat ABOVE "Enable Equalizer" as an equal,
+        // nothing with the EQ off. It sat ABOVE its parent switch as an equal,
         // which read as the bigger, better switch of the two. Nested and revealed
         // under its parent, exactly as the player's audio-tools panel does it —
         // and `toggleEq` clears the flag on the way out, so the effect cannot

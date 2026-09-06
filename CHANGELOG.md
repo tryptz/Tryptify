@@ -29,6 +29,9 @@
 
 ### Changed
 
+#### The equalizer's master switch says it covers AutoEQ
+- **Settings › Equalizer › "Enable Equalizer" is now "Enable AutoEQ/Equalizer".** The same switch is the master for the AutoEQ headphone correction, the tone shelves and the graphic bands — Target Curve and Headphone directly under it are both downstream of it — and the old name only claimed one of those.
+
 #### System-wide AutoEQ is a sub-toggle now, marked beta, and says what it costs
 - **It has moved under "Enable Equalizer" and only appears while that is on**, indented beneath it, the same shape the player's audio-tools panel has always used. It used to sit *above* Enable Equalizer as an equal, which read as the bigger and better of the two switches. It is neither: it is a way of publishing the same correction somewhere else, and it means nothing with the equalizer off.
 - **Turning the equalizer off now switches it off too.** `SystemAudioEqController` watches the system-wide flag and never `eqEnabled`, so disabling the EQ from Settings or the Equalizer screen left the global session-0 effect attached and running. The player's own toggle had always cleared it; the other two writers of that preference had not. With the row hidden while the EQ is off, that would have become a running global effect with nothing on screen left to stop it.
