@@ -39,11 +39,17 @@ object WhatsNew {
     /** The one section heading in use — the Discover page and everything under it. */
     private const val DISCOVER = "Discover (Beta)"
 
+    /** The equalizer's master switch and the system-wide correction under it. */
+    private const val EQUALIZER = "Equalizer"
+
     /** The world radio globe and everything hanging off it. */
     private const val GLOBE = "World radio"
 
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
+
+    /** The pages you swipe between, their order and their visibility. */
+    private const val PAGES = "Pages and order"
 
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
@@ -53,6 +59,80 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 188,
+            versionName = "1.8.8",
+            entries = listOf(
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Every page you swipe between is in one list",
+                    body = "Settings › Library › Page Order now holds all seven — Home, " +
+                        "Discover, Local, Overview, Playlists, Favorites and Downloads — and any " +
+                        "of them can go anywhere in the sequence. Discover was never in the list " +
+                        "before, and Local was pinned to the front.",
+                ),
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Hide the pages you don't use",
+                    body = "Each row has a switch beside it. A hidden page drops out of the swipe " +
+                        "but keeps its slot, so switching it back on puts it where it was rather " +
+                        "than at the end. The last page still showing can't be hidden.",
+                ),
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Discover has a Settings button",
+                    body = "It was the only top bar without one. Now that a page can be hidden, " +
+                        "leaving Discover as the only one showing would have been a quick way to " +
+                        "strand yourself with nowhere to bring the others back from.",
+                ),
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Your order carries over, and one thing resets",
+                    body = "An upgrade keeps the pages in the order you were actually seeing them, " +
+                        "with Home and Discover in front. Each page remembers its own scroll " +
+                        "position now instead of sharing one, so those start from the top once.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The glass stopped flashing",
+                    body = "A band of light used to slide across every glass surface every few " +
+                        "seconds — the lyrics, the player chrome, the dock, the mini player. It " +
+                        "was the one thing on the pane you could not look away from. The swell and " +
+                        "the shimmer stay.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Lists read as an even column",
+                    body = "Songs, artists, genres, folders, search results, playlists and the " +
+                        "folder browser lay their rows out at one shared height, at whatever text " +
+                        "size you set. A wrapped subtitle used to make a single row a whole line " +
+                        "taller than its neighbours.",
+                ),
+                WhatsNewEntry(
+                    section = EQUALIZER,
+                    title = "The master switch says it covers AutoEQ",
+                    body = "\"Enable Equalizer\" is now \"Enable AutoEQ/Equalizer\". The one " +
+                        "switch has always been the master for the headphone correction as much " +
+                        "as for the tone shelves and the bands, and its name only claimed one of " +
+                        "them.",
+                ),
+                WhatsNewEntry(
+                    section = EQUALIZER,
+                    title = "System-wide AutoEQ says what it costs",
+                    body = "It sits under the equalizer's switch now instead of above it, marked " +
+                        "Beta. It hands other apps a coarser version of your correction in place " +
+                        "of the app's exact one — and some devices ignore it entirely, which " +
+                        "leaves you with neither.",
+                ),
+                WhatsNewEntry(
+                    section = EQUALIZER,
+                    title = "Turning the equalizer off turns that off too",
+                    body = "Switching the equalizer off from Settings left the system-wide effect " +
+                        "attached and running across the whole device. Only the player's own " +
+                        "toggle had ever cleared it.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 187,
             versionName = "1.8.7",
