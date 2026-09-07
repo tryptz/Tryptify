@@ -4,7 +4,6 @@ import tf.monochrome.android.ui.theme.goToPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MoreVert
@@ -66,6 +64,7 @@ import tf.monochrome.android.ui.components.TrackSort
 import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.applySearchAndSort
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
+import tf.monochrome.android.ui.navigation.APP_PAGE_TITLES
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -74,31 +73,22 @@ import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
 
-/**
- * The section Library lands on — page 0, and deliberately absent from the
- * overflow menu, since it's reached by swiping back rather than being picked.
- */
-internal const val LOCAL_SECTION = "local"
-
-/** Display names for every Library section id. */
-internal val LIBRARY_SECTION_NAMES = mapOf(
-    "overview" to "Overview",
-    "local" to "Local",
-    "playlists" to "Playlists",
-    "favorites" to "Favorites",
-    "downloads" to "Downloads",
-)
+// LOCAL_SECTION and LIBRARY_SECTION_NAMES used to live here. Page identity and
+// page names belong to APP_PAGES in ui/navigation now, because Home and Discover
+// are pages in the same list and this file could never have named them.
 
 /**
- * Library's pages in order: the local library first, then whatever the user has
- * left in their configured section order.
+ * How the Library pager ordered its sections before the flat page list: Local
+ * pinned to the front regardless of what the user had actually set, which is why
+ * moving Local in Settings never did anything.
  *
- * Shared with the nav host, which owns the `PagerState` for these pages so the
- * top-bar indicator can count and track every one of them — Home plus each
- * Library section — rather than just Home vs Library.
+ * Kept ONLY to migrate a stored `library_tab_order` into the flat page order,
+ * which has to reproduce what that install was seeing rather than what its CSV
+ * said. Nothing renders from this any more and Local is genuinely movable now —
+ * do not reintroduce the pin.
  */
-internal fun librarySections(order: List<String>): List<String> =
-    listOf(LOCAL_SECTION) + order.filter { it != LOCAL_SECTION && it in LIBRARY_SECTION_NAMES }
+internal fun legacyLibrarySections(order: List<String>): List<String> =
+    listOf("local") + order.filter { it != "local" && it in APP_PAGE_TITLES }
 
 /**
  * Lazy list keys for Library's two mixed pages.
@@ -131,10 +121,14 @@ internal object LibraryKeys {
 fun LibraryScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
-    // Hoisted to the nav host: it owns these so the top-bar page indicator can
-    // track Library's sections, not just the Home↔Library split.
-    sections: List<String>,
-    sectionPager: PagerState,
+    // One page per instance now. The app has a single flat pager in the nav host,
+    // so this composable is the chrome around ONE section rather than a pager
+    // over five. All instances share one LibraryViewModel: the pager sits outside
+    // the NavHost, so hiltViewModel() resolves against the Activity store.
+    sectionId: String,
+    // The whole page list and the one pager, for the overflow menu's jumps.
+    pages: List<String>,
+    pager: PagerState,
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
 ) {
@@ -148,15 +142,15 @@ fun LibraryScreen(
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
 
     val sectionScope = rememberCoroutineScope()
-    // Tab changes slide normally; with "Disable animations" on they jump.
+    // Page changes slide normally; with "Disable animations" on they jump.
     val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
-    val currentSectionId = sections.getOrElse(sectionPager.currentPage) { LOCAL_SECTION }
 
-    // The overflow menu survives as a shortcut past the swipe — Downloads sits
-    // several pages deep — not as the only way in.
-    val menuSections = sections.drop(1).mapNotNull { id ->
-        LIBRARY_SECTION_NAMES[id]?.let { id to it }
-    }
+    // The overflow menu survives as a shortcut past the swipe — a page the user
+    // has put several places away is a long drag — not as the only way in. It
+    // lists Home and Discover too now, since they are ordinary pages in the same
+    // sequence rather than a separate pager this screen could not reach.
+    val menuSections = pages.filter { it != sectionId }
+        .mapNotNull { id -> APP_PAGE_TITLES[id]?.let { id to it } }
 
     // Saveable so the dialog reopens after a process death triggered by its own
     // SAF CSV picker; the dialog's typed fields + picked uri are saveable too.
@@ -175,16 +169,15 @@ fun LibraryScreen(
     }
 
     val selection = rememberTrackSelectionState<Long>()
-    // Back out of a menu section returns to the local library rather than
-    // leaving Library entirely. Composed BEFORE the selection handler on
-    // purpose: the dispatcher serves the LAST-composed enabled callback first,
-    // so an active selection still wins the first back press.
-    BackHandler(enabled = sectionPager.currentPage != 0) {
-        sectionScope.launch { sectionPager.goToPage(0, animateTabs) }
-    }
+    // The "back returns to the first page" handler lives in the nav host now,
+    // composed before this page's content — which is what keeps the ordering
+    // this comment has always been about: the dispatcher serves the
+    // LAST-composed enabled callback first, so an active selection still wins
+    // the first back press and only then does back move the pager.
     BackHandler(enabled = selection.active) { selection.clear() }
-    // Lists (and delete semantics) differ per section — drop any selection on switch.
-    LaunchedEffect(currentSectionId) { selection.clear() }
+    // No "clear the selection when the section changes" effect any more: each
+    // page is its own instance with its own selection state, so a selection
+    // structurally cannot follow the user to another page.
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -260,7 +253,12 @@ fun LibraryScreen(
 
     // Tracks that bulk-selection actions operate on; ids are unique across the
     // overview's two sections, so a combined distinct list resolves either.
-    val selectableTracks = (recentTracks + favoriteTracks).distinctBy { it.id }
+    // Remembered because this composable is now one page rather than a pager
+    // over five, so up to three instances of it are composed at once and each
+    // would otherwise rebuild the list on every recomposition.
+    val selectableTracks = remember(recentTracks, favoriteTracks) {
+        (recentTracks + favoriteTracks).distinctBy { it.id }
+    }
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
@@ -289,37 +287,26 @@ fun LibraryScreen(
             TopAppBar(
                 title = {
                     Text(
-                        // Titled for whatever is actually on screen: "Library"
-                        // is the local library, anything else names itself so
-                        // the menu section you picked is identifiable.
-                        text = if (currentSectionId == LOCAL_SECTION) "Library"
-                               else LIBRARY_SECTION_NAMES[currentSectionId] ?: "Library",
+                        // The local library keeps calling itself "Library".
+                        // That IS a special case, and a deliberate one — it is
+                        // not a leftover of the old pin that made Local page 0.
+                        // Every other page uses its registry title.
+                        text = if (sectionId == "local") "Library"
+                               else APP_PAGE_TITLES[sectionId] ?: "Library",
                         style = MaterialTheme.typography.headlineMedium
                     )
                 },
-                navigationIcon = {
-                    // Only while a menu section is showing — the local library
-                    // has no entry in the menu, so this is the way back to it.
-                    if (currentSectionId != LOCAL_SECTION) {
-                        IconButton(onClick = {
-                            sectionScope.launch { sectionPager.goToPage(0, animateTabs) }
-                        }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to local library",
-                                tint = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                    }
-                },
+                // No back arrow: there is no page this one is "inside" any
+                // more. Every page is a peer in one swipe list, and back is the
+                // nav host's — it returns to the first page from any of them.
                 actions = {
-                    // Settings lets the user strip sections out of the order,
-                    // so the button goes away rather than opening an empty menu.
+                    // Settings lets the user hide pages, so the button goes
+                    // away rather than opening an empty menu.
                     if (menuSections.isNotEmpty()) Box {
                         IconButton(onClick = { sectionMenuOpen = true }) {
                             Icon(
                                 Icons.Default.MoreVert,
-                                contentDescription = "Other library sections",
+                                contentDescription = "Other pages",
                                 tint = MaterialTheme.colorScheme.onBackground
                             )
                         }
@@ -331,10 +318,10 @@ fun LibraryScreen(
                                 DropdownMenuItem(
                                     text = { Text(title) },
                                     onClick = {
-                                        val page = sections.indexOf(id)
+                                        val page = pages.indexOf(id)
                                         if (page >= 0) {
                                             sectionScope.launch {
-                                                sectionPager.goToPage(page, animateTabs)
+                                                pager.goToPage(page, animateTabs)
                                             }
                                         }
                                         sectionMenuOpen = false
@@ -346,7 +333,7 @@ fun LibraryScreen(
                     // Only where there is a list to search. The other sections
                     // are grids of albums and artists with no filter behind
                     // them, and an icon that does nothing is worse than none.
-                    if (currentSectionId == "favorites") {
+                    if (sectionId == "favorites") {
                         SearchAction(open = likedSearchOpen, onToggle = {
                             likedSearchOpen = !likedSearchOpen
                             if (!likedSearchOpen) likedQuery = ""
@@ -375,7 +362,7 @@ fun LibraryScreen(
                     selection.clear()
                 },
                 onAddToPlaylist = { showAddToPlaylistForSelection = true },
-                onDelete = if (currentSectionId == "favorites") {
+                onDelete = if (sectionId == "favorites") {
                     {
                         playerViewModel.unlikeTracks(selection.selectedIds)
                         selection.clear()
@@ -385,22 +372,9 @@ fun LibraryScreen(
             )
         }
 
-        val sectionStateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
-        // Preserve each section's scroll position (and the local library's own
-        // sub-tab state) across section switches, instead of remounting a fresh
-        // list that snaps back to the top every time.
-        //
-        // Nested inside the nav host's Home↔Library pager, same axis. Compose
-        // resolves that through nested scroll: this inner pager consumes the
-        // drag until it's at page 0 and the user keeps pulling right, at which
-        // point the outer pager takes over and carries them to Home.
-        HorizontalPager(
-            state = sectionPager,
-            modifier = Modifier.fillMaxSize(),
-            beyondViewportPageCount = 0,
-        ) { page ->
-        val sectionId = sections[page]
-        sectionStateHolder.SaveableStateProvider(sectionId) {
+        // No pager and no state holder here any more: this composable is one
+        // page, and the nav host's single pager wraps it in the
+        // SaveableStateProvider that keeps its scroll position.
         when (sectionId) {
             "overview" ->
                 LazyColumn(
@@ -661,8 +635,6 @@ fun LibraryScreen(
 
             "downloads" ->
                 DownloadsScreen(navController = navController)
-        }
-        }
         }
     }
 }

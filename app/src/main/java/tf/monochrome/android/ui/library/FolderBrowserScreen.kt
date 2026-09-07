@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,6 +46,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
+import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.TrackListToolbar
 import tf.monochrome.android.ui.components.TrackSort
 import tf.monochrome.android.ui.components.TrackSortSaver
@@ -195,8 +197,9 @@ fun FolderBrowserScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(MonoDimens.listRowHeight)
                         .clickable { onPlayTrack(track, visibleTracks) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (track.artworkUri != null) {

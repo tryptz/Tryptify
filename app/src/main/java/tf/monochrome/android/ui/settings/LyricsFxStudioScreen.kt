@@ -1166,7 +1166,7 @@ private fun PlayerGlassTab(
         ) { onUpdate { g -> g.copy(hazeTint = it) } }
         FxSlider(
             "Surface motion", "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
-            description = "Living-liquid shimmer on the glass surface (0 = still).",
+            description = "Swell, edge ripple and glint on the glass surface (0 = still).",
         ) { onUpdate { g -> g.copy(surfaceMotion = it) } }
 
         StudioSection("Shape & bevel")

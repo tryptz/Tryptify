@@ -4,6 +4,13 @@
 
 ### Removed
 
+#### The glass no longer has a light sweeping across it
+- **The traveling light sheet is gone from every glass surface** — the lyric glass, the player chrome, the transport disc, the action dock, the mini player and the Studio preview. A soft diagonal band used to glide across each pane every ~7 seconds, and it is the one thing on that surface you could not look away from.
+- **It was removed rather than dimmed because a band that crosses the pane is an event, not a texture.** It travels the full width, it is the brightest thing on the glass while it does, and unlike the shimmer and the swell it has somewhere to be — so the eye follows it off the edge and then waits for the next one. At a quarter of the brightness it is still a thing that happens, just fainter.
+- **Surface motion still does the rest of its job.** Face swell, edge shimmer and the glint twinkle all stay, and all of them undulate in place, so the setting still runs from perfectly still at 0 to fully alive at 1 and every shipped theme keeps its character. The slider's caption now says what it actually drives.
+- **Two surfaces were never obeying the slider anyway.** The lyric glass and the player panel pin the shader's motion uniform to 1, so the sweep ran at full strength on them no matter where Surface motion sat — turning the setting to 0 could not stop it. With the pass gone that discrepancy stops mattering, and those surfaces are still free to keep their own liquid at full.
+- **The rim is very slightly calmer as a result.** The sheet also lifted the glass's alpha as it passed, so a see-through face would show the shine at all; without it the edge highlight is the Fresnel rim and the glint alone, which is what "Edge highlight" was always meant to control.
+
 #### The app no longer votes on the display's refresh rate
 - **Settings › System › Display › Frame Rate and Resolution are gone** — with them, the window's `preferredDisplayModeId` and `preferredRefreshRate`. The app now holds no display-mode preference at all, so the panel is left entirely to system policy and to whatever per-app override you have installed.
 - **The reason is that a pin is a vote, and a vote can be lost or won at the wrong value** — an external per-app override asking a OnePlus panel for 165 was contested by whatever mode this window pinned, and on a display that offers its top rate only at a lower resolution the pinned mode was the slower of the two. The app was arguing its own display down. "Unlocked" was no defence either: a pin at the ceiling is still a lock, just a high one.
@@ -20,7 +27,38 @@
 - **From Android 14 that key is a Material 3 role colour, not the accent ramp** — Contrast moves the roles and leaves the older `system_accent1_*` ramp untouched, so a key taken from the ramp would have read as no change at all while the rest of the system repainted around it.
 - **"Tint the menus too" still wins wherever it is on**, exactly as it does over every other theme: the album rebuilds the scheme and the system palette gives way for as long as something is playing.
 
+### Changed
+
+#### Discover can be moved, and any page can be hidden
+- **Settings › Library › Page Order now lists every page you swipe between** — Home, Discover, Local, Overview, Playlists, Favorites and Downloads — and each one can be moved anywhere in the sequence. It was "Library Tab Order" and it listed five, because Discover was not in the same pager as the others.
+- **There were two nested pagers, and now there is one.** An outer one hardcoded to Home / Discover / Library, and an inner one over the Library's sections driven by the setting. Only the inner one was reorderable. The dot indicator had been flattening the two into a single strip of seven for a while, so the app was already presenting one sequence — this makes it one.
+- **Each page has a visibility toggle.** Hiding one grays its row out and drops it from the swipe; it keeps its slot in the order, so turning it back on puts it back where it was rather than at the end. The last visible page cannot be hidden, refused in three separate places — the last of which exists because a hidden set can arrive from another device's settings sync without this device's UI ever seeing it.
+- **Discover has a Settings button now.** It was the only top bar without one, which with hiding would have made "Discover is the only visible page" a three-tap way to strand yourself: no bottom nav, no drawer, and Settings the only place to bring a page back.
+- **"Local" can finally be moved.** It was pinned to the front in code regardless of the stored order, so moving it in Settings had never done anything and its arrows were decorative.
+- **Your existing order carries over as what you were seeing**, not as what was stored. The old setting's list started with Overview, but the pin meant Local was the page you actually landed on, so an upgrade puts Home and Discover first and Local after them — rather than appending the two pages you start on to the far end of a seven-page swipe.
+- **A page added in a future version will now show up for you.** The old order could not do that: any install that had ever touched the setting kept its five-entry list forever and never saw anything added later. New pages are inserted where they belong in the sequence rather than dropped at the end, which is where nobody finds one.
+- **One thing resets once on upgrade:** each page keeps its own saved scroll position now instead of sharing one with the rest of the Library, so those start from the top on the first launch after updating.
+
+#### The equalizer's master switch says it covers AutoEQ
+- **Settings › Equalizer › "Enable Equalizer" is now "Enable AutoEQ/Equalizer".** The same switch is the master for the AutoEQ headphone correction, the tone shelves and the graphic bands — Target Curve and Headphone directly under it are both downstream of it — and the old name only claimed one of those.
+
+#### System-wide AutoEQ is a sub-toggle now, marked beta, and says what it costs
+- **It has moved under "Enable Equalizer" and only appears while that is on**, indented beneath it, the same shape the player's audio-tools panel has always used. It used to sit *above* Enable Equalizer as an equal, which read as the bigger and better of the two switches. It is neither: it is a way of publishing the same correction somewhere else, and it means nothing with the equalizer off.
+- **Turning the equalizer off now switches it off too.** `SystemAudioEqController` watches the system-wide flag and never `eqEnabled`, so disabling the EQ from Settings or the Equalizer screen left the global session-0 effect attached and running. The player's own toggle had always cleared it; the other two writers of that preference had not. With the row hidden while the EQ is off, that would have become a running global effect with nothing on screen left to stop it.
+- **Both places it appears now carry a Beta badge and a warning.** It was a plain switch among the ordinary ones, which read as a free upgrade.
+- **The warning says what the trade actually is**, in two lines: it swaps the app's exact correction for a coarser global one, and some devices ignore it entirely. Turning it on takes the in-app parametric EQ out of the chain and replaces it with a many-band graphic-EQ approximation, because a global effect can only be a graphic EQ.
+- **"Some devices ignore it entirely" is the sharp end**, not a footnote — whether a session-0 effect reaches any stream is up to the audio HAL, and since the in-app correction has already stepped aside, an ignored effect leaves you with none at all. This is what "device-permitting" was always hedging about.
+- **The point of the setting is other apps**, and the wording now says that outright rather than leaving people to turn it on because it sounded like more of a good thing.
+- **The badge and the warning are their own fields on the row**, not text spliced into the title, because the title is the anchor settings search scrolls to and the row's stable DevEdit id — folding "(beta)" into it would have moved both.
+
 ### Fixed
+
+#### Every list row is now the same height
+- **Songs, Artists, Genres, Folders, search results, playlists, album and genre track lists and the folder browser all lay their rows out at one shared height.** A scrolling list reads as an even column instead of a ragged one.
+- **Three things used to move the height, and all three were invisible in the code.** A subtitle whose artist and album did not both fit wrapped onto a second line and made that one row a whole line taller. A track whose artist is a tappable link carried the link's hit-box inset, where a plain "Unknown Artist" did not — so linked rows sat 8dp taller than unlinked ones. And a row whose text was shorter than its 48dp cover was sized by the cover instead, so rows with and without artwork disagreed.
+- **The subtitle is capped at one line now.** It was already capped for *many artists*, but the album is appended outside that component, so "artist • album" that did not fit still wrapped. Both rows are capped, and the album ellipsizes rather than dropping to a second line.
+- **The height follows your text size rather than being a fixed 64dp.** The app scales its own type from Settings › Theme, and that multiplies with the system font scale — a hardcoded row would be right at the default and clip the subtitle at "Larger" and "Largest". It is derived from the line heights instead, so rows grow together and stay equal at any size.
+- **A test holds it.** `ListRowHeightTest` walks every text-size preset against the system scale and checks each row shape the app renders — cover, title, linked subtitle, badge pills, the search row's extra gap, the folder browser's smaller artwork — so a line height raised in the type scale or a trimmed row height fails there rather than on a phone.
 
 #### One preset rotation setting, and it can be turned off
 - **Settings › Visualizer › Preset rotation is now a single choice: Off, On a timer, or Each track.** It replaces two switches that each claimed the job — "Preset rotation" drove projectM's timer, while "Auto-shuffle Presets" changed the preset on every new track and described itself as rotating presets during playback, which was the other one's job. Between them there was no single answer to "stop changing my preset", because either could still be doing it.

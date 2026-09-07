@@ -61,9 +61,13 @@ val SwipeHintPillHeight = TapTargetHeight
  *
  * The bottom `NavigationBar` is gone (its imports in `MonochromeNavHost` are
  * dead) and Library's tab row with it, so horizontal swipes are the *only*
- * route between Home, each Library section, and each local-library sub-tab —
- * invisible gestures with nothing pointing at them. This is the glass header
- * they hang off: one slot per page with a filled mark travelling between them.
+ * route between the app's pages — invisible gestures with nothing pointing at
+ * them. This is the glass header they hang off: one slot per page with a filled
+ * mark travelling between them.
+ *
+ * The name is a leftover. There is no "Library" to swipe to any more — Home,
+ * Discover and each former Library section are peers in one reorderable list —
+ * but renaming it would spread a no-behaviour diff across four files.
  *
  * Sizing comes entirely from [modifier], so the same component works as a
  * compact pill or as a full-bleed header bar. The marks are always centred
@@ -91,9 +95,10 @@ val SwipeHintPillHeight = TapTargetHeight
  * haze source — Haze can only blur content already drawn this frame — in which
  * case the marks read against the slab's own tint instead of a blurred backdrop.
  *
- * [progressProvider] is the absolute page position across every page — 0f on
- * Home, 1f on the local library, 2f on the next Library section and so on —
- * passed as a lambda rather than a plain Float on purpose. The value changes
+ * [progressProvider] is the absolute page position across every visible page —
+ * 0f on the first, 1f on the second and so on — passed as a lambda rather than a
+ * plain Float on purpose. It used to be handed a value that folded two nested
+ * pagers onto one axis; there is one pager now, so it is simply its position. The value changes
  * every frame of a swipe; reading `currentPageOffsetFraction` in composition
  * would recompose this subtree at 60–120 Hz for the whole gesture. Read inside
  * `DrawScope` instead, it only re-runs draw.
@@ -109,6 +114,9 @@ fun SwipeToLibraryHint(
     onClickLabel: String? = null,
     hazeState: HazeState? = null,
 ) {
+    // Reachable now that pages can be hidden: a user can leave exactly one
+    // visible, and an indicator with one slot has nothing to indicate. The
+    // caller still sizes a Box around this, which simply draws nothing.
     if (pageCount < 2) return
 
     // This slab is ~26 dp tall and nearly all edge. The glass shader draws its

@@ -144,7 +144,7 @@ relying on hard rule 3: a field you omit inherits these, not a tidy midpoint.
 | `shadowDepth` | 0..1 | 0.20475428 | Drop-shadow darkness (Compose). 1 = deeply floated/levitating. |
 | `reflection` | 0..2 | 2 | Room/environment reflection strength. **Default is the maximum** — mirror-strong. |
 | `gloss` | 0..1 | 1 | Highlight polish. 0 = soft frosted-wide, 1 = tight mirror. **Default is the maximum.** |
-| `surfaceMotion` | 0..1 | 0.53 | Living-liquid undulation — face swell, edge shimmer, travelling light sheet, glint twinkle. 1 + frost = molten/lava-lamp. |
+| `surfaceMotion` | 0..1 | 0.53 | Living-liquid undulation — face swell, edge shimmer, glint twinkle. All undulate in place; no pass travels across the pane. 1 + frost = molten/lava-lamp. |
 | `tiltReactivity` | 0..1.5 | 0 | Device-tilt light sway. **Default is 0** — a locked studio light. 1.5 = gyro/holo. |
 | `lightAngleDeg` | 0..360 | 215.1965 | Key-light direction. 25 = raking sunset, 90 = top, 270 = underlit. |
 | `edgeWidth` | 0..1 | 0 | Reflective shoulder width. **Default is 0** — a hairline edge. Wide + low gloss = soap. |

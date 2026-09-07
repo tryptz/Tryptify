@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import tf.monochrome.android.domain.model.UnifiedArtistRef
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.navigation.isNavigableAlbumId
+import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
  * Renders a track's credited artists as individually tappable segments — a track
@@ -97,7 +98,13 @@ fun TrackArtistAlbumLine(
 ) {
     val albumTitle = track.albumTitle?.takeIf { it.isNotBlank() }
     val albumLinkable = albumTitle != null && isNavigableAlbumId(track.albumId)
-    FlowRow(modifier = modifier) {
+    // Capped for the same reason [ClickableArtists] caps its own row, which was
+    // half the fix: that one stops MANY ARTISTS from wrapping, but the album
+    // segment is appended out here, so "artist • album" that did not fit still
+    // dropped the album onto a second line and made that one list row taller
+    // than its neighbours. One line, always — the row is a fixed height now
+    // ([MonoDimens.listRowHeight]) and a second line would be clipped, not shown.
+    FlowRow(modifier = modifier, maxLines = 1) {
         ClickableArtists(
             artists = track.artists,
             fallbackName = track.artistName,
@@ -139,4 +146,5 @@ fun TrackArtistAlbumLine(
  * failure being fixed is over-triggering, not under-triggering. Both
  * destinations also remain available from the track's long-press menu.
  */
-private fun Modifier.linkHitBox(): Modifier = padding(horizontal = 3.dp, vertical = 4.dp)
+private fun Modifier.linkHitBox(): Modifier =
+    padding(horizontal = 3.dp, vertical = MonoDimens.linkHitBoxV)
