@@ -39,11 +39,17 @@ object WhatsNew {
     /** The one section heading in use — the Discover page and everything under it. */
     private const val DISCOVER = "Discover (Beta)"
 
+    /** The equalizer's master switch and the system-wide correction under it. */
+    private const val EQUALIZER = "Equalizer"
+
     /** The world radio globe and everything hanging off it. */
     private const val GLOBE = "World radio"
 
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
+
+    /** The pages you swipe between, their order and their visibility. */
+    private const val PAGES = "Pages and order"
 
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
@@ -53,6 +59,67 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 188,
+            versionName = "1.8.8",
+            entries = listOf(
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Every page is in one list you can reorder",
+                    body = "Settings › Library › Page Order holds all seven pages you swipe " +
+                        "between, Discover included, and any of them can go anywhere in the " +
+                        "sequence.",
+                ),
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Hide the pages you don't use",
+                    body = "A hidden page drops out of the swipe but keeps its slot, so " +
+                        "switching it back on puts it where it was. The last page showing " +
+                        "can't be hidden.",
+                ),
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Your order carries over",
+                    body = "An upgrade keeps the pages as you were seeing them, with Home and " +
+                        "Discover in front. Each page has its own scroll position now, so those " +
+                        "reset once.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The glass stopped flashing",
+                    body = "A band of light used to slide across every glass surface every few " +
+                        "seconds. It is gone. The face swell, the edge shimmer and the glint " +
+                        "all stay.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Lists read as an even column",
+                    body = "Every list lays its rows out at one height, at whatever text size " +
+                        "you set. A wrapped subtitle used to make a single row taller than its " +
+                        "neighbours.",
+                ),
+                WhatsNewEntry(
+                    section = EQUALIZER,
+                    title = "The master switch says it covers AutoEQ",
+                    body = "\"Enable Equalizer\" is now \"Enable AutoEQ/Equalizer\". The one " +
+                        "switch has always been the master for the headphone correction as much " +
+                        "as for the bands.",
+                ),
+                WhatsNewEntry(
+                    section = EQUALIZER,
+                    title = "System-wide AutoEQ says what it costs",
+                    body = "It sits under the equalizer's switch now, marked Beta. It hands " +
+                        "other apps a coarser version of your correction, and some devices " +
+                        "ignore it entirely.",
+                ),
+                WhatsNewEntry(
+                    section = EQUALIZER,
+                    title = "Turning the equalizer off turns that off too",
+                    body = "Switching the equalizer off used to leave the system-wide effect " +
+                        "attached and running across the whole device.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 187,
             versionName = "1.8.7",

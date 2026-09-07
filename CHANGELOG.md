@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.8.7]
+## [1.8.8]
 
 ### Removed
 
@@ -10,22 +10,6 @@
 - **Surface motion still does the rest of its job.** Face swell, edge shimmer and the glint twinkle all stay, and all of them undulate in place, so the setting still runs from perfectly still at 0 to fully alive at 1 and every shipped theme keeps its character. The slider's caption now says what it actually drives.
 - **Two surfaces were never obeying the slider anyway.** The lyric glass and the player panel pin the shader's motion uniform to 1, so the sweep ran at full strength on them no matter where Surface motion sat — turning the setting to 0 could not stop it. With the pass gone that discrepancy stops mattering, and those surfaces are still free to keep their own liquid at full.
 - **The rim is very slightly calmer as a result.** The sheet also lifted the glass's alpha as it passed, so a see-through face would show the shine at all; without it the edge highlight is the Fresnel rim and the glint alone, which is what "Edge highlight" was always meant to control.
-
-#### The app no longer votes on the display's refresh rate
-- **Settings › System › Display › Frame Rate and Resolution are gone** — with them, the window's `preferredDisplayModeId` and `preferredRefreshRate`. The app now holds no display-mode preference at all, so the panel is left entirely to system policy and to whatever per-app override you have installed.
-- **The reason is that a pin is a vote, and a vote can be lost or won at the wrong value** — an external per-app override asking a OnePlus panel for 165 was contested by whatever mode this window pinned, and on a display that offers its top rate only at a lower resolution the pinned mode was the slower of the two. The app was arguing its own display down. "Unlocked" was no defence either: a pin at the ceiling is still a lock, just a high one.
-- **A resolution could not be spared** — a mode id names a resolution and a refresh rate together, so there is no way to ask for one without also asserting the other. Keeping the Resolution row would have meant keeping the vote.
-- **Nothing needs migrating** — both were device-local and deliberately absent from `SETTINGS_SYNC_KEYS`, so no backup carried them and no account state refers to them. The two DataStore keys (`app_target_fps`, `app_render_resolution`) are simply no longer read; a phone that has them stored keeps the values as dead entries.
-
-### Added
-
-#### The app can follow the phone's own colours
-- **Settings › Theme › Color Theme gains "System colors"** — the palette the system builds from your wallpaper, a featured colour picked in the system settings, and the Contrast accessibility setting. It sits directly under "System": that one follows the OS's light/dark switch, this one follows its colours as well.
-- **The palette was already implemented and unreachable** — the theme resolver has understood the key since Material You support went in, but it was never listed in `themeDisplayNames` and the picker offers exactly what that map holds. None of the scheme needed writing; it had simply never been possible to choose.
-- **Below Android 12 the entry is not offered rather than offered and quietly substituted** — there is no system palette before then, and picking it resolved to Monochrome with nothing to say so, leaving no way to tell a failed setting from a grey wallpaper. The name is still recognised, so a preference restored from a backup or carried over from a newer phone reads as "System colors" instead of as a raw key.
-- **The scheme is cached against the palette instead of rebuilt per frame** — it is read at the theme root, which recomposes continuously for the whole colour cross-fade every time the track changes, and building a scheme allocates every slot it holds. The cache key is a colour read back out of the palette, so it invalidates itself whichever way a change arrives: switching System colors swaps a resource overlay, and this activity declares `uiMode` in its own `configChanges` and so is not restarted for a light/dark switch.
-- **From Android 14 that key is a Material 3 role colour, not the accent ramp** — Contrast moves the roles and leaves the older `system_accent1_*` ramp untouched, so a key taken from the ramp would have read as no change at all while the rest of the system repainted around it.
-- **"Tint the menus too" still wins wherever it is on**, exactly as it does over every other theme: the album rebuilds the scheme and the system palette gives way for as long as something is playing.
 
 ### Changed
 
@@ -59,6 +43,28 @@
 - **The subtitle is capped at one line now.** It was already capped for *many artists*, but the album is appended outside that component, so "artist • album" that did not fit still wrapped. Both rows are capped, and the album ellipsizes rather than dropping to a second line.
 - **The height follows your text size rather than being a fixed 64dp.** The app scales its own type from Settings › Theme, and that multiplies with the system font scale — a hardcoded row would be right at the default and clip the subtitle at "Larger" and "Largest". It is derived from the line heights instead, so rows grow together and stay equal at any size.
 - **A test holds it.** `ListRowHeightTest` walks every text-size preset against the system scale and checks each row shape the app renders — cover, title, linked subtitle, badge pills, the search row's extra gap, the folder browser's smaller artwork — so a line height raised in the type scale or a trimmed row height fails there rather than on a phone.
+
+## [1.8.7]
+
+### Removed
+
+#### The app no longer votes on the display's refresh rate
+- **Settings › System › Display › Frame Rate and Resolution are gone** — with them, the window's `preferredDisplayModeId` and `preferredRefreshRate`. The app now holds no display-mode preference at all, so the panel is left entirely to system policy and to whatever per-app override you have installed.
+- **The reason is that a pin is a vote, and a vote can be lost or won at the wrong value** — an external per-app override asking a OnePlus panel for 165 was contested by whatever mode this window pinned, and on a display that offers its top rate only at a lower resolution the pinned mode was the slower of the two. The app was arguing its own display down. "Unlocked" was no defence either: a pin at the ceiling is still a lock, just a high one.
+- **A resolution could not be spared** — a mode id names a resolution and a refresh rate together, so there is no way to ask for one without also asserting the other. Keeping the Resolution row would have meant keeping the vote.
+- **Nothing needs migrating** — both were device-local and deliberately absent from `SETTINGS_SYNC_KEYS`, so no backup carried them and no account state refers to them. The two DataStore keys (`app_target_fps`, `app_render_resolution`) are simply no longer read; a phone that has them stored keeps the values as dead entries.
+
+### Added
+
+#### The app can follow the phone's own colours
+- **Settings › Theme › Color Theme gains "System colors"** — the palette the system builds from your wallpaper, a featured colour picked in the system settings, and the Contrast accessibility setting. It sits directly under "System": that one follows the OS's light/dark switch, this one follows its colours as well.
+- **The palette was already implemented and unreachable** — the theme resolver has understood the key since Material You support went in, but it was never listed in `themeDisplayNames` and the picker offers exactly what that map holds. None of the scheme needed writing; it had simply never been possible to choose.
+- **Below Android 12 the entry is not offered rather than offered and quietly substituted** — there is no system palette before then, and picking it resolved to Monochrome with nothing to say so, leaving no way to tell a failed setting from a grey wallpaper. The name is still recognised, so a preference restored from a backup or carried over from a newer phone reads as "System colors" instead of as a raw key.
+- **The scheme is cached against the palette instead of rebuilt per frame** — it is read at the theme root, which recomposes continuously for the whole colour cross-fade every time the track changes, and building a scheme allocates every slot it holds. The cache key is a colour read back out of the palette, so it invalidates itself whichever way a change arrives: switching System colors swaps a resource overlay, and this activity declares `uiMode` in its own `configChanges` and so is not restarted for a light/dark switch.
+- **From Android 14 that key is a Material 3 role colour, not the accent ramp** — Contrast moves the roles and leaves the older `system_accent1_*` ramp untouched, so a key taken from the ramp would have read as no change at all while the rest of the system repainted around it.
+- **"Tint the menus too" still wins wherever it is on**, exactly as it does over every other theme: the album rebuilds the scheme and the system palette gives way for as long as something is playing.
+
+### Fixed
 
 #### One preset rotation setting, and it can be turned off
 - **Settings › Visualizer › Preset rotation is now a single choice: Off, On a timer, or Each track.** It replaces two switches that each claimed the job — "Preset rotation" drove projectM's timer, while "Auto-shuffle Presets" changed the preset on every new track and described itself as rotating presets during playback, which was the other one's job. Between them there was no single answer to "stop changing my preset", because either could still be doing it.
