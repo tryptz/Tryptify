@@ -11,9 +11,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -49,6 +49,15 @@ private val DockItemVerticalPadding = 10.dp
 // squeeze. The old pair (bouncy spring up, tween down) stuttered: a tween carries
 // no velocity, so releasing mid-bounce snapped the dome still before easing off.
 private val PressSpring = spring<Float>(dampingRatio = 0.85f, stiffness = 900f)
+
+// Room for the lit glyph's bloom to spread into. A blur can only smear pixels
+// it was given, and Unbounded treats everything past the layer as transparent,
+// so a glyph blurred in a box its own size is cut off a few dp out from the
+// strokes -- the glow came back as a soft SQUARE rather than the shape of the
+// glyph. The dock's drawables fill ~80% of their viewport, which left about
+// 3dp of margin against an 11dp blur.
+private val DockBloomPadding = 16.dp
+private val DockBloomBox = PlayerDesignTokens.DockIconSize + DockBloomPadding * 2
 
 /**
  * Erase the four dock glyphs from whatever has just been drawn, leaving
@@ -259,18 +268,30 @@ private fun DockLabel(
             .padding(vertical = DockItemVerticalPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            // Reserves the slot the glass slab's hollow icon is punched into.
-            Spacer(Modifier.size(PlayerDesignTokens.DockIconSize))
+        // Fixed to the hole the glass slab punches, so the bloom below can
+        // overflow it without the row growing: punchDockIcons places the holes
+        // from the row's paddings, and a taller slot walks them off the glyphs.
+        Box(
+            modifier = Modifier.size(PlayerDesignTokens.DockIconSize),
+            contentAlignment = Alignment.Center,
+        ) {
             if (lit > 0.004f) {
                 // Soft bloom behind the lit glyph.
                 Icon(
                     painter = painter,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(PlayerDesignTokens.DockIconSize)
+                        // requiredSize, so the bigger box is measured but never
+                        // reported to the slot above.
+                        .requiredSize(DockBloomBox)
+                        // Blur OUTSIDE the alpha layer, for the reason the
+                        // slab's own shadow already carries: a layer at partial
+                        // alpha composites through an offscreen buffer its own
+                        // size, and that cuts the spill back to a hard-edged
+                        // rectangle -- here on every frame of the fade.
+                        .blur(radius = 11.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                         .graphicsLayer { alpha = lit }
-                        .blur(radius = 11.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded),
+                        .padding(DockBloomPadding),
                     tint = litColor.copy(alpha = 0.6f),
                 )
                 // Crisp lit glyph filling the hole.
