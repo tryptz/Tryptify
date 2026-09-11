@@ -32,7 +32,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -96,60 +95,55 @@ fun PlayerTransportControls(
             },
             label = "playBulge",
         )
-        // Play/pause is a SOLID round glass disc with the play/pause symbol
-        // punched out (hollow), so the backdrop shows through the glyph and the
-        // shader bevels both the disc rim and the cut-out edges.
+        // Play/pause is the SOLID glass glyph itself — no disc. What used to be
+        // the hole is now the glass, so the shader bevels the triangle and the
+        // bars the way it bevels the chevrons either side of them, and the row
+        // reads as three pieces of glass rather than two beside a plate.
+        //
+        // Nothing here clips: the shape-accurate shadow below has to feather
+        // past the glyph, and a CircleShape clip or frost pane would leave a
+        // ring of exactly the circle this button no longer has.
         Box(
             modifier = Modifier
                 .size(PlayerDesignTokens.PlayButtonSize)
-                .graphicsLayer { scaleX = scale; scaleY = scale },
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onPlayPause,
+                )
+                .buttonSemantics(
+                    label = if (isPlaying) "Pause" else "Play",
+                    state = if (isBuffering) "Buffering" else null,
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            // Drop shadow drawn by us as a blurred, tinted circle — a TRUE round
-            // shadow. The platform elevation shadow facets CircleShape into an
-            // octagon on some GPUs; a blurred circle stays perfectly round.
-            // Depth = darkness, softness = blur radius + offset, tint = black ->
-            // accent glow (all tunable in the Studio).
-            GlassDropShadow(
-                color = androidx.compose.ui.graphics.lerp(Color.Black, tint, glass.shadowTint)
-                    .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
-                softness = glass.shadowSoftness,
-                depth = glass.shadowDepth,
-            )
-            // What the disc is a lens over. Same frost as the dock, clipped to
-            // the disc instead: the punched play/pause glyph then reads as a
-            // hole into blurred light rather than onto the raw background, and
-            // the (ghost-thin) body shows the blur through it.
-            PlayerGlassHaze(
-                modifier = Modifier.matchParentSize(),
-                shape = CircleShape,
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = onPlayPause,
-                    )
-                    .buttonSemantics(
-                        label = if (isPlaying) "Pause" else "Play",
-                        state = if (isBuffering) "Buffering" else null,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
+            // Shape-accurate drop shadow: a blurred copy of the SAME glyph, so
+            // a triangle casts a triangle. The round GlassDropShadow this
+            // replaces would have gone on drawing the circle from underneath.
+            // TransportIcon's recipe exactly, so all three transport glyphs
+            // cast one kind of shadow.
+            if (glass.enabled) {
+                val shadowColor = androidx.compose.ui.graphics.lerp(Color.Black, tint, glass.shadowTint)
+                    .copy(alpha = 0.30f + 0.5f * glass.shadowDepth)
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .playerGlass(tint = tint, bulgeAmount = { bulge })
-                        // Own offscreen layer so the punch-out (BlendMode.Clear) is
-                        // contained here and can't clear the player behind it — needed
-                        // when the glass effect is off or below API 33.
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                        .graphicsLayer { translationY = (1.5f + glass.shadowDepth * 4f).dp.toPx() }
+                        .blur(
+                            radius = (2f + glass.shadowSoftness * 12f).dp,
+                            edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                        ),
                 ) {
-                    drawGlassPlayPauseDisc(isPlaying = isPlaying, fill = tint)
+                    drawGlassPlayPauseGlyph(isPlaying = isPlaying, fill = shadowColor)
                 }
+            }
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .playerGlass(tint = tint, bulgeAmount = { bulge }),
+            ) {
+                drawGlassPlayPauseGlyph(isPlaying = isPlaying, fill = tint)
             }
             // Buffering ring: without this the play glyph stays static while a
             // stream loads, so the tap looks dead in a streaming-first app.
@@ -170,20 +164,35 @@ fun PlayerTransportControls(
 }
 
 /**
- * Draws the play/pause round button: a solid [fill] disc with the play triangle
- * or pause bars *punched out* (cleared to transparent) so the glyph reads as a
- * clean hollow cut-out of the glass — a single beveled glass edge, no double
- * outline. Meant to be drawn inside a layer carrying the [playerGlass] render
- * effect, which bevels the disc edge and the cut-out edges into refractive 3D
- * glass.
+ * How much bigger the glyph is drawn than its old proportions against the disc.
+ *
+ * [drawPlayPauseSymbol] measures itself in fractions of the button — the bars
+ * are 0.34 of it — which on a 72dp disc came out around 24dp. That was right
+ * for a hole: a cut-out reads as large as the plate it is cut from. Standing on
+ * its own the same 24dp glyph would sit between two 51dp chevrons and lose the
+ * centre of the row, so it is drawn at about 56dp — the largest of the three,
+ * which is the hierarchy the disc used to carry.
  */
-internal fun DrawScope.drawGlassPlayPauseDisc(isPlaying: Boolean, fill: Color) {
-    val d = size.minDimension
-    val cx = size.width / 2f
-    val cy = size.height / 2f
-    drawCircle(color = fill, radius = d / 2f)
-    // One clean punch → the shader bevels a single glass edge around the hollow.
-    drawPlayPauseSymbol(isPlaying, cx, cy, d, scale = 1f, color = fill, blend = BlendMode.Clear)
+private const val PlayGlyphScale = 2.3f
+
+/**
+ * Draws the play/pause button: the play triangle or the pause bars as a SOLID
+ * [fill] shape, and nothing else — no disc. Meant to be drawn inside a layer
+ * carrying the [playerGlass] render effect, which builds its bevel from the
+ * alpha beneath it and so turns the glyph itself into refractive 3D glass.
+ *
+ * Doubles as its own drop shadow: pass a shadow colour and blur the layer.
+ */
+internal fun DrawScope.drawGlassPlayPauseGlyph(isPlaying: Boolean, fill: Color) {
+    drawPlayPauseSymbol(
+        isPlaying,
+        cx = size.width / 2f,
+        cy = size.height / 2f,
+        d = size.minDimension * PlayGlyphScale,
+        scale = 1f,
+        color = fill,
+        blend = BlendMode.SrcOver,
+    )
 }
 
 /** One play/pause glyph, scaled about the button centre, for the layered cut. */
