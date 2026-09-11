@@ -858,11 +858,10 @@ private fun PlayerGlassTab(
     val previewTint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
     val previewBgBrush = if (glass.previewBg != 0) SolidColor(Color(glass.previewBg)) else previewBackground(accent)
     // The swatch above as ONE colour, for the frost to ask which way to wash.
-    // The player's chrome normally frosts against the player's own near-black
-    // ground, but here it is over whatever the listener picked — which can be
-    // white — so handing it the player's ground would lay dark frost on a light
-    // backdrop. The gradient's two stops are the accent at 0.34 and 0.10 out of
-    // black, so their midpoint stands for it.
+    // Here the chrome is over whatever the listener picked — possibly white —
+    // so the player's own near-black ground would lay dark frost on a light
+    // backdrop. The gradient runs accent 0.34 to 0.10 out of black; its
+    // midpoint stands for it.
     val previewGround = if (glass.previewBg != 0) Color(glass.previewBg)
         else lerp(Color.Black, accent, 0.22f)
     var showBgPicker by remember { mutableStateOf(false) }
@@ -908,8 +907,8 @@ private fun PlayerGlassTab(
             CompositionLocalProvider(
                 LocalPlayerGlass provides glass,
                 LocalPlayerHaze provides previewHaze,
-                // Beside the haze it belongs to: the backdrop's colour travels
-                // with the backdrop, so the dock's own frost gets it too.
+                // Beside the haze it belongs to, so the dock's own frost
+                // gets it too.
                 LocalPlayerGlassGround provides previewGround,
             ) {
                 if (previewMini) {

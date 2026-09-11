@@ -8,10 +8,9 @@ import tf.monochrome.android.domain.model.UnifiedTrack
 /**
  * What the player writes down so it can come back to where it was.
  *
- * Pure Kotlin on purpose — no Android, no Room, no coroutines. The unit test
- * source set carries JUnit and nothing else, so every decision worth pinning
- * (queue ordering, the size cap, when a position is worth writing) lives in a
- * function that can be called without a device.
+ * Pure Kotlin on purpose — no Android, no Room, no coroutines — so every
+ * decision worth pinning is callable from the unit tests, which carry JUnit
+ * and nothing else.
  */
 
 /** Bumped when the shape below changes incompatibly; older blobs are discarded. */
@@ -20,17 +19,14 @@ const val PLAYBACK_SNAPSHOT_VERSION = 1
 /**
  * One queue position.
  *
- * [unified] is the load-bearing half, not an optimization. `UnifiedTrackRegistry`
- * is an in-memory map and is empty after process death, and
- * `PlayerViewModel.resolveAndPlay` resolves through it first, then a synthesized
- * Qobuz track, then the legacy TIDAL path. A queue persisted as bare [Track]s
- * would send every restored local file down that last branch and play a
- * different song under the right title.
+ * [unified] is load-bearing, not an optimization: `UnifiedTrackRegistry` is
+ * in-memory and empty after process death, so a queue of bare [Track]s falls
+ * through `resolveAndPlay` to the legacy TIDAL branch and plays a different
+ * song under the right title.
  *
- * Both halves are stored rather than deriving one from the other:
- * `UnifiedTrack.toLegacyTrack()` is not a faithful inverse (it rewrites the
- * album id to a hash), so a round trip through it would quietly corrupt the
- * entries that came in as legacy tracks.
+ * Both halves are stored because `UnifiedTrack.toLegacyTrack()` is not a
+ * faithful inverse — it rewrites the album id to a hash — so deriving either
+ * one would corrupt the entries that arrived as legacy tracks.
  */
 @Serializable
 data class PersistedQueueEntry(
@@ -44,9 +40,8 @@ data class PersistedQueue(
     val version: Int,
     val entries: List<PersistedQueueEntry> = emptyList(),
     /**
-     * The pre-shuffle order, as indices into [entries]. Empty means "same as
-     * [entries]", which is the common case and costs nothing to store. A second
-     * copy of the track list would double the blob to say the same thing.
+     * Pre-shuffle order, as indices into [entries]. Empty means identity — the
+     * common case. A second copy of the list would double the blob to say it.
      */
     val originalOrder: List<Int> = emptyList(),
 )
@@ -54,12 +49,10 @@ data class PersistedQueue(
 object PlaybackSnapshotCodec {
 
     /**
-     * `encodeDefaults = false` roughly halves the blob — most of `UnifiedTrack`'s
-     * fields are null defaults on any given track — and `ignoreUnknownKeys`
-     * means a field added in a later build doesn't invalidate a snapshot written
-     * by this one. Same configuration the history rows already round-trip
-     * `UnifiedTrack` through, so `PlaybackSource`'s sealed polymorphism is
-     * already proven against it in production.
+     * `encodeDefaults = false` roughly halves the blob (most of `UnifiedTrack`
+     * is null on any given track); `ignoreUnknownKeys` keeps a snapshot
+     * readable after a later build adds a field. Same config the history rows
+     * already round-trip `UnifiedTrack` through.
      */
     private val json = Json {
         ignoreUnknownKeys = true
@@ -70,10 +63,9 @@ object PlaybackSnapshotCodec {
         runCatching { json.encodeToString(queue) }.getOrNull()
 
     /**
-     * Returns null for anything we shouldn't act on — malformed JSON, a version
-     * this build doesn't know, an empty queue. The caller treats null as "no
-     * snapshot", which lands the user exactly where they are today rather than
-     * somewhere wrong.
+     * Null for anything not worth acting on — malformed, wrong version, empty.
+     * The caller reads that as "no snapshot" and leaves the user where they
+     * are rather than somewhere wrong.
      */
     fun decode(raw: String?): PersistedQueue? {
         if (raw.isNullOrBlank()) return null
@@ -86,26 +78,21 @@ object PlaybackSnapshotCodec {
 }
 
 /**
- * Encoding of the pre-shuffle queue order.
- *
- * Matching is positional, never by track id: a queue is allowed to hold the same
- * track twice, and an id-keyed mapping would collapse both copies onto whichever
- * one it found first.
+ * Encoding of the pre-shuffle queue order. Positional, never by track id: a
+ * queue may hold the same track twice, and an id-keyed map collapses both
+ * copies onto whichever it found first.
  */
 object QueueOrdering {
 
     /**
      * [original] as indices into [current], dropping originals [current] no
-     * longer holds.
+     * longer holds. The two genuinely diverge: `QueueManager.originalQueue` is
+     * maintained only by setQueue, addToQueue, clearUpcoming and toggleShuffle,
+     * so treating it as a permutation would let a shuffle toggled off after a
+     * restore resurrect tracks the user removed.
      *
-     * The two lists genuinely do diverge. `QueueManager.originalQueue` is only
-     * maintained by setQueue, addToQueue, clearUpcoming and toggleShuffle —
-     * removing a track, moving one, or queueing one to play next all leave it
-     * untouched. Treating it as a permutation would mean a shuffle toggled off
-     * after a restore resurrects tracks the user removed.
-     *
-     * Returns empty when the result is the identity, which is what an unshuffled
-     * queue produces and is the case not worth storing.
+     * Empty when the result is the identity — an unshuffled queue, not worth
+     * storing.
      */
     fun encode(current: List<Track>, original: List<Track>): List<Int> {
         if (original.isEmpty() || current.isEmpty()) return emptyList()
@@ -134,12 +121,9 @@ object QueueOrdering {
 }
 
 /**
- * How much of a long queue is worth writing down.
- *
- * A queue can run to thousands of entries (an album shuffle, a radio tail), and
- * the blob is rewritten whenever the queue changes. Biased forward because
- * that is where the value is: what's coming up matters more on reopening than
- * what already played.
+ * How much of a long queue is worth writing down. A queue can run to thousands
+ * of entries and the blob is rewritten on every change. Biased forward: what's
+ * coming up matters more on reopening than what already played.
  */
 object QueueWindow {
     const val MAX_PERSISTED_ENTRIES = 300
@@ -153,20 +137,17 @@ object QueueWindow {
         if (size <= max) return Window(0, size, currentIndex)
 
         val current = currentIndex.coerceIn(0, size - 1)
-        // Take the tail when the play head is near the end, so the window is
-        // always exactly `max` long rather than running off the end.
+        // Take the tail near the end, so the window is always exactly `max`.
         val from = (current - KEEP_BEHIND).coerceIn(0, size - max)
         return Window(from, from + max, current - from)
     }
 }
 
 /**
- * When a position is worth writing to disk.
- *
- * Two sources feed the save — player events and a heartbeat — and without a
- * throttle between them a pause during a seek is several writes in a
- * millisecond. [flush] is for the moments where losing the write loses the
- * feature: a pause, a seek, the task being swiped away, the service dying.
+ * When a position is worth writing to disk. Player events and a heartbeat both
+ * feed the save, so without a throttle a pause mid-seek is several writes in a
+ * millisecond. [flush] is for when losing the write loses the feature: a pause,
+ * a seek, the task swiped away, the service dying.
  */
 object PositionWriteThrottle {
     const val MIN_INTERVAL_MS = 5_000L
@@ -180,9 +161,8 @@ object PositionWriteThrottle {
         flush: Boolean,
     ): Boolean {
         if (flush) return true
-        // Backwards means a seek back or a new track: the stored position is
-        // now wrong about which second of which song, so it lands regardless of
-        // how recently we wrote.
+        // Backwards means a seek back or a new track, so the stored position
+        // is wrong about which second of which song. Always write.
         if (positionMs < lastPositionMs) return true
         return now - lastWriteAt >= MIN_INTERVAL_MS &&
             positionMs - lastPositionMs >= MIN_DELTA_MS

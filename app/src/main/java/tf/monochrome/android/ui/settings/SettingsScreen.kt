@@ -730,12 +730,9 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             onCheckedChange = { viewModel.setGlowBehindArt(it) }
         )
         // The cover bloom's own size and strength, separate from the Studio's
-        // Glow section (which tunes the bloom behind the lyrics). Like the two
-        // rows under Dynamic Colors above, they only mean anything once the
-        // switch that draws the glow is on, so they live inside it.
-        //
-        // Until one of them is moved they read the lyric glow, so these open on
-        // whatever is already on screen rather than on a default.
+        // Glow section (the bloom behind the lyrics). Inside the switch that
+        // draws them, like the Dynamic Colors rows above. Until one is moved
+        // they read the lyric glow, so they open on what is already on screen.
         AnimatedVisibility(visible = glowBehindArt) {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 IntSettingSlider(

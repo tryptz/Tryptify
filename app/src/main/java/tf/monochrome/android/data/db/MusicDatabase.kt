@@ -204,21 +204,18 @@ abstract class MusicDatabase : RoomDatabase() {
         }
 
         /**
-         * Somewhere to write down what was playing, so reopening the app comes
-         * back to the track and the second it was left on instead of to an
-         * empty player.
+         * Somewhere to write down what was playing, so reopening comes back to
+         * the track and the second it was left on.
          *
-         * Two tables rather than one because they are written at completely
-         * different rates: the queue blob changes when the queue does, the play
-         * head every few seconds while a track runs, and SQLite rewrites a whole
-         * record on any UPDATE. One row would mean re-writing the blob to store
-         * a number.
+         * Two tables because they are written at completely different rates —
+         * the blob when the queue changes, the play head every few seconds —
+         * and SQLite rewrites a whole record on any UPDATE. One row would mean
+         * re-writing the blob to store a number.
          *
-         * Both statements are copied verbatim out of the generated
-         * MusicDatabase_Impl. Room compares the live schema against its own
-         * expectation on open and a mismatch of so much as a column order sends
-         * the database through fallbackToDestructiveMigration, which drops every
-         * playlist, favourite and preset the user has. Do not hand-edit these.
+         * Both statements are verbatim from the generated MusicDatabase_Impl.
+         * Room compares the live schema against its own on open, and a mismatch
+         * of so much as a column order triggers fallbackToDestructiveMigration,
+         * dropping every playlist, favourite and preset. Do not hand-edit.
          */
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {

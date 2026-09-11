@@ -13,20 +13,15 @@ import javax.inject.Singleton
 /**
  * Moves cover art out of `cacheDir` and into the durable store, once.
  *
- * Deliberately a move and a key rewrite, not a rescan. Re-extracting the art
- * would be the tidier end state — every cover deduplicated and downscaled in one
- * pass — but it is also a full library scan, which is the exact thing this whole
- * change exists to stop happening at launch, and it would show a wall of
- * placeholders until it finished. `renameTo` within the same partition is a
- * metadata operation, so this costs one directory listing and three UPDATEs
- * however large the library is.
+ * A move and a key rewrite, not a rescan. Re-extracting would be the tidier end
+ * state, but it is a full library scan — the exact thing this change exists to
+ * stop at launch — behind a wall of placeholders. `renameTo` within a partition
+ * is metadata only, so this costs one listing and three UPDATEs at any size.
  *
- * What that trades away: the files carried over keep their old
- * one-copy-per-track naming and their original size. They land in
- * [ArtworkStore.legacyRoot] rather than the store root, which is what lets
- * `MediaScanner.needsReRead` recognise them, so the next *manual* rescan
- * replaces them with deduplicated, downscaled copies a row at a time. Nothing is
- * forced on the user in the meantime and nothing renders a placeholder.
+ * The trade: carried-over files keep their one-copy-per-track naming and
+ * original size. They land in [ArtworkStore.legacyRoot] so
+ * `MediaScanner.needsReRead` recognises them and the next *manual* rescan
+ * replaces them a row at a time, with nothing forced on the user meanwhile.
  */
 @Singleton
 class ArtworkStoreMigration @Inject constructor(
@@ -42,8 +37,7 @@ class ArtworkStoreMigration @Inject constructor(
         val oldDir = File(context.cacheDir, ArtworkKeys.DIR_NAME)
         val destination = artworkStore.legacyRoot
 
-        // Nothing to carry over — a fresh install, or a device whose cache was
-        // already reaped. Mark it done either way so this never runs again.
+        // Fresh install, or a cache already reaped. Mark done either way.
         val files = oldDir.listFiles()
         if (files == null || files.isEmpty()) {
             oldDir.delete()
@@ -56,8 +50,8 @@ class ArtworkStoreMigration @Inject constructor(
         for (file in files) {
             if (!file.isFile) continue
             val target = File(destination, file.name)
-            // A name already taken means a previous interrupted run got this
-            // one across. The old copy is redundant, not newer.
+            // Taken means an interrupted run already got this one across.
+            // The old copy is redundant, not newer.
             if (target.exists()) {
                 if (file.delete()) moved++
                 continue
@@ -65,10 +59,9 @@ class ArtworkStoreMigration @Inject constructor(
             if (file.renameTo(target)) moved++
         }
 
-        // Key rewrite comes after the files have actually landed. The other
-        // order would point every row at a path that does not exist yet, and a
-        // crash in between would leave the whole library showing placeholders
-        // with no scan able to explain why.
+        // After the files have landed. The other order points every row at a
+        // path that does not exist yet, and a crash in between leaves the whole
+        // library on placeholders with no scan able to explain why.
         val oldPrefix = oldDir.absolutePath.trimEnd('/') + "/"
         val newPrefix = destination.absolutePath.trimEnd('/') + "/"
         val tracks = localMediaDao.repointTrackArtwork(oldPrefix, newPrefix)

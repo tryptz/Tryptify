@@ -224,9 +224,8 @@ class PlaybackService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 // Also what wakes the blend watcher — see startCrossfadeWatcher.
                 playingSignal.value = isPlaying
-                // A pause is where the play head is most likely to sit until
-                // the app is closed, so it is the one save that must not be
-                // throttled away.
+                // Where the play head most likely sits until the app closes,
+                // so this is the one save that must not be throttled away.
                 playbackState.savePosition(player.currentPosition, player.duration, flush = true)
                 refreshNowPlayingWidget()
                 // Discord draws the progress bar from timestamps and animates
@@ -834,8 +833,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
-        // Swiping the app away is a normal way to end a listening session, and
-        // for a paused one it is the last moment we get.
+        // A normal way to end a session, and for a paused one the last moment
+        // we get.
         if (player != null && player.mediaItemCount > 0) {
             playbackState.savePosition(player.currentPosition, player.duration, flush = true)
         }
@@ -901,9 +900,8 @@ class PlaybackService : MediaSessionService() {
         // shutdown(), not clear(): the service is going away now, so there is
         // nothing for the between-tracks grace period to wait for.
         discordPresence.shutdown()
-        // Before the player is released and stops being able to answer. Lands
-        // on the repository's own scope, so cancelling serviceScope below does
-        // not take the write with it.
+        // Before the player is released and stops answering. Lands on the
+        // repository's own scope, so cancelling serviceScope doesn't take it.
         mediaSession?.player?.let {
             if (it.mediaItemCount > 0) {
                 playbackState.savePosition(it.currentPosition, it.duration, flush = true)
@@ -1305,17 +1303,14 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * Writes the play head down periodically, so a session that ends without
-     * warning still comes back to roughly the right second.
+     * warning still comes back to roughly the right second. The event hooks
+     * cover every ending we are told about; they do not cover being killed
+     * under memory pressure while playing, which is how a long session usually
+     * ends.
      *
-     * The event hooks cover every ending we get told about — a pause, a seek,
-     * the task swiped away, the service destroyed. They do not cover the app
-     * being killed outright under memory pressure while playing, which is the
-     * common way a long listening session actually ends.
-     *
-     * Parks on [playingSignal] exactly as the blend watcher below does. A
-     * free-running loop here would repeat that watcher's old mistake — see its
-     * comment about waking ~345,000 times a day — and this one would be worse,
-     * because each wake would touch the disk.
+     * Parks on [playingSignal] like the blend watcher below — a free-running
+     * loop would repeat that watcher's old mistake (see its ~345,000 wakes a
+     * day), and worse here, since each wake touches the disk.
      */
     private fun startPositionPersistWatcher() {
         serviceScope.launch {
@@ -1780,17 +1775,14 @@ class PlaybackService : MediaSessionService() {
             // BT-remote / lock-screen play tap. Resolve on serviceScope and
             // complete the future when ready.
             //
-            // Only the track being resumed is resolved. This used to resolve
-            // the whole queue, which was two bugs in one. It was a network
-            // request per entry on a single play tap — now that a queue
-            // survives a restart, potentially hundreds. And `index` counted
-            // positions in the *unfiltered* queue while the list handed back
-            // was a mapNotNull, so a single earlier entry that failed to
-            // resolve shifted everything down and resumed the wrong track.
-            // One item cannot be misindexed, and the player never held more
-            // than one anyway: QueueForwardingPlayer routes next/previous
-            // through QueueManager precisely because ExoPlayer's own playlist
-            // is not this app's queue.
+            // Only the track being resumed. Resolving the whole queue was two
+            // bugs: a network request per entry on one tap — hundreds, now that
+            // queues survive a restart — and `index` counted the *unfiltered*
+            // queue while the list handed back was a mapNotNull, so one earlier
+            // failure shifted everything down and resumed the wrong track. The
+            // player never held more than one anyway: QueueForwardingPlayer
+            // routes next/previous through QueueManager because ExoPlayer's
+            // playlist is not this app's queue.
             val future = com.google.common.util.concurrent.SettableFuture
                 .create<MediaSession.MediaItemsWithStartPosition>()
             serviceScope.launch {

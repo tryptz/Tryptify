@@ -28,10 +28,10 @@ class PlaybackSnapshotTest {
 
     // ── Serialization ───────────────────────────────────────────────
     //
-    // PlaybackSource is a sealed class discriminated by @SerialName. A rename
-    // there would not fail the build; it would silently stop every restored
-    // local file from resolving, sending it down the legacy catalog path to
-    // play a different song under the right title. Hence a test per source.
+    // PlaybackSource is sealed, discriminated by @SerialName. A rename there
+    // would not fail the build — it would send every restored local file down
+    // the legacy catalog path to play a different song under the right title.
+    // Hence a test per source.
 
     private fun assertSourceRoundTrips(source: PlaybackSource, type: SourceType) {
         val snapshot = PersistedQueue(
@@ -86,9 +86,8 @@ class PlaybackSnapshotTest {
 
     // ── Refusing to act on a bad snapshot ───────────────────────────
     //
-    // Every one of these must read as "no snapshot" rather than throwing or,
-    // worse, restoring something wrong. Landing the user where they are today
-    // is the acceptable failure; landing them on the wrong song is not.
+    // Each must read as "no snapshot" rather than throw or restore something
+    // wrong. Landing where they are today is the acceptable failure.
 
     @Test
     fun `malformed json is no snapshot`() {
@@ -136,8 +135,7 @@ class PlaybackSnapshotTest {
 
     @Test
     fun `duplicate tracks map to distinct positions`() {
-        // Matching by id would collapse both copies onto whichever it found
-        // first, losing an entry and duplicating another.
+        // Matching by id collapses both copies onto whichever it found first.
         val original = listOf(track(1), track(2), track(1))
         val shuffled = listOf(track(2), track(1), track(1))
         val order = QueueOrdering.encode(shuffled, original)
@@ -147,10 +145,9 @@ class PlaybackSnapshotTest {
 
     @Test
     fun `originals the queue no longer holds are dropped`() {
-        // QueueManager keeps originalQueue through setQueue and toggleShuffle
-        // but not through removeFromQueue or move, so the two really do
-        // diverge. Treating it as a permutation would let toggling shuffle off
-        // after a restore resurrect tracks the user deleted.
+        // originalQueue survives setQueue and toggleShuffle but not
+        // removeFromQueue or move, so the two really diverge — as a permutation
+        // it would resurrect deleted tracks when shuffle is toggled off.
         val original = listOf(track(1), track(2), track(3))
         val current = listOf(track(3), track(1))
         val order = QueueOrdering.encode(current, original)
@@ -244,7 +241,7 @@ class PlaybackSnapshotTest {
 
     @Test
     fun `going backwards always writes`() {
-        // A seek back or a track change: the stored position is now wrong about
+        // A seek back or a track change: the stored position is wrong about
         // which second of which song, so it can't wait for the interval.
         assertTrue(
             PositionWriteThrottle.shouldWrite(

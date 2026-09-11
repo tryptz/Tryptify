@@ -86,10 +86,9 @@ class MediaScanner @Inject constructor(
             // Update scan state
             updateScanState(full = true)
 
-            // The store is app data now, not a cache the OS will bound for us,
-            // so a scan is the one moment we know which covers are still
-            // spoken for. Best effort: a failed sweep is wasted disk, never a
-            // failed scan.
+            // App data now, not a cache the OS bounds for us, and a scan is
+            // the one moment we know which covers are still spoken for. Best
+            // effort: a failed sweep is wasted disk, never a failed scan.
             runCatching {
                 artworkStore.sweepOrphans(localMediaDao.getAllReferencedArtworkKeys())
             }
@@ -451,10 +450,9 @@ class MediaScanner @Inject constructor(
         localMediaDao.updateScanState(
             ScanStateEntity(
                 id = 1,
-                // Was `existingState?.lastFullScan ?: now`, which pinned the
-                // column to the first scan the install ever ran: every later
-                // full scan left it untouched, so it recorded when the library
-                // was first indexed rather than when it was last rebuilt.
+                // Was `existingState?.lastFullScan ?: now`, which pinned this
+                // to the install's first scan — recording when the library was
+                // first indexed rather than when it was last rebuilt.
                 lastFullScan = if (full) now else existingState?.lastFullScan ?: now,
                 lastIncremental = now,
                 totalTracks = trackCount,
@@ -520,10 +518,9 @@ class MediaScanner @Inject constructor(
             // older scan logic missed it" — re-read so freshly-
             // installed cover detection logic gets a chance.
             if (!existing.hasEmbeddedArt && existing.artworkCacheKey == null) return true
-            // Art carried over from the old cache-keyed store: one unscaled
-            // copy per track file. Re-reading replaces it with a downscaled
-            // copy shared by every track on the album, so the store compacts
-            // itself over the manual rescans the user already runs.
+            // Carried over from the old cache-keyed store: one unscaled copy
+            // per track. Re-reading replaces it with a downscaled copy shared
+            // across the album, so the store compacts over the user's rescans.
             if (tf.monochrome.android.data.local.tags.ArtworkKeys
                     .isLegacyKey(existing.artworkCacheKey)
             ) return true

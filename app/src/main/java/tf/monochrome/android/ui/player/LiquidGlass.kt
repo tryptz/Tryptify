@@ -453,43 +453,33 @@ fun PlayerGlassHaze(
 }
 
 /**
- * The ground the player's glass is actually a sheet over.
+ * The ground the player's glass is a sheet over.
  *
- * Every frosted pane inside the player asks its backdrop two questions: what
- * colour to reconstruct behind the blur (`HazeStyle.backgroundColor`), and
- * whether that backdrop is dark — which side of the [playerFrostTint] recipe to
- * wash it with. Both used to be answered with
- * `MaterialTheme.colorScheme.background`, and that is the wrong surface: the
- * player does not sit on the theme. It sits on [dynamicPlayerBackground], which
- * washes the album colour toward black and ends on
+ * Frosted panes ask their backdrop two things — what colour to reconstruct
+ * behind the blur (`HazeStyle.backgroundColor`), and whether it is dark (which
+ * side of [playerFrostTint] to use). Both used to ask
+ * `MaterialTheme.colorScheme.background`, which is the wrong surface: the
+ * player sits on [dynamicPlayerBackground], ending on
  * [PlayerDesignTokens.BackgroundBlack] — dark under *every* theme, which is why
- * the player's chrome is hardcoded white and why the system bars compute their
- * own luminance from this colour instead of asking the theme.
+ * its chrome is hardcoded white. On a light theme the frost therefore laid
+ * white at 0.26 over a near-black ground: milky grey slabs, glyphs washed out.
  *
- * On a light theme the old question got a light answer, so the frost laid white
- * at 0.26 over a near-black ground and the panes came out as milky grey slabs
- * with the glyphs washed out of them.
- *
- * Keep deriving `isDark` from `luminance()` on this rather than hardcoding
- * `true`: if the player's ground ever lightens, the frost follows it instead of
- * silently lying about what it is over.
+ * Keep deriving `isDark` from `luminance()` rather than hardcoding `true`, so
+ * the frost follows if the player's ground ever lightens.
  */
 val PlayerGlassGround: Color = PlayerDesignTokens.BackgroundBlack
 
 /**
  * The ground the glass in *this* subtree is over, defaulting to the player's.
  *
- * Every frosted pane in the player sits on [PlayerGlassGround] and does not
- * need this. The Player Visuals Studio does: its preview draws the chrome over
- * a swatch the listener picks, and that swatch can be any colour, including a
- * light one. Reading the player's ground there would frost dark over a light
- * backdrop — the same bug as asking the theme, pointed the other way — on the
- * one screen whose whole job is showing what the glass looks like.
+ * Only the Player Visuals Studio needs to override it: its preview draws the
+ * chrome over a swatch the listener picks, which can be any colour including a
+ * light one, so the player's ground would frost dark over a light backdrop —
+ * the theme bug pointed the other way, on the screen meant to show the glass.
  *
- * Provided next to [LocalPlayerHaze], because the ground *is* a property of the
- * haze source: whoever supplies the backdrop to blur knows what colour it is.
- * Nested chrome (the dock, which frosts inside itself) picks it up for free,
- * which a parameter could not reach.
+ * Provided next to [LocalPlayerHaze], because the ground is a property of the
+ * haze source. Nested chrome (the dock frosts inside itself) picks it up for
+ * free, which a parameter could not reach.
  */
 val LocalPlayerGlassGround = compositionLocalOf { PlayerGlassGround }
 

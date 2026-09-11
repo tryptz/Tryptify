@@ -50,12 +50,10 @@ private val DockItemVerticalPadding = 10.dp
 // no velocity, so releasing mid-bounce snapped the dome still before easing off.
 private val PressSpring = spring<Float>(dampingRatio = 0.85f, stiffness = 900f)
 
-// Room for the lit glyph's bloom to spread into. A blur can only smear pixels
-// it was given, and Unbounded treats everything past the layer as transparent,
-// so a glyph blurred in a box its own size is cut off a few dp out from the
-// strokes -- the glow came back as a soft SQUARE rather than the shape of the
-// glyph. The dock's drawables fill ~80% of their viewport, which left about
-// 3dp of margin against an 11dp blur.
+// Room for the lit glyph's bloom. A blur only smears pixels it was given, and
+// Unbounded treats everything past the layer as transparent, so a glyph blurred
+// in a box its own size comes back a soft SQUARE. The dock's drawables fill
+// ~80% of their viewport: about 3dp of margin against an 11dp blur.
 private val DockBloomPadding = 16.dp
 private val DockBloomBox = PlayerDesignTokens.DockIconSize + DockBloomPadding * 2
 
@@ -124,12 +122,10 @@ fun PlayerActionDock(
         painterResource(R.drawable.ic_glass_playlist),
     )
     // Press-bulge: one shared interaction source per slot so the parent knows
-    // which button is held and can swell the glass under it. Its rise and fall are
-    // one interruptible spring; its centre is *placed* on the last pressed slot
-    // rather than animated to it. Animating it only looked like a glide: a press
-    // is never handed between sibling clickables, so a finger sliding along the
-    // dock cannot move the dome, and all an animated centre does is drag it
-    // across from whichever button bloomed last.
+    // which button is held and can swell the glass under it. The centre is
+    // *placed* on the last pressed slot, not animated to it: a press is never
+    // handed between sibling clickables, so an animated centre cannot glide
+    // under a finger — it only drags the dome over from the last button.
     val sources = remember { List(icons.size) { MutableInteractionSource() } }
     val pressed = sources.map { it.collectIsPressedAsState() }
     val pressedIndex = pressed.indexOfFirst { it.value }
@@ -268,9 +264,9 @@ private fun DockLabel(
             .padding(vertical = DockItemVerticalPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Fixed to the hole the glass slab punches, so the bloom below can
-        // overflow it without the row growing: punchDockIcons places the holes
-        // from the row's paddings, and a taller slot walks them off the glyphs.
+        // Fixed to the punched hole so the bloom can overflow without the row
+        // growing: punchDockIcons places the holes from the row's paddings, and
+        // a taller slot walks them off the glyphs.
         Box(
             modifier = Modifier.size(PlayerDesignTokens.DockIconSize),
             contentAlignment = Alignment.Center,
@@ -281,14 +277,12 @@ private fun DockLabel(
                     painter = painter,
                     contentDescription = null,
                     modifier = Modifier
-                        // requiredSize, so the bigger box is measured but never
-                        // reported to the slot above.
+                        // Measured, never reported to the slot above.
                         .requiredSize(DockBloomBox)
-                        // Blur OUTSIDE the alpha layer, for the reason the
-                        // slab's own shadow already carries: a layer at partial
-                        // alpha composites through an offscreen buffer its own
-                        // size, and that cuts the spill back to a hard-edged
-                        // rectangle -- here on every frame of the fade.
+                        // Blur OUTSIDE the alpha layer, as the slab's shadow
+                        // already does: partial alpha composites through an
+                        // offscreen buffer its own size, cutting the spill back
+                        // to a rectangle on every frame of the fade.
                         .blur(radius = 11.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                         .graphicsLayer { alpha = lit }
                         .padding(DockBloomPadding),

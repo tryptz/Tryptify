@@ -25,21 +25,16 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Remembers what was playing, so reopening the app comes back to it.
- *
- * The queue, the play head and the shuffle/repeat modes all lived only in
- * [QueueManager]'s StateFlows, which die with the process. Closing the app and
- * opening it later landed on an empty player with no mini player and no way
- * back to the song except finding it again and scrubbing.
+ * Remembers what was playing, so reopening the app comes back to it. The queue,
+ * play head and modes lived only in [QueueManager]'s StateFlows, which die with
+ * the process.
  *
  * Restores **paused**. Nothing here resolves a stream, takes audio focus or
- * posts a notification — the queue comes back, the scrubber shows where it was,
- * and the first press of play is what goes to the network.
+ * posts a notification; the first press of play is what goes to the network.
  *
- * The split of responsibilities copies DownloadManager/DownloadQueue: this class
- * owns the I/O so [QueueManager] can stay a plain state holder with no
- * dependencies, which is also what keeps `QueueManagerTest` able to construct it
- * with no mocks.
+ * Owns the I/O so [QueueManager] stays a plain state holder with no
+ * dependencies — which is what lets `QueueManagerTest` build it with no mocks.
+ * Same split as DownloadManager/DownloadQueue.
  */
 @Singleton
 class PlaybackStateRepository @Inject constructor(
@@ -50,10 +45,9 @@ class PlaybackStateRepository @Inject constructor(
 ) {
 
     /**
-     * Its own scope, deliberately. The service saves the position from
-     * `onDestroy`, and `PlaybackService.serviceScope` is cancelled in that same
-     * method — a save launched there would be cancelled before it reached the
-     * disk, losing exactly the write that matters most.
+     * Its own scope, deliberately: the service saves from `onDestroy`, which is
+     * where `serviceScope` is cancelled — a save launched there dies before
+     * reaching disk, losing exactly the write that matters most.
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val writeMutex = Mutex()
@@ -71,9 +65,8 @@ class PlaybackStateRepository @Inject constructor(
     @OptIn(FlowPreview::class)
     fun start(appScope: CoroutineScope) {
         appScope.launch {
-            // Restore before the collector below is subscribed. The other order
-            // publishes QueueManager's empty initial state straight over the
-            // snapshot we are about to read.
+            // Before the collector subscribes: the other order publishes
+            // QueueManager's empty initial state over the snapshot.
             runCatching { restore() }
                 .onFailure { Log.e(TAG, "Could not restore the last session", it) }
             restoreDone = true
@@ -119,8 +112,8 @@ class PlaybackStateRepository @Inject constructor(
             PersistedQueue(
                 version = PLAYBACK_SNAPSHOT_VERSION,
                 entries = entries,
-                // Re-encoded against the window, not the full queue, or the
-                // indices point past the end of what was actually stored.
+                // Against the window, not the full queue, or the indices
+                // point past the end of what was stored.
                 originalOrder = QueueOrdering.encode(windowed, queueManager.originalQueueSnapshot),
             )
         ) ?: return@withLock
@@ -133,10 +126,9 @@ class PlaybackStateRepository @Inject constructor(
                 id = 1,
                 currentIndex = window.currentIndex,
                 currentTrackId = current?.id ?: 0,
-                // A queue edit does not move the play head, so carry the stored
-                // position across rather than resetting it — otherwise removing
-                // a track further down the queue would drop the play head of
-                // the song currently running back to zero.
+                // A queue edit doesn't move the play head: carry the stored
+                // position across, or removing a track further down the queue
+                // drops the running song back to zero.
                 positionMs = dao.getState()?.takeIf { it.currentTrackId == current?.id }?.positionMs ?: 0,
                 durationMs = (current?.duration ?: 0) * 1000L,
                 shuffleEnabled = shape.shuffle,
@@ -147,19 +139,16 @@ class PlaybackStateRepository @Inject constructor(
     }
 
     /**
-     * Record the play head. Fire-and-forget on this class's own scope.
-     *
-     * [flush] is for the moments where losing the write loses the feature — a
-     * pause, a seek, the task swiped away, the service being destroyed —
-     * and bypasses the throttle.
+     * Record the play head. Fire-and-forget on this class's own scope. [flush]
+     * bypasses the throttle, for when losing the write loses the feature: a
+     * pause, a seek, the task swiped away, the service destroyed.
      */
     fun savePosition(positionMs: Long, durationMs: Long, flush: Boolean = false) {
         if (!restoreDone) return
         val track = queueManager.currentTrack.value ?: return
-        // A station is not a recording: it has no position worth seeking to and
-        // resuming one "where you left off" would seek into a live stream.
-        // Enforced here as well as at the caller — one invariant, and the
-        // callers are spread across six player events.
+        // A station is not a recording: resuming one "where you left off"
+        // seeks into a live stream. Enforced here as well as at the caller,
+        // which is spread across six player events.
         val live = isLiveStream(track)
         val position = if (live) 0L else positionMs.coerceAtLeast(0L)
         val duration = if (live) 0L else durationMs.coerceAtLeast(0L)
@@ -185,11 +174,10 @@ class PlaybackStateRepository @Inject constructor(
         val state = dao.getState() ?: return
         val persisted = PlaybackSnapshotCodec.decode(dao.getQueue()?.queueJson) ?: return
 
-        // Rehydrate the routing registries before QueueManager publishes a
-        // current track. resolveAndPlay consults them first and falls through to
-        // the legacy TIDAL path when they miss, which for a restored local file
-        // means playing a different song under the right title — the same
-        // failure the history rows already guard against this way.
+        // Before QueueManager publishes a current track: resolveAndPlay
+        // consults these first and falls through to the legacy TIDAL path when
+        // they miss, which for a restored local file plays a different song
+        // under the right title.
         persisted.entries.forEach { entry ->
             val unified = entry.unified ?: return@forEach
             unifiedTrackRegistry.put(entry.track.id, unified)
@@ -212,9 +200,8 @@ class PlaybackStateRepository @Inject constructor(
         val duration = state.durationMs.takeIf { it > 0 } ?: (current.duration * 1000L)
         val position = when {
             isLiveStream(current) -> 0L
-            // It had effectively finished. Reopening onto the last four seconds
-            // of a song, where play means an immediate skip, is worse than
-            // reopening onto the start of it.
+            // Effectively finished. Reopening onto the last four seconds,
+            // where play means an immediate skip, is worse than the start.
             duration > 0 && state.positionMs >= duration - END_OF_TRACK_MS -> 0L
             else -> state.positionMs.coerceAtLeast(0L)
         }
@@ -223,18 +210,15 @@ class PlaybackStateRepository @Inject constructor(
     }
 
     /**
-     * The position [trackId] should start at, consumed on first use.
-     *
-     * One-shot and keyed on the track so that replaying the same song later
-     * starts at the beginning, and so a restore whose track the user skipped
-     * past never seeks a different one.
+     * The position [trackId] should start at, consumed on first use. Keyed on
+     * the track so replaying it later starts at the beginning, and a restore
+     * the user skipped past never seeks a different song.
      */
     fun consumePendingStart(trackId: Long): Long {
         val pending = _pendingStart.value ?: return 0L
-        // Cleared either way. Any resolveAndPlay is the user picking something
-        // to play, which spends the restored session whether or not they picked
-        // the track it was holding — leaving it set would keep the scrubber
-        // seed and the pre-play seek path armed for the rest of the process.
+        // Cleared either way: any resolveAndPlay spends the restored session,
+        // and leaving it set keeps the scrubber seed and the pre-play seek
+        // armed for the rest of the process.
         _pendingStart.value = null
         return if (pending.trackId == trackId) pending.positionMs else 0L
     }
@@ -247,11 +231,9 @@ class PlaybackStateRepository @Inject constructor(
     }
 
     /**
-     * Move where the first play will start.
-     *
-     * Scrubbing before pressing play is a real gesture, and on a restored
-     * session the player holds no item yet, so the seek that would normally
-     * carry it is dropped on the floor and play resumes at the stale position.
+     * Move where the first play will start. Scrubbing before pressing play is a
+     * real gesture, but a restored session holds no item yet, so the seek that
+     * would carry it is dropped and play resumes at the stale position.
      */
     fun overridePendingStart(positionMs: Long) {
         val pending = _pendingStart.value ?: return

@@ -153,8 +153,7 @@ fun FLChannelStrip(
     val tint = if (glass.tintColor != 0) Color(glass.tintColor) else paneAccent
     val flat = LocalLowPerformance.current.disableLiquidGlass
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
-    // The mixer draws `dynamicPlayerBackground` too, so its strips frost over the
-    // player's ground rather than the theme's — see [PlayerGlassGround].
+    // The mixer draws `dynamicPlayerBackground` too — see [PlayerGlassGround].
     val frostBg = LocalPlayerGlassGround.current
     val isDark = frostBg.luminance() <= 0.5f
 

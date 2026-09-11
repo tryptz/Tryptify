@@ -22,12 +22,10 @@ interface PlaybackStateDao {
     suspend fun upsertQueue(queue: PlaybackQueueEntity)
 
     /**
-     * The hot path, written every few seconds while playing.
-     *
-     * A column-level UPDATE rather than an upsert of the whole row: the queue
-     * shape (index, shuffle, repeat) is owned by the queue collector, and a
-     * position write that carried a stale copy of those would undo an edit made
-     * between the two.
+     * The hot path, written every few seconds while playing. A column-level
+     * UPDATE rather than a whole-row upsert: the queue shape is owned by the
+     * queue collector, and a position write carrying a stale copy of it would
+     * undo an edit made between the two.
      */
     @Query(
         "UPDATE playback_state SET positionMs = :positionMs, durationMs = :durationMs, " +

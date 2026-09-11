@@ -39,10 +39,9 @@ import tf.monochrome.android.ui.components.liquidGlass
  * Bottom 2×2 grid surfacing the player's premium audio tools: sleep timer,
  * sound/AutoEQ, playback speed and the DSP mixer.
  *
- * The timer sits here rather than in the action dock, whose fourth slot is the
- * shuffle toggle now. It took the Output card's place: that one read a hardcoded
- * "Default" and only opened Settings, which the top bar's headphone button
- * already does.
+ * The timer sits here rather than in the dock, whose slot is shuffle now. It
+ * took the Output card's place: that read a hardcoded "Default" and only opened
+ * Settings, which the top bar's headphone button already does.
  */
 @Composable
 fun PlayerStatusGrid(

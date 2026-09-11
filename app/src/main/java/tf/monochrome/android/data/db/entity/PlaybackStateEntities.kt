@@ -6,16 +6,14 @@ import androidx.room.PrimaryKey
 /**
  * The play head: which track, how far in, and how the queue is being walked.
  *
- * Split from [PlaybackQueueEntity] on purpose. This row is tiny and is updated
- * every few seconds while something is playing; the queue blob is large and
- * changes only when the queue actually does. SQLite rewrites a whole record on
- * any UPDATE, so keeping them in one row would mean re-writing a
- * hundred-kilobyte blob every ten seconds for the sake of a six-byte number.
+ * Split from [PlaybackQueueEntity] on purpose: this row is tiny and updated
+ * every few seconds, the blob is large and changes only with the queue. SQLite
+ * rewrites a whole record on any UPDATE, so one row would mean re-writing a
+ * hundred-kilobyte blob every ten seconds for a six-byte number.
  *
- * [currentTrackId] is stored beside the position so a restore can tell whether
- * the position still belongs to the track it is about to seek — a queue edit
- * that lands between the two writes would otherwise drop the play head of one
- * song onto another.
+ * [currentTrackId] sits beside the position so a restore can tell the two still
+ * belong together — a queue edit between the writes would otherwise drop one
+ * song's play head onto another.
  */
 @Entity(tableName = "playback_state")
 data class PlaybackStateEntity(

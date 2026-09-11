@@ -13,11 +13,9 @@ class ArtworkKeysTest {
 
     // ── Naming ──────────────────────────────────────────────────────
     //
-    // The whole point of the new scheme: one cover is one file, however many
-    // tracks carry it. Keyed by the audio file's path (as it used to be) a
-    // 500-track album wrote 500 identical JPEGs, which is what made the store
-    // big enough for Android to be worth reclaiming — and every reclaim cost a
-    // full rescan at the next launch.
+    // The point of the new scheme: one cover is one file. Keyed by the audio
+    // file's path, a 500-track album wrote 500 identical JPEGs — which is what
+    // made the store worth reclaiming, and every reclaim cost a full rescan.
 
     @Test
     fun `identical cover bytes produce one name`() {
@@ -72,9 +70,8 @@ class ArtworkKeysTest {
 
     // ── Key rewriting (the one-time move out of cacheDir) ───────────
     //
-    // The two cases below were the reason the old eviction probe had tests at
-    // all: the column holds sidecar covers and raw audio paths beside stored
-    // art, and a prefix match that ignores directory boundaries corrupts them.
+    // The column holds sidecar covers and raw audio paths beside stored art,
+    // and a prefix match that ignores directory boundaries corrupts them.
 
     @Test
     fun `a key under the old store is repointed`() {
@@ -113,9 +110,9 @@ class ArtworkKeysTest {
 
     @Test
     fun `a huge embedded cover is subsampled but never below the cap`() {
-        // 3000x3000 is an ordinary embedded FLAC cover. Halving twice lands at
-        // 750, which is under the cap, so it must stop at one halving (1500)
-        // and leave the exact scale to Bitmap.createScaledBitmap.
+        // 3000x3000 is an ordinary embedded FLAC cover. Halving twice lands
+        // under the cap at 750, so it must stop at 1500 and leave the exact
+        // scale to Bitmap.createScaledBitmap.
         assertEquals(2, ArtworkKeys.sampleSizeFor(3000, 3000, 1024))
     }
 

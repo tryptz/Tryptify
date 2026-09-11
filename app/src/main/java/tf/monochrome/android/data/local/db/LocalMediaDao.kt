@@ -177,11 +177,10 @@ interface LocalMediaDao {
 
     // ── Artwork store ───────────────────────────────────────────────
 
-    // Repoint every key that sits under [oldPrefix] at [newPrefix], for the
-    // one-time move of the cover store out of cacheDir. [oldPrefix] ends in a
-    // slash, so this cannot catch a sibling directory whose name merely starts
-    // the same way ("…/artwork_backup/"), and the LIKE keeps REPLACE away from
-    // sidecar covers and raw file paths, which share the column.
+    // Repoint keys under [oldPrefix] at [newPrefix], for the one-time move out
+    // of cacheDir. [oldPrefix] ends in a slash so "…/artwork_backup/" cannot
+    // match, and the LIKE keeps REPLACE away from the sidecar covers and raw
+    // file paths sharing the column.
     @Query(
         "UPDATE local_tracks SET artworkCacheKey = " +
             "REPLACE(artworkCacheKey, :oldPrefix, :newPrefix) " +
@@ -203,9 +202,9 @@ interface LocalMediaDao {
     )
     suspend fun repointArtistArtwork(oldPrefix: String, newPrefix: String): Int
 
-    // Every key the store has to keep alive during an orphan sweep. Albums and
-    // artists carry their own copies of a track's key, and a sweep that only
-    // consulted local_tracks would delete a cover an album row still points at.
+    // Every key an orphan sweep must keep alive. Albums and artists carry
+    // their own copies, so consulting local_tracks alone would delete a cover
+    // an album row still points at.
     @Query(
         "SELECT artworkCacheKey FROM local_tracks WHERE artworkCacheKey IS NOT NULL " +
             "UNION SELECT artworkCacheKey FROM local_albums WHERE artworkCacheKey IS NOT NULL " +

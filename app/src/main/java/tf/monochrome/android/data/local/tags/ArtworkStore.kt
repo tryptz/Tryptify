@@ -11,28 +11,21 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Where extracted cover art lives, and what it is named.
+ * Where extracted cover art lives, and what it is named. Two things about the
+ * old store made the library rescan itself on almost every launch.
  *
- * Two things about the old store made the library rescan itself on almost every
- * launch, and both are fixed here rather than repaired afterwards.
+ * It lived in `cacheDir`, which Android is entitled to empty whenever it wants
+ * — and did. Every eviction left Room rows pointing at vanished JPEGs, which
+ * the startup check answered with a *full library scan*. It lives in [filesDir]
+ * now: app data, which the OS does not reclaim and "Clear cache" does not touch.
  *
- * It lived in `cacheDir`, which is by definition the directory Android is
- * entitled to empty whenever it wants — and did, routinely. Every eviction left
- * Room rows pointing at vanished JPEGs, which the startup artwork check answered
- * with a *full library scan*. The store lives in [filesDir] now: app data, which
- * the OS does not reclaim and which Settings' "Clear cache" does not touch.
+ * And it was keyed by `MD5(filePath)`, so a 500-track album wrote the same
+ * cover 500 times at whatever size it was embedded at — often 3000x3000. That
+ * is what made it worth reclaiming. Art is keyed by the hash of its own encoded
+ * bytes now, one file per cover, downscaled to [MAX_EDGE_PX] on the way in.
  *
- * And it was keyed by `MD5(filePath)`, so a 500-track album wrote the same cover
- * 500 times under 500 names, at whatever size it was embedded at — frequently a
- * 3000x3000 PNG. That is what made the store big enough to be worth reclaiming
- * in the first place. Art is keyed by the hash of its own encoded bytes now, so
- * one cover is one file however many tracks carry it, and it is downscaled to
- * [MAX_EDGE_PX] on the way in. Nothing in the app draws cover art above 640 px.
- *
- * Keys stay absolute paths. The column already holds absolute paths to sidecar
- * covers on external storage and to raw audio files as a fallback, and every
- * reader treats it as "a path to an image"; making it relative would be a change
- * at every call site for no gain here.
+ * Keys stay absolute paths: the column already holds paths to sidecar covers
+ * and raw audio files, and every reader treats it as "a path to an image".
  */
 @Singleton
 class ArtworkStore @Inject constructor(
@@ -44,20 +37,18 @@ class ArtworkStore @Inject constructor(
 
     /**
      * Where [ArtworkStoreMigration] parks art carried over from the old
-     * cache-keyed store. Same durability as [root] — the separate directory is
-     * only so the two naming schemes stay tellable apart, since after the move
-     * both are otherwise just `<hex>.jpg`. `needsReRead()` re-reads a row still
-     * pointing in here, so the next manual rescan compacts it a row at a time.
+     * cache-keyed store. Same durability as [root]; the separate directory only
+     * keeps the two naming schemes tellable apart, since both are `<hex>.jpg`.
+     * `needsReRead()` re-reads a row still pointing here, so the next manual
+     * rescan compacts it a row at a time.
      */
     val legacyRoot: File by lazy { File(root, ArtworkKeys.LEGACY_DIR_NAME) }
 
     /**
-     * Store [artworkBytes] and return the absolute path to hold in
-     * `artworkCacheKey`, or [fallbackPath] if it could not be written.
-     *
-     * Identical covers collapse onto one file: the name is the hash of the
-     * *encoded* bytes, so it describes what is actually on disk rather than
-     * which track happened to be read first.
+     * Store [artworkBytes] and return the absolute path for `artworkCacheKey`,
+     * or [fallbackPath] if it could not be written. Identical covers collapse
+     * onto one file: the name is the hash of the *encoded* bytes, so it
+     * describes what is on disk rather than which track was read first.
      */
     fun put(artworkBytes: ByteArray, fallbackPath: String): String {
         return try {
@@ -65,16 +56,15 @@ class ArtworkStore @Inject constructor(
             val name = ArtworkKeys.nameFor(encoded)
             val file = File(root, name)
             if (!file.exists()) {
-                // The lazy mkdirs above runs once per process and the directory
-                // can still be gone by now (a "Clear storage" mid-process), so
-                // recreate it or the write fails silently and every track falls
-                // back to its raw file path.
+                // The lazy mkdirs runs once per process and the directory can
+                // be gone by now ("Clear storage" mid-process); without this
+                // the write fails silently and every track falls back to its
+                // raw file path.
                 root.mkdirs()
-                // Write beside the target and rename into place. A half-written
-                // JPEG under a content hash is a permanent lie: the name says
-                // those exact bytes are present, so nothing would ever rewrite
-                // it and every track sharing that cover would render a torn
-                // image for good.
+                // Write beside the target and rename in. A half-written JPEG
+                // under a content hash is permanent: the name claims those
+                // exact bytes, so nothing ever rewrites it and every track
+                // sharing that cover renders torn for good.
                 val tmp = File(root, "$name.tmp")
                 FileOutputStream(tmp).use { it.write(encoded) }
                 if (!tmp.renameTo(file)) {
@@ -90,9 +80,8 @@ class ArtworkStore @Inject constructor(
 
     /**
      * Decode, downscale to [MAX_EDGE_PX] on the longest edge, re-encode as JPEG.
-     *
-     * Returns null when the bytes are not a decodable image, which is the one
-     * case the caller must treat as "no art" rather than as a write failure.
+     * Null when the bytes are not a decodable image — the one case the caller
+     * must read as "no art" rather than a write failure.
      */
     private fun encode(artworkBytes: ByteArray): ByteArray? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -129,15 +118,13 @@ class ArtworkStore @Inject constructor(
     }
 
     /**
-     * Delete stored art no row points at any more.
+     * Delete stored art no row points at any more. Used to be Android's job —
+     * the store was a cache, so eviction bounded it. It is app data now, so a
+     * deleted album would otherwise leave its cover behind forever.
      *
-     * This used to be Android's job: the store was a cache, so eviction bounded
-     * it whether we pruned or not. It is app data now, so an album deleted from
-     * the device would otherwise leave its cover behind forever.
-     *
-     * [referencedKeys] is every `artworkCacheKey` in the database, which also
-     * carries sidecar and raw-file paths; anything outside the store simply
-     * doesn't match a file in it. Returns the number of files deleted.
+     * [referencedKeys] is every `artworkCacheKey` in the database, sidecar and
+     * raw-file paths included; those simply don't match a file in the store.
+     * Returns the number of files deleted.
      */
     fun sweepOrphans(referencedKeys: Collection<String>): Int {
         val keep = referencedKeys.toHashSet()
@@ -155,9 +142,9 @@ class ArtworkStore @Inject constructor(
 
     companion object {
         /**
-         * Longest edge of a stored cover. The largest surface the app draws art
-         * on is the player hero, and remote art is fetched at 640 px for the
-         * same surfaces, so this leaves headroom rather than setting a target.
+         * Longest edge of a stored cover. The player hero is the largest
+         * surface art is drawn on and remote art is fetched at 640 px for the
+         * same surfaces, so this is headroom rather than a target.
          */
         const val MAX_EDGE_PX = 1024
         const val JPEG_QUALITY = 85

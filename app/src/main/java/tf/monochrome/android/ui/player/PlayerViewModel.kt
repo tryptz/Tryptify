@@ -434,10 +434,9 @@ class PlayerViewModel @Inject constructor(
         connectToService()
         startPositionPolling()
         observeCurrentTrackMeta()
-        // Show the restored position before anything is loaded, so the mini
-        // player comes back with the scrubber where the user left it rather
-        // than at zero. Duration comes from the snapshot (or the catalogue's
-        // own figure) because the player has no opinion until it is prepared.
+        // Before anything is loaded, so the mini player comes back with the
+        // scrubber where the user left it. Duration comes from the snapshot:
+        // the player has no opinion until it is prepared.
         viewModelScope.launch {
             playbackState.pendingStart.collect { pending ->
                 if (pending != null && mediaController?.currentMediaItem == null) {
@@ -581,13 +580,10 @@ class PlayerViewModel @Inject constructor(
     private fun syncState() {
         mediaController?.let { mc ->
             _isPlaying.value = mc.isPlaying
-            // A restored session shows the last track and the second it was
-            // left on before anything is loaded into the player. This runs the
-            // moment the controller connects, and on an empty player Media3
-            // reports position 0 and an unset duration — which are "no item",
-            // not "at the start". Without this guard those zeroes land on the
-            // scrubber a frame after the restore paints it and the whole thing
-            // silently does nothing.
+            // This runs the moment the controller connects, and on an empty
+            // player Media3 reports position 0 and an unset duration — "no
+            // item", not "at the start". Without the guard those zeroes land on
+            // the scrubber a frame after the restore paints it.
             if (mc.currentMediaItem == null && playbackState.pendingStart.value != null) return@let
             _durationMs.value = mc.duration.coerceAtLeast(0)
             _positionMs.value = mc.currentPosition.coerceAtLeast(0)
@@ -853,10 +849,9 @@ class PlayerViewModel @Inject constructor(
         mediaController?.let { mc ->
             when {
                 mc.isPlaying -> mc.pause()
-                // A restored session has a queue and a current track but the
-                // player has never been handed an item, and play() on an empty
-                // timeline does nothing. This is the one point where coming
-                // back to a session touches the network, and only on a tap.
+                // A restored session has a queue but the player was never
+                // handed an item, and play() on an empty timeline does nothing.
+                // The one point where a restore touches the network, on a tap.
                 mc.currentMediaItem == null && queueManager.currentTrack.value != null ->
                     resolveAndPlay()
                 else -> mc.play()
@@ -892,10 +887,9 @@ class PlayerViewModel @Inject constructor(
         // looks like it rewinds would actually restart the stream. Every seek
         // verb the UI offers funnels through here, so one guard covers them all.
         if (isLiveStreamTrack(currentTrack.value)) return
-        // Dragging the scrubber before pressing play on a restored session: the
-        // player holds no item, so the seek would be dropped and play would
-        // start from the stale restored position instead. Move where it will
-        // start rather than seeking something that isn't loaded.
+        // Scrubbing before play on a restored session: the player holds no
+        // item, so the seek is dropped and play starts from the stale position.
+        // Move where it will start instead of seeking something unloaded.
         if (mediaController?.currentMediaItem == null && playbackState.pendingStart.value != null) {
             playbackState.overridePendingStart(positionMs)
         } else {
@@ -1013,9 +1007,8 @@ class PlayerViewModel @Inject constructor(
 
     private fun resolveAndPlay(startPositionMs: Long = 0L) {
         val track = queueManager.currentTrack.value ?: return
-        // A restored session starts where it was left. Consumed on first use
-        // and keyed on the track, so replaying the same song later starts at
-        // the beginning and a track the user skipped past never hands its
+        // Consumed on first use and keyed on the track, so replaying it later
+        // starts at the beginning and a skipped-past track never hands its
         // offset to a different one.
         val start = if (startPositionMs > 0L) startPositionMs
         else playbackState.consumePendingStart(track.id)
@@ -1142,8 +1135,8 @@ class PlayerViewModel @Inject constructor(
      */
     private fun handleResolveFailure() {
         consecutiveResolveFailures++
-        // Whatever we were about to seek into never loaded. Leaving the offset
-        // behind would hand it to whichever track the skip below lands on.
+        // Never loaded. Leaving the offset hands it to whatever the skip
+        // below lands on.
         playbackState.clearPendingStart()
         val queueSize = queueManager.queue.value.size.coerceAtLeast(1)
         if (repeatMode.value == RepeatMode.ONE) {

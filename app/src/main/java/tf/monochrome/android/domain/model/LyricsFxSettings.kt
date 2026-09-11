@@ -100,11 +100,10 @@ data class LyricsFxSettings(
      */
     val glowBehindArt: Boolean = true,
     /**
-     * Album-cover bloom radius, in dp. `null` follows [glowRadiusDp], which is
-     * what the cover glow used before it had a knob of its own — so an upgrade
-     * changes nothing and the slider opens on the glow already on screen.
-     * Setting it pins the cover glow and ends the following. Personal, like
-     * [glowBehindArt] that gates it.
+     * Album-cover bloom radius, in dp. `null` follows [glowRadiusDp] — what the
+     * cover glow used before it had its own knob — so an upgrade changes
+     * nothing and the slider opens on the glow already on screen. Setting it
+     * pins the cover glow. Personal, like the [glowBehindArt] that gates it.
      */
     val artGlowRadiusDp: Float? = null,
     /** Album-cover bloom peak alpha. `null` follows [glowBrightness]. */
@@ -153,8 +152,7 @@ data class LyricsFxSettings(
             glowRadiusDp = glowRadiusDp.c(0f, 160f, d.glowRadiusDp),
             glowBrightness = glowBrightness.c(0f, 0.6f, d.glowBrightness),
             glowBehindArt = glowBehindArt,
-            // Clamped only when pinned — coercing would turn "follow the lyric
-            // glow" into a hard 0.
+            // Only when pinned: coercing null would turn "follow" into 0.
             artGlowRadiusDp = artGlowRadiusDp?.c(0f, 160f, d.glowRadiusDp),
             artGlowBrightness = artGlowBrightness?.c(0f, 0.6f, d.glowBrightness),
         )

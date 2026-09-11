@@ -194,16 +194,13 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // did not, and an account whose playlists were intact in the cloud
         // still showed an empty Playlists tab. Now both do.
         libraryRestoreCoordinator.start(appScope)
-        // Bring back whatever was playing when the app was last closed: the
-        // queue, the track and the second it was left on. Restores paused —
-        // nothing is resolved or played until the user presses play.
+        // The queue, track and second the app was last closed on. Paused:
+        // nothing resolves or plays until the user presses play.
         playbackStateRepository.start(appScope)
-        // Covers used to be extracted into cacheDir/artwork, which Android is
-        // entitled to empty whenever it likes — and did. A launch that found
-        // them gone answered with a full library rescan, which is why the app
-        // appeared to reindex itself every time it started. They live in
-        // filesDir now, where nothing reclaims them; this carries an existing
-        // install's art across, once, and then never runs again.
+        // Covers lived in cacheDir/artwork, which Android empties whenever it
+        // likes — and did, and a launch that found them gone answered with a
+        // full rescan. That is why the app seemed to reindex itself on every
+        // start. This carries an existing install's art into filesDir, once.
         appScope.launch {
             runCatching { artworkStoreMigration.migrateIfNeeded() }
         }

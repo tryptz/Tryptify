@@ -141,10 +141,9 @@ class SettingsViewModel @Inject constructor(
     val glowBehindArt: StateFlow<Boolean> = preferences.lyricsFx
         .map { it.glowBehindArt }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    // The album glow's own radius/brightness, read through the effective values
-    // so an unpinned slider opens on the lyric glow it is currently following
-    // rather than snapping to a default the user never chose. Writing either
-    // one pins it (see LyricsFxSettings.artGlowRadiusDp).
+    // Read through the effective values, so an unpinned slider opens on the
+    // lyric glow it follows rather than a default the user never chose.
+    // Writing either pins it (see LyricsFxSettings.artGlowRadiusDp).
     val artGlowRadius: StateFlow<Int> = preferences.lyricsFx
         .map { it.effectiveArtGlowRadiusDp.toInt() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 44)
@@ -978,10 +977,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             withContext(Dispatchers.IO) { appContext.cacheDir.deleteRecursively() }
             calculateCacheSize()
-            // No rescan to follow. Cover art used to live in here, so clearing
-            // the cache meant every local track lost its artwork and the only
-            // way back was reindexing the whole library. It lives in filesDir
-            // now and this wipe does not touch it.
+            // No rescan to follow: cover art used to live here, so clearing
+            // the cache cost every local track its artwork and a full reindex
+            // to get it back. It lives in filesDir now, untouched by this.
         }
     }
 
