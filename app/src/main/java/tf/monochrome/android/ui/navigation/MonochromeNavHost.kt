@@ -344,8 +344,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // the bar.
         // Both maps run full-bleed under the mini player on purpose, so its
         // glass has real content to lens rather than a flat inset.
+        //
+        // The player joins them: it already insets itself, so reserving the bar
+        // out here charged it twice — a second button bar of dead height on
+        // 3-button navigation, which the height-bound artwork paid for.
         val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
-            currentDestination?.route == Screen.WorldRadio.route
+            currentDestination?.route == Screen.WorldRadio.route ||
+            currentDestination?.route == Screen.NowPlaying.route
 
         // Every screen runs *under* the mini player. Reserving the bar's height
         // out here letterboxed them: the strip behind the bar was flat theme
