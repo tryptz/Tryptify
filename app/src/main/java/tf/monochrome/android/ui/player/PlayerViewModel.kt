@@ -75,6 +75,7 @@ class PlayerViewModel @Inject constructor(
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
     private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
+    private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
 ) : ViewModel() {
 
     /**
@@ -433,6 +434,18 @@ class PlayerViewModel @Inject constructor(
         connectToService()
         startPositionPolling()
         observeCurrentTrackMeta()
+        // Show the restored position before anything is loaded, so the mini
+        // player comes back with the scrubber where the user left it rather
+        // than at zero. Duration comes from the snapshot (or the catalogue's
+        // own figure) because the player has no opinion until it is prepared.
+        viewModelScope.launch {
+            playbackState.pendingStart.collect { pending ->
+                if (pending != null && mediaController?.currentMediaItem == null) {
+                    _positionMs.value = pending.positionMs
+                    _durationMs.value = pending.durationMs
+                }
+            }
+        }
         // Mirror the now-playing lyrics + position into the app-scoped holder so
         // other screens (the Player Visuals Studio preview) can show the real lyrics.
         viewModelScope.launch { _currentLyrics.collect { nowPlayingLyrics.setLyrics(it) } }
@@ -568,6 +581,14 @@ class PlayerViewModel @Inject constructor(
     private fun syncState() {
         mediaController?.let { mc ->
             _isPlaying.value = mc.isPlaying
+            // A restored session shows the last track and the second it was
+            // left on before anything is loaded into the player. This runs the
+            // moment the controller connects, and on an empty player Media3
+            // reports position 0 and an unset duration — which are "no item",
+            // not "at the start". Without this guard those zeroes land on the
+            // scrubber a frame after the restore paints it and the whole thing
+            // silently does nothing.
+            if (mc.currentMediaItem == null && playbackState.pendingStart.value != null) return@let
             _durationMs.value = mc.duration.coerceAtLeast(0)
             _positionMs.value = mc.currentPosition.coerceAtLeast(0)
         }
@@ -830,7 +851,16 @@ class PlayerViewModel @Inject constructor(
 
     fun togglePlayPause() {
         mediaController?.let { mc ->
-            if (mc.isPlaying) mc.pause() else mc.play()
+            when {
+                mc.isPlaying -> mc.pause()
+                // A restored session has a queue and a current track but the
+                // player has never been handed an item, and play() on an empty
+                // timeline does nothing. This is the one point where coming
+                // back to a session touches the network, and only on a tap.
+                mc.currentMediaItem == null && queueManager.currentTrack.value != null ->
+                    resolveAndPlay()
+                else -> mc.play()
+            }
         }
     }
 
@@ -862,7 +892,15 @@ class PlayerViewModel @Inject constructor(
         // looks like it rewinds would actually restart the stream. Every seek
         // verb the UI offers funnels through here, so one guard covers them all.
         if (isLiveStreamTrack(currentTrack.value)) return
-        mediaController?.seekTo(positionMs)
+        // Dragging the scrubber before pressing play on a restored session: the
+        // player holds no item, so the seek would be dropped and play would
+        // start from the stale restored position instead. Move where it will
+        // start rather than seeking something that isn't loaded.
+        if (mediaController?.currentMediaItem == null && playbackState.pendingStart.value != null) {
+            playbackState.overridePendingStart(positionMs)
+        } else {
+            mediaController?.seekTo(positionMs)
+        }
         _positionMs.value = positionMs
     }
 
@@ -973,8 +1011,14 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPlaybackSpeed(speed) }
     }
 
-    private fun resolveAndPlay() {
+    private fun resolveAndPlay(startPositionMs: Long = 0L) {
         val track = queueManager.currentTrack.value ?: return
+        // A restored session starts where it was left. Consumed on first use
+        // and keyed on the track, so replaying the same song later starts at
+        // the beginning and a track the user skipped past never hands its
+        // offset to a different one.
+        val start = if (startPositionMs > 0L) startPositionMs
+        else playbackState.consumePendingStart(track.id)
         // Every playback change the UI asks for funnels through here — taps,
         // transport skips, queue jumps, a removed current track. The player's
         // own end-of-track advance happens inside PlaybackService and never
@@ -1014,7 +1058,7 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mc.setMediaItem(resolved.mediaItem)
+                    mc.setMediaItem(resolved.mediaItem, start)
                     mc.prepare()
                     mc.play()
                     onResolveSucceeded()
@@ -1031,7 +1075,7 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mc.setMediaItem(mediaItem)
+                    mc.setMediaItem(mediaItem, start)
                     mc.prepare()
                     mc.play()
                     onResolveSucceeded()
@@ -1098,6 +1142,9 @@ class PlayerViewModel @Inject constructor(
      */
     private fun handleResolveFailure() {
         consecutiveResolveFailures++
+        // Whatever we were about to seek into never loaded. Leaving the offset
+        // behind would hand it to whichever track the skip below lands on.
+        playbackState.clearPendingStart()
         val queueSize = queueManager.queue.value.size.coerceAtLeast(1)
         if (repeatMode.value == RepeatMode.ONE) {
             _playbackError.value = "Couldn't play this track."

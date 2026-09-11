@@ -10,6 +10,7 @@ import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
 import tf.monochrome.android.data.db.dao.PlayEventDao
+import tf.monochrome.android.data.db.dao.PlaybackStateDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
 import tf.monochrome.android.data.db.entity.CachedLyricsEntity
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
@@ -20,6 +21,8 @@ import tf.monochrome.android.data.db.entity.FavoriteArtistEntity
 import tf.monochrome.android.data.db.entity.FavoriteTrackEntity
 import tf.monochrome.android.data.db.entity.HistoryTrackEntity
 import tf.monochrome.android.data.db.entity.PlayEventEntity
+import tf.monochrome.android.data.db.entity.PlaybackQueueEntity
+import tf.monochrome.android.data.db.entity.PlaybackStateEntity
 import tf.monochrome.android.data.db.entity.PlaylistTrackEntity
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
 import tf.monochrome.android.data.collections.db.CollectionAlbumArtistCrossRef
@@ -52,6 +55,9 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CachedLyricsEntity::class,
         EqPresetEntity::class,
         MixPresetEntity::class,
+        // Playback session
+        PlaybackStateEntity::class,
+        PlaybackQueueEntity::class,
         // Local media
         LocalTrackEntity::class,
         LocalAlbumEntity::class,
@@ -68,7 +74,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -81,6 +87,7 @@ abstract class MusicDatabase : RoomDatabase() {
     abstract fun localMediaDao(): LocalMediaDao
     abstract fun collectionDao(): CollectionDao
     abstract fun mixPresetDao(): MixPresetDao
+    abstract fun playbackStateDao(): PlaybackStateDao
 
     companion object {
         /**
@@ -193,6 +200,40 @@ abstract class MusicDatabase : RoomDatabase() {
                         "ON `local_tracks` (`titleSearchKey`)"
                 )
                 db.execSQL("UPDATE `local_tracks` SET `titleSearchKey` = lower(`title`)")
+            }
+        }
+
+        /**
+         * Somewhere to write down what was playing, so reopening the app comes
+         * back to the track and the second it was left on instead of to an
+         * empty player.
+         *
+         * Two tables rather than one because they are written at completely
+         * different rates: the queue blob changes when the queue does, the play
+         * head every few seconds while a track runs, and SQLite rewrites a whole
+         * record on any UPDATE. One row would mean re-writing the blob to store
+         * a number.
+         *
+         * Both statements are copied verbatim out of the generated
+         * MusicDatabase_Impl. Room compares the live schema against its own
+         * expectation on open and a mismatch of so much as a column order sends
+         * the database through fallbackToDestructiveMigration, which drops every
+         * playlist, favourite and preset the user has. Do not hand-edit these.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `playback_state` (`id` INTEGER NOT NULL, " +
+                        "`currentIndex` INTEGER NOT NULL, `currentTrackId` INTEGER NOT NULL, " +
+                        "`positionMs` INTEGER NOT NULL, `durationMs` INTEGER NOT NULL, " +
+                        "`shuffleEnabled` INTEGER NOT NULL, `repeatMode` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `playback_queue` (`id` INTEGER NOT NULL, " +
+                        "`queueJson` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
             }
         }
     }

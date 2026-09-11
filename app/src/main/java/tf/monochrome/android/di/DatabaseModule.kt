@@ -38,6 +38,7 @@ object DatabaseModule {
                 MusicDatabase.MIGRATION_10_11,
                 MusicDatabase.MIGRATION_11_12,
                 MusicDatabase.MIGRATION_12_13,
+                MusicDatabase.MIGRATION_13_14,
             )
             // Retained as a safety net for any version gap without an explicit
             // migration; the THX (8→9) and Atmos (9→10) upgrades migrate in
@@ -67,6 +68,9 @@ object DatabaseModule {
 
     @Provides
     fun provideFavoriteDao(db: MusicDatabase): FavoriteDao = db.favoriteDao()
+
+    @Provides
+    fun providePlaybackStateDao(db: MusicDatabase): tf.monochrome.android.data.db.dao.PlaybackStateDao = db.playbackStateDao()
 
     @Provides
     fun provideHistoryDao(db: MusicDatabase): HistoryDao = db.historyDao()

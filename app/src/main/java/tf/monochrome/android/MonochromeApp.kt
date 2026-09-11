@@ -96,6 +96,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var artworkStoreMigration: tf.monochrome.android.data.local.tags.ArtworkStoreMigration
 
+    @Inject
+    lateinit var playbackStateRepository: tf.monochrome.android.player.PlaybackStateRepository
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -191,6 +194,10 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // did not, and an account whose playlists were intact in the cloud
         // still showed an empty Playlists tab. Now both do.
         libraryRestoreCoordinator.start(appScope)
+        // Bring back whatever was playing when the app was last closed: the
+        // queue, the track and the second it was left on. Restores paused —
+        // nothing is resolved or played until the user presses play.
+        playbackStateRepository.start(appScope)
         // Covers used to be extracted into cacheDir/artwork, which Android is
         // entitled to empty whenever it likes — and did. A launch that found
         // them gone answered with a full library rescan, which is why the app
