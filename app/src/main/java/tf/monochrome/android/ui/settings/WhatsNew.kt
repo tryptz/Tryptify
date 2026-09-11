@@ -51,6 +51,9 @@ object WhatsNew {
     /** The pages you swipe between, their order and their visibility. */
     private const val PAGES = "Pages and order"
 
+    /** The now-playing screen: its artwork, its transport and its dock. */
+    private const val PLAYER = "Now playing"
+
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
 
@@ -59,6 +62,72 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 189,
+            versionName = "1.8.9",
+            entries = listOf(
+                WhatsNewEntry(
+                    section = PLAYER,
+                    title = "The artwork fills the screen again",
+                    body = "On 3-button navigation the player was leaving room for the button " +
+                        "bar twice, so the cover shrank and left gutters down both sides. The " +
+                        "backdrop runs to the bottom edge now and the artwork gets that back.",
+                ),
+                WhatsNewEntry(
+                    section = PLAYER,
+                    title = "Shuffle is on the player",
+                    body = "It takes the dock's second slot, next to Lyrics, and lights up " +
+                        "while it is on. It used to be two taps into the top bar's menu.",
+                ),
+                WhatsNewEntry(
+                    section = PLAYER,
+                    title = "The sleep timer moved into Audio tools",
+                    body = "It shows the minutes left rather than \"Off\". It takes the Output " +
+                        "card's place, which only ever said \"Default\" and opened Settings — " +
+                        "what the headphone button in the top bar already does.",
+                ),
+                WhatsNewEntry(
+                    section = PLAYER,
+                    title = "Play, pause and skip are redrawn",
+                    body = "They are built from exact geometry now, so the corners match each " +
+                        "other and the two skip chevrons sit apart rather than nested.",
+                ),
+                WhatsNewEntry(
+                    section = PLAYER,
+                    title = "The dock presses cleanly",
+                    body = "One spring drives the swell and the glyph squeeze, so letting go " +
+                        "mid-press eases off instead of snapping. The swell also appears under " +
+                        "the button you pressed rather than sliding over from the last one.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "Glass stops turning grey on a light theme",
+                    body = "The player's panes and the mixer strips were frosting against the " +
+                        "theme's background instead of the dark backdrop they sit on, so on a " +
+                        "light theme they came out milky with the icons washed out of them.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The band of light across the scrubber is gone",
+                    body = "The album glow was landing at mid-screen with its edge there, which " +
+                        "showed as a ring. It sits behind the artwork now and fades out " +
+                        "without a rim — a bigger, softer halo behind the cover.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "The cover's glow has its own sliders",
+                    body = "Radius and brightness for the album halo sit under the switch that " +
+                        "draws it, so turning the lyric glow down no longer takes the halo " +
+                        "with it. Both follow the lyric glow until you move them.",
+                ),
+                WhatsNewEntry(
+                    section = LOOK,
+                    title = "A lit dock button glows its own shape",
+                    body = "The glow around an active Lyrics or Shuffle icon was being cut " +
+                        "into a soft square. It follows the glyph now.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 188,
             versionName = "1.8.8",

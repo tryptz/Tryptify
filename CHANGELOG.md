@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.8.9]
+
+### Changed
+
+#### Shuffle is on the player, and the sleep timer moved
+- **Shuffle takes the dock's second slot**, next to Lyrics. It was buried in the top bar's overflow menu — two taps and a read of "Shuffle: On" away from a mode you flip constantly. The dock's existing active state lights the glyph and its bloom while shuffle is on, exactly as Lyrics already does.
+- **The sleep timer takes the Output card's place in Audio tools** rather than losing its home. Output was the weakest of the four: a hardcoded "Default" that never reflected the real route, and a tap that only opened Settings — which the top bar's headphone button does already. The timer card shows the minutes left instead of "Off".
+- **`ic_glass_shuffle` is drawn to the dock's house style** — filled quads with solid corner arrowheads rather than strokes — so the punch leaves a clean hole and the glass shader has real edges to bevel.
+
+#### The transport glyphs are built from arithmetic
+- **Play, pause and the chevrons are generated rather than hand-placed.** A polygon with radius-r corners is that polygon inset by r, filled and stroked at width 2r with round joins, so play is three nodes rather than eight and each pause bar is four rather than twelve.
+- **The chevrons' proportions are read off the reference** instead of guessed, which is what puts the two apart rather than nested. They are scaled to sit with the play triangle rather than out-measure it.
+- **Pause stops short of stadium ends**, which read as too round beside play.
+
+#### The album-art glow has a radius and brightness of its own
+- **The cover bloom had no settings.** It read the same two knobs the Studio's Glow section tunes for the lyric line, so turning the lyric glow down took the album halo with it. The two have a pair each now, and the cover's appear under the switch that draws them.
+- **The new fields are nullable, and null means "follow the lyric glow"** — which is what the cover bloom already did, so an upgrade changes nothing on screen and the sliders open on the glow that is there rather than on a default. Moving a slider pins that field and ends the following.
+
+### Fixed
+
+#### The player was charging itself for the navigation bar twice
+- **The nav host reserves the navigation bar's height under every detail route, and the player then inset itself again** — its content column, the pull handle and both bottom sheets all carried `navigationBarsPadding`. Plain padding does not consume a window inset, so the two stacked.
+- **With 3-button navigation that was a whole second button bar**, and the portrait hero paid for it: the album square is `min(width, height)`, so once the region ran shorter than it is wide the artwork stopped being width-bound and shrank, leaving gutters down both sides and a flat strip of theme background under the buttons.
+- **The player joins the two maps as a full-bleed route.** It already insets everything interactive, so the controls stay clear of the buttons while the backdrop runs to the bottom edge — and the hero gets the bar's height back.
+
+#### The glass frosted white over a dark backdrop on a light theme
+- **The player's frost was asking the wrong surface which way to wash.** The player is drawn on `dynamicPlayerBackground`, which washes the album colour toward black and ends on `BackgroundBlack` — dark under every theme, which is why the player's chrome is hardcoded white and why the system bars read their luminance off that colour. The frost asked `MaterialTheme.colorScheme.background` instead.
+- **On a light theme that answered light**, so the recipe returned white at 0.26 and laid it over a near-black ground, and `HazeStyle.backgroundColor` was handed the same wrong ground: a milky grey slab with the glyphs washed out of it.
+- **`PlayerGlassGround` names that ground once**, next to `playerFrostTint`, which exists for the same reason — the recipe had been written out by hand in three places and was free to drift. The dock, the transport, the player panes, the audio-tools sheet and the mixer strips all read it. The mixer draws the same brush, so its strips had the identical bug.
+- **`isDark` still comes from `luminance()` rather than a hardcoded `true`**, so if the player's ground ever lightens the frost follows it instead of silently lying.
+- **The frost recipe itself is unchanged.** This only fixes which backdrop it is asked about.
+
+#### The press dome travelled across the dock
+- **The dome slid in from the previously pressed button.** It had been given a glide spring so it would follow a finger moving between slots, but Compose never hands a press from one sibling `clickable` to the next, so that gesture cannot happen. All the glide did was animate the dome across from wherever it last bloomed.
+- **The centre is placed on the last pressed slot again**, not animated to it.
+- **`PressSpring` stays.** One interruptible spring driving the dome's rise and fall and the glyph's squeeze was the actual fix for the press stutter — a tween carries no velocity, so releasing mid-bounce snapped the dome still before easing off — and it is not what made the dome travel.
+
+#### A lens of light sat across the scrubber
+- **`drawCircle`'s center and radius say what shape to fill; they say nothing about the brush.** `Brush.radialGradient` given neither centres itself on the draw scope and takes `minDimension / 2`, so the album glow's gradient ran from mid-screen over half the width while the disc it filled was meant to sit at three tenths of the height and reach eight tenths of the width. The light was never behind the hero — it was behind the transport, and it ran out there. `drawGlow` and `drawArtGlow` pass both to the brush; this one did not.
+- **The falloff was two stops**, so alpha fell in a straight line and then stopped dead at the rim. Losing all of the slope in one step is a kink, and the eye picks a kink out of a smooth field as a ring. It falls on a smoothstep now and arrives at nothing with no slope left; the stops cross the old straight line at the half-way mark, so the halo keeps the weight it had.
+- **It also faded to `Color.Transparent`, which is transparent black.** Stops interpolate unpremultiplied, so the RGB was being dragged toward black as the alpha came off — a grey film going away rather than light. It fades to the album colour at zero alpha now, and only the alpha moves.
+- **The glow is bigger and softer under the artwork** as a result, because that is the shape the numbers always described.
+
+#### A lit dock glyph glowed square
+- **The bloom was blurred inside a box its own size.** A blur can only smear the pixels it is handed, and `Unbounded` treats everything past the layer as transparent, so the glow was cut off a few dp out from the strokes — `ic_glass_shuffle` spans 2.0 to 21.4 of its 24-unit viewport, leaving about 3dp of margin against an 11dp blur.
+- **The bloom now sits in a box with 16dp of padding each side**, reached with `requiredSize` so the overflow is never reported to the slot: the punch geometry places the holes from the row's paddings, and a taller slot would walk them off the glyphs.
+- **The blur also moved outside the alpha layer**, which is the lesson the slab's own shadow already carries. A layer at partial alpha composites through an offscreen buffer its own size, and that cut the spill back to a hard-edged rectangle on every frame of the fade.
+
 ## [1.8.8]
 
 ### Removed
