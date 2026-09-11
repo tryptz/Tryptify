@@ -137,12 +137,38 @@ fun dynamicPlayerBackground(color: Color): Brush {
 @Composable
 fun DynamicAlbumGlow(color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.fillMaxSize().dithered().graphicsLayer { alpha = 0.45f }) {
+        // Handed to the BRUSH as well as to the circle. drawCircle's own
+        // center/radius say only what shape to fill; a radial brush given
+        // neither centres itself on the draw scope and takes minDimension / 2,
+        // so the light was sitting at mid-screen at little over half this
+        // width — not behind the hero at all, and with its falloff running out
+        // right across the scrubber. drawGlow and drawArtGlow pass both.
+        val radius = size.width * 0.8f
+        val center = Offset(size.width * 0.5f, size.height * 0.3f)
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(color.copy(alpha = 0.3f), Color.Transparent)
+                // Smoothstep, not a straight line. A two-stop ramp sheds all
+                // its slope in one step at the rim, and the eye reads that kink
+                // as a ring: a lens of light with an edge on it. These stops
+                // arrive at nothing with no slope left, so the halo ends
+                // without anywhere to point at. They cross the old straight
+                // line at the half-way mark, so it keeps the weight it had.
+                0.0f to color.copy(alpha = 0.30f),
+                0.2f to color.copy(alpha = 0.27f),
+                0.4f to color.copy(alpha = 0.19f),
+                0.6f to color.copy(alpha = 0.11f),
+                0.8f to color.copy(alpha = 0.03f),
+                0.9f to color.copy(alpha = 0.008f),
+                // The album colour at zero alpha, never Color.Transparent.
+                // Gradient stops interpolate unpremultiplied, so fading to
+                // transparent *black* drags the RGB toward black on the way
+                // out — a grey film going off, rather than light going away.
+                1.0f to color.copy(alpha = 0f),
+                center = center,
+                radius = radius,
             ),
-            radius = size.width * 0.8f,
-            center = Offset(size.width * 0.5f, size.height * 0.3f)
+            radius = radius,
+            center = center,
         )
     }
 }
