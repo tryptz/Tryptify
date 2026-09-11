@@ -70,7 +70,7 @@ fun PlayerTransportControls(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TransportIcon(
-            painterResource(R.drawable.ic_glass_skip_previous), "Previous", tint, onPrevious,
+            painterResource(R.drawable.ic_glass_skip_previous_chevron), "Previous", tint, onPrevious,
             size = PlayerDesignTokens.SkipIconSize,
         )
 
@@ -163,7 +163,7 @@ fun PlayerTransportControls(
         }
 
         TransportIcon(
-            painterResource(R.drawable.ic_glass_skip_next), "Next", tint, onNext,
+            painterResource(R.drawable.ic_glass_skip_next_chevron), "Next", tint, onNext,
             size = PlayerDesignTokens.SkipIconSize,
         )
     }

@@ -3,22 +3,21 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!--
-        Solid triangle + bar (skip next), chunky for the 3D glass bevel.
+    <!-- Skip next: rounded triangle plus a stadium bar.
 
-        Corners are curves in the path itself — one fill, no stroke. Rounding by
-        stroking the outline was the obvious shortcut and the wrong one here:
-        these glyphs are punched out of the glass with DstOut, so a fill plus a
-        stroke is the same hole cut twice, and the two anti-aliased edges landed
-        on top of each other along every boundary. One outline cuts one hole.
-
-        Each corner backs off along both edges and curves through the vertex, so
-        the flats stay flat and only the points go. The tips matter most: they
-        are the sharpest angles in the transport, and the shader builds its bevel
-        from the edge, so a point that acute beveled into a bright spike instead
-        of an edge.
-    -->
+         Rounding is the renderer's job, not the path's. A polygon with radius-r
+         corners is that polygon inset by r, filled and stroked at width 2r with
+         round joins — so the corners are exact and the path keeps one node per
+         corner instead of a pair of hand-placed Bezier controls. -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M6.47,6.03 Q5,5 5,6.8 L5,17.2 Q5,19 6.47,17.97 L13.53,13.03 Q15,12 13.53,10.97 Z M16.5,5.7 Q16.5,5 17.2,5 L18.3,5 Q19,5 19,5.7 L19,18.3 Q19,19 18.3,19 L17.2,19 Q16.5,19 16.5,18.3 Z" />
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.8"
+        android:strokeLineJoin="round"
+        android:pathData="M6.9,8.83 L11.47,12.0 L6.9,15.17 Z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:pathData="M17.7,6.4 V17.6" />
 </vector>

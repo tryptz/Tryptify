@@ -3,23 +3,37 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Shuffle: a long path crossing over two short ones, with solid corner
-         arrowheads. The bars are filled quads 2.5 thick rather than strokes, like
-         the other dock glyphs, so the liquid-glass shader has real edges to bevel
-         into 3D chrome and the DstOut punch leaves a clean hole. -->
+    <!-- Shuffle: two paths entering flat on the left, crossing in the middle and
+         leaving as swept right-pointing arrows.
+
+         Stroked with round caps and joins rather than built from filled quads: as
+         quads every elbow left a notch and the glass bevel drew a highlight around
+         it. The heads are filled darts carrying a thin round stroke so their corners
+         match the arms, and the run overlaps the head so no hairline survives the
+         DstOut punch. Endpoints sit half a stroke inside the box — a round cap
+         overhangs them. -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3.4,7.2 H7 L15.2,16.8 H17.2" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3.4,16.8 H7 L15.2,7.2 H17.2" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M4.877,19.891 L18.077,6.891 L16.323,5.109 L3.123,18.109 Z" />
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.9"
+        android:strokeLineJoin="round"
+        android:pathData="M21.4,16.8 L16.2,19.7 L16.2,13.9 Z" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M3.116,5.884 L8.716,11.484 L10.484,9.716 L4.884,4.116 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M12.116,14.884 L16.316,19.084 L18.084,17.316 L13.884,13.116 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M15,4 L20,4 L20,9 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M15,20 L20,20 L20,15 Z" />
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.9"
+        android:strokeLineJoin="round"
+        android:pathData="M21.4,7.2 L16.2,10.1 L16.2,4.3 Z" />
 </vector>

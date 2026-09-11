@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Skip previous: a double chevron, for the main player's transport row only. The mini
+         player and the home screen widget keep the bar-and-triangle glyphs, so the two
+         shapes stay on separate drawables.
+
+         Proportions are solved from the reference sheet rather than eyeballed. Reading
+         its pixels gives total width = s + gap + t and total height = 2s + t, which for
+         a 126x97 glyph with the apexes 62px apart resolves to stroke : arm : gap of
+         4.2 : 4.45 : 8.4 — arms at 45 degrees, and a gap wider than the arms, so the two
+         chevrons sit apart instead of nesting. Scaled to 0.78 here (13.3 x 10.22) so the pair
+         reads at the same size as the play triangle beside it.
+
+         No rounding maths needed: a chevron is a two-segment polyline whose cap and join
+         do the rounding, so it is three nodes and no fill. Endpoints sit half a stroke
+         inside the box, since a round cap overhangs them. -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.28"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M17.01,8.53 L13.54,12 L17.01,15.47" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.28"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M10.46,8.53 L6.99,12 L10.46,15.47" />
+</vector>

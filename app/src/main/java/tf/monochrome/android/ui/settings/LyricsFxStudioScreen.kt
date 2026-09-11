@@ -946,7 +946,7 @@ private fun PlayerGlassTab(
                         // Real transport icon: bigger skip + shape-accurate shadow,
                         // exactly like the player.
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_previous), "Previous", previewTint, {},
+                            painterResource(R.drawable.ic_glass_skip_previous_chevron), "Previous", previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                         // Solid glass disc with the play symbol punched out, plus the
@@ -982,7 +982,7 @@ private fun PlayerGlassTab(
                             }
                         }
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_next), "Next", previewTint, {},
+                            painterResource(R.drawable.ic_glass_skip_next_chevron), "Next", previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                     }
