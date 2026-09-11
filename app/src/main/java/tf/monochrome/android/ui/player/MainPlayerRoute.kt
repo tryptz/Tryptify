@@ -780,10 +780,10 @@ fun MainPlayerRoute(
                         else NowPlayingViewMode.LYRICS
                     )
                 },
+                onShuffle = playerViewModel::toggleShuffle,
                 onTimer = { showSleepSheet = true },
                 onMixer = { navController.navigateTool(Screen.Mixer) },
                 onPlaylist = { showQueueSheet = true },
-                onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
                 onSound = { navController.navigateTool(Screen.Equalizer) },
                 onSpeed = { showSpeedSheet = true },
                 onVisualizer = {

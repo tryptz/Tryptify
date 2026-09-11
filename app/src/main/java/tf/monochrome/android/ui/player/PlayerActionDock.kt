@@ -84,7 +84,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.punchDockIcons(
 }
 
 /**
- * Compact tool row beneath the transport controls: Lyrics · Timer · Mixer/FX · Playlist.
+ * Compact tool row beneath the transport controls: Lyrics · Shuffle · Mixer/FX · Playlist.
  *
  * The whole rectangle is one liquid-glass slab with the four icons *hollowed out*
  * of it — exactly like the play button: a solid translucent slab, the icon shapes
@@ -97,16 +97,16 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.punchDockIcons(
 fun PlayerActionDock(
     accent: Color,
     lyricsActive: Boolean,
-    timerActive: Boolean,
+    shuffleActive: Boolean,
     onLyrics: () -> Unit,
-    onTimer: () -> Unit,
+    onShuffle: () -> Unit,
     onMixer: () -> Unit,
     onPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val icons = listOf(
         painterResource(R.drawable.ic_glass_lyrics),
-        painterResource(R.drawable.ic_glass_timer),
+        painterResource(R.drawable.ic_glass_shuffle),
         painterResource(R.drawable.ic_glass_mixer),
         painterResource(R.drawable.ic_glass_playlist),
     )
@@ -209,7 +209,7 @@ fun PlayerActionDock(
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
             DockLabel(Modifier.weight(1f), "Lyrics", icons[0], glassTint, lyricsActive, sources[0], onLyrics)
-            DockLabel(Modifier.weight(1f), "Timer", icons[1], glassTint, timerActive, sources[1], onTimer)
+            DockLabel(Modifier.weight(1f), "Shuffle", icons[1], glassTint, shuffleActive, sources[1], onShuffle)
             DockLabel(Modifier.weight(1f), "Mixer/FX", icons[2], glassTint, false, sources[2], onMixer)
             DockLabel(Modifier.weight(1f), "Playlist", icons[3], glassTint, false, sources[3], onPlaylist)
         }

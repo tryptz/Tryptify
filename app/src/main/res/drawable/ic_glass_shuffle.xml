@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Shuffle: a long path crossing over two short ones, with solid corner
+         arrowheads. The bars are filled quads 2.5 thick rather than strokes, like
+         the other dock glyphs, so the liquid-glass shader has real edges to bevel
+         into 3D chrome and the DstOut punch leaves a clean hole. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4.877,19.891 L18.077,6.891 L16.323,5.109 L3.123,18.109 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3.116,5.884 L8.716,11.484 L10.484,9.716 L4.884,4.116 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12.116,14.884 L16.316,19.084 L18.084,17.316 L13.884,13.116 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15,4 L20,4 L20,9 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15,20 L20,20 L20,15 Z" />
+</vector>
