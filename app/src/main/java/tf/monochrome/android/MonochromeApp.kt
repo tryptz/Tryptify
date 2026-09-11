@@ -94,7 +94,7 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     lateinit var libraryRestoreCoordinator: tf.monochrome.android.data.sync.LibraryRestoreCoordinator
 
     @Inject
-    lateinit var artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector
+    lateinit var artworkStoreMigration: tf.monochrome.android.data.local.tags.ArtworkStoreMigration
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -191,12 +191,14 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // did not, and an account whose playlists were intact in the cloud
         // still showed an empty Playlists tab. Now both do.
         libraryRestoreCoordinator.start(appScope)
-        // Local-file album art self-heal. Covers extracted at scan time live
-        // in cacheDir/artwork, which Android reaps under storage pressure —
-        // without this check the library shows placeholders after a cache
-        // wipe until the user manually hits refresh.
+        // Covers used to be extracted into cacheDir/artwork, which Android is
+        // entitled to empty whenever it likes — and did. A launch that found
+        // them gone answered with a full library rescan, which is why the app
+        // appeared to reindex itself every time it started. They live in
+        // filesDir now, where nothing reclaims them; this carries an existing
+        // install's art across, once, and then never runs again.
         appScope.launch {
-            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
+            runCatching { artworkStoreMigration.migrateIfNeeded() }
         }
     }
 

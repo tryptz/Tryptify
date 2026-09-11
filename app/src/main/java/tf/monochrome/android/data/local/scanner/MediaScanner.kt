@@ -44,6 +44,7 @@ class MediaScanner @Inject constructor(
     private val preferences: PreferencesManager,
     private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
     private val genreGraph: tf.monochrome.android.data.repository.GenreGraphRepository,
+    private val artworkStore: tf.monochrome.android.data.local.tags.ArtworkStore,
 ) {
 
     fun fullScan(
@@ -83,7 +84,15 @@ class MediaScanner @Inject constructor(
             rebuildFolders()
 
             // Update scan state
-            updateScanState()
+            updateScanState(full = true)
+
+            // The store is app data now, not a cache the OS will bound for us,
+            // so a scan is the one moment we know which covers are still
+            // spoken for. Best effort: a failed sweep is wasted disk, never a
+            // failed scan.
+            runCatching {
+                artworkStore.sweepOrphans(localMediaDao.getAllReferencedArtworkKeys())
+            }
 
             emit(ScanProgress.Complete(
                 scanned = mediaStoreFiles.size,
@@ -112,7 +121,7 @@ class MediaScanner @Inject constructor(
                 emit(ScanProgress.Grouping("Refreshing library..."))
                 rebuildGroupings()
                 rebuildFolders()
-                updateScanState()
+                updateScanState(full = false)
                 emit(ScanProgress.Complete(scanned = 0, added = 0, removed = 0))
                 return@flow
             }
@@ -136,7 +145,7 @@ class MediaScanner @Inject constructor(
 
             rebuildGroupings()
             rebuildFolders()
-            updateScanState()
+            updateScanState(full = false)
 
             emit(ScanProgress.Complete(scanned = modifiedFiles.size, added = addedCount, removed = 0))
         } catch (e: Exception) {
@@ -435,14 +444,19 @@ class MediaScanner @Inject constructor(
         }
     }
 
-    private suspend fun updateScanState() {
+    private suspend fun updateScanState(full: Boolean) {
         val trackCount = localMediaDao.getTrackCount()
         val existingState = localMediaDao.getScanState()
+        val now = System.currentTimeMillis()
         localMediaDao.updateScanState(
             ScanStateEntity(
                 id = 1,
-                lastFullScan = existingState?.lastFullScan ?: System.currentTimeMillis(),
-                lastIncremental = System.currentTimeMillis(),
+                // Was `existingState?.lastFullScan ?: now`, which pinned the
+                // column to the first scan the install ever ran: every later
+                // full scan left it untouched, so it recorded when the library
+                // was first indexed rather than when it was last rebuilt.
+                lastFullScan = if (full) now else existingState?.lastFullScan ?: now,
+                lastIncremental = now,
                 totalTracks = trackCount,
                 totalDuration = 0,
                 totalSizeBytes = 0
@@ -506,6 +520,13 @@ class MediaScanner @Inject constructor(
             // older scan logic missed it" — re-read so freshly-
             // installed cover detection logic gets a chance.
             if (!existing.hasEmbeddedArt && existing.artworkCacheKey == null) return true
+            // Art carried over from the old cache-keyed store: one unscaled
+            // copy per track file. Re-reading replaces it with a downscaled
+            // copy shared by every track on the album, so the store compacts
+            // itself over the manual rescans the user already runs.
+            if (tf.monochrome.android.data.local.tags.ArtworkKeys
+                    .isLegacyKey(existing.artworkCacheKey)
+            ) return true
             // Re-read rows that were indexed before artist-from-title
             // recovery existed: no artist tag, but a "Artist - Title"
             // shaped title we can now split. Self-heals (artist gets

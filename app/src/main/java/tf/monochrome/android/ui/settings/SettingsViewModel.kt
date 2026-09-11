@@ -60,7 +60,6 @@ class SettingsViewModel @Inject constructor(
     private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
-    private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
@@ -979,10 +978,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             withContext(Dispatchers.IO) { appContext.cacheDir.deleteRecursively() }
             calculateCacheSize()
-            // The wipe just deleted cacheDir/artwork, which local tracks'
-            // Room rows point at. Rescan now so covers come back without
-            // waiting for the next app start (or a manual refresh).
-            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
+            // No rescan to follow. Cover art used to live in here, so clearing
+            // the cache meant every local track lost its artwork and the only
+            // way back was reindexing the whole library. It lives in filesDir
+            // now and this wipe does not touch it.
         }
     }
 
@@ -993,7 +992,6 @@ class SettingsViewModel @Inject constructor(
                 appContext.cacheDir.deleteRecursively()
             }
             calculateCacheSize()
-            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
         }
     }
 

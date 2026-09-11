@@ -175,6 +175,44 @@ interface LocalMediaDao {
     @Upsert
     suspend fun updateScanState(state: ScanStateEntity)
 
+    // ── Artwork store ───────────────────────────────────────────────
+
+    // Repoint every key that sits under [oldPrefix] at [newPrefix], for the
+    // one-time move of the cover store out of cacheDir. [oldPrefix] ends in a
+    // slash, so this cannot catch a sibling directory whose name merely starts
+    // the same way ("…/artwork_backup/"), and the LIKE keeps REPLACE away from
+    // sidecar covers and raw file paths, which share the column.
+    @Query(
+        "UPDATE local_tracks SET artworkCacheKey = " +
+            "REPLACE(artworkCacheKey, :oldPrefix, :newPrefix) " +
+            "WHERE artworkCacheKey LIKE :oldPrefix || '%'"
+    )
+    suspend fun repointTrackArtwork(oldPrefix: String, newPrefix: String): Int
+
+    @Query(
+        "UPDATE local_albums SET artworkCacheKey = " +
+            "REPLACE(artworkCacheKey, :oldPrefix, :newPrefix) " +
+            "WHERE artworkCacheKey LIKE :oldPrefix || '%'"
+    )
+    suspend fun repointAlbumArtwork(oldPrefix: String, newPrefix: String): Int
+
+    @Query(
+        "UPDATE local_artists SET artworkCacheKey = " +
+            "REPLACE(artworkCacheKey, :oldPrefix, :newPrefix) " +
+            "WHERE artworkCacheKey LIKE :oldPrefix || '%'"
+    )
+    suspend fun repointArtistArtwork(oldPrefix: String, newPrefix: String): Int
+
+    // Every key the store has to keep alive during an orphan sweep. Albums and
+    // artists carry their own copies of a track's key, and a sweep that only
+    // consulted local_tracks would delete a cover an album row still points at.
+    @Query(
+        "SELECT artworkCacheKey FROM local_tracks WHERE artworkCacheKey IS NOT NULL " +
+            "UNION SELECT artworkCacheKey FROM local_albums WHERE artworkCacheKey IS NOT NULL " +
+            "UNION SELECT artworkCacheKey FROM local_artists WHERE artworkCacheKey IS NOT NULL"
+    )
+    suspend fun getAllReferencedArtworkKeys(): List<String>
+
     // ── Bulk operations ─────────────────────────────────────────────
 
     @Query("DELETE FROM local_tracks")

@@ -383,6 +383,12 @@ class PreferencesManager @Inject constructor(
         private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
         private val DOWNLOAD_QUEUE_JSON = stringPreferencesKey("download_queue_json")
+
+        // One-shot marker for the move of the cover store out of cacheDir.
+        // Deliberately NOT in SETTINGS_SYNC_KEYS: it describes this device's
+        // filesystem, and syncing it would tell a fresh device the move had
+        // already happened there.
+        private val ARTWORK_STORE_MIGRATED = booleanPreferencesKey("artwork_store_migrated")
         private val USB_BIT_PERFECT_ENABLED = booleanPreferencesKey("usb_bit_perfect_enabled")
         private val USB_EXCLUSIVE_BIT_PERFECT_ENABLED =
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
@@ -1036,6 +1042,14 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDownloadQueueJson(json: String) {
         dataStore.edit { it[DOWNLOAD_QUEUE_JSON] = json }
+    }
+
+    /** Whether cover art has been moved out of cacheDir into the durable store. */
+    val artworkStoreMigrated: Flow<Boolean> =
+        dataStore.data.map { it[ARTWORK_STORE_MIGRATED] ?: false }
+
+    suspend fun setArtworkStoreMigrated(migrated: Boolean) {
+        dataStore.edit { it[ARTWORK_STORE_MIGRATED] = migrated }
     }
 
     val crossfadeDuration: Flow<Int> = dataStore.data.map { prefs ->
