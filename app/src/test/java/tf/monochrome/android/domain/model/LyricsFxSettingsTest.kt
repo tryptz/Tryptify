@@ -108,6 +108,8 @@ class LyricsFxSettingsTest {
             glassSampleRings = 3,
             fxaa = true,
             fxaaStrength = 0.4f,
+            artGlowRadiusDp = 90f,
+            artGlowBrightness = 0.5f,
         )
         val decoded = json.decodeFromString<LyricsFxSettings>(json.encodeToString(original))
         assertEquals(original, decoded)
@@ -123,6 +125,8 @@ class LyricsFxSettingsTest {
             fxaa = true,
             fxaaStrength = 0.9f,
             glowBehindArt = true,
+            artGlowRadiusDp = 120f,
+            artGlowBrightness = 0.45f,
         )
         val theme = LyricsFxSettings.PRESETS.first { it.first == "Voltage" }.second
         val applied = theme.withPersonalFrom(personal)
@@ -132,8 +136,11 @@ class LyricsFxSettingsTest {
         assertEquals(1, applied.glassSampleRings)
         assertTrue(applied.fxaa)
         assertEquals(0.9f, applied.fxaaStrength, 0f)
-        // The album-glow toggle is a personal setting — a theme never clobbers it.
+        // The album-glow toggle is a personal setting — a theme never clobbers it,
+        // and neither the radius nor the brightness it gates.
         assertTrue(applied.glowBehindArt)
+        assertEquals(120f, applied.artGlowRadiusDp!!, 0f)
+        assertEquals(0.45f, applied.artGlowBrightness!!, 0f)
         // Aesthetic fields still come from the theme.
         assertEquals(theme.rotationDegrees, applied.rotationDegrees, 0f)
         // …and the chip-selection helper recognises the match despite the carry-over.
@@ -165,5 +172,40 @@ class LyricsFxSettingsTest {
         val decoded = LyricsFxPreset.decode(evil)!!
         assertEquals(34f, decoded.settings.fontSizeSp, 0f)
         assertEquals(160f, decoded.settings.glowRadiusDp, 0f)
+    }
+
+    @Test
+    fun `the album glow follows the lyric glow until it is pinned`() {
+        val d = LyricsFxSettings.DEFAULT
+        // Unset by default, so an upgrade changes nothing on screen.
+        assertNull(d.artGlowRadiusDp)
+        assertNull(d.artGlowBrightness)
+        assertEquals(d.glowRadiusDp, d.effectiveArtGlowRadiusDp, 0f)
+        assertEquals(d.glowBrightness, d.effectiveArtGlowBrightness, 0f)
+
+        // Someone on a big-glow preset keeps that halo, not a default one.
+        val supernova = LyricsFxSettings(glowRadiusDp = 150f, glowBrightness = 0.55f)
+        assertEquals(150f, supernova.effectiveArtGlowRadiusDp, 0f)
+        assertEquals(0.55f, supernova.effectiveArtGlowBrightness, 0f)
+
+        // Pinning one leaves the other following, and leaves the lyric glow alone.
+        val pinned = supernova.copy(artGlowRadiusDp = 20f)
+        assertEquals(20f, pinned.effectiveArtGlowRadiusDp, 0f)
+        assertEquals(0.55f, pinned.effectiveArtGlowBrightness, 0f)
+        assertEquals(150f, pinned.glowRadiusDp, 0f)
+    }
+
+    @Test
+    fun `clamped coerces a pinned album glow but leaves an unpinned one null`() {
+        val unpinned = LyricsFxSettings().clamped()
+        assertNull("clamping must not turn following into a hard 0", unpinned.artGlowRadiusDp)
+        assertNull(unpinned.artGlowBrightness)
+
+        val c = LyricsFxSettings(artGlowRadiusDp = 999f, artGlowBrightness = 5f).clamped()
+        assertEquals(160f, c.artGlowRadiusDp!!, 0f)
+        assertEquals(0.6f, c.artGlowBrightness!!, 0f)
+
+        val nan = LyricsFxSettings(artGlowRadiusDp = Float.NaN).clamped()
+        assertEquals(LyricsFxSettings.DEFAULT.glowRadiusDp, nan.artGlowRadiusDp!!, 0f)
     }
 }

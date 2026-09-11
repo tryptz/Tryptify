@@ -99,10 +99,26 @@ data class LyricsFxSettings(
      * Appearance (under Dynamic Colors), not in the Studio.
      */
     val glowBehindArt: Boolean = true,
+    /**
+     * Album-cover bloom radius, in dp. `null` follows [glowRadiusDp], which is
+     * what the cover glow used before it had a knob of its own — so an upgrade
+     * changes nothing and the slider opens on the glow already on screen.
+     * Setting it pins the cover glow and ends the following. Personal, like
+     * [glowBehindArt] that gates it.
+     */
+    val artGlowRadiusDp: Float? = null,
+    /** Album-cover bloom peak alpha. `null` follows [glowBrightness]. */
+    val artGlowBrightness: Float? = null,
 ) {
     /** Spring damping ratio for the bass-pulse spring, derived from [bounce]. */
     val springDampingRatio: Float
         get() = (0.9f - 0.72f * bounce.coerceIn(0f, 1f)).coerceIn(0.15f, 0.9f)
+
+    /** The cover bloom's radius: its own if pinned, else the lyric glow's. */
+    val effectiveArtGlowRadiusDp: Float get() = artGlowRadiusDp ?: glowRadiusDp
+
+    /** The cover bloom's peak alpha: its own if pinned, else the lyric glow's. */
+    val effectiveArtGlowBrightness: Float get() = artGlowBrightness ?: glowBrightness
 
     /** Every field coerced into its slider range; non-finite values reset to default. */
     fun clamped(): LyricsFxSettings {
@@ -137,6 +153,10 @@ data class LyricsFxSettings(
             glowRadiusDp = glowRadiusDp.c(0f, 160f, d.glowRadiusDp),
             glowBrightness = glowBrightness.c(0f, 0.6f, d.glowBrightness),
             glowBehindArt = glowBehindArt,
+            // Clamped only when pinned — coercing would turn "follow the lyric
+            // glow" into a hard 0.
+            artGlowRadiusDp = artGlowRadiusDp?.c(0f, 160f, d.glowRadiusDp),
+            artGlowBrightness = artGlowBrightness?.c(0f, 0.6f, d.glowBrightness),
         )
     }
 
@@ -152,6 +172,8 @@ data class LyricsFxSettings(
         fxaa = other.fxaa,
         fxaaStrength = other.fxaaStrength,
         glowBehindArt = other.glowBehindArt,
+        artGlowRadiusDp = other.artGlowRadiusDp,
+        artGlowBrightness = other.artGlowBrightness,
     )
 
     /**
@@ -171,8 +193,9 @@ data class LyricsFxSettings(
          * theme claims a distinct region of the glass / wave / beat / glow
          * space: mirror metal, etched mist, electric strobes, arctic calm,
          * supernova bloom, brutalist flat, ghost text, a one-line ticker and a
-         * fully still accessible mode. `glowBehindArt` is a personal toggle and
-         * is intentionally left at its default in every preset.
+         * fully still accessible mode. `glowBehindArt` and the two album-glow
+         * knobs it gates are personal and are intentionally left at their
+         * defaults in every preset.
          */
         val PRESETS: List<Pair<String, LyricsFxSettings>> = listOf(
             // The shipped look.

@@ -400,6 +400,9 @@ fun MainPlayerRoute(
     // when the Studio toggle is on. Cover-art and lyrics views are mutually
     // exclusive, so both share ONE pulse / analyzer stake — never two FFT taps.
     val albumGlowOn = lyricsFx.glowBehindArt && lyricsFx.bassReact > 0.01f &&
+        // A halo at zero brightness is the same case as the legacy guard below:
+        // drawArtGlow returns immediately, so staking the tap buys nothing.
+        lyricsFx.effectiveArtGlowBrightness > 0.001f &&
         viewMode == NowPlayingViewMode.COVER_ART &&
         // Only MainPlayerScreen is handed the fxUnderlay that draws this glow.
         // Without the guard the legacy layout still staked the FFT tap and woke

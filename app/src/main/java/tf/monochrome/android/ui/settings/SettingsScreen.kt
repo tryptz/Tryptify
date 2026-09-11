@@ -607,6 +607,8 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     val availableFonts by viewModel.availableFonts.collectAsStateWithLifecycle()
     val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsStateWithLifecycle()
     val glowBehindArt by viewModel.glowBehindArt.collectAsStateWithLifecycle()
+    val artGlowRadius by viewModel.artGlowRadius.collectAsStateWithLifecycle()
+    val artGlowBrightness by viewModel.artGlowBrightnessPct.collectAsStateWithLifecycle()
     val customThemeEnabled by viewModel.customThemeEnabled.collectAsStateWithLifecycle()
     val customAccent by viewModel.customAccentColor.collectAsStateWithLifecycle()
     val customBackground by viewModel.customBackgroundColor.collectAsStateWithLifecycle()
@@ -727,6 +729,31 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             checked = glowBehindArt,
             onCheckedChange = { viewModel.setGlowBehindArt(it) }
         )
+        // The cover bloom's own size and strength, separate from the Studio's
+        // Glow section (which tunes the bloom behind the lyrics). Like the two
+        // rows under Dynamic Colors above, they only mean anything once the
+        // switch that draws the glow is on, so they live inside it.
+        //
+        // Until one of them is moved they read the lyric glow, so these open on
+        // whatever is already on screen rather than on a default.
+        AnimatedVisibility(visible = glowBehindArt) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                IntSettingSlider(
+                    value = artGlowRadius,
+                    valueRange = 0f..160f,
+                    onCommit = { viewModel.setArtGlowRadius(it) },
+                    label = { "Glow radius  +$it dp" },
+                    subtitle = "How far the halo reaches past the cover's edge",
+                )
+                IntSettingSlider(
+                    value = artGlowBrightness,
+                    valueRange = 0f..60f,
+                    onCommit = { viewModel.setArtGlowBrightness(it) },
+                    label = { "Glow brightness  $it%" },
+                    subtitle = "Peak strength of the halo on a kick",
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Typography")

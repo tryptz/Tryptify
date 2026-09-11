@@ -142,6 +142,16 @@ class SettingsViewModel @Inject constructor(
     val glowBehindArt: StateFlow<Boolean> = preferences.lyricsFx
         .map { it.glowBehindArt }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    // The album glow's own radius/brightness, read through the effective values
+    // so an unpinned slider opens on the lyric glow it is currently following
+    // rather than snapping to a default the user never chose. Writing either
+    // one pins it (see LyricsFxSettings.artGlowRadiusDp).
+    val artGlowRadius: StateFlow<Int> = preferences.lyricsFx
+        .map { it.effectiveArtGlowRadiusDp.toInt() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 44)
+    val artGlowBrightnessPct: StateFlow<Int> = preferences.lyricsFx
+        .map { (it.effectiveArtGlowBrightness * 100).toInt() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 22)
 
     // --- Interface ---
     val gaplessPlayback: StateFlow<Boolean> = preferences.gaplessPlayback
@@ -455,6 +465,20 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val current = preferences.lyricsFx.first()
             preferences.setLyricsFx(current.copy(glowBehindArt = enabled))
+        }
+    }
+
+    fun setArtGlowRadius(dp: Int) {
+        viewModelScope.launch {
+            val current = preferences.lyricsFx.first()
+            preferences.setLyricsFx(current.copy(artGlowRadiusDp = dp.toFloat()))
+        }
+    }
+
+    fun setArtGlowBrightness(percent: Int) {
+        viewModelScope.launch {
+            val current = preferences.lyricsFx.first()
+            preferences.setLyricsFx(current.copy(artGlowBrightness = percent / 100f))
         }
     }
 

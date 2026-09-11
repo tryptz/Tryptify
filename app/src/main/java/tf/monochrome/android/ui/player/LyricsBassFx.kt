@@ -250,7 +250,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlow(
 /**
  * Album-cover bloom: a radial glow centred on the art whose brightest ring sits
  * at the cover's edge ([halfSize] = half the square's diagonal) and fades out
- * over an extra [LyricsFxSettings.glowRadiusDp] that grows with the pulse [p].
+ * over an extra [LyricsFxSettings.effectiveArtGlowRadiusDp] that grows with the
+ * pulse [p] — the cover's own radius once pinned, the lyric glow's until then.
+ * Reading the art knobs rather than the lyric ones is what lets the halo be
+ * dialled without moving the glow behind the words.
  * Because the peak is at the edge (not the — hidden — centre), the halo stays
  * visible around the opaque album art and visibly pumps on the kick.
  */
@@ -261,11 +264,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArtGlow(
     accent: Color,
     fx: LyricsFxSettings,
 ) {
-    if (fx.glowBrightness <= 0.001f || halfSize <= 1f) return
-    val radius = halfSize + fx.glowRadiusDp.dp.toPx() * (1f + p)
+    if (fx.effectiveArtGlowBrightness <= 0.001f || halfSize <= 1f) return
+    val radius = halfSize + fx.effectiveArtGlowRadiusDp.dp.toPx() * (1f + p)
     if (radius <= 1f) return
     val edge = (halfSize / radius).coerceIn(0.05f, 0.95f)
-    val peak = fx.glowBrightness * p
+    val peak = fx.effectiveArtGlowBrightness * p
     drawCircle(
         brush = Brush.radialGradient(
             0f to accent.copy(alpha = peak * 0.45f),
