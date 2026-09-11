@@ -66,8 +66,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -75,6 +73,7 @@ import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -113,11 +112,13 @@ import tf.monochrome.android.ui.components.MiniPlayer
 import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.LocalPlayerHaze
+import tf.monochrome.android.ui.player.PlayerGlassHaze
 import tf.monochrome.android.ui.player.PlayerActionDock
+import tf.monochrome.android.ui.player.GlassDropShadow
 import tf.monochrome.android.ui.player.GlassProgressTube
 import tf.monochrome.android.ui.player.PlayerDesignTokens
 import tf.monochrome.android.ui.player.TransportIcon
-import tf.monochrome.android.ui.player.drawGlassPlayPauseGlyph
+import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.Letters3DRow
 import tf.monochrome.android.ui.player.LocalBeatPulse
@@ -948,30 +949,36 @@ private fun PlayerGlassTab(
                             painterResource(R.drawable.ic_glass_skip_previous_chevron), "Previous", previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
-                        // The bare glass play glyph and its shape-accurate
-                        // shadow — the real button's recipe, so what is tuned
-                        // here is what ships.
+                        // Solid glass disc with the play symbol punched out, plus the
+                        // same custom round drop shadow as the real play button.
                         Box(
-                            Modifier.size(PlayerDesignTokens.PlayButtonSize),
+                            Modifier.size(64.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Canvas(
-                                Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer { translationY = (1.5f + glass.shadowDepth * 4f).dp.toPx() }
-                                    .blur(
-                                        radius = (2f + glass.shadowSoftness * 12f).dp,
-                                        edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                                    ),
+                            GlassDropShadow(
+                                color = lerp(Color.Black, previewTint, glass.shadowTint)
+                                    .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
+                                softness = glass.shadowSoftness,
+                                depth = glass.shadowDepth,
+                            )
+                            // The same frost the real disc gets, so Backdrop
+                            // blur and tint move something here too.
+                            PlayerGlassHaze(
+                                modifier = Modifier.matchParentSize(),
+                                shape = CircleShape,
+                            )
+                            Box(
+                                Modifier.fillMaxSize().clip(CircleShape),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                drawGlassPlayPauseGlyph(
-                                    isPlaying = false,
-                                    fill = lerp(Color.Black, previewTint, glass.shadowTint)
-                                        .copy(alpha = 0.30f + 0.5f * glass.shadowDepth),
-                                )
-                            }
-                            Canvas(Modifier.fillMaxSize().playerGlass(previewTint)) {
-                                drawGlassPlayPauseGlyph(isPlaying = false, fill = previewTint)
+                                Canvas(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .playerGlass(previewTint)
+                                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                                ) {
+                                    drawGlassPlayPauseDisc(isPlaying = false, fill = previewTint)
+                                }
                             }
                         }
                         TransportIcon(
