@@ -428,7 +428,7 @@ fun PlayerGlassHaze(
     val leaving by remember { derivedStateOf { fade.value > 0.001f } }
     if (!lit && !leaving) return
 
-    val frostBg = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val frostBg = PlayerGlassGround
     val isDark = frostBg.luminance() <= 0.5f
     // The blur is the haze; this is the frost, and it is the thin part — most
     // of what reads through should be the blurred art.
@@ -451,6 +451,30 @@ fun PlayerGlassHaze(
             ),
     )
 }
+
+/**
+ * The ground the player's glass is actually a sheet over.
+ *
+ * Every frosted pane inside the player asks its backdrop two questions: what
+ * colour to reconstruct behind the blur (`HazeStyle.backgroundColor`), and
+ * whether that backdrop is dark — which side of the [playerFrostTint] recipe to
+ * wash it with. Both used to be answered with
+ * `MaterialTheme.colorScheme.background`, and that is the wrong surface: the
+ * player does not sit on the theme. It sits on [dynamicPlayerBackground], which
+ * washes the album colour toward black and ends on
+ * [PlayerDesignTokens.BackgroundBlack] — dark under *every* theme, which is why
+ * the player's chrome is hardcoded white and why the system bars compute their
+ * own luminance from this colour instead of asking the theme.
+ *
+ * On a light theme the old question got a light answer, so the frost laid white
+ * at 0.26 over a near-black ground and the panes came out as milky grey slabs
+ * with the glyphs washed out of them.
+ *
+ * Keep deriving `isDark` from `luminance()` on this rather than hardcoding
+ * `true`: if the player's ground ever lightens, the frost follows it instead of
+ * silently lying about what it is over.
+ */
+val PlayerGlassGround: Color = PlayerDesignTokens.BackgroundBlack
 
 /**
  * The wash that goes over the blur — the *frost*, as opposed to the haze.

@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -50,9 +49,6 @@ private val DockItemVerticalPadding = 10.dp
 // squeeze. The old pair (bouncy spring up, tween down) stuttered: a tween carries
 // no velocity, so releasing mid-bounce snapped the dome still before easing off.
 private val PressSpring = spring<Float>(dampingRatio = 0.85f, stiffness = 900f)
-
-// The dome slides between slots instead of teleporting when a finger moves along.
-private val BulgeGlideSpring = spring<Float>(dampingRatio = 1f, stiffness = 450f)
 
 /**
  * Erase the four dock glyphs from whatever has just been drawn, leaving
@@ -119,9 +115,12 @@ fun PlayerActionDock(
         painterResource(R.drawable.ic_glass_playlist),
     )
     // Press-bulge: one shared interaction source per slot so the parent knows
-    // which button is held and can swell the glass under it. Rise, fall and the
-    // slide between slots are all springs, so any of them can be interrupted
-    // mid-flight and pick up from the speed it already had.
+    // which button is held and can swell the glass under it. Its rise and fall are
+    // one interruptible spring; its centre is *placed* on the last pressed slot
+    // rather than animated to it. Animating it only looked like a glide: a press
+    // is never handed between sibling clickables, so a finger sliding along the
+    // dock cannot move the dome, and all an animated centre does is drag it
+    // across from whichever button bloomed last.
     val sources = remember { List(icons.size) { MutableInteractionSource() } }
     val pressed = sources.map { it.collectIsPressedAsState() }
     val pressedIndex = pressed.indexOfFirst { it.value }
@@ -132,12 +131,7 @@ fun PlayerActionDock(
         animationSpec = PressSpring,
         label = "dockBulge",
     )
-    val bulgeX by animateFloatAsState(
-        targetValue = (bulgeSlot.intValue + 0.5f) / icons.size,
-        animationSpec = BulgeGlideSpring,
-        label = "dockBulgeX",
-    )
-    val bulgeCenter = Offset(bulgeX, 0.5f)
+    val bulgeCenter = Offset((bulgeSlot.intValue + 0.5f) / icons.size, 0.5f)
     Box(modifier = modifier.fillMaxWidth()) {
         // Button glass tint: a custom colour chosen in the Studio, or the album
         // accent when none is set (tintColor == 0).
