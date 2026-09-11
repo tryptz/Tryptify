@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+#### The library stopped reindexing itself every time you open the app
+- **One line started it**: the app-start artwork check answered a missing cover file with a full library scan. It fired constantly because of where covers were kept — extracted art went to `cacheDir`, the one directory Android is entitled to empty whenever it likes, and it emptied it. Settings' "Clear cache" did the same thing on purpose, so tidying up your storage cost you a reindex.
+- **It was also large enough to be worth reclaiming.** Art was written raw, at whatever size it was embedded at, once per *track file* — a 500-track album wrote the same 3000x3000 cover 500 times under 500 names. Covers are keyed by a hash of their own bytes now, so one cover is one file however many tracks carry it, and they are downscaled on the way in. Nothing in the app draws cover art above 640 px.
+- **Art lives in app data now**, which nothing reclaims. That is only affordable because of the two changes above; without them it would have been a way to fill your phone instead.
+- **It could latch permanently.** A row whose art can't be re-extracted — an unmounted SD card, a failed read, or the repair being dropped because another scan was already running — kept its stale key, so the check fired again next launch, and every launch after that, forever.
+- **With nothing left to heal, the startup check is gone** rather than made cheaper, and clearing the cache no longer costs the library its covers.
+- **An existing library's art is carried across by a move, not a rescan.** It costs the same whatever the library's size and no cover ever blanks. Those files keep their old per-track naming, so the next time you rescan by hand they are compacted a row at a time — nothing is forced on you in the meantime.
+- **A scan now sweeps art no track points at any more.** Eviction used to bound that directory whether we pruned or not.
+
+#### The app remembers what you were listening to
+- **Closing it and opening it later landed on an empty player.** The queue, the track, the play head, shuffle and repeat all lived only in memory and died with the process, and the position was never written down at all — so there was no mini player to come back to and no way back to the song except finding it again and scrubbing to where you were.
+- **It comes back paused, exactly where you left it.** The mini player shows the track with the scrubber already at the right second, and pressing play resumes from there. Nothing is resolved, played or announced at startup: opening the app costs no network and takes no audio focus, and the first tap is what starts anything.
+- **Scrubbing before you press play works too**, rather than being quietly dropped and starting from the old position anyway.
+- **Shuffle and repeat come back with it**, and turning shuffle off after reopening restores the order the queue was in before it was shuffled rather than inventing a new one.
+- **A live station comes back as a station.** It is not a recording, so it restores at the live edge; resuming one "where you left off" would reconnect it anyway.
+- **A very long queue keeps the 300 entries around where you were**, weighted toward what is coming up.
+- **A track that has since been deleted fails quietly and moves on** instead of resolving to a different song under the right title.
+
+#### Playing from the lock screen resumed the wrong track, from the start
+- **The start position was hardcoded to zero.** A play tap from the lock screen, a Bluetooth remote or Android Auto now lands on the same second the app would.
+- **It resolved every track in the queue on a single tap** — one network request per entry, and now that a queue survives a restart, potentially hundreds of them. It resolves only the track being resumed. The player has never held more than one track at a time, which is exactly why next and previous are routed around its own playlist.
+- **Its start index counted positions in the full queue while the list it handed back had the unplayable entries filtered out**, so one earlier track that failed to resolve shifted everything down and resumed the wrong song.
+
+#### Scanner bookkeeping
+- **`lastFullScan` advances when a full scan runs.** It was pinned to the first scan an install ever ran, so it recorded when the library was first indexed rather than when it was last rebuilt — and the incremental scan reads it as a watermark.
+
 ## [1.8.9]
 
 ### Changed
