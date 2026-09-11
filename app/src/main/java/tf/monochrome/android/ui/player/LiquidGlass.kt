@@ -428,7 +428,7 @@ fun PlayerGlassHaze(
     val leaving by remember { derivedStateOf { fade.value > 0.001f } }
     if (!lit && !leaving) return
 
-    val frostBg = PlayerGlassGround
+    val frostBg = LocalPlayerGlassGround.current
     val isDark = frostBg.luminance() <= 0.5f
     // The blur is the haze; this is the frost, and it is the thin part — most
     // of what reads through should be the blurred art.
@@ -475,6 +475,23 @@ fun PlayerGlassHaze(
  * silently lying about what it is over.
  */
 val PlayerGlassGround: Color = PlayerDesignTokens.BackgroundBlack
+
+/**
+ * The ground the glass in *this* subtree is over, defaulting to the player's.
+ *
+ * Every frosted pane in the player sits on [PlayerGlassGround] and does not
+ * need this. The Player Visuals Studio does: its preview draws the chrome over
+ * a swatch the listener picks, and that swatch can be any colour, including a
+ * light one. Reading the player's ground there would frost dark over a light
+ * backdrop — the same bug as asking the theme, pointed the other way — on the
+ * one screen whose whole job is showing what the glass looks like.
+ *
+ * Provided next to [LocalPlayerHaze], because the ground *is* a property of the
+ * haze source: whoever supplies the backdrop to blur knows what colour it is.
+ * Nested chrome (the dock, which frosts inside itself) picks it up for free,
+ * which a parameter could not reach.
+ */
+val LocalPlayerGlassGround = compositionLocalOf { PlayerGlassGround }
 
 /**
  * The wash that goes over the blur — the *frost*, as opposed to the haze.
