@@ -172,7 +172,6 @@ fun MainPlayerRoute(
     val currentVisualizerPreset by playerViewModel.currentVisualizerPreset.collectAsStateWithLifecycle()
     val visualizerPresets by playerViewModel.visualizerPresets.collectAsStateWithLifecycle()
     val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
-    val visualizerCompact by playerViewModel.visualizerCompact.collectAsStateWithLifecycle()
     val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
     val spectrumAnalyzerEnabled by playerViewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
     val spectrumShowOnNowPlaying by playerViewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
@@ -625,8 +624,6 @@ fun MainPlayerRoute(
                     onTogglePresetFavorite = {
                         currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
                     },
-                    visualizerCompact = visualizerCompact,
-                    onToggleCompact = playerViewModel::toggleVisualizerCompact,
                     onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
                     spectrumBins = spectrumBins,
                     spectrumColor = spectrumColor,

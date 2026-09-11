@@ -33,8 +33,8 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Shuffle
@@ -117,8 +117,6 @@ fun PlayerHero(
     onOpenPresetBrowser: () -> Unit,
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
-    visualizerCompact: Boolean = false,
-    onToggleCompact: () -> Unit = {},
     onToggleFullscreen: () -> Unit = {},
     spectrumBins: FloatArray = FloatArray(0),
     spectrumColor: Color = PlayerGlowBlue,
@@ -147,8 +145,6 @@ fun PlayerHero(
             onOpenPresetBrowser = onOpenPresetBrowser,
             isPresetFavorite = isPresetFavorite,
             onTogglePresetFavorite = onTogglePresetFavorite,
-            visualizerCompact = visualizerCompact,
-            onToggleCompact = onToggleCompact,
             onToggleFullscreen = onToggleFullscreen,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
@@ -308,8 +304,6 @@ private fun VisualizerHero(
     onOpenPresetBrowser: () -> Unit,
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
-    visualizerCompact: Boolean,
-    onToggleCompact: () -> Unit,
     onToggleFullscreen: () -> Unit,
     spectrumBins: FloatArray,
     spectrumColor: Color,
@@ -348,53 +342,18 @@ private fun VisualizerHero(
                     onClick = { overlayInteraction++ },
                 )
         ) {
-            if (visualizerCompact) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    HeroCoverArt(
-                        track = track,
-                        isPlaying = isPlaying,
-                        spectrumBins = spectrumBins,
-                        spectrumColor = spectrumColor,
-                        showSpectrum = showSpectrum,
-                        onToggleShowSpectrum = onToggleShowSpectrum,
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(12.dp)
-                            .size(120.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.Black,
-                        shadowElevation = 8.dp,
-                    ) {
-                        VisualizerComponent(
-                            isPlaying = isPlaying,
-                            sensitivity = visualizerSensitivity,
-                            brightness = visualizerBrightness,
-                            modifier = Modifier.fillMaxSize(),
-                            engineStatus = visualizerEngineStatus,
-                            engineEnabled = visualizerEngineEnabled,
-                            showFps = false,
-                            isFullscreen = false,
-                            touchWaveformEnabled = visualizerTouchWaveform,
-                            repository = visualizerRepository,
-                        )
-                    }
-                }
-            } else {
-                VisualizerComponent(
-                    isPlaying = isPlaying,
-                    sensitivity = visualizerSensitivity,
-                    brightness = visualizerBrightness,
-                    modifier = Modifier.fillMaxSize(),
-                    engineStatus = visualizerEngineStatus,
-                    engineEnabled = visualizerEngineEnabled,
-                    showFps = visualizerShowFps,
-                    isFullscreen = isFullscreen,
-                    touchWaveformEnabled = visualizerTouchWaveform,
-                    repository = visualizerRepository,
-                )
-            }
+            VisualizerComponent(
+                isPlaying = isPlaying,
+                sensitivity = visualizerSensitivity,
+                brightness = visualizerBrightness,
+                modifier = Modifier.fillMaxSize(),
+                engineStatus = visualizerEngineStatus,
+                engineEnabled = visualizerEngineEnabled,
+                showFps = visualizerShowFps,
+                isFullscreen = isFullscreen,
+                touchWaveformEnabled = visualizerTouchWaveform,
+                repository = visualizerRepository,
+            )
 
             AnimatedVisibility(
                 visible = showOverlay,
@@ -403,19 +362,6 @@ private fun VisualizerHero(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    IconButton(
-                        onClick = onToggleCompact,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(16.dp)
-                            .background(Color.Black.copy(alpha = 0.3f), shape = RoundedCornerShape(999.dp)),
-                    ) {
-                        Icon(
-                            if (visualizerCompact) Icons.Default.Fullscreen else Icons.Default.GraphicEq,
-                            contentDescription = if (visualizerCompact) "Expand Visualizer" else "Window Mode",
-                            tint = Color.White,
-                        )
-                    }
                     IconButton(
                         onClick = onToggleFullscreen,
                         modifier = Modifier

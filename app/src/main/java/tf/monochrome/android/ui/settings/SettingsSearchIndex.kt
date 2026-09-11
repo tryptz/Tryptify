@@ -61,6 +61,33 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("lyrics_fx_studio")),
     entry("Now playing view", "Appearance", listOf("player", "layout", "lyrics")),
     entry("Blurred background", "Appearance", listOf("player", "artwork", "blur")),
+    entry("Glow behind album art", "Appearance", listOf("bloom", "halo", "cover", "kick", "bass", "pump")),
+    entry("Glow radius", "Appearance", listOf("bloom", "halo", "cover", "size", "reach", "spread")),
+    entry("Glow brightness", "Appearance", listOf("bloom", "halo", "cover", "strength", "intensity")),
+    entry("Dynamic Player Color", "Appearance", listOf("album", "art", "tint", "accent", "player")),
+    entry("Custom colors", "Appearance", listOf("colour", "accent", "background", "pick", "override")),
+    entry("Use system font size", "Appearance", listOf("text size", "accessibility", "os", "display")),
+    entry("Romaji Lyrics", "Appearance", listOf("japanese", "transliterate", "latin", "kana", "lyrics")),
+    entry("Show Explicit Badges", "Appearance", listOf("explicit", "badge", "parental", "e")),
+    entry("Legacy player", "Appearance", listOf("old", "flat", "classic", "pre-glass", "design")),
+    entry("Remove liquid glass", "Appearance", listOf("flat", "opaque", "blur", "performance", "glass")),
+    entry("Disable animations", "Appearance", listOf("motion", "reduce", "still", "accessibility")),
+
+    // ── Appearance › Spectrum and visualizer ────────────────────────────
+    // The whole projectM section was unindexed: nine rows, none findable.
+    entry("Show Spectrum Analyzer", "Appearance", listOf("fft", "bars", "frequency", "meter")),
+    entry("Spectrum over the artwork", "Appearance", listOf("overlay", "hero", "cover", "now playing")),
+    entry("Animated spectrum", "Appearance", listOf("motion", "bars", "genre", "artwork")),
+    entry("Use projectM Visualizer", "Appearance", listOf("milkdrop", "visualiser", "projectm", "preset", "engine")),
+    entry("Default Preset", "Appearance", listOf("visualiser", "milkdrop", "projectm", "startup")),
+    entry("Texture Size", "Appearance", listOf("visualiser", "resolution", "quality", "graphics", "projectm")),
+    entry("Touch Waveform", "Appearance", listOf("visualiser", "waveform", "finger", "draw", "projectm")),
+    // Distinct from System › "Full screen", which is the app-wide immersive
+    // switch. Both are real and the tab label tells them apart in results.
+    entry("Fullscreen", "Appearance", listOf("visualiser", "projectm", "fill screen", "now playing")),
+    entry("Show FPS", "Appearance", listOf("visualiser", "framerate", "counter", "performance", "projectm")),
+    entry("Disable vsync", "Appearance", listOf("visualiser", "refresh", "tearing", "framerate", "projectm")),
+    entry("Engine Status", "Appearance", listOf("visualiser", "projectm", "assets", "version", "diagnostics")),
 
     // ── Audio ───────────────────────────────────────────────────────────
     entry("Gapless playback", "Audio", listOf("gap", "continuous", "album")),
@@ -77,6 +104,9 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Mixer", "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
     entry("Streaming quality", "Audio", listOf("bitrate", "wifi", "cellular", "data")),
+    entry("Preserve Pitch", "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
+    entry("Never Resample Between Tracks", "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),
+    entry("USB DAC bit-perfect routing", "Audio", listOf("usb", "dac", "exclusive", "bit perfect", "output")),
 
     // ── Equalizer ───────────────────────────────────────────────────────
     entry("Equalizer", "Equalizer", listOf("eq", "bass", "treble", "bands", "graphic"))
@@ -85,6 +115,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("parametric_eq")),
     entry("AutoEQ headphone profile", "Equalizer", listOf("headphone", "harman", "target", "correction")),
     entry("Spectrum analyzer", "Equalizer", listOf("fft", "visualiser", "frequency", "meter")),
+    entry("System-wide AutoEQ", "Equalizer", listOf("global", "device", "all audio", "correction", "beta")),
 
     // ── Library ─────────────────────────────────────────────────────────
     // Renamed with the header it points at: SettingsSearchIndexTest greps the
@@ -99,6 +130,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Auto-download liked", "Downloads", listOf("offline", "favourites", "hearted")),
     entry("Download centre", "Downloads", listOf("queue", "progress", "offline"))
         .at(SettingsDestination.Route("downloads")),
+    entry("Save location", "Downloads", listOf("folder", "path", "sd card", "storage", "where")),
 
     // ── Connections ─────────────────────────────────────────────────────
     entry("Last.fm scrobbling", "Connections", listOf("scrobble", "account", "history")),
@@ -107,6 +139,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Qobuz instance", "Connections", listOf("server", "url", "source")),
     entry("Apple instance", "Connections", listOf("server", "url", "source")),
     entry("Source mode", "Connections", listOf("provider", "catalogue", "backend")),
+    entry("Show what I'm playing", "Connections", listOf("discord", "presence", "rich", "status", "playing")),
+    entry("Spotify", "Connections", listOf("import", "playlist", "account", "transfer")),
 
     // ── Radio ───────────────────────────────────────────────────────────
     entry("AI radio", "Radio", listOf("station", "recommend", "queue", "seed")),
@@ -124,6 +158,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Developer mode", "System", listOf("dev", "advanced", "hidden")),
     entry("Backup and restore", "System", listOf("export", "import", "settings", "transfer")),
     entry("Clear cache", "System", listOf("storage", "space", "images")),
+    entry("Check for updates", "System", listOf("update", "version", "github", "release", "newer")),
+    entry("Restart onboarding", "System", listOf("setup", "first run", "wizard", "again", "tutorial")),
 
     // ── About ───────────────────────────────────────────────────────────
     entry("What's new", "About", listOf("changelog", "release", "version", "updates")),

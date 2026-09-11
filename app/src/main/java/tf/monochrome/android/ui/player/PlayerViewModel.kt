@@ -231,8 +231,6 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val visualizerTouchWaveform: StateFlow<Boolean> = preferences.visualizerTouchWaveform
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    private val _visualizerCompact = MutableStateFlow(false)
-    val visualizerCompact: StateFlow<Boolean> = _visualizerCompact.asStateFlow()
 
     // --- Spectrum analyzer (global prefs) ---
     val spectrumAnalyzerEnabled: StateFlow<Boolean> = preferences.spectrumAnalyzerEnabled
@@ -983,10 +981,6 @@ class PlayerViewModel @Inject constructor(
 
     fun setVisualizerPlaybackPaused(paused: Boolean) {
         projectMEngineRepository.setPlaybackPaused(paused)
-    }
-
-    fun toggleVisualizerCompact() {
-        _visualizerCompact.value = !_visualizerCompact.value
     }
 
     fun toggleVisualizerFullscreen() {
