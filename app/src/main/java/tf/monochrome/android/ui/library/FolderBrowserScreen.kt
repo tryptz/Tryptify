@@ -53,6 +53,7 @@ import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.FastScroller
 import tf.monochrome.android.ui.components.bounceCombinedClick
+import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.TrackListToolbar
@@ -184,8 +185,17 @@ fun FolderBrowserScreen(
             // Compose would try to reuse a folder row's slots for a track row.
             items(subfolders, key = { it.path }, contentType = { "folder" }) { folder ->
                 Row(
+                    // The same pane as the Folders tab and Home's page list.
+                    // The gap is in this row's own padding rather than the
+                    // list's arrangement, because the tracks below share this
+                    // LazyColumn and are a dense list, not tiles.
+                    //
+                    // No hazeState, as everywhere else in scrolling content —
+                    // see liquidGlass.
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .liquidGlass(shape = MonoDimens.shapeMd)
                         .bounceCombinedClick(
                             onLongClick = {
                                 folderToExclude = FolderToExclude(

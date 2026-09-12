@@ -14,6 +14,11 @@
 - **Jumps go through the pager, not the navigator**, so Back retraces them exactly as it retraces a swipe.
 - **Home's feed is gone to make room**: Play Radio is removed, and Recently Played with it — Overview already shows the same history, and it is now one tap away. `HomeViewModel` went with them, which also drops a second live collector of the play history.
 
+#### Folders are glass tiles
+- **Both folder surfaces draw a pane per folder** — the Folders tab and the browser inside it — matching Home's page list rather than inventing a third look for the same kind of row. Tap opens, long press removes: the behaviour is untouched.
+- **The gap between tiles is the list's arrangement in the Folders tab and the row's own padding in the browser.** The browser's LazyColumn also holds the folder's tracks, which are a dense list and not tiles, and `verticalArrangement` would have spaced those too.
+- **No `hazeState` on either**, like every other glass surface in scrolling content: it sits inside the app's one `hazeSource`, and a haze child within its own source is the cycle that crashed the app on launch when Home's tiles first shipped.
+
 #### A scrollbar you can drag
 - **Long lists have a thumb down the right edge now**, like a web page. Drag it to land anywhere in the library instead of flicking.
 - **The songs list loads a page at a time.** It used to build every track in the library on every change — around 118 ms and 20,000 objects for a 20,000-track library, to draw the dozen rows on screen.

@@ -938,15 +938,30 @@ fun FolderList(
     Box {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+            contentPadding = PaddingValues(
+                top = 8.dp,
+                bottom = MonoDimens.listBottomPadding,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(folders, key = { it.path }) { folder ->
                 val name = folder.displayName
                 val path = folder.path
                 Row(
+                    // A pane each, like Home's page list: the gutter padding
+                    // and the gap between rows are what make these read as
+                    // separate tiles rather than one striped slab.
+                    //
+                    // No hazeState — see liquidGlass's own note. This is inside
+                    // the pager, which is inside the app's one hazeSource, and a
+                    // haze child within its own source is a cycle Haze throws
+                    // on. The tiles sit on the flat theme background, so a
+                    // backdrop blur of it would be that same colour anyway.
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = MonoDimens.listItemPaddingH)
                         .height(MonoDimens.listRowHeight)
+                        .liquidGlass(shape = MonoDimens.shapeMd)
                         .bounceCombinedClick(
                             onLongClick = { onFolderLongClick(path, name) },
                             onClick = { onFolderClick(path) },

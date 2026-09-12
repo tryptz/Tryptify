@@ -209,6 +209,13 @@ object WhatsNew {
                         "same way.",
                 ),
                 WhatsNewEntry(
+                    section = LIBRARY,
+                    title = "Folders are glass tiles",
+                    body = "The Folders tab and the folder browser draw each folder as " +
+                        "its own pane, like Home's page list, instead of a flat row. " +
+                        "Tapping still opens it and a long press still removes it.",
+                ),
+                WhatsNewEntry(
                     section = PAGES,
                     title = "Presses feel like the player's, everywhere",
                     body = "The old press settled slowly and wobbled — barely visible on a " +
