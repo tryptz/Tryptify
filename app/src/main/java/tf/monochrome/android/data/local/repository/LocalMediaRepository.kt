@@ -73,7 +73,13 @@ class LocalMediaRepository @Inject constructor(
             // normal speed never waits on a query; the placeholder-free config
             // means the list length grows as pages land rather than starting
             // at the full count with blank rows.
-            config = PagingConfig(pageSize = 60, prefetchDistance = 30, enablePlaceholders = false),
+            // Placeholders ON so the list reports its real length from the
+            // first frame: the fast scroller's thumb is sized and positioned
+            // from totalItemsCount, and without them that is only the rows
+            // loaded so far, so the thumb would shrink and the drag crawl.
+            // Unloaded rows come back null and the list draws an empty row of
+            // the right height until the page lands.
+            config = PagingConfig(pageSize = 60, prefetchDistance = 30, enablePlaceholders = true),
             pagingSourceFactory = { pagingSourceFor(sort) },
         ).flow.map { page -> page.map { it.toUnifiedTrack() } }
 

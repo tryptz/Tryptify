@@ -90,6 +90,8 @@ import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import androidx.navigation.NavController
+import tf.monochrome.android.ui.components.FastScroller
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -787,24 +789,34 @@ fun SongList(
     onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController,
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(
-            count = tracks.itemCount,
-            key = tracks.itemKey { it.id },
-            contentType = tracks.itemContentType { "track" },
-        ) { index ->
-            // Null only when placeholders are on, which this Pager disables.
-            // Handled rather than asserted away.
-            val track = tracks[index] ?: return@items
-            SongRow(
-                track = track,
-                onClick = { onTrackClick(track) },
-                onMoreClick = onMoreClick,
-                navController = navController,
-            )
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(
+                count = tracks.itemCount,
+                key = tracks.itemKey { it.id },
+                contentType = tracks.itemContentType { "track" },
+            ) { index ->
+                val track = tracks[index]
+                if (track == null) {
+                    // Placeholders are on, so a row not yet loaded arrives as
+                    // null. It still has to occupy its height or the list would
+                    // shorten under the scroller mid-drag.
+                    Spacer(Modifier.fillMaxWidth().height(MonoDimens.listRowHeight))
+                } else {
+                    SongRow(
+                        track = track,
+                        onClick = { onTrackClick(track) },
+                        onMoreClick = onMoreClick,
+                        navController = navController,
+                    )
+                }
+            }
         }
+        FastScroller(state = state)
     }
 }
 
