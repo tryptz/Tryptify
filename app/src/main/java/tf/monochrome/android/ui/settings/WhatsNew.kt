@@ -78,29 +78,19 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     section = PLAYER,
-                    title = "Shuffle is on the player",
-                    body = "It takes the dock's second slot, next to Lyrics, and lights up " +
-                        "while it is on. It used to be two taps into the top bar's menu.",
+                    title = "Shuffle is on the dock, the sleep timer in Audio tools",
+                    body = "Shuffle takes the dock's second slot next to Lyrics and lights up " +
+                        "while it is on, instead of two taps into a menu. The sleep timer " +
+                        "moved to Audio tools, where it shows the minutes left rather than a " +
+                        "switch.",
                 ),
                 WhatsNewEntry(
                     section = PLAYER,
-                    title = "The sleep timer moved into Audio tools",
-                    body = "It shows the minutes left rather than \"Off\". It takes the Output " +
-                        "card's place, which only ever said \"Default\" and opened Settings — " +
-                        "what the headphone button in the top bar already does.",
-                ),
-                WhatsNewEntry(
-                    section = PLAYER,
-                    title = "Play, pause and skip are redrawn",
-                    body = "They are built from exact geometry now, so the corners match each " +
-                        "other and the two skip chevrons sit apart rather than nested.",
-                ),
-                WhatsNewEntry(
-                    section = PLAYER,
-                    title = "The dock presses cleanly",
-                    body = "One spring drives the swell and the glyph squeeze, so letting go " +
-                        "mid-press eases off instead of snapping. The swell also appears under " +
-                        "the button you pressed rather than sliding over from the last one.",
+                    title = "Play, pause and skip are redrawn, and press cleanly",
+                    body = "They are built from exact geometry, so the corners match and the " +
+                        "two skip chevrons sit apart rather than nested. One spring drives the " +
+                        "swell and the glyph squeeze, so letting go mid-press eases off " +
+                        "instead of snapping.",
                 ),
                 WhatsNewEntry(
                     section = LOOK,
@@ -111,45 +101,34 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     section = LOOK,
-                    title = "The band of light across the scrubber is gone",
-                    body = "The album glow was landing at mid-screen with its edge there, which " +
-                        "showed as a ring. It sits behind the artwork now and fades out " +
-                        "without a rim — a bigger, softer halo behind the cover.",
+                    title = "The cover's halo is softer, and yours to tune",
+                    body = "The glow was landing at mid-screen with a visible edge, showing as " +
+                        "a band across the scrubber. It sits behind the artwork now, fades out " +
+                        "without a rim, and has its own sliders. A lit dock icon glows its own " +
+                        "shape too.",
                 ),
                 WhatsNewEntry(
-                    section = LOOK,
-                    title = "The cover's glow has its own sliders",
-                    body = "Radius and brightness for the album halo sit under the switch that " +
-                        "draws it, so turning the lyric glow down no longer takes the halo " +
-                        "with it. Both follow the lyric glow until you move them.",
+                    section = LIBRARY,
+                    title = "Folders show your music, and open where it is",
+                    body = "The tab opens on the folders your music is really in, each a glass " +
+                        "tile with a count. A folder lists its own audio, not just subfolders; " +
+                        "ones with a space in the name open at last; and Back steps up one " +
+                        "level at a time.",
                 ),
                 WhatsNewEntry(
-                    section = LOOK,
-                    title = "A lit dock button glows its own shape",
-                    body = "The glow around an active Lyrics or Shuffle icon was being cut " +
-                        "into a soft square. It follows the glyph now.",
+                    section = LIBRARY,
+                    title = "Long press a folder to remove it",
+                    body = "Its tracks leave the library and scans skip it from then on. " +
+                        "Nothing is deleted from your phone — the files stay where they " +
+                        "are.",
                 ),
                 WhatsNewEntry(
                     section = LIBRARY,
                     title = "Drag the scrollbar to move through a big library",
-                    body = "Long lists have a thumb down the right edge you can drag, the " +
-                        "way a web page does. The songs list also loads a page at a time " +
-                        "now instead of building the whole library to show a screenful.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "Folders show the music inside them",
-                    body = "Opening a folder listed its subfolders and nothing else — the " +
-                        "audio files sitting in that folder were being filtered straight " +
-                        "back out again. They are listed under the subfolders now.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "Folders whose music sits deeper open properly",
-                    body = "A folder holding only other folders was missing from the folder " +
-                        "list the browser walks, so anything more than one level down was " +
-                        "unreachable and the folder came up blank. An empty folder now " +
-                        "says so instead of showing nothing.",
+                    body = "Long lists have a thumb down the right edge you can drag. It no " +
+                        "longer catches flicks meant for the list, and the songs list loads a " +
+                        "page at a time instead of building the whole library to show a " +
+                        "screenful.",
                 ),
                 WhatsNewEntry(
                     section = LIBRARY,
@@ -166,54 +145,12 @@ object WhatsNew {
                         "ever worked.",
                 ),
                 WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "The Folders tab shows your music folders",
-                    body = "It used to list only folders you had added by hand — a folder of " +
-                        "hundreds of scanned songs never appeared, while the same songs " +
-                        "filled the Songs list. It now opens on the folders your music " +
-                        "actually starts in, each with its path.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "Long press a folder to remove it",
-                    body = "Its tracks leave the library and scans skip it from then on. " +
-                        "Nothing is deleted from your phone — the files stay where they " +
-                        "are.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "Folders with a space in the name open again",
-                    body = "A folder with a space in its name opened blank. The space was " +
-                        "turned into a + on the way to the screen, so it looked up a folder " +
-                        "that does not exist — only folders without one ever worked.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "The scrollbar stops catching your flicks",
-                    body = "Scrolling near the right edge grabbed the invisible scrollbar " +
-                        "and threw the list somewhere else. Only the visible bar takes your " +
-                        "finger now, and it glides instead of stepping.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "Every folder says how much is in it",
-                    body = "The Folders tab puts a count beside every folder, so one the " +
-                        "library found nothing in says so before you open it.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "Back steps up one folder at a time",
-                    body = "Opening a subfolder replaced the folder you came from instead " +
-                        "of stacking on it, so Back left the browser altogether. It steps " +
-                        "back up the tree now, and album and artist trails retrace the " +
-                        "same way.",
-                ),
-                WhatsNewEntry(
-                    section = LIBRARY,
-                    title = "Folders are glass tiles",
-                    body = "The Folders tab and the folder browser draw each folder as " +
-                        "its own pane, like Home's page list, instead of a flat row. " +
-                        "Tapping still opens it and a long press still removes it.",
+                    section = PAGES,
+                    title = "Home is the list of pages",
+                    body = "Tap a name to go straight there instead of swiping to it, and " +
+                        "Back returns to the list. The swipe and the dots at the top are " +
+                        "gone. Every other page has the same list behind the button in " +
+                        "its top bar.",
                 ),
                 WhatsNewEntry(
                     section = PAGES,
@@ -222,14 +159,6 @@ object WhatsNew {
                         "small button, obvious on a big tile. Every press in the app now " +
                         "uses the spring the player's dock had. Picking a page opens it at " +
                         "once too, rather than sliding past the pages in between.",
-                ),
-                WhatsNewEntry(
-                    section = PAGES,
-                    title = "Home is the list of pages",
-                    body = "Tap a name to go straight there instead of swiping to it, and " +
-                        "Back returns to the list. The swipe and the dots at the top are " +
-                        "gone. Every other page has the same list behind the button in " +
-                        "its top bar.",
                 ),
             ),
         ),
