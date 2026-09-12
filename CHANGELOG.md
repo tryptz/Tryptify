@@ -10,6 +10,11 @@
 
 ### Fixed
 
+#### A folder showed its subfolders and none of its own music
+- **The query behind the folder browser returned nothing, for every folder, always.** It asked for paths starting with the folder and *not* also containing a further `/`, written as `NOT LIKE folder || '%/%'` — but `%` matches the empty string, so a direct child matched that too: `/Music/song.mp3` reads as `/Music` + `""` + `/` + `song.mp3`. Whatever the first half let through, the second half took straight back out.
+- **It compares substrings now instead of patterns**: the path must start with the folder plus a slash, and what remains must hold no further slash. That also stops a folder named `Hip_Hop` picking up a sibling `HipXHop`'s files, since `_` is a `LIKE` wildcard and was never escaped.
+- **Folder rows and track rows declare their own content types**, so Compose stops trying to reuse one as the other now that a single list holds both.
+
 #### The library stopped reindexing itself every time you open the app
 - **One line started it**: the app-start artwork check answered a missing cover file with a full library scan. It fired constantly because of where covers were kept — extracted art went to `cacheDir`, the one directory Android is entitled to empty whenever it likes, and it emptied it. Settings' "Clear cache" did the same thing on purpose, so tidying up your storage cost you a reindex.
 - **It was also large enough to be worth reclaiming.** Art was written raw, at whatever size it was embedded at, once per *track file* — a 500-track album wrote the same 3000x3000 cover 500 times under 500 names. Covers are keyed by a hash of their own bytes now, so one cover is one file however many tracks carry it, and they are downscaled on the way in. Nothing in the app draws cover art above 640 px.

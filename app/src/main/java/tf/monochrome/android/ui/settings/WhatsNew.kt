@@ -45,6 +45,9 @@ object WhatsNew {
     /** The world radio globe and everything hanging off it. */
     private const val GLOBE = "World radio"
 
+    /** Browsing what is on the device: the song list, the folder tree. */
+    private const val LIBRARY = "Library"
+
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
 
@@ -126,13 +129,19 @@ object WhatsNew {
                     body = "The glow around an active Lyrics or Shuffle icon was being cut " +
                         "into a soft square. It follows the glyph now.",
                 ),
-                // No section: it is the only library note in this release, and a
-                // heading over one entry reads as a heading over nothing.
                 WhatsNewEntry(
+                    section = LIBRARY,
                     title = "Drag the scrollbar to move through a big library",
                     body = "Long lists have a thumb down the right edge you can drag, the " +
                         "way a web page does. The songs list also loads a page at a time " +
                         "now instead of building the whole library to show a screenful.",
+                ),
+                WhatsNewEntry(
+                    section = LIBRARY,
+                    title = "Folders show the music inside them",
+                    body = "Opening a folder listed its subfolders and nothing else — the " +
+                        "audio files sitting in that folder were being filtered straight " +
+                        "back out again. They are listed under the subfolders now.",
                 ),
             ),
         ),
