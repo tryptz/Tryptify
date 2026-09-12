@@ -42,8 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 import tf.monochrome.android.ui.components.buttonSemantics
-import tf.monochrome.android.ui.theme.GlassPressSpring
-import tf.monochrome.android.ui.theme.GlassReleaseSpring
+import tf.monochrome.android.ui.theme.PressSpring
 
 /**
  * Primary transport row: previous · play/pause · next. The icons are solid glyph
@@ -90,7 +89,7 @@ fun PlayerTransportControls(
         // the dock and the other glass buttons.
         val bulge by animateFloatAsState(
             targetValue = if (isPressed) 1f else 0f,
-            animationSpec = if (isPressed) GlassPressSpring else GlassReleaseSpring,
+            animationSpec = PressSpring,
             label = "playBulge",
         )
         // Play/pause is a SOLID round glass disc with the play/pause symbol
@@ -319,7 +318,7 @@ internal fun TransportIcon(
     val isPressed by interactionSource.collectIsPressedAsState()
     val bulge by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
-        animationSpec = if (isPressed) GlassPressSpring else GlassReleaseSpring,
+        animationSpec = PressSpring,
         label = "transportBulge",
     )
     // The same give the play disc has. The chevrons had the bulge — the glass

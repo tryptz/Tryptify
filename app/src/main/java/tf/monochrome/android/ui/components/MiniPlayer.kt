@@ -66,8 +66,7 @@ import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
 import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.glassTint
-import tf.monochrome.android.ui.theme.GlassPressSpring
-import tf.monochrome.android.ui.theme.GlassReleaseSpring
+import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.abs
 import tf.monochrome.android.ui.player.playerFrostTint
@@ -178,8 +177,8 @@ fun MiniPlayer(
     val skipPainter = painterResource(R.drawable.ic_glass_skip_next)
 
     // Press-bulge, mirroring PlayerActionDock: swell the glass under whichever
-    // control is held; the bulge centre follows it. A spring both ways — see
-    // GlassReleaseSpring for what the tween that used to end this was doing.
+    // control is held; the bulge centre follows it. The dock's own spring, both
+    // ways, so the two slabs answer a press identically — see PressSpring.
     val playSource = remember { MutableInteractionSource() }
     val skipSource = remember { MutableInteractionSource() }
     val playPressed by playSource.collectIsPressedAsState()
@@ -190,7 +189,7 @@ fun MiniPlayer(
     LaunchedEffect(skipPressed) { if (skipPressed) lastControl = 1 }
     val bulgeAmt by animateFloatAsState(
         targetValue = if (anyPressed) 1f else 0f,
-        animationSpec = if (anyPressed) GlassPressSpring else GlassReleaseSpring,
+        animationSpec = PressSpring,
         label = "miniBulge",
     )
 

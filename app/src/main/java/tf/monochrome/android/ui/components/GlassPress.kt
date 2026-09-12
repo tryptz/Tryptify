@@ -31,8 +31,7 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.glassTint
-import tf.monochrome.android.ui.theme.GlassPressSpring
-import tf.monochrome.android.ui.theme.GlassReleaseSpring
+import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.reduceMotion
 
 /**
@@ -132,11 +131,9 @@ fun rememberGlassPress(): GlassPress {
     val instant = reduceMotion()
     val amount by animateFloatAsState(
         targetValue = if (press.held) 1f else 0f,
-        animationSpec = when {
-            instant -> snap()
-            press.held -> GlassPressSpring
-            else -> GlassReleaseSpring
-        },
+        // The dock's spring, so the mini player's slab answers a press exactly
+        // the way the player's does.
+        animationSpec = if (instant) snap() else PressSpring,
         label = "glassPress",
     )
     SideEffect { press.amount = amount }

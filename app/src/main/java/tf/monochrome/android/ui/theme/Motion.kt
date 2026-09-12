@@ -7,7 +7,6 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.pager.PagerState
@@ -33,36 +32,16 @@ import tf.monochrome.android.performance.LocalLowPerformance
  * One spring for both directions on purpose. The dock used to pair a bouncy
  * spring up with a tween down and it stuttered — a tween carries no velocity,
  * so releasing mid-bounce snapped the motion still before easing off.
+ *
+ * It drives the glass dome as well as the scale. Four presses raised that swell
+ * with `spring(0.5f, StiffnessMediumLow)` in and `tween(260)` out — the mini
+ * player's controls, the mini player bar, the play disc and the skip chevrons —
+ * which is the same pairing, left behind in four files when the dock was fixed.
+ * They read as instant next to the dock's slab, and a softer release of their
+ * own did not close the gap: the dock's feel is this spring, not a slower one,
+ * so they use this one now and match it exactly.
  */
 val PressSpring: AnimationSpec<Float> = spring(dampingRatio = 0.85f, stiffness = 900f)
-
-/**
- * The glass dome rising under a finger, and settling back once it lifts.
- *
- * Four places raised this swell — the mini player's controls, the bar itself,
- * the play disc and the skip chevrons — and all four paired a bouncy spring in
- * with `tween(260)` out. That is the pairing the dock had removed from it and
- * the note above explains why: a tween carries no velocity. At the moment a
- * finger lifts the spring is still travelling *upward*, and the tween threw
- * that away and restarted from a standstill. `FastOutSlowInEasing` then spent
- * most of its travel in the first eighty milliseconds, so the dome dropped at
- * once and crawled invisibly through the rest — a snap, not a settle, which is
- * exactly how it read.
- *
- * So: a spring both ways, and a deliberately soft one coming back. Springs hand
- * velocity between them, so the release picks up the rise it interrupted and
- * carries it for a moment before easing down.
- *
- * Critically damped on the way back, not bouncy. It is leaving from a *positive*
- * velocity, so the dome still swells a little further before it falls, which is
- * the spring you can see — and at `dampingRatio = 1` the value cannot cross
- * zero on the way, which a negative bulge would hand straight to the shader.
- */
-val GlassPressSpring: AnimationSpec<Float> =
-    spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
-
-/** @see GlassPressSpring — the slow half, deliberately about three times its rise. */
-val GlassReleaseSpring: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 150f)
 
 /**
  * "Disable animations" (Settings › System › Performance) in the form the UI
