@@ -339,7 +339,7 @@ fun SearchResultsContent(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
-                item {
+                item(key = "filters", contentType = "filters") {
                     SearchFilterRow(
                         selectedType = selectedType,
                         onTypeSelected = onTypeSelected,
@@ -350,8 +350,8 @@ fun SearchResultsContent(
                 }
 
                 if (artists.isNotEmpty()) {
-                    item { SectionHeader(title = "Artists") }
-                    item {
+                    item(key = "header:artists", contentType = "header") { SectionHeader(title = "Artists") }
+                    item(key = "row:artists", contentType = "artistRow") {
                         LazyRow(
                             state = artistsRowState,
                             modifier = Modifier.nestedScroll(swallowHorizontal),
@@ -373,8 +373,8 @@ fun SearchResultsContent(
                 }
 
                 if (albums.isNotEmpty()) {
-                    item { SectionHeader(title = "Albums") }
-                    item {
+                    item(key = "header:albums", contentType = "header") { SectionHeader(title = "Albums") }
+                    item(key = "row:albums", contentType = "albumRow") {
                         LazyRow(
                             state = albumsRowState,
                             modifier = Modifier.nestedScroll(swallowHorizontal),
@@ -396,8 +396,12 @@ fun SearchResultsContent(
                 }
 
                 if (playlistResults.isNotEmpty()) {
-                    item { SectionHeader(title = "Playlists") }
-                    items(playlistResults, key = { it.uuid }) { playlist ->
+                    item(key = "header:playlists", contentType = "header") { SectionHeader(title = "Playlists") }
+                    items(
+                        playlistResults,
+                        key = { it.uuid },
+                        contentType = { "playlist" },
+                    ) { playlist ->
                         PlaylistSearchItem(
                             playlist = playlist,
                             onClick = {
@@ -410,8 +414,14 @@ fun SearchResultsContent(
                 }
 
                 if (tracks.isNotEmpty()) {
-                    item { SectionHeader(title = "Tracks") }
-                    items(tracks, key = { it.id }) { track ->
+                    item(key = "header:tracks", contentType = "header") { SectionHeader(title = "Tracks") }
+                    // The one unbounded run in this list — it pages — so it is
+                    // the one whose composition reuse actually matters.
+                    items(
+                        tracks,
+                        key = { it.id },
+                        contentType = { "track" },
+                    ) { track ->
                         UnifiedSearchTrackItem(
                             track = track,
                             isLiked = favoriteTrackIds.contains(track.toLegacyTrack().id),
@@ -438,7 +448,7 @@ fun SearchResultsContent(
                 // Disappears once every type has hit endReached so the
                 // list terminates cleanly.
                 if (isLoadingMore && !endReached) {
-                    item {
+                    item(key = "loadingMore", contentType = "footer") {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

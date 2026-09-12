@@ -114,6 +114,36 @@ internal object LibraryKeys {
     fun artist(id: Long) = "artist:$id"
     fun recent(id: Long) = "recent:$id"
     fun liked(id: Long) = "liked:$id"
+
+    // Headers and spacers need keys for the same reason the rows do. A bare
+    // `item {}` takes a positional key, so inserting a section above one
+    // renumbers every item after it and Compose treats the whole tail as new.
+    // Sections here appear and disappear with their content, so that happens
+    // whenever the first album is liked or the last one is unliked.
+    fun header(id: String) = "header:$id"
+    fun spacer(id: String) = "spacer:$id"
+    const val EMPTY = "empty"
+}
+
+/**
+ * What KIND of row an item is, for `LazyColumn`'s `contentType`.
+ *
+ * Compose reuses an item's composition only when the outgoing and incoming
+ * items report the same content type; with none given every item reports null,
+ * so a mixed list reuses a track row's slot table for an album row, throws
+ * almost all of it away and rebuilds. Naming the shapes lets each kind reuse
+ * its own, which is what makes scrolling a list of headers, tracks, albums and
+ * artists cost the same as scrolling a list of tracks.
+ *
+ * Values are compared with `equals`, so these are plain strings.
+ */
+internal object LibraryContentType {
+    const val TRACK = "track"
+    const val ALBUM = "album"
+    const val ARTIST = "artist"
+    const val HEADER = "header"
+    const val SPACER = "spacer"
+    const val EMPTY = "empty"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -382,8 +412,14 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     if (recentTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "Recently Played") }
-                        items(recentTracks.take(5), key = { LibraryKeys.recent(it.id) }) { track ->
+                        item(key = LibraryKeys.header("recent"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(title = "Recently Played")
+                        }
+                        items(
+                            recentTracks.take(5),
+                            key = { LibraryKeys.recent(it.id) },
+                            contentType = { LibraryContentType.TRACK },
+                        ) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
@@ -407,8 +443,14 @@ fun LibraryScreen(
                     }
 
                     if (favoriteTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "Liked Songs") }
-                        items(favoriteTracks.take(5), key = { LibraryKeys.liked(it.id) }) { track ->
+                        item(key = LibraryKeys.header("liked"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(title = "Liked Songs")
+                        }
+                        items(
+                            favoriteTracks.take(5),
+                            key = { LibraryKeys.liked(it.id) },
+                            contentType = { LibraryContentType.TRACK },
+                        ) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -573,7 +615,11 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(top = searchTopInset, bottom = 80.dp)
                 ) {
                     if (favoriteTracks.isNotEmpty()) {
-                        items(visibleFavorites, key = { LibraryKeys.track(it.id) }) { track ->
+                        items(
+                            visibleFavorites,
+                            key = { LibraryKeys.track(it.id) },
+                            contentType = { LibraryContentType.TRACK },
+                        ) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -597,9 +643,17 @@ fun LibraryScreen(
                     }
 
                     if (favoriteAlbums.isNotEmpty()) {
-                        item { Spacer(modifier = Modifier.height(8.dp)) }
-                        item { SectionHeader(title = "Liked Albums") }
-                        items(favoriteAlbums, key = { LibraryKeys.album(it.id) }) { album ->
+                        item(key = LibraryKeys.spacer("albums"), contentType = LibraryContentType.SPACER) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        item(key = LibraryKeys.header("albums"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(title = "Liked Albums")
+                        }
+                        items(
+                            favoriteAlbums,
+                            key = { LibraryKeys.album(it.id) },
+                            contentType = { LibraryContentType.ALBUM },
+                        ) { album ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -612,9 +666,17 @@ fun LibraryScreen(
                     }
 
                     if (favoriteArtists.isNotEmpty()) {
-                        item { Spacer(modifier = Modifier.height(8.dp)) }
-                        item { SectionHeader(title = "Liked Artists") }
-                        items(favoriteArtists, key = { LibraryKeys.artist(it.id) }) { artist ->
+                        item(key = LibraryKeys.spacer("artists"), contentType = LibraryContentType.SPACER) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        item(key = LibraryKeys.header("artists"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(title = "Liked Artists")
+                        }
+                        items(
+                            favoriteArtists,
+                            key = { LibraryKeys.artist(it.id) },
+                            contentType = { LibraryContentType.ARTIST },
+                        ) { artist ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -627,7 +689,9 @@ fun LibraryScreen(
                     }
 
                     if (favoriteTracks.isEmpty() && favoriteAlbums.isEmpty() && favoriteArtists.isEmpty()) {
-                        item { EmptyState("Like tracks, albums, and artists to see them here.") }
+                        item(key = LibraryKeys.EMPTY, contentType = LibraryContentType.EMPTY) {
+                            EmptyState("Like tracks, albums, and artists to see them here.")
+                        }
                     }
                 }
                 }
