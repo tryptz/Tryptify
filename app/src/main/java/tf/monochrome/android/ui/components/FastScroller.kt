@@ -13,13 +13,14 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,18 +31,33 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.roundToInt
 
 /**
  * A draggable scrollbar down the right edge, for lists too long to flick.
  *
- * Call it inside the same [Box] as the list. Fades in while the list moves or
- * the thumb is held, out when idle.
+ * Call it inside the same [Box] as the list and hand it the list's state.
+ * Fades in while the list moves or the thumb is held, out when idle.
  *
- * With a paged list the Pager must have `enablePlaceholders = true`, or
- * `totalItemsCount` is only the rows loaded so far and the thumb reports the
- * wrong size and crawls instead of jumping.
+ * With a paged list the Pager wants `enablePlaceholders = true`, or
+ * `totalItemsCount` is only the rows loaded so far and the thumb sizes itself
+ * against a fraction of the list.
+ *
+ * Three things here are load-bearing for smoothness, and all three were wrong
+ * in the first version of this file:
+ *
+ *  - The gesture is keyed on [Unit]. Keying `pointerInput` on the list metrics
+ *    tears the detector down and back up whenever they change — which, while
+ *    paging loads and `totalItemsCount` grows, is *during the drag*. The
+ *    gesture was being cancelled under the finger.
+ *  - The drag publishes a fraction; one long-lived effect does the scrolling.
+ *    Launching a `scrollToItem` per drag event puts dozens of coroutines in a
+ *    fight over the list's scroll mutex, and all but one lose.
+ *  - The thumb's position is read inside `offset { }`, not in composition.
+ *    `firstVisibleItemIndex` changes every frame of a scroll, so reading it
+ *    during composition recomposes this on every one of them; read from the
+ *    layout lambda it only re-lays-out, which is what a moving thumb needs.
  */
 @Composable
 fun BoxScope.FastScroller(
@@ -51,31 +67,39 @@ fun BoxScope.FastScroller(
     width: Dp = 6.dp,
     touchWidth: Dp = 28.dp,
 ) {
-    // layoutInfo changes on every frame of a scroll. derivedStateOf keeps that
-    // off the composition — without it this recomposes ~120 times a second on
-    // the very lists it exists to help.
-    val metrics by remember(state) {
+    // Deliberately does NOT include firstVisibleItemIndex: these two settle
+    // quickly and change rarely, so this derived value — and therefore this
+    // composable — is stable while scrolling.
+    val extent by remember(state) {
         derivedStateOf {
             val info = state.layoutInfo
-            Metrics(info.totalItemsCount, info.visibleItemsInfo.size, state.firstVisibleItemIndex)
+            info.totalItemsCount to info.visibleItemsInfo.size
         }
     }
-    val scrolling = state.isScrollInProgress
-    var dragging by remember { mutableStateOf(false) }
+    val (total, visible) = extent
+    if (total == 0 || visible == 0 || visible >= total) return
+
+    val density = LocalDensity.current
+    var trackPx by remember { mutableFloatStateOf(0f) }
+    // Non-null only while the thumb is held; the value is where on the track.
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+
     val alpha by animateFloatAsState(
-        targetValue = if (dragging || scrolling) 1f else 0f,
+        targetValue = if (dragFraction != null || state.isScrollInProgress) 1f else 0f,
         label = "fastScroller",
     )
 
-    // Composed even at zero alpha so it can fade out rather than vanish; the
-    // early return is only for lists that do not scroll at all.
-    val (total, visible, first) = metrics
-    if (total == 0 || visible == 0 || visible >= total) return
-
-    val scope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    var trackPx by remember { mutableFloatStateOf(0f) }
-    val lastIndex = (total - visible).coerceAtLeast(1)
+    // One scroller, fed the newest fraction. collectLatest cancels the previous
+    // jump the moment a newer one arrives, so a fast drag issues one scroll per
+    // frame rather than queueing every sample the finger produced.
+    LaunchedEffect(state) {
+        snapshotFlow { dragFraction }.collectLatest { fraction ->
+            if (fraction == null) return@collectLatest
+            val info = state.layoutInfo
+            val last = (info.totalItemsCount - info.visibleItemsInfo.size).coerceAtLeast(1)
+            state.scrollToItem((last * fraction).roundToInt().coerceAtLeast(0))
+        }
+    }
 
     Box(
         modifier = modifier
@@ -83,19 +107,15 @@ fun BoxScope.FastScroller(
             .fillMaxHeight()
             .width(touchWidth)
             .onSizeChanged { trackPx = it.height.toFloat() }
-            .pointerInput(total, visible, trackPx) {
+            .pointerInput(Unit) {
+                val track = { size.height.toFloat().coerceAtLeast(1f) }
                 detectVerticalDragGestures(
-                    onDragStart = { dragging = true },
-                    onDragEnd = { dragging = false },
-                    onDragCancel = { dragging = false },
+                    onDragStart = { dragFraction = (it.y / track()).coerceIn(0f, 1f) },
+                    onDragEnd = { dragFraction = null },
+                    onDragCancel = { dragFraction = null },
                 ) { change, _ ->
                     change.consume()
-                    if (trackPx <= 0f) return@detectVerticalDragGestures
-                    val fraction = (change.position.y / trackPx).coerceIn(0f, 1f)
-                    // scrollToItem, not animateScrollToItem: the thumb should
-                    // track the finger, and an animation per drag event would
-                    // queue up behind itself.
-                    scope.launch { state.scrollToItem((lastIndex * fraction).roundToInt()) }
+                    dragFraction = (change.position.y / track()).coerceIn(0f, 1f)
                 }
             }
             .graphicsLayer { this.alpha = alpha },
@@ -104,10 +124,14 @@ fun BoxScope.FastScroller(
         val thumbPx = (trackPx * visible / total)
             .coerceAtLeast(with(density) { thumbMin.toPx() })
             .coerceAtMost(trackPx)
-        val y = (trackPx - thumbPx) * (first.toFloat() / lastIndex).coerceIn(0f, 1f)
         Box(
             Modifier
-                .offset { IntOffset(0, y.roundToInt()) }
+                .offset {
+                    // Read in the layout phase, not composition — see above.
+                    val last = (total - visible).coerceAtLeast(1)
+                    val progress = (state.firstVisibleItemIndex.toFloat() / last).coerceIn(0f, 1f)
+                    IntOffset(0, ((trackPx - thumbPx) * progress).roundToInt())
+                }
                 .width(width)
                 .height(with(density) { thumbPx.toDp() })
                 .clip(RoundedCornerShape(percent = 50))
@@ -115,6 +139,3 @@ fun BoxScope.FastScroller(
         )
     }
 }
-
-/** Destructured above; a class rather than Triple so the fields have names. */
-private data class Metrics(val total: Int, val visible: Int, val first: Int)

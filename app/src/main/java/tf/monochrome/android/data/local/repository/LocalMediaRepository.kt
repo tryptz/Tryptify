@@ -79,7 +79,19 @@ class LocalMediaRepository @Inject constructor(
             // loaded so far, so the thumb would shrink and the drag crawl.
             // Unloaded rows come back null and the list draws an empty row of
             // the right height until the page lands.
-            config = PagingConfig(pageSize = 60, prefetchDistance = 30, enablePlaceholders = true),
+            config = PagingConfig(
+                pageSize = 60,
+                prefetchDistance = 30,
+                enablePlaceholders = true,
+                // Without a jump threshold, dragging the scrollbar to row
+                // 15,000 makes Paging walk there — loading, and keeping, every
+                // page in between. Past this many rows skipped it throws the
+                // loaded pages away and reloads around where the finger landed,
+                // which is one query instead of two hundred. Room's
+                // LimitOffsetPagingSource supports it; a source that does not
+                // simply ignores the value.
+                jumpThreshold = 180,
+            ),
             pagingSourceFactory = { pagingSourceFor(sort) },
         ).flow.map { page -> page.map { it.toUnifiedTrack() } }
 
