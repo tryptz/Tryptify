@@ -60,6 +60,7 @@ import tf.monochrome.android.ui.components.TrackSort
 import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
+import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -195,7 +196,7 @@ fun FolderBrowserScreen(
                             },
                             onClick = {
                                 navController.navigateSafe(
-                                    "folder/" + java.net.URLEncoder.encode(folder.path, "UTF-8")
+                                    Screen.FolderBrowser.createRoute(folder.path)
                                 )
                             },
                         )

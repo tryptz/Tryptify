@@ -36,6 +36,18 @@ import tf.monochrome.android.domain.usecase.ImportCollectionUseCase
 import tf.monochrome.android.data.sync.BackupManager
 import javax.inject.Inject
 
+/**
+ * A row in the Folders tab: where the music starts, and how much is under it.
+ *
+ * [trackCount] is the whole subtree, which is what `buildFolderTree` records —
+ * a folder holding nothing but other folders still reports what is below it.
+ */
+data class FolderRoot(
+    val displayName: String,
+    val path: String,
+    val trackCount: Int,
+)
+
 @HiltViewModel
 class LocalLibraryViewModel @Inject constructor(
     private val localMediaRepository: LocalMediaRepository,
@@ -176,18 +188,30 @@ class LocalLibraryViewModel @Inject constructor(
      *
      * folderBrowseRoots does the picking; off the main thread because it walks
      * every folder row.
+     *
+     * Each row carries its track count. Without one every root looks the same
+     * whether it holds five hundred tracks or none, which is how a folder that
+     * opened blank took three rounds to explain — the list had the number and
+     * was not showing it.
      */
-    val displayRootFolders: StateFlow<List<Pair<String, String>>> = combine(
+    val displayRootFolders: StateFlow<List<FolderRoot>> = combine(
         localMediaRepository.getAllFolders(),
         preferencesManager.userFolderRoots
     ) { allFolders, userPaths ->
+        // A hand-added root has no folder row of its own until the scanner
+        // finds music under it, so its count comes from the tree when there is
+        // one and is honestly zero when there is not.
+        val countByPath = allFolders.associate { it.path to it.trackCount }
         val user = userPaths.map { path ->
-            val name = path.substringAfterLast('/').ifBlank { path }
-            name to path
+            FolderRoot(
+                displayName = path.substringAfterLast('/').ifBlank { path },
+                path = path,
+                trackCount = countByPath[path] ?: 0,
+            )
         }
         val scanned = folderBrowseRoots(allFolders)
             .filter { it.path !in userPaths }
-            .map { it.displayName to it.path }
+            .map { FolderRoot(it.displayName, it.path, it.trackCount) }
         user + scanned
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

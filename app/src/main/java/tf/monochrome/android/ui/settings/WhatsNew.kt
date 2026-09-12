@@ -181,6 +181,26 @@ object WhatsNew {
                         "are.",
                 ),
                 WhatsNewEntry(
+                    section = LIBRARY,
+                    title = "Folders with a space in the name open again",
+                    body = "A folder with a space in its name opened blank. The space was " +
+                        "turned into a + on the way to the screen, so it looked up a folder " +
+                        "that does not exist — only folders without one ever worked.",
+                ),
+                WhatsNewEntry(
+                    section = LIBRARY,
+                    title = "The scrollbar stops catching your flicks",
+                    body = "Scrolling near the right edge grabbed the invisible scrollbar " +
+                        "and threw the list somewhere else. Only the visible bar takes your " +
+                        "finger now, and it glides instead of stepping.",
+                ),
+                WhatsNewEntry(
+                    section = LIBRARY,
+                    title = "Every folder says how much is in it",
+                    body = "The Folders tab puts a count beside every folder, so one the " +
+                        "library found nothing in says so before you open it.",
+                ),
+                WhatsNewEntry(
                     section = PAGES,
                     title = "Presses feel like the player's, everywhere",
                     body = "The old press settled slowly and wobbled — barely visible on a " +

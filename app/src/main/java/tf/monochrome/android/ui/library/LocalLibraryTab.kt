@@ -930,7 +930,7 @@ fun GenreList(
 
 @Composable
 fun FolderList(
-    folders: List<Pair<String, String>>,
+    folders: List<FolderRoot>,
     onFolderClick: (String) -> Unit,
     onFolderLongClick: (String, String) -> Unit = { _, _ -> },
 ) {
@@ -940,7 +940,9 @@ fun FolderList(
             state = state,
             contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
         ) {
-            items(folders, key = { it.second }) { (name, path) ->
+            items(folders, key = { it.path }) { folder ->
+                val name = folder.displayName
+                val path = folder.path
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -977,6 +979,15 @@ fun FolderList(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                    // A root that reads "0 tracks" is a folder the library has
+                    // found nothing in, said before you tap it rather than by a
+                    // blank screen afterwards.
+                    Text(
+                        if (folder.trackCount == 1) "1 track" else "${folder.trackCount} tracks",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
                 }
             }
         }

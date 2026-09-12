@@ -489,7 +489,7 @@ fun LibraryScreen(
                         navController.navigateSafe(Screen.LocalGenreDetail.createRoute(genre))
                     },
                     onFolderClick = { path ->
-                        navController.navigateSafe("folder/${java.net.URLEncoder.encode(path, "UTF-8")}")
+                        navController.navigateSafe(Screen.FolderBrowser.createRoute(path))
                     },
                     onShuffleAll = { tracks ->
                         playerViewModel.shufflePlayUnified(tracks)

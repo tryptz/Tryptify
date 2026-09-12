@@ -20,6 +20,21 @@
 
 ### Fixed
 
+#### A folder with a space in its name opened blank
+- **The route was built with the wrong encoder.** `java.net.URLEncoder` is form encoding, where a space becomes `+`. Navigation percent-decodes a route argument once on the way into the destination, and `+` is not percent-encoding, so it arrived as a literal plus: `/storage/emulated/0/My Music` was queried as `/storage/emulated/0/My+Music`, a path that does not exist, and both the subfolder and the track query came back empty.
+- **`/Music` was the one folder that worked**, because it has no space in it — which is what made this look like a scanner or folder-index problem for three rounds. Neither was involved.
+- **`Screen.FolderBrowser.createRoute` already did it correctly** with `Uri.encode`, and carried a comment saying why. Nothing called it: both the Folders tab and the subfolder row built the string themselves. They go through it now.
+- **A test pins the rule** rather than leaving it to the comment: no file under `ui/` may call `URLEncoder.encode`. The API clients under `data/api` still want form encoding for query strings, so the rule is scoped to the UI. A source scan rather than a call to `createRoute`, because `Uri.encode` is framework code and throws off-device.
+- **Every folder root shows its track count.** The list had the number all along and was not showing it, so a folder holding five hundred tracks and one holding none looked identical until you opened them.
+
+#### The scrollbar caught flicks meant for the list
+- **It was a 28dp-wide, full-height touch strip**, and the last child of the Box, so it hit-tested above the list: any drag starting near the right edge was grabbed and turned into a jump-to-position — while the thumb was animated to `alpha = 0` and invisible. The gesture is on the thumb itself now, which is measured to zero height while invisible so it has no bounds to hit, and the track consumes nothing.
+- **It stays up for a moment after the list stops**, so there is something to reach for. Before, the thumb could only be caught mid-scroll.
+- **Nothing about the scroll is read during composition any more.** The extent was a `derivedStateOf` of `totalItemsCount to visibleItemsInfo.size`, and that second number oscillates — 12, 13, 12 — as partial rows enter and leave. Each oscillation was a new `Pair`, so the composable re-ran mid-scroll and the thumb, sized in composition, changed height on every one. Size and position are computed in the layout phase; only a `Boolean` is derived for composition, and a `Boolean` is equal to itself frame after frame.
+- **The thumb glides instead of stepping.** Its position used `firstVisibleItemIndex` alone — an integer — so it moved one row at a time; it now adds the offset into that row.
+- **The drag accumulates deltas rather than positions**, because the thumb moves under the finger as the list scrolls and an absolute position would be measured against a moving origin.
+- **The list and grid copies are one implementation**, instead of the same sixty lines twice.
+
 #### Folders whose music sits deeper than one level came up blank
 - **The folder table was built with holes in it.** `rebuildFolders` recorded only the folders that directly hold a file, so a folder containing nothing but other folders was never written down — and since children are looked up by their parent's path, a missing row did not hide one folder, it severed the tree. Everything below it became unreachable.
 - **Two levels was enough to lose a library.** For `/Music/Some/Deeper/a.mp3` the only row was `/Music/Some/Deeper`, whose parent `/Music/Some` had no row, so opening `/Music` listed nothing at all. One level happened to work, which is why it was *some* folders and not all of them.
