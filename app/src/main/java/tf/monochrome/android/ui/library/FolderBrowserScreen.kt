@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +51,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.FastScroller
+import tf.monochrome.android.ui.components.bounceCombinedClick
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.TrackListToolbar
@@ -86,6 +90,20 @@ fun FolderBrowserScreen(
     }
     val visibleTracks = remember(tracks, listQuery, listSort) {
         tracks.applyUnifiedSearchAndSort(listQuery, listSort)
+    }
+
+    var folderToExclude by remember { mutableStateOf<FolderToExclude?>(null) }
+    folderToExclude?.let { folder ->
+        ExcludeFolderDialog(
+            folder = folder,
+            onDismiss = { folderToExclude = null },
+            onConfirm = {
+                viewModel.excludeFolder(folder.path)
+                // The folder just left the library; staying on a page that is
+                // now guaranteed empty is not useful.
+                if (folder.path == folderPath) navController.popBackStack()
+            },
+        )
     }
 
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
@@ -165,7 +183,20 @@ fun FolderBrowserScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navController.navigateSafe("folder/${java.net.URLEncoder.encode(folder.path, "UTF-8")}") }
+                        .bounceCombinedClick(
+                            onLongClick = {
+                                folderToExclude = FolderToExclude(
+                                    path = folder.path,
+                                    displayName = folder.displayName,
+                                    trackCount = folder.trackCount,
+                                )
+                            },
+                            onClick = {
+                                navController.navigateSafe(
+                                    "folder/" + java.net.URLEncoder.encode(folder.path, "UTF-8")
+                                )
+                            },
+                        )
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -280,6 +311,32 @@ fun FolderBrowserScreen(
                         )
                     }
                 }
+            }
+        }
+        // A folder with nothing in it used to render two empty lists and say
+        // nothing at all, which is how the broken folder tree went unnoticed:
+        // a blank screen looks the same whether the folder is empty or the
+        // browser lost track of its contents.
+        if (subfolders.isEmpty() && tracks.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "No music here",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Nothing under this folder has been added to your library. " +
+                        "If you have put music here since the last scan, scan again.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                TextButton(onClick = { viewModel.startFullScan() }) { Text("Scan again") }
             }
         }
         FastScroller(state = listState)

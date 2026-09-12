@@ -375,6 +375,7 @@ class PreferencesManager @Inject constructor(
 
         // Library / Local Media
         private val EXCLUDED_PATHS_JSON = stringPreferencesKey("excluded_paths_json")
+        private val FOLDER_TREE_REBUILD = intPreferencesKey("folder_tree_rebuild_version")
         private val USER_FOLDER_ROOTS_JSON = stringPreferencesKey("user_folder_roots_json")
 
         // DSP Mixer
@@ -1799,6 +1800,34 @@ class PreferencesManager @Inject constructor(
     val excludedPathsJson: Flow<String> = dataStore.data.map { it[EXCLUDED_PATHS_JSON] ?: "[]" }
     suspend fun setExcludedPaths(pathsJson: String) {
         dataStore.edit { it[EXCLUDED_PATHS_JSON] = pathsJson }
+    }
+
+    /** The excluded paths, decoded. The stored JSON is the source of truth. */
+    val excludedPaths: Flow<Set<String>> = excludedPathsJson
+        .distinctUntilChanged()
+        .map { raw -> runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet()) }
+
+    suspend fun addExcludedPath(path: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[EXCLUDED_PATHS_JSON]
+                ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
+                ?: emptySet()
+            prefs[EXCLUDED_PATHS_JSON] = json.encodeToString(current + path)
+        }
+    }
+
+    /**
+     * Which build last rebuilt `local_folders`.
+     *
+     * The folder tree used to be written without its intermediate folders, and
+     * the table is only rebuilt during a scan — so fixing the builder would
+     * leave every existing install broken until the user happened to rescan.
+     * Bumping [FOLDER_TREE_REBUILD_VERSION] makes the next launch rebuild it
+     * once, which costs a query and a table rewrite rather than a scan.
+     */
+    val folderTreeRebuildVersion: Flow<Int> = dataStore.data.map { it[FOLDER_TREE_REBUILD] ?: 0 }
+    suspend fun setFolderTreeRebuildVersion(version: Int) {
+        dataStore.edit { it[FOLDER_TREE_REBUILD] = version }
     }
 
     val userFolderRoots: Flow<Set<String>> = dataStore.data

@@ -85,6 +85,9 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesManager.artistSort.collect { _artistSort.value = parseSort(it) }
         }
+        // One-off repair for libraries indexed before the folder tree included
+        // its intermediate folders. No-ops on every launch after the first.
+        viewModelScope.launch { scanCoordinator.rebuildFolderTreeIfStale() }
     }
 
     fun setSongSort(sort: LibrarySort) {
@@ -219,6 +222,11 @@ class LocalLibraryViewModel @Inject constructor(
 
     fun startIncrementalScan() {
         viewModelScope.launch { scanCoordinator.runIncrementalScan() }
+    }
+
+    /** Drops a folder from the library. The files on disk are not touched. */
+    fun excludeFolder(path: String) {
+        viewModelScope.launch { scanCoordinator.excludeFolder(path) }
     }
 
     /** Dismiss the terminal scan-progress bar (Complete/Error). */

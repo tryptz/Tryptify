@@ -198,6 +198,22 @@ interface LocalMediaDao {
     @Query("DELETE FROM local_tracks WHERE filePath IN (:paths)")
     suspend fun deleteTracksByPaths(paths: List<String>)
 
+    /**
+     * Every track anywhere beneath [folderPath] — the whole subtree, not one
+     * level, which is what excluding a folder means.
+     *
+     * Substrings rather than a LIKE pattern, for the reason getTracksInFolder
+     * gives: a folder named `Hip_Hop` would otherwise match a sibling
+     * `HipXHop`, and here that would delete somebody else's music.
+     */
+    @Query(
+        """
+        DELETE FROM local_tracks
+        WHERE substr(filePath, 1, length(:folderPath) + 1) = :folderPath || '/'
+        """
+    )
+    suspend fun deleteTracksUnder(folderPath: String)
+
     @Query("SELECT filePath FROM local_tracks")
     suspend fun getAllTrackPaths(): List<String>
 

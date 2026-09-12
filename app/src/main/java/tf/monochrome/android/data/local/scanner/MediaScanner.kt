@@ -57,8 +57,13 @@ class MediaScanner @Inject constructor(
             // are removed consistently). Empty set = whole-device scan —
             // the behavior for users who never picked folders in onboarding.
             val folderRoots = preferences.userFolderRoots.first()
+            // Read the stored exclusions here rather than trusting the caller.
+            // They were a parameter only, and the one real caller —
+            // ScanCoordinator.runFullScan — has nothing to pass, so the setting
+            // was written by the UI and then ignored by every scan.
+            val excluded = excludedPaths + preferences.excludedPaths.first()
             val mediaStoreFiles =
-                mediaStoreSource.queryAllAudio(minDurationMs, excludedPaths, folderRoots)
+                mediaStoreSource.queryAllAudio(minDurationMs, excluded, folderRoots)
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
 
             // One projection query up front instead of a findByPath() SELECT
@@ -413,25 +418,33 @@ class MediaScanner @Inject constructor(
         }
     }
 
-    private suspend fun rebuildFolders() {
-        val allPaths = localMediaDao.getAllTrackPaths()
-        val folderMap = mutableMapOf<String, MutableList<String>>()
+    /**
+     * Drop a folder from the library: its tracks go, and scans stop finding it.
+     *
+     * Nothing on disk is touched. The files stay where they are; this is the
+     * library forgetting them.
+     *
+     * Deleting the rows is not enough on its own — the albums, artists and
+     * genres they belonged to would linger, and the folder itself would keep
+     * its row — so the two rebuild passes a scan runs are run here too. That is
+     * much cheaper than a scan: no MediaStore query and no tag reading.
+     */
+    suspend fun excludeFolder(path: String) {
+        val folder = path.trimEnd('/')
+        if (folder.isEmpty()) return
+        preferences.addExcludedPath(folder)
+        // A folder the user added by hand is also a scan root, and leaving it
+        // there would have the next scan re-find what the exclusion just
+        // removed — the two settings pulling against each other.
+        preferences.removeUserFolderRoot(folder)
+        localMediaDao.deleteTracksUnder(folder)
+        rebuildGroupings()
+        rebuildFolders()
+        localLibraryRevision.bump()
+    }
 
-        for (path in allPaths) {
-            val folder = path.substringBeforeLast('/')
-            folderMap.getOrPut(folder) { mutableListOf() }.add(path)
-        }
-
-        val folders = folderMap.map { (folderPath, filePaths) ->
-            val parentPath = folderPath.substringBeforeLast('/').takeIf { it != folderPath }
-            LocalFolderEntity(
-                path = folderPath,
-                parentPath = parentPath,
-                displayName = folderPath.substringAfterLast('/'),
-                trackCount = filePaths.size,
-                totalDuration = 0 // Could compute from track durations
-            )
-        }
+    suspend fun rebuildFolders() {
+        val folders = buildFolderTree(localMediaDao.getAllTrackPaths())
 
         // Clear + repopulate atomically so folder-tab observers never see an
         // empty list mid-scan, and the whole rebuild is one Room flush.

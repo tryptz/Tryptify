@@ -100,6 +100,7 @@ import androidx.paging.compose.LazyPagingItems
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.bounceCombinedClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
@@ -205,6 +206,15 @@ fun LocalLibraryTab(
         navController = navController,
         playerViewModel = playerViewModel,
     )
+
+    var folderToExclude by remember { mutableStateOf<FolderToExclude?>(null) }
+    folderToExclude?.let { folder ->
+        ExcludeFolderDialog(
+            folder = folder,
+            onDismiss = { folderToExclude = null },
+            onConfirm = { viewModel.excludeFolder(folder.path) },
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Permission gate — block UI only until READ_MEDIA_AUDIO is granted
@@ -378,7 +388,10 @@ fun LocalLibraryTab(
                 )
                 4 -> FolderList(
                     folders = rootFolders,
-                    onFolderClick = onFolderClick
+                    onFolderClick = onFolderClick,
+                    onFolderLongClick = { path, name ->
+                        folderToExclude = FolderToExclude(path = path, displayName = name)
+                    },
                 )
             }
         }
@@ -911,7 +924,8 @@ fun GenreList(
 @Composable
 fun FolderList(
     folders: List<Pair<String, String>>,
-    onFolderClick: (String) -> Unit
+    onFolderClick: (String) -> Unit,
+    onFolderLongClick: (String, String) -> Unit = { _, _ -> },
 ) {
     val state = rememberLazyListState()
     Box {
@@ -924,7 +938,10 @@ fun FolderList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(MonoDimens.listRowHeight)
-                        .bounceClick(onClick = { onFolderClick(path) })
+                        .bounceCombinedClick(
+                            onLongClick = { onFolderLongClick(path, name) },
+                            onClick = { onFolderClick(path) },
+                        )
                         .padding(horizontal = MonoDimens.listItemPaddingH),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
