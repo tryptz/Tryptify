@@ -5,7 +5,10 @@
 ### Added
 
 #### Home is the list of pages
-- **Every page is one tap from Home**, by name, instead of up to six swipes away. The list is also behind a button in every other page's top bar, so the swipe is never the only way across.
+- **Every page is one tap from Home**, by name, instead of up to six swipes away. The list is also behind a button in every other page's top bar, so the swipe is never the only way across. Each name is a glass tile.
+- **The swipe and the dot indicator are gone**, along with the 249 lines behind the pill. Three ways to change page was two too many. The pager itself stays, because `SaveableStateProvider` hangs off it and that is what keeps each page's scroll position alive while the page is off screen — it is driven now rather than dragged.
+- **Back goes to Home and nowhere else.** Retracing the route made sense while the route was something you walked by swiping; with pages picked from a list, the only thing to undo is "I opened this page".
+- **Tapping a name opened the wrong page.** The list ran the scroll on its own `rememberCoroutineScope`, and in both places the jump destroys the caller — the sheet closes, or Home is disposed as the pager leaves its viewport. The scope died with it and the pager settled wherever it had got to, worst for the pages furthest down the list. The scroll runs on the navigation host's scope now, which outlives the pager.
 - **It replaces the Library pages' three-dot "Other pages" dropdown**, which was the only shortcut that existed and was missing from the two pages people start on — Home and Discover.
 - **The page you are on is shown and tinted rather than hidden**, so the list is the same length and the same order everywhere, and nothing shifts under your thumb between pages.
 - **Jumps go through the pager, not the navigator**, so Back retraces them exactly as it retraces a swipe.
@@ -16,6 +19,18 @@
 - **The songs list loads a page at a time.** It used to build every track in the library on every change — around 118 ms and 20,000 objects for a 20,000-track library, to draw the dozen rows on screen.
 
 ### Fixed
+
+#### Folders whose music sits deeper than one level came up blank
+- **The folder table was built with holes in it.** `rebuildFolders` recorded only the folders that directly hold a file, so a folder containing nothing but other folders was never written down — and since children are looked up by their parent's path, a missing row did not hide one folder, it severed the tree. Everything below it became unreachable.
+- **Two levels was enough to lose a library.** For `/Music/Some/Deeper/a.mp3` the only row was `/Music/Some/Deeper`, whose parent `/Music/Some` had no row, so opening `/Music` listed nothing at all. One level happened to work, which is why it was *some* folders and not all of them.
+- **A folder's track count is now its whole subtree.** A folder that only holds folders has a direct count of zero, and a row reading "0 tracks" above a hundred of them is worse than no row. Nothing already on screen changes: a folder with no subfolders has the same number either way.
+- **It repairs itself on the next launch.** The table is only rebuilt during a scan, so the fix alone would have left every existing library broken until someone thought to rescan. The rebuild is one query and one table rewrite — no MediaStore, no tag reading.
+- **A folder with nothing in it says so**, instead of rendering two empty lists. A blank screen looks identical whether the folder is empty or the browser has lost its contents, which is how this went unnoticed.
+
+#### Long press a folder to remove it from the library
+- **Its tracks leave the library and scans skip it from then on.** Nothing is deleted from storage, and the confirmation says so — "remove" next to a folder full of music reads as a delete.
+- **The setting behind it had never once been read.** `excluded_paths_json` has been stored since it was added, but `fullScan` only took it as a parameter and its one real caller had nothing to pass. It is read from preferences now, beside the folder roots.
+- **Excluding also drops the folder as a scan root**, or the next scan would go and re-find exactly what the exclusion removed.
 
 #### A folder showed its subfolders and none of its own music
 - **The query behind the folder browser returned nothing, for every folder, always.** It asked for paths starting with the folder and *not* also containing a further `/`, written as `NOT LIKE folder || '%/%'` — but `%` matches the empty string, so a direct child matched that too: `/Music/song.mp3` reads as `/Music` + `""` + `/` + `song.mp3`. Whatever the first half let through, the second half took straight back out.

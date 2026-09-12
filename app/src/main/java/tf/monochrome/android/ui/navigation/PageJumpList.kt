@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
@@ -49,7 +51,14 @@ internal fun PageJumpList(
     contentPadding: PaddingValues = PaddingValues(),
     onJump: () -> Unit = {},
 ) {
-    LazyColumn(modifier = modifier.fillMaxWidth(), contentPadding = contentPadding) {
+    val haze = LocalAppHaze.current
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = contentPadding,
+        // The gap is what makes these read as separate panes. Butted together,
+        // glass tiles are one striped slab.
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         items(pages, key = { it }, contentType = { "page" }) { id ->
             val isCurrent = id == current
             Text(
@@ -60,6 +69,10 @@ internal fun PageJumpList(
                         else MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    // The app's own pane material, so a tile matches the mini
+                    // player and the sheets rather than inventing a surface.
+                    .liquidGlass(hazeState = haze)
                     // The page you are already on is shown but inert — it is
                     // there to tell you where you are, and a row that looks
                     // tappable and does nothing reads as a broken row.
