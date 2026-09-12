@@ -122,15 +122,41 @@ class ListRowHeightTest {
     }
 
     /**
-     * The search result row is the track row plus a 4dp gap between its title
-     * and subtitle, which is the least slack of anything sharing the budget.
+     * The search result row does NOT share the two-line budget: it stacks a
+     * source badge ("Qobuz", "Local") under the subtitle, so it has its own
+     * height. This test used to model it as two lines and so passed while the
+     * badge was being cut in half on screen — the row was laid out at
+     * [MonoDimens.listRowHeight] and clipped the third line away.
      */
     @Test
-    fun `a search result row fits despite its extra title gap`() {
-        forEachScale { scale, budget ->
-            val text = sp(bodyLargeSp, scale) + 4.dp + sp(bodySmallSp, scale) +
-                MonoDimens.linkHitBoxV * 2
+    fun `a search result row fits its own three-line budget`() {
+        forEachScale { scale, _ ->
+            val budget = searchRowHeightOf(
+                titleLineHeight = sp(bodyLargeSp, scale),
+                subtitleLineHeight = sp(bodySmallSp, scale),
+                badgeLineHeight = sp(labelSmallSp, scale),
+            )
+            val text = sp(bodyLargeSp, scale) + MonoDimens.spacingXs +
+                sp(bodySmallSp, scale) + MonoDimens.linkHitBoxV * 2 + MonoDimens.spacingXs +
+                sp(labelSmallSp, scale) + MonoDimens.badgePaddingV * 2
             assertFits("search row", scale, budget, maxOf(MonoDimens.coverList, text))
+        }
+    }
+
+    /** The shared two-line budget is never enough for it — that was the bug. */
+    @Test
+    fun `the search row is taller than the shared list row`() {
+        forEachScale { scale, shared ->
+            val search = searchRowHeightOf(
+                titleLineHeight = sp(bodyLargeSp, scale),
+                subtitleLineHeight = sp(bodySmallSp, scale),
+                badgeLineHeight = sp(labelSmallSp, scale),
+            )
+            assertTrue(
+                "search row $search must exceed the shared $shared at ${scale}x, " +
+                    "or its badge line is being clipped again",
+                search.value > shared.value,
+            )
         }
     }
 

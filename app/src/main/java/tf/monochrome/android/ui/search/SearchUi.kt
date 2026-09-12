@@ -599,7 +599,7 @@ private fun UnifiedSearchTrackItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(MonoDimens.listRowHeight)
+                .height(MonoDimens.searchRowHeight)
                 .padding(horizontal = MonoDimens.listItemPaddingH),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -767,7 +767,7 @@ private fun ResultBadge(text: String) {
             text = text,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = MonoDimens.badgePaddingV)
         )
     }
 }

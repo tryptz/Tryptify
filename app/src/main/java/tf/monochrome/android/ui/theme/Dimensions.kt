@@ -85,6 +85,14 @@ object MonoDimens {
     val linkHitBoxV = 4.dp
 
     /**
+     * Vertical padding inside a [tf.monochrome.android.ui.search] result badge.
+     * Here rather than in `ResultBadge` for the same reason as [linkHitBoxV]:
+     * [searchRowHeight] has to budget for it, and the two drifting apart is how
+     * the badge came to be clipped in half.
+     */
+    val badgePaddingV = 4.dp
+
+    /**
      * The one height every list row is laid out at.
      *
      * Rows used to size themselves to their content, and content in a music
@@ -112,6 +120,31 @@ object MonoDimens {
                 listRowHeightOf(
                     titleLineHeight = lineHeightDp(typography.bodyLarge),
                     subtitleLineHeight = lineHeightDp(typography.bodySmall),
+                )
+            }
+        }
+
+    /**
+     * The search results row, which is [listRowHeight] plus a third line.
+     *
+     * Search rows carry a source badge ("Qobuz", "Local") under the subtitle
+     * that no other list has, so they do not fit the shared two-line budget —
+     * they were laid out at [listRowHeight] anyway and the badge was cut in
+     * half by the row's own clip.
+     *
+     * A height of their own rather than raising [listRowHeight]: the badge line
+     * is a search thing, and paying for it on every Songs and Folders row would
+     * add 30dp of empty space to every list in the app. Search rows still agree
+     * with each other, which is what the even-column rule is actually about.
+     */
+    val searchRowHeight: Dp
+        @Composable get() {
+            val typography = MaterialTheme.typography
+            return with(LocalDensity.current) {
+                searchRowHeightOf(
+                    titleLineHeight = lineHeightDp(typography.bodyLarge),
+                    subtitleLineHeight = lineHeightDp(typography.bodySmall),
+                    badgeLineHeight = lineHeightDp(typography.labelSmall),
                 )
             }
         }
@@ -162,3 +195,28 @@ internal fun listRowHeightOf(
     linkInset: Dp = MonoDimens.linkHitBoxV,
     verticalPadding: Dp = MonoDimens.spacingSm,
 ): Dp = maxOf(coverSize, titleLineHeight + subtitleLineHeight + linkInset * 2) + verticalPadding * 2
+
+/**
+ * The rule behind [MonoDimens.searchRowHeight], split out for `ListRowHeightTest`.
+ *
+ * The search row stacks three things with [lineGap] between them — a title, a
+ * subtitle whose artist may be a link, and a row of badges — where every other
+ * list stacks two. [badgeLineHeight] is the badge's text; its pill padding is
+ * added here from [MonoDimens.badgePaddingV] so the budget and `ResultBadge`
+ * cannot disagree about how tall a badge is.
+ */
+internal fun searchRowHeightOf(
+    titleLineHeight: Dp,
+    subtitleLineHeight: Dp,
+    badgeLineHeight: Dp,
+    coverSize: Dp = MonoDimens.coverList,
+    linkInset: Dp = MonoDimens.linkHitBoxV,
+    badgePadding: Dp = MonoDimens.badgePaddingV,
+    verticalPadding: Dp = MonoDimens.spacingSm,
+    lineGap: Dp = MonoDimens.spacingXs,
+): Dp = maxOf(
+    coverSize,
+    titleLineHeight + lineGap +
+        subtitleLineHeight + linkInset * 2 + lineGap +
+        badgeLineHeight + badgePadding * 2,
+) + verticalPadding * 2
