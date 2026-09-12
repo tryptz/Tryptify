@@ -448,11 +448,18 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         tf.monochrome.android.devedit.DevEditScreen(pageId) {
                             when (pageId) {
                                 Screen.Home.route ->
-                                    HomeScreen(navController = navController, playerViewModel = playerViewModel)
+                                    HomeScreen(
+                                        navController = navController,
+                                        playerViewModel = playerViewModel,
+                                        pages = pages,
+                                        pager = pagerState,
+                                    )
                                 Screen.Discover.route ->
                                     DiscoverScreen(
                                         navController = navController,
                                         playerViewModel = playerViewModel,
+                                        pages = pages,
+                                        pager = pagerState,
                                     )
                                 // Everything else is a Library page.
                                 // reconcilePageOrder drops ids this build does

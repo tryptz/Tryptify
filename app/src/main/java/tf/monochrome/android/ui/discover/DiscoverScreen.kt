@@ -46,6 +46,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -127,8 +128,22 @@ import tf.monochrome.android.ui.components.SearchOverlay
 fun DiscoverScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
+    // The page list and the pager behind it, for the jump sheet in the top bar.
+    pages: List<String>,
+    pager: androidx.compose.foundation.pager.PagerState,
     viewModel: DiscoverViewModel = rememberDiscoverViewModel(),
 ) {
+    var pageJumpOpen by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
+    if (pageJumpOpen) {
+        tf.monochrome.android.ui.navigation.PageJumpSheet(
+            pages = pages,
+            pager = pager,
+            current = tf.monochrome.android.ui.navigation.Screen.Discover.route,
+            onDismiss = { pageJumpOpen = false },
+        )
+    }
     val shelves by viewModel.visibleShelves.collectAsStateWithLifecycle()
     val selectedChip by viewModel.selectedChip.collectAsStateWithLifecycle()
     val genreQuery by viewModel.genreQuery.collectAsStateWithLifecycle()
@@ -191,6 +206,13 @@ fun DiscoverScreen(
                 }
                 IconButton(onClick = { viewModel.showSomethingElse() }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Show me something else")
+                }
+                // Discover had no way off it but the swipe.
+                IconButton(onClick = { pageJumpOpen = true }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.List,
+                        contentDescription = "Go to page",
+                    )
                 }
                 // Every page can now be the only visible one, so every page has
                 // to be a way into Settings — which is the only place to make

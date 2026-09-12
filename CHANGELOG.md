@@ -4,6 +4,13 @@
 
 ### Added
 
+#### Home is the list of pages
+- **Every page is one tap from Home**, by name, instead of up to six swipes away. The list is also behind a button in every other page's top bar, so the swipe is never the only way across.
+- **It replaces the Library pages' three-dot "Other pages" dropdown**, which was the only shortcut that existed and was missing from the two pages people start on — Home and Discover.
+- **The page you are on is shown and tinted rather than hidden**, so the list is the same length and the same order everywhere, and nothing shifts under your thumb between pages.
+- **Jumps go through the pager, not the navigator**, so Back retraces them exactly as it retraces a swipe.
+- **Home's feed is gone to make room**: Play Radio is removed, and Recently Played with it — Overview already shows the same history, and it is now one tap away. `HomeViewModel` went with them, which also drops a second live collector of the play history.
+
 #### A scrollbar you can drag
 - **Long lists have a thumb down the right edge now**, like a web page. Drag it to land anywhere in the library instead of flicking.
 - **The songs list loads a page at a time.** It used to build every track in the library on every change — around 118 ms and 20,000 objects for a 20,000-track library, to draw the dozen rows on screen.

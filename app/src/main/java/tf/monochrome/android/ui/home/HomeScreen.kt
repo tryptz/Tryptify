@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,16 +58,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import tf.monochrome.android.domain.model.Track
-import tf.monochrome.android.ui.components.AddToPlaylistSheet
-import tf.monochrome.android.ui.components.CreatePlaylistDialog
-import tf.monochrome.android.ui.components.LoadingScreen
-import tf.monochrome.android.ui.components.SectionHeader
-import tf.monochrome.android.ui.components.TrackContextMenu
-import tf.monochrome.android.ui.components.TrackItem
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.foundation.pager.PagerState
+import tf.monochrome.android.ui.navigation.PageJumpList
 import tf.monochrome.android.ui.navigation.Screen
-import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.search.SearchHistoryContent
@@ -84,7 +76,10 @@ import androidx.compose.foundation.layout.Box
 fun HomeScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
-    viewModel: HomeViewModel = hiltViewModel(),
+    // The whole page list and the one pager. Home IS the page list now, so it
+    // needs both for the same reason LibraryScreen does.
+    pages: List<String>,
+    pager: PagerState,
     searchViewModel: SearchViewModel = hiltViewModel(),
     downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel(),
     settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel(),
@@ -95,10 +90,9 @@ fun HomeScreen(
     var showDownloadsMonitor by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
-    val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    // Both only feed SearchResultsContent now that the Recently Played list is
+    // gone from this screen.
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
-    val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val libraryPlaylists by playerViewModel.playlists.collectAsStateWithLifecycle()
 
     // Update notice. Reads straight off the settings store so opening About
@@ -145,106 +139,11 @@ fun HomeScreen(
     // restored true, which is arriving back from a detail screen, not a request
     // to type. That case rebuilds this as false and the keyboard stays down.
     var focusOnOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val isRadioActive by playerViewModel.isRadioActive.collectAsStateWithLifecycle()
-    val isRadioGenerating by playerViewModel.isRadioGenerating.collectAsStateWithLifecycle()
-
-    var showContextMenuForTrack by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<Track?>(null)
-    }
-    var showAddToPlaylistForTrack by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<Track?>(null)
-    }
-    var showCreatePlaylistDialog by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf(false)
-    }
-    // Tracks handed over from an "Add to playlist → New Playlist" tap, added to
-    // the playlist once it's created so they aren't dropped on the way.
-    var pendingTracksForNewPlaylist by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<List<Track>>(emptyList())
-    }
-    var showAddToPlaylistForSelection by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf(false)
-    }
-
-    val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<Long>()
-    androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
     // Back closes an open search (and clears the query so the feed returns)
     // instead of falling through and exiting the app.
     androidx.activity.compose.BackHandler(enabled = searchOpen) {
         searchViewModel.onQueryChange("")
         searchOpen = false
-    }
-
-    showContextMenuForTrack?.let { track ->
-        TrackContextMenu(
-            track = track,
-            isLiked = favoriteTrackIds.contains(track.id),
-            onDismiss = { showContextMenuForTrack = null },
-            onPlayNext = { playerViewModel.playNext(track) },
-            onAddToQueue = { playerViewModel.addToQueue(listOf(track)) },
-            onToggleLike = { playerViewModel.toggleFavorite(track) },
-            onAddToPlaylist = { showAddToPlaylistForTrack = track },
-            onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
-            else ({ playerViewModel.downloadTrack(track) }),
-            onShareFile = { playerViewModel.shareTrack(track) },
-            onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
-        )
-    }
-
-    if (showCreatePlaylistDialog) {
-        CreatePlaylistDialog(
-            onDismiss = {
-                showCreatePlaylistDialog = false
-                pendingTracksForNewPlaylist = emptyList()
-            },
-            onSubmit = { name, description ->
-                playerViewModel.createPlaylist(name, description, pendingTracksForNewPlaylist)
-                pendingTracksForNewPlaylist = emptyList()
-                showCreatePlaylistDialog = false
-            }
-        )
-    }
-
-    showAddToPlaylistForTrack?.let { track ->
-        AddToPlaylistSheet(
-            playlists = libraryPlaylists,
-            onDismiss = { showAddToPlaylistForTrack = null },
-            onPlaylistSelected = { playlist ->
-                playerViewModel.addTrackToPlaylist(playlist.id, track)
-                showAddToPlaylistForTrack = null
-            },
-            onCreateNew = {
-                pendingTracksForNewPlaylist = listOf(track)
-                showAddToPlaylistForTrack = null
-                showCreatePlaylistDialog = true
-            }
-        )
-    }
-
-    if (showAddToPlaylistForSelection) {
-        AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
-            playlists = libraryPlaylists,
-            onDismiss = { showAddToPlaylistForSelection = false },
-            onPlaylistSelected = { playlist ->
-                playerViewModel.addTracksToPlaylist(
-                    playlist.id,
-                    recentTracks.filter { it.id in selection.selectedIds },
-                )
-                showAddToPlaylistForSelection = false
-                selection.clear()
-            },
-            onCreateNew = {
-                pendingTracksForNewPlaylist = recentTracks.filter { it.id in selection.selectedIds }
-                showAddToPlaylistForSelection = false
-                showCreatePlaylistDialog = true
-            }
-        )
     }
 
     if (showDownloadsMonitor) {
@@ -339,22 +238,6 @@ fun HomeScreen(
             autoFocus = focusOnOpen,
         ) { searchTopInset ->
         Column(modifier = Modifier.fillMaxSize()) {
-        // Play Radio — the home screen's primary action: seed a station from
-        // whatever is playing (falling back to recent history) and keep the
-        // queue topped up.
-        if (!searchOpen && !hasSearchResults) {
-            tf.monochrome.android.devedit.DevEditable("home_play_radio", Modifier.fillMaxWidth()) {
-                tf.monochrome.android.ui.components.PlayRadioButton(
-                    isActive = isRadioActive,
-                    isGenerating = isRadioGenerating,
-                    onClick = {
-                        if (isRadioActive) playerViewModel.stopRadio()
-                        else playerViewModel.playRadio()
-                    }
-                )
-            }
-        }
-
         if (hasSearchResults) {
             SearchResultsContent(
                 navController = navController,
@@ -388,112 +271,62 @@ fun HomeScreen(
                     )
                 },
             )
-        } else if (isLoading) {
-            LoadingScreen()
         } else {
-            androidx.compose.animation.AnimatedVisibility(visible = selection.active) {
-                tf.monochrome.android.ui.components.TrackSelectionBar(
-                    selectedCount = selection.count,
-                    onClose = { selection.clear() },
-                    onAddToQueue = {
-                        playerViewModel.addToQueue(recentTracks.filter { it.id in selection.selectedIds })
-                        selection.clear()
-                    },
-                    onAddToPlaylist = { showAddToPlaylistForSelection = true },
-                    onDelete = {
-                        playerViewModel.removeFromHistory(selection.selectedIds)
-                        selection.clear()
-                    },
-                    deleteContentDescription = "Remove from history"
-                )
-            }
-
-            // ── Home content ────────────────────────────────────
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = searchTopInset, bottom = 160.dp)
-            ) {
-                // One dismissible bar per release, at the top of the first
-                // screen the user lands on. Tapping it opens the notes in
-                // About; it never blocks anything.
+            // ── Home IS the page list ───────────────────────────
+            //
+            // It used to be a feed: Play Radio, then Recently Played. Both are
+            // gone — the history is still on Overview, which this list is one
+            // tap from — because the swipe was the only way to reach six of the
+            // seven pages and Home is where people start.
+            //
+            // The two banners sit above the list rather than inside it. They
+            // are one dismissible row apiece, and keeping them out of the
+            // LazyColumn means the list's own indices are the pages and nothing
+            // else.
+            Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
                 val update = availableUpdate
                 if (showUpdateBar && update != null) {
-                    item(key = "update_bar") {
-                        tf.monochrome.android.ui.components.WhatsNewBar(
-                            title = "Version ${update.versionName} is available",
-                            subtitle = "Tap to see the release on GitHub",
-                            onOpen = {
-                                settingsViewModel.dismissUpdate()
-                                runCatching {
-                                    homeContext.startActivity(
-                                        android.content.Intent(
-                                            android.content.Intent.ACTION_VIEW,
-                                            android.net.Uri.parse(update.releaseUrl),
-                                        )
-                                    )
-                                }
-                            },
-                            onDismiss = { settingsViewModel.dismissUpdate() },
-                            onNeverShow = { settingsViewModel.neverShowWhatsNew() },
-                        )
-                    }
-                } else if (showWhatsNew) {
-                    item(key = "whats_new_bar") {
-                        tf.monochrome.android.ui.components.WhatsNewBar(
-                            title = "Updated to $whatsNewVersionName",
-                            subtitle = "See what's new",
-                            onOpen = {
-                                settingsViewModel.markWhatsNewSeen()
-                                navController.navigateSafe(
-                                    Screen.Settings.createRoute(
-                                        tf.monochrome.android.ui.settings.SETTINGS_TAB_ABOUT
+                    tf.monochrome.android.ui.components.WhatsNewBar(
+                        title = "Version ${update.versionName} is available",
+                        subtitle = "Tap to see the release on GitHub",
+                        onOpen = {
+                            settingsViewModel.dismissUpdate()
+                            runCatching {
+                                homeContext.startActivity(
+                                    android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse(update.releaseUrl),
                                     )
                                 )
-                            },
-                            onDismiss = { settingsViewModel.markWhatsNewSeen() },
-                            onNeverShow = { settingsViewModel.neverShowWhatsNew() },
-                        )
-                    }
+                            }
+                        },
+                        onDismiss = { settingsViewModel.dismissUpdate() },
+                        onNeverShow = { settingsViewModel.neverShowWhatsNew() },
+                    )
+                } else if (showWhatsNew) {
+                    tf.monochrome.android.ui.components.WhatsNewBar(
+                        title = "Updated to $whatsNewVersionName",
+                        subtitle = "See what's new",
+                        onOpen = {
+                            settingsViewModel.markWhatsNewSeen()
+                            navController.navigateSafe(
+                                Screen.Settings.createRoute(
+                                    tf.monochrome.android.ui.settings.SETTINGS_TAB_ABOUT
+                                )
+                            )
+                        },
+                        onDismiss = { settingsViewModel.markWhatsNewSeen() },
+                        onNeverShow = { settingsViewModel.neverShowWhatsNew() },
+                    )
                 }
 
-                // Discovery moved out to its own tab. Home is now what the user
-                // is doing right now — start a station, pick a recent track,
-                // search — and Discover is where they go to look for something
-                // new. Two jobs that were competing for one scroll.
-                if (recentTracks.isNotEmpty()) {
-                    item {
-                        SectionHeader(title = "Recently Played")
-                    }
-                    items(recentTracks, key = { it.id }) { track ->
-                        TrackItem(
-                            track = track,
-                            isLiked = favoriteTrackIds.contains(track.id),
-                            onLikeClick = { playerViewModel.toggleFavorite(track) },
-                            onClick = {
-                                if (selection.active) selection.toggle(track.id)
-                                else playerViewModel.playTrack(track, recentTracks)
-                            },
-                            onLongClick = { selection.toggle(track.id) },
-                            onMoreClick = { showContextMenuForTrack = track },
-                            onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                            onAlbumClick = track.album?.id?.let { albumId ->
-                                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-                            },
-                            isDownloaded = track.id in downloadedTrackIds,
-                            selectionMode = selection.active,
-                            selected = track.id in selection.selectedIds
-                        )
-                    }
-                } else {
-                    item {
-                        Text(
-                            text = "Play some music — your history will show up here.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                        )
-                    }
-                }
+                PageJumpList(
+                    pages = pages,
+                    pager = pager,
+                    current = Screen.Home.route,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = 160.dp),
+                )
             }
         }
         }

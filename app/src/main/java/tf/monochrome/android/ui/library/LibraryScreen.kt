@@ -1,12 +1,10 @@
 package tf.monochrome.android.ui.library
 
-import tf.monochrome.android.ui.theme.goToPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,15 +20,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -39,10 +35,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -171,16 +165,7 @@ fun LibraryScreen(
     val activeDownloads by playerViewModel.activeDownloads.collectAsStateWithLifecycle()
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
 
-    val sectionScope = rememberCoroutineScope()
     // Page changes slide normally; with "Disable animations" on they jump.
-    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
-
-    // The overflow menu survives as a shortcut past the swipe — a page the user
-    // has put several places away is a long drag — not as the only way in. It
-    // lists Home and Discover too now, since they are ordinary pages in the same
-    // sequence rather than a separate pager this screen could not reach.
-    val menuSections = pages.filter { it != sectionId }
-        .mapNotNull { id -> APP_PAGE_TITLES[id]?.let { id to it } }
 
     // Saveable so the dialog reopens after a process death triggered by its own
     // SAF CSV picker; the dialog's typed fields + picked uri are saveable too.
@@ -312,6 +297,17 @@ fun LibraryScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         var sectionMenuOpen by remember { mutableStateOf(false) }
+        // The same list Home renders, over this page. It used to be a
+        // DropdownMenu of small rows hung off a three-dot icon, and it existed
+        // on these five pages only.
+        if (sectionMenuOpen) {
+            tf.monochrome.android.ui.navigation.PageJumpSheet(
+                pages = pages,
+                pager = pager,
+                current = sectionId,
+                onDismiss = { sectionMenuOpen = false },
+            )
+        }
 
         tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
             TopAppBar(
@@ -330,35 +326,12 @@ fun LibraryScreen(
                 // more. Every page is a peer in one swipe list, and back is the
                 // nav host's — it returns to the first page from any of them.
                 actions = {
-                    // Settings lets the user hide pages, so the button goes
-                    // away rather than opening an empty menu.
-                    if (menuSections.isNotEmpty()) Box {
-                        IconButton(onClick = { sectionMenuOpen = true }) {
-                            Icon(
-                                Icons.Default.MoreVert,
-                                contentDescription = "Other pages",
-                                tint = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = sectionMenuOpen,
-                            onDismissRequest = { sectionMenuOpen = false }
-                        ) {
-                            menuSections.forEach { (id, title) ->
-                                DropdownMenuItem(
-                                    text = { Text(title) },
-                                    onClick = {
-                                        val page = pages.indexOf(id)
-                                        if (page >= 0) {
-                                            sectionScope.launch {
-                                                pager.goToPage(page, animateTabs)
-                                            }
-                                        }
-                                        sectionMenuOpen = false
-                                    }
-                                )
-                            }
-                        }
+                    IconButton(onClick = { sectionMenuOpen = true }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.List,
+                            contentDescription = "Go to page",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
                     }
                     // Only where there is a list to search. The other sections
                     // are grids of albums and artists with no filter behind

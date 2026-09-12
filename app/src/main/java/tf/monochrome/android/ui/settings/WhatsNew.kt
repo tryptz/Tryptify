@@ -143,6 +143,14 @@ object WhatsNew {
                         "audio files sitting in that folder were being filtered straight " +
                         "back out again. They are listed under the subfolders now.",
                 ),
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Home is the list of pages",
+                    body = "Tap a name to go straight there instead of swiping to it. Every " +
+                        "other page has the same list behind the button in its top bar. " +
+                        "Play Radio and Recently Played are gone from Home; the history " +
+                        "is still on Overview.",
+                ),
             ),
         ),
         WhatsNewRelease(
