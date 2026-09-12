@@ -88,9 +88,9 @@ object WhatsNew {
                     section = PLAYER,
                     title = "Play, pause and skip are redrawn, and press cleanly",
                     body = "They are built from exact geometry, so the corners match and the " +
-                        "two skip chevrons sit apart rather than nested. One spring drives the " +
-                        "swell and the glyph squeeze, so letting go mid-press eases off " +
-                        "instead of snapping.",
+                        "two skip chevrons sit apart rather than nested. The glow under a " +
+                        "press springs back when you let go instead of snapping out — on the " +
+                        "mini player's buttons too.",
                 ),
                 WhatsNewEntry(
                     section = LOOK,

@@ -3,7 +3,6 @@ package tf.monochrome.android.ui.player
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,6 +42,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 import tf.monochrome.android.ui.components.buttonSemantics
+import tf.monochrome.android.ui.theme.GlassPressSpring
+import tf.monochrome.android.ui.theme.GlassReleaseSpring
 
 /**
  * Primary transport row: previous · play/pause · next. The icons are solid glyph
@@ -89,11 +90,7 @@ fun PlayerTransportControls(
         // the dock and the other glass buttons.
         val bulge by animateFloatAsState(
             targetValue = if (isPressed) 1f else 0f,
-            animationSpec = if (isPressed) {
-                spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
-            } else {
-                tween(durationMillis = 260)
-            },
+            animationSpec = if (isPressed) GlassPressSpring else GlassReleaseSpring,
             label = "playBulge",
         )
         // Play/pause is a SOLID round glass disc with the play/pause symbol
@@ -315,18 +312,14 @@ internal fun TransportIcon(
     size: Dp = PlayerDesignTokens.TransportIconSize,
 ) {
     val glass = LocalPlayerGlass.current
-    // Press-bulge: swell the glass glyph while it's held (spring in, tween out),
+    // Press-bulge: swell the glass glyph while it's held,
     // matching the play disc and the dock — the bulge is the tap feedback, so no
     // ripple indication.
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val bulge by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
-        animationSpec = if (isPressed) {
-            spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            tween(durationMillis = 260)
-        },
+        animationSpec = if (isPressed) GlassPressSpring else GlassReleaseSpring,
         label = "transportBulge",
     )
     // The same give the play disc has. The chevrons had the bulge — the glass

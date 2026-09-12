@@ -25,6 +25,13 @@
 
 ### Fixed
 
+#### The glass dome snapped away on release instead of settling
+- **Four presses paired a spring in with a tween out** — the mini player's controls, the mini player bar, the play disc and the skip chevrons. That is the pairing `Motion.kt` describes having removed from the dock, and for the reason it gives: a tween carries no velocity. At the moment a finger lifts the spring is still travelling *upward*; the tween threw that away and restarted from a standstill.
+- **`FastOutSlowInEasing` finished the job.** Most of the travel went in the first eighty milliseconds and the rest crawled invisibly, so the dome read as gone at once rather than settling — instant where a spring was wanted.
+- **A spring both ways now, and a soft one coming back** (`GlassReleaseSpring`, `dampingRatio = 1`, `stiffness = 150` against the rise's `StiffnessMediumLow`). Springs hand velocity between them, so the release picks up the rise it interrupted and carries it a moment before easing down — the swell you can actually see.
+- **Critically damped rather than bouncy on the way back**, because it leaves from a positive velocity and at `dampingRatio = 1` the value cannot cross zero, which a negative bulge would hand straight to the shader.
+- **Both halves live in `Motion.kt`** beside `PressSpring` rather than as the same literal spec copied into four files, which is how one of them stayed wrong after the dock was fixed.
+
 #### Back left the folder browser instead of stepping up a level
 - **`launchSingleTop` does not compare the route.** `NavController.launchSingleTopInternal` matches on the *destination*, then removes the top back-stack entry and puts a copy back carrying the new arguments. `folder/{folderPath}` is registered once, so `folder/A` and `folder/A/B` are the same destination: walking into a subfolder replaced the folder you came from, leaving nothing to go back to.
 - **It was never only folders.** Any trail through one screen type collapsed the same way — album → album, artist → artist, genre → genre, shelf → shelf. `navigateTool`'s own documentation promised the opposite: "Content screens are allowed to chain … and Back should walk it in reverse."
