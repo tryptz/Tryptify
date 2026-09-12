@@ -167,6 +167,33 @@ android {
     }
 }
 
+// Compose compiler metrics and reports, off by default.
+//
+// `-Pcompose.metrics` on any build writes, per module, which composables are
+// skippable and restartable and — the half that matters here — which
+// parameters the compiler inferred as unstable and why. That is the evidence
+// for a stability change; annotating a model @Immutable because it "looks
+// immutable" is how a wrong annotation gets shipped, and @Immutable is a
+// promise the compiler does not verify.
+//
+// Off by default because it adds a compiler pass and a pile of files to every
+// build. Run it when a stability question comes up:
+//
+//   ./gradlew :app:compileDebugKotlin -Pcompose.metrics
+//   app/build/compose_reports/app_debug-composables.txt
+composeCompiler {
+    // What the compiler cannot infer but the report proves. See the file.
+    stabilityConfigurationFiles.add(
+        layout.projectDirectory.file("compose_stability.conf")
+    )
+
+    if (project.hasProperty("compose.metrics")) {
+        metricsDestination = layout.buildDirectory.dir("compose_metrics")
+        reportsDestination = layout.buildDirectory.dir("compose_reports")
+    }
+}
+
+
 // Packs the ~9.8k raw .milk presets in src/main/projectm-assets/presets into a
 // single assets/projectm/presets.zip. Shipping one archive instead of individual
 // asset entries lets first-run installation extract everything in a single
