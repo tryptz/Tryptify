@@ -1,11 +1,13 @@
 package tf.monochrome.android.ui.theme
 
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
@@ -14,6 +16,24 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import tf.monochrome.android.performance.LocalLowPerformance
+
+/**
+ * The spring every press in the app rides.
+ *
+ * Tight and barely bouncy — critically damped enough to look like the surface
+ * moved under the finger rather than wobbled. It came from the player's dock,
+ * which is the press that felt right, and it is shared so that "smooth like the
+ * player" is one constant rather than a feel each screen re-invents.
+ *
+ * The old `bounceClick` default was DampingRatioMediumBouncy (0.5) at
+ * StiffnessMedium (400): a long, visibly oscillating settle. On a glyph you
+ * barely see it; on a full-width tile it is the wobble that reads as jank.
+ *
+ * One spring for both directions on purpose. The dock used to pair a bouncy
+ * spring up with a tween down and it stuttered — a tween carries no velocity,
+ * so releasing mid-bounce snapped the motion still before easing off.
+ */
+val PressSpring: AnimationSpec<Float> = spring(dampingRatio = 0.85f, stiffness = 900f)
 
 /**
  * "Disable animations" (Settings › System › Performance) in the form the UI

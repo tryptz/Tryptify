@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -64,6 +65,7 @@ import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
 
@@ -233,10 +235,17 @@ fun FolderBrowserScreen(
                 }
             }
             items(visibleTracks, key = { it.id }, contentType = { "track" }) { track ->
+                // legacyId, not id: the queue holds legacy Tracks, so that is
+                // what LocalNowPlayingTrackId carries.
+                val nowPlaying = track.legacyId == LocalNowPlayingTrackId.current
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(MonoDimens.listRowHeight)
+                        .background(
+                            if (nowPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                            else Color.Transparent
+                        )
                         .clickable { onPlayTrack(track, visibleTracks) }
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -263,6 +272,8 @@ fun FolderBrowserScreen(
                         Text(
                             track.title,
                             style = MaterialTheme.typography.bodyLarge,
+                            color = if (nowPlaying) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

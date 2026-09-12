@@ -542,9 +542,15 @@ data class UnifiedTrack(
     val channelBadge: String?
         get() = channelBadgeFor(channelCount)
 
-    /** Convert to legacy Track model for backward compatibility */
-    fun toLegacyTrack(): Track {
-        val tidalId = when (val s = source) {
+    /**
+     * The id this track gets once it reaches the player.
+     *
+     * The queue holds [Track]s, so `currentTrack` is a legacy track and its id
+     * is this. A row showing a UnifiedTrack compares against this to know
+     * whether it is the one playing, without building a whole Track to ask.
+     */
+    val legacyId: Long
+        get() = when (val s = source) {
             is PlaybackSource.HiFiApi -> s.tidalId
             is PlaybackSource.QobuzCached -> s.qobuzId
             // Apple tracks keep their true adamId. Before this branch existed
@@ -556,6 +562,10 @@ data class UnifiedTrack(
             is PlaybackSource.AppleCached -> s.appleId
             else -> id.hashCode().toLong()
         }
+
+    /** Convert to legacy Track model for backward compatibility */
+    fun toLegacyTrack(): Track {
+        val tidalId = legacyId
         // Fall back to the audio file path for local sources when the scan
         // didn't manage to cache an artwork JPG. AudioFileCoverFetcher
         // (Coil) extracts the embedded picture on demand from the file

@@ -39,16 +39,16 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
+import tf.monochrome.android.ui.theme.PressSpring
 
 // Vertical paddings shared between the label overlay and the punch geometry, so
 // the hollow icons stay centred over their labels regardless of DPI.
 private val DockRowVerticalPadding = 6.dp
 private val DockItemVerticalPadding = 10.dp
 
-// One spring for both things a press moves -- the slab's dome and the glyph's
-// squeeze. The old pair (bouncy spring up, tween down) stuttered: a tween carries
-// no velocity, so releasing mid-bounce snapped the dome still before easing off.
-private val PressSpring = spring<Float>(dampingRatio = 0.85f, stiffness = 900f)
+// The dome and the glyph squeeze both ride the app's shared press spring — see
+// Motion.kt, which is where this one moved to once every press in the app
+// started using it.
 
 // Room for the lit glyph's bloom. A blur only smears pixels it was given, and
 // Unbounded treats everything past the layer as transparent, so a glyph blurred

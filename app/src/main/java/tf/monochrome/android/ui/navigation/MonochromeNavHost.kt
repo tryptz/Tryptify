@@ -394,6 +394,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
         CompositionLocalProvider(
             LocalMiniPlayerInset provides if (showMiniPlayer) MINI_PLAYER_INSET else 0.dp,
+            // So a song row anywhere in the app can show that it is the one
+            // playing, without every list having to pass it down.
+            LocalNowPlayingTrackId provides currentTrack?.id,
             LocalAppHaze provides hazeState,
             // Published for the whole app, so every floating sheet of glass on
             // an ordinary screen is the same material as the bar it sits beside

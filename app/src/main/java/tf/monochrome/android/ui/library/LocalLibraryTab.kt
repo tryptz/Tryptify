@@ -107,6 +107,7 @@ import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
+import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.util.safTreeUriToPath
 import tf.monochrome.android.ui.components.SearchOverlay
@@ -712,6 +713,9 @@ private fun SongRow(
     onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController,
 ) {
+    // legacyId, not id: the queue holds legacy Tracks, so that is what
+    // `currentTrack.id` — and therefore LocalNowPlayingTrackId — is.
+    val nowPlaying = track.legacyId == LocalNowPlayingTrackId.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -719,7 +723,8 @@ private fun SongRow(
             .bounceClick(onClick = onClick)
             .liquidGlass(shape = MonoDimens.shapeMd),
         shape = MonoDimens.shapeMd,
-        color = Color.Transparent,
+        color = if (nowPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                else Color.Transparent,
     ) {
         Row(
             modifier = Modifier
@@ -757,6 +762,8 @@ private fun SongRow(
                 Text(
                     track.title,
                     style = MaterialTheme.typography.bodyLarge,
+                    color = if (nowPlaying) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

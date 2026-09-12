@@ -1,7 +1,5 @@
 package tf.monochrome.android.ui.components
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -12,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
+import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.reduceMotion
 
 fun Modifier.bounceClick(
@@ -36,10 +35,7 @@ fun Modifier.bounceClick(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) scaleDown else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = PressSpring,
         label = "bounceScale"
     )
 
@@ -76,10 +72,7 @@ fun Modifier.bounceCombinedClick(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) scaleDown else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = PressSpring,
         label = "bounceScale"
     )
 
