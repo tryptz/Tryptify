@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -128,6 +129,86 @@ fun BoxScope.FastScroller(
             Modifier
                 .offset {
                     // Read in the layout phase, not composition — see above.
+                    val last = (total - visible).coerceAtLeast(1)
+                    val progress = (state.firstVisibleItemIndex.toFloat() / last).coerceIn(0f, 1f)
+                    IntOffset(0, ((trackPx - thumbPx) * progress).roundToInt())
+                }
+                .width(width)
+                .height(with(density) { thumbPx.toDp() })
+                .clip(RoundedCornerShape(percent = 50))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+        )
+    }
+}
+
+/**
+ * The same thumb over a [LazyVerticalGrid][androidx.compose.foundation.lazy.grid.LazyVerticalGrid].
+ *
+ * Counts in items, not rows, which is what the grid's own state reports — so on
+ * a three-column grid the thumb measures a third of what it would on a list of
+ * the same length. That is correct: both describe the same fraction of the
+ * content being on screen.
+ */
+@Composable
+fun BoxScope.FastScroller(
+    state: LazyGridState,
+    modifier: Modifier = Modifier,
+    thumbMin: Dp = 48.dp,
+    width: Dp = 6.dp,
+    touchWidth: Dp = 28.dp,
+) {
+    val extent by remember(state) {
+        derivedStateOf {
+            val info = state.layoutInfo
+            info.totalItemsCount to info.visibleItemsInfo.size
+        }
+    }
+    val (total, visible) = extent
+    if (total == 0 || visible == 0 || visible >= total) return
+
+    val density = LocalDensity.current
+    var trackPx by remember { mutableFloatStateOf(0f) }
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    val alpha by animateFloatAsState(
+        targetValue = if (dragFraction != null || state.isScrollInProgress) 1f else 0f,
+        label = "fastScrollerGrid",
+    )
+
+    LaunchedEffect(state) {
+        snapshotFlow { dragFraction }.collectLatest { fraction ->
+            if (fraction == null) return@collectLatest
+            val info = state.layoutInfo
+            val last = (info.totalItemsCount - info.visibleItemsInfo.size).coerceAtLeast(1)
+            state.scrollToItem((last * fraction).roundToInt().coerceAtLeast(0))
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .align(Alignment.CenterEnd)
+            .fillMaxHeight()
+            .width(touchWidth)
+            .onSizeChanged { trackPx = it.height.toFloat() }
+            .pointerInput(Unit) {
+                val track = { size.height.toFloat().coerceAtLeast(1f) }
+                detectVerticalDragGestures(
+                    onDragStart = { dragFraction = (it.y / track()).coerceIn(0f, 1f) },
+                    onDragEnd = { dragFraction = null },
+                    onDragCancel = { dragFraction = null },
+                ) { change, _ ->
+                    change.consume()
+                    dragFraction = (change.position.y / track()).coerceIn(0f, 1f)
+                }
+            }
+            .graphicsLayer { this.alpha = alpha },
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        val thumbPx = (trackPx * visible / total)
+            .coerceAtLeast(with(density) { thumbMin.toPx() })
+            .coerceAtMost(trackPx)
+        Box(
+            Modifier
+                .offset {
                     val last = (total - visible).coerceAtLeast(1)
                     val progress = (state.firstVisibleItemIndex.toFloat() / last).coerceIn(0f, 1f)
                     IntOffset(0, ((trackPx - thumbPx) * progress).roundToInt())

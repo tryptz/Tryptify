@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.FastScroller
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.TrackListToolbar
@@ -145,15 +148,20 @@ fun FolderBrowserScreen(
             placeholder = "Search this folder",
             onClose = { searchOpen = false; listQuery = "" },
         ) { searchTopInset ->
+        val listState = rememberLazyListState()
+        Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                         top = searchTopInset,
                         bottom = 80.dp + LocalMiniPlayerInset.current,
                     )
         ) {
-            // Subfolders
-            items(subfolders) { folder ->
+            // Subfolders first, then the folder's own audio files. Both kinds of
+            // row live in one list, so each declares its contentType — without it
+            // Compose would try to reuse a folder row's slots for a track row.
+            items(subfolders, key = { it.path }, contentType = { "folder" }) { folder ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -193,7 +201,7 @@ fun FolderBrowserScreen(
                     )
                 }
             }
-            items(visibleTracks, key = { it.id }) { track ->
+            items(visibleTracks, key = { it.id }, contentType = { "track" }) { track ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -273,6 +281,8 @@ fun FolderBrowserScreen(
                     }
                 }
             }
+        }
+        FastScroller(state = listState)
         }
         }
     }

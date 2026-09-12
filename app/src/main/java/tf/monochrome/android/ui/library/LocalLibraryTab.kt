@@ -91,6 +91,7 @@ import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.components.FastScroller
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
@@ -555,73 +556,78 @@ fun AlbumGrid(
     albums: List<UnifiedAlbum>,
     onAlbumClick: (UnifiedAlbum) -> Unit
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 150.dp),
-        contentPadding = PaddingValues(MonoDimens.spacingLg),
-        horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd),
-        verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd)
-    ) {
-        items(albums, key = { it.id }) { album ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .bounceClick(onClick = { onAlbumClick(album) }),
-                shape = MonoDimens.shapeMd,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha)
-                )
-            ) {
-                Column {
-                    if (album.artworkUri != null) {
-                        AsyncImage(
-                            model = album.artworkUri,
-                            contentDescription = album.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f)
-                                .clip(MonoDimens.shapeMd)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Album,
-                                contentDescription = null,
-                                modifier = Modifier.size(MonoDimens.coverList),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+    val state = rememberLazyGridState()
+    Box {
+        LazyVerticalGrid(
+            state = state,
+            columns = GridCells.Adaptive(minSize = 150.dp),
+            contentPadding = PaddingValues(MonoDimens.spacingLg),
+            horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd),
+            verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd)
+        ) {
+            items(albums, key = { it.id }) { album ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .bounceClick(onClick = { onAlbumClick(album) }),
+                    shape = MonoDimens.shapeMd,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha)
+                    )
+                ) {
+                    Column {
+                        if (album.artworkUri != null) {
+                            AsyncImage(
+                                model = album.artworkUri,
+                                contentDescription = album.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clip(MonoDimens.shapeMd)
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Album,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(MonoDimens.coverList),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                )
+                            }
                         }
-                    }
-                    Column(modifier = Modifier.padding(MonoDimens.spacingSm)) {
-                        Text(
-                            album.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            album.artistName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (album.qualitySummary != null) {
+                        Column(modifier = Modifier.padding(MonoDimens.spacingSm)) {
                             Text(
-                                album.qualitySummary,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                album.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                            Text(
+                                album.artistName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (album.qualitySummary != null) {
+                                Text(
+                                    album.qualitySummary,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+        FastScroller(state = state)
     }
 }
 
@@ -630,51 +636,56 @@ fun ArtistList(
     artists: List<UnifiedArtist>,
     onArtistClick: (UnifiedArtist) -> Unit
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(artists, key = { it.id }) { artist ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MonoDimens.listRowHeight)
-                    .bounceClick(onClick = { onArtistClick(artist) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (artist.artworkUri != null) {
-                    AsyncImage(
-                        model = artist.artworkUri,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        artist.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        "${artist.albumCount} albums, ${artist.trackCount} tracks",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(artists, key = { it.id }) { artist ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(MonoDimens.listRowHeight)
+                        .bounceClick(onClick = { onArtistClick(artist) })
+                        .padding(horizontal = MonoDimens.listItemPaddingH),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (artist.artworkUri != null) {
+                        AsyncImage(
+                            model = artist.artworkUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            artist.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            "${artist.albumCount} albums, ${artist.trackCount} tracks",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
+        FastScroller(state = state)
     }
 }
 /**
@@ -834,17 +845,22 @@ fun SongList(
     onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController,
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(tracks, key = { it.id }, contentType = { "track" }) { track ->
-            SongRow(
-                track = track,
-                onClick = { onTrackClick(track, tracks) },
-                onMoreClick = onMoreClick,
-                navController = navController,
-            )
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+                SongRow(
+                    track = track,
+                    onClick = { onTrackClick(track, tracks) },
+                    onMoreClick = onMoreClick,
+                    navController = navController,
+                )
+            }
         }
+        FastScroller(state = state)
     }
 }
 
@@ -853,37 +869,42 @@ fun GenreList(
     genres: List<Pair<String, Int>>,
     onGenreClick: (String) -> Unit
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(genres, key = { it.first }) { (genre, count) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MonoDimens.listRowHeight)
-                    .bounceClick(onClick = { onGenreClick(genre) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Style,
-                    contentDescription = null,
-                    modifier = Modifier.size(MonoDimens.iconMd),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
-                Text(
-                    genre,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    "$count tracks",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(genres, key = { it.first }) { (genre, count) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(MonoDimens.listRowHeight)
+                        .bounceClick(onClick = { onGenreClick(genre) })
+                        .padding(horizontal = MonoDimens.listItemPaddingH),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Style,
+                        contentDescription = null,
+                        modifier = Modifier.size(MonoDimens.iconMd),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
+                    Text(
+                        genre,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "$count tracks",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
+        FastScroller(state = state)
     }
 }
 
@@ -892,32 +913,37 @@ fun FolderList(
     folders: List<Pair<String, String>>,
     onFolderClick: (String) -> Unit
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(folders, key = { it.second }) { (name, path) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MonoDimens.listRowHeight)
-                    .bounceClick(onClick = { onFolderClick(path) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Folder,
-                    contentDescription = null,
-                    modifier = Modifier.size(MonoDimens.iconMd),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
-                Text(
-                    name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(folders, key = { it.second }) { (name, path) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(MonoDimens.listRowHeight)
+                        .bounceClick(onClick = { onFolderClick(path) })
+                        .padding(horizontal = MonoDimens.listItemPaddingH),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(MonoDimens.iconMd),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
+        FastScroller(state = state)
     }
 }

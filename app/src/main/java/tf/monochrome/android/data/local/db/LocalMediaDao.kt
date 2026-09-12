@@ -121,7 +121,29 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks WHERE genre = :genre ORDER BY album, trackNumber")
     fun getTracksByGenre(genre: String): Flow<List<LocalTrackEntity>>
 
-    @Query("SELECT * FROM local_tracks WHERE filePath LIKE :folderPath || '%' AND filePath NOT LIKE :folderPath || '%/%' ORDER BY trackNumber, title")
+    /**
+     * The audio files sitting directly in [folderPath], not those in its subfolders.
+     *
+     * This used to be `LIKE :folderPath || '%' AND NOT LIKE :folderPath || '%/%'`,
+     * which returned nothing at all. `%` matches the empty string, so the second
+     * pattern also matched a direct child: for `/Music`, the file
+     * `/Music/song.mp3` is `/Music` + "" + `/` + `song.mp3`, and the NOT excluded
+     * every row the first pattern let through. The folder browser could only ever
+     * list subfolders.
+     *
+     * Compared as substrings rather than patterns, so a folder name containing
+     * `_` or `%` is matched literally — as a LIKE pattern, `Hip_Hop` would also
+     * match a sibling `HipXHop`. `local_tracks` has no index on `filePath`, so
+     * both forms scan the same way.
+     */
+    @Query(
+        """
+        SELECT * FROM local_tracks
+        WHERE substr(filePath, 1, length(:folderPath) + 1) = :folderPath || '/'
+          AND instr(substr(filePath, length(:folderPath) + 2), '/') = 0
+        ORDER BY trackNumber, title
+        """
+    )
     fun getTracksInFolder(folderPath: String): Flow<List<LocalTrackEntity>>
 
     @Query("SELECT * FROM local_tracks WHERE isrc = :isrc LIMIT 1")
