@@ -159,6 +159,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     section = LIBRARY,
+                    title = "Sending a file works for music on your phone",
+                    body = "\"Send file\" reported no file available for tracks sitting on the " +
+                        "device — from the player, playlists, albums, artists, Favorites and " +
+                        "search. It was trying to download them first. Only the songs list " +
+                        "ever worked.",
+                ),
+                WhatsNewEntry(
+                    section = LIBRARY,
                     title = "The Folders tab shows your music folders",
                     body = "It used to list only folders you had added by hand — a folder of " +
                         "hundreds of scanned songs never appeared, while the same songs " +

@@ -1267,11 +1267,30 @@ class PlayerViewModel @Inject constructor(
     }
 
     /**
-     * Hand the track's local audio file to Android's share sheet. Resolves
-     * a downloaded copy first, then a Qobuz cache hit; if neither exists
-     * the call is a no-op (logged in TrackShareHelper).
+     * Hand the track's audio file to Android's share sheet.
+     *
+     * A scanned file goes straight to its path. Everything else resolves a
+     * downloaded copy, then a Qobuz cache hit, then a fetch on demand.
+     *
+     * The local branch is the whole point. A [Track] carries no file path, and
+     * TrackShareHelper.shareTrack has nowhere to look for one: it finds no
+     * download row and no cache entry for a scanned file, and falls through to
+     * *downloading the track from Qobuz* — which fails, and reports "No file
+     * available to share" about a file sitting on the user's phone. Every
+     * screen that shares a legacy Track hit that: the player, playlists, album
+     * and artist pages, Favorites, search. Only the unified context menu, which
+     * has the UnifiedTrack and its path, ever worked.
+     *
+     * The lookup is the one already drawing the player's "Downloaded" tick —
+     * see [isLocalTrack]. It was answering correctly one menu row above the
+     * failure.
      */
     fun shareTrack(track: Track) {
+        val unified = unifiedTrackRegistry[track.id]
+        if (unified?.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile) {
+            shareUnifiedTrack(unified)
+            return
+        }
         viewModelScope.launch {
             trackShareHelper.shareTrack(track)
         }

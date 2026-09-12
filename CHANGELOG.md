@@ -27,6 +27,11 @@
 - **It repairs itself on the next launch.** The table is only rebuilt during a scan, so the fix alone would have left every existing library broken until someone thought to rescan. The rebuild is one query and one table rewrite — no MediaStore, no tag reading.
 - **A folder with nothing in it says so**, instead of rendering two empty lists. A blank screen looks identical whether the folder is empty or the browser has lost its contents, which is how this went unnoticed.
 
+#### "Send file" said there was no file, for files already on the phone
+- **It was trying to download the track first.** A legacy track carries no file path, so the share helper looked for a download row, then a stream-cache entry, and finding neither for a *scanned* file fell through to fetching it from the Qobuz instance. That fetch failed, and its failure is what the toast was reporting.
+- **It affected six screens, not just the player** — playlists, album and artist pages, Favorites and search shared the same path. The songs list was the only place it worked, because its menu has the unified track and its path.
+- **The answer was already on screen.** The "Downloaded" tick one row above "Send file" is the same registry lookup the share needed, returning the right answer for the same track. The share now uses it.
+
 #### The Folders tab only ever listed folders you had added by hand
 - **The query behind it could not match anything.** It asked for folders with no parent (`parentPath IS NULL`), but a parent is `substringBeforeLast('/')`, which for a top-level `/storage` is the empty string — never null. It has always returned zero rows, so the tab fell back to showing only hand-added roots while a folder of hundreds of scanned songs never appeared in it. The same songs filled the Songs list the whole time, which is what makes it look like the folder view is broken rather than the list it reads.
 - **It now opens on the folders your music actually starts in.** The rule is the one you would apply looking at the tree: walk down while there is nothing to choose. `/storage` holds only `emulated`, which holds only `0` — three taps that ask no question — so what you see is what is inside: Music, Download, and anything else holding music. The walk stops at the first folder that branches or that holds songs of its own.
