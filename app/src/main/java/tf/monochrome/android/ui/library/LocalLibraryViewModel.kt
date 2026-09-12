@@ -6,7 +6,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -101,17 +103,26 @@ class LocalLibraryViewModel @Inject constructor(
         return LibrarySort(key, ascending = parts.getOrNull(1) != "desc")
     }
 
+    // `flowOn(Default)` on all three: `stateIn(viewModelScope, …)` collects on
+    // Dispatchers.Main.immediate, so without it the combine body — an O(n log n)
+    // sort of the entire library — ran on the UI thread, on every database
+    // emission and every sort toggle. The repository below already does its
+    // mapping on Default (LocalMediaRepository), but flowOn only covers what is
+    // upstream of it, so everything these view models add landed back on Main.
     val sortedTracks: StateFlow<List<UnifiedTrack>> = combine(localTracks, _songSort) { tracks, sort ->
         tracks.applySort(sort)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val sortedAlbums: StateFlow<List<UnifiedAlbum>> = combine(localAlbums, _albumSort) { albums, sort ->
         albums.applySort(sort)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val sortedArtists: StateFlow<List<UnifiedArtist>> = combine(localArtists, _artistSort) { artists, sort ->
         artists.applySort(sort)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val localGenres: StateFlow<List<LocalGenreEntity>> = localMediaRepository.getAllGenres()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
