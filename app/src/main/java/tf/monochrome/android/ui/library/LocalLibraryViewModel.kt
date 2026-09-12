@@ -214,23 +214,42 @@ class LocalLibraryViewModel @Inject constructor(
 
     // ── Folder browsing ─────────────────────────────────────────────
 
+    /**
+     * One [StateFlow] per path, for the life of this view model.
+     *
+     * These are read from a composable body, and `stateIn` builds a NEW
+     * StateFlow and launches a NEW sharing coroutine every time it is called.
+     * Called straight from composition that is once per recomposition: the
+     * coroutines pile up in [viewModelScope] until the screen dies, the Room
+     * query is re-issued each time, and because `collectAsStateWithLifecycle`
+     * keys on flow identity it restarts collection, emits, and recomposes —
+     * which calls the function again.
+     *
+     * Caching by key makes the call idempotent, so the trap is closed here
+     * rather than left for each caller to remember. Main-thread only, which is
+     * where composition reads it; bounded by the paths one browser screen
+     * visits, and the whole map goes when the back stack entry does.
+     */
+    private val subfolderFlows = mutableMapOf<String, StateFlow<List<LocalFolderEntity>>>()
+    private val folderTrackFlows = mutableMapOf<String, StateFlow<List<UnifiedTrack>>>()
+
     fun getSubfolders(parentPath: String): StateFlow<List<LocalFolderEntity>> =
-        localMediaRepository.getSubfolders(parentPath)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        subfolderFlows.getOrPut(parentPath) {
+            localMediaRepository.getSubfolders(parentPath)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }
 
     fun getTracksInFolder(folderPath: String): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksInFolder(folderPath)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        folderTrackFlows.getOrPut(folderPath) {
+            localMediaRepository.getTracksInFolder(folderPath)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }
 
-    fun getTracksByAlbum(albumId: Long): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksByAlbum(albumId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun getTracksByArtist(artistId: Long): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksByArtist(artistId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun getTracksByGenre(genre: String): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksByGenre(genre)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // getTracksByAlbum / getTracksByArtist / getTracksByGenre used to sit here
+    // with the same per-call `stateIn`. Nothing called them: every local detail
+    // screen has its own view model that holds the flow as a property
+    // (LocalAlbumDetailViewModel.tracks, LocalArtistDetailViewModel,
+    // LocalGenreDetailViewModel), which is the shape that does not have the
+    // bug. They were three more copies of the trap with no users, so they are
+    // gone rather than fixed.
 }
