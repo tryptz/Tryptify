@@ -111,4 +111,60 @@ class FolderTreeTest {
         assertEquals("Some", folders.single { it.path == "$root/Some" }.displayName)
         assertEquals("Monochrome+", folders.single { it.path == root }.displayName)
     }
+
+    // ── Where the Folders tab opens ─────────────────────────────────────
+    //
+    // The tab used to read getRootFolders(), which selects `parentPath IS NULL`
+    // and matches nothing — parentPath is substringBeforeLast('/'), which for a
+    // top-level /storage is "" and not null. So the tab listed only hand-added
+    // roots, and a folder of hundreds of scanned songs never showed up in it
+    // while the same songs filled the Songs list.
+
+    private val sd = "/storage/emulated/0"
+
+    private fun rootPaths(vararg paths: String) =
+        folderBrowseRoots(buildFolderTree(paths.toList())).map { it.path }
+
+    @Test
+    fun `the roots are the folders with music, not the corridors above them`() {
+        // /storage and /storage/emulated hold exactly one child each and no
+        // music of their own — three taps that ask no question.
+        assertEquals(
+            listOf("$sd/Download", "$sd/Monochrome+", "$sd/Music"),
+            rootPaths("$sd/Music/a.mp3", "$sd/Monochrome+/b.mp3", "$sd/Download/Rock/c.mp3"),
+        )
+    }
+
+    @Test
+    fun `a folder holding its own music stops the descent`() {
+        // The reported case: hundreds of songs sitting directly in one folder.
+        // It is a destination, not a corridor, so the walk stops and lists it.
+        assertEquals(listOf("$sd/Monochrome+"), rootPaths("$sd/Monochrome+/a.mp3"))
+    }
+
+    @Test
+    fun `descent continues while there is nothing to choose`() {
+        // Every level down to x/y has one child and no music of its own.
+        assertEquals(listOf("$sd/Monochrome+/x/y"), rootPaths("$sd/Monochrome+/x/y/b.mp3"))
+    }
+
+    @Test
+    fun `a branch point that also holds music is itself a root`() {
+        // A stray file loose in internal storage: the walk cannot go past it
+        // without hiding it.
+        assertEquals(listOf(sd), rootPaths("$sd/loose.mp3", "$sd/Music/a.mp3"))
+    }
+
+    @Test
+    fun `roots come back sorted by name, case-insensitively`() {
+        assertEquals(
+            listOf("$sd/alpha", "$sd/Beta", "$sd/gamma"),
+            rootPaths("$sd/gamma/c.mp3", "$sd/alpha/a.mp3", "$sd/Beta/b.mp3"),
+        )
+    }
+
+    @Test
+    fun `an empty library has no roots rather than throwing`() {
+        assertEquals(emptyList<String>(), folderBrowseRoots(emptyList()).map { it.path })
+    }
 }

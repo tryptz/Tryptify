@@ -54,3 +54,48 @@ internal fun buildFolderTree(trackPaths: List<String>): List<LocalFolderEntity> 
         )
     }
 }
+
+/**
+ * The folders the Folders tab opens on.
+ *
+ * The tab used to read `getRootFolders()`, which selects `parentPath IS NULL`
+ * — and no row ever has that. `parentPath` is `substringBeforeLast('/')`, which
+ * for a top-level `/storage` is the empty string, not null. That query has
+ * always returned nothing, so the tab showed only the roots a user had added by
+ * hand: a folder of 500 songs the scanner had indexed never appeared, while the
+ * same songs filled the Songs list.
+ *
+ * The rule here is the one a person would apply looking at the tree: walk down
+ * while there is nothing to choose. `/storage` holds only `emulated`, which
+ * holds only `0` — three taps that ask no question — so the roots are `0`'s
+ * children: Music, Download, and whatever else has music in it. Descent stops
+ * at the first folder that branches or that holds tracks of its own, because
+ * past that point the choice is the user's.
+ *
+ * Returns that level, not the folder above it: a row labelled "0" is not a
+ * place anyone recognises.
+ */
+internal fun folderBrowseRoots(folders: List<LocalFolderEntity>): List<LocalFolderEntity> {
+    if (folders.isEmpty()) return emptyList()
+
+    val childrenOf = folders.groupBy { it.parentPath.orEmpty() }
+    val known = folders.mapTo(HashSet()) { it.path }
+    // The tops: rows whose parent has no row of its own. Normally just
+    // "/storage", but a path shape this code has not seen still starts
+    // somewhere rather than nowhere.
+    var level = folders.filter { it.parentPath.orEmpty() !in known }
+
+    while (level.size == 1) {
+        val only = level.single()
+        val kids = childrenOf[only.path].orEmpty()
+        if (kids.isEmpty()) break
+        // trackCount is the whole subtree, so what is left after the children
+        // have taken their share is what sits in this folder itself. A folder
+        // holding its own music is a destination, not a corridor to walk past.
+        if (only.trackCount - kids.sumOf { it.trackCount } > 0) break
+        level = kids
+    }
+
+    return level.sortedBy { it.displayName.lowercase() }
+}
+

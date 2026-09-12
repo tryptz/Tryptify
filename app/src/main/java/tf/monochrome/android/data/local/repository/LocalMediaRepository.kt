@@ -197,6 +197,9 @@ class LocalMediaRepository @Inject constructor(
 
     fun getRootFolders(): Flow<List<LocalFolderEntity>> = localMediaDao.getRootFolders()
 
+    /** Every folder row, for working out where the Folders tab should open. */
+    fun getAllFolders(): Flow<List<LocalFolderEntity>> = localMediaDao.getAllFolders()
+
     fun getSubfolders(parentPath: String): Flow<List<LocalFolderEntity>> =
         localMediaDao.getSubfolders(parentPath)
 

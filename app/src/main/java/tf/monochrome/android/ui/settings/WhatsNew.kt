@@ -153,10 +153,32 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     section = LIBRARY,
+                    title = "The track playing is coloured in the list",
+                    body = "Its row is tinted and its title takes the accent, so you can find " +
+                        "what is playing in a long list at a glance.",
+                ),
+                WhatsNewEntry(
+                    section = LIBRARY,
+                    title = "The Folders tab shows your music folders",
+                    body = "It used to list only folders you had added by hand — a folder of " +
+                        "hundreds of scanned songs never appeared, while the same songs " +
+                        "filled the Songs list. It now opens on the folders your music " +
+                        "actually starts in, each with its path.",
+                ),
+                WhatsNewEntry(
+                    section = LIBRARY,
                     title = "Long press a folder to remove it",
                     body = "Its tracks leave the library and scans skip it from then on. " +
                         "Nothing is deleted from your phone — the files stay where they " +
                         "are.",
+                ),
+                WhatsNewEntry(
+                    section = PAGES,
+                    title = "Presses feel like the player's, everywhere",
+                    body = "The old press settled slowly and wobbled — barely visible on a " +
+                        "small button, obvious on a big tile. Every press in the app now " +
+                        "uses the spring the player's dock had. Picking a page opens it at " +
+                        "once too, rather than sliding past the pages in between.",
                 ),
                 WhatsNewEntry(
                     section = PAGES,

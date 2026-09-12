@@ -282,6 +282,20 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_folders WHERE parentPath = :parentPath ORDER BY displayName")
     fun getSubfolders(parentPath: String): Flow<List<LocalFolderEntity>>
 
+    @Query("SELECT * FROM local_folders ORDER BY path")
+    fun getAllFolders(): Flow<List<LocalFolderEntity>>
+
+    /**
+     * Never matches anything, and cannot.
+     *
+     * `parentPath` is `substringBeforeLast('/')`, which for a top-level
+     * `/storage` is the empty string, not null — so no row an absolute path
+     * produces has a null parent. The Folders tab read this and therefore only
+     * ever showed the roots a user had added by hand; a folder full of music
+     * the scanner found never appeared. See folderBrowseRoots, which is what
+     * the tab uses instead. Kept because Room needs the query to exist for
+     * anything still calling it.
+     */
     @Query("SELECT * FROM local_folders WHERE parentPath IS NULL ORDER BY displayName")
     fun getRootFolders(): Flow<List<LocalFolderEntity>>
 

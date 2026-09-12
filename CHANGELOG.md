@@ -27,6 +27,11 @@
 - **It repairs itself on the next launch.** The table is only rebuilt during a scan, so the fix alone would have left every existing library broken until someone thought to rescan. The rebuild is one query and one table rewrite — no MediaStore, no tag reading.
 - **A folder with nothing in it says so**, instead of rendering two empty lists. A blank screen looks identical whether the folder is empty or the browser has lost its contents, which is how this went unnoticed.
 
+#### The Folders tab only ever listed folders you had added by hand
+- **The query behind it could not match anything.** It asked for folders with no parent (`parentPath IS NULL`), but a parent is `substringBeforeLast('/')`, which for a top-level `/storage` is the empty string — never null. It has always returned zero rows, so the tab fell back to showing only hand-added roots while a folder of hundreds of scanned songs never appeared in it. The same songs filled the Songs list the whole time, which is what makes it look like the folder view is broken rather than the list it reads.
+- **It now opens on the folders your music actually starts in.** The rule is the one you would apply looking at the tree: walk down while there is nothing to choose. `/storage` holds only `emulated`, which holds only `0` — three taps that ask no question — so what you see is what is inside: Music, Download, and anything else holding music. The walk stops at the first folder that branches or that holds songs of its own.
+- **Each row shows its path under its name.** Two folders can share a name, and the level these come from is chosen by walking the tree, so the path is how you tell which one you are looking at.
+
 #### Long press a folder to remove it from the library
 - **Its tracks leave the library and scans skip it from then on.** Nothing is deleted from storage, and the confirmation says so — "remove" next to a folder full of music reads as a delete.
 - **The setting behind it had never once been read.** `excluded_paths_json` has been stored since it was added, but `fullScan` only took it as a parameter and its one real caller had nothing to pass. It is read from preferences now, beside the folder roots.
@@ -66,6 +71,13 @@
 ## [1.8.9]
 
 ### Changed
+
+#### Presses and page changes
+- **Every press in the app now uses the player's spring.** The old one settled slowly and visibly oscillated — barely noticeable on a small glyph, but on a full-width tile it was the wobble that read as jank. The dock already had the spring that felt right, so that one is now shared.
+- **Picking a page opens it at once** instead of sliding the pager through every page in between — Home to Downloads swept across five of them. That slide was there to follow a finger, and there is no finger any more.
+
+#### The track playing is coloured in the list
+- **Its row is tinted and its title takes the accent**, in the catalogue rows, the local songs list and the folder browser. The tint alone is easy to miss on a dark row.
 
 #### Shuffle is on the player, and the sleep timer moved
 - **Shuffle takes the dock's second slot**, next to Lyrics. It was buried in the top bar's overflow menu — two taps and a read of "Shuffle: On" away from a mode you flip constantly. The dock's existing active state lights the glyph and its bloom while shuffle is on, exactly as Lyrics already does.

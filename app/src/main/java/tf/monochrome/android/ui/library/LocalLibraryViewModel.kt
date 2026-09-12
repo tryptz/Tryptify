@@ -26,6 +26,7 @@ import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
 import tf.monochrome.android.data.local.scanner.ScanCoordinator
+import tf.monochrome.android.data.local.scanner.folderBrowseRoots
 import tf.monochrome.android.data.local.scanner.ScanProgress
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.UnifiedAlbum
@@ -164,20 +165,32 @@ class LocalLibraryViewModel @Inject constructor(
     val rootFolders: StateFlow<List<LocalFolderEntity>> = localMediaRepository.getRootFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** User-added folder roots merged with scanner-derived folders. User roots come first. */
+    /**
+     * What the Folders tab lists: the folders the user's music actually starts
+     * in, with any hand-added roots kept at the top.
+     *
+     * This used to read `getRootFolders()`, which selects `parentPath IS NULL`
+     * and therefore matched nothing — see the note on that query. The tab
+     * showed only hand-added roots, so a folder of hundreds of scanned songs
+     * never appeared in it while the same songs filled the Songs list.
+     *
+     * folderBrowseRoots does the picking; off the main thread because it walks
+     * every folder row.
+     */
     val displayRootFolders: StateFlow<List<Pair<String, String>>> = combine(
-        localMediaRepository.getRootFolders(),
+        localMediaRepository.getAllFolders(),
         preferencesManager.userFolderRoots
-    ) { dbFolders, userPaths ->
+    ) { allFolders, userPaths ->
         val user = userPaths.map { path ->
             val name = path.substringAfterLast('/').ifBlank { path }
             name to path
         }
-        val db = dbFolders
+        val scanned = folderBrowseRoots(allFolders)
             .filter { it.path !in userPaths }
             .map { it.displayName to it.path }
-        user + db
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        user + scanned
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addUserFolderRoot(path: String) {
         if (path.isBlank()) return
