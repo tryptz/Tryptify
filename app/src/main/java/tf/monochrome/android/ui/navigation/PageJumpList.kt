@@ -51,7 +51,6 @@ internal fun PageJumpList(
     contentPadding: PaddingValues = PaddingValues(),
     onJump: () -> Unit = {},
 ) {
-    val haze = LocalAppHaze.current
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = contentPadding,
@@ -70,9 +69,16 @@ internal fun PageJumpList(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    // The app's own pane material, so a tile matches the mini
-                    // player and the sheets rather than inventing a surface.
-                    .liquidGlass(hazeState = haze)
+                    // The app's own pane material, so a tile matches the rows
+                    // in the library rather than inventing a surface.
+                    //
+                    // No hazeState, deliberately. This is inside the pager,
+                    // which is inside the app's one hazeSource, and a haze
+                    // child within its own source is a cycle Haze throws on —
+                    // it crashed the app on launch, Home being the first
+                    // screen. Nothing is lost: the tiles sit on the flat theme
+                    // background, so a backdrop blur of it is that same colour.
+                    .liquidGlass(shape = MonoDimens.shapeMd)
                     // The page you are already on is shown but inert — it is
                     // there to tell you where you are, and a row that looks
                     // tappable and does nothing reads as a broken row.
