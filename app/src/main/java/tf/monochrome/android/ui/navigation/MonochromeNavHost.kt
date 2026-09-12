@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -272,6 +273,32 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         lastPageId = pages.getOrNull(pagerState.currentPage)
     }
 
+    // The pages the user has actually been on, oldest first, so Back retraces
+    // the route they took. Page ids rather than indices, for the same reason
+    // `lastPageId` is: hiding or reordering a page in Settings moves every
+    // index, and a stack of stale indices would send Back somewhere arbitrary.
+    //
+    // At most one entry per page — visiting a page again moves it to the top
+    // rather than appending. Without that, swiping back and forth between two
+    // pages builds an arbitrarily deep stack, and Back then takes as many
+    // presses to leave as the user made swipes.
+    //
+    // Session-scoped on purpose: `remember`, not `rememberSaveable`. A history
+    // that survived process death would send the first Back after a cold start
+    // to a page the user has no memory of being on.
+    val pageHistory = remember { mutableStateListOf<String>() }
+    // The page the last settle left us on. Recording happens against this
+    // rather than against `currentPage` so a swipe in progress is not history
+    // yet, and so the Back handler can mark its own destination as already
+    // seen — which is what keeps Back out of its own history.
+    var settledPageId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(pagerState.settledPage, pages) {
+        val settled = pages.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
+        if (settled == settledPageId) return@LaunchedEffect
+        settledPageId?.let { previous -> pushPageHistory(pageHistory, previous) }
+        settledPageId = settled
+    }
+
     // One-shot landing route handed over by onboarding. Keyed on Unit and not on
     // `pages`: keying it there would re-run the landing every time the user
     // reordered or hid a page and yank them back to it.
@@ -296,18 +323,33 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // down for a detail screen — is the sole record of which page you are on.
     // That is already how the inner section pager worked.
 
-    // Back on any page but the first returns the pager to page 0 — whichever page
-    // the user has put there — instead of popping the nav out from under it.
-    // Previously back on the Library tab popped the NavController to Home while
-    // the pager stayed on Library: visually nothing happened, and the next back
-    // exited the app with Library still on screen.
+    // Back retraces the pages the user visited, then falls back to page 0, then
+    // lets the system exit. It used to jump straight to page 0 from anywhere,
+    // which threw away every page in between: Home -> Playlists -> Favorites
+    // answered one Back with Home, and the two pages the user actually walked
+    // through were unreachable except by swiping again.
     //
-    // This is composed before the pager content below, so it registers first and
+    // Back never popped the NavController here even before that, and must not:
+    // back on the Library tab used to pop to Home while the pager stayed put,
+    // so visually nothing happened and the next Back exited the app with
+    // Library still on screen.
+    //
+    // Each page's scroll position rides along for free — `tabStateHolder`
+    // below keeps every `rememberSaveable` in a page alive while it is off
+    // screen, `rememberLazyListState` included, so a page returned to is where
+    // it was left rather than at the top.
+    //
+    // Composed before the pager content below, so it registers first and
     // LibraryScreen's selection handler — composed later, inside a page — wins the
     // first back press while a selection is active. That ordering used to be
     // enforced within LibraryScreen; it is spread across two files now.
-    BackHandler(enabled = isOnMainTab && pagerState.currentPage != 0) {
-        scope.launch { pagerState.goToPage(0, animateTabs) }
+    BackHandler(enabled = isOnMainTab && (pagerState.currentPage != 0 || pageHistory.isNotEmpty())) {
+        val target = popPageHistory(pageHistory, pages)
+        // Claim the destination before scrolling, so the settle effect above
+        // sees no change and Back does not push what it just left onto the
+        // stack — which would make Back and forward the same gesture.
+        settledPageId = pages.getOrNull(target)
+        scope.launch { pagerState.goToPage(target, animateTabs) }
     }
 
     val themeBackground = MaterialTheme.colorScheme.background

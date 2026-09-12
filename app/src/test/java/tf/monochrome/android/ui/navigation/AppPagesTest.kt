@@ -290,4 +290,63 @@ class AppPagesTest {
         assertTrue("page_order is not in SETTINGS_SYNC_KEYS", syncBlock.contains("PAGE_ORDER"))
         assertTrue("hidden_pages is not in SETTINGS_SYNC_KEYS", syncBlock.contains("HIDDEN_PAGES"))
     }
+
+    // ── Back retraces the pages the user walked ─────────────────────────
+    //
+    // Back used to jump to page 0 from anywhere, which threw away every page
+    // in between. These pin the two things that made the naive stack wrong: a
+    // page revisited must not appear twice, and a page hidden since it was
+    // visited must not be returned to.
+
+    @Test
+    fun `back retraces the route instead of jumping to the first page`() {
+        val pages = listOf("home", "discover", "playlists", "favorites")
+        val history = mutableListOf<String>()
+        // home -> discover -> playlists -> favorites
+        pushPageHistory(history, "home")
+        pushPageHistory(history, "discover")
+        pushPageHistory(history, "playlists")
+
+        assertEquals(2, popPageHistory(history, pages)) // playlists
+        assertEquals(1, popPageHistory(history, pages)) // discover
+        assertEquals(0, popPageHistory(history, pages)) // home
+    }
+
+    @Test
+    fun `revisiting a page moves it up rather than stacking another copy`() {
+        val pages = listOf("home", "discover")
+        val history = mutableListOf<String>()
+        // Swiping back and forth must not make Back take one press per swipe.
+        repeat(5) {
+            pushPageHistory(history, "home")
+            pushPageHistory(history, "discover")
+        }
+        assertEquals(listOf("home", "discover"), history)
+    }
+
+    @Test
+    fun `an exhausted history falls back to the first page`() {
+        val history = mutableListOf<String>()
+        assertEquals(0, popPageHistory(history, listOf("home", "discover")))
+    }
+
+    @Test
+    fun `a page hidden since it was visited is skipped, not clamped`() {
+        val history = mutableListOf<String>()
+        pushPageHistory(history, "home")
+        pushPageHistory(history, "playlists")
+        // The user hides Playlists in Settings while it sits in the history.
+        val pages = listOf("home", "discover", "favorites")
+        assertEquals("skips the hidden page and lands on home", 0, popPageHistory(history, pages))
+        assertTrue("the hidden entry is consumed, not left to fire again", history.isEmpty())
+    }
+
+    @Test
+    fun `popping consumes the entry so Back does not loop on one page`() {
+        val pages = listOf("home", "discover")
+        val history = mutableListOf<String>()
+        pushPageHistory(history, "discover")
+        assertEquals(1, popPageHistory(history, pages))
+        assertEquals("nothing left, so the next Back goes to page 0", 0, popPageHistory(history, pages))
+    }
 }

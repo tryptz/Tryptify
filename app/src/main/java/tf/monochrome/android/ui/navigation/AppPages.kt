@@ -149,3 +149,34 @@ internal fun landingPageIndex(pages: List<String>, route: String): Int? = when (
  */
 internal fun restoredPageIndex(pages: List<String>, lastId: String?): Int =
     pages.indexOf(lastId).takeIf { it >= 0 } ?: 0
+
+/**
+ * Record [leaving] as somewhere the user has been, in [history] (oldest first).
+ *
+ * At most one entry per page: revisiting moves it to the top rather than
+ * appending. Without that, swiping between two pages builds a stack as deep as
+ * the number of swipes, and Back then takes that many presses to leave.
+ */
+internal fun pushPageHistory(history: MutableList<String>, leaving: String) {
+    history.remove(leaving)
+    history.add(leaving)
+}
+
+/**
+ * Where Back should go, consuming [history] as it looks.
+ *
+ * Entries for pages that are no longer visible — hidden or removed in Settings
+ * while the history was being built — are dropped rather than clamped, because
+ * an index that no longer means what it did sends Back somewhere the user never
+ * was. When nothing usable is left the answer is page 0, which is where Back
+ * always went before there was a history at all; the caller stops enabling Back
+ * once that is also where the user already is.
+ */
+internal fun popPageHistory(history: MutableList<String>, pages: List<String>): Int {
+    while (history.isNotEmpty()) {
+        val candidate = history.removeAt(history.lastIndex)
+        val index = pages.indexOf(candidate)
+        if (index >= 0) return index
+    }
+    return 0
+}
