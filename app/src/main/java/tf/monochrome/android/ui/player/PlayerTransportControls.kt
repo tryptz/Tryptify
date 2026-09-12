@@ -329,12 +329,26 @@ internal fun TransportIcon(
         },
         label = "transportBulge",
     )
+    // The same give the play disc has. The chevrons had the bulge — the glass
+    // swelling under the finger — but not the squeeze, so the two controls
+    // either side of play answered a tap differently from play itself. Same
+    // 0.92 and the same spring, so the row presses as one set of buttons.
+    //
+    // Follows "Disable animations" exactly as the disc does: with motion off
+    // there is no press state to scale, so the whole layer is skipped.
+    val stillPress = tf.monochrome.android.ui.theme.reduceMotion()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && !stillPress) 0.92f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "transportScale",
+    )
     // A generously-sized clickable box (instead of the fixed 48dp IconButton) so
     // the offset + blurred drop shadow has canvas room and isn't clipped by the
     // transport row. The visible glyph stays `size`, centred in the box.
     Box(
         modifier = Modifier
             .size(size + 40.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
