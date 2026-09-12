@@ -201,6 +201,14 @@ object WhatsNew {
                         "library found nothing in says so before you open it.",
                 ),
                 WhatsNewEntry(
+                    section = LIBRARY,
+                    title = "Back steps up one folder at a time",
+                    body = "Opening a subfolder replaced the folder you came from instead " +
+                        "of stacking on it, so Back left the browser altogether. It steps " +
+                        "back up the tree now, and album and artist trails retrace the " +
+                        "same way.",
+                ),
+                WhatsNewEntry(
                     section = PAGES,
                     title = "Presses feel like the player's, everywhere",
                     body = "The old press settled slowly and wobbled — barely visible on a " +

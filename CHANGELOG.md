@@ -20,6 +20,11 @@
 
 ### Fixed
 
+#### Back left the folder browser instead of stepping up a level
+- **`launchSingleTop` does not compare the route.** `NavController.launchSingleTopInternal` matches on the *destination*, then removes the top back-stack entry and puts a copy back carrying the new arguments. `folder/{folderPath}` is registered once, so `folder/A` and `folder/A/B` are the same destination: walking into a subfolder replaced the folder you came from, leaving nothing to go back to.
+- **It was never only folders.** Any trail through one screen type collapsed the same way — album → album, artist → artist, genre → genre, shelf → shelf. `navigateTool`'s own documentation promised the opposite: "Content screens are allowed to chain … and Back should walk it in reverse."
+- **The duplicate it was meant to stop is the double-tap**, and the `isSettled()` guard on the line above already stops that: after a navigate the new entry is the current one and is not RESUMED until its transition finishes, so the second tap is dropped. Re-entering a screen from a different screen is what `navigateTool` is for, and it keeps its `popUpTo`.
+
 #### A folder with a space in its name opened blank
 - **The route was built with the wrong encoder.** `java.net.URLEncoder` is form encoding, where a space becomes `+`. Navigation percent-decodes a route argument once on the way into the destination, and `+` is not percent-encoding, so it arrived as a literal plus: `/storage/emulated/0/My Music` was queried as `/storage/emulated/0/My+Music`, a path that does not exist, and both the subfolder and the track query came back empty.
 - **`/Music` was the one folder that worked**, because it has no space in it — which is what made this look like a scanner or folder-index problem for three rounds. Neither was involved.
