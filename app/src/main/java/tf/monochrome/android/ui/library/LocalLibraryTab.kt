@@ -90,6 +90,10 @@ import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import androidx.navigation.NavController
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.LazyPagingItems
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.bounceClick
@@ -116,8 +120,11 @@ fun LocalLibraryTab(
     navController: NavController,
     playerViewModel: PlayerViewModel
 ) {
-    val localTracks by viewModel.localTracks.collectAsStateWithLifecycle()
-    val sortedTracks by viewModel.sortedTracks.collectAsStateWithLifecycle()
+    // Pages, not the whole library. `collectAsLazyPagingItems` holds only the
+    // rows near the screen; `trackCount` answers "is the library empty" and
+    // "can we shuffle" without building a single track to find out.
+    val pagedTracks = viewModel.pagedTracks.collectAsLazyPagingItems()
+    val trackCount by viewModel.trackCount.collectAsStateWithLifecycle()
     val sortedAlbums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
     val sortedArtists by viewModel.sortedArtists.collectAsStateWithLifecycle()
     val songSort by viewModel.songSort.collectAsStateWithLifecycle()
@@ -301,8 +308,14 @@ fun LocalLibraryTab(
                 Icon(Icons.Default.Search, contentDescription = "Search")
             }
             IconButton(
-                onClick = { if (localTracks.isNotEmpty()) onShuffleAll(localTracks) },
-                enabled = localTracks.isNotEmpty()
+                // The queue is fetched when it is needed, not held on the
+                // chance it will be. Off the main thread, inside the scope.
+                onClick = {
+                    if (trackCount > 0) {
+                        subTabScope.launch { onShuffleAll(viewModel.songQueue()) }
+                    }
+                },
+                enabled = trackCount > 0
             ) {
                 Icon(Icons.Default.Shuffle, contentDescription = "Shuffle all")
             }
@@ -349,8 +362,10 @@ fun LocalLibraryTab(
                 0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
                 1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
                 2 -> SongList(
-                    tracks = sortedTracks,
-                    onTrackClick = onTrackClick,
+                    tracks = pagedTracks,
+                    onTrackClick = { track ->
+                        subTabScope.launch { onTrackClick(track, viewModel.songQueue()) }
+                    },
                     onMoreClick = { menuTrack = it },
                     navController = navController,
                 )
@@ -366,7 +381,7 @@ fun LocalLibraryTab(
         }
 
         // Empty state
-        if (!isScanning && localTracks.isEmpty()) {
+        if (!isScanning && trackCount == 0) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -660,101 +675,163 @@ fun ArtistList(
         }
     }
 }
+/**
+ * One song row. Shared by both lists below so the paged library and the
+ * bounded search results cannot drift apart in appearance.
+ */
+@Composable
+private fun SongRow(
+    track: UnifiedTrack,
+    onClick: () -> Unit,
+    onMoreClick: (UnifiedTrack) -> Unit,
+    navController: NavController,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
+            .bounceClick(onClick = onClick)
+            .liquidGlass(shape = MonoDimens.shapeMd),
+        shape = MonoDimens.shapeMd,
+        color = Color.Transparent,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(MonoDimens.listRowHeight)
+                .padding(horizontal = MonoDimens.listItemPaddingH),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Music-note placeholder sits underneath the artwork: if the
+            // cover loads (cached JPG, sidecar, or embedded art pulled on
+            // demand by AudioFileCoverFetcher) it covers the icon; if the
+            // file genuinely has no art the icon stays visible.
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MonoDimens.shapeSm),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                if (track.artworkUri != null) {
+                    AsyncImage(
+                        model = track.artworkUri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    track.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row {
+                    TrackArtistAlbumLine(
+                        track = track,
+                        onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                        onAlbumClick = { navController.openAlbum(track.albumId) },
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    track.qualityBadge?.let { badge ->
+                        Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                        Text(
+                            badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+            Text(
+                track.formattedDuration,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            IconButton(
+                onClick = { onMoreClick(track) },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
 
+/**
+ * The songs list, one page at a time.
+ *
+ * [tracks] is a paged window, not the library: only the rows near the screen
+ * exist. [onTrackClick] therefore takes just the track — the play queue is
+ * built by the caller when a row is tapped, because this list cannot supply
+ * one. That is the whole point: the library used to be held in memory so that
+ * a tap could answer instantly, at ~118 ms and 20,000 objects per emission.
+ */
+@Composable
+fun SongList(
+    tracks: LazyPagingItems<UnifiedTrack>,
+    onTrackClick: (UnifiedTrack) -> Unit,
+    onMoreClick: (UnifiedTrack) -> Unit,
+    navController: NavController,
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+    ) {
+        items(
+            count = tracks.itemCount,
+            key = tracks.itemKey { it.id },
+            contentType = tracks.itemContentType { "track" },
+        ) { index ->
+            // Null only when placeholders are on, which this Pager disables.
+            // Handled rather than asserted away.
+            val track = tracks[index] ?: return@items
+            SongRow(
+                track = track,
+                onClick = { onTrackClick(track) },
+                onMoreClick = onMoreClick,
+                navController = navController,
+            )
+        }
+    }
+}
+
+/**
+ * The same list over a plain list, for search results.
+ *
+ * Search is already bounded — a query narrows the library and the flow behind
+ * it is debounced — so there is nothing to page, and the result set is the
+ * queue, which keeps tapping a search hit behaving as it always has.
+ */
 @Composable
 fun SongList(
     tracks: List<UnifiedTrack>,
     onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onMoreClick: (UnifiedTrack) -> Unit,
-    navController: NavController
+    navController: NavController,
 ) {
     LazyColumn(
         contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
     ) {
-        items(tracks, key = { it.id }) { track ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
-                    .bounceClick(onClick = { onTrackClick(track, tracks) })
-                    .liquidGlass(shape = MonoDimens.shapeMd),
-                shape = MonoDimens.shapeMd,
-                color = Color.Transparent,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(MonoDimens.listRowHeight)
-                        .padding(horizontal = MonoDimens.listItemPaddingH),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Music-note placeholder sits underneath the artwork: if the
-                    // cover loads (cached JPG, sidecar, or embedded art pulled on
-                    // demand by AudioFileCoverFetcher) it covers the icon; if the
-                    // file genuinely has no art the icon stays visible.
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(MonoDimens.shapeSm),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                        if (track.artworkUri != null) {
-                            AsyncImage(
-                                model = track.artworkUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.matchParentSize()
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            track.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Row {
-                            TrackArtistAlbumLine(
-                                track = track,
-                                onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
-                                onAlbumClick = { navController.openAlbum(track.albumId) },
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            track.qualityBadge?.let { badge ->
-                                Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
-                                Text(
-                                    badge,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        track.formattedDuration,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    IconButton(
-                        onClick = { onMoreClick(track) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = "More options",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
+        items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+            SongRow(
+                track = track,
+                onClick = { onTrackClick(track, tracks) },
+                onMoreClick = onMoreClick,
+                navController = navController,
+            )
         }
     }
 }

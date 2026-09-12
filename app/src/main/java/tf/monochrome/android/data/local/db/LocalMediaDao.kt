@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.local.db
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -16,6 +17,94 @@ interface LocalMediaDao {
 
     @Query("SELECT * FROM local_tracks ORDER BY albumArtist, album, discNumber, trackNumber")
     fun getAllTracks(): Flow<List<LocalTrackEntity>>
+
+    /**
+     * The songs list, one page at a time.
+     *
+     * Eight queries rather than one @RawQuery with the ORDER BY pasted in.
+     * Room checks these at build time; a RawQuery is a string, so a typo in a
+     * column name is a crash when the tab opens instead of a failed build. The
+     * list is the most-used screen in the app, which is exactly where that
+     * trade should fall on the safe side.
+     *
+     * Every clause ends in `albumArtist, album, discNumber, trackNumber` — the
+     * table's default order, and the order the Kotlin sort used to see. A
+     * stable sort leaves rows the key ties on in the order they arrived, so
+     * repeating the base order as a tiebreak reproduces that; and DESC repeats
+     * it reversed, because the descending case reversed the whole sorted list,
+     * ties and all. Reversing only the leading key would quietly reshuffle
+     * every same-titled track. See LibrarySortTest.
+     *
+     * LOWER(COALESCE(title, filePath)) matches `displayTitle.lowercase()` for
+     * every tagged file. Two known differences, both confined to sorting: an
+     * untitled file sorts by its full path rather than by the bare filename
+     * the row displays, and SQLite's LOWER only folds ASCII where Kotlin's
+     * lowercase() is Unicode-aware.
+     */
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByNameAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByNameDesc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByDateAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByDateDesc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByTimeAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByTimeDesc(): PagingSource<Int, LocalTrackEntity>
+
+    // codec is NOT NULL in the schema, so no COALESCE. The Kotlin sort's
+    // "\uFFFF" fallback only ever applied to an unmapped codec name, which
+    // sorts as itself here rather than as UNKNOWN.
+    @Query("SELECT * FROM local_tracks ORDER BY codec ASC, LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByFileTypeAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY codec DESC, LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByFileTypeDesc(): PagingSource<Int, LocalTrackEntity>
+
+    /** How many tracks there are, without loading any of them. */
+    @Query("SELECT COUNT(*) FROM local_tracks")
+    fun countTracks(): Flow<Int>
+
+    /**
+     * The whole library in one sort order, once, for building a play queue.
+     *
+     * Tapping a row queues everything after it, and the paged list above only
+     * ever holds the rows near the screen — so the queue has to come from
+     * somewhere. It comes from here, on tap, off the main thread, instead of
+     * the list being held in memory permanently just in case somebody presses
+     * play. Same rows and same order as the paged queries; the ORDER BY
+     * clauses are deliberately identical.
+     */
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByNameAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByNameDesc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByDateAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByDateDesc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByTimeAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByTimeDesc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY codec ASC, LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByFileTypeAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY codec DESC, LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByFileTypeDesc(): List<LocalTrackEntity>
 
     // `genre` is in the LIKE and indexed (see LocalMediaEntities). Searching
     // "techno" used to match only tracks with it in the title; now it finds

@@ -7,6 +7,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import androidx.paging.cachedIn
+import androidx.paging.PagingData
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.StateFlow
@@ -44,8 +47,12 @@ class LocalLibraryViewModel @Inject constructor(
 
     // ── Local media ─────────────────────────────────────────────────
 
-    val localTracks: StateFlow<List<UnifiedTrack>> = localMediaRepository.getAllTracks()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // localTracks used to live here: the whole library as a StateFlow, rebuilt
+    // on every database emission, held for the life of the screen. It is gone
+    // rather than left unused, because an unread StateFlow with a live
+    // subscriber still does all of that work — leaving it would have made the
+    // paging below buy nothing at all. What used it now asks for a page
+    // ([pagedTracks]), a count ([trackCount]), or a queue ([songQueue]).
 
     val localAlbums: StateFlow<List<UnifiedAlbum>> = localMediaRepository.getAllAlbums()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -109,10 +116,34 @@ class LocalLibraryViewModel @Inject constructor(
     // emission and every sort toggle. The repository below already does its
     // mapping on Default (LocalMediaRepository), but flowOn only covers what is
     // upstream of it, so everything these view models add landed back on Main.
-    val sortedTracks: StateFlow<List<UnifiedTrack>> = combine(localTracks, _songSort) { tracks, sort ->
-        tracks.applySort(sort)
-    }.flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /**
+     * The songs list, paged, re-pagered whenever the sort changes.
+     *
+     * `cachedIn` so the pages survive the sub-tab pager swiping this screen
+     * away and back, and so a configuration change does not re-query the
+     * database from row zero.
+     */
+    val pagedTracks: Flow<PagingData<UnifiedTrack>> = _songSort
+        .flatMapLatest { sort -> localMediaRepository.pagedTracks(sort) }
+        .cachedIn(viewModelScope)
+
+    /**
+     * How many tracks there are, for the empty state and the shuffle button.
+     *
+     * A COUNT, not `localTracks.isEmpty()`: asking the list whether it is empty
+     * is what forced the whole library into memory to answer a yes/no.
+     */
+    val trackCount: StateFlow<Int> = localMediaRepository.countTracks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /**
+     * The play queue for the songs list, in the order it is currently shown.
+     *
+     * Suspends: the query runs off the main thread when a row is tapped rather
+     * than the library being held in memory for the life of the screen against
+     * the chance that somebody presses play.
+     */
+    suspend fun songQueue(): List<UnifiedTrack> = localMediaRepository.tracksForQueue(_songSort.value)
 
     val sortedAlbums: StateFlow<List<UnifiedAlbum>> = combine(localAlbums, _albumSort) { albums, sort ->
         albums.applySort(sort)

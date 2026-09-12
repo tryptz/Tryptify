@@ -363,6 +363,9 @@ dependencies {
 
     // Bundles app/src/main/baseline-prof.txt into the APK so ProfileInstaller
     // AOT-compiles hot Compose code paths on first launch.
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
+    implementation(libs.room.paging)
     implementation(libs.profileinstaller)
     // Where the generated profile comes from. profileinstaller above is the
     // runtime half — it installs a profile at first launch — and until this

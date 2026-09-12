@@ -6,6 +6,7 @@ composeBom = "2024.12.01"
 media3 = "1.5.1"
 hilt = "2.57.1"
 room = "2.7.1"
+paging = "3.3.5"
 ktor = "3.0.3"
 coil = "3.0.4"
 supabase = "3.4.1"
@@ -152,6 +153,9 @@ profileinstaller = { group = "androidx.profileinstaller", name = "profileinstall
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+androidx-paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
+room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
 androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
