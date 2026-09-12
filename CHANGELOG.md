@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+#### A scrollbar you can drag
+- **Long lists have a thumb down the right edge now**, like a web page. Drag it to land anywhere in the library instead of flicking.
+- **The songs list loads a page at a time.** It used to build every track in the library on every change — around 118 ms and 20,000 objects for a 20,000-track library, to draw the dozen rows on screen.
+
 ### Fixed
 
 #### The library stopped reindexing itself every time you open the app

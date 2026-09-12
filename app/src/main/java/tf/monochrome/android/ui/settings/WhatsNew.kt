@@ -126,6 +126,14 @@ object WhatsNew {
                     body = "The glow around an active Lyrics or Shuffle icon was being cut " +
                         "into a soft square. It follows the glyph now.",
                 ),
+                // No section: it is the only library note in this release, and a
+                // heading over one entry reads as a heading over nothing.
+                WhatsNewEntry(
+                    title = "Drag the scrollbar to move through a big library",
+                    body = "Long lists have a thumb down the right edge you can drag, the " +
+                        "way a web page does. The songs list also loads a page at a time " +
+                        "now instead of building the whole library to show a screenful.",
+                ),
             ),
         ),
         WhatsNewRelease(
