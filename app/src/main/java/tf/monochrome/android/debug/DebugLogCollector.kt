@@ -90,7 +90,7 @@ class DebugLogCollector @Inject constructor(
      * Returns a best-effort entry; anything that doesn't match is preserved
      * verbatim as an INFO line so nothing is silently dropped.
      */
-    private fun parse(line: String): DebugLogEntry {
+    internal fun parse(line: String): DebugLogEntry {
         val match = THREADTIME_REGEX.matchEntire(line)
         if (match == null) {
             return DebugLogEntry(
@@ -122,12 +122,20 @@ class DebugLogCollector @Inject constructor(
      * codec back-pressure during buffering and prebuffering — not an error.
      * Same idea for the other entries: pure plumbing noise from system
      * components, never our app's behavior.
+     *
+     * Some of it is logged at ERROR, which matters more than the volume does:
+     * the viewer's Errors tab is where you look when something is actually
+     * wrong, and a screen of vendor chatter there is worse than a long All tab.
+     * Everything dropped below was filling that tab on a ColorOS device while
+     * the app was working perfectly.
      */
-    private fun isNoise(entry: DebugLogEntry): Boolean {
+    internal fun isNoise(entry: DebugLogEntry): Boolean {
         // Drop debug-level lines from these tags entirely.
         if (entry.level == 'D' && entry.tag in NOISE_DEBUG_TAGS) return true
         // Some tags spam at info level too — drop those regardless of level.
         if (entry.tag in NOISE_TAGS_ALL_LEVELS) return true
+        // And some arrive under a tag worth keeping — see NOISE_MESSAGES.
+        if (NOISE_MESSAGES.any { entry.message.startsWith(it) }) return true
         return false
     }
 
@@ -155,6 +163,30 @@ class DebugLogCollector @Inject constructor(
             "VRR",                        // OPlus skin: variable refresh rate state
             "OplusScrollToTopManager",    // OPlus skin: focus tracking
             "CoreBackPreview",            // System: predictive back gesture
+            // Both of these log at ERROR, several times a minute, on OPlus
+            // devices. OplusBracketLog is the skin's view-mirroring manager
+            // saying it does not handle a plain ViewRootImpl — which is every
+            // window that is not in its split-screen bracket, i.e. ours.
+            // AudioTrackExtImpl is the vendor's AudioTrack extension reporting
+            // that the platform returned no fade type, once per track start.
+            "OplusBracketLog",
+            "AudioTrackExtImpl",
+        )
+
+        /**
+         * Noise that arrives under a tag we cannot drop wholesale.
+         *
+         * Native logging uses the process name as its tag, so this lands on
+         * `notrypt.android` — the tail of our own applicationId — alongside
+         * linker and ART messages that would matter. Matched on the message
+         * instead, by prefix, so only the known line goes.
+         *
+         * The codec one is Android 15's `getRequiredSystemResources` query
+         * against a component that does not implement it. It is logged once per
+         * MediaCodec the player creates, and playback is unaffected.
+         */
+        private val NOISE_MESSAGES = listOf(
+            "Failed to query component interface for required system resources",
         )
     }
 }

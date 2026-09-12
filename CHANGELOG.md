@@ -25,6 +25,11 @@
 
 ### Fixed
 
+#### The debug log's Errors tab was all vendor chatter
+- **Three sources filled it on a ColorOS device while nothing was wrong.** `OplusBracketLog` is the skin's view-mirroring manager saying it does not handle a plain `ViewRootImpl` — every window not in its split-screen bracket, i.e. ours. `AudioTrackExtImpl` reports that the platform returned no fade type, once per track start. The third is Android 15's `getRequiredSystemResources` query against a codec that does not implement it, logged once per `MediaCodec` the player creates.
+- **All three log at ERROR**, which is what made them worth filtering rather than tolerating: a long All tab is a nuisance, but an Errors tab that is 100% noise is the one view that has to be trustworthy.
+- **The codec line is matched on its message, not its tag.** Native logging tags lines with the process name, so it arrives under `notrypt.android` — our own applicationId — alongside linker and ART failures that would matter. `DebugLogNoiseTest` pins that difference.
+
 #### The press glow was instant on every slab but the dock's
 - **Four presses paired a spring in with a tween out** — the mini player's controls, the mini player bar, the play disc and the skip chevrons. That is the pairing `Motion.kt` describes having removed from the dock, and for the reason it gives: a tween carries no velocity, so the release threw away the rise it interrupted and restarted from a standstill.
 - **A softer release of their own did not close the gap.** The dock's feel is `PressSpring` itself, not a slower spring, so all four use that — the same value the slab under Shuffle has always had, rather than a second spec approximating it.
