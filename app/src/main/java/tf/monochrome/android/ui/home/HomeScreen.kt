@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.components.liquidGlass
-import androidx.compose.foundation.pager.PagerState
 import tf.monochrome.android.ui.navigation.PageJumpList
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -76,10 +75,11 @@ import androidx.compose.foundation.layout.Box
 fun HomeScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
-    // The whole page list and the one pager. Home IS the page list now, so it
-    // needs both for the same reason LibraryScreen does.
+    // The page list, and the nav host's way of opening one. A lambda rather
+    // than the PagerState: see PageJumpList's own note on whose coroutine scope
+    // the scroll has to run on.
     pages: List<String>,
-    pager: PagerState,
+    onSelectPage: (String) -> Unit,
     searchViewModel: SearchViewModel = hiltViewModel(),
     downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel(),
     settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel(),
@@ -322,7 +322,7 @@ fun HomeScreen(
 
                 PageJumpList(
                     pages = pages,
-                    pager = pager,
+                    onSelect = onSelectPage,
                     current = Screen.Home.route,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(bottom = 160.dp),

@@ -17,13 +17,8 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.pager.PagerState
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.theme.MonoDimens
-import tf.monochrome.android.ui.theme.goToPage
-import tf.monochrome.android.ui.theme.reduceMotion
 
 /**
  * The page list: every page, by name, tapped to go there.
@@ -36,25 +31,24 @@ import tf.monochrome.android.ui.theme.reduceMotion
  * This is that list, and it is the same list everywhere: Home renders it as its
  * whole body, and every other page reaches it through [PageJumpSheet].
  *
- * Jumping through [pager] rather than the NavController is deliberate and is
- * what makes Back work for free: `MonochromeNavHost`'s settle effect records
- * every page the pager lands on, so a tap here enters the page history exactly
- * as a swipe does.
+ * [onSelect] is supplied by `MonochromeNavHost` and moves its pager. It is a
+ * lambda rather than the `PagerState` itself because the scroll must not run on
+ * a coroutine scope this composable owns: `rememberCoroutineScope` is cancelled
+ * when its composable leaves the composition, and in both call sites the jump
+ * destroys the caller — the sheet closes, or Home is disposed as the pager
+ * leaves its viewport (`beyondViewportPageCount = 0`). The animation was being
+ * cancelled part-way and the pager settled on whatever page it was nearest,
+ * which is why tapping a distant page landed on the wrong one.
  */
 @Composable
 internal fun PageJumpList(
     pages: List<String>,
-    pager: PagerState,
+    onSelect: (String) -> Unit,
     current: String?,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(),
     onJump: () -> Unit = {},
 ) {
-    val scope = rememberCoroutineScope()
-    // Read once here rather than inside the click lambda: reduceMotion() is a
-    // composable read and the jump happens in a coroutine.
-    val animate = !reduceMotion()
-
     LazyColumn(modifier = modifier.fillMaxWidth(), contentPadding = contentPadding) {
         items(pages, key = { it }, contentType = { "page" }) { id ->
             val isCurrent = id == current
@@ -73,11 +67,8 @@ internal fun PageJumpList(
                     .then(
                         if (isCurrent) Modifier
                         else Modifier.bounceClick {
-                            val page = pages.indexOf(id)
-                            if (page >= 0) {
-                                onJump()
-                                scope.launch { pager.goToPage(page, animate) }
-                            }
+                            onJump()
+                            onSelect(id)
                         }
                     )
                     .padding(horizontal = 24.dp, vertical = 20.dp),
@@ -96,7 +87,7 @@ internal fun PageJumpList(
 @Composable
 internal fun PageJumpSheet(
     pages: List<String>,
-    pager: PagerState,
+    onSelect: (String) -> Unit,
     current: String?,
     onDismiss: () -> Unit,
 ) {
@@ -109,11 +100,13 @@ internal fun PageJumpSheet(
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
             PageJumpList(
                 pages = pages,
-                pager = pager,
+                onSelect = onSelect,
                 current = current,
                 // Dismiss before the scroll, not after it: the sheet is over the
                 // pager, so animating a page change underneath a sheet that is
-                // still up hides the thing the tap was for.
+                // still up hides the thing the tap was for. Safe to do in this
+                // order only because the scroll no longer runs on this
+                // composable's scope — see above.
                 onJump = onDismiss,
             )
         }

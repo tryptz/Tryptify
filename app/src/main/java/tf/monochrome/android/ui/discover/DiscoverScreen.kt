@@ -128,9 +128,9 @@ import tf.monochrome.android.ui.components.SearchOverlay
 fun DiscoverScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
-    // The page list and the pager behind it, for the jump sheet in the top bar.
+    // The page list and the nav host's way of opening one, for the jump sheet.
     pages: List<String>,
-    pager: androidx.compose.foundation.pager.PagerState,
+    onSelectPage: (String) -> Unit,
     viewModel: DiscoverViewModel = rememberDiscoverViewModel(),
 ) {
     var pageJumpOpen by androidx.compose.runtime.remember {
@@ -139,7 +139,7 @@ fun DiscoverScreen(
     if (pageJumpOpen) {
         tf.monochrome.android.ui.navigation.PageJumpSheet(
             pages = pages,
-            pager = pager,
+            onSelect = onSelectPage,
             current = tf.monochrome.android.ui.navigation.Screen.Discover.route,
             onDismiss = { pageJumpOpen = false },
         )

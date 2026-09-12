@@ -68,9 +68,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.components.MiniPlayer
-import tf.monochrome.android.ui.components.SwipeToLibraryHint
-import tf.monochrome.android.ui.components.SwipeHintPillHeight
-import tf.monochrome.android.ui.components.swipeHintPillWidth
 import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.detail.AlbumDetailScreen
@@ -273,30 +270,16 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         lastPageId = pages.getOrNull(pagerState.currentPage)
     }
 
-    // The pages the user has actually been on, oldest first, so Back retraces
-    // the route they took. Page ids rather than indices, for the same reason
-    // `lastPageId` is: hiding or reordering a page in Settings moves every
-    // index, and a stack of stale indices would send Back somewhere arbitrary.
-    //
-    // At most one entry per page — visiting a page again moves it to the top
-    // rather than appending. Without that, swiping back and forth between two
-    // pages builds an arbitrarily deep stack, and Back then takes as many
-    // presses to leave as the user made swipes.
-    //
-    // Session-scoped on purpose: `remember`, not `rememberSaveable`. A history
-    // that survived process death would send the first Back after a cold start
-    // to a page the user has no memory of being on.
-    val pageHistory = remember { mutableStateListOf<String>() }
-    // The page the last settle left us on. Recording happens against this
-    // rather than against `currentPage` so a swipe in progress is not history
-    // yet, and so the Back handler can mark its own destination as already
-    // seen — which is what keeps Back out of its own history.
-    var settledPageId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(pagerState.settledPage, pages) {
-        val settled = pages.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
-        if (settled == settledPageId) return@LaunchedEffect
-        settledPageId?.let { previous -> pushPageHistory(pageHistory, previous) }
-        settledPageId = settled
+    // Every jump to a page goes through here, and it matters that `scope` is
+    // the nav host's rather than the calling screen's. The list that issues the
+    // jump is inside the thing being navigated away from — a sheet that closes,
+    // or Home, which the pager disposes on the way out — and a
+    // rememberCoroutineScope dies with its composable, cancelling the scroll
+    // part-way. The pager then settled wherever it had got to, which is why
+    // tapping a distant page opened the wrong one.
+    val selectPage: (String) -> Unit = { id ->
+        val page = pages.indexOf(id)
+        if (page >= 0) scope.launch { pagerState.goToPage(page, animateTabs) }
     }
 
     // One-shot landing route handed over by onboarding. Keyed on Unit and not on
@@ -323,33 +306,25 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // down for a detail screen — is the sole record of which page you are on.
     // That is already how the inner section pager worked.
 
-    // Back retraces the pages the user visited, then falls back to page 0, then
-    // lets the system exit. It used to jump straight to page 0 from anywhere,
-    // which threw away every page in between: Home -> Playlists -> Favorites
-    // answered one Back with Home, and the two pages the user actually walked
-    // through were unreachable except by swiping again.
+    // Back goes to Home, and nowhere else. There is no swipe any more, so there
+    // is no route to retrace: the only movement to undo is "I opened this page
+    // from the list", and its undo is the list.
     //
-    // Back never popped the NavController here even before that, and must not:
-    // back on the Library tab used to pop to Home while the pager stayed put,
-    // so visually nothing happened and the next Back exited the app with
-    // Library still on screen.
+    // Back never popped the NavController here and must not: back on a library
+    // page used to pop to Home while the pager stayed put, so visually nothing
+    // happened and the next Back exited the app with the page still on screen.
     //
-    // Each page's scroll position rides along for free — `tabStateHolder`
-    // below keeps every `rememberSaveable` in a page alive while it is off
-    // screen, `rememberLazyListState` included, so a page returned to is where
-    // it was left rather than at the top.
+    // Each page's scroll position rides along for free — `tabStateHolder` below
+    // keeps every `rememberSaveable` in a page alive while it is off screen,
+    // `rememberLazyListState` included, so a page returned to is where it was
+    // left rather than at the top.
     //
     // Composed before the pager content below, so it registers first and
-    // LibraryScreen's selection handler — composed later, inside a page — wins the
-    // first back press while a selection is active. That ordering used to be
-    // enforced within LibraryScreen; it is spread across two files now.
-    BackHandler(enabled = isOnMainTab && (pagerState.currentPage != 0 || pageHistory.isNotEmpty())) {
-        val target = popPageHistory(pageHistory, pages)
-        // Claim the destination before scrolling, so the settle effect above
-        // sees no change and Back does not push what it just left onto the
-        // stack — which would make Back and forward the same gesture.
-        settledPageId = pages.getOrNull(target)
-        scope.launch { pagerState.goToPage(target, animateTabs) }
+    // LibraryScreen's selection handler — composed later, inside a page — wins
+    // the first back press while a selection is active.
+    val homePage = homePageIndex(pages)
+    BackHandler(enabled = isOnMainTab && pagerState.currentPage != homePage) {
+        pages.getOrNull(homePage)?.let(selectPage)
     }
 
     val themeBackground = MaterialTheme.colorScheme.background
@@ -431,7 +406,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
-                    beyondViewportPageCount = 0
+                    beyondViewportPageCount = 0,
+                    // Pages are chosen from the list on Home. The pager stays
+                    // because SaveableStateProvider hangs off it — that is what
+                    // keeps each page's scroll position while it is off screen
+                    // — but it is driven, not dragged.
+                    userScrollEnabled = false,
                 ) { page ->
                     // getOrNull, not [page]: `pages` shrinks when a page is
                     // hidden, and the content lambda can be invoked for a stale
@@ -452,14 +432,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                         navController = navController,
                                         playerViewModel = playerViewModel,
                                         pages = pages,
-                                        pager = pagerState,
+                                        onSelectPage = selectPage,
                                     )
                                 Screen.Discover.route ->
                                     DiscoverScreen(
                                         navController = navController,
                                         playerViewModel = playerViewModel,
                                         pages = pages,
-                                        pager = pagerState,
+                                        onSelectPage = selectPage,
                                     )
                                 // Everything else is a Library page.
                                 // reconcilePageOrder drops ids this build does
@@ -469,7 +449,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                     playerViewModel = playerViewModel,
                                     sectionId = pageId,
                                     pages = pages,
-                                    pager = pagerState,
+                                    onSelectPage = selectPage,
                                 )
                             }
                         }
@@ -774,48 +754,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         )
                     }
                 }
-            }
-        }
-
-        // ── Layer 1.5: page indicator ───────────────────────────────
-        // Compact glass pill centred on the TopAppBar's own centre line, in the
-        // free gap between the screens' titles and their action icons. Drawn
-        // OVER the pager, not behind it: Haze can only blur content already
-        // drawn this frame, so a pill under the pager loses its frost entirely.
-        if (isOnMainTab) {
-            CompositionLocalProvider(
-                tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
-            ) {
-                // One slot per visible page. This used to fold an outer
-                // Home/Discover/Library pager and an inner section pager onto
-                // one axis by hand, fading the inner one in by how far the outer
-                // crossing had got. There is one pager now, so the indicator is
-                // just its position.
-                val next = (pagerState.currentPage + 1) % pages.size.coerceAtLeast(1)
-                SwipeToLibraryHint(
-                    pageCount = pages.size,
-                    // Stays a lambda: it is read in a DrawScope, not in
-                    // composition, so the worm follows the finger without
-                    // recomposing on every frame of the swipe.
-                    progressProvider = {
-                        pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    },
-                    // Tap walks forward one page and wraps at the end.
-                    onClick = { scope.launch { pagerState.goToPage(next, animateTabs) } },
-                    onClickLabel = pages.getOrNull(next)
-                        ?.let { "Open " + (APP_PAGE_TITLES[it] ?: it) }
-                        ?: "Open next page",
-                    hazeState = hazeState,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        // The TopAppBar pads itself for the status bar and is
-                        // 64.dp tall, so this drops the pill onto its centre.
-                        .padding(top = statusBarHeight + (64.dp - SwipeHintPillHeight) / 2)
-                        .size(
-                            width = swipeHintPillWidth(pages.size),
-                            height = SwipeHintPillHeight,
-                        ),
-                )
             }
         }
         }

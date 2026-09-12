@@ -3,7 +3,6 @@ package tf.monochrome.android.ui.library
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -150,9 +149,9 @@ fun LibraryScreen(
     // over five. All instances share one LibraryViewModel: the pager sits outside
     // the NavHost, so hiltViewModel() resolves against the Activity store.
     sectionId: String,
-    // The whole page list and the one pager, for the overflow menu's jumps.
+    // The page list and the nav host's way of opening one, for the jump sheet.
     pages: List<String>,
-    pager: PagerState,
+    onSelectPage: (String) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
 ) {
@@ -303,7 +302,7 @@ fun LibraryScreen(
         if (sectionMenuOpen) {
             tf.monochrome.android.ui.navigation.PageJumpSheet(
                 pages = pages,
-                pager = pager,
+                onSelect = onSelectPage,
                 current = sectionId,
                 onDismiss = { sectionMenuOpen = false },
             )
