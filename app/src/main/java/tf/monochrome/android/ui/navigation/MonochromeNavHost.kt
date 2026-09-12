@@ -1,6 +1,5 @@
 package tf.monochrome.android.ui.navigation
 
-import tf.monochrome.android.ui.theme.goToPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -245,8 +244,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         && currentDestination?.route !in miniPlayerHiddenRoutes
 
     val scope = rememberCoroutineScope()
-    // Page changes slide normally; with "Disable animations" on they jump.
-    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
 
     // One pager over one flat list of pages. There used to be two — an outer one
     // hardcoded to Home / Discover / Library and an inner one over the Library's
@@ -279,7 +276,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // tapping a distant page opened the wrong one.
     val selectPage: (String) -> Unit = { id ->
         val page = pages.indexOf(id)
-        if (page >= 0) scope.launch { pagerState.goToPage(page, animateTabs) }
+        // scrollToPage, not animateScrollToPage: picking a page is a choice off
+        // a list, not a drag, and sliding there sweeps the pager through every
+        // page in between — Home to Downloads animated across five of them.
+        // The slide was there to follow a finger, and there is no finger now.
+        if (page >= 0) scope.launch { pagerState.scrollToPage(page) }
     }
 
     // One-shot landing route handed over by onboarding. Keyed on Unit and not on
