@@ -86,6 +86,14 @@ monochrome_tf_reference-*.pdf
 *.json
 *.py
 old_HomeViewModel.kt
+# The generated baseline profile. `*.txt` above would swallow it silently:
+# `generateBaselineProfile` would succeed, the file would never be staged, and
+# the release would ship without the profile it was built to carry. It is an
+# INPUT to the release build, not an artifact -- committed on purpose, so a
+# release does not depend on somebody having a device attached.
+!app/src/**/generated/baselineProfiles/*.txt
+!app/src/main/baseline-prof.txt
+
 !monochrome-library-2026-03-23.json
 !app/src/main/assets/devedit_default_layout.json
 !app/src/main/assets/qobuz_recommendations.json

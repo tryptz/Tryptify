@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.baselineprofile)
 }
 
 val keystoreProperties = Properties()
@@ -125,6 +126,16 @@ android {
             // on every machine and every CI run — so `./gradlew installDebug`
             // over a CI-produced APK (or vice versa) upgrades in place.
             signingConfig = signingConfigs.getByName("debug")
+        }
+        // Macrobenchmark and profile generation need a build that is shaped
+        // like release — minified, not debuggable — but signed with the debug
+        // key so it installs anywhere. Measuring a debug build measures the
+        // debugger.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
         }
         release {
             if (hasCompleteReleaseSigning) {
@@ -353,6 +364,11 @@ dependencies {
     // Bundles app/src/main/baseline-prof.txt into the APK so ProfileInstaller
     // AOT-compiles hot Compose code paths on first launch.
     implementation(libs.profileinstaller)
+    // Where the generated profile comes from. profileinstaller above is the
+    // runtime half — it installs a profile at first launch — and until this
+    // existed the only profiles it had to install were the ones the AndroidX
+    // libraries ship. Nothing described this app's own startup or its lists.
+    baselineProfile(project(":baselineprofile"))
 
     // Testing
     testImplementation(libs.junit)

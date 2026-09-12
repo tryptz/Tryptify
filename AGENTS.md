@@ -51,6 +51,34 @@ Several tests exist specifically to hold the invariants above — `LightSchemesT
 guarantee, not a formality. If one fails, fix the code; do not loosen the
 threshold.
 
+## Baseline profile
+
+`:app` ships `androidx.profileinstaller`, and until now the only profiles it had
+to install were the ones the AndroidX libraries ship — nothing described this
+app's own startup, nav host or list rows. `:baselineprofile` is the module that
+records that. It needs a **connected device or emulator**, because the only way
+to know which code is hot is to run it:
+
+```
+./gradlew :app:generateBaselineProfile
+```
+
+The result lands in `app/src/release/generated/baselineProfiles/` and is
+**committed** — it is an input to the release build, not an artifact, so a
+release does not depend on someone having a phone plugged in. `.gitignore` has
+a blanket `*.txt`, so there is an explicit negation for that path; if you move
+the output, move the negation with it or the profile will vanish silently and
+the build will still succeed.
+
+Needs the submodules, like anything else that assembles an APK.
+
+Two things to know before trusting it. The Baseline Profile Gradle Plugin
+prints a warning that it was tested only against AGP 9.0.0-alpha01 while this
+project is on 9.0.0 — the warning is left switched on deliberately rather than
+silenced, because nobody has verified generation on this combination yet.
+And regenerate the profile when startup or the first screens change shape: a
+stale profile is not wrong, only progressively less useful.
+
 ## Commits
 
 Author as `tryptz`. No co-author trailers and no tool attribution in commit

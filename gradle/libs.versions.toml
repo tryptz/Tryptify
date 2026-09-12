@@ -26,6 +26,10 @@ nextlibMedia3ext = "0.8.4"
 profileinstaller = "1.4.1"
 jaudiotagger = "3.0.1"
 junit = "4.13.2"
+baselineprofile = "1.4.0"
+benchmark = "1.4.0"
+androidxTestJunit = "1.2.1"
+uiautomator = "2.3.0"
 
 [libraries]
 # Compose
@@ -148,9 +152,14 @@ profileinstaller = { group = "androidx.profileinstaller", name = "profileinstall
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-test = { id = "com.android.test", version.ref = "agp" }
+baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
