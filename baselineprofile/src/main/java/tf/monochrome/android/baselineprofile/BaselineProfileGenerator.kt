@@ -61,7 +61,7 @@ class BaselineProfileGenerator {
         device.waitForIdle()
 
         scrollFirstPage()
-        swipeBetweenPages()
+        openPagesFromHome()
         openSearch()
     }
 
@@ -82,18 +82,29 @@ class BaselineProfileGenerator {
     }
 
     /**
-     * The pager between pages, which is the most common navigation in the app
-     * and pulls in each page's own first composition.
+     * Opening pages from the list on Home, which is how the app navigates now.
+     *
+     * This used to swipe the pager. The pager has `userScrollEnabled = false`
+     * since pages became a list on Home, so the swipes did nothing at all and
+     * the profile recorded startup three times instead of the destination
+     * screens it is named after — the exact cost this profile exists to remove.
+     *
+     * Each tap is verified to have landed. A page that did not open is a page
+     * whose first composition is missing from the profile, and a profile is
+     * only as good as the code it was watched executing; silence about that is
+     * worse than the missing coverage.
      */
-    private fun androidx.benchmark.macro.MacrobenchmarkScope.swipeBetweenPages() {
-        repeat(2) {
-            device.swipe(
-                device.displayWidth * 4 / 5,
-                device.displayHeight / 2,
-                device.displayWidth / 5,
-                device.displayHeight / 2,
-                10,
-            )
+    private fun androidx.benchmark.macro.MacrobenchmarkScope.openPagesFromHome() {
+        for (page in PAGES) {
+            val row = device.wait(Until.findObject(By.text(page)), TIMEOUT_MS) ?: continue
+            row.click()
+            // The page's own title is what tells us the tap arrived; Home's row
+            // for it is gone from the screen once the pager has moved.
+            device.wait(Until.hasObject(By.text(page)), TIMEOUT_MS)
+            device.waitForIdle()
+            scrollFirstPage()
+            // Back returns to the list, which is the only way back now.
+            device.pressBack()
             device.waitForIdle()
         }
     }
@@ -117,5 +128,14 @@ class BaselineProfileGenerator {
         // renamed and `tf.monochrome.android` is only the source package.
         const val PACKAGE = "tf.monotrypt.android"
         const val TIMEOUT_MS = 5_000L
+
+        /**
+         * The pages worth the recording time, by the name the list shows.
+         *
+         * Not all seven: each one costs a launch-to-idle round trip across five
+         * iterations, and these are the three that carry the row composables,
+         * the image loader and the glass modifiers the profile is for.
+         */
+        val PAGES = listOf("Local", "Playlists", "Favorites")
     }
 }

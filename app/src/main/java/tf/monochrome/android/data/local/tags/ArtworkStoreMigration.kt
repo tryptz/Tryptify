@@ -37,31 +37,35 @@ class ArtworkStoreMigration @Inject constructor(
         val oldDir = File(context.cacheDir, ArtworkKeys.DIR_NAME)
         val destination = artworkStore.legacyRoot
 
-        // Fresh install, or a cache already reaped. Mark done either way.
-        val files = oldDir.listFiles()
-        if (files == null || files.isEmpty()) {
-            oldDir.delete()
-            preferences.setArtworkStoreMigrated(true)
-            return
-        }
-
-        destination.mkdirs()
+        val files = oldDir.listFiles().orEmpty()
         var moved = 0
-        for (file in files) {
-            if (!file.isFile) continue
-            val target = File(destination, file.name)
-            // Taken means an interrupted run already got this one across.
-            // The old copy is redundant, not newer.
-            if (target.exists()) {
-                if (file.delete()) moved++
-                continue
+        if (files.isNotEmpty()) {
+            destination.mkdirs()
+            for (file in files) {
+                if (!file.isFile) continue
+                val target = File(destination, file.name)
+                // Taken means an interrupted run already got this one across.
+                // The old copy is redundant, not newer.
+                if (target.exists()) {
+                    if (file.delete()) moved++
+                    continue
+                }
+                if (file.renameTo(target)) moved++
             }
-            if (file.renameTo(target)) moved++
         }
 
         // After the files have landed. The other order points every row at a
         // path that does not exist yet, and a crash in between leaves the whole
         // library on placeholders with no scan able to explain why.
+        //
+        // Runs even when the old directory is empty, and that is the point. An
+        // empty directory used to return early as "nothing to migrate" — but it
+        // is also exactly what a run that moved every file and then died before
+        // repointing leaves behind. The next launch took that branch, marked
+        // the migration done, and left every row pointing at a file that had
+        // moved: covers gone for good, short of a manual rescan. A prefix
+        // rewrite that matches nothing is three no-op UPDATEs, which is a small
+        // price for the case where it matches everything.
         val oldPrefix = oldDir.absolutePath.trimEnd('/') + "/"
         val newPrefix = destination.absolutePath.trimEnd('/') + "/"
         val tracks = localMediaDao.repointTrackArtwork(oldPrefix, newPrefix)

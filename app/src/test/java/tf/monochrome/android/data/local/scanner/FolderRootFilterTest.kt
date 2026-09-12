@@ -81,4 +81,76 @@ class FolderRootFilterTest {
         val path = "/storage/emulated/0/Music"
         assertEquals(path, MediaStoreSource.escapeLikePattern(path))
     }
+
+    // ── Exclusions ──────────────────────────────────────────────────────
+    //
+    // This was a bare startsWith, which meant excluding /Music also excluded
+    // /Music2 and took every track in it out of the library on the next scan.
+    // The delete that runs at exclusion time always had the boundary; the scan
+    // filter did not, so the two disagreed about what "this folder" meant.
+
+    @Test
+    fun `nothing is excluded when the set is empty`() {
+        assertFalse(MediaStoreSource.isExcluded("/storage/emulated/0/Music/a.mp3", emptySet()))
+    }
+
+    @Test
+    fun `a file under an excluded folder is excluded`() {
+        assertTrue(
+            MediaStoreSource.isExcluded(
+                "/storage/emulated/0/Music/a.mp3",
+                setOf("/storage/emulated/0/Music"),
+            )
+        )
+    }
+
+    @Test
+    fun `a sibling sharing the prefix is NOT excluded`() {
+        // The P1. /Music2 is a different folder and keeps its music.
+        assertFalse(
+            MediaStoreSource.isExcluded(
+                "/storage/emulated/0/Music2/a.mp3",
+                setOf("/storage/emulated/0/Music"),
+            )
+        )
+        assertFalse(
+            MediaStoreSource.isExcluded(
+                "/storage/emulated/0/MusicVideos/clip.mp3",
+                setOf("/storage/emulated/0/Music"),
+            )
+        )
+    }
+
+    @Test
+    fun `the excluded folder itself matches`() {
+        val p = "/storage/emulated/0/Music"
+        assertTrue(MediaStoreSource.isExcluded(p, setOf(p)))
+    }
+
+    @Test
+    fun `a trailing slash on the exclusion is tolerated`() {
+        assertTrue(
+            MediaStoreSource.isExcluded(
+                "/storage/emulated/0/Music/a.mp3",
+                setOf("/storage/emulated/0/Music/"),
+            )
+        )
+    }
+
+    @Test
+    fun `a blank exclusion does not swallow the whole device`() {
+        // "" trimmed is "", and "anything".startsWith("/") style checks would
+        // make every path match. A junk entry must exclude nothing.
+        assertFalse(MediaStoreSource.isExcluded("/storage/emulated/0/a.mp3", setOf("", "/")))
+    }
+
+    @Test
+    fun `deeper nesting under an excluded folder is excluded`() {
+        assertTrue(
+            MediaStoreSource.isExcluded(
+                "/storage/emulated/0/Music/Rock/1990/a.mp3",
+                setOf("/storage/emulated/0/Music"),
+            )
+        )
+    }
 }

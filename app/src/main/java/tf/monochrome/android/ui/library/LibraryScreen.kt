@@ -270,6 +270,11 @@ fun LibraryScreen(
     // Remembered because this composable is now one page rather than a pager
     // over five, so up to three instances of it are composed at once and each
     // would otherwise rebuild the list on every recomposition.
+    // Session-scoped: an expanded history is a thing you did a moment ago, not
+    // a preference, and coming back to a page scrolled into 200 rows you do not
+    // remember opening is worse than re-tapping.
+    var allRecentShown by remember { mutableStateOf(false) }
+
     val selectableTracks = remember(recentTracks, favoriteTracks) {
         (recentTracks + favoriteTracks).distinctBy { it.id }
     }
@@ -385,10 +390,22 @@ fun LibraryScreen(
                 ) {
                     if (recentTracks.isNotEmpty()) {
                         item(key = LibraryKeys.header("recent"), contentType = LibraryContentType.HEADER) {
-                            SectionHeader(title = "Recently Played")
+                            SectionHeader(
+                                title = "Recently Played",
+                                // Home used to carry the full history; it is
+                                // the page list now, and five rows here was
+                                // all that was left of it. Rather than a
+                                // screen of its own, the section opens in
+                                // place — the history is one list, and it is
+                                // already loaded.
+                                onSeeAllClick = if (recentTracks.size > RECENT_PREVIEW) {
+                                    { allRecentShown = !allRecentShown }
+                                } else null,
+                                seeAllLabel = if (allRecentShown) "Show less" else "See All",
+                            )
                         }
                         items(
-                            recentTracks.take(5),
+                            if (allRecentShown) recentTracks else recentTracks.take(RECENT_PREVIEW),
                             key = { LibraryKeys.recent(it.id) },
                             contentType = { LibraryContentType.TRACK },
                         ) { track ->
@@ -684,3 +701,6 @@ private fun EmptyState(message: String) {
         modifier = Modifier.padding(24.dp)
     )
 }
+
+/** Rows of history Overview shows before "See All" opens the rest. */
+private const val RECENT_PREVIEW = 5

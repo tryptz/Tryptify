@@ -34,6 +34,9 @@
 
 #### Long press a folder to remove it from the library
 - **Its tracks leave the library and scans skip it from then on.** Nothing is deleted from storage, and the confirmation says so — "remove" next to a folder full of music reads as a delete.
+- **Removing /Music no longer removes /Music2.** The scan's exclusion check was a bare `startsWith`, with no directory boundary, so any sibling whose name began the same way lost its music on the next scan. The boundary rule the folder-roots filter already used now covers exclusions too.
+- **Incremental scans respect it.** Only full scans read the exclusions, so adding or touching a file under a removed folder imported it straight back — the removal held only until the next song landed there.
+- **Adding a folder back un-removes it.** It used to reappear in the list while every scan kept skipping its music, with nothing in the app able to clear the exclusion again.
 - **The setting behind it had never once been read.** `excluded_paths_json` has been stored since it was added, but `fullScan` only took it as a parameter and its one real caller had nothing to pass. It is read from preferences now, beside the folder roots.
 - **Excluding also drops the folder as a scan root**, or the next scan would go and re-find exactly what the exclusion removed.
 
@@ -65,6 +68,13 @@
 - **It resolved every track in the queue on a single tap** — one network request per entry, and now that a queue survives a restart, potentially hundreds of them. It resolves only the track being resumed. The player has never held more than one track at a time, which is exactly why next and previous are routed around its own playlist.
 - **Its start index counted positions in the full queue while the list it handed back had the unplayable entries filtered out**, so one earlier track that failed to resolve shifted everything down and resumed the wrong song.
 
+#### An interrupted artwork move could lose every cover
+- **The empty-directory case was doing double duty.** A run that moved the files and then died before updating the database left the old directory empty — which the next launch read as "nothing to migrate", marked the migration finished, and left every row pointing at a file that had moved. The database repair now runs whether or not there was anything to move; a prefix rewrite that matches nothing costs three no-op updates.
+
+#### Playback could come back as the wrong song
+- **The queue and the play head into it were two separate writes.** Process death between them left a new queue beside the previous queue's index and position, and restore trusted that index — reopening whichever track sat at that slot, at the wrong second. They are one transaction now.
+- **Restore finds the saved track rather than trusting the saved index.** That also repairs snapshots already written the old way, which a transaction cannot reach. When the track genuinely is not in the queue any more it falls back to the index and starts at the beginning, because the saved second belongs to the saved song.
+
 #### Scanner bookkeeping
 - **`lastFullScan` advances when a full scan runs.** It was pinned to the first scan an install ever ran, so it recorded when the library was first indexed rather than when it was last rebuilt — and the incremental scan reads it as a watermark.
 
@@ -75,6 +85,9 @@
 #### Presses and page changes
 - **Every press in the app now uses the player's spring.** The old one settled slowly and visibly oscillated — barely noticeable on a small glyph, but on a full-width tile it was the wobble that read as jank. The dock already had the spring that felt right, so that one is now shared.
 - **Picking a page opens it at once** instead of sliding the pager through every page in between — Home to Downloads swept across five of them. That slide was there to follow a finger, and there is no finger any more.
+
+#### Recently Played opens in place
+- **Overview showed five rows and no way to the rest.** Home used to carry the full history and is the page list now, so five was all that was left of it. "See All" opens the section where it is — the history is one list and it is already loaded.
 
 #### The track playing is coloured in the list
 - **Its row is tinted and its title takes the accent**, in the catalogue rows, the local songs list and the folder browser. The tint alone is easy to miss on a dark row.

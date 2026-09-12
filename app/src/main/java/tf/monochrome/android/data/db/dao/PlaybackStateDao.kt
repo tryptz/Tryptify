@@ -2,6 +2,7 @@ package tf.monochrome.android.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import tf.monochrome.android.data.db.entity.PlaybackQueueEntity
 import tf.monochrome.android.data.db.entity.PlaybackStateEntity
@@ -20,6 +21,21 @@ interface PlaybackStateDao {
 
     @Upsert
     suspend fun upsertQueue(queue: PlaybackQueueEntity)
+
+    /**
+     * The queue and the play head into it, written together or not at all.
+     *
+     * They used to be two calls under a mutex, which orders writers but does
+     * nothing about the process dying between them. That left a new queue
+     * beside the previous queue's index and position, and restore trusted the
+     * index — reopening whatever track happened to sit at that slot, at the
+     * wrong second. A snapshot is one fact; this makes it one write.
+     */
+    @Transaction
+    suspend fun upsertSnapshot(queue: PlaybackQueueEntity, state: PlaybackStateEntity) {
+        upsertQueue(queue)
+        upsertState(state)
+    }
 
     /**
      * The hot path, written every few seconds while playing. A column-level

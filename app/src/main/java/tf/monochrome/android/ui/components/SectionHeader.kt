@@ -16,7 +16,9 @@ import androidx.compose.ui.unit.dp
 fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
-    onSeeAllClick: (() -> Unit)? = null
+    onSeeAllClick: (() -> Unit)? = null,
+    /** The action's own word — "Show less" when the section is already open. */
+    seeAllLabel: String = "See All",
 ) {
     tf.monochrome.android.devedit.DevEditable(
         elementId = "section_" + title.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_'),
@@ -37,7 +39,7 @@ fun SectionHeader(
         if (onSeeAllClick != null) {
             TextButton(onClick = onSeeAllClick) {
                 Text(
-                    text = "See All",
+                    text = seeAllLabel,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )

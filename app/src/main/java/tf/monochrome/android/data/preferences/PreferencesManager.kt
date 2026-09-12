@@ -1838,12 +1838,36 @@ class PreferencesManager @Inject constructor(
             else runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
         }
 
+    /**
+     * Add a folder to scan, and stop excluding it.
+     *
+     * Both halves, in one edit. Adding a folder that was previously removed
+     * used to leave its exclusion in place: the folder reappeared in the list
+     * while every scan kept skipping its music, and nothing in the UI could
+     * clear the exclusion again. "Add this folder" and "keep ignoring this
+     * folder" are contradictory instructions, and the later one wins.
+     */
     suspend fun addUserFolderRoot(path: String) {
+        val root = path.trimEnd('/')
         dataStore.edit { prefs ->
             val current = prefs[USER_FOLDER_ROOTS_JSON]
                 ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
                 ?: emptySet()
-            prefs[USER_FOLDER_ROOTS_JSON] = json.encodeToString(current + path)
+            prefs[USER_FOLDER_ROOTS_JSON] = json.encodeToString(current + root)
+
+            val excluded = prefs[EXCLUDED_PATHS_JSON]
+                ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
+                ?: emptySet()
+            // Also drop exclusions ABOVE this folder. Re-adding /Music/Live
+            // while /Music is excluded would otherwise still find nothing, and
+            // the reason would be invisible.
+            val survivors = excluded.filterNot { ex ->
+                val e = ex.trimEnd('/')
+                e == root || root.startsWith("$e/")
+            }.toSet()
+            if (survivors.size != excluded.size) {
+                prefs[EXCLUDED_PATHS_JSON] = json.encodeToString(survivors)
+            }
         }
     }
 

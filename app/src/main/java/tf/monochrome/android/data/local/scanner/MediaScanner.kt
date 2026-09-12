@@ -113,11 +113,16 @@ class MediaScanner @Inject constructor(
     ): Flow<ScanProgress> = flow {
         try {
             val folderRoots = preferences.userFolderRoots.first()
+            // Exclusions apply here too. They used to be read only by fullScan,
+            // so adding or touching a file under an excluded folder let the
+            // incremental scan import it straight back — the removal held only
+            // until the next song landed in that folder.
+            val excluded = preferences.excludedPaths.first()
             val scanState = localMediaDao.getScanState()
             val lastScan = scanState?.lastIncremental ?: scanState?.lastFullScan ?: 0
 
             val modifiedFiles =
-                mediaStoreSource.queryModifiedSince(lastScan, minDurationMs, folderRoots)
+                mediaStoreSource.queryModifiedSince(lastScan, minDurationMs, folderRoots, excluded)
             if (modifiedFiles.isEmpty()) {
                 // No new tag content to read, but still rebuild groupings so
                 // album-cover-into-track propagation runs and the UI picks up
@@ -143,7 +148,7 @@ class MediaScanner @Inject constructor(
             // Check for deleted files. Same roots filter as fullScan so the
             // prune diff never mass-deletes tracks a full scan would keep.
             val allMediaStorePaths = mediaStoreSource
-                .queryAllAudio(minDurationMs, folderRoots = folderRoots)
+                .queryAllAudio(minDurationMs, excluded, folderRoots)
                 .mapTo(HashSet()) { it.absolutePath }
             pruneDeleted(allMediaStorePaths)
 
@@ -431,6 +436,8 @@ class MediaScanner @Inject constructor(
      */
     suspend fun excludeFolder(path: String) {
         val folder = path.trimEnd('/')
+        // trimEnd matches what addUserFolderRoot stores, so re-adding the same
+        // folder finds the exclusion it needs to clear.
         if (folder.isEmpty()) return
         preferences.addExcludedPath(folder)
         // A folder the user added by hand is also a scan root, and leaving it

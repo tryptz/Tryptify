@@ -120,9 +120,9 @@ class PlaybackStateRepository @Inject constructor(
 
         val now = System.currentTimeMillis()
         val current = windowed.getOrNull(window.currentIndex)
-        dao.upsertQueue(PlaybackQueueEntity(id = 1, queueJson = json, updatedAt = now))
-        dao.upsertState(
-            PlaybackStateEntity(
+        dao.upsertSnapshot(
+            queue = PlaybackQueueEntity(id = 1, queueJson = json, updatedAt = now),
+            state = PlaybackStateEntity(
                 id = 1,
                 currentIndex = window.currentIndex,
                 currentTrackId = current?.id ?: 0,
@@ -134,7 +134,7 @@ class PlaybackStateRepository @Inject constructor(
                 shuffleEnabled = shape.shuffle,
                 repeatMode = shape.repeat.name,
                 updatedAt = now,
-            )
+            ),
         )
     }
 
@@ -187,18 +187,42 @@ class PlaybackStateRepository @Inject constructor(
         }
 
         val tracks = persisted.entries.map { it.track }
+        // Find the saved track rather than trusting the saved index.
+        //
+        // The two records are written in one transaction now, so they cannot
+        // disagree in future — but snapshots already on disk were written the
+        // old way, and a stale index against a fresh queue silently reopens
+        // whatever track sits at that slot. Matching on the id fixes those too,
+        // and costs one scan of a queue that is at most a few hundred entries.
+        //
+        // Falls back to the index when the id is not found: it is 0 in
+        // snapshots written before it was recorded, and a queue can legitimately
+        // no longer contain it.
+        val savedIndex = tracks.indexOfFirst { it.id == state.currentTrackId }
+            .takeIf { it >= 0 }
+            ?: state.currentIndex
         queueManager.restore(
             queue = tracks,
             originalQueue = QueueOrdering.decode(tracks, persisted.originalOrder),
-            currentIndex = state.currentIndex,
+            currentIndex = savedIndex,
             shuffleEnabled = state.shuffleEnabled,
             repeatMode = runCatching { RepeatMode.valueOf(state.repeatMode) }
                 .getOrDefault(RepeatMode.OFF),
         )
 
         val current = queueManager.currentTrack.value ?: return
-        val duration = state.durationMs.takeIf { it > 0 } ?: (current.duration * 1000L)
+        // The saved second belongs to the saved track. If we could not find
+        // that track and fell back to the index, the position and duration
+        // beside it describe a different song — starting this one 2:41 in
+        // because that is where the last one was is worse than starting it at
+        // the beginning. Zero is only a lost resume; the alternative is a
+        // wrong one. currentTrackId is 0 in snapshots from before it was
+        // recorded, which is not a mismatch, just nothing to check against.
+        val samePosition = state.currentTrackId == 0L || current.id == state.currentTrackId
+        val duration = state.durationMs.takeIf { it > 0 && samePosition }
+            ?: (current.duration * 1000L)
         val position = when {
+            !samePosition -> 0L
             isLiveStream(current) -> 0L
             // Effectively finished. Reopening onto the last four seconds,
             // where play means an immediate skip, is worse than the start.

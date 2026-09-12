@@ -157,7 +157,7 @@ class MediaStoreSource @Inject constructor(
                 while (cursor.moveToNext()) {
                     val path = cursor.getString(dataCol) ?: continue
                     if (!mayCarryEac3(path)) continue
-                    if (excludedPaths.any { path.startsWith(it) }) continue
+                    if (isExcluded(path, excludedPaths)) continue
 
                     val uri = Uri.withAppendedPath(collection, cursor.getLong(idCol).toString())
                     // The only expensive step, and it runs last so the cheap
@@ -227,7 +227,7 @@ class MediaStoreSource @Inject constructor(
                 if (isExcludedExtension(path)) continue
 
                 // Filter excluded paths
-                if (excludedPaths.any { path.startsWith(it) }) continue
+                if (isExcluded(path, excludedPaths)) continue
 
                 // Restrict to user-chosen library roots. Empty set = no
                 // restriction (whole-device scan, the pre-onboarding default).
@@ -256,7 +256,8 @@ class MediaStoreSource @Inject constructor(
     fun queryModifiedSince(
         sinceTimestamp: Long,
         minDurationMs: Long = 30_000,
-        folderRoots: Set<String> = emptySet()
+        folderRoots: Set<String> = emptySet(),
+        excludedPaths: Set<String> = emptySet(),
     ): List<AudioFileInfo> {
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -287,6 +288,7 @@ class MediaStoreSource @Inject constructor(
 
             while (cursor.moveToNext()) {
                 val path = cursor.getString(dataCol) ?: continue
+                if (isExcluded(path, excludedPaths)) continue
                 if (!isUnderRoots(path, folderRoots)) continue
                 val id = cursor.getLong(idCol)
                 val uri = Uri.withAppendedPath(collection, id.toString())
@@ -360,6 +362,28 @@ class MediaStoreSource @Inject constructor(
             return roots.any { root ->
                 val r = root.trimEnd('/')
                 path == r || path.startsWith("$r/")
+            }
+        }
+
+        /**
+         * True when [path] sits under one of [excluded].
+         *
+         * The same boundary rule as [isUnderRoots], and for the same reason:
+         * this used to be a bare `startsWith`, so excluding /Music also
+         * excluded /Music2 and every track in it disappeared from the library
+         * on the next scan. The delete that runs at exclusion time always had
+         * the boundary — the scan filter did not, so the two disagreed about
+         * what "this folder" meant.
+         *
+         * Empty means nothing is excluded, which is the opposite of what an
+         * empty root set means to [isUnderRoots]; hence a function of its own
+         * rather than a call through to it.
+         */
+        fun isExcluded(path: String, excluded: Set<String>): Boolean {
+            if (excluded.isEmpty()) return false
+            return excluded.any { root ->
+                val r = root.trimEnd('/')
+                r.isNotEmpty() && (path == r || path.startsWith("$r/"))
             }
         }
 
