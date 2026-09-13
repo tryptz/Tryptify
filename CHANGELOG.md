@@ -25,6 +25,12 @@
 
 ### Fixed
 
+#### Recording a baseline profile no longer means cooking a phone
+- **`useConnectedDevices = true` was the only option**, so generating a profile meant running the app flat out on a handset for several minutes — five launches, three pages, a scroll and a search each — with the screen on the whole time. That is enough sustained load to heat a phone, which is a poor reason not to have a profile at all.
+- **A Gradle Managed Device is the default now**: a Pixel 6 API 34 emulator the build starts for itself, on whatever machine is running Gradle. `aosp` rather than `google`, because the generator wants root and the Play images are not rootable — Macrobenchmark 1.4 can do without root on API 33 and above, but an AOSP image costs nothing and keeps the option open. API 34 rather than the app's target 36 because profiles are portable across API levels: they name classes and methods, not platform behaviour.
+- **The phone is still available** via `-Pbaselineprofile.device=connected`, for a machine with no emulator. Nothing about the profile is better for having come from real hardware; it is a list of what the app executed.
+- Iteration counts are untouched. On an emulator the heat that prompted this is not a constraint, and cutting the journey to save a phone would have bought that back out of the profile's coverage.
+
 #### Art-less tracks re-opened their audio file on every scroll
 - **Coil caches images, not the absence of one.** `AudioFileCoverFetcher` opens a `MediaMetadataRetriever` on the audio file to pull embedded art; a file that has none costs the same native open, returns nothing, and is asked again the next time the row scrolls back. A device log shows 22 `getEmbeddedPicture: Call to getEmbeddedPicture failed` in five seconds — a handful of art-less tracks being recycled through a list.
 - **A bounded LRU of paths with no picture**, keyed on the file's modification time as well as its path so retagging a track puts its cover back without anything having to clear it. 512 entries: an optimisation for rows going past on screen cannot grow into a leak on a library of any size, and a miss costs one wasted open, which is what happened every time before.
