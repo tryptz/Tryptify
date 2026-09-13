@@ -87,6 +87,12 @@ and wrong everywhere else. `GlassPanel` publishes whatever settings it was hande
 as `LocalPlayerGlass` for its own shader, so its `glass` parameter is the whole
 material — frost and shader both.
 
+**The Studio previews each material on the tab that owns it.** The Player tab
+shows the transport straight over the swatch, with no pane behind it — that is
+how the real screen is built, and a `GlassPanel` there would be drawing the *UI
+panels* blob, which those sliders do not control. The pane belongs to the UI
+panels tab, alongside the mini player bar, because that tab is what tunes it.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one

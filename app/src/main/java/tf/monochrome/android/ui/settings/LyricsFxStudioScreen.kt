@@ -70,7 +70,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.components.GlassPanel
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -912,8 +911,15 @@ private fun PlayerGlassTab(
                 LocalPlayerGlassGround provides previewGround,
             ) {
                 if (previewMini) {
-                    // The real mini player bar under the current glass — the exact
-                    // component the nav host shows, so tuning is what-you-see.
+                    // Both faces of this material, because this tab owns both:
+                    // the floating PANE (the audio-tools sheet, the speed panel,
+                    // the search bars, the map panels) and the mini player bar.
+                    //
+                    // The pane used to be previewed on the Player tab instead,
+                    // wrapped around the transport — which put the one thing on
+                    // that preview those sliders do NOT control behind
+                    // everything they do, and left the tab that does control it
+                    // showing only the bar.
                     val sampleTrack = remember {
                         Track(
                             id = 0L,
@@ -921,30 +927,52 @@ private fun PlayerGlassTab(
                             artist = Artist(id = 0L, name = "Tiësto"),
                         )
                     }
-                    MiniPlayer(
-                        track = sampleTrack,
-                        isPlaying = false,
-                        progressProvider = { 0.4f },
-                        onPlayPauseClick = {},
-                        onSkipNextClick = {},
-                        onSkipPreviousClick = {},
-                        onClick = {},
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        GlassPanel(
+                            hazeState = previewHaze,
+                            glass = glass,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            avoidNavigationBar = false,
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    "Audio tools",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                )
+                                Text(
+                                    "Sheets, panels and search bars all wear this pane.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.62f),
+                                )
+                            }
+                        }
+                        MiniPlayer(
+                            track = sampleTrack,
+                            isPlaying = false,
+                            progressProvider = { 0.4f },
+                            onPlayPauseClick = {},
+                            onSkipNextClick = {},
+                            onSkipPreviousClick = {},
+                            onClick = {},
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
                 } else {
-                // The chrome being tuned sits on a pane of the app's own glass —
-                // the mini player's material, like every other floating panel —
-                // rather than straight onto a flat swatch. It is what the player
-                // actually looks like in use: glass over something, not shapes on
-                // a colour. The panel takes the *mini player's* settings and the
-                // transport inside it takes the player's, which is exactly the
-                // relationship on the real screen.
-                GlassPanel(
-                    hazeState = previewHaze,
-                    glass = LocalMiniPlayerGlass.current,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    avoidNavigationBar = false,
-                ) {
+                // The transport as it actually sits on the player screen: straight
+                // over the backdrop, with nothing between. There was a GlassPanel
+                // here, on the argument that glass should be previewed over
+                // something rather than on a flat swatch — but the real player has
+                // no pane behind its transport (the invariants forbid one under a
+                // punched slab), and the pane it drew was the UI panels blob,
+                // tuned on the other tab. The swatch behind is the something.
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1015,7 +1043,6 @@ private fun PlayerGlassTab(
                         onSeekFinished = {},
                         modifier = Modifier.fillMaxWidth(),
                     )
-                }
                 }
                 }
             }
