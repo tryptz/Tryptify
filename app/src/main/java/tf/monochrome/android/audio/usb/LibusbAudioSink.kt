@@ -129,9 +129,23 @@ class LibusbAudioSink(
 
         val rate = inputFormat.sampleRate
         val channels = inputFormat.channelCount
+        // Both bail-outs below used to be silent. A track that reached here and
+        // fell out left no trace at all: no "configured" line, the DAC still
+        // streaming the previous track's rate with an empty ring, and the
+        // pipeline panel reporting the stale chain rate because that is what it
+        // prefers. Indistinguishable, in a log, from configure never being
+        // called — which is the other half of the same question.
         if (rate <= 0 || channels <= 0 ||
             sourceBytesPerSample(inputFormat.pcmEncoding) <= 0
         ) {
+            Log.w(
+                TAG,
+                "configure declined the input: ${rate}Hz ${channels}ch " +
+                    "encoding=${inputFormat.pcmEncoding} " +
+                    "(${encodingLabel(inputFormat.pcmEncoding)}, " +
+                    "${sourceBytesPerSample(inputFormat.pcmEncoding)} bytes/sample) " +
+                    "— delegate takes over",
+            )
             bypassActive = false
             return
         }
@@ -148,12 +162,26 @@ class LibusbAudioSink(
         if (out.sampleRate <= 0 || out.channelCount <= 0 ||
             sourceBytesPerSample(out.encoding) <= 0
         ) {
+            Log.w(
+                TAG,
+                "configure declined the chain output: ${out.sampleRate}Hz " +
+                    "${out.channelCount}ch encoding=${out.encoding} " +
+                    "(${encodingLabel(out.encoding)}) — delegate takes over",
+            )
             bypassActive = false
             return
         }
 
-        bypassActive = driver.isOpen.value &&
-            engageDriver(out.sampleRate, out.channelCount, out.encoding)
+        val driverOpen = driver.isOpen.value
+        bypassActive = driverOpen && engageDriver(out.sampleRate, out.channelCount, out.encoding)
+        if (!bypassActive) {
+            Log.w(
+                TAG,
+                "bypass not engaged for ${out.sampleRate}Hz ${out.channelCount}ch " +
+                    "${encodingLabel(out.encoding)} (driverOpen=$driverOpen) " +
+                    "— delegate takes over",
+            )
+        }
 
         if (bypassActive) {
             Log.i(
