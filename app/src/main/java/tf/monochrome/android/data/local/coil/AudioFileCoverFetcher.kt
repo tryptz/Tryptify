@@ -118,7 +118,12 @@ class AudioFileCoverFetcher(
         }
     }
 
-    private companion object {
+    internal companion object {
+        /**
+         * Extensions this fetcher claims. Also read by StreamResolver, which
+         * has to recognise the same "artwork URI is really an audio file"
+         * case in order NOT to hand it to Media3 — see the note there.
+         */
         val AUDIO_EXTENSIONS = setOf(
             "mp3", "flac", "m4a", "mp4", "aac", "ogg", "oga", "opus",
             "wav", "wma", "aif", "aiff", "ape", "dsf", "dff",

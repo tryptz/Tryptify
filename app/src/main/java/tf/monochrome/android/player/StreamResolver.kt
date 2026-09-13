@@ -11,6 +11,7 @@ import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
 import tf.monochrome.android.data.cache.QobuzStreamUri
 import tf.monochrome.android.data.cache.QobuzStreamCacheManager
+import tf.monochrome.android.data.local.coil.AudioFileCoverFetcher
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.CollectionDirectLink
@@ -48,7 +49,28 @@ class StreamResolver @Inject constructor(
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
         val parsed = raw.toUri()
-        return if (parsed.scheme.isNullOrBlank()) Uri.fromFile(File(raw)) else parsed
+        val uri = if (parsed.scheme.isNullOrBlank()) Uri.fromFile(File(raw)) else parsed
+        // A local track with no cached cover carries its own audio file as its
+        // artwork URI (LocalMediaRepository), which is what lets Coil's
+        // AudioFileCoverFetcher pull the embedded picture on demand. Media3
+        // has no such fetcher: its bitmap loader reads whatever is at the URI
+        // *whole* into a byte[] and gives it to BitmapFactory. For an
+        // uncompressed 32-bit WAV that is a hundred-megabyte allocation on the
+        // Java heap, per track change.
+        //
+        // A device log caught three of them OOM inside seventeen seconds, each
+        // forcing a four-to-five second blocking GC. The audio thread was
+        // logged waiting on one, and the DAC ran dry behind it —
+        // "written=0 ring=0" across six consecutive heartbeats. Every effect
+        // stops when that happens, which is what "the mixer stopped working"
+        // turned out to be.
+        //
+        // Dropping it costs nothing: BitmapFactory cannot decode an audio
+        // file, so this never yielded artwork in the first place. The same log
+        // shows it failing on every track with "Could not decode image data
+        // {contentIsMalformed=true}". In-app artwork is unaffected — that goes
+        // through Coil, which does have the fetcher.
+        return if (pathLooksLikeAudioFile(uri.path)) null else uri
     }
 
     // Legacy method for existing Track model. Returns (null, null) when the
@@ -660,4 +682,22 @@ class StreamResolver @Inject constructor(
 
         return builder.build()
     }
+}
+
+/**
+ * Whether an artwork URI's path points at an audio file rather than a picture.
+ *
+ * Matched on the path's extension, so a query string on a signed cover URL
+ * cannot confuse it, and a dot in a directory name cannot either (a path of
+ * "/a.b/cover" yields "b/cover", which is in no extension set). Scheme is
+ * deliberately not consulted: an artwork URI ending in .wav is wrong whatever
+ * the scheme, and file:// is merely the case that exists today.
+ *
+ * Top-level and String-based so it is a plain JVM unit test rather than an
+ * instrumented one — the failure mode it guards is dropping every real cover,
+ * which is worth a test that actually runs.
+ */
+internal fun pathLooksLikeAudioFile(path: String?): Boolean {
+    val ext = (path ?: return false).substringAfterLast('.', "").lowercase()
+    return ext in AudioFileCoverFetcher.AUDIO_EXTENSIONS
 }
