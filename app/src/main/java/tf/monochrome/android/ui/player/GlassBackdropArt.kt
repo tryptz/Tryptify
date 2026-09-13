@@ -59,7 +59,9 @@ import kotlin.math.max
  * cover would refract detail that is nowhere on the screen, and it would read
  * as a bug rather than as glass. A [ART_SIZE]px thumbnail sampled with the
  * hardware's bilinear filter is, to within a few percent, that blur already —
- * for one 16KB texture uploaded once per track instead of a per-frame capture.
+ * for one ~64KB texture uploaded once per track instead of a per-frame capture.
+ * The bilinear part is load-bearing and has to be asked for explicitly; see
+ * the filter mode set in [rememberBackdropArt].
  */
 @Immutable
 internal data class BackdropArt(
@@ -137,7 +139,25 @@ internal fun rememberBackdropArt(coverUrl: String?, enabled: Boolean): BackdropA
     val bmp = bitmap ?: return null
     return remember(bmp) {
         BackdropArt(
-            shader = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP),
+            shader = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+                // Bilinear, said out loud. FILTER_MODE_DEFAULT resolves the
+                // sampling from the Paint's isFilterBitmap flag — and a shader
+                // bound through RuntimeShader.setInputShader has no Paint, so
+                // the default lands on NEAREST. That point-sampled the
+                // thumbnail across the whole surface, and the glass now has
+                // surfaces the size of the window — the mini player fits the
+                // cover along the full width of the bar, the Audio tools sheet
+                // is a full-width panel. At that magnification every texel
+                // became its own flat block of colour instead of glass.
+                //
+                // The class doc above already reasons from "sampled with the
+                // hardware's bilinear filter" — the tiny thumbnail is only a
+                // stand-in for a 64dp gaussian *because* it is smoothly
+                // interpolated. This is the line that makes that true.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setFilterMode(BitmapShader.FILTER_MODE_LINEAR)
+                }
+            },
             width = bmp.width,
             height = bmp.height,
         )
@@ -161,16 +181,30 @@ private suspend fun loadArt(context: Context, url: String, size: Int): Bitmap? =
     null
 }
 
-private const val ART_SIZE = 64
+/**
+ * Side of the backdrop thumbnail, in pixels.
+ *
+ * Small on purpose — see the class doc: lensing a sharp cover would refract
+ * detail that is nowhere on the screen. But 64 was sized for one pane of the
+ * player, and the glass has since grown surfaces that span the whole window:
+ * the mini player fits the cover along the full width of the bar, and the
+ * Audio tools sheet is a full-width panel. Stretched that far, 64 px puts a
+ * texel every ~17 device pixels, and each one reads as its own block of
+ * colour however smoothly it is interpolated.
+ *
+ * 128 is the size the ambient overlay already upscales over the entire screen
+ * without looking blocky, and it is still only ~64KB, decoded once per track.
+ */
+private const val ART_SIZE = 128
 
 /**
  * The cover as a plain bitmap, for the ambient visualizer's GL texture.
  *
  * Same decode as [rememberBackdropArt], but the overlay needs the bitmap
- * itself — `glTexImage2D` takes a `Bitmap`, not a `BitmapShader` — and it
- * upscales the texture over the whole screen rather than over one pane, so it
- * asks for a slightly larger thumbnail. Still tiny: twice [ART_SIZE], 128px,
- * ~64KB.
+ * itself — `glTexImage2D` takes a `Bitmap`, not a `BitmapShader`. It once
+ * asked for twice [ART_SIZE] because it upscales over the whole screen rather
+ * than over one pane; the glass has since grown window-sized surfaces of its
+ * own and the two sizes have met. Still tiny: 128px, ~64KB.
  *
  * The thumbnail is **pre-blurred here**, on a background dispatcher, rather
  * than in the GL shader: the overlay only bilinearly upscales the texture,
@@ -284,7 +318,9 @@ private fun blurAxis(
 
 /**
  * The ambient overlay's thumbnail, upscaled over the whole screen rather than
- * over one pane. Twice [ART_SIZE] and still 64KB.
+ * over one pane. The same size as [ART_SIZE] now that the glass has
+ * full-width surfaces of its own; kept as its own constant because the two
+ * answer different questions and need not move together.
  */
 internal const val AMBIENT_ART_SIZE = 128
 
