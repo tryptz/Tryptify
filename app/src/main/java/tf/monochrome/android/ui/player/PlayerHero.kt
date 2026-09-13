@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
@@ -498,6 +499,78 @@ private fun VisualizerHeroOverlay(
     }
 }
 
+/**
+ * Preset controls for ambient mode's "Remove album cover" state.
+ *
+ * With the cover gone the MilkDrop atmosphere is the whole player, but the
+ * preset controls live on [VisualizerHeroOverlay] — which only exists in
+ * VISUALIZER view mode, not here. This puts the three that matter into the
+ * space the cover vacated: back, browse, forward.
+ *
+ * Track skip is deliberately not here. The transport is still on screen below,
+ * and the hero slot's swipe-to-skip gesture keeps working over this region —
+ * so these buttons are unambiguously about presets.
+ */
+@Composable
+internal fun AmbientPresetControls(
+    currentPreset: VisualizerPreset?,
+    canGoBack: Boolean,
+    onPreviousPreset: () -> Unit,
+    onNextPreset: () -> Unit,
+    onOpenPresetBrowser: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .padding(10.dp)
+            .liquidGlass(shape = RoundedCornerShape(18.dp), tintAlpha = 0.26f),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.Transparent,
+        contentColor = Color.White,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = currentPreset?.displayName ?: "Bundled projectM presets",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                VisualizerActionPill(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.SkipPrevious,
+                    label = "Back",
+                    accent = PlayerGlowBlue,
+                    enabled = canGoBack,
+                    onClick = onPreviousPreset,
+                )
+                VisualizerActionPill(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.LibraryMusic,
+                    label = "Presets",
+                    accent = PlayerGlowGold,
+                    onClick = onOpenPresetBrowser,
+                )
+                VisualizerActionPill(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.SkipNext,
+                    label = "Next",
+                    accent = PlayerGlowBlue,
+                    onClick = onNextPreset,
+                )
+            }
+        }
+    }
+}
+
 private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
     SLOW("SLOW", 0.12f, 0.03f),
     NORMAL("NORMAL", 0.55f, 0.12f),
@@ -709,6 +782,7 @@ private fun VisualizerActionPill(
     icon: ImageVector,
     label: String,
     accent: Color,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -721,10 +795,18 @@ private fun VisualizerActionPill(
     Surface(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            ),
         shape = RoundedCornerShape(12.dp),
-        color = accent.copy(alpha = 0.14f),
-        contentColor = accent,
+        // Two separate alphas, not one dimmed colour reused: Surface's `color`
+        // and `contentColor` each overwrite alpha, so a single pre-dimmed
+        // accent would come out identical to the enabled one.
+        color = accent.copy(alpha = if (enabled) 0.14f else 0.06f),
+        contentColor = if (enabled) accent else accent.copy(alpha = 0.38f),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),

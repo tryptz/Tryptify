@@ -172,6 +172,8 @@ fun MainPlayerRoute(
     val currentVisualizerPreset by playerViewModel.currentVisualizerPreset.collectAsStateWithLifecycle()
     val visualizerPresets by playerViewModel.visualizerPresets.collectAsStateWithLifecycle()
     val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
+    val canGoToPreviousVisualizerPreset by
+        playerViewModel.canGoToPreviousVisualizerPreset.collectAsStateWithLifecycle()
     val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
     val spectrumAnalyzerEnabled by playerViewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
     val spectrumShowOnNowPlaying by playerViewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
@@ -697,6 +699,21 @@ fun MainPlayerRoute(
                             indication = null,
                             enabled = lyricsCanExpand,
                         ) { lyricsExpanded = !lyricsExpanded },
+                )
+            }
+
+            // Ambient › "Remove album cover": the preset controls normally
+            // live on the visualizer hero, which does not exist in this view
+            // mode — so they take the space the cover just vacated. Suppressed
+            // while the lyric surface is up, since that owns the slot.
+            if (ambientActive && ambient.hideCover && !showLyricsHero) {
+                AmbientPresetControls(
+                    currentPreset = currentVisualizerPreset,
+                    canGoBack = canGoToPreviousVisualizerPreset,
+                    onPreviousPreset = playerViewModel::previousVisualizerPreset,
+                    onNextPreset = playerViewModel::nextVisualizerPreset,
+                    onOpenPresetBrowser = { showPresetSheet = true },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
         }

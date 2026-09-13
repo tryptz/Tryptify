@@ -58,6 +58,21 @@ class ProjectMEngineRepository @Inject constructor(
     private val _currentPreset = MutableStateFlow<VisualizerPreset?>(null)
     val currentPreset: StateFlow<VisualizerPreset?> = _currentPreset.asStateFlow()
 
+    /**
+     * Where Previous goes.
+     *
+     * Recorded from the main thread ([selectPreset]) and from the GL thread
+     * (the Next branch of [applyPendingGlWorkLocked], which holds engineLock).
+     * [PresetHistory] takes its own lock rather than borrowing engineLock —
+     * the deadlock note on [requestPresetOnGlThread] is reason enough not to
+     * hold that one any wider than it already is.
+     */
+    private val presetHistory = PresetHistory()
+
+    private val _canGoToPreviousPreset = MutableStateFlow(false)
+    /** Whether [previousPreset] has anywhere to go — drives the button's enabled state. */
+    val canGoToPreviousPreset: StateFlow<Boolean> = _canGoToPreviousPreset.asStateFlow()
+
     private val _rotationMode = MutableStateFlow(PresetRotationMode.Default)
     val rotationMode: StateFlow<PresetRotationMode> = _rotationMode.asStateFlow()
 
@@ -528,12 +543,39 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     fun selectPreset(preset: VisualizerPreset) {
+        applyPreset(preset, recordHistory = true)
+    }
+
+    /**
+     * Step back to the preset before this one.
+     *
+     * Pops [presetHistory] rather than walking [presets] backwards, so it
+     * returns you to what you were actually watching even with shuffle on.
+     * A no-op with nothing to go back to — [canGoToPreviousPreset] says so, so
+     * the button can be disabled rather than silently doing nothing.
+     */
+    fun previousPreset() {
+        val target = presetHistory.back()
+        _canGoToPreviousPreset.value = presetHistory.canGoBack()
+        if (target == null) return
+        // recordHistory = false: walking back must not push the preset we are
+        // leaving, or Previous would bounce between two presets forever.
+        applyPreset(target, recordHistory = false)
+    }
+
+    private fun applyPreset(preset: VisualizerPreset, recordHistory: Boolean) {
+        if (recordHistory) rememberOutgoingPreset(_currentPreset.value, preset)
         preferredPresetId = preset.id
         _currentPreset.value = preset
         scope.launch {
             preferences.setVisualizerPresetId(preset.id)
         }
         requestPresetOnGlThread(PendingPresetRequest.Select(preset))
+    }
+
+    private fun rememberOutgoingPreset(outgoing: VisualizerPreset?, incoming: VisualizerPreset?) {
+        presetHistory.record(outgoing, incoming)
+        _canGoToPreviousPreset.value = presetHistory.canGoBack()
     }
 
     /**
@@ -676,7 +718,10 @@ class ProjectMEngineRepository @Inject constructor(
                 PendingPresetRequest.Next -> {
                     val path = nativeBridge.nextPreset()
                     if (path != null) {
+                        // Captured before the move, so Previous undoes a Next.
+                        val outgoing = _currentPreset.value
                         updateCurrentPresetFromPathLocked(path)
+                        rememberOutgoingPreset(outgoing, _currentPreset.value)
                         val id = _currentPreset.value?.id
                         scope.launch { preferences.setVisualizerPresetId(id) }
                     }

@@ -275,6 +275,8 @@ class PlayerViewModel @Inject constructor(
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
     val currentVisualizerPreset: StateFlow<VisualizerPreset?> = projectMEngineRepository.currentPreset
     val visualizerFavoritePresetIds: StateFlow<Set<String>> = projectMEngineRepository.favoritePresetIds
+    val canGoToPreviousVisualizerPreset: StateFlow<Boolean> =
+        projectMEngineRepository.canGoToPreviousPreset
     val visualizerRepository: ProjectMEngineRepository
         get() = projectMEngineRepository
 
@@ -1010,6 +1012,10 @@ class PlayerViewModel @Inject constructor(
 
     fun nextVisualizerPreset() {
         projectMEngineRepository.nextPreset()
+    }
+
+    fun previousVisualizerPreset() {
+        projectMEngineRepository.previousPreset()
     }
 
     fun selectVisualizerPreset(preset: VisualizerPreset) {
