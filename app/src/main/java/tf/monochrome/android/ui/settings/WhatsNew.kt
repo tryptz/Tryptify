@@ -108,6 +108,14 @@ object WhatsNew {
                         "shape too.",
                 ),
                 WhatsNewEntry(
+                    section = LOOK,
+                    title = "Colour transitions no longer run for seconds",
+                    body = "It used to match Blend Between Tracks, so a four-second blend " +
+                        "repainted the whole screen for four seconds on every track change. " +
+                        "It is half a second now, on its own slider, from instant to eight " +
+                        "seconds.",
+                ),
+                WhatsNewEntry(
                     section = LIBRARY,
                     title = "Folders show your music, and open where it is",
                     body = "The tab opens on the folders your music is really in, each a glass " +

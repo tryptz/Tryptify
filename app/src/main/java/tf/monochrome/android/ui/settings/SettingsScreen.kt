@@ -600,7 +600,6 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     val colorTransitionMs by viewModel.colorTransitionMs.collectAsStateWithLifecycle()
     // Only to show what "Match blend" currently works out to; the slider does
     // not change it.
-    val crossfadeSeconds by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val themePaper by viewModel.themePaper.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
@@ -647,7 +646,6 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         // there when the track changes.
         ColorTransitionSetting(
             millis = colorTransitionMs,
-            blendSeconds = crossfadeSeconds,
             onMillisChange = { viewModel.setColorTransitionMs(it) },
         )
 
@@ -3861,16 +3859,14 @@ private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
  * How long the album's colours take to cross over, as a slider that says the
  * time in seconds.
  *
- * Its first stop is **Match blend**, not zero, and that is the default. Left
- * there the app keeps deriving the fade from "Blend Between Tracks", which is
- * the pairing [ColorBlend] exists to hold: with a blend set, the queue advances
- * at `duration - blend`, so a fade of exactly that length lands on the last
- * sample of the outgoing track. Any number here breaks that on purpose, which is
- * a fine thing to want and a poor thing to do by accident — hence a stop that
- * means "leave it alone" rather than a number that happens to match today.
- *
- * The label shows what Match blend currently works out to, because "match blend"
- * on its own does not tell you whether that is 0.6 s or twelve seconds.
+ * The first stop was **Match blend**, and it was the default: the fade took its
+ * length from "Blend Between Tracks" so the picture and the sound moved
+ * together. That pairing is real, and the price of it was not obvious from the
+ * slider — a four-second blend is an ordinary setting, and it made the left end
+ * of this control read "Match blend · 4.00 s" and repaint the whole window for
+ * four seconds on every track change. The stops start at zero now and the
+ * default is a few hundred milliseconds; anyone who wants the old behaviour can
+ * read their blend and dial the same number.
  *
  * The value is committed on release rather than on every pixel of the drag: it
  * is written to disk and read by the player, the mini player and the theme, and
@@ -3879,23 +3875,19 @@ private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
 @Composable
 private fun ColorTransitionSetting(
     millis: Int,
-    blendSeconds: Int,
     onMillisChange: (Int) -> Unit,
 ) {
     val stops = ColorBlend.steps
-    // An unrecognised stored value (an older build's, a hand-edited one) lands
-    // on Match blend rather than off the end of the track.
-    val stored = stops.indexOf(millis).coerceAtLeast(0)
+    // An unrecognised stored value — an older build's -1 for "match blend", or
+    // a hand-edited one — is resolved to a real length first, so the thumb
+    // lands on the stop that value actually behaves like rather than off the
+    // end of the track.
+    val stored = stops.indexOf(ColorBlend.millisFor(millis)).coerceAtLeast(0)
     var position by remember(stored) { mutableFloatStateOf(stored.toFloat()) }
     val selected = stops[position.roundToInt().coerceIn(stops.indices)]
 
     fun seconds(ms: Int) = String.format(Locale.US, "%.2f s", ms / 1000f)
-    val readout = when {
-        selected == ColorBlend.MATCH_BLEND ->
-            "Match blend · ${seconds(ColorBlend.millisFor(blendSeconds))}"
-        selected == 0 -> "Instant"
-        else -> seconds(selected)
-    }
+    val readout = if (selected == 0) "Instant" else seconds(selected)
 
     Column(modifier = Modifier.fillMaxWidth().settingsAnchor("Color transition")) {
         Row(
@@ -3916,7 +3908,7 @@ private fun ColorTransitionSetting(
         }
         Text(
             text = "How long the album's colours take to cross over when the track changes. " +
-                "Match blend keeps them in step with Blend Between Tracks.",
+                "Longer means more of the screen repainting for longer.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

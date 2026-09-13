@@ -180,14 +180,14 @@ object DynamicColorExtractor {
  * or null while loading / when extraction fails / when disabled.
  *
  * The result crosses over [blendMillis] rather than switching, so the mini
- * player, full player and lyrics change colour at the speed the audio changes
- * track. See [ColorBlend] for where that number comes from.
+ * player, full player and lyrics all change colour at one speed. See
+ * [ColorBlend] for where that number comes from.
  */
 @Composable
 fun rememberDynamicPalette(
     coverUrl: String?,
     enabled: Boolean,
-    blendMillis: Int = ColorBlend.GAPLESS_MS,
+    blendMillis: Int = ColorBlend.DEFAULT_MS,
 ): State<DynamicPalette?> {
     val context = LocalContext.current
     val target = remember { mutableStateOf<DynamicPalette?>(null) }

@@ -105,11 +105,11 @@ class PaletteBlendTest {
 
     @Test
     fun `a short fade is thinned too, not left alone`() {
-        // The gapless default. 600ms at 120 Hz is 73 frames, 36 steps.
-        val distinct = distinctPalettes(ColorBlend.GAPLESS_MS)
+        // The default fade. 500ms at 120 Hz is 61 frames, 30 steps.
+        val distinct = distinctPalettes(ColorBlend.DEFAULT_MS)
         assertTrue(
-            "a 600ms fade should still shed frames, not pass all 73 through",
-            distinct < framesFor(ColorBlend.GAPLESS_MS).size * 0.6,
+            "a 500ms fade should still shed frames, not pass all 61 through",
+            distinct < framesFor(ColorBlend.DEFAULT_MS).size * 0.6,
         )
     }
 

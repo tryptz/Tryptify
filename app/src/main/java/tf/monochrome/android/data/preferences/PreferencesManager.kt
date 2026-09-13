@@ -142,8 +142,9 @@ class PreferencesManager @Inject constructor(
         private val DYNAMIC_COLORS_MENUS = booleanPreferencesKey("dynamic_colors_menus")
         private val DYNAMIC_COLORS_KEEP_BACKGROUND =
             booleanPreferencesKey("dynamic_colors_keep_background")
-        // How long the album colours take to cross over, in ms, or
-        // ColorBlend.MATCH_BLEND to go on following "Blend Between Tracks".
+        // How long the album colours take to cross over, in ms. Older builds
+        // also stored -1 here for "match Blend Between Tracks"; ColorBlend
+        // .millisFor turns that back into a real length.
         private val COLOR_TRANSITION_MS = intPreferencesKey("color_transition_ms")
         // Custom colours: when on, an accent and a ground the listener picked
         // replace whichever preset is selected. Stored as ARGB ints.
@@ -616,12 +617,13 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
-     * How long the album colours take to cross over, in milliseconds, or
-     * [tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND] (the default) to
-     * keep deriving it from "Blend Between Tracks".
+     * How long the album colours take to cross over, in milliseconds.
+     *
+     * Read it through `ColorBlend.millisFor`, which handles the `-1` an older
+     * build wrote here when this followed "Blend Between Tracks".
      */
     val colorTransitionMs: Flow<Int> = dataStore.data.map { prefs ->
-        prefs[COLOR_TRANSITION_MS] ?: tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND
+        prefs[COLOR_TRANSITION_MS] ?: tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS
     }
 
     suspend fun setColorTransitionMs(millis: Int) {

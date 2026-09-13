@@ -214,12 +214,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val miniPlayerGlass by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     // The mini player's cover changes track at the same speed its album tint
-    // does — both come off "Blend Between Tracks" — and tells a skip from a
-    // song ending the same way the full player does.
-    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
+    // does — both come off "Color transition" — and tells a skip from a song
+    // ending the same way the full player does.
     val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
     val miniBlendMs = tf.monochrome.android.ui.theme.motionMillis(
-        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+        ColorBlend.millisFor(colorTransitionMs)
     )
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
 

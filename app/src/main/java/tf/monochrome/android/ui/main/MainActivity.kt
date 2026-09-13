@@ -172,12 +172,11 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(
                     initialValue = tf.monochrome.android.performance.LowPerformanceSettings()
                 )
-            // The album palette crosses over at the speed the audio does, so a
-            // blended transition doesn't have the colours land on the new track
-            // while the old one is still playing.
-            val blendSeconds by preferences.crossfadeDuration.collectAsStateWithLifecycle(initialValue = 0)
+            // The album palette crosses over at the Color transition length —
+            // a few hundred milliseconds by default, not the audio blend, which
+            // could make every track change a six-second repaint.
             val colorTransitionMs by preferences.colorTransitionMs
-                .collectAsStateWithLifecycle(initialValue = ColorBlend.MATCH_BLEND)
+                .collectAsStateWithLifecycle(initialValue = ColorBlend.DEFAULT_MS)
             // Held as state, not unwrapped: `by` here would subscribe this whole
             // composable to a value that changes every frame of the colour
             // cross-fade, recomposing the root and every provider under it for
@@ -190,7 +189,7 @@ class MainActivity : ComponentActivity() {
                 // continuous cross-fade rather than a one-off transition, so it
                 // goes on producing values for the whole blend window.
                 blendMillis = if (lowPerformance.disableAnimations) 0
-                else ColorBlend.millisFor(blendSeconds, colorTransitionMs),
+                else ColorBlend.millisFor(colorTransitionMs),
             )
 
             // Handles both a bundled `asset:` font and an imported file path —

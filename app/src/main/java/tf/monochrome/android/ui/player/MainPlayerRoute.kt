@@ -260,10 +260,9 @@ fun MainPlayerRoute(
     // which meant the player finished repainting while a 6s blend was still
     // half the previous track. Linear for the same reason the palette is: it
     // is pacing an audio crossfade, not decorating a tap.
-    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
     val colorBlendMs = tf.monochrome.android.ui.theme.motionMillis(
-        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+        ColorBlend.millisFor(colorTransitionMs)
     )
     // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()

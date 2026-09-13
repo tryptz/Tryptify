@@ -135,7 +135,7 @@ data class MainPlayerUiState(
      * has to move at the same speed or the two disagree for the length of the
      * transition. See `ColorBlend`.
      */
-    val colorBlendMs: Int = tf.monochrome.android.ui.theme.ColorBlend.GAPLESS_MS,
+    val colorBlendMs: Int = tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS,
     val visualizerActive: Boolean,
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,

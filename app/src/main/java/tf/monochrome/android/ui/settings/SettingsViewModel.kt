@@ -127,7 +127,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND,
+            tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS,
         )
     val fontScale: StateFlow<Float> = preferences.fontScale
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)

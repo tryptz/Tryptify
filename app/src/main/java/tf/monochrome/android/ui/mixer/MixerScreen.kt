@@ -192,12 +192,11 @@ fun MixerScreen(
     } else {
         AlbumColors(dominant = accent, vibrant = accent)
     }
-    // The cover dissolves between tracks over the listener's own blend length,
-    // so the mixer's backdrop changes track at the speed the player's does.
-    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
+    // The cover dissolves between tracks over the Color transition length, so
+    // the mixer's backdrop changes track at the speed the player's does.
     val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
     val colorBlendMs = tf.monochrome.android.ui.theme.motionMillis(
-        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+        ColorBlend.millisFor(colorTransitionMs)
     )
     val blurBgAlpha by animateFloatAsState(
         targetValue = if (blurredBackground) 1f else 0f,

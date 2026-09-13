@@ -196,13 +196,14 @@ class PlayerViewModel @Inject constructor(
     // colour crossfade against the audio one rather than a fixed tween.
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-    // Appearance › "Color transition". MATCH_BLEND (the default) leaves the
-    // pacing above alone; anything else overrides it outright.
+    // Appearance › "Color transition", in milliseconds. It used to default to
+    // the blend above, which made a six-second audio crossfade a six-second
+    // repaint of the window; it is its own short length now.
     val colorTransitionMs: StateFlow<Int> = preferences.colorTransitionMs
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND,
+            tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS,
         )
 
     // Counts playback changes the UI asked for (see resolveAndPlay). Only

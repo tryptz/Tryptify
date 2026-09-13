@@ -25,6 +25,12 @@
 
 ### Fixed
 
+#### The colour transition defaulted to the length of the audio blend
+- **The slider's first stop read "Match blend · 4.00 s".** The album-colour fade took its length from "Blend Between Tracks" so the picture and the sound finished together, and that pairing is real — the queue advances at `duration - blend`, so a fade of exactly that length lands on the last sample of the outgoing track. What it did not say is that a four- or six-second blend is an ordinary setting, and it made the *default* a multi-second animation repainting the whole window on every track change.
+- **The two are unhitched.** `ColorBlend` is a plain number of milliseconds now: stops from instant to eight seconds, `DEFAULT_MS` of 500. Anyone who wants the old pairing can read their blend and dial the same number. `millisFor` lost its `crossfadeSeconds` parameter, and with it the four screens that were collecting the blend length purely to pass it in.
+- **`millisFor` still exists, as the migration.** Older builds stored `-1` in the preference to mean "match blend", and that is not a duration — handed to an animation spec it is a negative tween. It resolves to `DEFAULT_MS`, which is roughly what those listeners were getting on a gapless queue anyway. Zero is left alone: it is a real choice and it means instant.
+- **`DEFAULT_MS` is 500 rather than the 600 gapless used**, because the slider's stops are every 250ms and 600 is not one of them. `stops.indexOf(600)` returned -1, the thumb fell back to the stop before it, and an untouched install would have read "Instant" while the app was fading. A test pins the default to a stop the slider can rest at.
+
 #### The debug log's Errors tab was all vendor chatter
 - **Three sources filled it on a ColorOS device while nothing was wrong.** `OplusBracketLog` is the skin's view-mirroring manager saying it does not handle a plain `ViewRootImpl` — every window not in its split-screen bracket, i.e. ours. `AudioTrackExtImpl` reports that the platform returned no fade type, once per track start. The third is Android 15's `getRequiredSystemResources` query against a codec that does not implement it, logged once per `MediaCodec` the player creates.
 - **All three log at ERROR**, which is what made them worth filtering rather than tolerating: a long All tab is a nuisance, but an Errors tab that is 100% noise is the one view that has to be trustworthy.
