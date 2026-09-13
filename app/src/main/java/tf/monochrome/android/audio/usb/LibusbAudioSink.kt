@@ -34,7 +34,26 @@ class LibusbAudioSink(
 
     private var bypassActive = false
     private var configuredFormat: Format? = null
-    private var pcmBytesPerFrame = 0
+
+    /**
+     * Stride of the PCM the chain hands us — 4 bytes/sample for float, 2 for
+     * 16-bit. Distinct from the USB stride because the two differ the moment
+     * the DAC runs at a width the chain does not: a float chain feeding a
+     * 24-bit stream is 8 bytes in and 6 out per stereo frame. Everything that
+     * advances a Media3 buffer counts in this one.
+     */
+    private var sourceBytesPerFrame = 0
+    private var sourceIsFloat = false
+
+    /**
+     * Subslot size the driver negotiated, from the device's own descriptor —
+     * NOT bitsPerSample / 8. A 24-bit alt may carry each sample in 4 bytes
+     * (bSubslotSize = 4, sample left-justified), and the driver strides its
+     * ring by exactly this. Guessing would desync the two and the JNI bounds
+     * check would reject every write.
+     */
+    private var usbBytesPerSample = 0
+    private var outChannels = 0
     private var outBitsPerSample = 0
 
     private var framesWritten = 0L
@@ -71,6 +90,7 @@ class LibusbAudioSink(
 
     private var gainScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var copyScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+    private var packScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
 
     override fun configure(
         inputFormat: Format,
@@ -86,8 +106,9 @@ class LibusbAudioSink(
 
         val rate = inputFormat.sampleRate
         val channels = inputFormat.channelCount
-        val bits = pcmBitsFromEncoding(inputFormat.pcmEncoding)
-        if (rate <= 0 || channels <= 0 || bits <= 0) {
+        if (rate <= 0 || channels <= 0 ||
+            sourceBytesPerSample(inputFormat.pcmEncoding) <= 0
+        ) {
             bypassActive = false
             return
         }
@@ -95,50 +116,85 @@ class LibusbAudioSink(
         val chainOut = chain.configure(
             AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
         )
-        val outRate = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
-            chainOut.sampleRate
+        val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
+            chainOut
         } else {
-            rate
-        }
-        val outChannels = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
-            chainOut.channelCount
-        } else {
-            channels
-        }
-        val outBits = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
-            pcmBitsFromEncoding(chainOut.encoding)
-        } else {
-            bits
+            AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
         }
 
-        if (outRate <= 0 || outChannels <= 0 || outBits <= 0) {
+        if (out.sampleRate <= 0 || out.channelCount <= 0 ||
+            sourceBytesPerSample(out.encoding) <= 0
+        ) {
             bypassActive = false
             return
         }
 
-        pcmBytesPerFrame = (outBits / 8) * outChannels
-        outBitsPerSample = outBits
+        bypassActive = driver.isOpen.value &&
+            engageDriver(out.sampleRate, out.channelCount, out.encoding)
 
-        bypassActive = when {
-            !driver.isOpen.value -> false
-            driver.isStreamingFormat(outRate, outBits, outChannels) -> {
-                Log.i(TAG, "configured: reused active stream ($outRate/${outBits}b/${outChannels}ch)")
-                true
-            }
-            else -> {
-                driver.start(outRate, outBits, outChannels).also { ok ->
-                    if (ok) {
-                        Log.i(
-                            TAG,
-                            "configured: bypass active " +
-                                "(in $rate/${bits}b/${channels}ch -> out $outRate/${outBits}b/${outChannels}ch)",
-                        )
-                    }
+        if (bypassActive) {
+            Log.i(
+                TAG,
+                "configured: bypass active (chain ${out.sampleRate}/" +
+                    "${encodingLabel(out.encoding)}/${out.channelCount}ch -> DAC " +
+                    "${out.sampleRate}/${outBitsPerSample}b in " +
+                    "${usbBytesPerSample}-byte subslots)",
+            )
+            resetStreamAccounting()
+        }
+    }
+
+    /**
+     * Brings the DAC up for [encoding] and records the stride it negotiated.
+     *
+     * A float chain asks for 24-bit and falls back to 16. Float carries a
+     * 24-bit mantissa, so rounding it to 16 on the way out throws away
+     * precision the DSP actually produced — but a DAC with no 24-bit alt at
+     * this rate must still get audio rather than being dropped to the HAL,
+     * which is what a single failed start() would have done.
+     */
+    private fun engageDriver(rate: Int, channels: Int, encoding: Int): Boolean {
+        for (bits in usbBitDepthLadder(encoding)) {
+            val reused = driver.isStreamingFormat(rate, bits, channels)
+            if (reused) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
+            if (reused || driver.start(rate, bits, channels)) {
+                adoptNegotiatedFormat(bits, channels, encoding)
+                // Integer PCM reaches the DAC untouched, so its stride has to
+                // match the subslot the device negotiated. Normally it does —
+                // 16-bit is two bytes everywhere — but a 24-bit alt may use
+                // 4-byte subslots, and handing it 3-byte frames would have the
+                // driver read past the buffer. The JNI bounds check turns that
+                // into a dropped write and an error line per buffer, i.e.
+                // silence, so take the next rung (or the delegate) instead.
+                val sourceStride = sourceBytesPerSample(encoding)
+                if (!sourceIsFloat && usbBytesPerSample != sourceStride) {
+                    Log.w(
+                        TAG,
+                        "DAC negotiated ${usbBytesPerSample}-byte subslots at ${bits}b but " +
+                            "the chain emits $sourceStride bytes/sample — not engaging at this depth",
+                    )
+                    continue
                 }
+                return true
             }
         }
+        return false
+    }
 
-        if (bypassActive) resetStreamAccounting()
+    private fun adoptNegotiatedFormat(bits: Int, channels: Int, encoding: Int) {
+        outBitsPerSample = bits
+        outChannels = channels
+        sourceIsFloat = encoding == C.ENCODING_PCM_FLOAT
+        sourceBytesPerFrame = sourceBytesPerSample(encoding) * channels
+        // Ask the driver what it actually negotiated rather than assuming
+        // bits / 8 — see the note on [usbBytesPerSample]. The guard keeps a
+        // stale snapshot from a previous stream out of the arithmetic.
+        usbBytesPerSample = driver.diagnostics.value
+            ?.takeIf { it.bitsPerSample == bits && it.channels == channels }
+            ?.bytesPerSample
+            ?.takeIf { it > 0 }
+            ?: (bits / 8)
+        usbBytesPerFrame = usbBytesPerSample * channels
     }
 
     override fun handleBuffer(
@@ -211,24 +267,30 @@ class LibusbAudioSink(
      * instead of replaying the beginning of the chunk.
      */
     private fun writeProcessedBuffer(processed: ByteBuffer): Int {
-        if (!processed.hasRemaining() || pcmBytesPerFrame <= 0) return 0
+        if (!processed.hasRemaining() || sourceBytesPerFrame <= 0) return 0
 
         val direct = if (processed.isDirect) processed else copyIntoScratch(processed)
-        val framesAvailable = direct.remaining() / pcmBytesPerFrame
+        val framesAvailable = direct.remaining() / sourceBytesPerFrame
         if (framesAvailable <= 0) return 0
 
         val gain = volumeController.getVolume()
-        val toWrite = if (gain >= 0.9999f || outBitsPerSample != 16) {
-            direct
-        } else {
-            applyGainPcm16(direct, gain)
+        val toWrite = when {
+            // Float chain: gain and the pack down to the DAC's subslot happen
+            // in one pass. This is also what gives 24-bit output a working
+            // volume control — the integer path only ever had a 16-bit fast
+            // path and silently skipped attenuation at any other depth.
+            sourceIsFloat -> packFloatForUsb(direct, framesAvailable, gain)
+            gain >= 0.9999f || outBitsPerSample != 16 -> direct
+            else -> applyGainPcm16(direct, gain)
         }
 
         val positionedView = toWrite.slice().order(ByteOrder.nativeOrder())
         val written = driver.write(positionedView, framesAvailable)
 
         if (written > 0) {
-            val bytesWritten = written * pcmBytesPerFrame
+            // Source stride, not USB stride: this advances the Media3 buffer,
+            // which is still the chain's PCM however narrow the DAC is.
+            val bytesWritten = written * sourceBytesPerFrame
             processed.position((processed.position() + bytesWritten).coerceAtMost(processed.limit()))
             framesWritten += written
 
@@ -292,44 +354,48 @@ class LibusbAudioSink(
     }
 
     private fun tryLazyEngage() {
-        if (bypassActive || pcmBytesPerFrame <= 0 || !driver.isOpen.value) return
+        if (bypassActive || !driver.isOpen.value) return
 
         val fmt = configuredFormat ?: return
         val chainOut = chain.outputFormat()
 
         val rate: Int
         val channels: Int
-        val bits: Int
+        val encoding: Int
         if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
             rate = chainOut.sampleRate
             channels = chainOut.channelCount
-            bits = pcmBitsFromEncoding(chainOut.encoding)
+            encoding = chainOut.encoding
         } else {
             rate = fmt.sampleRate
             channels = fmt.channelCount
-            bits = pcmBitsFromEncoding(fmt.pcmEncoding)
+            encoding = fmt.pcmEncoding
         }
 
-        if (rate <= 0 || channels <= 0 || bits <= 0) return
+        if (rate <= 0 || channels <= 0 || sourceBytesPerSample(encoding) <= 0) return
 
-        val fmtHash = (rate * 31 + channels) * 31 + bits
+        val fmtHash = (rate * 31 + channels) * 31 + encoding
         if (fmtHash == lastEngageFailHash) return
 
-        bypassActive = if (driver.isStreamingFormat(rate, bits, channels)) {
-            true
-        } else {
-            driver.start(rate, bits, channels)
-        }
+        bypassActive = engageDriver(rate, channels, encoding)
 
         if (bypassActive) {
             lastEngageFailHash = 0
             pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
             endOfStreamRequested = false
             resetStreamAccounting()
-            Log.i(TAG, "lazy-engaged bypass mid-stream ($rate/${bits}b/${channels}ch)")
+            Log.i(
+                TAG,
+                "lazy-engaged bypass mid-stream (chain $rate/${encodingLabel(encoding)}/" +
+                    "${channels}ch -> DAC ${outBitsPerSample}b)",
+            )
         } else {
             lastEngageFailHash = fmtHash
-            Log.w(TAG, "bypass engage failed for $rate/${bits}b/${channels}ch — staying on delegate")
+            Log.w(
+                TAG,
+                "bypass engage failed for $rate/${encodingLabel(encoding)}/${channels}ch " +
+                    "— staying on delegate",
+            )
         }
     }
 
@@ -522,6 +588,53 @@ class LibusbAudioSink(
         return scratch
     }
 
+    /**
+     * Converts [frames] frames of native-order float PCM into the DAC's
+     * subslot width, applying [gain] on the way.
+     *
+     * Scales to a 24-bit sample and then keeps the top [usbBytesPerSample]
+     * bytes, which is what left-justification means: USB Audio Type I places
+     * a sample narrower than its subslot in the high bits with the low ones
+     * zeroed — the same mapping snd-usb-audio uses when it reports a
+     * 24-bit-in-4-byte alt as S32_LE. One scale therefore covers 2-, 3- and
+     * 4-byte subslots with no per-width special case beyond which bytes to
+     * emit. USB PCM is always little-endian, hence the explicit byte order
+     * rather than the buffer's.
+     */
+    private fun packFloatForUsb(src: ByteBuffer, frames: Int, gain: Float): ByteBuffer {
+        val bytesPerSample = usbBytesPerSample
+        val samples = frames * outChannels
+        val out = ensurePackScratch(samples * bytesPerSample)
+        val srcPos = src.position()
+
+        var o = 0
+        for (i in 0 until samples) {
+            val sample = floatToSubslotSample(
+                src.getFloat(srcPos + (i shl 2)) * gain,
+                bytesPerSample,
+            )
+            out.put(o, sample.toByte())
+            if (bytesPerSample > 1) out.put(o + 1, (sample shr 8).toByte())
+            if (bytesPerSample > 2) out.put(o + 2, (sample shr 16).toByte())
+            if (bytesPerSample > 3) out.put(o + 3, (sample shr 24).toByte())
+            o += bytesPerSample
+        }
+
+        out.position(0)
+        out.limit(samples * bytesPerSample)
+        return out
+    }
+
+    private fun ensurePackScratch(needBytes: Int): ByteBuffer {
+        if (packScratch.capacity() < needBytes) {
+            packScratch = ByteBuffer.allocateDirect(needBytes)
+                .order(ByteOrder.nativeOrder())
+        } else {
+            packScratch.clear()
+        }
+        return packScratch
+    }
+
     private fun ensureGainScratch(needBytes: Int): ByteBuffer {
         if (gainScratch.capacity() < needBytes) {
             gainScratch = ByteBuffer.allocateDirect(needBytes)
@@ -554,9 +667,53 @@ class LibusbAudioSink(
         else -> 0
     }
 
+    /** Bytes one sample of [encoding] occupies in the chain's own buffers. */
+    private fun sourceBytesPerSample(encoding: Int): Int =
+        if (encoding == C.ENCODING_PCM_FLOAT) 4 else pcmBitsFromEncoding(encoding) / 8
+
+    /**
+     * Widths to offer the DAC for [encoding], best first.
+     *
+     * Only float gets a ladder. An integer chain has exactly as many bits as
+     * it has, so there is nothing to gain by asking for more and no converter
+     * here to narrow it if the DAC wants less — offering one width keeps that
+     * case behaving exactly as it did.
+     */
+    private fun usbBitDepthLadder(encoding: Int): IntArray =
+        if (encoding == C.ENCODING_PCM_FLOAT) intArrayOf(24, 16)
+        else intArrayOf(pcmBitsFromEncoding(encoding))
+
+    private fun encodingLabel(encoding: Int): String =
+        if (encoding == C.ENCODING_PCM_FLOAT) "float" else "${pcmBitsFromEncoding(encoding)}b"
+
     companion object {
         private const val TAG = "LibusbAudioSink"
         private const val kIsoWarmupNs = 400_000_000L
         private const val kIsoStallNs = 400_000_000L
+    }
+}
+
+/**
+ * A float sample as the little-endian integer a USB Audio Type I subslot of
+ * [bytesPerSample] bytes carries.
+ *
+ * Scales to 24 bits and then shifts, because that is what left-justification
+ * means: a sample narrower than its subslot sits in the subslot's high bits
+ * with the low ones zeroed — the same mapping snd-usb-audio uses when it
+ * reports a 24-bit-in-4-byte alt as S32_LE. 2^23 - 1 is exactly representable
+ * as a float, so the product cannot overflow the Int conversion the way a 2^31
+ * scale would, and NaN converts to zero rather than to garbage.
+ *
+ * A free function, like [tf.monochrome.android.visualizer.shouldDropFrame],
+ * because every way to get this wrong still plays: a bad scale is distortion
+ * at full level, and a missed shift is 48 dB of attenuation on a 4-byte DAC.
+ */
+internal fun floatToSubslotSample(value: Float, bytesPerSample: Int): Int {
+    val clamped = if (value > 1f) 1f else if (value < -1f) -1f else value
+    val sample24 = (clamped * 8_388_607f).toInt()
+    return when {
+        bytesPerSample >= 4 -> sample24 shl 8
+        bytesPerSample == 2 -> sample24 shr 8
+        else -> sample24
     }
 }

@@ -317,7 +317,21 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
         PipelineStage.OUTPUT,
         listOfNotNull(
             PipelineField("Device Name", input.deviceName?.takeIf { it.isNotBlank() }),
-            PipelineField("Bit Depth In", bits(pcmBits, pcmIsFloat)),
+            // What the sink is actually fed, not what the file is tagged.
+            // `pcmBits` falls back to the container's tag, which for a
+            // compressed source says nothing about the PCM: a 24/96 FLAC
+            // decoded to float (or to 16-bit, as it was before float output)
+            // read "24-bit in / 16-bit out" and looked like the DAC had
+            // downgraded it, when the decoder had. The chain's own isFloat
+            // comes from ChannelDetectorProcessor at the head of the chain,
+            // so it is measured rather than inferred.
+            PipelineField(
+                "Bit Depth In",
+                when {
+                    input.chain?.isFloat == true || pcmIsFloat -> "32-bit float"
+                    else -> bits(pcmBits)
+                },
+            ),
             PipelineField("Bit Depth Out", bits(input.usb?.bitsPerSample)),
             PipelineField("Sample Rate", hz(outRate)),
             input.usb?.detail?.let { PipelineField("Link", it) },

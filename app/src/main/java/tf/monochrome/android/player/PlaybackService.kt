@@ -779,6 +779,24 @@ class PlaybackService : MediaSessionService() {
             init {
                 setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
 
+                // Decode to 32-bit float instead of 16-bit integer.
+                //
+                // This is what makes bit depths above 16 reachable at all.
+                // FfmpegAudioRenderer emits either 16-bit or float and never
+                // 24-bit, so without this the PCM reaching LibusbAudioSink is
+                // 16-bit whatever the file holds, and a 24/96 FLAC negotiated
+                // a 16-bit alt on the DAC. Float carries a 24-bit mantissa, so
+                // the sink can now pack genuine 24-bit samples for the USB
+                // stream (see LibusbAudioSink.packFloatForUsb).
+                //
+                // It also stops the DSP chain rounding to 16 bits between
+                // stages: every processor here already has a float path
+                // (mixBus, AutoEQ, parametric EQ, spectrum tap all branch on
+                // ENCODING_PCM_FLOAT), and DefaultAudioSink writes float to
+                // AudioTrack natively — so the non-USB outputs keep working
+                // and gain the same headroom.
+                setEnableAudioFloatOutput(true)
+
                 // Hand ALAC to FFmpeg instead of the platform decoder.
                 //
                 // EXTENSION_RENDERER_MODE_ON puts the FFmpeg renderers *after*
