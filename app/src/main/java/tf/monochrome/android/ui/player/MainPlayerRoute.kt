@@ -353,6 +353,72 @@ fun MainPlayerRoute(
         "${(currentIndex + 1).coerceAtLeast(1)} / ${queue.size}"
     } else ""
 
+    // ── Ambient MilkDrop ────────────────────────────────────────────────
+    //
+    // Never at the same time as the hero visualizer. ProjectMEngineRepository
+    // refcounts its surfaces and the FIRST attachment owns the native bridge;
+    // renderFrame needs that bridge's GL objects current, so a second view on
+    // a second context would draw from objects it does not have. The two are
+    // different compositions of the same engine, so this is not a limitation
+    // anyone should feel — but it is a crash if it is ever ignored.
+    //
+    // Off on the legacy player too: that path is the low-performance profile,
+    // which is the last place to run a GL composite behind the whole screen.
+    //
+    // Declared this high because three places need them: Audio tools' own
+    // Visualizer chip (which has to read lit while ambient is the thing on
+    // screen), the hero slot — Ambient › "Remove album cover" fades the square
+    // artwork out so MilkDrop's atmosphere is the whole show — and the
+    // background layer itself.
+    val ambient by playerViewModel.ambientVisualizer.collectAsStateWithLifecycle()
+
+    /** What the user asked for. Drives the Audio tools chip. */
+    val ambientEnabled = ambient.enabled &&
+        viewMode != NowPlayingViewMode.VISUALIZER &&
+        !legacyPlayer
+
+    // Preparing the engine is a first-run preset install on its own dispatcher.
+    // Ask for it as soon as ambient is switched on: the only other callers are
+    // the fullscreen visualizer and Settings, so with ambient on over the cover
+    // art nothing had asked, and the overlay attached to an engine that had not
+    // started installing.
+    LaunchedEffect(ambientEnabled) {
+        if (ambientEnabled) playerViewModel.visualizerRepository.requestPrepare()
+    }
+
+    /**
+     * What can actually be drawn.
+     *
+     * Attaching the overlay before the engine is ready put a TextureView's GL
+     * setup and the native init in the middle of the player's open animation —
+     * the player stuttered, waiting on a visualizer that had not loaded. Until
+     * it is ready the ordinary blurred backdrop stands in and the cover stays
+     * put, so opening is instant and MilkDrop arrives when it is genuinely
+     * able to draw.
+     */
+    val ambientActive = ambientEnabled && visualizerEngineStatus.isNativeReady
+
+    /**
+     * Audio tools' Visualizer chip. One lambda for both layouts — the glass and
+     * legacy players wire these controls twice, and this file already carries a
+     * scar from a parameter added to one branch and not the other.
+     */
+    val onVisualizerToggle: () -> Unit = {
+        when {
+            // Fullscreen visualizer is up: back to the cover.
+            viewMode == NowPlayingViewMode.VISUALIZER ->
+                playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
+            // Ambient is the visualizer that is running, so the chip stops it
+            // rather than swapping one visualizer for another. Off means off —
+            // and it works mid-load too, which is why this tests the setting
+            // and not whether the engine finished coming up.
+            ambientEnabled ->
+                playerViewModel.setAmbientVisualizerEnabled(false)
+            else ->
+                playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER)
+        }
+    }
+
     val state = MainPlayerUiState(
         track = currentTrack,
         sourceType = currentUnified?.sourceType,
@@ -380,7 +446,14 @@ fun MainPlayerRoute(
         queueLabel = queueLabel,
         albumColors = blendedColors,
         colorBlendMs = colorBlendMs,
-        visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER,
+        // Ambient counts as the visualizer being on. It is the MilkDrop the
+        // user is looking at, so a chip that tracked only the fullscreen view
+        // mode read "off" over a running visualizer and offered no way to stop
+        // it short of the Player Visuals Studio.
+        // ambientEnabled, not ambientActive: the chip reflects the setting, so
+        // it reads lit the moment ambient is switched on rather than waiting
+        // for the engine to finish loading.
+        visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER || ambientEnabled,
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
@@ -488,26 +561,6 @@ fun MainPlayerRoute(
             },
         )
     }
-    // ── Ambient MilkDrop ────────────────────────────────────────────────
-    //
-    // Never at the same time as the hero visualizer. ProjectMEngineRepository
-    // refcounts its surfaces and the FIRST attachment owns the native bridge;
-    // renderFrame needs that bridge's GL objects current, so a second view on
-    // a second context would draw from objects it does not have. The two are
-    // different compositions of the same engine, so this is not a limitation
-    // anyone should feel — but it is a crash if it is ever ignored.
-    //
-    // Off on the legacy player too: that path is the low-performance profile,
-    // which is the last place to run a GL composite behind the whole screen.
-    //
-    // Declared up here rather than next to ambientCover because the hero slot
-    // below needs them in scope: Ambient › "Remove album cover" fades the
-    // square artwork out so MilkDrop's atmosphere is the whole show.
-    val ambient by playerViewModel.ambientVisualizer.collectAsStateWithLifecycle()
-    val ambientActive = ambient.enabled &&
-        viewMode != NowPlayingViewMode.VISUALIZER &&
-        !legacyPlayer
-
     val heroSlot: @Composable (Modifier) -> Unit = { heroModifier ->
         // Manual dissolve between the album art / visualizer and the lyric
         // surface (lyricsProgress is hoisted above). The built-in Crossfade
@@ -797,12 +850,7 @@ fun MainPlayerRoute(
                 onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
                 onSound = { navController.navigateTool(Screen.Equalizer) },
                 onSpeed = { showSpeedSheet = true },
-                onVisualizer = {
-                    playerViewModel.setNowPlayingViewMode(
-                        if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
-                        else NowPlayingViewMode.VISUALIZER
-                    )
-                },
+                onVisualizer = onVisualizerToggle,
                 onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
                 onCompressorToggle = playerViewModel::setCompressorEnabled,
                 onInflatorToggle = playerViewModel::setInflatorEnabled,
@@ -850,12 +898,7 @@ fun MainPlayerRoute(
                 onPlaylist = { showQueueSheet = true },
                 onSound = { navController.navigateTool(Screen.Equalizer) },
                 onSpeed = { showSpeedSheet = true },
-                onVisualizer = {
-                    playerViewModel.setNowPlayingViewMode(
-                        if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
-                        else NowPlayingViewMode.VISUALIZER
-                    )
-                },
+                onVisualizer = onVisualizerToggle,
                 onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
                 onCompressorToggle = playerViewModel::setCompressorEnabled,
                 onInflatorToggle = playerViewModel::setInflatorEnabled,

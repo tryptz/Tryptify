@@ -245,6 +245,18 @@ class PlayerViewModel @Inject constructor(
     val ambientVisualizer: StateFlow<AmbientVisualizerSettings> = preferences.ambientVisualizer
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AmbientVisualizerSettings())
 
+    /**
+     * Turns the ambient MilkDrop background off (or back on) from the player.
+     *
+     * The setting's home is the Player Visuals Studio, but Audio tools' own
+     * Visualizer chip has to be able to switch it off: when ambient is running
+     * it *is* the visualizer the user is looking at, so a chip that only knows
+     * about the fullscreen view mode leaves no way to stop it from here.
+     */
+    fun setAmbientVisualizerEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setAmbientVisualizerEnabled(enabled) }
+    }
+
     // --- Spectrum analyzer (global prefs) ---
     val spectrumAnalyzerEnabled: StateFlow<Boolean> = preferences.spectrumAnalyzerEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
