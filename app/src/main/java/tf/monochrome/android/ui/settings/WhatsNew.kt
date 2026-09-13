@@ -259,6 +259,14 @@ object WhatsNew {
                         "what is playing in a long list at a glance.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Browse by album artist, composer or year",
+                    body = "Three more ways into what is on the device, beside albums and " +
+                        "artists. All three read tags you already have, so nothing needs " +
+                        "rescanning to appear.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
                     title = "Sending a file works for music on your phone",
@@ -266,6 +274,14 @@ object WhatsNew {
                         "device — from the player, playlists, albums, artists, Favorites and " +
                         "search. It was trying to download them first. Only the songs list " +
                         "ever worked.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Local opens on a list instead of five swipes",
+                    body = "Songs, Albums, Artists, Genres and Folders were tabs on a strip " +
+                        "too narrow to show them, four drags apart end to end. They are a " +
+                        "list you tap now, and Back returns to it.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

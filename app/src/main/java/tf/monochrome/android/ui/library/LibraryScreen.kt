@@ -485,8 +485,8 @@ fun LibraryScreen(
                             navController.navigateSafe("local_artist/$artistId")
                         }
                     },
-                    onGenreClick = { genre ->
-                        navController.navigateSafe(Screen.LocalGenreDetail.createRoute(genre))
+                    onFacetClick = { facet, value ->
+                        navController.navigateSafe(Screen.LocalFacetDetail.createRoute(facet, value))
                     },
                     onFolderClick = { path ->
                         navController.navigateSafe(Screen.FolderBrowser.createRoute(path))

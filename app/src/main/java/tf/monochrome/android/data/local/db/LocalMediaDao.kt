@@ -121,6 +121,64 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks WHERE genre = :genre ORDER BY album, trackNumber")
     fun getTracksByGenre(genre: String): Flow<List<LocalTrackEntity>>
 
+    @Query("SELECT * FROM local_tracks WHERE albumArtist = :albumArtist ORDER BY album, discNumber, trackNumber")
+    fun getTracksByAlbumArtist(albumArtist: String): Flow<List<LocalTrackEntity>>
+
+    @Query("SELECT * FROM local_tracks WHERE composer = :composer ORDER BY album, discNumber, trackNumber")
+    fun getTracksByComposer(composer: String): Flow<List<LocalTrackEntity>>
+
+    @Query("SELECT * FROM local_tracks WHERE year = :year ORDER BY albumArtist, album, discNumber, trackNumber")
+    fun getTracksByYear(year: Int): Flow<List<LocalTrackEntity>>
+
+    // ── Facet tallies ───────────────────────────────────────────────
+    //
+    // One row per distinct value with the number of tracks under it, so the
+    // Album artists / Composers / Years lists can be drawn without reading a
+    // single track. `local_genres` is a real table the scanner maintains;
+    // these three have no table of their own, so they are grouped out of
+    // `local_tracks` on demand. That is cheap for album artist (indexed) and a
+    // full scan for the other two — acceptable for a list that is built once
+    // when the page opens, and the alternative is three more tables for the
+    // scanner to keep in step.
+    //
+    // Blank is not a value: a file with no composer tag must not create a
+    // nameless row that opens onto every untagged track in the library.
+
+    @Query(
+        """
+        SELECT albumArtist AS name, COUNT(*) AS trackCount
+        FROM local_tracks
+        WHERE albumArtist IS NOT NULL AND TRIM(albumArtist) != ''
+        GROUP BY albumArtist
+        ORDER BY albumArtist COLLATE NOCASE
+        """
+    )
+    fun getAlbumArtistTallies(): Flow<List<LocalFacetTally>>
+
+    @Query(
+        """
+        SELECT composer AS name, COUNT(*) AS trackCount
+        FROM local_tracks
+        WHERE composer IS NOT NULL AND TRIM(composer) != ''
+        GROUP BY composer
+        ORDER BY composer COLLATE NOCASE
+        """
+    )
+    fun getComposerTallies(): Flow<List<LocalFacetTally>>
+
+    // Newest first, and CAST so every tally reads the same shape. Year 0 is
+    // what a missing tag decodes to often enough to be worth excluding by hand.
+    @Query(
+        """
+        SELECT CAST(year AS TEXT) AS name, COUNT(*) AS trackCount
+        FROM local_tracks
+        WHERE year IS NOT NULL AND year > 0
+        GROUP BY year
+        ORDER BY year DESC
+        """
+    )
+    fun getYearTallies(): Flow<List<LocalFacetTally>>
+
     /**
      * The audio files sitting directly in [folderPath], not those in its subfolders.
      *

@@ -11,6 +11,21 @@
 
 ### Added
 
+#### The Local page is a list of categories, not five swipeable tabs
+- **Three pagers deep.** The five sub-tabs sat in a `HorizontalPager` inside the section pager inside the page pager. Folders was four drags from Albums, and `ScrollableTabRow` gave five labels about 120dp on a 360dp screen, so the strip was permanently mid-scroll with "Albums" and "Folders" clipped at both ends.
+- **It is `PageJumpList`'s material, deliberately.** This is the app's second list-of-places and the two should not look like different products: `headlineMedium` bold on a `liquidGlass` pane, spaced 12dp so the tiles read as separate rather than as one striped slab, each with its category's icon in the theme's primary. **No `hazeState`**, for the reason every glass surface inside the pager has none — a haze child within its own `hazeSource` is a cycle Haze throws on at draw time.
+- **Index and category are page state, not navigation.** The list composables already live on this page and the page is itself a pager page, so opening a category is a `rememberSaveable` id, not a destination. Only opening a *value* navigates. `BackHandler` is registered inside the page, so it closes the category without touching Back anywhere else.
+- **The id is spelled out, not the enum's name.** A category renamed in a later build must not silently drop a restored session back to the index, and `LibraryCategoryTest` reads `LocalLibraryTab` to check every category on the index actually has a branch — the same guard `AppPagesTest` puts on the page list, against the same failure: a row that draws a blank page.
+- **The sort menu is contextual.** It shows on Songs, Albums and Artists, which have an order to choose, and not on a facet list, whose `ORDER BY` is baked into its one query.
+- **The empty state replaces the index** instead of drawing under it. It used to sit below the pager, so a library with nothing in it showed a half-height empty list with "No local music found" underneath.
+
+#### Album artists, composers and years are browsable
+- **No new tables and no migration.** All three are `GROUP BY` projections over `local_tracks`, whose `albumArtist`, `composer` and `year` columns have been written by the scanner all along. Genres have `local_genres` because the scanner maintains it; these three are grouped on demand instead, so a retag shows up the moment the row is rewritten and there is nothing extra to keep in step.
+- **`LocalFacetTally` is shaped like `LocalGenreEntity`** — a name and a count — so the four browse lists are one composable. Four copies of a list that must not drift apart in appearance is how they drift apart.
+- **Blank is not a value.** A file with no composer tag must not create a nameless row that opens onto every untagged track in the library, so every tally query excludes `NULL` and empty, and years excludes 0 — which is what a missing date tag decodes to often enough to matter.
+- **A composer is one string.** A file tagged `Bach; Glenn Gould` is one row of that name, because splitting on `;` or `/` would also split the legitimate names containing them. Genres have always behaved this way; the new lists at least agree with the old one.
+- **`local_genre/{genre}` became `local_facet/{facet}/{value}`.** The screen and its view model were the same four times over with only the query differing, so the facet moved into the path rather than three more near-identical routes being added beside it. `LocalFacet.fromKey` falls back to a genre on an unknown segment: a stale link opening the wrong list is survivable, throwing on the way into a nav destination is not.
+
 #### Home is the list of pages
 - **Every page is one tap from Home**, by name, instead of up to six swipes away. The list is also behind a button in every other page's top bar, so the swipe is never the only way across. Each name is a glass tile.
 - **The swipe and the dot indicator are gone**, along with the 249 lines behind the pill. Three ways to change page was two too many. The pager itself stays, because `SaveableStateProvider` hangs off it and that is what keeps each page's scroll position alive while the page is off screen — it is driven now rather than dragged.

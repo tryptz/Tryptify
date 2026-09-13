@@ -18,10 +18,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.collections.db.CollectionEntity
 import tf.monochrome.android.data.collections.repository.CollectionRepository
+import tf.monochrome.android.data.local.db.LocalFacetTally
 import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
@@ -173,6 +175,33 @@ class LocalLibraryViewModel @Inject constructor(
 
     val localGenres: StateFlow<List<LocalGenreEntity>> = localMediaRepository.getAllGenres()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ── Facet browse lists ──────────────────────────────────────────
+    //
+    // Album artists, composers and years, each as a name and a tally. All
+    // three are GROUP BY queries: Room runs them on its own executor and
+    // nothing is mapped on the way out, so unlike sortedAlbums/sortedArtists
+    // above there is no work here to move off the main thread with flowOn.
+    //
+    // WhileSubscribed like their neighbours, which is what makes browsing one
+    // category at a time actually cost one query: the other lists are not
+    // collected while their row sits unopened on the index.
+
+    val genreTallies: StateFlow<List<LocalFacetTally>> = localGenres
+        .map { genres -> genres.map { LocalFacetTally(it.name, it.trackCount) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val albumArtistTallies: StateFlow<List<LocalFacetTally>> =
+        localMediaRepository.getAlbumArtistTallies()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val composerTallies: StateFlow<List<LocalFacetTally>> =
+        localMediaRepository.getComposerTallies()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val yearTallies: StateFlow<List<LocalFacetTally>> =
+        localMediaRepository.getYearTallies()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val rootFolders: StateFlow<List<LocalFolderEntity>> = localMediaRepository.getRootFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

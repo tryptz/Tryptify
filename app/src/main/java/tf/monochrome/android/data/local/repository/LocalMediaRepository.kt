@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import tf.monochrome.android.data.local.db.LocalAlbumEntity
 import tf.monochrome.android.data.local.db.LocalArtistEntity
+import tf.monochrome.android.data.local.db.LocalFacetTally
 import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.db.LocalMediaDao
@@ -149,6 +150,18 @@ class LocalMediaRepository @Inject constructor(
         localMediaDao.getTracksByGenre(genre).map { tracks -> tracks.map { it.toUnifiedTrack() } }
             .flowOn(Dispatchers.Default)
 
+    fun getTracksByAlbumArtist(albumArtist: String): Flow<List<UnifiedTrack>> =
+        localMediaDao.getTracksByAlbumArtist(albumArtist).map { tracks -> tracks.map { it.toUnifiedTrack() } }
+            .flowOn(Dispatchers.Default)
+
+    fun getTracksByComposer(composer: String): Flow<List<UnifiedTrack>> =
+        localMediaDao.getTracksByComposer(composer).map { tracks -> tracks.map { it.toUnifiedTrack() } }
+            .flowOn(Dispatchers.Default)
+
+    fun getTracksByYear(year: Int): Flow<List<UnifiedTrack>> =
+        localMediaDao.getTracksByYear(year).map { tracks -> tracks.map { it.toUnifiedTrack() } }
+            .flowOn(Dispatchers.Default)
+
     fun getTracksInFolder(folderPath: String): Flow<List<UnifiedTrack>> =
         localMediaDao.getTracksInFolder(folderPath).map { tracks -> tracks.map { it.toUnifiedTrack() } }
             .flowOn(Dispatchers.Default)
@@ -192,6 +205,19 @@ class LocalMediaRepository @Inject constructor(
     // ── Genres ──────────────────────────────────────────────────────
 
     fun getAllGenres(): Flow<List<LocalGenreEntity>> = localMediaDao.getAllGenres()
+
+    // ── Facets without a table ──────────────────────────────────────
+    //
+    // Genres have `local_genres`, kept up to date by the scanner. Album
+    // artists, composers and years are grouped straight out of the track table
+    // instead, so a retag shows up the moment the row is rewritten and there
+    // is nothing extra for the scanner to keep in step.
+
+    fun getAlbumArtistTallies(): Flow<List<LocalFacetTally>> = localMediaDao.getAlbumArtistTallies()
+
+    fun getComposerTallies(): Flow<List<LocalFacetTally>> = localMediaDao.getComposerTallies()
+
+    fun getYearTallies(): Flow<List<LocalFacetTally>> = localMediaDao.getYearTallies()
 
     // ── Folders ─────────────────────────────────────────────────────
 

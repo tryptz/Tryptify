@@ -73,7 +73,8 @@ import tf.monochrome.android.ui.detail.AlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
 import tf.monochrome.android.ui.detail.LocalAlbumDetailScreen
 import tf.monochrome.android.ui.detail.LocalArtistDetailScreen
-import tf.monochrome.android.ui.detail.LocalGenreDetailScreen
+import tf.monochrome.android.ui.detail.LocalFacet
+import tf.monochrome.android.ui.detail.LocalFacetDetailScreen
 import tf.monochrome.android.ui.eq.EqualizerScreen
 import tf.monochrome.android.ui.eq.ParametricEqEditScreen
 import tf.monochrome.android.ui.eq.ParametricEqScreen
@@ -156,8 +157,19 @@ sealed class Screen(val route: String) {
     data object LocalArtistDetail : Screen("local_artist/{artistId}") {
         fun createRoute(artistId: Long) = "local_artist/$artistId"
     }
-    data object LocalGenreDetail : Screen("local_genre/{genre}") {
-        fun createRoute(genre: String) = "local_genre/${android.net.Uri.encode(genre)}"
+    /**
+     * One value of a library tag — a genre, an album artist, a composer, a
+     * year — and the tracks under it.
+     *
+     * This was `local_genre/{genre}`. The facet moved into the path rather
+     * than four near-identical routes being added beside it, because the
+     * screen and its view model are the same four times over; only the query
+     * differs. [LocalFacet.fromKey] decides what an unknown segment means, so
+     * a stale link opens a genre instead of crashing.
+     */
+    data object LocalFacetDetail : Screen("local_facet/{facet}/{value}") {
+        fun createRoute(facet: LocalFacet, value: String) =
+            "local_facet/${facet.key}/${android.net.Uri.encode(value)}"
     }
     data object Mixer : Screen("mixer")
     data object CarMode : Screen("car_mode")
@@ -735,11 +747,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     }
                 }
                 composable(
-                    route = Screen.LocalGenreDetail.route,
-                    arguments = listOf(navArgument("genre") { type = NavType.StringType })
+                    route = Screen.LocalFacetDetail.route,
+                    arguments = listOf(
+                        navArgument("facet") { type = NavType.StringType },
+                        navArgument("value") { type = NavType.StringType },
+                    )
                 ) {
-                    tf.monochrome.android.devedit.DevEditScreen("local_genre_detail") {
-                        LocalGenreDetailScreen(
+                    tf.monochrome.android.devedit.DevEditScreen("local_facet_detail") {
+                        LocalFacetDetailScreen(
                             navController = navController,
                             onPlayTrack = { track, queue ->
                                 playerViewModel.playUnifiedTrack(track, queue)

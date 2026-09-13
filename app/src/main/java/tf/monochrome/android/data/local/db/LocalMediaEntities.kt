@@ -165,3 +165,20 @@ data class ScanStateEntity(
     val totalDuration: Int = 0,
     val totalSizeBytes: Long = 0
 )
+
+/**
+ * One value of a library facet, and how many tracks carry it.
+ *
+ * Not an @Entity — nothing stores these. They are the shape the album-artist,
+ * composer and year GROUP BY queries project into, deliberately identical to
+ * [LocalGenreEntity]'s name/trackCount pair so the four browse lists can be
+ * one composable rather than four.
+ *
+ * [name] is text even for years (the query CASTs) because the row shows it and
+ * the route carries it as a path segment either way; the year detail parses it
+ * back once, at the edge.
+ */
+data class LocalFacetTally(
+    val name: String,
+    val trackCount: Int,
+)

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -66,17 +65,18 @@ import tf.monochrome.android.ui.components.SearchAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LocalGenreDetailScreen(
+fun LocalFacetDetailScreen(
     navController: NavController,
     onPlayTrack: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onPlayAll: (List<UnifiedTrack>) -> Unit,
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
     onAddToQueue: (UnifiedTrack) -> Unit,
     playerViewModel: PlayerViewModel,
-    viewModel: LocalGenreDetailViewModel = hiltViewModel()
+    viewModel: LocalFacetDetailViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
-    val genreName = viewModel.genreName
+    val facet = viewModel.facet
+    val facetValue = viewModel.value
 
     val sortedTracks = remember(tracks) {
         tracks.sortedWith(
@@ -126,7 +126,7 @@ fun LocalGenreDetailScreen(
             open = searchOpen,
             query = listQuery,
             onQueryChange = { listQuery = it },
-            placeholder = "Search this genre",
+            placeholder = "Search this ${facet.noun}",
             onClose = { searchOpen = false; listQuery = "" },
         ) { searchTopInset ->
         LazyColumn(
@@ -137,7 +137,7 @@ fun LocalGenreDetailScreen(
                     )
         ) {
             item {
-                tf.monochrome.android.devedit.DevEditable("genre_hero", Modifier.fillMaxWidth()) {
+                tf.monochrome.android.devedit.DevEditable("facet_hero", Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -151,7 +151,7 @@ fun LocalGenreDetailScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.Style,
+                            facet.icon,
                             contentDescription = null,
                             modifier = Modifier.size(80.dp),
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -159,7 +159,7 @@ fun LocalGenreDetailScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = genreName.ifBlank { "Unknown Genre" },
+                        text = facetValue.ifBlank { "Unknown ${facet.noun}" },
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
@@ -206,8 +206,9 @@ fun LocalGenreDetailScreen(
             // Gated on the unfiltered list, not the visible one: a search that
             // matches nothing must still leave the toolbar on screen to clear it.
             if (sortedTracks.isNotEmpty()) {
-                // A genre spans every artist and album, so every key groups
-                // something real — the default set applies unchanged.
+                // Every one of these facets spans more than one artist and
+                // album, so every sort key groups something real — the default
+                // set applies unchanged.
                 stickyHeader {
                     TrackListToolbar(
                         sort = listSort,
@@ -215,7 +216,7 @@ fun LocalGenreDetailScreen(
                     )
                 }
                 items(visibleTracks, key = { it.id }) { track ->
-                    GenreTrackRow(
+                    FacetTrackRow(
                         track = track,
                         onClick = { onPlayTrack(track, visibleTracks) },
                         onAddToQueue = { onAddToQueue(track) },
@@ -230,7 +231,7 @@ fun LocalGenreDetailScreen(
 }
 
 @Composable
-private fun GenreTrackRow(
+private fun FacetTrackRow(
     track: UnifiedTrack,
     onClick: () -> Unit,
     onAddToQueue: () -> Unit,
