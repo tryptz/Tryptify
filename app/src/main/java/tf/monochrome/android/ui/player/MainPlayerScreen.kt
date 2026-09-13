@@ -200,6 +200,13 @@ fun MainPlayerScreen(
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
+    // Applied to the region the hero square is centred in, not to the square.
+    // The square is inscribed (side = min(width, height)), so on a tall phone
+    // there are strips above and below it that belong to the empty area a user
+    // sees but that the hero slot never receives a touch from. Ambient's
+    // tap-to-bring-the-preset-row-back needs the whole region, which is what
+    // "anywhere above the song title" means on screen.
+    heroRegionModifier: Modifier = Modifier,
     // Full-screen, unclipped layer between the background/stain and the player
     // content — the bass-reactive glow blooms here behind the active line's
     // screen bounds, so the light can never be clipped by a canvas/container.
@@ -600,7 +607,10 @@ fun MainPlayerScreen(
                 // track info below it. For expanded lyrics the same slot animates
                 // out to fill everything the hidden controls freed up.
                 BoxWithConstraints(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .then(heroRegionModifier),
                     contentAlignment = Alignment.Center,
                 ) {
                     val side = minOf(maxWidth, maxHeight)

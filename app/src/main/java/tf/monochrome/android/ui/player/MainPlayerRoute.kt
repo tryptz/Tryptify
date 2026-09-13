@@ -610,6 +610,34 @@ fun MainPlayerRoute(
             },
         )
     }
+    // Ambient › "Remove album cover": the preset row fades itself out after a
+    // few seconds so the atmosphere is unobstructed, and a tap on the space the
+    // cover vacated brings it back.
+    //
+    // Attached to the hero *region* (via MainPlayerScreen's heroRegionModifier)
+    // rather than to the hero slot. The slot is the inscribed square — side =
+    // min(width, height) — so on a tall phone it misses the strips above and
+    // below it, which to the eye are the same empty area. "Anywhere above the
+    // song title" is the region, not the square.
+    //
+    // A pointerInput rather than a tap-catching overlay Box: an overlay would
+    // sit between the finger and the hero's swipe-to-skip. As a modifier on an
+    // ancestor it cooperates instead — detectTapGestures consumes the down, but
+    // detectHorizontalDragGestures awaits its own with requireUnconsumed =
+    // false, so the swipe still runs, and a drag consumes the movement, which
+    // cancels the pending tap.
+    //
+    // Only attached while the row is actually on screen, so nothing new
+    // consumes downs in the ordinary cover mode. lyricsSlotWide is the same
+    // predicate the lyric surface is composed under.
+    var ambientPresetReveal by remember { mutableIntStateOf(0) }
+    val revealPresetControls =
+        if (ambientActive && ambient.hideCover && !lyricsSlotWide) {
+            Modifier.pointerInput(Unit) { detectTapGestures { ambientPresetReveal++ } }
+        } else {
+            Modifier
+        }
+
     val heroSlot: @Composable (Modifier) -> Unit = { heroModifier ->
         // Manual dissolve between the album art / visualizer and the lyric
         // surface (lyricsProgress is hoisted above). The built-in Crossfade
@@ -631,6 +659,21 @@ fun MainPlayerRoute(
             animationSpec = tween(durationMillis = 400),
             label = "ambientHideCover",
         )
+
+        // Composed only while something of the cover is actually visible.
+        //
+        // Alpha is a draw-phase property, so a hero faded to 0 still hit-tests
+        // — and the cover carries its own tap target (onEnterVisualizer, at
+        // PlayerHero.kt's 0.86f circle) across most of the slot. Invisible, it
+        // was swallowing every tap aimed at the empty region above the song
+        // title, which is where the ambient preset row asks to be tapped to
+        // come back. It also meant those taps were quietly requesting the
+        // square visualizer, which the "ambient wins" effect then had to undo.
+        //
+        // Gated on the animated alpha rather than on the setting, so the cover
+        // still fades out and back in instead of popping on the frame the
+        // toggle flips.
+        val heroVisible = showAlbumHero && ambientHideCoverAlpha > 0.001f
 
         // Horizontal swipe across the hero skips tracks, matching the
         // gesture (and the 50px threshold) the mini player already uses.
@@ -690,35 +733,11 @@ fun MainPlayerRoute(
             )
         }
 
-        // Ambient › "Remove album cover": the preset row below fades itself
-        // out after a few seconds so the atmosphere is unobstructed. A tap
-        // anywhere on the slot the cover vacated brings it back.
-        //
-        // A second pointerInput on the same node rather than a tap-catching
-        // overlay. An overlay would have to span the slot to catch the tap,
-        // which puts it between the finger and trackSwipe. Two detectors on
-        // one node cooperate instead: detectTapGestures consumes the down,
-        // but detectHorizontalDragGestures awaits its own with
-        // requireUnconsumed = false, so swipe-to-skip still runs — and a drag
-        // consumes the movement, which cancels the pending tap. Only attached
-        // while the row is on screen, so nothing new consumes downs in the
-        // ordinary cover mode.
-        var ambientPresetReveal by remember { mutableIntStateOf(0) }
-        // Exactly the condition the row itself is composed under, below. A
-        // looser one would leave a down-consuming detector over the lyric
-        // surface, feeding a counter nothing is reading.
-        val revealPresetControls =
-            if (ambientActive && ambient.hideCover && !showLyricsHero) {
-                Modifier.pointerInput(Unit) { detectTapGestures { ambientPresetReveal++ } }
-            } else {
-                Modifier
-            }
-
         BoxWithConstraints(
-            modifier = heroModifier.then(trackSwipe).then(revealPresetControls),
+            modifier = heroModifier.then(trackSwipe),
             contentAlignment = Alignment.Center,
         ) {
-            if (showAlbumHero) {
+            if (heroVisible) {
                 // `&& !ambientEnabled` is the mutual exclusion itself, not a
                 // tidy-up: one boolean decides both surfaces in the same
                 // composition, so the hero visualizer is gone in the very
@@ -993,6 +1012,7 @@ fun MainPlayerRoute(
                 onToneControlsChange = playerViewModel::setToneControls,
                 topBar = topBarSlot,
                 hero = heroSlot,
+                heroRegionModifier = revealPresetControls,
                 fxUnderlay = {
                     if (beatPulse != null) {
                         // Cover-art view uses the album anchor with an edge-hugging
