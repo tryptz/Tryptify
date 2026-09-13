@@ -434,6 +434,12 @@ fun MainPlayerRoute(
     // visible (dissolving in or out). derivedStateOf flips only at the threshold.
     val lyricsSlotWide by remember { derivedStateOf { lyricsProgress > 0.001f } }
 
+    // The cover as shader input for the glass, so panes refract the artwork
+    // itself rather than the field the shader reconstructs. Only loaded while
+    // the blurred background is on — that is the only time the artwork is what
+    // is actually behind them.
+    val backdropArt = rememberBackdropArt(currentTrack?.coverUrl, blurredBackground)
+
     CompositionLocalProvider(
         LocalLyricsFx provides lyricsFx,
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
@@ -445,6 +451,7 @@ fun MainPlayerRoute(
             blurredArt = blurredBackground,
             dominant = blendedColors.dominant,
             secondary = blendedColors.vibrant,
+            art = backdropArt,
         ),
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,

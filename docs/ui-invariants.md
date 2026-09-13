@@ -57,6 +57,29 @@ window's haze source: `MainPlayerScreen`'s `overlay` slot exists for exactly
 this, and the speed panel goes through it. The cost is owning the scrim, the
 slide and Back by hand, and that is the cheaper half of the trade.
 
+**The real backdrop is sampled, not reconstructed — when there is one.** The
+`playerGlass` shader carries a `uArt` sampler holding the current cover
+(`GlassBackdropArt.kt`), so a pane refracts the artwork actually behind it
+rather than the procedural field `backdropField` reconstructs. Three rules keep
+it safe:
+
+- `uArt` is **always bound**, including on every path that does not use it. SkSL
+  requires a child shader to have an input; an unbound one fails the draw rather
+  than sampling blank.
+- `uArtMix = 0` must stay **bit-identical** to the reconstruction-only output.
+  That is what let the sampler ship without re-tuning a single preset, and it is
+  what every device with no decoded cover falls back to.
+- The sampler is only fed while the **blurred album background** is on. That is
+  the only time the artwork is what is behind the glass; with it off the backdrop
+  is the flat wash, which the shader already reconstructs exactly.
+
+It is a bitmap and not a live layer capture because it cannot be one:
+`RenderEffect.createRuntimeShaderEffect` binds exactly one input, this shader
+spends it on `content` (the alpha heightfield every bevel normal comes from),
+and no public API turns a `GraphicsLayer` into an `android.graphics.Shader` for
+the second. The thumbnail is 64px on purpose — it stands in for a 64dp blur, and
+lensing a sharp cover would refract detail that is nowhere on the screen.
+
 Search bars and other app chrome take **the mini player's** settings
 (`LocalMiniPlayerGlass`), not the player's. The player route overrides
 `LocalPlayerGlass` with its own material for the transport, which is right there
