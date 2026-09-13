@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.device.DeviceRegistry
@@ -98,6 +99,21 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
 
     @Inject
     lateinit var playbackStateRepository: tf.monochrome.android.player.PlaybackStateRepository
+
+    // Providers, not `lateinit var`. Every field above is built by Hilt during
+    // Application construction, on the startup path, before onCreate returns —
+    // eleven singletons and their graphs. These three exist only to be warmed
+    // on a background coroutine, so field-injecting them would move their
+    // construction cost onto the very path the warm-up is meant to clear. The
+    // Provider is resolved inside the launch below instead.
+    @Inject
+    lateinit var genreGraph: javax.inject.Provider<tf.monochrome.android.data.repository.GenreGraphRepository>
+
+    @Inject
+    lateinit var projectMAssets: javax.inject.Provider<tf.monochrome.android.visualizer.ProjectMAssetInstaller>
+
+    @Inject
+    lateinit var preferencesProvider: javax.inject.Provider<tf.monochrome.android.data.preferences.PreferencesManager>
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -203,6 +219,46 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // start. This carries an existing install's art into filesDir, once.
         appScope.launch {
             runCatching { artworkStoreMigration.migrateIfNeeded() }
+        }
+        warmFirstUseCaches()
+    }
+
+    /**
+     * Work that is otherwise paid for by whoever opens a screen first.
+     *
+     * After the first frame, never before it. A splash held until the caches
+     * are warm does not remove the wait, it moves it to every cold start —
+     * including the ones that only wanted the pause button — which is why the
+     * platform guidance is not to hold a splash for background loading. The
+     * splash here stays gated on one boolean.
+     *
+     * Warmed selectively, not exhaustively. `genre_history.json` (1.9 MB) and
+     * `world_radio.json` are bigger than either of these and are deliberately
+     * left alone: both are already suspending and cached, and neither is
+     * touched until a screen is opened on purpose. Pre-empting those would be
+     * battery spent on something the listener may never look at, which is the
+     * failure mode of "warm everything" and the reason this is a list rather
+     * than a loop.
+     *
+     * Nothing here is load-bearing. Every one of these paths still works
+     * unwarmed, on its caller's thread, exactly as it did before.
+     */
+    private fun warmFirstUseCaches() {
+        // ~280 KB of JSON behind a blocking `by lazy` that the first search
+        // resolves — see GenreGraphRepository.warm.
+        appScope.launch {
+            runCatching { genreGraph.get().warm() }
+        }
+        // Unzips the whole preset pack and writes a catalog the first time the
+        // visualizer opens. Gated on the toggle: doing it for someone who has
+        // turned the engine off is pure waste, and it defaults to on, so the
+        // people who benefit are not made to ask.
+        appScope.launch {
+            runCatching {
+                if (preferencesProvider.get().visualizerEngineEnabled.first()) {
+                    projectMAssets.get().ensureInstalled()
+                }
+            }
         }
     }
 

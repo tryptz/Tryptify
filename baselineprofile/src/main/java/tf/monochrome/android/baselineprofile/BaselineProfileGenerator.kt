@@ -23,10 +23,11 @@ import org.junit.Test
  * ./gradlew :app:generateBaselineProfile
  * ```
  *
- * The result lands in `app/src/<variant>/generated/baselineProfiles/` and is
- * meant to be committed — it is an input to the release build, not a build
- * artifact. Regenerate it when startup or the first screens change shape;
- * a stale profile is not wrong, just progressively less useful.
+ * Two files land in `app/src/<variant>/generated/baselineProfiles/` —
+ * `baseline-prof.txt` from [generate] and `startup-prof.txt` from [startup] —
+ * and both are meant to be committed: they are inputs to the release build, not
+ * build artifacts. Regenerate them when startup or the first screens change
+ * shape; a stale profile is not wrong, just progressively less useful.
  *
  * Requires the `projectm` and `libusb` submodules, because it assembles a real
  * APK. See AGENTS.md.
@@ -35,6 +36,37 @@ class BaselineProfileGenerator {
 
     @get:Rule
     val rule = BaselineProfileRule()
+
+    /**
+     * Cold start and nothing else, recorded into the **startup profile**.
+     *
+     * A different file with a different job from the one below. `baseline-prof`
+     * is compiled ahead of time by ART on the device; `startup-prof` is read by
+     * R8 at build time to decide DEX *layout*, so that the classes a launch
+     * touches sit in the primary `classes.dex` and are not chased across
+     * secondary files. Without `includeInStartupProfile` here, no startup
+     * profile is produced at all — which is what this project was shipping.
+     *
+     * Deliberately just the launch. These rules only pay off while the startup
+     * code fits in that first dex, so adding journeys here works against it.
+     * Everything else belongs in [generate], which feeds the baseline profile
+     * where breadth is the point.
+     *
+     * No Gradle change goes with this: DEX layout optimisation is on by default
+     * from AGP 8.3 (this project is on 9.0.0) and release is already minified,
+     * so `baselineProfile { dexLayoutOptimization = true }` would be a no-op
+     * that reads as if it were doing something.
+     */
+    @Test
+    fun startup() = rule.collect(
+        packageName = PACKAGE,
+        includeInStartupProfile = true,
+        maxIterations = 5,
+        stableIterations = 3,
+    ) {
+        pressHome()
+        startActivityAndWait()
+    }
 
     /**
      * Cold start, then the journeys a first session actually takes.
