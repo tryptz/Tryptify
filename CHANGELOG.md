@@ -25,6 +25,15 @@
 
 ### Fixed
 
+#### "Clear All Downloads" did not say what it would delete
+- **The warning is above the button now, not only in the dialog it opens.** A confirmation you meet *after* committing to the tap is a speed bump; what stops the wrong tap is knowing beforehand that there is something here to lose, and how much of it. `SettingCaution` — the same red-tinted line the rest of Settings uses — names the count and the size.
+- **The dialog names them too**, instead of "all downloaded tracks". A number and a size tell you whether this is three podcasts or an album fetched over a hotel connection.
+- **Disabled with nothing downloaded**, where it used to sit there fully armed. A destructive-looking control that does nothing still costs a moment of worry to press.
+- **`observeDownloadCount()` is a `COUNT`, not the size of `getDownloadedTracks()`** — reading every row to answer "how many" would pull the whole download table into memory to print one integer.
+
+#### Page Order described a swipe that no longer exists
+- **"Reorder the pages you swipe between" was left behind** by Home becoming the page list. The setting is not irrelevant, which is why it stays: the order set there is the order the list reads on Home, and a page grayed out leaves that list altogether. Only the description was wrong.
+
 #### The colour transition defaulted to the length of the audio blend
 - **The slider's first stop read "Match blend · 4.00 s".** The album-colour fade took its length from "Blend Between Tracks" so the picture and the sound finished together, and that pairing is real — the queue advances at `duration - blend`, so a fade of exactly that length lands on the last sample of the outgoing track. What it did not say is that a four- or six-second blend is an ordinary setting, and it made the *default* a multi-second animation repainting the whole window on every track change.
 - **The two are unhitched.** `ColorBlend` is a plain number of milliseconds now: stops from instant to eight seconds, `DEFAULT_MS` of 500. Anyone who wants the old pairing can read their blend and dial the same number. `millisFor` lost its `crossfadeSeconds` parameter, and with it the four screens that were collecting the blend length purely to pass it in.

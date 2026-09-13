@@ -125,6 +125,13 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     section = LIBRARY,
+                    title = "Clear All Downloads says what it will delete",
+                    body = "It says how many tracks and how much disk it is about to " +
+                        "delete, before you press it rather than only after, and it is " +
+                        "disabled when there is nothing downloaded.",
+                ),
+                WhatsNewEntry(
+                    section = LIBRARY,
                     title = "Long press a folder to remove it",
                     body = "Its tracks leave the library and scans skip it from then on. " +
                         "Nothing is deleted from your phone — the files stay where they " +
@@ -157,8 +164,7 @@ object WhatsNew {
                     title = "Home is the list of pages",
                     body = "Tap a name to go straight there instead of swiping to it, and " +
                         "Back returns to the list. The swipe and the dots at the top are " +
-                        "gone. Every other page has the same list behind the button in " +
-                        "its top bar.",
+                        "gone. Page Order in Settings now sets the order of that list.",
                 ),
                 WhatsNewEntry(
                     section = PAGES,

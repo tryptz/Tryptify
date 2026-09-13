@@ -857,6 +857,22 @@ class SettingsViewModel @Inject constructor(
      * did a main-thread deleteRecursively() of only the default folder and
      * never cleared the DB, so tracks stayed listed and failed to play.
      */
+    /**
+     * What "Clear All Downloads" would delete, for the warning above the
+     * button: how many tracks, and how much disk they hold.
+     *
+     * Zero tracks is worth knowing too — the button is disabled there, because
+     * a destructive-looking control that does nothing still costs a moment of
+     * worry to press.
+     */
+    val downloadedCount: StateFlow<Int> = downloadDao.observeDownloadCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /** Their total size, pre-formatted, or null while it is unknown. */
+    val downloadedSize: StateFlow<String?> = downloadDao.getTotalDownloadSize()
+        .map { bytes -> bytes?.takeIf { it > 0 }?.let { formatSize(it) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     fun clearAllDownloads() {
         viewModelScope.launch(Dispatchers.IO) {
             val tracks = downloadDao.getDownloadedTracks().first()

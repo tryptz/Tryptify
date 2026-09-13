@@ -2189,6 +2189,8 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
     val downloadFolder by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
     var showQualityDropdown by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
+    val downloadedCount by viewModel.downloadedCount.collectAsStateWithLifecycle()
+    val downloadedSize by viewModel.downloadedSize.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val folderPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -2208,7 +2210,25 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
             title = { Text("Clear Downloads") },
-            text = { Text("This will delete all downloaded tracks from your device. This action cannot be undone.") },
+            // Named, not "all downloaded tracks". A number and a size are what
+            // tell you whether this is the three podcasts you meant or the
+            // album you spent an evening on a hotel connection fetching.
+            text = {
+                Text(
+                    buildString {
+                        append(
+                            when (downloadedCount) {
+                                1 -> "1 downloaded track"
+                                else -> "$downloadedCount downloaded tracks"
+                            }
+                        )
+                        downloadedSize?.let { append(" ($it)") }
+                        append(" will be deleted from your device. ")
+                        append("Streaming them again needs a connection, and re-downloading ")
+                        append("them needs the same data over again. This cannot be undone.")
+                    }
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAllDownloads()
@@ -2285,8 +2305,32 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         // two identically-titled headers in different tabs read as the same
         // setting reachable from two places. This one is about the files.
         SettingsGroupHeader("Downloaded Files")
+        // The warning goes above the button, not only in the dialog it opens.
+        // A confirmation you meet after committing to the tap is a speed bump;
+        // what stops the wrong tap is knowing beforehand that there is
+        // something here to lose, and how much of it.
+        if (downloadedCount > 0) {
+            SettingCaution(
+                buildString {
+                    append("Deletes ")
+                    append(if (downloadedCount == 1) "1 track" else "$downloadedCount tracks")
+                    downloadedSize?.let { append(" ($it)") }
+                    append(" from this device. They have to be downloaded again to play offline.")
+                }
+            )
+        } else {
+            Text(
+                "Nothing downloaded.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         OutlinedButton(
             onClick = { showClearDialog = true },
+            // A destructive-looking button that does nothing still costs a
+            // moment of worry to press.
+            enabled = downloadedCount > 0,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
         ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -3476,9 +3520,15 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         // pages this list could reach. It covers Home and Discover now, neither
         // of which is a library tab. The entry in SettingsSearchIndex has to be
         // renamed with it — a test greps these files for every index title.
+        //
+        // It no longer orders a swipe: pages are picked from the list on Home,
+        // and this is that list's order. Which is less than it used to do, and
+        // not nothing — the order here is the order you read there, and a page
+        // grayed out leaves the list altogether.
         SettingsGroupHeader("Page Order")
         Text(
-            "Reorder the pages you swipe between, and gray out the ones you don't use.",
+            "The order of the page list on Home. Gray out the ones you don't use " +
+                "and they leave the list.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)

@@ -37,6 +37,17 @@ interface DownloadDao {
     @Query("SELECT COUNT(*) FROM downloaded_tracks")
     suspend fun getDownloadCount(): Int
 
+    /**
+     * The same count, observed.
+     *
+     * A COUNT rather than the size of [getDownloadedTracks]: Settings needs the
+     * number to warn what "Clear All Downloads" is about to delete, and reading
+     * every row to answer "how many" would pull the whole download table into
+     * memory to print one integer.
+     */
+    @Query("SELECT COUNT(*) FROM downloaded_tracks")
+    fun observeDownloadCount(): Flow<Int>
+
     @Query("SELECT SUM(sizeBytes) FROM downloaded_tracks")
     fun getTotalDownloadSize(): Flow<Long?>
 
