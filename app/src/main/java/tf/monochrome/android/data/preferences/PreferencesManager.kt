@@ -29,7 +29,9 @@ import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
+import tf.monochrome.android.visualizer.AmbientVisualizerSettings
 import tf.monochrome.android.visualizer.PresetRotationMode
+import tf.monochrome.android.visualizer.VisualizerBlendMode
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -311,6 +313,12 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_SHOW_FPS = booleanPreferencesKey("visualizer_show_fps")
         private val VISUALIZER_FULLSCREEN = booleanPreferencesKey("visualizer_fullscreen")
         private val VISUALIZER_TOUCH_WAVEFORM = booleanPreferencesKey("visualizer_touch_waveform")
+        // Ambient overlay — MilkDrop composited into the player background
+        // rather than replacing the artwork. See AmbientVisualizerSettings.
+        private val VISUALIZER_OVERLAY_ENABLED = booleanPreferencesKey("visualizer_overlay_enabled")
+        private val VISUALIZER_OVERLAY_OPACITY = intPreferencesKey("visualizer_overlay_opacity")
+        private val VISUALIZER_OVERLAY_BLACK_POINT = intPreferencesKey("visualizer_overlay_black_point")
+        private val VISUALIZER_OVERLAY_BLEND = stringPreferencesKey("visualizer_overlay_blend")
         private val VISUALIZER_FAVORITE_PRESETS = stringSetPreferencesKey("visualizer_favorite_presets")
 
         // AI
@@ -1441,6 +1449,46 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setVisualizerVsyncEnabled(value: Boolean) {
         dataStore.edit { it[VISUALIZER_VSYNC_ENABLED] = value }
+    }
+
+    /**
+     * The ambient MilkDrop overlay, as one value.
+     *
+     * Four keys but one setting as far as anything reading it is concerned —
+     * the renderer wants all of it at once, and combining here keeps three
+     * separate collectors out of the player.
+     *
+     * **Off by default, deliberately.** It changes what the player looks like,
+     * and a visual change nobody asked for should not arrive with an update.
+     */
+    val ambientVisualizer: Flow<AmbientVisualizerSettings> = dataStore.data.map { prefs ->
+        AmbientVisualizerSettings(
+            enabled = prefs[VISUALIZER_OVERLAY_ENABLED] ?: false,
+            opacityPercent = prefs[VISUALIZER_OVERLAY_OPACITY]
+                ?: AmbientVisualizerSettings.DEFAULT_OPACITY,
+            blackPointPercent = prefs[VISUALIZER_OVERLAY_BLACK_POINT]
+                ?: AmbientVisualizerSettings.DEFAULT_BLACK_POINT,
+            blend = VisualizerBlendMode.fromId(prefs[VISUALIZER_OVERLAY_BLEND]),
+        )
+    }
+
+    suspend fun setAmbientVisualizerEnabled(enabled: Boolean) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_ENABLED] = enabled }
+    }
+
+    suspend fun setAmbientVisualizerOpacity(percent: Int) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_OPACITY] = percent.coerceIn(0, 100) }
+    }
+
+    suspend fun setAmbientVisualizerBlackPoint(percent: Int) {
+        dataStore.edit {
+            it[VISUALIZER_OVERLAY_BLACK_POINT] =
+                percent.coerceIn(0, AmbientVisualizerSettings.MAX_BLACK_POINT)
+        }
+    }
+
+    suspend fun setAmbientVisualizerBlend(mode: VisualizerBlendMode) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_BLEND] = mode.id }
     }
     suspend fun setVisualizerShowFps(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_SHOW_FPS] = enabled }

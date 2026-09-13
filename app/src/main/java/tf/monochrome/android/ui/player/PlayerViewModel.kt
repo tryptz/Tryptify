@@ -51,6 +51,7 @@ import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.player.StreamResolver
 import tf.monochrome.android.radio.RadioQueueManager
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
+import tf.monochrome.android.visualizer.AmbientVisualizerSettings
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import javax.inject.Inject
 
@@ -232,6 +233,17 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val visualizerTouchWaveform: StateFlow<Boolean> = preferences.visualizerTouchWaveform
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /**
+     * MilkDrop as the player's background rather than instead of the artwork.
+     *
+     * The initial value is the disabled default rather than the stored one:
+     * DataStore has not answered yet on the first frame, and defaulting to
+     * "on" would flash a GL surface over the player on every cold start for
+     * everybody who has it off — which is everybody, until they turn it on.
+     */
+    val ambientVisualizer: StateFlow<AmbientVisualizerSettings> = preferences.ambientVisualizer
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AmbientVisualizerSettings())
 
     // --- Spectrum analyzer (global prefs) ---
     val spectrumAnalyzerEnabled: StateFlow<Boolean> = preferences.spectrumAnalyzerEnabled

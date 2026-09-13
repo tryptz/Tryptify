@@ -57,8 +57,6 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Dynamic colours", "Appearance", listOf("album", "art", "material you", "accent")),
     entry("Font scale", "Appearance", listOf("text size", "bigger", "smaller", "accessibility")),
     entry("Custom font", "Appearance", listOf("typeface", "import font")),
-    entry("Player Visuals Studio", "Appearance", listOf("lyrics", "glass", "fx", "visuals", "beat"))
-        .at(SettingsDestination.Route("lyrics_fx_studio")),
     entry("Now playing view", "Appearance", listOf("player", "layout", "lyrics")),
     entry("Blurred background", "Appearance", listOf("player", "artwork", "blur")),
     entry("Glow behind album art", "Appearance", listOf("bloom", "halo", "cover", "kick", "bass", "pump")),
@@ -72,6 +70,19 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Legacy player", "Appearance", listOf("old", "flat", "classic", "pre-glass", "design")),
     entry("Remove liquid glass", "Appearance", listOf("flat", "opaque", "blur", "performance", "glass")),
     entry("Disable animations", "Appearance", listOf("motion", "reduce", "still", "accessibility")),
+
+    // ── Visuals ─────────────────────────────────────────────────────────
+    entry(
+        "Player Visuals Studio",
+        "Visuals",
+        listOf(
+            "lyrics", "glass", "fx", "visuals", "beat",
+            // The Ambient tab. Somebody looking for the visualizer over the
+            // artwork will search for what they saw, not for "studio".
+            "ambient", "milkdrop", "visualizer", "overlay", "blend",
+        ),
+    )
+        .at(SettingsDestination.Route("lyrics_fx_studio")),
 
     // ── Appearance › Spectrum and visualizer ────────────────────────────
     // The whole projectM section was unindexed: nine rows, none findable.

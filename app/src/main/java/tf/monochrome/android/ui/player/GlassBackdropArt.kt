@@ -129,7 +129,7 @@ internal fun rememberBackdropArt(coverUrl: String?, enabled: Boolean): BackdropA
             bitmap = null
             return@LaunchedEffect
         }
-        loadArt(context, coverUrl)?.let { bitmap = it }
+        loadArt(context, coverUrl, ART_SIZE)?.let { bitmap = it }
     }
 
     val bmp = bitmap ?: return null
@@ -142,13 +142,46 @@ internal fun rememberBackdropArt(coverUrl: String?, enabled: Boolean): BackdropA
     }
 }
 
-private suspend fun loadArt(context: Context, url: String): Bitmap? = try {
+/**
+ * The cover as a plain bitmap, for the ambient visualizer's GL texture.
+ *
+ * Same decode as [rememberBackdropArt] and the same reasons for it, but the
+ * overlay needs the bitmap itself — `glTexImage2D` takes a `Bitmap`, not a
+ * `BitmapShader` — and it upscales the texture over the whole screen rather
+ * than over one pane, so it asks for a slightly larger thumbnail. Still tiny:
+ * the target is a 64dp blur, and sharpening that would only refract detail
+ * that is nowhere on the screen.
+ *
+ * Holds the last cover while the next decodes, like [rememberBackdropArt]:
+ * dropping to null on a track change would take the background out from under
+ * a dissolve that is still running.
+ */
+@Composable
+internal fun rememberCoverBitmap(
+    coverUrl: String?,
+    enabled: Boolean,
+    size: Int = AMBIENT_ART_SIZE,
+): Bitmap? {
+    val context = LocalContext.current
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(coverUrl, enabled, size) {
+        if (!enabled || coverUrl.isNullOrBlank()) {
+            bitmap = null
+            return@LaunchedEffect
+        }
+        loadArt(context, coverUrl, size)?.let { bitmap = it }
+    }
+    return bitmap
+}
+
+private suspend fun loadArt(context: Context, url: String, size: Int): Bitmap? = try {
     val request = ImageRequest.Builder(context)
         .data(url)
         // A hardware bitmap cannot be wrapped in a BitmapShader on every
-        // driver, and at this size the software copy costs nothing.
+        // driver, nor uploaded with GLUtils.texImage2D, and at this size the
+        // software copy costs nothing.
         .allowHardware(false)
-        .size(ART_SIZE, ART_SIZE)
+        .size(size, size)
         .build()
     (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image?.toBitmap()
 } catch (_: Exception) {
@@ -159,6 +192,12 @@ private suspend fun loadArt(context: Context, url: String): Bitmap? = try {
 }
 
 private const val ART_SIZE = 64
+
+/**
+ * The ambient overlay's thumbnail, upscaled over the whole screen rather than
+ * over one pane. Twice [ART_SIZE] and still 64KB.
+ */
+internal const val AMBIENT_ART_SIZE = 128
 
 /**
  * How the artwork maps onto a pane.

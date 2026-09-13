@@ -252,6 +252,50 @@ Local (`content://` / `file://`) artwork has no URL Discord can fetch, so it is
 uploaded as an attachment and referenced by the media-proxy path — the same route
 the animation takes. This needs the upload channel configured.
 
+## The visualizer has two compositions, and only one at a time
+
+The hero visualizer (`ProjectMRendererView`, a `GLSurfaceView`) **replaces** the
+artwork. The ambient overlay (`ProjectMOverlayView`, a `TextureView`) **is** the
+player's background, with the artwork composited into it. They are two framings
+of the same engine and they must never be on screen together:
+`ProjectMEngineRepository` refcounts attached surfaces and only the *first* owns
+the native bridge, whose GL objects belong to that one context. A second view
+would render from objects it does not have. `MainPlayerRoute` gates the overlay
+on `viewMode != VISUALIZER`.
+
+The overlay is a `TextureView` for a reason that cannot be worked around: a
+`SurfaceView` is composited by SurfaceFlinger either *behind* the window
+(hole-punched, so opaque Compose content above hides it) or, with
+`setZOrderOnTop`, *in front of the whole window* including the player's
+controls. There is no "in the middle of the stack" for a SurfaceView. The same
+fact is why the `graphicsLayer { alpha }` around the hero renderer does nothing:
+view alpha never reaches a SurfaceView's buffer.
+
+**projectM will not render into your framebuffer.** `ProjectM::RenderFrame` in
+4.1.6 ends with a hardcoded `glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0)` — the
+`ToDo: Allow external apps to provide a custom target framebuffer` is on the
+line above — and the C API has no FBO-taking variant. So the overlay lets it
+draw where it insists, then `glBlitFramebuffer`s the result into a texture
+before overwriting the surface with the composite. GPU-side throughout; nothing
+is read back to the CPU, and preset feedback is untouched because that lives in
+projectM's own internal FBOs.
+
+**The blend happens in the fragment shader, not between views.** HWUI composites
+a TextureView with plain source-over and `glBlendFunc` only reaches inside our
+own surface, so a Screen blend against the artwork is only possible if the
+shader has the artwork. It does: the overlay draws the blurred cover and the
+scrim itself and outputs opaque pixels, which is why it replaces
+`PlayerBlurredArtBackground` rather than layering over it. Two backdrops would
+be the artwork darkened twice.
+
+**Alpha is inferred from the rendered image, never from the preset.** Presets
+assume an opaque, usually black framebuffer and many depend on feedback; making
+the target transparent breaks trails, warps and glow. `ambientAlpha` derives the
+alpha from the pixels afterwards, which is what makes this work across a whole
+`.milk` collection unmodified. Its Kotlin twin in `AmbientVisualizer.kt` is
+tested; the GLSL is not runnable in this build, so the two must be changed
+together.
+
 ## Build and test
 
 ```

@@ -214,6 +214,16 @@ fun MainPlayerScreen(
     // Full-screen blurred, stretched album-art background (Appearance setting).
     blurredBackground: Boolean = false,
     /**
+     * The ambient MilkDrop background, when it is on.
+     *
+     * Given as a slot rather than a flag because it *replaces* the blurred
+     * artwork below rather than layering over it: the visualizer has to be
+     * screen-blended against the cover, HWUI cannot do that between sibling
+     * views, so the GL layer draws the cover and the scrim itself. Two
+     * backdrops at once would be the artwork darkened twice.
+     */
+    ambientBackground: (@Composable () -> Unit)? = null,
+    /**
      * Chrome the route wants drawn over the player, inside the player's own
      * window — a slot rather than the route rendering it itself, because *where*
      * is the whole point. It lands here as a sibling of the haze source, so a
@@ -328,7 +338,9 @@ fun MainPlayerScreen(
             animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
             label = "blurredBg",
         )
-        if (blurBgAlpha > 0.001f) {
+        if (ambientBackground != null) {
+            ambientBackground()
+        } else if (blurBgAlpha > 0.001f) {
             PlayerBlurredArtBackground(
                 coverUrl = state.track?.coverUrl,
                 albumColors = state.albumColors,

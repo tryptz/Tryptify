@@ -681,6 +681,25 @@ fun MainPlayerRoute(
     // control; this branch added four of them for the pitch engine, twice.
     // `overlay` is `BoxScope.() -> Unit` and the legacy branch sits in a Box,
     // so one lambda serves both.
+    // ── Ambient MilkDrop ────────────────────────────────────────────────
+    //
+    // Never at the same time as the hero visualizer. ProjectMEngineRepository
+    // refcounts its surfaces and the FIRST attachment owns the native bridge;
+    // renderFrame needs that bridge's GL objects current, so a second view on
+    // a second context would draw from objects it does not have. The two are
+    // different compositions of the same engine, so this is not a limitation
+    // anyone should feel — but it is a crash if it is ever ignored.
+    //
+    // Off on the legacy player too: that path is the low-performance profile,
+    // which is the last place to run a GL composite behind the whole screen.
+    val ambient by playerViewModel.ambientVisualizer.collectAsStateWithLifecycle()
+    val ambientActive = ambient.enabled &&
+        viewMode != NowPlayingViewMode.VISUALIZER &&
+        !legacyPlayer
+    // The overlay draws the backdrop itself, so it needs the cover as a
+    // bitmap. Only decoded while it is actually on.
+    val ambientCover = rememberCoverBitmap(currentTrack?.coverUrl, enabled = ambientActive)
+
     val playerPanels: @Composable BoxScope.() -> Unit = {
         VisualizerPresetPanel(
             visible = showPresetSheet,
@@ -835,6 +854,19 @@ fun MainPlayerRoute(
                 // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
                 lyricsMode = lyricsSlotWide,
                 blurredBackground = blurredBackground,
+                ambientBackground = if (ambientActive) {
+                    {
+                        AmbientVisualizerLayer(
+                            repository = playerViewModel.visualizerRepository,
+                            settings = ambient,
+                            cover = ambientCover,
+                            dominant = albumColors.dominant,
+                            isPlaying = isPlaying,
+                        )
+                    }
+                } else {
+                    null
+                },
                 overlay = playerPanels,
             )
         }

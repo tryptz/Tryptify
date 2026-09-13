@@ -173,7 +173,7 @@ import kotlinx.coroutines.delay
 // specific tab must go through a named constant derived from this list (see
 // SETTINGS_TAB_ABOUT), never a literal — a hardcoded index has silently broken
 // twice now, once per reorder.
-private val settingsTabs = listOf("Appearance", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+private val settingsTabs = listOf("Appearance", "Visuals", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
 
 /**
  * Which tab carries a given label, for the search index to point at.
@@ -376,14 +376,15 @@ fun SettingsScreen(
                     tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
                         when (page) {
                             0 -> AppearanceTab(viewModel, navController)
-                            1 -> AudioTab(viewModel, navController)
-                            2 -> EqualizerTab(navController, viewModel)
-                            3 -> LibrarySettingsTab(viewModel)
-                            4 -> DownloadsTab(viewModel)
-                            5 -> ConnectionsTab(viewModel)
-                            6 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                            7 -> SystemTab(viewModel, navController)
-                            8 -> AboutTab(viewModel)
+                            1 -> VisualsTab(navController)
+                            2 -> AudioTab(viewModel, navController)
+                            3 -> EqualizerTab(navController, viewModel)
+                            4 -> LibrarySettingsTab(viewModel)
+                            5 -> DownloadsTab(viewModel)
+                            6 -> ConnectionsTab(viewModel)
+                            7 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                            8 -> SystemTab(viewModel, navController)
+                            9 -> AboutTab(viewModel)
                         }
                     }
                 }
@@ -567,6 +568,27 @@ private fun EqualizerTab(
             dismissButton = {
                 TextButton(onClick = { presetToDelete = null }) { Text("Cancel") }
             }
+        )
+    }
+}
+
+/**
+ * The Visuals tab: what the player looks like while it is playing.
+ *
+ * Its own category rather than a "Now Playing Appearance" group at the bottom
+ * of Appearance, where it was one row under a header of its own — a heading
+ * over a single item is a category that has not been admitted to yet.
+ * Appearance is the app's chrome: theme, fonts, colours. This is the player's
+ * surface, which is a different thing to go looking for.
+ */
+@Composable
+private fun VisualsTab(navController: NavController) {
+    SettingsTabContent {
+        SettingItem(
+            title = "Player Visuals Studio",
+            subtitle = "Lyric type, 3D wave and beat FX; the player and panel glass; " +
+                "and the ambient MilkDrop background",
+            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
         )
     }
 }
@@ -1038,14 +1060,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             subtitle = "Behind the player and the mixer: the album art stretched and heavily blurred",
             checked = playerBlurredBackground,
             onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Now Playing Appearance")
-        SettingItem(
-            title = "Player Visuals Studio",
-            subtitle = "Live editor for the lyric type / 3D wave / beat FX, plus the player and mini-player glass",
-            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
         )
 
         Spacer(modifier = Modifier.height(16.dp))

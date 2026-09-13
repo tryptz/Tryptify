@@ -129,6 +129,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "MilkDrop can play behind the music, not instead of it",
+                    body = "Turn on the ambient visualizer and the preset is drawn into the " +
+                        "album background, under the controls, with its black falling away " +
+                        "so the cover shows through. Player Visuals Studio \u203a Ambient.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Wide Stage joins the shipped presets",
                     body = "A wide, long reverb running beside the dry signal rather than " +
@@ -216,6 +224,14 @@ object WhatsNew {
                         "a band across the scrubber. It sits behind the artwork now, fades out " +
                         "without a rim, and has its own sliders. A lit dock icon glows its own " +
                         "shape too.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Player Visuals has a settings tab of its own",
+                    body = "It was one row under a heading of its own at the bottom of " +
+                        "Appearance. Appearance is the app's chrome — themes, fonts; this " +
+                        "is what the player looks like. Settings \u203a Visuals.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
