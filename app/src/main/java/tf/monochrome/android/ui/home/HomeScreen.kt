@@ -328,11 +328,22 @@ fun HomeScreen(
                     )
                 } else if (showDonate) {
                     tf.monochrome.android.ui.components.DonateBar(
-                        onTip = {
+                        // Taking either offer puts the bar away for another run
+                        // of songs, but never for good: somebody who tipped
+                        // once has not asked to stop being asked, and the
+                        // checkbox is there for those who have.
+                        onKofi = {
                             settingsViewModel.dismissDonatePrompt(neverAgain = false)
                             tf.monochrome.android.ui.settings.openDonationUrl(
                                 homeContext,
-                                "https://ko-fi.com/trypt",
+                                tf.monochrome.android.ui.settings.SupportLinks.KO_FI,
+                            )
+                        },
+                        onPatreon = {
+                            settingsViewModel.dismissDonatePrompt(neverAgain = false)
+                            tf.monochrome.android.ui.settings.openDonationUrl(
+                                homeContext,
+                                tf.monochrome.android.ui.settings.SupportLinks.PATREON,
                             )
                         },
                         onDismiss = { neverAgain ->

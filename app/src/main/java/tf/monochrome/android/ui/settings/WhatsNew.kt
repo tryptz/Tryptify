@@ -137,9 +137,16 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = SUPPORT,
                     title = "An occasional tip bar, easily silenced",
-                    body = "A bar at the top of Home offers a Ko-fi tip every 20 songs. The " +
-                        "cross puts it away until another 20 have played; tick \"Don't ask " +
+                    body = "A bar at the top of Home offers a tip every 20 songs. The cross " +
+                        "puts it away until another 20 have played; tick \"Don't ask " +
                         "again\" first and it never returns.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SUPPORT,
+                    title = "Patreon, alongside Ko-fi",
+                    body = "Ko-fi for a one-off, Patreon for monthly, both in Settings \u203a " +
+                        "Support and on the tip bar. Neither is pushed as the better one.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

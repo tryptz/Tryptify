@@ -1,22 +1,28 @@
 package tf.monochrome.android.ui.components
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,8 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.R
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -65,11 +73,18 @@ object DonatePrompt {
  * alone does nothing until dismissed, so the box can be unticked again and
  * there is exactly one action that closes the bar.
  *
+ * Both destinations are offered here rather than one, and neither is styled as
+ * the recommendation: one is a one-off and the other is monthly, and which of
+ * those suits a listener is not something the app knows. The title is no longer
+ * a tap target now that there are two — a banner where the text and the buttons
+ * go to different places is a banner that will be tapped wrong.
+ *
  * [onDismiss] carries whether the box was ticked.
  */
 @Composable
 fun DonateBar(
-    onTip: () -> Unit,
+    onKofi: () -> Unit,
+    onPatreon: () -> Unit,
     onDismiss: (neverAgain: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -106,11 +121,7 @@ fun DonateBar(
                     tint = content,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(onClick = onTip),
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Enjoying Tryptify?",
                         style = MaterialTheme.typography.bodyLarge,
@@ -119,7 +130,7 @@ fun DonateBar(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "Tip on Ko-fi to keep it going",
+                        text = "A tip keeps it going",
                         style = MaterialTheme.typography.bodyMedium,
                         color = content.copy(alpha = 0.8f),
                         maxLines = 1,
@@ -133,6 +144,26 @@ fun DonateBar(
                         tint = content,
                     )
                 }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(end = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                DonateButton(
+                    label = "Ko-fi",
+                    logo = R.drawable.logo_kofi,
+                    content = content,
+                    onClick = onKofi,
+                    modifier = Modifier.weight(1f),
+                )
+                DonateButton(
+                    label = "Patreon",
+                    logo = R.drawable.logo_patreon,
+                    content = content,
+                    onClick = onPatreon,
+                    modifier = Modifier.weight(1f),
+                )
             }
             Row(
                 modifier = Modifier
@@ -169,5 +200,37 @@ fun DonateBar(
                 )
             }
         }
+    }
+}
+
+/**
+ * One destination on the tip bar: its mark, then its name.
+ *
+ * Takes [content] rather than reading the theme, because the bar's own text
+ * colour depends on whether the glass drew — see [DonateBar] — and a button
+ * that picked its own would go invisible on the LOW-tier fallback.
+ */
+@Composable
+private fun DonateButton(
+    label: String,
+    @DrawableRes logo: Int,
+    content: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+        border = BorderStroke(1.dp, content.copy(alpha = 0.35f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = content),
+    ) {
+        Icon(
+            painter = painterResource(id = logo),
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = label, style = MaterialTheme.typography.labelLarge)
     }
 }

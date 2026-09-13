@@ -61,6 +61,14 @@
 - **The solid container is the LOW-tier fallback.** `Modifier.liquidGlass` returns the modifier untouched on those devices — no blur, no tint, no rim — which is right for a list row and wrong for a notice, where it would leave text loose on the page.
 - Device-local, like the update keys and for the same reason: syncing the count would open a bar on a second phone that the user just put away on the first.
 
+#### Patreon, beside Ko-fi
+- **Two destinations now, in Settings › Support and on the tip bar**, side by side and equally weighted. One is a one-off and the other is monthly, and which of those suits a listener is not something the app knows — so the Ko-fi button stops being a filled `Button`: two filled buttons compete, and a filled one beside an outlined one is a recommendation.
+- **`SupportLinks` holds both URLs in one place.** A donation URL is the worst kind of string to keep two copies of — editing one and not the other sends money somewhere the author does not control, and nothing about the app would look wrong. `openDonationUrl` moved out of `SettingsScreen.kt` to sit with them.
+- **The tip bar's title is no longer a tap target.** With two destinations, a banner whose text and buttons go to different places is a banner that gets tapped wrong.
+- **`logo_kofi` and `logo_patreon` are drawn, not copied** — recognisable marks in the app's own icon language rather than reproductions of the trademark artwork.
+- **Both are white and tinted at the call site**, unlike `logo_spotify` and friends which carry their brand colour. Those sit on a neutral onboarding card where the colour is the recognition; these sit on buttons and on glass across every theme the app ships, and Ko-fi's coral beside Patreon's would read as one brand twice. Tinted, each takes its container's content colour — including the tip bar's, which changes with whether the glass drew at all.
+- Taking either offer puts the bar away for another twenty songs but never for good: somebody who tipped once has not asked to stop being asked.
+
 #### What's New groups its entries by New, Changed and Removed
 - **`WhatsNewKind` and a second level of heading.** The outer one is what kind of change it is, because that is what a reader is usually scanning for and a flat list makes "what can I do now", "what moved" and "where did that go" the same search. The inner one stays what part of the app it touches.
 - **Fixes go under Changed.** Splitting them out reads as an apology list, and from the outside "this works now" and "this works differently now" are the same news.

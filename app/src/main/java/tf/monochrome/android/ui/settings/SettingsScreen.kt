@@ -12,6 +12,7 @@ import java.util.Locale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.res.painterResource
 import tf.monochrome.android.R
 import androidx.compose.ui.focus.onFocusChanged
@@ -3094,7 +3095,10 @@ private fun AboutTab(viewModel: SettingsViewModel) {
         // Support first. It used to sit at the bottom of About, below the
         // release notes and the update controls — which is to say, below the
         // fold on every phone, where nobody scrolled to find it.
-        SupportSection(onTip = { openDonationUrl(context, "https://ko-fi.com/trypt") })
+        SupportSection(
+            onKofi = { openDonationUrl(context, SupportLinks.KO_FI) },
+            onPatreon = { openDonationUrl(context, SupportLinks.PATREON) },
+        )
 
         Spacer(modifier = Modifier.height(28.dp))
         WhatsNewPanel(highlight = arrivedUnread)
@@ -3131,7 +3135,7 @@ private fun AboutTab(viewModel: SettingsViewModel) {
 
 /** The tip jar, and who's asking. */
 @Composable
-private fun SupportSection(onTip: () -> Unit) {
+private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit) {
     SettingsGroupHeader("Support the app")
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -3157,23 +3161,53 @@ private fun SupportSection(onTip: () -> Unit) {
             modifier = Modifier.padding(horizontal = 8.dp)
         )
         Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = onTip,
+        // Two ways to give, side by side and equally weighted, because they
+        // are equally good from here — one is a one-off, the other is monthly,
+        // and the app has no business steering that. Outlined rather than the
+        // single filled button Ko-fi used to be: two filled buttons compete,
+        // and a filled one beside an outlined one is a recommendation.
+        Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Tip on Ko-fi")
+            SupportButton(
+                label = "Ko-fi",
+                logo = R.drawable.logo_kofi,
+                onClick = onKofi,
+                modifier = Modifier.weight(1f),
+            )
+            SupportButton(
+                label = "Patreon",
+                logo = R.drawable.logo_patreon,
+                onClick = onPatreon,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
-// Opens an external donation/support URL in the browser (or a Custom Tab, if the
-// user's default browser supports it). Wrapped so a device with no browser can't
-// crash the app — it surfaces a Toast instead.
-internal fun openDonationUrl(context: android.content.Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-    } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+/**
+ * One donation destination: its mark, then its name.
+ *
+ * The logo is tinted to the button's own content colour rather than carrying
+ * the brand's — see the note in `logo_kofi.xml`. Both marks are corals close
+ * enough that, side by side at 18dp, they would read as one brand twice.
+ */
+@Composable
+private fun SupportButton(
+    label: String,
+    @DrawableRes logo: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(onClick = onClick, modifier = modifier) {
+        Icon(
+            painter = painterResource(id = logo),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label)
     }
 }
 

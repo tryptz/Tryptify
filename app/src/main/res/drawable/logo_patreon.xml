@@ -1,0 +1,24 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!--
+      Patreon's mark: the column and the circle. Geometry simple enough to draw
+      honestly at this size rather than approximate.
+
+      White and tinted, for the reason given in logo_kofi.xml — on a button or
+      on glass these take their container's content colour, and Patreon's coral
+      beside Ko-fi's would read as the same brand twice.
+    -->
+    <!-- The column. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2.4,3.2 h4.3 v17.6 h-4.3 z" />
+    <!-- The circle, sitting to its right and clear of both edges. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15.0,9.8 m-6.6,0 a6.6,6.6 0 1,0 13.2,0 a6.6,6.6 0 1,0 -13.2,0"
+        android:fillType="nonZero" />
+</vector>
