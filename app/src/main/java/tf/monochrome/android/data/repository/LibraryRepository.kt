@@ -170,6 +170,10 @@ class LibraryRepository @Inject constructor(
         val event = track.toPlayEventEntity()
         historyDao.addToHistory(historyRow)
         val localRowId = playEventDao.insert(event)
+        // One song closer to the tip bar. Counted here rather than in the
+        // service because this is already the app's own definition of "a track
+        // was played", and the service reaches it from four different places.
+        preferences.recordPlayTowardsDonatePrompt()
         // Fire-and-forget cloud sync — no-op if the user isn't signed in.
         syncScope.launch {
             supabaseSync.pushHistoryTrack(historyRow)

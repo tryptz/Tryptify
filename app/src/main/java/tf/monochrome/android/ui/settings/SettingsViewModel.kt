@@ -663,6 +663,17 @@ class SettingsViewModel @Inject constructor(
     val whatsNewNeverShow: StateFlow<Boolean> = preferences.whatsNewNeverShow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    // --- Tip bar ---
+    //
+    // Both start at the value that shows NOTHING, like whatsNewNeverShow above:
+    // a StateFlow's initial value is read before DataStore answers, and the
+    // wrong default here flashes a bar asking for money on every cold start.
+
+    val donatePlaysSincePrompt: StateFlow<Int> = preferences.donatePlaysSincePrompt
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val donateNeverShow: StateFlow<Boolean> = preferences.donateNeverShow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     /**
      * Whether this build's notes were still unread when Settings was opened —
      * what the "New in …" badge on the What's New header goes by.
@@ -764,6 +775,20 @@ class SettingsViewModel @Inject constructor(
             latchWhatsNewUnread()
             preferences.setWhatsNewNeverShow(true)
             preferences.setWhatsNewSeenVersion(WhatsNew.currentVersionCode)
+        }
+    }
+
+    /**
+     * Put the tip bar away. [neverAgain] is the checkbox on it.
+     *
+     * The count is reset either way: with the box ticked nothing will read it
+     * again, and leaving it at twenty would bring the bar straight back if the
+     * user ever changed their mind.
+     */
+    fun dismissDonatePrompt(neverAgain: Boolean) {
+        viewModelScope.launch {
+            if (neverAgain) preferences.setDonateNeverShow(true)
+            preferences.resetDonatePromptCount()
         }
     }
 

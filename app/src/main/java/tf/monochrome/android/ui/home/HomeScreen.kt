@@ -104,6 +104,14 @@ fun HomeScreen(
     val whatsNewVersionName = tf.monochrome.android.ui.settings.WhatsNew
         .current?.versionName.orEmpty()
 
+    // The tip bar, offered every DonatePrompt.EVERY_N_SONGS songs. Ranked
+    // below both update notices: those say something changed, this is a
+    // request, and two bars stacked at the top of Home is one too many.
+    val donatePlays by settingsViewModel.donatePlaysSincePrompt.collectAsStateWithLifecycle()
+    val donateNeverShow by settingsViewModel.donateNeverShow.collectAsStateWithLifecycle()
+    val showDonate = tf.monochrome.android.ui.components.DonatePrompt
+        .shouldShow(donatePlays, donateNeverShow)
+
     // A release waiting on GitHub outranks the notes for the build already
     // installed: "there's a newer version" is the more useful of the two, and
     // showing both at once would be two bars saying almost the same thing.
@@ -317,6 +325,19 @@ fun HomeScreen(
                         },
                         onDismiss = { settingsViewModel.markWhatsNewSeen() },
                         onNeverShow = { settingsViewModel.neverShowWhatsNew() },
+                    )
+                } else if (showDonate) {
+                    tf.monochrome.android.ui.components.DonateBar(
+                        onTip = {
+                            settingsViewModel.dismissDonatePrompt(neverAgain = false)
+                            tf.monochrome.android.ui.settings.openDonationUrl(
+                                homeContext,
+                                "https://ko-fi.com/trypt",
+                            )
+                        },
+                        onDismiss = { neverAgain ->
+                            settingsViewModel.dismissDonatePrompt(neverAgain)
+                        },
                     )
                 }
 

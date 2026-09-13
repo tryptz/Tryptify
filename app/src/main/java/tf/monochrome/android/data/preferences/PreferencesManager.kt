@@ -244,6 +244,8 @@ class PreferencesManager @Inject constructor(
         private val GAPLESS_NO_RESAMPLE = booleanPreferencesKey("gapless_no_resample")
         private val WHATS_NEW_SEEN_VERSION = intPreferencesKey("whats_new_seen_version")
         private val WHATS_NEW_NEVER_SHOW = booleanPreferencesKey("whats_new_never_show")
+        private val DONATE_PLAYS_SINCE_PROMPT = intPreferencesKey("donate_plays_since_prompt")
+        private val DONATE_NEVER_SHOW = booleanPreferencesKey("donate_never_show")
         private val UPDATE_LAST_CHECKED_AT = longPreferencesKey("update_last_checked_at")
         private val UPDATE_LATEST_VERSION = stringPreferencesKey("update_latest_version")
         private val UPDATE_LATEST_URL = stringPreferencesKey("update_latest_url")
@@ -979,6 +981,18 @@ class PreferencesManager @Inject constructor(
     /** Set once the user asks never to be told about updates again. */
     val whatsNewNeverShow: Flow<Boolean> = dataStore.data.map { it[WHATS_NEW_NEVER_SHOW] ?: false }
 
+    // --- Tip bar ---
+    //
+    // Device-local, like the update keys above and for the same reason: this
+    // counts what happened on THIS phone. Syncing it would have a second
+    // device open on a bar the user just put away on the first.
+
+    /** Songs played since the tip bar was last put away. */
+    val donatePlaysSincePrompt: Flow<Int> = dataStore.data.map { it[DONATE_PLAYS_SINCE_PROMPT] ?: 0 }
+
+    /** Set once the user ticks "don't ask again" on the tip bar. */
+    val donateNeverShow: Flow<Boolean> = dataStore.data.map { it[DONATE_NEVER_SHOW] ?: false }
+
     suspend fun setGaplessNoResample(enabled: Boolean) {
         dataStore.edit { it[GAPLESS_NO_RESAMPLE] = enabled }
     }
@@ -1018,6 +1032,32 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setWhatsNewNeverShow(enabled: Boolean) {
         dataStore.edit { it[WHATS_NEW_NEVER_SHOW] = enabled }
+    }
+
+    /**
+     * One more song towards the tip bar.
+     *
+     * Read-modify-write inside a single `edit`, which DataStore runs on one
+     * writer: counting with a separate read would drop plays whenever two
+     * tracks ended close together, and this is the only thing that advances it.
+     * Stops counting once the user has asked not to be asked, so the number
+     * does not sit there climbing forever.
+     */
+    suspend fun recordPlayTowardsDonatePrompt() {
+        dataStore.edit {
+            if (it[DONATE_NEVER_SHOW] != true) {
+                it[DONATE_PLAYS_SINCE_PROMPT] = (it[DONATE_PLAYS_SINCE_PROMPT] ?: 0) + 1
+            }
+        }
+    }
+
+    /** Put the tip bar away; it comes back after another run of songs. */
+    suspend fun resetDonatePromptCount() {
+        dataStore.edit { it[DONATE_PLAYS_SINCE_PROMPT] = 0 }
+    }
+
+    suspend fun setDonateNeverShow(enabled: Boolean) {
+        dataStore.edit { it[DONATE_NEVER_SHOW] = enabled }
     }
 
     val showExplicitBadges: Flow<Boolean> = dataStore.data.map { prefs ->

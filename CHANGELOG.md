@@ -51,6 +51,16 @@
 - **Porting it to the DSL would mean transcribing sixteen floats by parameter index** and teaching the builder two new concepts, with a changed sound as the price of getting either wrong. Kept verbatim instead, split one literal per bus so it is reviewable.
 - **`BuiltInMixPresetsTest` is new.** The builder cannot emit malformed state, so nothing covered these; a captured blob can lose a character to an edit or a merge, and the native parser answers that by silently doing nothing. It holds every preset to five buses and well-formed plugins, holds the ids unique and negative so a user's own preset cannot shadow one, and pins the two properties of this one the DSL would quietly drop.
 
+#### An occasional tip bar on Home
+- **A glass bar at the head of Home offers a Ko-fi tip every 20 songs**, in the same slot and the same shape as the update notices — a bar rather than a dialog, for the reason those are: asking for money is worth offering and never worth blocking somebody who opened the app to play a song.
+- **The × puts it away until another twenty have played; a "Don't ask again" checkbox retires it for good.** Ticking alone does nothing until the bar is dismissed, so the box can be unticked again and there is exactly one action that closes it. The count is reset either way — leaving it at twenty would bring the bar straight back if the user ever cleared the flag.
+- **Counted in `LibraryRepository.addToHistory`**, which is already the app's own definition of "a track was played", rather than in `PlaybackService`, which reaches it from four places. The increment is a read-modify-write inside one `edit` so simultaneous track ends cannot drop a play, and it stops counting once the user has asked not to be asked.
+- **It counts plays, not days.** Somebody who opens the app twice a year should be asked on their twentieth song, not on a calendar the app cannot see.
+- **Ranked below both update notices**, which say something changed where this asks for something, and two bars stacked on Home is one too many.
+- **Both StateFlows start at the value that shows nothing.** A StateFlow's initial value is read before DataStore answers, and the wrong default flashes a bar asking for money on every cold start.
+- **The solid container is the LOW-tier fallback.** `Modifier.liquidGlass` returns the modifier untouched on those devices — no blur, no tint, no rim — which is right for a list row and wrong for a notice, where it would leave text loose on the page.
+- Device-local, like the update keys and for the same reason: syncing the count would open a bar on a second phone that the user just put away on the first.
+
 #### What's New groups its entries by New, Changed and Removed
 - **`WhatsNewKind` and a second level of heading.** The outer one is what kind of change it is, because that is what a reader is usually scanning for and a flat list makes "what can I do now", "what moved" and "where did that go" the same search. The inner one stays what part of the app it touches.
 - **Fixes go under Changed.** Splitting them out reads as an apology list, and from the outside "this works now" and "this works differently now" are the same news.

@@ -3169,7 +3169,7 @@ private fun SupportSection(onTip: () -> Unit) {
 // Opens an external donation/support URL in the browser (or a Custom Tab, if the
 // user's default browser supports it). Wrapped so a device with no browser can't
 // crash the app — it surfaces a Toast instead.
-private fun openDonationUrl(context: android.content.Context, url: String) {
+internal fun openDonationUrl(context: android.content.Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
     } catch (e: ActivityNotFoundException) {

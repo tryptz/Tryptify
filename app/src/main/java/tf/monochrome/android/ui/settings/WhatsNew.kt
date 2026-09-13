@@ -89,6 +89,9 @@ object WhatsNew {
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
 
+    /** Tipping, and how often the app brings it up. */
+    private const val SUPPORT = "Support"
+
     /** The projectM visualizer, its preset browser and its rotation. */
     private const val VISUALIZER = "Visualizer"
 
@@ -129,6 +132,14 @@ object WhatsNew {
                     body = "That tab sets the material for every floating pane — the audio " +
                         "tools sheet, the speed panel, the search bars — and used to " +
                         "preview only the mini player. It shows a pane above the bar now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SUPPORT,
+                    title = "An occasional tip bar, easily silenced",
+                    body = "A bar at the top of Home offers a Ko-fi tip every 20 songs. The " +
+                        "cross puts it away until another 20 have played; tick \"Don't ask " +
+                        "again\" first and it never returns.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
