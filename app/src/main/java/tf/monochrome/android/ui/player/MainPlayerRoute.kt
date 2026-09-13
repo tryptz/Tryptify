@@ -418,6 +418,21 @@ fun MainPlayerRoute(
      */
     val ambientActive = ambientEnabled && visualizerEngineStatus.isNativeReady
 
+    // Every reason the ambient visualizer can fail to appear is a boolean in
+    // this one expression, and none of them was observable. "It is not turning
+    // on" could be the setting, the legacy-player exclusion, or an engine that
+    // never reported ready — three very different bugs that look identical on
+    // screen. Logged on change only, so it is one line per transition rather
+    // than one per recomposition.
+    LaunchedEffect(ambientEnabled, legacyPlayer, ambient.hideCover, ambientActive) {
+        android.util.Log.i(
+            "AmbientVisualizer",
+            "gate: setting=${ambient.enabled} legacyPlayer=$legacyPlayer " +
+                "nativeReady=${visualizerEngineStatus.isNativeReady} " +
+                "hideCover=${ambient.hideCover} -> active=$ambientActive",
+        )
+    }
+
     /**
      * Audio tools' Visualizer chip. One lambda for both layouts — the glass and
      * legacy players wire these controls twice, and this file already carries a
