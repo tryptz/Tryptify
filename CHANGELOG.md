@@ -25,6 +25,12 @@
 
 ### Fixed
 
+#### Art-less tracks re-opened their audio file on every scroll
+- **Coil caches images, not the absence of one.** `AudioFileCoverFetcher` opens a `MediaMetadataRetriever` on the audio file to pull embedded art; a file that has none costs the same native open, returns nothing, and is asked again the next time the row scrolls back. A device log shows 22 `getEmbeddedPicture: Call to getEmbeddedPicture failed` in five seconds — a handful of art-less tracks being recycled through a list.
+- **A bounded LRU of paths with no picture**, keyed on the file's modification time as well as its path so retagging a track puts its cover back without anything having to clear it. 512 entries: an optimisation for rows going past on screen cannot grow into a leak on a library of any size, and a miss costs one wasted open, which is what happened every time before.
+- **Only a definite "opened, nothing inside" is remembered.** A failure to open might be a file still being written or a transient read error, and writing that off permanently would hide a cover that does exist.
+- `local_tracks` already carries `hasEmbeddedArt` from the scanner, which is the same fact recorded properly. Consulting it here would mean a database hit per fetch and a Hilt entry point inside a Coil component, so this stays in memory.
+
 #### The widget started the whole player just to read a track title
 - **Connecting a `MediaController` to a `MediaSessionService` starts it.** `readNowPlaying` built one against `PlaybackService` on every widget redraw, so drawing the widget constructed an ExoPlayer, a MediaSession and both FFmpeg renderers, read one title off them, and let the lot be torn down. A device log caught it: `ExoPlayerImpl: Init` at 23:36:35.848, `Release` at 23:36:36.244 — four hundred milliseconds later, thirty-three seconds before anybody opened the app. The process had been woken by WorkManager and the widget refresh did the rest.
 - **`NowPlayingSnapshotStore` is written by the player and read by the widget.** The write hangs off `refreshNowPlayingWidget`, which the service already called on every real playback change, so the state is current whenever there is a player to be current about — and it outlives the process, which is what a widget's contents should do anyway. A widget drawn hours later shows the track that was playing, paused.
