@@ -120,6 +120,15 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "The headphones button shows the audio pipeline",
+                    body = "What is happening to the track, stage by stage: its format, the " +
+                        "decoder, the rates in and out, the DSP, and where it lands. That " +
+                        "button opened Settings before; Settings is still in the menu next " +
+                        "to it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Wide Stage joins the shipped presets",
                     body = "A wide, long reverb running beside the dry signal rather than " +

@@ -197,6 +197,7 @@ fun MainPlayerRoute(
     var showPresetSheet by rememberSaveable { mutableStateOf(false) }
     var showSpeedSheet by rememberSaveable { mutableStateOf(false) }
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
+    var showPipelineSheet by rememberSaveable { mutableStateOf(false) }
     // Overflow › "Add to playlist" and the create-playlist follow-up it opens.
     // Held as the pending track rather than a flag so the follow-up dialog
     // still knows what to add after the picker sheet is gone.
@@ -468,7 +469,7 @@ fun MainPlayerRoute(
             isDownloaded = isDownloaded,
             downloadState = downloadState,
             onCollapse = { navController.popBackStack() },
-            onOutputClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+            onOutputClick = { showPipelineSheet = true },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
             onCycleRepeat = playerViewModel::cycleRepeatMode,
@@ -692,6 +693,11 @@ fun MainPlayerRoute(
                 navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
             },
             onDismiss = { showPresetSheet = false },
+        )
+        AudioPipelinePanel(
+            visible = showPipelineSheet,
+            track = currentUnified,
+            onDismiss = { showPipelineSheet = false },
         )
         SpeedPanel(
             visible = showSpeedSheet,

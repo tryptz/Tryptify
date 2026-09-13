@@ -7,6 +7,7 @@ import androidx.core.net.toUri
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -17,6 +18,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
@@ -83,6 +85,10 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
     @Inject lateinit var playbackState: PlaybackStateRepository
+    // The Audio Pipeline panel's window into the decoder. Nothing else in
+    // the app can see a Format: the UI reaches the player through a
+    // MediaController, which carries neither one nor any decoder identity.
+    @Inject lateinit var audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
@@ -218,6 +224,8 @@ class PlaybackService : MediaSessionService() {
                     )
                 )
             }
+
+        player.addAnalyticsListener(audioPipelineAnalytics())
 
         player.addListener(object : Player.Listener {
             // Keep the home-screen now-playing widget live: the widget uses
@@ -676,6 +684,86 @@ class PlaybackService : MediaSessionService() {
                 }
             }
         }
+    }
+
+    /**
+     * Feeds the Audio Pipeline panel the two facts only this process can see.
+     *
+     * `Format` and the decoder's name never leave the player: the UI talks to
+     * playback through a `MediaController`, which carries neither. Everything
+     * else the panel shows is already a singleton somebody observes — the
+     * channel detector, the DSP engine, the USB controller — so this listener
+     * is the whole of the new plumbing.
+     *
+     * The decoder is deliberately forgotten when it is released and the format
+     * is not. A decoder is torn down between tracks and built again for the
+     * next one, and in that gap the app genuinely does not know what will
+     * decode what comes next; leaving the previous name on screen would be a
+     * confident answer to a question nobody can answer yet. Media3 reports the
+     * new format before the old decoder goes, so the format has no such gap.
+     */
+    @OptIn(UnstableApi::class)
+    private fun audioPipelineAnalytics(): AnalyticsListener = object : AnalyticsListener {
+        override fun onAudioInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: androidx.media3.common.Format,
+            decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?,
+        ) {
+            audioPipelineMonitor.onStreamFormat(
+                tf.monochrome.android.audio.pipeline.DecodedStream(
+                    mimeType = format.sampleMimeType,
+                    sampleRate = format.sampleRate.takeIf { it != Format.NO_VALUE },
+                    channelCount = format.channelCount.takeIf { it != Format.NO_VALUE },
+                    // averageBitrate is what a container actually states;
+                    // `bitrate` prefers the peak, which reads as an
+                    // implausibly high number for a VBR file.
+                    bitrate = format.averageBitrate.takeIf { it != Format.NO_VALUE }
+                        ?: format.bitrate.takeIf { it != Format.NO_VALUE },
+                    pcmBits = pcmBitsOf(format.pcmEncoding),
+                    pcmIsFloat = format.pcmEncoding == C.ENCODING_PCM_FLOAT,
+                )
+            )
+        }
+
+        override fun onAudioDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            audioPipelineMonitor.onDecoderInitialized(decoderName)
+        }
+
+        override fun onAudioDecoderReleased(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+        ) {
+            audioPipelineMonitor.onDecoderReleased()
+        }
+
+        override fun onAudioDisabled(
+            eventTime: AnalyticsListener.EventTime,
+            decoderCounters: androidx.media3.exoplayer.DecoderCounters,
+        ) {
+            audioPipelineMonitor.onIdle()
+        }
+    }
+
+    /**
+     * PCM depth from a Media3 encoding constant, or null when it says nothing.
+     *
+     * Null rather than a default of 16: "the decoder did not report a depth"
+     * and "the decoder reported 16-bit" are different facts, and the panel
+     * prints them differently.
+     */
+    @OptIn(UnstableApi::class)
+    private fun pcmBitsOf(encoding: Int): Int? = when (encoding) {
+        C.ENCODING_PCM_8BIT -> 8
+        C.ENCODING_PCM_16BIT, C.ENCODING_PCM_16BIT_BIG_ENDIAN -> 16
+        C.ENCODING_PCM_24BIT, C.ENCODING_PCM_24BIT_BIG_ENDIAN -> 24
+        C.ENCODING_PCM_32BIT, C.ENCODING_PCM_32BIT_BIG_ENDIAN -> 32
+        C.ENCODING_PCM_FLOAT -> 32
+        else -> null
     }
 
     @OptIn(UnstableApi::class)
