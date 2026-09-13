@@ -3,12 +3,15 @@ package tf.monochrome.android.audio.usb
 import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
+import tf.monochrome.android.audio.resample.VariRateAudioProcessor
 
 /**
  * AudioSink wrapper that routes decoded PCM directly to the libusb UAC driver
@@ -28,6 +31,16 @@ class LibusbAudioSink(
     private val driver: LibusbUacDriver,
     private val volumeController: BypassVolumeController,
     processors: List<AudioProcessor> = emptyList(),
+    /**
+     * The varispeed resampler from [processors], if it is in there.
+     *
+     * Handed in separately because this path has to drive it by hand.
+     * DefaultAudioSink runs its chain's `applyPlaybackParameters` only from
+     * its own processing path, and in bypass it never processes a buffer — so
+     * the ratio Media3 hands the sink would never reach the resampler and
+     * speed would silently do nothing over USB.
+     */
+    private val resampler: VariRateAudioProcessor? = null,
 ) : ForwardingAudioSink(delegate) {
 
     private val chain = AudioProcessorChain(processors)
@@ -55,6 +68,16 @@ class LibusbAudioSink(
     private var usbBytesPerSample = 0
     private var outChannels = 0
     private var outBitsPerSample = 0
+
+    /**
+     * Media seconds per output second, from the playback parameters.
+     *
+     * The resampler consumes [speedRatio] input frames per output frame, so
+     * one output frame is that many media frames. Position accounting has to
+     * scale by it or the progress bar runs at the wrong rate the moment speed
+     * leaves 1.
+     */
+    private var speedRatio = 1f
 
     private var framesWritten = 0L
     private var startTimeUs = C.TIME_UNSET
@@ -398,6 +421,27 @@ class LibusbAudioSink(
         }
     }
 
+    /**
+     * Drives the varispeed resampler, which nothing else on this path will.
+     *
+     * Mirrors the rides-tempo decision [TryptifyAudioProcessorChain] makes:
+     * pitch equal to speed and away from unity is a record played faster, and
+     * goes to the resampler. Anything else — preserve-pitch speed — is Sonic's
+     * job, and Sonic is not in the bypass chain, so the ratio stays at 1 and
+     * speed does not apply. Better than resampling it here and changing the
+     * pitch the user asked to keep.
+     */
+    override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {
+        super.setPlaybackParameters(playbackParameters)
+        val speed = playbackParameters.speed
+        val pitch = playbackParameters.pitch
+        val ridesTempo = abs(pitch - speed) < SPEED_TOLERANCE &&
+            abs(speed - 1f) >= SPEED_TOLERANCE
+        val ratio = if (ridesTempo) speed else 1f
+        speedRatio = ratio
+        resampler?.setRatio(ratio)
+    }
+
     override fun pause() {
         super.pause()
         // Gate first, flush second: a renderer that is still mid-feed when
@@ -500,7 +544,11 @@ class LibusbAudioSink(
         if (rate <= 0 || startTimeUs == C.TIME_UNSET) return AudioSink.CURRENT_POSITION_NOT_SET
 
         val playedDelta = (driver.playedFrames() - positionPlayedBaseFrames).coerceAtLeast(0L)
-        val mediaFramesPlayed = minOf(playedDelta, framesWritten)
+        val outputFramesPlayed = minOf(playedDelta, framesWritten)
+        // Scaled by the ratio: these are output frames, and at 2x one second
+        // of them carries two seconds of media. Without this the progress bar
+        // crawls at half speed while the music plays twice as fast.
+        val mediaFramesPlayed = (outputFramesPlayed * speedRatio).toLong()
         return startTimeUs + mediaFramesPlayed * 1_000_000L / rate
     }
 
@@ -687,6 +735,12 @@ class LibusbAudioSink(
 
     companion object {
         private const val TAG = "LibusbAudioSink"
+        /**
+         * How far speed or pitch must sit from unity to count as a change.
+         * Matches TryptifyAudioProcessorChain's own dead zone so the two paths
+         * agree on when varispeed is running.
+         */
+        private const val SPEED_TOLERANCE = 1e-4f
         private const val kIsoWarmupNs = 400_000_000L
         private const val kIsoStallNs = 400_000_000L
     }

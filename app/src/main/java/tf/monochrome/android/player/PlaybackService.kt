@@ -907,12 +907,39 @@ class PlaybackService : MediaSessionService() {
                             autoEqProcessor,
                             parametricEqProcessor,
                             spectrumAnalyzerTap,
+                            // Transport stages last, and in the same order as
+                            // TryptifyAudioProcessorChain builds them
+                            // (resampler then transposer), so the two compose
+                            // identically on both paths and the AutoEQ
+                            // pre-warp — which runs upstream of both — still
+                            // inverts their product.
+                            //
+                            // Varispeed: pitch riding the tempo, the way a
+                            // record does. The ratio cannot arrive the usual
+                            // way here — DefaultAudioSink only runs its
+                            // chain's applyPlaybackParameters from its own
+                            // processing path, and in bypass it never
+                            // processes a buffer, so this would sit at unity
+                            // forever. LibusbAudioSink pushes the ratio itself
+                            // from setPlaybackParameters instead.
+                            variRateProcessor,
+                            // Transposition. Without it the semitone buttons
+                            // set a field nothing on the exclusive path was
+                            // reading: pitch silently did nothing over USB and
+                            // only the pre-warp moved. Needs no sample-rate
+                            // change — configure() returns the input format
+                            // untouched, so the DAC keeps the rate it
+                            // negotiated — and at zero semitones queueInput
+                            // passes the block straight through, so
+                            // bit-perfect output survives.
+                            stretchProcessor,
                             // ProjectM tap intentionally omitted from
                             // the bypass chain — the inline pump runs
                             // on the renderer thread and the visualizer
                             // bus sometimes blocks on its consumer.
                             // Spectrum tap is light-weight and fine.
                         ),
+                        resampler = variRateProcessor,
                     )
                 } catch (error: Exception) {
                     projectMEngineRepository.reportAudioTapFailure(
