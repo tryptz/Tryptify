@@ -154,7 +154,12 @@ internal fun rememberBackdropArt(coverUrl: String?, enabled: Boolean): BackdropA
                 // hardware's bilinear filter" — the tiny thumbnail is only a
                 // stand-in for a 64dp gaussian *because* it is smoothly
                 // interpolated. This is the line that makes that true.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // TIRAMISU, not S: setFilterMode is API 33 despite the filter
+                // constants themselves landing in 31. Nothing is lost by the
+                // higher gate — the liquid-glass shader that samples this is
+                // API 33+ anyway, so on anything older the art never reaches a
+                // RuntimeShader in the first place.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     setFilterMode(BitmapShader.FILTER_MODE_LINEAR)
                 }
             },
