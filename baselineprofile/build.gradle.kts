@@ -48,6 +48,31 @@ android {
             apiLevel = 34
             systemImageSource = "aosp"
         }
+        // A second, older device, for the branches the first one never takes.
+        //
+        // A profile only contains code the app was *seen* executing, and this
+        // app gates a great deal on the platform version: nineteen checks
+        // against TIRAMISU alone — the whole liquid-glass path, which needs
+        // RuntimeShader from API 33 — plus five against S and two against R.
+        // Recorded only on API 34, every one of those resolves to the modern
+        // branch and the fallbacks a phone on API 26-32 actually runs are
+        // absent from the profile, which is precisely the hardware that can
+        // least afford to JIT them.
+        //
+        // API 30 is below R, S and TIRAMISU, so one pass here covers all three
+        // fallbacks. It does not go below Q (29), where fourteen more checks
+        // sit; API 28 would catch those too, at the cost of an older and
+        // flakier image — and 28 is the floor anyway, since Macrobenchmark
+        // itself needs it (see minSdk above).
+        //
+        // Pixel 5 rather than Pixel 6: the 6 shipped on API 31, and pairing a
+        // device profile with an image older than the hardware is asking for
+        // an emulator combination nobody tests.
+        create<com.android.build.api.dsl.ManagedVirtualDevice>("pixel5Api30") {
+            device = "Pixel 5"
+            apiLevel = 30
+            systemImageSource = "aosp"
+        }
     }
 }
 
@@ -66,7 +91,12 @@ baselineProfile {
     if (providers.gradleProperty("baselineprofile.device").orNull == "connected") {
         useConnectedDevices = true
     } else {
-        managedDevices += "pixel6Api34"
+        // Both devices, and the plugin merges what they record into the one
+        // profile that ships. A baseline profile is not per-device — it names
+        // classes and methods, and ART compiles them at install time on
+        // whatever hardware installs the app — so this is about the *union of
+        // code paths observed*, not about producing a file per phone.
+        managedDevices += listOf("pixel6Api34", "pixel5Api30")
         useConnectedDevices = false
     }
 }
