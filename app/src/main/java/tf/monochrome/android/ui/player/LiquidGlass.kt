@@ -84,6 +84,8 @@ internal data class PlayerBackdrop(
      * shader already reconstructs exactly.
      */
     val art: BackdropArt? = null,
+    /** How [art] maps onto the pane — see [BackdropArtFit]. */
+    val fit: BackdropArtFit = BackdropArtFit.ROOT,
 )
 
 internal val LocalPlayerBackdrop = androidx.compose.runtime.compositionLocalOf { PlayerBackdrop() }
@@ -234,7 +236,7 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
             shader.bindBackdropArt(
                 art = backdrop.art,
-                mix = if (backdrop.blurredArt) REAL_BACKDROP_MIX else 0f,
+                fit = backdrop.fit,
                 scrim = scrim,
                 anchor = anchor.rect,
                 paneW = size.width,
@@ -316,7 +318,7 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             // is behind the panel, which is the whole point of the sampler.
             shader.bindBackdropArt(
                 art = backdrop.art,
-                mix = if (backdrop.blurredArt) REAL_BACKDROP_MIX else 0f,
+                fit = backdrop.fit,
                 scrim = scrim,
                 anchor = anchor.rect,
                 paneW = size.width,
@@ -598,7 +600,7 @@ private fun playerGlassModifier(
             // carries the cover's own colour through it instead of a wash.
             shader.bindBackdropArt(
                 art = backdrop.art,
-                mix = if (backdrop.blurredArt) REAL_BACKDROP_MIX else 0f,
+                fit = backdrop.fit,
                 scrim = scrim,
                 anchor = anchor.rect,
                 paneW = size.width,

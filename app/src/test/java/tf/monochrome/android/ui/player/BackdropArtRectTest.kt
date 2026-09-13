@@ -94,6 +94,31 @@ class BackdropArtRectTest {
     }
 
     @Test
+    fun `fitted to the bar, the cover sweeps along its whole length`() {
+        // BackdropArtFit.PANE passes the pane in as its own root. A mini player
+        // is about 1000x64: the honest mapping would hand it a five-pixel strip
+        // of thumbnail, which refraction cannot move enough to see, so instead
+        // the cover is fitted to the bar.
+        val bar = backdropArtRect(
+            artW = 64, artH = 64,
+            rootW = 1000f, rootH = 64f,
+            paneLeft = 0f, paneTop = 0f, paneW = 1000f, paneH = 64f,
+        )
+        // The full width of the cover is in play -- that is what makes its
+        // colours sweep from one end of the bar to the other.
+        assertEquals(0f, bar[0], 0.01f)
+        assertEquals(64f, bar[2], 0.01f)
+        // A thin band, taken from the middle of the cover rather than its edge.
+        assertTrue("band should be short, was ${bar[3]}", bar[3] < 8f)
+        assertEquals(32f, bar[1] + bar[3] / 2f, 0.01f)
+
+        // And it is strictly more colour than the honest mapping would give:
+        // that one reads a sliver a fraction of a thumbnail pixel wide.
+        val honest = portrait(0f, 2300f, 1000f, 64f)
+        assertTrue("fitted must span more of the cover", bar[2] > honest[2] * 2f)
+    }
+
+    @Test
     fun `a pane measured before layout falls back to the whole cover`() {
         // rootW/rootH of zero is the one frame between composition and layout.
         // Dividing by it would hand the shader a NaN rect, and a NaN sampler

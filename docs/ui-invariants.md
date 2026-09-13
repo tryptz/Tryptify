@@ -69,9 +69,23 @@ it safe:
 - `uArtMix = 0` must stay **bit-identical** to the reconstruction-only output.
   That is what let the sampler ship without re-tuning a single preset, and it is
   what every device with no decoded cover falls back to.
-- The sampler is only fed while the **blurred album background** is on. That is
-  the only time the artwork is what is behind the glass; with it off the backdrop
-  is the flat wash, which the shader already reconstructs exactly.
+- Whoever provides the art decides whether there is any: `rememberBackdropArt`
+  returns null when it should not be used and a null art binds `uArtMix = 0`.
+  In the player that means **only while the blurred album background is on**,
+  because that is the only time the artwork is really behind the glass; with it
+  off the backdrop is the flat wash, which the shader reconstructs exactly.
+
+The **mini player is the exception, and deliberately so.** Away from the player
+the artwork is not behind the bar — the app's own content is — so its glass uses
+`BackdropArtFit.PANE`: the cover is fitted to the bar rather than positioned
+behind it, and its colours sweep along the length of it. Two reasons it cannot
+use the honest mapping. A 64dp bar is about a twelfth of a phone, so the slice
+of a 64px thumbnail behind it is roughly five pixels and refraction moves it by
+a fraction of one — the effect would be invisible. And there is nothing honest
+to map: PANE is a material property of the bar, not a window onto something, so
+it is not gated on the blurred-background setting either. Its scrim is flat
+(zero height in `uArtScreen`) and read off the bar's own position on screen,
+because the gradient it stands in for is not really there.
 
 It is a bitmap and not a live layer capture because it cannot be one:
 `RenderEffect.createRuntimeShaderEffect` binds exactly one input, this shader

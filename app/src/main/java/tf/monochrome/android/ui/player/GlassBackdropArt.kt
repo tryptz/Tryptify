@@ -161,6 +161,28 @@ private suspend fun loadArt(context: Context, url: String): Bitmap? = try {
 private const val ART_SIZE = 64
 
 /**
+ * How the artwork maps onto a pane.
+ *
+ * [ROOT] is the honest case and the one [backdropArtRect] was written for: the
+ * cover really is stretched across the window behind the pane, so the pane
+ * reads the slice of it that is actually there.
+ *
+ * [PANE] exists because that mapping degenerates. The mini player is a ~64dp
+ * bar, about a twelfth of a phone's height, so the slice of a 64px thumbnail
+ * behind it is roughly five pixels tall — and refraction displaces by a
+ * fraction of one of those. Mapped honestly the bar would lens a flat colour,
+ * which is to say nothing at all. It also is not honest: away from the player
+ * the artwork is not behind the bar, the app's own content is. So the cover is
+ * fitted to the bar instead, and its colours sweep across the length of it.
+ * That is a material choice rather than a window onto something, and it is the
+ * only version of this that is visible.
+ */
+internal enum class BackdropArtFit {
+    ROOT,
+    PANE,
+}
+
+/**
  * Where a glass pane sits in the root layout, captured at layout time and read
  * at draw time.
  *
@@ -210,45 +232,71 @@ internal fun Modifier.backdropAnchor(anchor: BackdropAnchor): Modifier =
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal fun RuntimeShader.bindBackdropArt(
     art: BackdropArt?,
-    mix: Float,
+    fit: BackdropArtFit,
     scrim: Color,
     anchor: AnchorRect,
     paneW: Float,
     paneH: Float,
+    mix: Float = REAL_BACKDROP_MIX,
 ) {
     setInputShader("uArt", art?.shader ?: EMPTY_ART)
     setFloatUniform("uArtScrim", scrim.red, scrim.green, scrim.blue)
 
-    if (art == null || mix <= 0f || anchor.rootW <= 0f || anchor.rootH <= 0f) {
+    if (art == null || mix <= 0f || anchor.rootW <= 0f || anchor.rootH <= 0f ||
+        paneW <= 0f || paneH <= 0f
+    ) {
         setFloatUniform("uArtMix", 0f)
         setFloatUniform("uArtRect", 0f, 0f, 1f, 1f)
         setFloatUniform("uArtScreen", 0f, 0f, 1f, 1f)
         return
     }
 
-    val r = backdropArtRect(
-        artW = art.width,
-        artH = art.height,
-        rootW = anchor.rootW,
-        rootH = anchor.rootH,
-        paneLeft = anchor.left,
-        paneTop = anchor.top,
-        paneW = paneW,
-        paneH = paneH,
-    )
+    // PANE is the same crop arithmetic with the pane standing in for the
+    // window: the cover is fitted to the bar rather than positioned behind it.
+    val r = when (fit) {
+        BackdropArtFit.ROOT -> backdropArtRect(
+            artW = art.width,
+            artH = art.height,
+            rootW = anchor.rootW,
+            rootH = anchor.rootH,
+            paneLeft = anchor.left,
+            paneTop = anchor.top,
+            paneW = paneW,
+            paneH = paneH,
+        )
+        BackdropArtFit.PANE -> backdropArtRect(
+            artW = art.width,
+            artH = art.height,
+            rootW = paneW,
+            rootH = paneH,
+            paneLeft = 0f,
+            paneTop = 0f,
+            paneW = paneW,
+            paneH = paneH,
+        )
+    }
     setFloatUniform("uArtMix", mix)
     setFloatUniform("uArtRect", r[0], r[1], r[2], r[3])
+    // The scrim runs down the SCREEN, so it is placed by where the pane sits
+    // there in both fits. PANE passes zero height on purpose: the bar is short
+    // enough that a gradient across it would only tilt it, and it is standing
+    // in for a scrim that is not really there, so it takes one flat value read
+    // off its own height on screen.
     setFloatUniform(
         "uArtScreen",
         anchor.left / anchor.rootW,
         anchor.top / anchor.rootH,
         paneW / anchor.rootW,
-        paneH / anchor.rootH,
+        if (fit == BackdropArtFit.PANE) 0f else paneH / anchor.rootH,
     )
 }
 
 /**
  * How strongly a pane lenses the real cover when one is available.
+ *
+ * Whether there is one to lens is decided by whoever provides the art, not
+ * here: [rememberBackdropArt] returns null when it should not be used, and a
+ * null art binds uArtMix = 0.
  *
  * Not 1.0 on purpose. The reconstructed field it blends with carries the soft
  * top glow and the off-axis pools that the on-screen backdrop also has from
