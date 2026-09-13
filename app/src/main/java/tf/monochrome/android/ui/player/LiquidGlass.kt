@@ -622,9 +622,21 @@ private fun rememberGravityTilt(): State<Offset> {
 
 /**
  * Shared, ref-counted gravity tilt for all liquid-glass surfaces. Registers a
- * single [SensorEventListener] on the first [acquire] and unregisters it on the
- * last [release]. All access is on the main thread (Compose effects + the
- * main-Looper sensor callback), so the counter and filter need no locking.
+ * single [SensorEventListener] on the first [acquire] and unregisters it a
+ * moment after the last [release]. All access is on the main thread (Compose
+ * effects + the main-Looper sensor callback), so the counter, the filter and
+ * the pending-stop token need no locking.
+ *
+ * The delay is the point. Navigating between two glass screens disposes the old
+ * one before the new one composes, so the count passes through zero every time
+ * — a device log shows register → unregister → register inside 120ms, twice in
+ * two seconds. Two costs came with that: a pair of binder round trips to the
+ * sensor service on every screen change, and — visibly — [fx]/[fy] starting
+ * again from zero, so the tilt on the incoming screen snapped to neutral and
+ * eased back rather than continuing from where the phone actually is.
+ *
+ * [STOP_DELAY_MS] is long enough to cover a navigation and short enough that
+ * leaving the glass behind still stops a 50Hz sensor promptly.
  */
 private object GravityTiltSource : SensorEventListener {
     val tilt = mutableStateOf(Offset.Zero)
@@ -633,8 +645,16 @@ private object GravityTiltSource : SensorEventListener {
     private var fx = 0f
     private var fy = 0f
 
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val stop = Runnable { stopNow() }
+
     fun acquire(context: Context) {
+        // Cancel a pending stop first, whatever the count: arriving inside the
+        // grace period means the listener is still live and the filter still
+        // holds the phone's real attitude, so this re-acquire is free.
+        handler.removeCallbacks(stop)
         if (refCount++ > 0) return
+        if (manager != null) return
         val mgr = context.applicationContext
             .getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val sensor = mgr?.getDefaultSensor(Sensor.TYPE_GRAVITY)
@@ -648,10 +668,19 @@ private object GravityTiltSource : SensorEventListener {
     fun release() {
         if (refCount <= 0) return
         if (--refCount == 0) {
-            manager?.unregisterListener(this)
-            manager = null
+            handler.removeCallbacks(stop)
+            handler.postDelayed(stop, STOP_DELAY_MS)
         }
     }
+
+    /** The real unregister, once the grace period has passed with nobody back. */
+    private fun stopNow() {
+        if (refCount > 0) return
+        manager?.unregisterListener(this)
+        manager = null
+    }
+
+    private const val STOP_DELAY_MS = 2_000L
 
     override fun onSensorChanged(event: SensorEvent) {
         val gx = (event.values[0] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
