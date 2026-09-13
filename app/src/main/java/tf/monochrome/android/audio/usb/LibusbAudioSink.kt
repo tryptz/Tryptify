@@ -440,6 +440,12 @@ class LibusbAudioSink(
         val ratio = if (ridesTempo) speed else 1f
         speedRatio = ratio
         resampler?.setRatio(ratio)
+        // Setting the ratio is not enough on its own: the resampler is only a
+        // member of the chain while that ratio is away from 1, and membership
+        // is otherwise fixed at configure. A track configured at 1.00x had
+        // already skipped it, so the new ratio went to a processor nothing was
+        // calling.
+        chain.refreshActive()
     }
 
     override fun pause() {

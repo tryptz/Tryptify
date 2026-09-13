@@ -78,6 +78,34 @@ internal class AudioProcessorChain(
         return current
     }
 
+    /**
+     * Re-evaluates which processors are in the chain.
+     *
+     * Membership is otherwise decided once, in [configure]. That is the same
+     * contract Media3's own `AudioProcessingPipeline` keeps — it consults
+     * `isActive` at configure and again at flush, and at no other time — and
+     * it works there because DefaultAudioSink re-flushes the pipeline whenever
+     * the playback parameters change. Nothing re-flushes this one.
+     *
+     * So a processor whose activity tracks a live control never joins:
+     * [tf.monochrome.android.audio.resample.VariRateAudioProcessor] is active
+     * only while its ratio is away from 1, and a track configured at 1.00x had
+     * already written it out of the chain. A later speed change then set a
+     * ratio on a processor this chain was skipping, and nothing happened.
+     *
+     * Only the processors that just joined are flushed. Flushing the whole
+     * chain would reset the mixer's DSP for a change that has nothing to do
+     * with it.
+     */
+    fun refreshActive() {
+        for (i in processors.indices) {
+            val nowActive = processors[i].isActive
+            if (nowActive == active[i]) continue
+            active[i] = nowActive
+            if (nowActive) processors[i].flush()
+        }
+    }
+
     fun flush() {
         for (p in processors) p.flush()
     }
