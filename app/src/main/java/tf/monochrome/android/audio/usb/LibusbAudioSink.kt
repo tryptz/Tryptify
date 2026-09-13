@@ -194,7 +194,6 @@ class LibusbAudioSink(
             ?.bytesPerSample
             ?.takeIf { it > 0 }
             ?: (bits / 8)
-        usbBytesPerFrame = usbBytesPerSample * channels
     }
 
     override fun handleBuffer(
