@@ -46,6 +46,12 @@ import tf.monochrome.android.ui.theme.MonoDimens
 internal fun PageJumpList(
     pages: List<String>,
     onSelect: (String) -> Unit,
+    /**
+     * Opens one of [APP_LINKS] — a real nav destination rather than a pager
+     * page. Required rather than defaulted to `{}`: a call site that forgot it
+     * would render rows that look tappable and do nothing.
+     */
+    onOpenRoute: (String) -> Unit,
     current: String?,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(),
@@ -60,40 +66,72 @@ internal fun PageJumpList(
     ) {
         items(pages, key = { it }, contentType = { "page" }) { id ->
             val isCurrent = id == current
-            Text(
-                text = APP_PAGE_TITLES[id] ?: id,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (isCurrent) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    // The app's own pane material, so a tile matches the rows
-                    // in the library rather than inventing a surface.
-                    //
-                    // No hazeState, deliberately. This is inside the pager,
-                    // which is inside the app's one hazeSource, and a haze
-                    // child within its own source is a cycle Haze throws on —
-                    // it crashed the app on launch, Home being the first
-                    // screen. Nothing is lost: the tiles sit on the flat theme
-                    // background, so a backdrop blur of it is that same colour.
-                    .liquidGlass(shape = MonoDimens.shapeMd)
-                    // The page you are already on is shown but inert — it is
-                    // there to tell you where you are, and a row that looks
-                    // tappable and does nothing reads as a broken row.
-                    .semantics { selected = isCurrent }
-                    .then(
-                        if (isCurrent) Modifier
-                        else Modifier.bounceClick {
-                            onJump()
-                            onSelect(id)
-                        }
-                    )
-                    .padding(horizontal = 24.dp, vertical = 20.dp),
+            PageJumpRow(
+                title = APP_PAGE_TITLES[id] ?: id,
+                isCurrent = isCurrent,
+                // The page you are already on is shown but inert — it is there
+                // to tell you where you are, and a row that looks tappable and
+                // does nothing reads as a broken row.
+                onClick = if (isCurrent) null else {
+                    {
+                        onJump()
+                        onSelect(id)
+                    }
+                },
+            )
+        }
+        // The links last, under the pages. They leave the pager rather than
+        // moving it, so they are never "current" — you cannot be looking at
+        // this list while you are on one.
+        items(APP_LINKS, key = { it.route }, contentType = { "link" }) { link ->
+            PageJumpRow(
+                title = link.title,
+                isCurrent = false,
+                onClick = {
+                    onJump()
+                    onOpenRoute(link.route)
+                },
             )
         }
     }
+}
+
+/**
+ * One tile on the page list.
+ *
+ * A null [onClick] is a row that is shown but inert — the page you are already
+ * on. Shared by the pages and the links so a destination cannot end up looking
+ * like a different kind of thing from a page.
+ */
+@Composable
+private fun PageJumpRow(
+    title: String,
+    isCurrent: Boolean,
+    onClick: (() -> Unit)?,
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = if (isCurrent) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            // The app's own pane material, so a tile matches the rows in the
+            // library rather than inventing a surface.
+            //
+            // No hazeState, deliberately. This is inside the pager, which is
+            // inside the app's one hazeSource, and a haze child within its own
+            // source is a cycle Haze throws on — it crashed the app on launch,
+            // Home being the first screen. Nothing is lost: the tiles sit on
+            // the flat theme background, so a backdrop blur of it is that same
+            // colour.
+            .liquidGlass(shape = MonoDimens.shapeMd)
+            .semantics { selected = isCurrent }
+            .then(if (onClick == null) Modifier else Modifier.bounceClick(onClick = onClick))
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+    )
 }
 
 /**
@@ -107,6 +145,7 @@ internal fun PageJumpList(
 internal fun PageJumpSheet(
     pages: List<String>,
     onSelect: (String) -> Unit,
+    onOpenRoute: (String) -> Unit,
     current: String?,
     onDismiss: () -> Unit,
 ) {
@@ -120,6 +159,7 @@ internal fun PageJumpSheet(
             PageJumpList(
                 pages = pages,
                 onSelect = onSelect,
+                onOpenRoute = onOpenRoute,
                 current = current,
                 // Dismiss before the scroll, not after it: the sheet is over the
                 // pager, so animating a page change underneath a sheet that is

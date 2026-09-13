@@ -36,6 +36,11 @@
 - **The dismiss drag is on the handle, not the body.** `SpeedPanel` puts it on its whole content, which works for sliders: they claim horizontal, the drag claims vertical. This panel scrolls vertically, so the same arrangement would have the drag and the scroll fighting over every gesture.
 - **Nothing runs while the panel is shut.** The seven flows and the once-a-second poll are collected inside the visibility gate, on a `WhileSubscribed` view model.
 
+#### World radio is on the page list
+- **It was a button partway down Discover**, which meant finding it required already knowing it was there. It is one tap from Home now, and in the jump sheet on every other page, because that list is the app's answer to "where is everything".
+- **Links are kept apart from `APP_PAGES`.** That list drives the pager, the stored page order and `LIBRARY_PAGE_IDS`, and every id in it needs a branch in `LibraryScreen` — a nav route in there would be a page that draws nothing. `APP_LINKS` is a separate list of real destinations, drawn under the pages by the same row composable so a link cannot end up looking like a different kind of thing from a page.
+- **`onOpenRoute` is required, not defaulted.** A call site that forgot it would render tiles that look tappable and do nothing; making it mandatory turned that into three compile errors instead. `AppPagesTest` resolves each link's `Screen` object from its declaration and checks the nav host really registers a `composable()` for it — matching the route text alone would pass on the declaration and prove nothing.
+
 #### Visual Studio is a settings page of its own, right after Appearance
 - **It was one row under a "Now Playing Appearance" header at the bottom of Appearance** — a heading over a single item, which is a category that has not admitted to being one yet. Appearance is the app's chrome: theme, fonts, colours. The Studio is what the player looks like while it is playing, which is a different thing to go and look for, and it has just grown an Ambient tab.
 - **Tab indices are still derived, not written down.** `settingsTabIndex(label)` and `SETTINGS_TAB_ABOUT` mean inserting a tab in the middle cannot silently send What's New, or any search result, to the wrong page.

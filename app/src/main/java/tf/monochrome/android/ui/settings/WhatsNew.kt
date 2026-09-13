@@ -318,6 +318,14 @@ object WhatsNew {
                         "gone. Page Order in Settings now sets the order of that list.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "World radio is on that list too",
+                    body = "It was a button partway down Discover, so finding it meant " +
+                        "knowing it was there. It sits under the pages on Home, and in the " +
+                        "jump list on every other page.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = PAGES,
                     title = "Presses feel like the player's, everywhere",

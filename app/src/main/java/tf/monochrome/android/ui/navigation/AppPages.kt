@@ -36,6 +36,32 @@ internal val APP_PAGES: List<AppPage> = listOf(
 
 internal val APP_PAGE_IDS: List<String> = APP_PAGES.map { it.id }
 
+/**
+ * A destination on the page list that is not a page.
+ *
+ * The seven above are pager pages: picking one scrolls the pager and Back
+ * returns to Home. These are ordinary nav destinations — full screens with
+ * their own back stack — that people were expected to find by first swiping to
+ * the right page and then spotting a button on it.
+ *
+ * Kept apart from [APP_PAGES] deliberately. That list drives the pager, the
+ * stored page order and `LIBRARY_PAGE_IDS`, and every id in it needs a branch
+ * in `LibraryScreen`; a nav route in there would be a page that draws nothing.
+ */
+internal data class AppLink(val route: String, val title: String)
+
+/**
+ * The non-page destinations, shown under the pages on the same list.
+ *
+ * World radio was reachable only from a button partway down Discover, so
+ * finding it meant knowing it was there. It is one tap from Home now, and from
+ * the jump sheet on every other page, because the page list is the app's
+ * answer to "where is everything".
+ */
+internal val APP_LINKS: List<AppLink> = listOf(
+    AppLink(Screen.WorldRadio.route, "World radio"),
+)
+
 /** Display name for every page id. The one source for what a page is called. */
 internal val APP_PAGE_TITLES: Map<String, String> = APP_PAGES.associate { it.id to it.title }
 

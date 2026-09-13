@@ -140,6 +140,7 @@ fun DiscoverScreen(
         tf.monochrome.android.ui.navigation.PageJumpSheet(
             pages = pages,
             onSelect = onSelectPage,
+            onOpenRoute = { route -> navController.navigateSafe(route) },
             current = tf.monochrome.android.ui.navigation.Screen.Discover.route,
             onDismiss = { pageJumpOpen = false },
         )

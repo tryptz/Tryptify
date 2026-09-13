@@ -273,6 +273,64 @@ class AppPagesTest {
         assertTrue("library pages with no render branch: $missing", missing.isEmpty())
     }
 
+    // ── Links: destinations on the list that are not pages ─────────────
+
+    @Test
+    fun `a link is never also a page`() {
+        // The two lists mean different things to a tap — a page scrolls the
+        // pager, a link leaves it — so an id in both would behave differently
+        // depending on which loop drew it first.
+        val clashes = APP_LINKS.map { it.route }.filter { it in APP_PAGE_IDS }
+        assertTrue("routes listed as both a page and a link: $clashes", clashes.isEmpty())
+    }
+
+    @Test
+    fun `every link points at a destination the nav host actually has`() {
+        // A link route with no composable navigates nowhere and leaves the user
+        // on the page they tapped from — a dead tile with no other symptom.
+        // Same cross-file rule, and the same reason for reading source, as the
+        // library-branch check above.
+        //
+        // Routes are registered as `composable(Screen.X.route)`, not as string
+        // literals, so the object name has to be resolved from its declaration
+        // first. Matching the bare route text instead would pass on the
+        // declaration alone and prove nothing.
+        val source = File("src/main/java/tf/monochrome/android/ui/navigation/MonochromeNavHost.kt")
+            .readText()
+        val declared = Regex("data object (\\w+) : Screen\\(\"([^\"]+)\"\\)")
+            .findAll(source)
+            .associate { it.groupValues[2] to it.groupValues[1] }
+
+        APP_LINKS.forEach { link ->
+            val name = declared[link.route]
+            assertTrue("no Screen object declares the route ${link.route}", name != null)
+            assertTrue(
+                "Screen.$name is never registered with composable() — " +
+                    "${link.title} would be a dead row",
+                source.contains("composable(Screen.$name.route)"),
+            )
+        }
+    }
+
+    @Test
+    fun `links have a title and a unique route`() {
+        APP_LINKS.forEach {
+            assertTrue("a link has a blank title", it.title.isNotBlank())
+            assertTrue("a link has a blank route", it.route.isNotBlank())
+        }
+        val routes = APP_LINKS.map { it.route }
+        assertEquals(routes.size, routes.toSet().size)
+    }
+
+    @Test
+    fun `world radio is on the list`() {
+        // It was reachable only from a button partway down Discover.
+        assertTrue(
+            "World radio is missing from the page list",
+            APP_LINKS.any { it.title == "World radio" },
+        )
+    }
+
     /**
      * An order or hidden set that does not sync is invisible until someone uses a
      * second device, which is the worst time to find out. Both keys are named
