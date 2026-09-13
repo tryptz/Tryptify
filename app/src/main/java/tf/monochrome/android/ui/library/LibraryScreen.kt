@@ -308,7 +308,6 @@ fun LibraryScreen(
             tf.monochrome.android.ui.navigation.PageJumpSheet(
                 pages = pages,
                 onSelect = onSelectPage,
-                onOpenRoute = { route -> navController.navigateSafe(route) },
                 current = sectionId,
                 onDismiss = { sectionMenuOpen = false },
             )

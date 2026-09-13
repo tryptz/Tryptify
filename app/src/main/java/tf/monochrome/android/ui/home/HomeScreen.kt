@@ -355,7 +355,6 @@ fun HomeScreen(
                 PageJumpList(
                     pages = pages,
                     onSelect = onSelectPage,
-                    onOpenRoute = { route -> navController.navigateSafe(route) },
                     current = Screen.Home.route,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(bottom = 160.dp),

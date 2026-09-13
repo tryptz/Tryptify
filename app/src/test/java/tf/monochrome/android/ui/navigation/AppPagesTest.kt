@@ -68,9 +68,16 @@ class AppPagesTest {
      * which is the next test.)
      */
     @Test
-    fun `reconciling a migrated complete order changes nothing`() {
+    fun `reconciling a migrated order keeps it and adds only what is new`() {
+        // This used to assert reconcile changed nothing at all, which held only
+        // while no page had been added since the flat list shipped. World radio
+        // is the first, so the guarantee is now the useful half of that: the
+        // migrated order survives intact, and anything added arrives on top of
+        // it rather than reshuffling it.
         val migrated = migrateLegacyPageOrder(legacyDefault)
-        assertEquals(migrated, reconcilePageOrder(migrated))
+        val reconciled = reconcilePageOrder(migrated)
+        assertEquals(migrated, reconciled.filter { it in migrated })
+        assertEquals(listOf(RADIO_PAGE_ID), reconciled - migrated.toSet())
     }
 
     /** A legacy order missing sections still ends up with every page. */
@@ -85,7 +92,13 @@ class AppPagesTest {
     @Test
     fun `a stored order wins over the legacy one`() {
         val stored = listOf("downloads", "home", "discover", "local", "overview", "playlists", "favorites")
-        assertEquals(stored, resolvePageOrder(stored, legacyDefault))
+        val resolved = resolvePageOrder(stored, legacyDefault)
+        // Downloads stays first, where this user put it, rather than where the
+        // legacy default would have had it.
+        assertEquals(stored, resolved.filter { it in stored })
+        // A page that install predates is still added — that is reconcile's
+        // job, and it does not make the legacy order win.
+        assertEquals(listOf(RADIO_PAGE_ID), resolved - stored.toSet())
     }
 
     // ── Forward compatibility ────────────────────────────────────────────
@@ -273,62 +286,58 @@ class AppPagesTest {
         assertTrue("library pages with no render branch: $missing", missing.isEmpty())
     }
 
-    // ── Links: destinations on the list that are not pages ─────────────
+    // ── Pages that draw themselves ─────────────────────────────────────
+    //
+    // Home, Discover and World radio are not library sections: each owns its
+    // whole surface, so the pager renders them directly instead of handing an
+    // id to LibraryScreen. That split has to hold in both directions, and
+    // neither half is visible at a glance.
 
     @Test
-    fun `a link is never also a page`() {
-        // The two lists mean different things to a tap — a page scrolls the
-        // pager, a link leaves it — so an id in both would behave differently
-        // depending on which loop drew it first.
-        val clashes = APP_LINKS.map { it.route }.filter { it in APP_PAGE_IDS }
-        assertTrue("routes listed as both a page and a link: $clashes", clashes.isEmpty())
+    fun `the self-drawn pages are exactly the ones LibraryScreen does not render`() {
+        assertEquals(
+            listOf(Screen.Home.route, Screen.Discover.route, RADIO_PAGE_ID),
+            APP_PAGE_IDS - LIBRARY_PAGE_IDS.toSet(),
+        )
     }
 
     @Test
-    fun `every link points at a destination the nav host actually has`() {
-        // A link route with no composable navigates nowhere and leaves the user
-        // on the page they tapped from — a dead tile with no other symptom.
-        // Same cross-file rule, and the same reason for reading source, as the
-        // library-branch check above.
-        //
-        // Routes are registered as `composable(Screen.X.route)`, not as string
-        // literals, so the object name has to be resolved from its declaration
-        // first. Matching the bare route text instead would pass on the
-        // declaration alone and prove nothing.
+    fun `the pager renders World radio itself instead of asking for a section`() {
+        // Without its own branch the id falls through to `else -> LibraryScreen`,
+        // which has no section by that name: a blank page and no other symptom.
         val source = File("src/main/java/tf/monochrome/android/ui/navigation/MonochromeNavHost.kt")
             .readText()
-        val declared = Regex("data object (\\w+) : Screen\\(\"([^\"]+)\"\\)")
-            .findAll(source)
-            .associate { it.groupValues[2] to it.groupValues[1] }
-
-        APP_LINKS.forEach { link ->
-            val name = declared[link.route]
-            assertTrue("no Screen object declares the route ${link.route}", name != null)
-            assertTrue(
-                "Screen.$name is never registered with composable() — " +
-                    "${link.title} would be a dead row",
-                source.contains("composable(Screen.$name.route)"),
-            )
-        }
-    }
-
-    @Test
-    fun `links have a title and a unique route`() {
-        APP_LINKS.forEach {
-            assertTrue("a link has a blank title", it.title.isNotBlank())
-            assertTrue("a link has a blank route", it.route.isNotBlank())
-        }
-        val routes = APP_LINKS.map { it.route }
-        assertEquals(routes.size, routes.toSet().size)
-    }
-
-    @Test
-    fun `world radio is on the list`() {
-        // It was reachable only from a button partway down Discover.
         assertTrue(
-            "World radio is missing from the page list",
-            APP_LINKS.any { it.title == "World radio" },
+            "the pager has no RADIO_PAGE_ID branch — the globe would draw blank",
+            source.contains("RADIO_PAGE_ID ->"),
         )
+    }
+
+    @Test
+    fun `World radio is a page rather than a destination`() {
+        // It used to be Screen.WorldRadio, reached from a button on Discover.
+        // Being a page is what makes Back leave it for Home like any other
+        // page, instead of unwinding a stack of its own — so a Screen object
+        // creeping back would quietly restore the old behaviour alongside the
+        // new one.
+        assertTrue("World radio is missing from the page list", RADIO_PAGE_ID in APP_PAGE_IDS)
+        assertEquals("World radio", APP_PAGE_TITLES[RADIO_PAGE_ID])
+        val source = File("src/main/java/tf/monochrome/android/ui/navigation/MonochromeNavHost.kt")
+            .readText()
+        assertFalse(
+            "a Screen.WorldRadio object is back alongside the page",
+            source.contains("data object WorldRadio"),
+        )
+        assertFalse(
+            "something still navigates to World radio as a destination",
+            source.contains("Screen.WorldRadio"),
+        )
+    }
+
+    @Test
+    fun `World radio sits next to Discover, where it used to be reached from`() {
+        val order = DEFAULT_PAGE_ORDER
+        assertEquals(order.indexOf(Screen.Discover.route) + 1, order.indexOf(RADIO_PAGE_ID))
     }
 
     /**

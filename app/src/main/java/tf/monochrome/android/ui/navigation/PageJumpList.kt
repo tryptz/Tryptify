@@ -46,12 +46,6 @@ import tf.monochrome.android.ui.theme.MonoDimens
 internal fun PageJumpList(
     pages: List<String>,
     onSelect: (String) -> Unit,
-    /**
-     * Opens one of [APP_LINKS] — a real nav destination rather than a pager
-     * page. Required rather than defaulted to `{}`: a call site that forgot it
-     * would render rows that look tappable and do nothing.
-     */
-    onOpenRoute: (String) -> Unit,
     current: String?,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(),
@@ -80,19 +74,6 @@ internal fun PageJumpList(
                 },
             )
         }
-        // The links last, under the pages. They leave the pager rather than
-        // moving it, so they are never "current" — you cannot be looking at
-        // this list while you are on one.
-        items(APP_LINKS, key = { it.route }, contentType = { "link" }) { link ->
-            PageJumpRow(
-                title = link.title,
-                isCurrent = false,
-                onClick = {
-                    onJump()
-                    onOpenRoute(link.route)
-                },
-            )
-        }
     }
 }
 
@@ -100,8 +81,8 @@ internal fun PageJumpList(
  * One tile on the page list.
  *
  * A null [onClick] is a row that is shown but inert — the page you are already
- * on. Shared by the pages and the links so a destination cannot end up looking
- * like a different kind of thing from a page.
+ * on, there to say where you are. A row that looks tappable and does nothing
+ * reads as a broken row, so the tap is removed rather than ignored.
  */
 @Composable
 private fun PageJumpRow(
@@ -145,7 +126,6 @@ private fun PageJumpRow(
 internal fun PageJumpSheet(
     pages: List<String>,
     onSelect: (String) -> Unit,
-    onOpenRoute: (String) -> Unit,
     current: String?,
     onDismiss: () -> Unit,
 ) {
@@ -159,7 +139,6 @@ internal fun PageJumpSheet(
             PageJumpList(
                 pages = pages,
                 onSelect = onSelect,
-                onOpenRoute = onOpenRoute,
                 current = current,
                 // Dismiss before the scroll, not after it: the sheet is over the
                 // pager, so animating a page change underneath a sheet that is

@@ -107,7 +107,6 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Discover : Screen("discover")
     data object GenreMap : Screen("discover/map")
-    data object WorldRadio : Screen("discover/radio")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
     }
@@ -377,8 +376,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // The player joins them: it already insets itself, so reserving the bar
         // out here charged it twice — a second button bar of dead height on
         // 3-button navigation, which the height-bound artwork paid for.
+        // World radio used to be here. It is a pager page now, and the pager
+        // is already full-bleed — this list is only about NavHost destinations.
         val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
-            currentDestination?.route == Screen.WorldRadio.route ||
             currentDestination?.route == Screen.NowPlaying.route
 
         // Every screen runs *under* the mini player. Reserving the bar's height
@@ -456,6 +456,16 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                         pages = pages,
                                         onSelectPage = selectPage,
                                     )
+                                // Its own branch rather than a Library section:
+                                // the globe is full-bleed and brings its own top
+                                // bar and gestures, and LibraryScreen wraps its
+                                // sections in chrome the globe does not want.
+                                RADIO_PAGE_ID ->
+                                    tf.monochrome.android.ui.discover.WorldRadioScreen(
+                                        playerViewModel = playerViewModel,
+                                        pages = pages,
+                                        onSelectPage = selectPage,
+                                    )
                                 // Everything else is a Library page.
                                 // reconcilePageOrder drops ids this build does
                                 // not know, so nothing else can arrive here.
@@ -488,14 +498,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.GenreMap.route) {
                     tf.monochrome.android.devedit.DevEditScreen("genre_map") {
                         GenreMapScreen(
-                            navController = navController,
-                            playerViewModel = playerViewModel,
-                        )
-                    }
-                }
-                composable(Screen.WorldRadio.route) {
-                    tf.monochrome.android.devedit.DevEditScreen("world_radio") {
-                        tf.monochrome.android.ui.discover.WorldRadioScreen(
                             navController = navController,
                             playerViewModel = playerViewModel,
                         )

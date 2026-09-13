@@ -320,10 +320,18 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PAGES,
-                    title = "World radio is on that list too",
+                    title = "World radio is a page of its own",
                     body = "It was a button partway down Discover, so finding it meant " +
-                        "knowing it was there. It sits under the pages on Home, and in the " +
-                        "jump list on every other page.",
+                        "knowing it was there. It is a page now, next to Discover, on the " +
+                        "list on Home and in the jump list everywhere else.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = GLOBE,
+                    title = "Next moves down the city's stations",
+                    body = "Tapping a station used to queue that one and nothing else, so " +
+                        "Next had nowhere to go. The city's list is the queue now, in the " +
+                        "order the panel shows it.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

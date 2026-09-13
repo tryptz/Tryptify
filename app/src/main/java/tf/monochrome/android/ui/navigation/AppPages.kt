@@ -24,9 +24,24 @@ internal data class AppPage(val id: String, val title: String)
  * the CSV said. Swapping these two would silently move every existing user's
  * landing page.
  */
+/**
+ * The globe's page id.
+ *
+ * A plain id rather than a `Screen` route, because it is no longer a nav
+ * destination: World radio is a page of the pager like Local or Playlists, so
+ * Back leaves it for Home the way it does from any other page rather than
+ * unwinding a back stack of its own.
+ */
+internal const val RADIO_PAGE_ID = "radio"
+
 internal val APP_PAGES: List<AppPage> = listOf(
     AppPage(Screen.Home.route, "Home"),
     AppPage(Screen.Discover.route, "Discover"),
+    // Next to Discover, which is where it used to be reached from. New pages
+    // are inserted into a stored order after the nearest earlier page that is
+    // stored (see reconcilePageOrder), so an existing install finds it here
+    // rather than at the far end of the list.
+    AppPage(RADIO_PAGE_ID, "World radio"),
     AppPage("local", "Local"),
     AppPage("overview", "Overview"),
     AppPage("playlists", "Playlists"),
@@ -36,32 +51,6 @@ internal val APP_PAGES: List<AppPage> = listOf(
 
 internal val APP_PAGE_IDS: List<String> = APP_PAGES.map { it.id }
 
-/**
- * A destination on the page list that is not a page.
- *
- * The seven above are pager pages: picking one scrolls the pager and Back
- * returns to Home. These are ordinary nav destinations — full screens with
- * their own back stack — that people were expected to find by first swiping to
- * the right page and then spotting a button on it.
- *
- * Kept apart from [APP_PAGES] deliberately. That list drives the pager, the
- * stored page order and `LIBRARY_PAGE_IDS`, and every id in it needs a branch
- * in `LibraryScreen`; a nav route in there would be a page that draws nothing.
- */
-internal data class AppLink(val route: String, val title: String)
-
-/**
- * The non-page destinations, shown under the pages on the same list.
- *
- * World radio was reachable only from a button partway down Discover, so
- * finding it meant knowing it was there. It is one tap from Home now, and from
- * the jump sheet on every other page, because the page list is the app's
- * answer to "where is everything".
- */
-internal val APP_LINKS: List<AppLink> = listOf(
-    AppLink(Screen.WorldRadio.route, "World radio"),
-)
-
 /** Display name for every page id. The one source for what a page is called. */
 internal val APP_PAGE_TITLES: Map<String, String> = APP_PAGES.associate { it.id to it.title }
 
@@ -69,13 +58,19 @@ internal val APP_PAGE_TITLES: Map<String, String> = APP_PAGES.associate { it.id 
 internal val DEFAULT_PAGE_ORDER: List<String> = APP_PAGE_IDS
 
 /**
- * The pages `LibraryScreen` renders — everything that is not Home or Discover.
+ * The pages `LibraryScreen` renders — everything that is not Home, Discover or
+ * World radio.
+ *
+ * Those three draw themselves straight from the pager's `when`, because each
+ * owns its whole surface: Home is the page list, Discover is its shelves, and
+ * the globe is full-bleed with its own gestures and top bar. `LibraryScreen`
+ * wraps its sections in shared chrome that none of them wants.
  *
  * Every id here needs a branch in `LibraryScreen`'s `when (sectionId)`, or it
  * draws a blank page. `AppPagesTest` reads that file and checks.
  */
 internal val LIBRARY_PAGE_IDS: List<String> =
-    APP_PAGE_IDS - setOf(Screen.Home.route, Screen.Discover.route)
+    APP_PAGE_IDS - setOf(Screen.Home.route, Screen.Discover.route, RADIO_PAGE_ID)
 
 /**
  * What an install that predates the flat page list was actually looking at.

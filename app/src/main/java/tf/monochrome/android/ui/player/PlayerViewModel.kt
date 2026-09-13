@@ -680,11 +680,39 @@ class PlayerViewModel @Inject constructor(
      * behind it and the station becomes the first track of a playlist nobody
      * asked for.
      */
-    fun playRadioStation(station: UnifiedTrack) {
+    /** One station, on its own. */
+    fun playRadioStation(station: UnifiedTrack) = playRadioStations(listOf(station), 0)
+
+    /**
+     * Tune in with the rest of the list behind it, so Next moves down the city.
+     *
+     * This used to be a queue of exactly one, which is why Next did nothing on
+     * a station: there was nowhere to go. A city's stations are an ordinary
+     * queue — the same shape [playAllUnified] builds — and the transport does
+     * not need to know that its entries happen to be live streams.
+     *
+     * [startIndex] rather than a lookup by id: the directory does not promise
+     * unique station uuids (see the deliberately unkeyed list in
+     * `WorldRadioScreen`), so "find the one that was tapped" can find the wrong
+     * one. The caller knows which row it was.
+     *
+     * Duplicate ids are still collapsed before the queue is built. Two entries
+     * sharing an id would fight over one slot in [unifiedTrackRegistry] — the
+     * second overwriting the first — and both would then resolve to the same
+     * stream. Dropping the repeat gives a queue whose length matches what it
+     * will actually play, and the start index is moved onto the survivor so the
+     * tapped row is still what comes out of the speaker.
+     */
+    fun playRadioStations(stations: List<UnifiedTrack>, startIndex: Int) {
+        if (stations.isEmpty()) return
+        val plan = planRadioQueue(stations.map { it.id }, startIndex)
+        val queue = plan.keep.map { stations[it] }
+        if (queue.isEmpty()) return
+
         radioQueueManager.stopRadio()
-        val legacy = station.toLegacyTrack()
-        unifiedTrackRegistry.put(legacy.id, station)
-        queueManager.setQueue(listOf(legacy), 0)
+        val legacy = queue.map { it.toLegacyTrack() }
+        queue.forEachIndexed { i, track -> unifiedTrackRegistry.put(legacy[i].id, track) }
+        queueManager.setQueue(legacy, plan.startIndex)
         resolveAndPlay()
     }
 

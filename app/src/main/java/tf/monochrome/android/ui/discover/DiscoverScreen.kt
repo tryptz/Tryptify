@@ -140,7 +140,6 @@ fun DiscoverScreen(
         tf.monochrome.android.ui.navigation.PageJumpSheet(
             pages = pages,
             onSelect = onSelectPage,
-            onOpenRoute = { route -> navController.navigateSafe(route) },
             current = tf.monochrome.android.ui.navigation.Screen.Discover.route,
             onDismiss = { pageJumpOpen = false },
         )
@@ -318,7 +317,11 @@ fun DiscoverScreen(
             }
             Box(modifier = Modifier.weight(1f)) {
                 WorldRadioEntryButton(
-                    onClick = { navController.navigateSafe(Screen.WorldRadio.route) },
+                    // A page now, not a destination: move the pager rather
+                    // than pushing a screen onto the stack.
+                    onClick = {
+                        onSelectPage(tf.monochrome.android.ui.navigation.RADIO_PAGE_ID)
+                    },
                 )
             }
         }
