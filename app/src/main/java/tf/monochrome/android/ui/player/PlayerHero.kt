@@ -500,6 +500,16 @@ private fun VisualizerHeroOverlay(
 }
 
 /**
+ * How long the ambient preset row stays up after the last interaction.
+ *
+ * The row exists so someone can change preset without leaving the atmosphere;
+ * it is not a permanent chrome. Four seconds is long enough to read the three
+ * glyphs and reach one, short enough that the visualizer is unobstructed the
+ * rest of the time.
+ */
+private const val AMBIENT_CONTROLS_IDLE_MS = 4_000L
+
+/**
  * Preset controls for ambient mode's "Remove album cover" state.
  *
  * With the cover gone the MilkDrop atmosphere is the whole player, but the
@@ -507,16 +517,36 @@ private fun VisualizerHeroOverlay(
  * VISUALIZER view mode, not here. This puts the three that matter into the
  * space the cover vacated: back, browse, forward.
  *
- * Deliberately small. The player's own language is bare outlined glyphs in a
- * slim glass pill — the transport and the action dock carry no labels — so a
+ * Laid out edge to edge rather than as one centred pill. Three glyphs in a
+ * shared pill sat as a single object floating in the middle of an otherwise
+ * empty field, which reads as a widget dropped on the artwork; pushed to the
+ * margins they read as the frame around it, and the centre — the part of the
+ * atmosphere worth looking at — is left clear. Browse stays in the middle
+ * because it is the one that opens something, and because SpaceBetween puts
+ * it exactly on the axis the transport below is already centred on.
+ *
+ * Individually glassed for the same reason: with the row spanning the width,
+ * one pill would have to be a full-width bar.
+ *
+ * Fades itself out after [AMBIENT_CONTROLS_IDLE_MS] of no interaction, and a
+ * tap anywhere on the vacated cover slot brings it back — the caller signals
+ * that by bumping [revealKey]. [AnimatedVisibility] rather than an alpha
+ * animation so the buttons leave the composition when they finish fading:
+ * invisible tap targets parked over a fullscreen visualizer would swallow
+ * taps meant for it.
+ *
+ * Deliberately small. The player's own language is bare outlined glyphs in
+ * slim glass — the transport and the action dock carry no labels — so a
  * full-width slab with a preset-name banner and three captioned pills read as
- * a dialog dropped on top of the artwork rather than as part of it. The
- * current preset's name lives in the browser this opens, which is where
- * someone reading names is already going.
+ * a dialog rather than as part of the player. The current preset's name lives
+ * in the browser this opens, which is where someone reading names is already
+ * going.
  *
  * Track skip is deliberately absent. The transport is still on screen below,
  * and the hero slot's swipe-to-skip gesture keeps working over this region —
  * so these buttons are unambiguously about presets.
+ *
+ * @param revealKey bump to bring the row back and restart the idle timer.
  */
 @Composable
 internal fun AmbientPresetControls(
@@ -524,36 +554,52 @@ internal fun AmbientPresetControls(
     onPreviousPreset: () -> Unit,
     onNextPreset: () -> Unit,
     onOpenPresetBrowser: () -> Unit,
+    revealKey: Int,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier
-            .padding(10.dp)
-            .liquidGlass(shape = RoundedCornerShape(999.dp), tintAlpha = 0.22f),
-        shape = RoundedCornerShape(999.dp),
-        color = Color.Transparent,
-        contentColor = Color.White,
+    // Bumped by the row's own buttons. Kept separate from revealKey so the
+    // caller does not have to observe presses it has no other use for; both
+    // key the same effect, so either one restarts the timer.
+    var selfPoke by remember { mutableIntStateOf(0) }
+    var visible by remember { mutableStateOf(true) }
+
+    LaunchedEffect(revealKey, selfPoke) {
+        visible = true
+        delay(AMBIENT_CONTROLS_IDLE_MS)
+        visible = false
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        // Quick in so a reveal tap feels answered, slow out so the row does
+        // not appear to be snatched away from a finger on its way to it.
+        enter = fadeIn(tween(140)),
+        exit = fadeOut(tween(520)),
+        modifier = modifier,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AmbientPresetButton(
                 icon = Icons.Default.SkipPrevious,
                 label = "Previous preset",
                 enabled = canGoBack,
-                onClick = onPreviousPreset,
+                onClick = { selfPoke++; onPreviousPreset() },
             )
             AmbientPresetButton(
                 icon = Icons.Default.LibraryMusic,
                 label = "Preset browser",
                 accent = PlayerGlowGold,
-                onClick = onOpenPresetBrowser,
+                onClick = { selfPoke++; onOpenPresetBrowser() },
             )
             AmbientPresetButton(
                 icon = Icons.Default.SkipNext,
                 label = "Next preset",
-                onClick = onNextPreset,
+                onClick = { selfPoke++; onNextPreset() },
             )
         }
     }
@@ -561,8 +607,9 @@ internal fun AmbientPresetControls(
 
 /**
  * One glyph in [AmbientPresetControls]. Sized to the transport's own icons
- * rather than to a labelled pill, with the tap target kept at 40dp so the
- * smaller glyph does not make it harder to hit.
+ * rather than to a labelled pill, and carrying its own glass disc now that
+ * the row has no shared pill to sit in. The 40dp tap target is the whole
+ * disc, so the smaller glyph does not make it harder to hit.
  */
 @Composable
 private fun AmbientPresetButton(
@@ -572,17 +619,28 @@ private fun AmbientPresetButton(
     enabled: Boolean = true,
     accent: Color = Color.White,
 ) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(40.dp),
+    // Sized by the button, not by the Surface. IconButton carries
+    // minimumInteractiveComponentSize (48dp), which a 40dp Surface would be
+    // fighting; letting the glass wrap a 40dp IconButton is the same shape
+    // the shared pill used to get and keeps the disc exactly on the glyph.
+    Surface(
+        modifier = Modifier.liquidGlass(shape = CircleShape, tintAlpha = 0.22f),
+        shape = CircleShape,
+        color = Color.Transparent,
+        contentColor = Color.White,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (enabled) accent.copy(alpha = 0.92f) else accent.copy(alpha = 0.30f),
-            modifier = Modifier.size(19.dp),
-        )
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (enabled) accent.copy(alpha = 0.92f) else accent.copy(alpha = 0.30f),
+                modifier = Modifier.size(19.dp),
+            )
+        }
     }
 }
 
