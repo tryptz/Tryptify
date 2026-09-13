@@ -440,6 +440,17 @@ class LibusbAudioSink(
         val ratio = if (ridesTempo) speed else 1f
         speedRatio = ratio
         resampler?.setRatio(ratio)
+        // Speed and the mixer interact here and nowhere else, and until now
+        // this path wrote nothing to the log at all — so a report of "the
+        // mixer stopped when I used speed" had no evidence to sit on. Logs
+        // what the sink was actually asked for, what it decided, and (via the
+        // chain, below) which stages that left running.
+        Log.i(
+            TAG,
+            "playback params: speed=$speed pitch=$pitch -> " +
+                "${if (ridesTempo) "varispeed" else "stretch/none"} ratio=$ratio " +
+                "(bypass=$bypassActive)",
+        )
         // Setting the ratio is not enough on its own: the resampler is only a
         // member of the chain while that ratio is away from 1, and membership
         // is otherwise fixed at configure. A track configured at 1.00x had
