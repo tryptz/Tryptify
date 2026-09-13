@@ -900,6 +900,17 @@ class PlaybackService : MediaSessionService() {
                         driver = libusbDriver,
                         volumeController = bypassVolumeController,
                         processors = listOf(
+                            // First, and only doing anything for 24/32-bit
+                            // sources: every stage after it accepts 16-bit or
+                            // float and nothing else, so without this a 24-bit
+                            // file configured the whole chain out of existence
+                            // — mixer, both EQs, spectrum and the visualizer
+                            // feed all skipped, with the audio still playing
+                            // perfectly because an empty chain passes buffers
+                            // through untouched. DefaultAudioSink gets the
+                            // equivalent from Media3; this chain is ours to
+                            // feed.
+                            tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
                             atmosAudioProcessor,
                             downmixProcessor,
