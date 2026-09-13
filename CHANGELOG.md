@@ -25,6 +25,16 @@
 
 ### Fixed
 
+#### The widget started the whole player just to read a track title
+- **Connecting a `MediaController` to a `MediaSessionService` starts it.** `readNowPlaying` built one against `PlaybackService` on every widget redraw, so drawing the widget constructed an ExoPlayer, a MediaSession and both FFmpeg renderers, read one title off them, and let the lot be torn down. A device log caught it: `ExoPlayerImpl: Init` at 23:36:35.848, `Release` at 23:36:36.244 — four hundred milliseconds later, thirty-three seconds before anybody opened the app. The process had been woken by WorkManager and the widget refresh did the rest.
+- **`NowPlayingSnapshotStore` is written by the player and read by the widget.** The write hangs off `refreshNowPlayingWidget`, which the service already called on every real playback change, so the state is current whenever there is a player to be current about — and it outlives the process, which is what a widget's contents should do anyway. A widget drawn hours later shows the track that was playing, paused.
+- **Its own DataStore file rather than `PreferencesManager`**: the widget runs outside Hilt (Glance hands `provideGlance` a bare `Context`), and fields the player owns do not belong in the file the settings screens edit.
+- **Transport taps still connect for real.** Starting the service is the entire point of pressing play; it was only *reading* that had no business doing it.
+
+#### One 356-line composable was the whole Interface tab
+- **`InterfaceControls` collected twenty-eight pieces of state at its top**, so moving the visualizer brightness slider invalidated the "Show Explicit Badges" switch and every other row on the screen — one composable scope, one invalidation. It is 95 lines now, with Spectrum Analyzer, Audio Visualizer, Visualizer Graphics and Preset rotation in `VisualizerSettings`; each reads only its own flows and neither recomposes for the other's changes.
+- **It was also the app's most expensive method to compile.** A device log shows ART allocating 4.7 MB to JIT it the first time Settings opened. Two smaller methods are cheaper to compile and land in a baseline profile independently. Whether that JIT *caused* the 102 skipped frames logged half a second earlier is not something the log proves — a 19 MB GC sits between them — and a system trace is what would settle it.
+
 #### The glass tilt snapped to neutral on every screen change
 - **The shared gravity listener was torn down and rebuilt between screens.** `rememberGravityTilt` ref-counts one process-wide `SensorEventListener` so seven glass surfaces do not register seven of them — but navigating between two glass screens disposes the old one *before* the new one composes, so the count passes through zero every time. A device log shows register → unregister → register inside 120ms, twice in two seconds.
 - **The visible half was the filter restarting.** `fx`/`fy` are a low-pass over gravity and they begin at zero, so the incoming screen's tilt snapped to neutral and eased back rather than continuing from where the phone actually was. The binder round trips to the sensor service on every screen change were the cheaper half of the bug.

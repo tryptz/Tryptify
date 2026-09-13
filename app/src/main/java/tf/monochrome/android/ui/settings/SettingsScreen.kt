@@ -958,38 +958,8 @@ private fun FontRow(
 @Composable
 private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavController) {
     val explicit by viewModel.showExplicitBadges.collectAsStateWithLifecycle()
-    val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
-    val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
-    val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
-    val presetId by viewModel.visualizerPresetId.collectAsStateWithLifecycle()
-    val rotationSeconds by viewModel.visualizerRotationSeconds.collectAsStateWithLifecycle()
-    val rotationMode by viewModel.visualizerPresetRotationMode.collectAsStateWithLifecycle()
-    val textureSize by viewModel.visualizerTextureSize.collectAsStateWithLifecycle()
-    val meshX by viewModel.visualizerMeshX.collectAsStateWithLifecycle()
-    val meshY by viewModel.visualizerMeshY.collectAsStateWithLifecycle()
-    val targetFps by viewModel.visualizerTargetFps.collectAsStateWithLifecycle()
-    val audioDelayMs by viewModel.visualizerAudioDelayMs.collectAsStateWithLifecycle()
-    val vsyncEnabled by viewModel.visualizerVsyncEnabled.collectAsStateWithLifecycle()
-    val showFps by viewModel.visualizerShowFps.collectAsStateWithLifecycle()
-    val fullscreen by viewModel.visualizerFullscreen.collectAsStateWithLifecycle()
-    val touchWaveform by viewModel.visualizerTouchWaveform.collectAsStateWithLifecycle()
-    val engineStatus by viewModel.visualizerEngineStatus.collectAsStateWithLifecycle()
-    val presets by viewModel.visualizerPresets.collectAsStateWithLifecycle()
-    val spectrumEnabled by viewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
-    val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
-    val spectrumFftSize by viewModel.spectrumFftSize.collectAsStateWithLifecycle()
-    val spectrumBins by viewModel.spectrumBins.collectAsStateWithLifecycle()
     val playerDynamicColor by viewModel.playerDynamicColor.collectAsStateWithLifecycle()
     val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsStateWithLifecycle()
-    val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
-    var showTextureDropdown by remember { mutableStateOf(false) }
-    var showPresetDropdown by remember { mutableStateOf(false) }
-    var showFftDropdown by remember { mutableStateOf(false) }
-
-    // Presets install lazily; make sure the preset dropdown has data.
-    LaunchedEffect(Unit) {
-        viewModel.prepareVisualizerEngine()
-    }
 
         SettingsGroupHeader("Display")
         SettingSwitchItem(
@@ -1076,6 +1046,59 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             subtitle = "Live editor for the lyric type / 3D wave / beat FX, plus the player and mini-player glass",
             onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        VisualizerSettings(viewModel)
+}
+
+/**
+ * Everything under Spectrum Analyzer, Audio Visualizer, Visualizer Graphics and
+ * Preset rotation.
+ *
+ * Split out of [InterfaceControls], which was 356 lines collecting twenty-eight
+ * pieces of state at its top — so moving the brightness slider invalidated the
+ * "Show Explicit Badges" switch, and every other row on the screen, because
+ * they all sat in one composable scope. Each half reads only its own flows now,
+ * and neither recomposes for the other's changes.
+ *
+ * It was also the single largest method in the app by compiler cost: a device
+ * log shows ART allocating 4.7 MB to JIT `InterfaceControls` the first time
+ * Settings opened, with 102 frames skipped around it. Two smaller methods are
+ * cheaper to compile and land in the profile independently.
+ */
+@Composable
+private fun VisualizerSettings(viewModel: SettingsViewModel) {
+    val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
+    val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
+    val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
+    val presetId by viewModel.visualizerPresetId.collectAsStateWithLifecycle()
+    val rotationSeconds by viewModel.visualizerRotationSeconds.collectAsStateWithLifecycle()
+    val rotationMode by viewModel.visualizerPresetRotationMode.collectAsStateWithLifecycle()
+    val textureSize by viewModel.visualizerTextureSize.collectAsStateWithLifecycle()
+    val meshX by viewModel.visualizerMeshX.collectAsStateWithLifecycle()
+    val meshY by viewModel.visualizerMeshY.collectAsStateWithLifecycle()
+    val targetFps by viewModel.visualizerTargetFps.collectAsStateWithLifecycle()
+    val audioDelayMs by viewModel.visualizerAudioDelayMs.collectAsStateWithLifecycle()
+    val vsyncEnabled by viewModel.visualizerVsyncEnabled.collectAsStateWithLifecycle()
+    val showFps by viewModel.visualizerShowFps.collectAsStateWithLifecycle()
+    val fullscreen by viewModel.visualizerFullscreen.collectAsStateWithLifecycle()
+    val touchWaveform by viewModel.visualizerTouchWaveform.collectAsStateWithLifecycle()
+    val engineStatus by viewModel.visualizerEngineStatus.collectAsStateWithLifecycle()
+    val presets by viewModel.visualizerPresets.collectAsStateWithLifecycle()
+    val spectrumEnabled by viewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
+    val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
+    val spectrumFftSize by viewModel.spectrumFftSize.collectAsStateWithLifecycle()
+    val spectrumBins by viewModel.spectrumBins.collectAsStateWithLifecycle()
+    val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
+    var showTextureDropdown by remember { mutableStateOf(false) }
+    var showPresetDropdown by remember { mutableStateOf(false) }
+    var showFftDropdown by remember { mutableStateOf(false) }
+
+    // Presets install lazily; make sure the preset dropdown has data.
+    LaunchedEffect(Unit) {
+        viewModel.prepareVisualizerEngine()
+    }
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Spectrum Analyzer")

@@ -76,26 +76,12 @@ suspend fun <T> withSessionController(context: Context, block: (MediaController)
         }
     }
 
-/** Read the current now-playing state, or [NowPlayingSnapshot.IDLE] if nothing is loaded. */
-suspend fun readNowPlaying(context: Context): NowPlayingSnapshot =
-    withSessionController(context) { mc ->
-        val md = mc.mediaMetadata
-        val hasItem = mc.currentMediaItem != null || md.title != null
-        if (!hasItem) {
-            NowPlayingSnapshot.IDLE
-        } else {
-            NowPlayingSnapshot(
-                hasSession = true,
-                isPlaying = mc.isPlaying,
-                title = (md.title ?: md.displayTitle)?.toString().orEmpty(),
-                artist = (md.artist ?: md.albumArtist)?.toString().orEmpty(),
-                artworkUri = md.artworkUri?.toString(),
-                positionMs = mc.currentPosition.coerceAtLeast(0L),
-                // duration is C.TIME_UNSET (negative) until the item is prepared.
-                durationMs = mc.duration.let { if (it > 0L) it else 0L },
-            )
-        }
-    } ?: NowPlayingSnapshot.IDLE
+// There was a `readNowPlaying(context)` here that built a controller just to
+// read the metadata off it. Connecting to a MediaSessionService *starts* it, so
+// every widget redraw constructed an ExoPlayer and a MediaSession and threw
+// them away — see NowPlayingSnapshotStore, which the player writes and the
+// widget reads instead. The controller below is for the transport taps, where
+// starting the service is the entire point.
 
 /**
  * Decode the cover to a small software bitmap through the app's shared Coil loader

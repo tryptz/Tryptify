@@ -51,6 +51,8 @@ import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
 import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
+import tf.monochrome.android.widget.NowPlayingSnapshot
+import tf.monochrome.android.widget.NowPlayingSnapshotStore
 import tf.monochrome.android.widget.NowPlayingWidget
 import androidx.glance.appwidget.updateAll
 import javax.inject.Inject
@@ -1634,14 +1636,42 @@ class PlaybackService : MediaSessionService() {
     )
 
     /**
-     * Push a fresh render to every now-playing widget instance. [serviceScope] runs
-     * on the main dispatcher, so the suspend updateAll is safe to launch here; the
-     * whole thing is wrapped so a widget/Glance hiccup can never crash playback.
+     * Record the current state and push a fresh render to every now-playing
+     * widget instance. [serviceScope] runs on the main dispatcher, so the
+     * suspend calls are safe to launch here; the whole thing is wrapped so a
+     * widget/Glance hiccup can never crash playback.
+     *
+     * The write comes first and matters more than the redraw. The widget used
+     * to read its state by connecting a MediaController back to this service,
+     * which *starts* it — so drawing the widget built an ExoPlayer and a
+     * MediaSession from scratch and then dropped them. Writing what is already
+     * in hand here means the widget has somewhere to read from that costs
+     * nothing, and the state outlives the process the way a widget's contents
+     * should.
      */
     private fun refreshNowPlayingWidget() {
         serviceScope.launch {
-            runCatching { NowPlayingWidget().updateAll(this@PlaybackService) }
+            runCatching {
+                NowPlayingSnapshotStore.write(this@PlaybackService, nowPlayingSnapshot())
+                NowPlayingWidget().updateAll(this@PlaybackService)
+            }
         }
+    }
+
+    /** The player's state in the shape the widget stores and draws. */
+    private fun nowPlayingSnapshot(): NowPlayingSnapshot {
+        val md = player.mediaMetadata
+        if (player.currentMediaItem == null && md.title == null) return NowPlayingSnapshot.IDLE
+        return NowPlayingSnapshot(
+            hasSession = true,
+            isPlaying = player.isPlaying,
+            title = (md.title ?: md.displayTitle)?.toString().orEmpty(),
+            artist = (md.artist ?: md.albumArtist)?.toString().orEmpty(),
+            artworkUri = md.artworkUri?.toString(),
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+            // duration is C.TIME_UNSET (negative) until the item is prepared.
+            durationMs = player.duration.let { if (it > 0L) it else 0L },
+        )
     }
 
     /**
