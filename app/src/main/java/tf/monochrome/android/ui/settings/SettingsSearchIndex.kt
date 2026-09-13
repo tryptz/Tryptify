@@ -71,10 +71,10 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Remove liquid glass", "Appearance", listOf("flat", "opaque", "blur", "performance", "glass")),
     entry("Disable animations", "Appearance", listOf("motion", "reduce", "still", "accessibility")),
 
-    // ── Visuals ─────────────────────────────────────────────────────────
+    // ── Visual Studio ───────────────────────────────────────────────────
     entry(
         "Player Visuals Studio",
-        "Visuals",
+        "Visual Studio",
         listOf(
             "lyrics", "glass", "fx", "visuals", "beat",
             // The Ambient tab. Somebody looking for the visualizer over the

@@ -36,7 +36,7 @@
 - **The dismiss drag is on the handle, not the body.** `SpeedPanel` puts it on its whole content, which works for sliders: they claim horizontal, the drag claims vertical. This panel scrolls vertically, so the same arrangement would have the drag and the scroll fighting over every gesture.
 - **Nothing runs while the panel is shut.** The seven flows and the once-a-second poll are collected inside the visibility gate, on a `WhileSubscribed` view model.
 
-#### Player Visuals has a settings category of its own
+#### Visual Studio is a settings page of its own, right after Appearance
 - **It was one row under a "Now Playing Appearance" header at the bottom of Appearance** — a heading over a single item, which is a category that has not admitted to being one yet. Appearance is the app's chrome: theme, fonts, colours. The Studio is what the player looks like while it is playing, which is a different thing to go and look for, and it has just grown an Ambient tab.
 - **Tab indices are still derived, not written down.** `settingsTabIndex(label)` and `SETTINGS_TAB_ABOUT` mean inserting a tab in the middle cannot silently send What's New, or any search result, to the wrong page.
 

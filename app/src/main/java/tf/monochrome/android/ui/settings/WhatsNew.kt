@@ -228,10 +228,11 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = LOOK,
-                    title = "Player Visuals has a settings tab of its own",
+                    title = "Visual Studio is a settings page of its own",
                     body = "It was one row under a heading of its own at the bottom of " +
                         "Appearance. Appearance is the app's chrome — themes, fonts; this " +
-                        "is what the player looks like. Settings \u203a Visuals.",
+                        "is what the player looks like. Settings \u203a Visual Studio, " +
+                        "right after Appearance.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

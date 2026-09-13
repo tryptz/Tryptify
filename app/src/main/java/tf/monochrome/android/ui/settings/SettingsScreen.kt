@@ -173,7 +173,7 @@ import kotlinx.coroutines.delay
 // specific tab must go through a named constant derived from this list (see
 // SETTINGS_TAB_ABOUT), never a literal — a hardcoded index has silently broken
 // twice now, once per reorder.
-private val settingsTabs = listOf("Appearance", "Visuals", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+private val settingsTabs = listOf("Appearance", "Visual Studio", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
 
 /**
  * Which tab carries a given label, for the search index to point at.
@@ -376,7 +376,7 @@ fun SettingsScreen(
                     tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
                         when (page) {
                             0 -> AppearanceTab(viewModel, navController)
-                            1 -> VisualsTab(navController)
+                            1 -> VisualStudioTab(navController)
                             2 -> AudioTab(viewModel, navController)
                             3 -> EqualizerTab(navController, viewModel)
                             4 -> LibrarySettingsTab(viewModel)
@@ -573,7 +573,7 @@ private fun EqualizerTab(
 }
 
 /**
- * The Visuals tab: what the player looks like while it is playing.
+ * The Visual Studio tab: what the player looks like while it is playing.
  *
  * Its own category rather than a "Now Playing Appearance" group at the bottom
  * of Appearance, where it was one row under a header of its own — a heading
@@ -582,7 +582,7 @@ private fun EqualizerTab(
  * surface, which is a different thing to go looking for.
  */
 @Composable
-private fun VisualsTab(navController: NavController) {
+private fun VisualStudioTab(navController: NavController) {
     SettingsTabContent {
         SettingItem(
             title = "Player Visuals Studio",
