@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Removed
+
+#### The pane behind the Player tab's preview
+- **The Studio drew its transport on a `GlassPanel` wearing `LocalMiniPlayerGlass`** — the UI panels blob, tuned on the next tab over. The largest surface in the Player preview was the one thing those sliders did not control: move a Player slider and everything moved except the surface behind it, move a UI panels slider and nothing on that tab moved at all, because UI panels previewed only the mini player bar.
+- **The real player has no pane there.** The transport and the dock are punched slabs floating straight over the artwork, and the invariants forbid a haze pane under one — an opaque frosted backdrop is exactly what flattens them. The preview was showing a construction that does not exist.
+- **It moved to the UI panels tab**, above the mini player, where the two faces of that one material — the floating sheet and the bar — are previewed together and both answer to the sliders under them.
+
 ### Added
 
 #### Home is the list of pages
@@ -22,6 +29,43 @@
 #### A scrollbar you can drag
 - **Long lists have a thumb down the right edge now**, like a web page. Drag it to land anywhere in the library instead of flicking.
 - **The songs list loads a page at a time.** It used to build every track in the library on every change — around 118 ms and 20,000 objects for a 20,000-track library, to draw the dozen rows on screen.
+
+#### Glass refracts the artwork rather than a reconstruction of it
+- **`backdropField` invented its own backdrop** — a vertical wash plus two off-axis pools, tinted with the album's two colours. With the blurred album background on, what is really behind a pane is the cover, and none of its colour was reaching the refraction.
+- **A 64px thumbnail of the cover is bound as a `uArt` child shader**, read at the same three dispersion-displaced coordinates the reconstruction was, so R, G and B still land where their own index of refraction bends them.
+- **It cannot be a live layer capture.** `RenderEffect.createRuntimeShaderEffect` binds exactly one input and this shader spends it on `content`, whose alpha field every bevel normal is derived from; a second `uniform shader` has to be set through `RuntimeShader.setInputShader`, which takes an `android.graphics.Shader`, and no public API turns a `GraphicsLayer` into one. The cover can be a bitmap, so it is one.
+- **Nor full resolution.** What it has to match is `BlurredCoverLayer` — the cover under a 64dp gaussian blur — and a 64px thumbnail sampled with the hardware's bilinear filter already is that. Lensing a sharp cover would refract detail that is nowhere on the screen.
+- **Nor the raw artwork.** `PlayerBlurredArtBackground` lays a heavy vertical scrim over the cover (black at 0.58, a darkened album tone at 0.52, black at 0.72), so `artScrimmed` puts the same falloff back in *screen* space: the gradient runs down the display, not down the pane, and two panes at different heights have to come out differently dark.
+- **`uArt` is bound on every path**, including the ones that never read it — SkSL fails the draw on an unbound child shader rather than sampling blank. At `uArtMix = 0` the output is bit-identical to the reconstruction, which is what let this land without re-tuning a single preset, and is what every device with no decoded cover falls back to.
+- **`backdropArtRect` inverts the `ContentScale.Crop` the cover is stretched with**, so the shader can ask what is behind it in the artwork's own pixels. Wrong arithmetic there reads as texture rather than as a bug, so `BackdropArtRectTest` pins it.
+
+#### The mini player lenses the cover too, fitted to the bar
+- **`BackdropArtFit.PANE` fits the cover to the pane** rather than positioning it behind one, so its colours sweep along the length of the bar. The same crop arithmetic with the pane standing in for the window, so it needed no new geometry — only a choice about which rectangle to invert.
+- **The player's mapping degenerates here.** The bar is about 64dp, roughly a twelfth of a phone, so the slice of a 64px thumbnail behind it is some five pixels tall and refraction displaces by a fraction of one of those: mapped that way it would lens a flat colour. It is also not what is there — away from the player the app's own content is behind the bar, not the artwork.
+- **Not gated on the blurred-album-background setting.** That setting asserts the artwork really is behind the glass, which is what makes the player's mapping truthful; it has nothing to say about a material property. The gate moved out of the three binding sites and into whoever supplies the art: `rememberBackdropArt` returns null when there should be none, and a null art binds `uArtMix = 0`.
+- **Its scrim is flat** — zero height in `uArtScreen`, read off the bar's own place on screen. The gradient it stands in for is not really there, and a bar that short would only tilt under one.
+
+#### Wide Stage joins the built-in mixer presets
+- **A patch tuned in the mixer and kept as the engine's own state JSON**, rather than rewritten in the preset DSL. `PresetScope` cannot describe it: it derives `inputEnabled` from the bus index — only bus 0 takes input — and writes `bypassed` as false for every processor, and this preset needs input on two buses and two bypassed processors on the first.
+- **That is the whole shape of it**: a dry path and a wet path running in parallel off the same input. Bus 0 trimmed a hair with a Haas and a Stereo parked on it switched off, bus 1 carrying a long wide Reverb into Stereo into Gain and pushed +8.2 dB to sit against the dry, master at +4.6 dB.
+- **Porting it to the DSL would mean transcribing sixteen floats by parameter index** and teaching the builder two new concepts, with a changed sound as the price of getting either wrong. Kept verbatim instead, split one literal per bus so it is reviewable.
+- **`BuiltInMixPresetsTest` is new.** The builder cannot emit malformed state, so nothing covered these; a captured blob can lose a character to an edit or a merge, and the native parser answers that by silently doing nothing. It holds every preset to five buses and well-formed plugins, holds the ids unique and negative so a user's own preset cannot shadow one, and pins the two properties of this one the DSL would quietly drop.
+
+#### What's New groups its entries by New, Changed and Removed
+- **`WhatsNewKind` and a second level of heading.** The outer one is what kind of change it is, because that is what a reader is usually scanning for and a flat list makes "what can I do now", "what moved" and "where did that go" the same search. The inner one stays what part of the app it touches.
+- **Fixes go under Changed.** Splitting them out reads as an apology list, and from the outside "this works now" and "this works differently now" are the same news.
+- **`kind` is nullable and unclassified entries print first, ungrouped**, exactly as the whole list did before. A default of `CHANGED` would have put a confident label on a hundred already-shipped entries that were written as one flat list; only the release being worked on is classified.
+
+### Changed
+
+#### Play and pause morph instead of swapping
+- **The disc is the only control on the player that changes shape, and it changed it on one frame.** `drawPlayPauseSymbol` branched on `isPlaying` and drew either a triangle or two bars. Everything else about the button moves — the press dome, the bulge, the shader's own liquid — so the one hard cut in the transport was where it read as a set of images rather than an object.
+- **Both states are now the same pair of quads.** The pause is two rectangles; the play triangle is split down its middle, the left piece the trapezoid from the flat back edge to the halfway line (where a triangle is half as tall) and the right piece the point, written as a quad whose two right corners sit on top of each other at the apex. Corner *i* travels to corner *i* of its bar.
+- **The seam is not rounded until the halves come apart.** Rounding each half independently gave the interior split a corner radius on both sides, which pinched the outline into an hourglass and left the point reading as a second glyph stuck to the first. The four seam corners take a radius that opens from zero to full with the morph and arrives as the bars' inner corners.
+- **A collapsed corner pair is folded back into one.** Carrying the apex as two coincident corners is what lets it travel to a bar, but `roundedPolygon` takes the radius to zero on a zero-length edge, so the tip lost the rounding it was given precisely because the shader bevels an angle that acute into a spike.
+- **The halves are unioned and punched once.** Two `BlendMode.Clear` passes over a shared antialiased edge each take about half the boundary pixel, leaving a quarter of it as a bright hairline across the glyph. `op()` reporting failure falls back to two passes — an empty path there would leave a disc with no symbol on it at all.
+- **The animation is read inside the Canvas draw lambda, not with `by`**, so a morph in flight invalidates the draw and nothing recomposes; read at the composable it would recompose the whole button, shadow and haze included, about twenty times per transition. With animations disabled it snaps, because a shape change has to land on the right shape rather than stop moving halfway.
+- Geometry is otherwise untouched: the bars, the triangle, the optical centre and the corner cut are the numbers the button already had, so both ends of the morph are the glyphs that shipped. `PlayPauseMorphTest` pins the seam shared exactly, the apex collapsed, the corner order held across the sweep, and the seam radius opening monotonically.
 
 ### Fixed
 

@@ -3643,31 +3643,58 @@ private fun WhatsNewPanel(highlight: Boolean) {
 
         AnimatedVisibility(visible = expanded) {
             Column {
-                // Sections are announced when they start, so consecutive entries
-                // under one heading print it once. Entries with no section carry
-                // straight on as the flat list they were.
-                var section: String? = null
-                release.entries.forEach { entry ->
-                    if (entry.section != null && entry.section != section) {
+                // Two levels of heading, and they answer different questions.
+                // The outer one is what KIND of change it is — what is new, what
+                // behaves differently, what is gone — because that is the thing
+                // a reader is usually scanning for and a flat list makes all
+                // three the same search. The inner one is what part of the app
+                // it touches.
+                //
+                // Unclassified entries print first, with no heading at all, the
+                // way the whole list did before there were groups: the releases
+                // already shipped were written flat, and inventing a label for
+                // each of them after the fact would be a hundred guesses.
+                val grouped = listOf<WhatsNewKind?>(null) + WhatsNewKind.entries
+                grouped.forEach { kind ->
+                    val entries = release.entries.filter { it.kind == kind }
+                    if (entries.isEmpty()) return@forEach
+
+                    if (kind != null) {
                         Text(
-                            text = entry.section,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                            text = kind.heading,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 2.dp),
                         )
                     }
-                    section = entry.section
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        Text(
-                            text = entry.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = entry.body,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+
+                    // Sections are announced when they start, so consecutive
+                    // entries under one heading print it once. Reset per kind:
+                    // the same section can open again under the next one.
+                    var section: String? = null
+                    entries.forEach { entry ->
+                        if (entry.section != null && entry.section != section) {
+                            Text(
+                                text = entry.section,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                            )
+                        }
+                        section = entry.section
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            Text(
+                                text = entry.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = entry.body,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }

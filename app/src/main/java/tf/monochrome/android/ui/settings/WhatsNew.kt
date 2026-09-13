@@ -22,10 +22,36 @@ import tf.monochrome.android.BuildConfig
  * Discover interleaved with download and equaliser notes tells you far less
  * than the same eight lines under a title saying what they are about.
  */
+/**
+ * Whether an entry is something that was not there before, something that
+ * behaves differently, or something that is gone.
+ *
+ * A reader scanning release notes is usually answering one of three questions —
+ * what can I do now, what moved, and where did that go — and a flat list makes
+ * all three the same search. [heading] is what they are grouped under.
+ *
+ * Fixes live under [CHANGED]. Splitting them out reads as an apology list, and
+ * from the outside "this works now" and "this works differently now" are the
+ * same news: the thing does not do what it did.
+ */
+enum class WhatsNewKind(val heading: String) {
+    NEW("New"),
+    CHANGED("Changed"),
+    REMOVED("Removed"),
+}
+
 data class WhatsNewEntry(
     val title: String,
     val body: String,
     val section: String? = null,
+    /**
+     * Null means unclassified, and prints ahead of the groups exactly as this
+     * list did before there were any. That is deliberate rather than a default
+     * of [WhatsNewKind.CHANGED]: the releases already shipped were written as
+     * one flat list, and filing a hundred of them after the fact would put a
+     * confident label on a lot of guesses. New entries should set it.
+     */
+    val kind: WhatsNewKind? = null,
 )
 
 data class WhatsNewRelease(
@@ -51,6 +77,9 @@ object WhatsNew {
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
 
+    /** The DSP mixer, its buses and the presets that ship with it. */
+    private const val MIXER = "Mixer"
+
     /** The pages you swipe between, their order and their visibility. */
     private const val PAGES = "Pages and order"
 
@@ -70,6 +99,56 @@ object WhatsNew {
             versionName = "1.8.9",
             entries = listOf(
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "The glass bends your artwork through it",
+                    body = "With Blurred Album Background on, the transport, the dock and " +
+                        "the panels refract the cover itself rather than a tint standing in " +
+                        "for it. Each lenses the part of the artwork behind it, so no two " +
+                        "panes on the screen carry quite the same colour.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "The mini player carries the cover too",
+                    body = "The bar takes its colour from the artwork it is showing, " +
+                        "sweeping along its length — wherever the bar is, not only over " +
+                        "the player.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Wide Stage joins the shipped presets",
+                    body = "A wide, long reverb running beside the dry signal rather than " +
+                        "over it. Load it from the mixer's preset list like the rest.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "UI panels previews the panel, not just the bar",
+                    body = "That tab sets the material for every floating pane — the audio " +
+                        "tools sheet, the speed panel, the search bars — and used to " +
+                        "preview only the mini player. It shows a pane above the bar now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Play and pause bend into one another",
+                    body = "The triangle opens out into the two bars and folds back, rather " +
+                        "than one shape being swapped for the other between frames. With " +
+                        "animations off it still lands on the right shape at once.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = LOOK,
+                    title = "The pane behind the Player tab's preview",
+                    body = "The Player tab drew its buttons on a panel its own sliders did " +
+                        "not control, and that the real player does not have — its transport " +
+                        "floats over the artwork. The panel is previewed under UI panels " +
+                        "instead.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = PLAYER,
                     title = "The artwork fills the screen again",
                     body = "On 3-button navigation the player was leaving room for the button " +
@@ -77,6 +156,7 @@ object WhatsNew {
                         "backdrop runs to the bottom edge now and the artwork gets that back.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = PLAYER,
                     title = "Shuffle is on the dock, the sleep timer in Audio tools",
                     body = "Shuffle takes the dock's second slot next to Lyrics and lights up " +
@@ -85,6 +165,7 @@ object WhatsNew {
                         "switch.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = PLAYER,
                     title = "Play, pause and skip are redrawn, and press cleanly",
                     body = "They are built from exact geometry, so the corners match and the " +
@@ -93,6 +174,7 @@ object WhatsNew {
                         "answers a tap the way the player does.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = LOOK,
                     title = "Glass stops turning grey on a light theme",
                     body = "The player's panes and the mixer strips were frosting against the " +
@@ -100,6 +182,7 @@ object WhatsNew {
                         "light theme they came out milky with the icons washed out of them.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = LOOK,
                     title = "The cover's halo is softer, and yours to tune",
                     body = "The glow was landing at mid-screen with a visible edge, showing as " +
@@ -108,6 +191,7 @@ object WhatsNew {
                         "shape too.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = LOOK,
                     title = "Colour transitions no longer run for seconds",
                     body = "It used to match Blend Between Tracks, so a four-second blend " +
@@ -116,6 +200,7 @@ object WhatsNew {
                         "seconds.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
                     title = "Folders show your music, and open where it is",
                     body = "The tab opens on the folders your music is really in, each a glass " +
@@ -124,6 +209,7 @@ object WhatsNew {
                         "level at a time.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
                     title = "Clear All Downloads says what it will delete",
                     body = "It says how many tracks and how much disk it is about to " +
@@ -131,6 +217,7 @@ object WhatsNew {
                         "disabled when there is nothing downloaded.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = LIBRARY,
                     title = "Long press a folder to remove it",
                     body = "Its tracks leave the library and scans skip it from then on. " +
@@ -138,6 +225,7 @@ object WhatsNew {
                         "are.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = LIBRARY,
                     title = "Drag the scrollbar to move through a big library",
                     body = "Long lists have a thumb down the right edge you can drag. It no " +
@@ -146,12 +234,14 @@ object WhatsNew {
                         "screenful.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = LIBRARY,
                     title = "The track playing is coloured in the list",
                     body = "Its row is tinted and its title takes the accent, so you can find " +
                         "what is playing in a long list at a glance.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
                     title = "Sending a file works for music on your phone",
                     body = "\"Send file\" reported no file available for tracks sitting on the " +
@@ -160,6 +250,7 @@ object WhatsNew {
                         "ever worked.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PAGES,
                     title = "Home is the list of pages",
                     body = "Tap a name to go straight there instead of swiping to it, and " +
@@ -167,6 +258,7 @@ object WhatsNew {
                         "gone. Page Order in Settings now sets the order of that list.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = PAGES,
                     title = "Presses feel like the player's, everywhere",
                     body = "The old press settled slowly and wobbled — barely visible on a " +
