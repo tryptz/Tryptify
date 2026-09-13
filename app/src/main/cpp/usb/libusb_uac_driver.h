@@ -237,8 +237,17 @@ private:
     // consumer is the event thread via onIso → drainRing.
     std::vector<uint8_t> ring_;
     size_t ringBytes_ = 1u << 20;  // resized at start() to ~250 ms of audio
-    std::atomic<size_t> ringHead_{0};  // producer cursor (writePcm)
-    std::atomic<size_t> ringTail_{0};  // consumer cursor (onIso)
+    // uint64_t, not size_t: with modulo indexing the cursors must not wrap at
+    // a boundary that isn't a multiple of ringBytes_, or the producer and the
+    // consumer map the same logical byte to different offsets until both have
+    // wrapped — one ring depth of scrambled PCM. size_t is 32 bits on
+    // armeabi-v7a, which we ship, and no size start() picks is a power of two,
+    // so 2^32 % ringBytes_ != 0 at every supported format (and isn't even
+    // frame-aligned at 96k/24-bit). That wrap lands after ~6.8 h at 44.1k and
+    // ~23 min at 384k/32-bit/2ch. The old power-of-two mask wrapped cleanly;
+    // 64-bit counters restore that for free (~190,000 years at 384k).
+    std::atomic<uint64_t> ringHead_{0};  // producer cursor (writePcm)
+    std::atomic<uint64_t> ringTail_{0};  // consumer cursor (onIso)
 
     mutable std::mutex mutex_;          // guards open/start/stop only
     libusb_context* ctx_ = nullptr;

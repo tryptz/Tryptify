@@ -66,14 +66,6 @@ constexpr size_t kRingQuantum = 4096;        // size rounding
 // when actively diagnosing a wedge.
 constexpr uint32_t kIsoLogEvery = 1000;
 
-// Produced/consumed bytes count, not frame count. We pack interleaved
-// PCM contiguously so byte-level accounting is the natural unit.
-inline size_t ringSize(size_t head, size_t tail) {
-    // head and tail are monotonic uint64-ish counters masked at access
-    // time, so this works correctly across 32-bit wrap.
-    return head - tail;
-}
-
 bool isClassDescriptor(const uint8_t* p, size_t remaining,
                        uint8_t descType, uint8_t subtype) {
     if (remaining < 3) return false;
@@ -1326,13 +1318,13 @@ void LibusbUacDriver::onIso(libusb_transfer* xfr) {
     // playedFrames (because every drainRing pads with silence) looks
     // identical to a pump that's perfectly healthy.
     if ((++isoCallbacks_ % kIsoLogEvery) == 0) {
-        size_t head = ringHead_.load(std::memory_order_acquire);
-        size_t tail = ringTail_.load(std::memory_order_acquire);
-        LOGI("iso heartbeat: cb=%u played=%ld written=%ld ring=%zu inflight=%d",
+        uint64_t head = ringHead_.load(std::memory_order_acquire);
+        uint64_t tail = ringTail_.load(std::memory_order_acquire);
+        LOGI("iso heartbeat: cb=%u played=%ld written=%ld ring=%llu inflight=%d",
              isoCallbacks_,
              playedFrames_.load(std::memory_order_relaxed),
              writtenFrames_.load(std::memory_order_relaxed),
-             head - tail,
+             static_cast<unsigned long long>(head - tail),
              inflight_.load(std::memory_order_relaxed));
     }
 
@@ -1346,12 +1338,12 @@ void LibusbUacDriver::onIso(libusb_transfer* xfr) {
 // --- Ring buffer ------------------------------------------------------
 
 int LibusbUacDriver::drainRing(uint8_t* dst, int bytes) {
-    size_t head = ringHead_.load(std::memory_order_acquire);
-    size_t tail = ringTail_.load(std::memory_order_relaxed);
-    size_t available = head - tail;
-    int n = static_cast<int>(std::min<size_t>(available, static_cast<size_t>(bytes)));
+    uint64_t head = ringHead_.load(std::memory_order_acquire);
+    uint64_t tail = ringTail_.load(std::memory_order_relaxed);
+    uint64_t available = head - tail;
+    int n = static_cast<int>(std::min<uint64_t>(available, static_cast<uint64_t>(bytes)));
     if (n > 0) {
-        size_t off = tail % ringBytes_;
+        size_t off = static_cast<size_t>(tail % ringBytes_);
         size_t first = std::min<size_t>(n, ringBytes_ - off);
         std::memcpy(dst, ring_.data() + off, first);
         if (first < static_cast<size_t>(n)) {
@@ -1377,17 +1369,17 @@ int LibusbUacDriver::drainRing(uint8_t* dst, int bytes) {
 int LibusbUacDriver::writePcm(const uint8_t* data, int frames) {
     if (frames <= 0 || format_.channels == 0) return 0;
     int bytes = frames * format_.channels * format_.bytesPerSample;
-    size_t head = ringHead_.load(std::memory_order_relaxed);
-    size_t tail = ringTail_.load(std::memory_order_acquire);
-    size_t free = ringBytes_ - (head - tail);
-    int writable = static_cast<int>(std::min<size_t>(free, static_cast<size_t>(bytes)));
+    uint64_t head = ringHead_.load(std::memory_order_relaxed);
+    uint64_t tail = ringTail_.load(std::memory_order_acquire);
+    uint64_t free = ringBytes_ - (head - tail);
+    int writable = static_cast<int>(std::min<uint64_t>(free, static_cast<uint64_t>(bytes)));
     // Round down to whole frames to avoid splitting a frame across
     // calls — saves the consumer from having to track partial frames.
     int frameStride = format_.channels * format_.bytesPerSample;
     if (frameStride > 0) writable -= writable % frameStride;
     if (writable <= 0) return 0;
 
-    size_t off = head % ringBytes_;
+    size_t off = static_cast<size_t>(head % ringBytes_);
     size_t first = std::min<size_t>(writable, ringBytes_ - off);
     std::memcpy(ring_.data() + off, data, first);
     if (first < static_cast<size_t>(writable)) {
@@ -1401,9 +1393,9 @@ int LibusbUacDriver::writePcm(const uint8_t* data, int frames) {
 
 int LibusbUacDriver::writableFrames() const {
     if (format_.channels == 0) return 0;
-    size_t head = ringHead_.load(std::memory_order_relaxed);
-    size_t tail = ringTail_.load(std::memory_order_acquire);
-    size_t free = ringBytes_ - (head - tail);
+    uint64_t head = ringHead_.load(std::memory_order_relaxed);
+    uint64_t tail = ringTail_.load(std::memory_order_acquire);
+    uint64_t free = ringBytes_ - (head - tail);
     int frameStride = format_.channels * format_.bytesPerSample;
     return static_cast<int>(free / frameStride);
 }

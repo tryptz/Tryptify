@@ -147,6 +147,7 @@ class LibusbAudioSink(
         encodedAccessUnitCount: Int,
     ): Boolean {
         tryLazyEngage()
+        checkDriverStillOwned()
 
         if (!bypassActive) {
             return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
@@ -265,6 +266,31 @@ class LibusbAudioSink(
         }
     }
 
+    /**
+     * Hands the stream back to the delegate the moment the driver stops owning
+     * the DAC.
+     *
+     * An unplug or an exclusive-mode toggle tears the stream down on
+     * UsbExclusiveController's own IO thread, so [bypassActive] is still true
+     * here while every subsequent driver.write() is guaranteed to fail. Before
+     * this check the only exit was the 400 ms wedge watchdog, which cost a full
+     * audible dropout and ~80 "no active stream format" JNI error lines (one
+     * per renderer tick) before the delegate took over. Both flags are cleared
+     * only by an explicit close()/stop(), so this cannot false-trip mid-stream.
+     */
+    private fun checkDriverStillOwned() {
+        if (!bypassActive) return
+        if (driver.isOpen.value && driver.isStreaming.value) return
+
+        Log.i(TAG, "driver released the DAC — disengaging bypass, delegate takes over")
+        bypassActive = false
+        pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        // Clear the engage throttle so a replug re-engages on the next buffer
+        // instead of waiting for a configure()/flush().
+        lastEngageFailHash = 0
+        resetWatchdog()
+    }
+
     private fun tryLazyEngage() {
         if (bypassActive || pcmBytesPerFrame <= 0 || !driver.isOpen.value) return
 
@@ -309,12 +335,19 @@ class LibusbAudioSink(
 
     override fun pause() {
         super.pause()
+        // Gate first, flush second: a renderer that is still mid-feed when
+        // pause lands must not be able to refill the ring behind the flush.
+        // With the gate up the ring stays empty and the DAC goes silent on
+        // its next iso packet.
+        //
+        // Set unconditionally, outside the bypassActive check: `paused`
+        // mirrors transport state, not bypass state. Gating it meant that if
+        // bypass dropped while paused (DAC unplugged, exclusive mode toggled
+        // off, watchdog trip), the matching play() also no-opped and the gate
+        // stayed up — so the next engage refused every buffer forever, with
+        // no log and no recovery short of reset().
+        paused = true
         if (bypassActive) {
-            // Gate first, flush second: a renderer that is still mid-feed when
-            // pause lands must not be able to refill the ring behind the
-            // flush. With the gate up the ring stays empty and the DAC goes
-            // silent on its next iso packet.
-            paused = true
             pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
             driver.flushRing()
             framesWritten = 0L
@@ -326,8 +359,10 @@ class LibusbAudioSink(
 
     override fun play() {
         super.play()
+        // Unconditional, for the same reason as pause(): the gate must come
+        // down even if bypass happened to be off when the user hit play.
+        paused = false
         if (bypassActive) {
-            paused = false
             resetWatchdog()
             startTimeUs = C.TIME_UNSET
             positionPlayedBaseFrames = 0L
@@ -390,7 +425,14 @@ class LibusbAudioSink(
             if (it != AudioProcessor.AudioFormat.NOT_SET) it.sampleRate
             else configuredFormat?.sampleRate ?: 0
         }
-        if (rate <= 0 || startTimeUs == C.TIME_UNSET) return C.TIME_UNSET
+        // CURRENT_POSITION_NOT_SET, not C.TIME_UNSET: the two differ by one
+        // (Long.MIN_VALUE vs Long.MIN_VALUE + 1) and only the former is
+        // filtered by MediaCodecAudioRenderer.updateCurrentPosition(). Worse,
+        // the guard it does pass assigns straight through while
+        // allowPositionDiscontinuity is set — which onPositionReset() sets on
+        // every seek, exactly when startTimeUs is back to unset. Returning
+        // TIME_UNSET here reported a position of Long.MIN_VALUE + 1.
+        if (rate <= 0 || startTimeUs == C.TIME_UNSET) return AudioSink.CURRENT_POSITION_NOT_SET
 
         val playedDelta = (driver.playedFrames() - positionPlayedBaseFrames).coerceAtLeast(0L)
         val mediaFramesPlayed = minOf(playedDelta, framesWritten)
