@@ -988,7 +988,7 @@ private fun PlayerGlassTab(
                                         .playerGlass(previewTint)
                                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
                                 ) {
-                                    drawGlassPlayPauseDisc(isPlaying = false, fill = previewTint)
+                                    drawGlassPlayPauseDisc(morph = 0f, fill = previewTint)
                                 }
                             }
                         }

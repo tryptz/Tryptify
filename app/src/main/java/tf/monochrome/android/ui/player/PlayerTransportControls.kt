@@ -1,8 +1,11 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,9 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -41,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
+import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.theme.PressSpring
 
@@ -112,6 +114,28 @@ fun PlayerTransportControls(
                 softness = glass.shadowSoftness,
                 depth = glass.shadowDepth,
             )
+            // Play triangle <-> pause bars as one shape that bends between them,
+            // rather than two glyphs swapped on the frame the state flips. The
+            // disc is the only control on the player that changes shape, and a
+            // hard cut there is the one place the transport reads as a set of
+            // images instead of an object.
+            //
+            // Deliberately NOT read with `by`: the value is pulled inside the
+            // Canvas draw lambda below, so a morph in flight invalidates the
+            // draw and nothing recomposes. Read here it would recompose this
+            // whole button ~20 times per transition, shadow and haze included.
+            val morph = animateFloatAsState(
+                targetValue = if (isPlaying) 1f else 0f,
+                // Snap when the listener has asked for no animation: this is a
+                // shape change, so a disabled animation has to land on the right
+                // shape, not stop moving halfway.
+                animationSpec = if (LocalLowPerformance.current.disableAnimations) {
+                    snap()
+                } else {
+                    tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                },
+                label = "playPauseMorph",
+            )
             // What the disc is a lens over. Same frost as the dock, clipped to
             // the disc instead: the punched play/pause glyph then reads as a
             // hole into blurred light rather than onto the raw background, and
@@ -144,7 +168,7 @@ fun PlayerTransportControls(
                         // when the glass effect is off or below API 33.
                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
                 ) {
-                    drawGlassPlayPauseDisc(isPlaying = isPlaying, fill = tint)
+                    drawGlassPlayPauseDisc(morph = morph.value, fill = tint)
                 }
             }
             // Buffering ring: without this the play glyph stays static while a
@@ -172,19 +196,22 @@ fun PlayerTransportControls(
  * outline. Meant to be drawn inside a layer carrying the [playerGlass] render
  * effect, which bevels the disc edge and the cut-out edges into refractive 3D
  * glass.
+ *
+ * [morph] is 0 for the play triangle and 1 for the pause bars, and every value
+ * between is a real intermediate shape — see [playPauseQuads].
  */
-internal fun DrawScope.drawGlassPlayPauseDisc(isPlaying: Boolean, fill: Color) {
+internal fun DrawScope.drawGlassPlayPauseDisc(morph: Float, fill: Color) {
     val d = size.minDimension
     val cx = size.width / 2f
     val cy = size.height / 2f
     drawCircle(color = fill, radius = d / 2f)
     // One clean punch → the shader bevels a single glass edge around the hollow.
-    drawPlayPauseSymbol(isPlaying, cx, cy, d, scale = 1f, color = fill, blend = BlendMode.Clear)
+    drawPlayPauseSymbol(morph, cx, cy, d, scale = 1f, color = fill, blend = BlendMode.Clear)
 }
 
 /** One play/pause glyph, scaled about the button centre, for the layered cut. */
 private fun DrawScope.drawPlayPauseSymbol(
-    isPlaying: Boolean,
+    morph: Float,
     cx: Float,
     cy: Float,
     d: Float,
@@ -192,45 +219,93 @@ private fun DrawScope.drawPlayPauseSymbol(
     color: Color,
     blend: BlendMode,
 ) {
-    if (isPlaying) {
-        val barW = d * 0.11f * scale
-        val barH = d * 0.34f * scale
-        val gap = d * 0.10f * scale
-        val corner = CornerRadius(d * 0.046f * scale, d * 0.046f * scale)
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(cx - gap / 2f - barW, cy - barH / 2f),
-            size = Size(barW, barH),
-            cornerRadius = corner,
-            blendMode = blend,
-        )
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(cx + gap / 2f, cy - barH / 2f),
-            size = Size(barW, barH),
-            cornerRadius = corner,
-            blendMode = blend,
-        )
-    } else {
-        val w = d * 0.32f * scale
-        val h = d * 0.34f * scale
-        val tcx = cx - d * 0.32f * 0.06f // optical-centre (scale-independent so passes stay concentric)
-        // Rounded to the same radius as the pause bars, so the two states of one
-        // button are cut from the same shape language. The tip matters most: it
-        // is the sharpest angle in the transport, and the shader builds its
-        // bevel from the edge, so a point that acute beveled into a bright spike
-        // rather than an edge.
-        val tri = roundedPolygon(
-            listOf(
-                Offset(tcx - w * 0.40f, cy - h / 2f),
-                Offset(tcx + w * 0.60f, cy),
-                Offset(tcx - w * 0.40f, cy + h / 2f),
-            ),
-            cut = d * 0.046f * scale,
-        )
-        drawPath(tri, color = color, blendMode = blend)
-    }
+    // Rounded to the same radius the pause bars always had, so the two states of
+    // one button are cut from the same shape language. The tip matters most: it
+    // is the sharpest angle in the transport, and the shader builds its bevel
+    // from the edge, so a point that acute beveled into a bright spike rather
+    // than an edge.
+    val cut = d * 0.046f * scale
+    val (left, right) = playPauseQuads(morph, cx, cy, d, scale)
+    drawPath(roundedPolygon(left, cut), color = color, blendMode = blend)
+    drawPath(roundedPolygon(right, cut), color = color, blendMode = blend)
 }
+
+/**
+ * The play triangle and the pause bars as the same pair of quads, so one can
+ * bend into the other.
+ *
+ * Both states are four-cornered twice over. The pause is the easy half: two
+ * rectangles. The play triangle becomes two by splitting it down the middle —
+ * the left piece is the blunt trapezoid from the flat back edge to the halfway
+ * line, the right piece is the point, written as a quad whose two right corners
+ * sit on top of each other at the apex. Corner *i* of each quad then travels to
+ * corner *i* of its bar, and the triangle opens out into two bars without any
+ * cross-fade.
+ *
+ * The duplicated apex is safe in [roundedPolygon]: a zero-length edge takes the
+ * corner radius to zero there rather than dividing by it.
+ *
+ * Corners are ordered top-left, top-right, bottom-right, bottom-left in both
+ * states. Getting that order wrong does not fail — it turns the transition into
+ * a shape folding through itself, which is why it is spelled out.
+ */
+private fun playPauseQuads(
+    morph: Float,
+    cx: Float,
+    cy: Float,
+    d: Float,
+    scale: Float,
+): Pair<List<Offset>, List<Offset>> {
+    val t = morph.coerceIn(0f, 1f)
+
+    // ── Play: the triangle, split at its horizontal midpoint ──────────────
+    val w = d * 0.32f * scale
+    val h = d * 0.34f * scale
+    val tcx = cx - d * 0.32f * 0.06f // optical centre (scale-independent so passes stay concentric)
+    val backX = tcx - w * 0.40f
+    val apexX = tcx + w * 0.60f
+    val midX = (backX + apexX) / 2f
+    // Halfway along, the triangle is half as tall — that is what makes the left
+    // piece a trapezoid rather than a rectangle.
+    val playLeft = listOf(
+        Offset(backX, cy - h / 2f),
+        Offset(midX, cy - h / 4f),
+        Offset(midX, cy + h / 4f),
+        Offset(backX, cy + h / 2f),
+    )
+    val playRight = listOf(
+        Offset(midX, cy - h / 4f),
+        Offset(apexX, cy),
+        Offset(apexX, cy),
+        Offset(midX, cy + h / 4f),
+    )
+
+    // ── Pause: two bars, at the sizes this button has always used ─────────
+    val barW = d * 0.11f * scale
+    val barH = d * 0.34f * scale
+    val gap = d * 0.10f * scale
+    val top = cy - barH / 2f
+    val bot = cy + barH / 2f
+    val leftBarX = cx - gap / 2f - barW
+    val rightBarX = cx + gap / 2f
+    val pauseLeft = listOf(
+        Offset(leftBarX, top),
+        Offset(leftBarX + barW, top),
+        Offset(leftBarX + barW, bot),
+        Offset(leftBarX, bot),
+    )
+    val pauseRight = listOf(
+        Offset(rightBarX, top),
+        Offset(rightBarX + barW, top),
+        Offset(rightBarX + barW, bot),
+        Offset(rightBarX, bot),
+    )
+
+    return lerpQuad(playLeft, pauseLeft, t) to lerpQuad(playRight, pauseRight, t)
+}
+
+private fun lerpQuad(from: List<Offset>, to: List<Offset>, t: Float): List<Offset> =
+    List(from.size) { i -> androidx.compose.ui.geometry.lerp(from[i], to[i], t) }
 
 /**
  * A closed polygon through [points] with every corner softened.
