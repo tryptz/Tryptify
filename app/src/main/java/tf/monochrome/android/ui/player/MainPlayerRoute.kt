@@ -761,7 +761,6 @@ fun MainPlayerRoute(
             // while the lyric surface is up, since that owns the slot.
             if (ambientActive && ambient.hideCover && !showLyricsHero) {
                 AmbientPresetControls(
-                    currentPreset = currentVisualizerPreset,
                     canGoBack = canGoToPreviousVisualizerPreset,
                     onPreviousPreset = playerViewModel::previousVisualizerPreset,
                     onNextPreset = playerViewModel::nextVisualizerPreset,

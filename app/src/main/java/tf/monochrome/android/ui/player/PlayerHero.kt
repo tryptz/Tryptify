@@ -507,13 +507,19 @@ private fun VisualizerHeroOverlay(
  * VISUALIZER view mode, not here. This puts the three that matter into the
  * space the cover vacated: back, browse, forward.
  *
- * Track skip is deliberately not here. The transport is still on screen below,
+ * Deliberately small. The player's own language is bare outlined glyphs in a
+ * slim glass pill — the transport and the action dock carry no labels — so a
+ * full-width slab with a preset-name banner and three captioned pills read as
+ * a dialog dropped on top of the artwork rather than as part of it. The
+ * current preset's name lives in the browser this opens, which is where
+ * someone reading names is already going.
+ *
+ * Track skip is deliberately absent. The transport is still on screen below,
  * and the hero slot's swipe-to-skip gesture keeps working over this region —
  * so these buttons are unambiguously about presets.
  */
 @Composable
 internal fun AmbientPresetControls(
-    currentPreset: VisualizerPreset?,
     canGoBack: Boolean,
     onPreviousPreset: () -> Unit,
     onNextPreset: () -> Unit,
@@ -523,51 +529,60 @@ internal fun AmbientPresetControls(
     Surface(
         modifier = modifier
             .padding(10.dp)
-            .liquidGlass(shape = RoundedCornerShape(18.dp), tintAlpha = 0.26f),
-        shape = RoundedCornerShape(18.dp),
+            .liquidGlass(shape = RoundedCornerShape(999.dp), tintAlpha = 0.22f),
+        shape = RoundedCornerShape(999.dp),
         color = Color.Transparent,
         contentColor = Color.White,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = currentPreset?.displayName ?: "Bundled projectM presets",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            AmbientPresetButton(
+                icon = Icons.Default.SkipPrevious,
+                label = "Previous preset",
+                enabled = canGoBack,
+                onClick = onPreviousPreset,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                VisualizerActionPill(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.SkipPrevious,
-                    label = "Back",
-                    accent = PlayerGlowBlue,
-                    enabled = canGoBack,
-                    onClick = onPreviousPreset,
-                )
-                VisualizerActionPill(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.LibraryMusic,
-                    label = "Presets",
-                    accent = PlayerGlowGold,
-                    onClick = onOpenPresetBrowser,
-                )
-                VisualizerActionPill(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.SkipNext,
-                    label = "Next",
-                    accent = PlayerGlowBlue,
-                    onClick = onNextPreset,
-                )
-            }
+            AmbientPresetButton(
+                icon = Icons.Default.LibraryMusic,
+                label = "Preset browser",
+                accent = PlayerGlowGold,
+                onClick = onOpenPresetBrowser,
+            )
+            AmbientPresetButton(
+                icon = Icons.Default.SkipNext,
+                label = "Next preset",
+                onClick = onNextPreset,
+            )
         }
+    }
+}
+
+/**
+ * One glyph in [AmbientPresetControls]. Sized to the transport's own icons
+ * rather than to a labelled pill, with the tap target kept at 40dp so the
+ * smaller glyph does not make it harder to hit.
+ */
+@Composable
+private fun AmbientPresetButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    accent: Color = Color.White,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(40.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (enabled) accent.copy(alpha = 0.92f) else accent.copy(alpha = 0.30f),
+            modifier = Modifier.size(19.dp),
+        )
     }
 }
 
@@ -782,7 +797,6 @@ private fun VisualizerActionPill(
     icon: ImageVector,
     label: String,
     accent: Color,
-    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -795,18 +809,10 @@ private fun VisualizerActionPill(
     Surface(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            ),
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        // Two separate alphas, not one dimmed colour reused: Surface's `color`
-        // and `contentColor` each overwrite alpha, so a single pre-dimmed
-        // accent would come out identical to the enabled one.
-        color = accent.copy(alpha = if (enabled) 0.14f else 0.06f),
-        contentColor = if (enabled) accent else accent.copy(alpha = 0.38f),
+        color = accent.copy(alpha = 0.14f),
+        contentColor = accent,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
