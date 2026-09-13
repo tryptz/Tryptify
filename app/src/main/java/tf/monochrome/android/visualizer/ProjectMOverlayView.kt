@@ -10,51 +10,80 @@ import android.opengl.EGLDisplay
 import android.opengl.EGLExt
 import android.opengl.EGLSurface
 import android.opengl.GLES30
+import android.os.Build
 import android.util.Log
+import android.view.Surface
 import android.view.TextureView
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * The ambient MilkDrop layer: projectM composited over the album artwork,
- * drawn as the player's background.
+ * The ambient MilkDrop layer: projectM composited over the blurred album
+ * artwork, drawn as the player's background — under every player element,
+ * which is why it must be a [TextureView] and not a [android.view.SurfaceView].
  *
  * ## Why this is a TextureView and the hero visualizer is not
  *
- * [ProjectMRendererView] is a `GLSurfaceView`, and a `SurfaceView` is
- * composited by SurfaceFlinger rather than by the view hierarchy — it is
- * either *behind* the window, hole-punched, where any opaque Compose content
- * above hides it, or with `setZOrderOnTop` *in front of the entire window*,
- * over the player's own controls. Neither is a layer in the middle of the
- * stack, which is exactly what ambient mode needs. (It is also why the
- * `graphicsLayer { alpha }` wrapped around the hero renderer does nothing:
- * view alpha never reaches a SurfaceView's buffer.)
+ * The hero's GLSurfaceView is a SurfaceView: SurfaceFlinger composites it
+ * either behind the window (hole-punched — hidden here by the theme's opaque
+ * window background) or on top of the entire window. A TextureView is an
+ * ordinary view: its content sits exactly where the view sits in the z-order,
+ * which is what "visualizer over the backdrop, under the controls" needs.
+ * It costs an extra copy per frame and it does not get GLSurfaceView's render
+ * thread for free, which is what the rest of this file manages.
  *
- * A `TextureView` is an ordinary view. It costs an extra copy per frame and
- * it does not get `GLSurfaceView`'s render thread for free, which is what the
- * rest of this file is.
+ * ## One engine, one surface, one thread — the lifecycle rules
  *
- * ## One engine, one surface
+ * `ProjectMEngineRepository` refcounts attachments, re-initializes the native
+ * engine on every attach (the engine is EGL-context-coupled), and keeps ONE
+ * render-trigger slot. The rules that keep this view from fighting the hero:
  *
- * `ProjectMEngineRepository` refcounts attachments and the *first* one owns
- * the native bridge; `renderFrame` needs that bridge's GL objects to be
- * current. Two views on two contexts would therefore render garbage from the
- * second. The caller must never show this at the same time as the hero
- * visualizer — the player gates it on the view mode.
+ *  1. The render trigger is registered in [onAttachedToWindow] and cleared in
+ *     [onDetachedFromWindow], keyed by `this` — the same discipline as
+ *     `ProjectMRendererView`, never inside start/stop where teardown races
+ *     used to clobber the other view's registration.
+ *  2. Exactly one render thread per view, guaranteed by an atomic flag: a new
+ *     thread is refused while the previous one is still draining (a join
+ *     timeout used to let two threads attach the engine under two contexts).
+ *  3. `onSurfaceDetached` runs exactly once per attach, in the thread's
+ *     finally, so the repository's count can never leak upward.
+ *  4. The ambient view is only ever composed while the hero is not
+ *     (the route gates it on view mode) — the two share the engine slot.
+ *
+ * ## The `update*` methods are diff-aware
+ *
+ * Compose calls the AndroidView `update` block on every recomposition of the
+ * player — album-color crossfades tick many times a second. Re-uploading the
+ * album texture and re-requesting frames at that rate is churn with nothing
+ * to show for it, so every setter compares against the last applied value
+ * and returns early when nothing changed.
  */
-@Suppress("ViewConstructor") // Programmatic-only; needs the repository.
+@Suppress("ViewConstructor") // Programmatic-only view; needs the repository.
 class ProjectMOverlayView(
     context: Context,
     private val repository: ProjectMEngineRepository,
 ) : TextureView(context) {
 
     private var renderThread: RenderThread? = null
+
+    // Set when a RenderThread enters run() and cleared in its finally. While
+    // true, startRenderer refuses to spawn a second thread: the old one is
+    // still draining (its join timed out), and a second onSurfaceAttached
+    // would re-initialize the engine under the new thread's context while the
+    // old one kept rendering into it — garbage, then a crash.
+    private val threadAlive = AtomicBoolean(false)
+
     private val pass = AmbientCompositePass()
 
     @Volatile private var settings = AmbientVisualizerSettings()
     @Volatile private var scrimTone = floatArrayOf(0f, 0f, 0f)
     @Volatile private var playing = true
+    private var lastAlbum: Bitmap? = null
+
+    /** Whether frames are being produced, for the frame-rate hint below. */
+    private var producingFrames = true
 
     init {
         // The composite writes an opaque frame — it *is* the background, not a
@@ -67,6 +96,7 @@ class ProjectMOverlayView(
                 height: Int,
             ) {
                 startRenderer(surface, width, height)
+                applyFrameRateHint()
             }
 
             override fun onSurfaceTextureSizeChanged(
@@ -75,6 +105,7 @@ class ProjectMOverlayView(
                 height: Int,
             ) {
                 renderThread?.resize(width, height)
+                applyFrameRateHint()
             }
 
             override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
@@ -89,51 +120,120 @@ class ProjectMOverlayView(
     }
 
     fun updatePlayback(isPlaying: Boolean) {
+        if (isPlaying == playing) return
         playing = isPlaying
         repository.setPlaybackPaused(!isPlaying)
         // A paused visualizer still has to draw once, or the last frame it
         // produced stays on screen without the composite over it.
         renderThread?.requestRender()
+        applyFrameRateHint()
     }
 
     fun updateSettings(next: AmbientVisualizerSettings) {
+        if (next == settings) return
         settings = next
         renderThread?.requestRender()
     }
 
     /** The mid-screen scrim colour, matching `PlayerBlurredArtBackground`. */
     fun updateScrimTone(red: Float, green: Float, blue: Float) {
+        val current = scrimTone
+        if (current[0] == red && current[1] == green && current[2] == blue) return
         scrimTone = floatArrayOf(red, green, blue)
         renderThread?.requestRender()
     }
 
     fun updateAlbum(bitmap: Bitmap?) {
+        // Identity, not equality: a new track decodes a new Bitmap instance,
+        // and a recomposition re-presenting the same instance must not reset
+        // the upload state.
+        if (bitmap === lastAlbum) return
+        lastAlbum = bitmap
         pass.setAlbum(bitmap)
         renderThread?.requestRender()
     }
 
     private fun startRenderer(surface: SurfaceTexture, width: Int, height: Int) {
         if (renderThread != null) return
-        renderThread = RenderThread(surface, width, height).also {
-            it.start()
-            repository.setRenderTrigger(it::requestRender)
+        if (!threadAlive.compareAndSet(false, true)) {
+            // The previous thread missed its join deadline but is on its way
+            // out (its finally clears this flag and detaches the engine).
+            // Starting a second one now would attach the engine twice.
+            Log.e(TAG, "previous ambient render thread still exiting — " +
+                "refusing to start a second renderer")
+            return
         }
+        renderThread = RenderThread(surface, width, height).also { it.start() }
+        producingFrames = true
+        applyFrameRateHint()
     }
 
     private fun stopRenderer() {
         val thread = renderThread ?: return
         renderThread = null
-        repository.setRenderTrigger(null)
         thread.finish()
         // Joined rather than left to die: the GL teardown and the repository
         // detach both happen on that thread, and returning true from
         // onSurfaceTextureDestroyed promises the surface is no longer in use.
         runCatching { thread.join(JOIN_TIMEOUT_MS) }
+        if (thread.isAlive) {
+            // Not fatal: the thread's finally still clears threadAlive and
+            // detaches the engine exactly once — but nothing new may start
+            // until it does, which startRenderer enforces.
+            Log.e(TAG, "ambient render thread did not exit within " +
+                "${JOIN_TIMEOUT_MS}ms; new renderers blocked until it does")
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // Lets the engine ask for a frame while paused (preset changes need a
+        // frame to land on). Keyed by `this`, mirroring ProjectMRendererView —
+        // a teardown from the other view can no longer clobber this slot.
+        repository.setRenderTrigger(this) { renderThread?.requestRender() }
     }
 
     override fun onDetachedFromWindow() {
-        stopRenderer()
+        // Clear before the surface goes away; keyed clear is a no-op if the
+        // hero has already taken the slot back.
+        repository.clearRenderTrigger(this)
+        producingFrames = false
+        applyFrameRateHint()
         super.onDetachedFromWindow()
+    }
+
+    /**
+     * Tell the display what frame rate this surface wants — the same
+     * per-surface content hint ProjectMRendererView applies: no resolution,
+     * no mode id, scoped to this TextureView's surface, cleared to
+     * "no preference" whenever frames stop. Without it the panel drops to its
+     * idle rate and the visualizer, one frame per vblank, drops with it.
+     */
+    private fun applyFrameRateHint() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val texture = surfaceTexture ?: return
+        val surface = Surface(texture)
+        try {
+            if (!surface.isValid) return
+            val wanted = if (producingFrames) {
+                display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: return
+            } else {
+                0f
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                surface.setFrameRate(
+                    wanted,
+                    Surface.FRAME_RATE_COMPATIBILITY_DEFAULT,
+                    Surface.CHANGE_FRAME_RATE_ALWAYS,
+                )
+            } else {
+                surface.setFrameRate(wanted, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
+            }
+        } catch (_: IllegalStateException) {
+            // The surface went away between the validity check and here.
+        } finally {
+            surface.release()
+        }
     }
 
     private inner class RenderThread(
@@ -176,12 +276,12 @@ class ProjectMOverlayView(
         }
 
         override fun run() {
-            if (!initEgl()) {
-                releaseEgl()
-                return
-            }
             var attached = false
             try {
+                if (!initEgl()) {
+                    releaseEgl()
+                    return
+                }
                 pass.ensureCreated()
                 repository.onSurfaceAttached(width, height)
                 attached = true
@@ -203,9 +303,13 @@ class ProjectMOverlayView(
             } catch (t: Throwable) {
                 Log.e(TAG, "ambient render thread stopped", t)
             } finally {
+                // Exactly once per attach, whether the loop exited cleanly,
+                // threw, or was torn down — the repository's surface count
+                // must never leak upward through this view.
                 if (attached) runCatching { repository.onSurfaceDetached() }
                 runCatching { pass.release() }
                 releaseEgl()
+                threadAlive.set(false)
             }
         }
 

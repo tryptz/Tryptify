@@ -41,11 +41,22 @@ constexpr uint8_t REQ_SET_CUR              = 0x01;
 constexpr uint16_t CS_SAM_FREQ_CONTROL_SEL = 0x01;
 
 // Pump tuning. 4 transfers × 8 packets keeps the pipe primed without
-// hogging memory; 1MB ring covers ~700ms at 384k/32-bit/2ch which is
-// far more than the audio thread's typical wakeup jitter.
+// hogging memory.
 constexpr int kNumTransfers = 4;
 constexpr int kPacketsPerTransfer = 8;
-constexpr size_t kRingBytes = 1u << 20;  // 1 MiB, must be power of two
+// Ring sizing: the ring is resized at start() to ~250 ms of audio at
+// the negotiated format, rounded up to a page multiple. The old fixed
+// 1 MiB ring held ~5.9 s at 44.1k/16/2ch — a partial write at that
+// depth meant seconds of rescrambled/duplicated PCM on retry, and
+// pause/seek had to throw away seconds of queued audio before going
+// quiet. 250 ms still absorbs the audio thread's wakeup jitter with
+// plenty of margin. The old power-of-two/mask invariant was dropped in
+// favor of modulo indexing: head/tail are monotonic byte counters
+// reset at start()/flush(), so `head % ringBytes_` is exact, and it
+// lets the size hit the latency target instead of jumping to the
+// next power of two (which overshot to ~450 ms at 96k/24-bit).
+constexpr size_t kRingMinBytes = 1u << 15;   // 32 KiB floor (~186 ms @ 44.1k/16/2ch)
+constexpr size_t kRingQuantum = 4096;        // size rounding
 
 // Heartbeat: one LOGI per N iso completion callbacks. At HS /
 // bInterval=1 the event thread fires 8000 callbacks/sec / kPacketsPerTransfer
@@ -86,8 +97,7 @@ void walkExtra(const uint8_t* extra, int extraLen, Cb&& cb) {
 } // namespace
 
 LibusbUacDriver::LibusbUacDriver() {
-    ring_.resize(kRingBytes);
-    ringMask_ = kRingBytes - 1;
+    ring_.resize(ringBytes_);
 }
 
 LibusbUacDriver::~LibusbUacDriver() {
@@ -925,6 +935,26 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
         return false;
     }
 
+    // Resize the ring to ~250 ms of audio at the negotiated format
+    // (see kRingMinBytes above). Safe here: the iso pump is either
+    // never-started or was stopped above, so no consumer is touching
+    // the ring, and the cursors are reset right after, so the size
+    // change can't alias a live head/tail.
+    {
+        const size_t stride = static_cast<size_t>(fmt.channels) *
+                              fmt.bytesPerSample;
+        size_t want = (static_cast<size_t>(fmt.sampleRateHz) * stride) / 4;
+        want = ((want + kRingQuantum - 1) / kRingQuantum) * kRingQuantum;
+        if (want < kRingMinBytes) want = kRingMinBytes;
+        if (want != ringBytes_) {
+            ringBytes_ = want;
+            ring_.resize(want);
+            LOGI("ring resized to %zu bytes (~%zu ms) for %d Hz/%d-bit/%dch",
+                 want, want * 1000 / (fmt.sampleRateHz * stride),
+                 fmt.sampleRateHz, fmt.bitsPerSample, fmt.channels);
+        }
+    }
+
     // Reset the ring before priming the pump.
     ringHead_.store(0, std::memory_order_relaxed);
     ringTail_.store(0, std::memory_order_relaxed);
@@ -1321,8 +1351,8 @@ int LibusbUacDriver::drainRing(uint8_t* dst, int bytes) {
     size_t available = head - tail;
     int n = static_cast<int>(std::min<size_t>(available, static_cast<size_t>(bytes)));
     if (n > 0) {
-        size_t off = tail & ringMask_;
-        size_t first = std::min<size_t>(n, kRingBytes - off);
+        size_t off = tail % ringBytes_;
+        size_t first = std::min<size_t>(n, ringBytes_ - off);
         std::memcpy(dst, ring_.data() + off, first);
         if (first < static_cast<size_t>(n)) {
             std::memcpy(dst + first, ring_.data(), n - first);
@@ -1349,7 +1379,7 @@ int LibusbUacDriver::writePcm(const uint8_t* data, int frames) {
     int bytes = frames * format_.channels * format_.bytesPerSample;
     size_t head = ringHead_.load(std::memory_order_relaxed);
     size_t tail = ringTail_.load(std::memory_order_acquire);
-    size_t free = kRingBytes - (head - tail);
+    size_t free = ringBytes_ - (head - tail);
     int writable = static_cast<int>(std::min<size_t>(free, static_cast<size_t>(bytes)));
     // Round down to whole frames to avoid splitting a frame across
     // calls — saves the consumer from having to track partial frames.
@@ -1357,8 +1387,8 @@ int LibusbUacDriver::writePcm(const uint8_t* data, int frames) {
     if (frameStride > 0) writable -= writable % frameStride;
     if (writable <= 0) return 0;
 
-    size_t off = head & ringMask_;
-    size_t first = std::min<size_t>(writable, kRingBytes - off);
+    size_t off = head % ringBytes_;
+    size_t first = std::min<size_t>(writable, ringBytes_ - off);
     std::memcpy(ring_.data() + off, data, first);
     if (first < static_cast<size_t>(writable)) {
         std::memcpy(ring_.data(), data + first, writable - first);
@@ -1373,7 +1403,7 @@ int LibusbUacDriver::writableFrames() const {
     if (format_.channels == 0) return 0;
     size_t head = ringHead_.load(std::memory_order_relaxed);
     size_t tail = ringTail_.load(std::memory_order_acquire);
-    size_t free = kRingBytes - (head - tail);
+    size_t free = ringBytes_ - (head - tail);
     int frameStride = format_.channels * format_.bytesPerSample;
     return static_cast<int>(free / frameStride);
 }

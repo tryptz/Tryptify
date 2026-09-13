@@ -85,20 +85,50 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("lyrics_fx_studio")),
 
     // ── Appearance › Spectrum and visualizer ────────────────────────────
-    // The whole projectM section was unindexed: nine rows, none findable.
-    entry("Show Spectrum Analyzer", "Appearance", listOf("fft", "bars", "frequency", "meter")),
-    entry("Spectrum over the artwork", "Appearance", listOf("overlay", "hero", "cover", "now playing")),
-    entry("Animated spectrum", "Appearance", listOf("motion", "bars", "genre", "artwork")),
-    entry("Use projectM Visualizer", "Appearance", listOf("milkdrop", "visualiser", "projectm", "preset", "engine")),
-    entry("Default Preset", "Appearance", listOf("visualiser", "milkdrop", "projectm", "startup")),
-    entry("Texture Size", "Appearance", listOf("visualiser", "resolution", "quality", "graphics", "projectm")),
-    entry("Touch Waveform", "Appearance", listOf("visualiser", "waveform", "finger", "draw", "projectm")),
+    // The projectM section used to live under Appearance; it moved to the
+    // Player Visuals Studio's Visualizer tab (which also hosts the ambient
+    // overlay), so these rows route to that screen instead of scrolling a
+    // settings tab that no longer contains them. "Spectrum over the
+    // artwork" and "Animated spectrum" stayed under Appearance — they are
+    // the equalizer/lifecycle rows, not the visualizer engine.
+    entry(
+        "Show Spectrum Analyzer", "Visual Studio",
+        listOf("fft", "bars", "frequency", "meter", "ambient"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    entry(
+        "Use projectM Visualizer", "Visual Studio",
+        listOf("milkdrop", "visualiser", "projectm", "preset", "engine", "ambient"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    entry(
+        "Default Preset", "Visual Studio",
+        listOf("visualiser", "milkdrop", "projectm", "startup"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    entry(
+        "Texture Size", "Visual Studio",
+        listOf("visualiser", "resolution", "quality", "graphics", "projectm"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    entry(
+        "Touch Waveform", "Visual Studio",
+        listOf("visualiser", "waveform", "finger", "draw", "projectm"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
     // Distinct from System › "Full screen", which is the app-wide immersive
     // switch. Both are real and the tab label tells them apart in results.
-    entry("Fullscreen", "Appearance", listOf("visualiser", "projectm", "fill screen", "now playing")),
-    entry("Show FPS", "Appearance", listOf("visualiser", "framerate", "counter", "performance", "projectm")),
-    entry("Disable vsync", "Appearance", listOf("visualiser", "refresh", "tearing", "framerate", "projectm")),
-    entry("Engine Status", "Appearance", listOf("visualiser", "projectm", "assets", "version", "diagnostics")),
+    entry(
+        "Fullscreen", "Visual Studio",
+        listOf("visualiser", "projectm", "fill screen", "now playing"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    entry(
+        "Show FPS", "Visual Studio",
+        listOf("visualiser", "framerate", "counter", "performance", "projectm"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    entry(
+        "Disable vsync", "Visual Studio",
+        listOf("visualiser", "refresh", "tearing", "framerate", "projectm"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    entry(
+        "Engine Status", "Visual Studio",
+        listOf("visualiser", "projectm", "assets", "version", "diagnostics"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
 
     // ── Audio ───────────────────────────────────────────────────────────
     entry("Gapless playback", "Audio", listOf("gap", "continuous", "album")),

@@ -319,6 +319,7 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_OVERLAY_OPACITY = intPreferencesKey("visualizer_overlay_opacity")
         private val VISUALIZER_OVERLAY_BLACK_POINT = intPreferencesKey("visualizer_overlay_black_point")
         private val VISUALIZER_OVERLAY_BLEND = stringPreferencesKey("visualizer_overlay_blend")
+        private val VISUALIZER_OVERLAY_HIDE_COVER = booleanPreferencesKey("visualizer_overlay_hide_cover")
         private val VISUALIZER_FAVORITE_PRESETS = stringSetPreferencesKey("visualizer_favorite_presets")
 
         // AI
@@ -1454,7 +1455,7 @@ class PreferencesManager @Inject constructor(
     /**
      * The ambient MilkDrop overlay, as one value.
      *
-     * Four keys but one setting as far as anything reading it is concerned —
+     * Five keys but one setting as far as anything reading it is concerned —
      * the renderer wants all of it at once, and combining here keeps three
      * separate collectors out of the player.
      *
@@ -1469,6 +1470,7 @@ class PreferencesManager @Inject constructor(
             blackPointPercent = prefs[VISUALIZER_OVERLAY_BLACK_POINT]
                 ?: AmbientVisualizerSettings.DEFAULT_BLACK_POINT,
             blend = VisualizerBlendMode.fromId(prefs[VISUALIZER_OVERLAY_BLEND]),
+            hideCover = prefs[VISUALIZER_OVERLAY_HIDE_COVER] ?: false,
         )
     }
 
@@ -1489,6 +1491,13 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setAmbientVisualizerBlend(mode: VisualizerBlendMode) {
         dataStore.edit { it[VISUALIZER_OVERLAY_BLEND] = mode.id }
+    }
+
+    /** Hide the square album cover in the player while the ambient
+     *  visualizer is on — the backdrop stays; the artwork stands down
+     *  so the MilkDrop atmosphere is the whole show. */
+    suspend fun setAmbientVisualizerHideCover(hide: Boolean) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_HIDE_COVER] = hide }
     }
     suspend fun setVisualizerShowFps(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_SHOW_FPS] = enabled }

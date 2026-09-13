@@ -229,11 +229,14 @@ private:
     // ship even on underrun (better a glitch than a dropped URB).
     int drainRing(uint8_t* dst, int bytes);
 
-    // SPSC ring buffer. Power-of-two size, atomic head/tail. Producer
-    // is the audio thread (writePcm); consumer is the event thread
-    // via onIso → drainRing.
+    // SPSC ring buffer. Atomic head/tail, modulo indexing (head/tail
+    // are monotonic byte counters reset at start()/flush(), so
+    // `cursor % ringBytes_` is exact and the size doesn't need to be
+    // a power of two — start() sizes it to ~250 ms of audio at the
+    // negotiated format). Producer is the audio thread (writePcm);
+    // consumer is the event thread via onIso → drainRing.
     std::vector<uint8_t> ring_;
-    size_t ringMask_ = 0;
+    size_t ringBytes_ = 1u << 20;  // resized at start() to ~250 ms of audio
     std::atomic<size_t> ringHead_{0};  // producer cursor (writePcm)
     std::atomic<size_t> ringTail_{0};  // consumer cursor (onIso)
 

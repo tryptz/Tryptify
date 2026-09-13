@@ -108,6 +108,8 @@ import tf.monochrome.android.domain.model.PlayerGlassPreset
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.MiniPlayer
+import tf.monochrome.android.visualizer.AmbientVisualizerSettings
+import tf.monochrome.android.visualizer.VisualizerBlendMode
 import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.LocalPlayerGlassGround
@@ -139,8 +141,6 @@ import kotlin.math.exp
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 import androidx.compose.material3.RadioButton
 import kotlinx.coroutines.flow.SharingStarted
-import tf.monochrome.android.visualizer.AmbientVisualizerSettings
-import tf.monochrome.android.visualizer.VisualizerBlendMode
 
 @HiltViewModel
 class LyricsFxStudioViewModel @Inject constructor(
@@ -175,7 +175,7 @@ class LyricsFxStudioViewModel @Inject constructor(
     private var miniPlayerGlassPersistJob: Job? = null
 
     /**
-     * The ambient MilkDrop overlay's three controls.
+     * The ambient MilkDrop overlay's controls.
      *
      * Read straight from preferences with no working copy, unlike the glass
      * blobs above: these are written on the slider's *release*, not on every
@@ -201,6 +201,10 @@ class LyricsFxStudioViewModel @Inject constructor(
 
     fun setAmbientBlend(mode: VisualizerBlendMode) {
         viewModelScope.launch { preferences.setAmbientVisualizerBlend(mode) }
+    }
+
+    fun setAmbientHideCover(hide: Boolean) {
+        viewModelScope.launch { preferences.setAmbientVisualizerHideCover(hide) }
     }
 
     /** Fonts the user has imported (Settings › Appearance copies them here). */
@@ -455,10 +459,10 @@ fun LyricsFxStudioScreen(
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("UI panels") })
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Lyrics") })
             // Not glass at all, unlike the other three — this is the player's
-            // background. It lives here because the screen is the Player
-            // Visuals Studio, and because there is nowhere else that a change
-            // to what the player looks like belongs.
-            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Ambient") })
+            // background and its visualizer engine. It lives here because the
+            // screen is the Player Visuals Studio, and because there is nowhere
+            // else that a change to what the player looks like belongs.
+            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Visualizer") })
         }
 
         // With the glass switched off app-wide, every control on these tabs still
@@ -476,13 +480,125 @@ fun LyricsFxStudioScreen(
 
         if (selectedTab == 3) {
             val ambient by viewModel.ambient.collectAsStateWithLifecycle()
-            AmbientVisualizerTab(
-                settings = ambient,
-                onEnabledChange = viewModel::setAmbientEnabled,
-                onOpacityChange = viewModel::setAmbientOpacity,
-                onBlackPointChange = viewModel::setAmbientBlackPoint,
-                onBlendChange = viewModel::setAmbientBlend,
-            )
+            // The rest of the visualizer's controls (spectrum, engine,
+            // graphics, preset rotation) read the main SettingsViewModel —
+            // this tab hosts them now, so pull that VM in alongside.
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Ambient visualizer",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            "MilkDrop drawn into the album background — over the " +
+                                "blurred cover, under the player's controls — instead " +
+                                "of replacing the artwork.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = ambient.enabled, onCheckedChange = viewModel::setAmbientEnabled)
+                }
+
+                if (ambient.enabled) {
+                    // Sliders write on release: each change is a DataStore
+                    // round trip, and the preview lives on the player, not
+                    // here — the engine can only drive one surface at a time.
+                    var opacity by remember(ambient.opacityPercent) {
+                        mutableFloatStateOf(ambient.opacityPercent.toFloat())
+                    }
+                    var blackPoint by remember(ambient.blackPointPercent) {
+                        mutableFloatStateOf(ambient.blackPointPercent.toFloat())
+                    }
+                    FxSlider(
+                        label = "Visualizer opacity",
+                        valueLabel = "${opacity.toInt()}%",
+                        value = opacity,
+                        range = 0f..100f,
+                        description = "How much of the preset reaches the screen at all.",
+                        onChange = { opacity = it },
+                        onChangeFinished = { viewModel.setAmbientOpacity(opacity.toInt()) },
+                    )
+                    FxSlider(
+                        label = "Black transparency",
+                        valueLabel = "${blackPoint.toInt()}%",
+                        value = blackPoint,
+                        range = 0f..AmbientVisualizerSettings.MAX_BLACK_POINT.toFloat(),
+                        description = "How much of the dark end disappears. Higher hides " +
+                            "more of a preset's trails and leaves only its bright detail.",
+                        onChange = { blackPoint = it },
+                        onChangeFinished = { viewModel.setAmbientBlackPoint(blackPoint.toInt()) },
+                    )
+
+                    Text(
+                        "Blend mode",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
+                    Text(
+                        "Screen is the default: black contributes nothing, so a preset's " +
+                            "luminous detail sits over the cover without flattening it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        VisualizerBlendMode.entries.forEach { mode ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setAmbientBlend(mode) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = ambient.blend == mode,
+                                    // The whole row is the target; a radio that
+                                    // also handles the click double-fires on some
+                                    // versions.
+                                    onClick = null,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(mode.label, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Remove album cover",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "Hide the square artwork while ambient is on: MilkDrop's " +
+                                    "atmosphere is the whole show, backdrop and controls " +
+                                    "unchanged.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = ambient.hideCover,
+                            onCheckedChange = viewModel::setAmbientHideCover,
+                        )
+                    }
+                }
+
+                VisualizerSettings(settingsViewModel)
+            }
             return@Column
         }
 
@@ -889,123 +1005,6 @@ fun LyricsFxStudioScreen(
  * The "Player Glass" tab: the same refractive-glass controls the lyrics have,
  * for the player's transport buttons, over a live preview of the glass icons.
  */
-/**
- * Ambient MilkDrop: the visualizer as the player's background.
- *
- * No preview. `ProjectMEngineRepository` refcounts attached surfaces and only
- * the first owns the native bridge, so a preview here would be a second
- * attachment competing with the player's — the controls say where to look
- * instead of showing a picture that would have to lie.
- *
- * Sliders write on release rather than per frame: each change is a DataStore
- * round trip, and the glass tabs above already learned what a drag's worth of
- * those costs.
- */
-@Composable
-private fun AmbientVisualizerTab(
-    settings: AmbientVisualizerSettings,
-    onEnabledChange: (Boolean) -> Unit,
-    onOpacityChange: (Int) -> Unit,
-    onBlackPointChange: (Int) -> Unit,
-    onBlendChange: (VisualizerBlendMode) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Ambient visualizer",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    "MilkDrop drawn into the album background, under the player, " +
-                        "instead of replacing the artwork.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
-        }
-
-        if (!settings.enabled) {
-            Text(
-                "Turn it on to tune it. Changes show on the player, not here — " +
-                    "the visualizer engine can only drive one surface at a time.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            return@Column
-        }
-
-        // Held locally so the thumb tracks the finger, and pushed down on
-        // release. See the tab's note.
-        var opacity by remember(settings.opacityPercent) {
-            mutableFloatStateOf(settings.opacityPercent.toFloat())
-        }
-        var blackPoint by remember(settings.blackPointPercent) {
-            mutableFloatStateOf(settings.blackPointPercent.toFloat())
-        }
-
-        FxSlider(
-            label = "Visualizer opacity",
-            valueLabel = "${opacity.toInt()}%",
-            value = opacity,
-            range = 0f..100f,
-            description = "How much of the preset reaches the screen at all.",
-            onChange = { opacity = it },
-            onChangeFinished = { onOpacityChange(opacity.toInt()) },
-        )
-        FxSlider(
-            label = "Black transparency",
-            valueLabel = "${blackPoint.toInt()}%",
-            value = blackPoint,
-            range = 0f..AmbientVisualizerSettings.MAX_BLACK_POINT.toFloat(),
-            description = "How much of the dark end disappears. Higher hides more " +
-                "of a preset's trails and leaves only its bright detail.",
-            onChange = { blackPoint = it },
-            onChangeFinished = { onBlackPointChange(blackPoint.toInt()) },
-        )
-
-        Text(
-            "Blend mode",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 16.dp),
-        )
-        Text(
-            "Screen is the default: black contributes nothing, so a preset's " +
-                "luminous detail sits over the cover without flattening it.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Column(modifier = Modifier.padding(top = 8.dp)) {
-            VisualizerBlendMode.entries.forEach { mode ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onBlendChange(mode) }
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(
-                        selected = settings.blend == mode,
-                        // The whole row is the target; a radio that also
-                        // handles the click double-fires on some versions.
-                        onClick = null,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(mode.label, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun PlayerGlassTab(
@@ -1897,8 +1896,8 @@ private fun FxSlider(
     description: String? = null,
     /**
      * Called when the finger lifts. The glass tabs debounce persistence
-     * instead and leave this null; the ambient tab uses it to write once per
-     * gesture rather than once per frame.
+     * instead and leave this null; release-write settings use it to write
+     * once per gesture rather than once per frame.
      */
     onChangeFinished: (() -> Unit)? = null,
     onChange: (Float) -> Unit,

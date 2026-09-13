@@ -27,6 +27,8 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 
 /**
@@ -142,38 +144,6 @@ internal fun rememberBackdropArt(coverUrl: String?, enabled: Boolean): BackdropA
     }
 }
 
-/**
- * The cover as a plain bitmap, for the ambient visualizer's GL texture.
- *
- * Same decode as [rememberBackdropArt] and the same reasons for it, but the
- * overlay needs the bitmap itself — `glTexImage2D` takes a `Bitmap`, not a
- * `BitmapShader` — and it upscales the texture over the whole screen rather
- * than over one pane, so it asks for a slightly larger thumbnail. Still tiny:
- * the target is a 64dp blur, and sharpening that would only refract detail
- * that is nowhere on the screen.
- *
- * Holds the last cover while the next decodes, like [rememberBackdropArt]:
- * dropping to null on a track change would take the background out from under
- * a dissolve that is still running.
- */
-@Composable
-internal fun rememberCoverBitmap(
-    coverUrl: String?,
-    enabled: Boolean,
-    size: Int = AMBIENT_ART_SIZE,
-): Bitmap? {
-    val context = LocalContext.current
-    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(coverUrl, enabled, size) {
-        if (!enabled || coverUrl.isNullOrBlank()) {
-            bitmap = null
-            return@LaunchedEffect
-        }
-        loadArt(context, coverUrl, size)?.let { bitmap = it }
-    }
-    return bitmap
-}
-
 private suspend fun loadArt(context: Context, url: String, size: Int): Bitmap? = try {
     val request = ImageRequest.Builder(context)
         .data(url)
@@ -192,6 +162,125 @@ private suspend fun loadArt(context: Context, url: String, size: Int): Bitmap? =
 }
 
 private const val ART_SIZE = 64
+
+/**
+ * The cover as a plain bitmap, for the ambient visualizer's GL texture.
+ *
+ * Same decode as [rememberBackdropArt], but the overlay needs the bitmap
+ * itself — `glTexImage2D` takes a `Bitmap`, not a `BitmapShader` — and it
+ * upscales the texture over the whole screen rather than over one pane, so it
+ * asks for a slightly larger thumbnail. Still tiny: twice [ART_SIZE], 128px,
+ * ~64KB.
+ *
+ * The thumbnail is **pre-blurred here**, on a background dispatcher, rather
+ * than in the GL shader: the overlay only bilinearly upscales the texture,
+ * and a gaussian done on the CPU reads exactly like the 64dp `Modifier.blur`
+ * [PlayerBlurredArtBackground] applies, while a blur attempted in the
+ * fragment shader (sparse taps over the upscaled thumbnail) reads as blocky
+ * tiles. Holds the last cover while the next decodes, like
+ * [rememberBackdropArt]: dropping to null on a track change would take the
+ * background out from under a dissolve that is still running.
+ */
+@Composable
+internal fun rememberCoverBitmap(
+    coverUrl: String?,
+    enabled: Boolean,
+    size: Int = AMBIENT_ART_SIZE,
+): Bitmap? {
+    val context = LocalContext.current
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(coverUrl, enabled, size) {
+        if (!enabled || coverUrl.isNullOrBlank()) {
+            bitmap = null
+            return@LaunchedEffect
+        }
+        val decoded = loadArt(context, coverUrl, size) ?: return@LaunchedEffect
+        // Off the main thread: three separable box passes over the thumbnail
+        // are cheap but not free, and this runs per track change.
+        bitmap = withContext(Dispatchers.Default) { decoded.stackBlur(AMBIENT_BLUR_RADIUS) }
+    }
+    return bitmap
+}
+
+/**
+ * Blur radius, in thumbnail pixels.
+ *
+ * Sized so the blurred thumbnail stretched across the screen matches the
+ * coverage of the 64dp gaussian [PlayerBlurredArtBackground] applies to the
+ * full-resolution cover: 64dp is roughly a sixth of a phone's width, and a
+ * sixth of the 128px thumbnail is ~21px. Three box passes of radius r give a
+ * gaussian of σ ≈ r/2, so r = 21 lands in the right place. Tuned against the
+ * non-ambient background; both should read as the same wash of album colour
+ * with nothing recognisable left in it.
+ */
+private const val AMBIENT_BLUR_RADIUS = 21
+
+/**
+ * A gaussian approximation: three box-blur passes, horizontal + vertical
+ * each, with a sliding-window sum — O(width · height) per pass regardless of
+ * radius. Runs once per track change over a 128px thumbnail, so it costs
+ * well under a frame.
+ *
+ * Pixels are handled in premultiplied form (as [getPixels] returns them),
+ * which is exactly what a GPU blur does, so a transparent-edged cover blurs
+ * the same way it would on the Compose side.
+ */
+internal fun Bitmap.stackBlur(radius: Int): Bitmap {
+    if (radius <= 0 || isRecycled) return this
+    val w = width
+    val h = height
+    if (w <= 0 || h <= 0) return this
+    val a = IntArray(w * h)
+    val b = IntArray(w * h)
+    getPixels(a, 0, w, 0, 0, w, h)
+    repeat(3) {
+        blurAxis(a, b, w, h, radius, horizontal = true)
+        blurAxis(b, a, w, h, radius, horizontal = false)
+    }
+    val out = Bitmap.createBitmap(w, h, config ?: Bitmap.Config.ARGB_8888)
+    out.setPixels(a, 0, w, 0, 0, w, h)
+    return out
+}
+
+/** One box-blur sweep along [horizontal] (x) or vertical (y), clamped edges. */
+private fun blurAxis(
+    src: IntArray,
+    dst: IntArray,
+    w: Int,
+    h: Int,
+    radius: Int,
+    horizontal: Boolean,
+) {
+    val window = radius * 2 + 1
+    val outer = if (horizontal) h else w
+    val inner = if (horizontal) w else h
+    val stride = if (horizontal) 1 else w
+    for (o in 0 until outer) {
+        val base = if (horizontal) o * w else o
+        // Int accumulators: the window is at most 2·radius+1 samples of
+        // 0..255, so a Long would be wasted — and the composed ARGB int
+        // that lands back in the IntArray must be Int anyway.
+        var sa = 0; var sr = 0; var sg = 0; var sb = 0
+        for (i in -radius..radius) {
+            val px = src[base + i.coerceIn(0, inner - 1) * stride]
+            sa += (px ushr 24) and 0xFF
+            sr += (px ushr 16) and 0xFF
+            sg += (px ushr 8) and 0xFF
+            sb += px and 0xFF
+        }
+        for (i in 0 until inner) {
+            dst[base + i * stride] =
+                ((sa / window) shl 24) or ((sr / window) shl 16) or
+                    ((sg / window) shl 8) or (sb / window)
+            val outPx = src[base + (i - radius).coerceIn(0, inner - 1) * stride]
+            val inPx = src[base + (i + radius + 1).coerceIn(0, inner - 1) * stride]
+            sa += ((inPx ushr 24) and 0xFF) - ((outPx ushr 24) and 0xFF)
+            sr += ((inPx ushr 16) and 0xFF) - ((outPx ushr 16) and 0xFF)
+            sg += ((inPx ushr 8) and 0xFF) - ((outPx ushr 8) and 0xFF)
+            sb += (inPx and 0xFF) - (outPx and 0xFF)
+        }
+    }
+}
 
 /**
  * The ambient overlay's thumbnail, upscaled over the whole screen rather than

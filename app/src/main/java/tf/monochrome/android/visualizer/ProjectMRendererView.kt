@@ -116,14 +116,16 @@ class ProjectMRendererView @JvmOverloads constructor(
         // on the GL thread inside renderFrame, and while playback is paused the
         // render mode is WHEN_DIRTY -- without this a preset chosen on a paused
         // track would be loaded but never drawn.
-        repository.setRenderTrigger(::requestRender)
+        repository.setRenderTrigger(this, ::requestRender)
         onResume()
     }
 
     override fun onDetachedFromWindow() {
         // Dropped first: past this point the surface is going away, and a
-        // request to draw on it is at best useless.
-        repository.setRenderTrigger(null)
+        // request to draw on it is at best useless. Keyed clear: if another
+        // view (the ambient overlay) has since taken the slot, ours is already
+        // gone and this must not clobber theirs.
+        repository.clearRenderTrigger(this)
         // Give the rate back while the surface is still valid enough to say so.
         producingFrames = false
         applyFrameRateHint()

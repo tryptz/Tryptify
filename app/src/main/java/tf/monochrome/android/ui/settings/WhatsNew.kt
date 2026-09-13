@@ -132,8 +132,9 @@ object WhatsNew {
                     section = PLAYER,
                     title = "MilkDrop can play behind the music, not instead of it",
                     body = "Turn on the ambient visualizer and the preset is drawn into the " +
-                        "album background, under the controls, with its black falling away " +
-                        "so the cover shows through. Player Visuals Studio \u203a Ambient.",
+                        "album background — over the blurred cover, under the controls — " +
+                        "with its black falling away so the artwork shows through. " +
+                        "Player Visuals Studio \u203a Visualizer.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

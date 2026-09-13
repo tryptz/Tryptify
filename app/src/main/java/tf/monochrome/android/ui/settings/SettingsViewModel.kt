@@ -94,6 +94,11 @@ class SettingsViewModel @Inject constructor(
     val usbBypassSupportedRates: StateFlow<List<tf.monochrome.android.audio.usb.ClockRateRange>> =
         usbExclusiveController.supportedRates
 
+    /** Which DAC is plugged in — name, VID:PID, USB version — as read from
+     *  its descriptors. Null while no device is owned. */
+    val usbDacInfo: StateFlow<tf.monochrome.android.audio.usb.DacInfo?> =
+        usbExclusiveController.dacInfo
+
     /** Shared live FFT bins from the audio pipeline — same source the NowPlaying overlay uses. */
     val spectrumBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrumBins
 

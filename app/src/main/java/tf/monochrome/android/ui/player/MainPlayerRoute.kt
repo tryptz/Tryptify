@@ -486,6 +486,26 @@ fun MainPlayerRoute(
             },
         )
     }
+    // ── Ambient MilkDrop ────────────────────────────────────────────────
+    //
+    // Never at the same time as the hero visualizer. ProjectMEngineRepository
+    // refcounts its surfaces and the FIRST attachment owns the native bridge;
+    // renderFrame needs that bridge's GL objects current, so a second view on
+    // a second context would draw from objects it does not have. The two are
+    // different compositions of the same engine, so this is not a limitation
+    // anyone should feel — but it is a crash if it is ever ignored.
+    //
+    // Off on the legacy player too: that path is the low-performance profile,
+    // which is the last place to run a GL composite behind the whole screen.
+    //
+    // Declared up here rather than next to ambientCover because the hero slot
+    // below needs them in scope: Ambient › "Remove album cover" fades the
+    // square artwork out so MilkDrop's atmosphere is the whole show.
+    val ambient by playerViewModel.ambientVisualizer.collectAsStateWithLifecycle()
+    val ambientActive = ambient.enabled &&
+        viewMode != NowPlayingViewMode.VISUALIZER &&
+        !legacyPlayer
+
     val heroSlot: @Composable (Modifier) -> Unit = { heroModifier ->
         // Manual dissolve between the album art / visualizer and the lyric
         // surface (lyricsProgress is hoisted above). The built-in Crossfade
@@ -497,6 +517,16 @@ fun MainPlayerRoute(
         // (expensive) art/visualizer doesn't recompose mid-dissolve.
         val showAlbumHero by remember { derivedStateOf { lyricsProgress < 0.999f } }
         val showLyricsHero by remember { derivedStateOf { lyricsProgress > 0.001f } }
+
+        // Ambient › "Remove album cover": the square art stands down (fades,
+        // not pops) so the MilkDrop atmosphere is the whole show — the
+        // backdrop behind is untouched. The swipe-to-skip gestures live on
+        // the slot itself, so they keep working over the empty region.
+        val ambientHideCoverAlpha by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (ambientActive && ambient.hideCover) 0f else 1f,
+            animationSpec = tween(durationMillis = 400),
+            label = "ambientHideCover",
+        )
 
         // Horizontal swipe across the hero skips tracks, matching the
         // gesture (and the 50px threshold) the mini player already uses.
@@ -602,7 +632,8 @@ fun MainPlayerRoute(
                         val travelled =
                             (abs(heroOffset.value) / size.width.coerceAtLeast(1f))
                                 .coerceIn(0f, 1f)
-                        alpha = (1f - lyricsProgress) * (1f - travelled * 0.85f)
+                        alpha = (1f - lyricsProgress) *
+                            (1f - travelled * 0.85f) * ambientHideCoverAlpha
                     },
                     style = effectiveStyle,
                     isFullscreen = isFullscreenActive,
@@ -681,21 +712,6 @@ fun MainPlayerRoute(
     // control; this branch added four of them for the pitch engine, twice.
     // `overlay` is `BoxScope.() -> Unit` and the legacy branch sits in a Box,
     // so one lambda serves both.
-    // ── Ambient MilkDrop ────────────────────────────────────────────────
-    //
-    // Never at the same time as the hero visualizer. ProjectMEngineRepository
-    // refcounts its surfaces and the FIRST attachment owns the native bridge;
-    // renderFrame needs that bridge's GL objects current, so a second view on
-    // a second context would draw from objects it does not have. The two are
-    // different compositions of the same engine, so this is not a limitation
-    // anyone should feel — but it is a crash if it is ever ignored.
-    //
-    // Off on the legacy player too: that path is the low-performance profile,
-    // which is the last place to run a GL composite behind the whole screen.
-    val ambient by playerViewModel.ambientVisualizer.collectAsStateWithLifecycle()
-    val ambientActive = ambient.enabled &&
-        viewMode != NowPlayingViewMode.VISUALIZER &&
-        !legacyPlayer
     // The overlay draws the backdrop itself, so it needs the cover as a
     // bitmap. Only decoded while it is actually on.
     val ambientCover = rememberCoverBitmap(currentTrack?.coverUrl, enabled = ambientActive)

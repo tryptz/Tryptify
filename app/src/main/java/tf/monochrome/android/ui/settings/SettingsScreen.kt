@@ -984,87 +984,85 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val playerDynamicColor by viewModel.playerDynamicColor.collectAsStateWithLifecycle()
     val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsStateWithLifecycle()
 
-        SettingsGroupHeader("Display")
-        SettingSwitchItem(
-            title = "Show Explicit Badges",
-            subtitle = "Display 'E' badge on explicit tracks",
-            checked = explicit,
-            onCheckedChange = { viewModel.setShowExplicitBadges(it) }
-        )
-        val romaji by viewModel.romajiLyrics.collectAsStateWithLifecycle()
-        SettingSwitchItem(
-            title = "Romaji Lyrics",
-            subtitle = "Transliterate Japanese lyrics to Latin characters",
-            checked = romaji,
-            onCheckedChange = { viewModel.setRomajiLyrics(it) }
-        )
+    SettingsGroupHeader("Display")
+    SettingSwitchItem(
+        title = "Show Explicit Badges",
+        subtitle = "Display 'E' badge on explicit tracks",
+        checked = explicit,
+        onCheckedChange = { viewModel.setShowExplicitBadges(it) }
+    )
+    val romaji by viewModel.romajiLyrics.collectAsStateWithLifecycle()
+    SettingSwitchItem(
+        title = "Romaji Lyrics",
+        subtitle = "Transliterate Japanese lyrics to Latin characters",
+        checked = romaji,
+        onCheckedChange = { viewModel.setRomajiLyrics(it) }
+    )
 
-        // Word-level lyrics provider — which karaoke-timing source(s) run when
-        // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
-        val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
-        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Text(
-                text = "Word-level lyrics provider",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            val providerOptions = listOf(
-                tf.monochrome.android.data.preferences.LyricsWordProvider.NETEASE_ONLY,
-                tf.monochrome.android.data.preferences.LyricsWordProvider.KUGOU_ONLY,
-                tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH,
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                providerOptions.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = lyricsProvider == mode,
-                        onClick = { viewModel.setLyricsWordProvider(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index, providerOptions.size),
-                    ) {
-                        Text(mode.displayName)
-                    }
+    // Word-level lyrics provider — which karaoke-timing source(s) run when
+    // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
+    val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            text = "Word-level lyrics provider",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        val providerOptions = listOf(
+            tf.monochrome.android.data.preferences.LyricsWordProvider.NETEASE_ONLY,
+            tf.monochrome.android.data.preferences.LyricsWordProvider.KUGOU_ONLY,
+            tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH,
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            providerOptions.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = lyricsProvider == mode,
+                    onClick = { viewModel.setLyricsWordProvider(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index, providerOptions.size),
+                ) {
+                    Text(mode.displayName)
                 }
             }
         }
+    }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Now Playing")
-        val viewMode by viewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
-        var showModeDropdown by remember { mutableStateOf(false) }
-        SettingItem(
-            title = "View Mode", 
-            subtitle = "Action when clicking album art: ${viewMode.displayName}", 
-            onClick = { showModeDropdown = true }
-        )
-        DropdownMenu(expanded = showModeDropdown, onDismissRequest = { showModeDropdown = false }) {
-            NowPlayingViewMode.entries.forEach { mode ->
-                DropdownMenuItem(
-                    text = { Text(mode.displayName) },
-                    onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
-                )
-            }
+    Spacer(modifier = Modifier.height(16.dp))
+    SettingsGroupHeader("Now Playing")
+    val viewMode by viewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
+    var showModeDropdown by remember { mutableStateOf(false) }
+    SettingItem(
+        title = "View Mode", 
+        subtitle = "Action when clicking album art: ${viewMode.displayName}", 
+        onClick = { showModeDropdown = true }
+    )
+    DropdownMenu(expanded = showModeDropdown, onDismissRequest = { showModeDropdown = false }) {
+        NowPlayingViewMode.entries.forEach { mode ->
+            DropdownMenuItem(
+                text = { Text(mode.displayName) },
+                onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
+            )
         }
-        SettingSwitchItem(
-            title = "Dynamic Player Color",
-            subtitle = "Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color",
-            checked = playerDynamicColor,
-            onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
-        )
-        SettingSwitchItem(
-            title = "Blurred Album Background",
-            subtitle = "Behind the player and the mixer: the album art stretched and heavily blurred",
-            checked = playerBlurredBackground,
-            onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
-        )
+    }
+    SettingSwitchItem(
+        title = "Dynamic Player Color",
+        subtitle = "Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color",
+        checked = playerDynamicColor,
+        onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
+    )
+    SettingSwitchItem(
+        title = "Blurred Album Background",
+        subtitle = "Behind the player and the mixer: the album art stretched and heavily blurred",
+        checked = playerBlurredBackground,
+        onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
+    )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        VisualizerSettings(viewModel)
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 /**
@@ -1081,9 +1079,14 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
  * log shows ART allocating 4.7 MB to JIT `InterfaceControls` the first time
  * Settings opened, with 102 frames skipped around it. Two smaller methods are
  * cheaper to compile and land in the profile independently.
+ *
+ * No longer rendered here: the whole visualizer — this block plus the
+ * ambient overlay controls — lives on the Player Visuals Studio's
+ * "Visualizer" tab now. Kept in this file (internal) because it shares the
+ * settings-row helpers below.
  */
 @Composable
-private fun VisualizerSettings(viewModel: SettingsViewModel) {
+internal fun VisualizerSettings(viewModel: SettingsViewModel) {
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
     val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
@@ -2014,6 +2017,7 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     val diagnostics by viewModel.usbBypassDiagnostics.collectAsStateWithLifecycle()
     val failure by viewModel.usbBypassFailure.collectAsStateWithLifecycle()
     val supportedRates by viewModel.usbBypassSupportedRates.collectAsStateWithLifecycle()
+    val dacInfo by viewModel.usbDacInfo.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = "Exclusive USB DAC (bypass Android audio)",
         subtitle = exclusiveSubtitle(
@@ -2024,20 +2028,24 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     )
     // Only render the diagnostic card when the toggle is on AND we
     // have something honest to say — either an active stream, a
-    // categorised failure, or a known rate inventory. Hidden the rest
-    // of the time so the toggle row stays clean.
+    // categorised failure, a known rate inventory, or a DAC we can
+    // actually name. Hidden the rest of the time so the toggle row
+    // stays clean.
     if (exclusiveEnabled &&
-        (diagnostics != null || failure != null || supportedRates.isNotEmpty())) {
+        (diagnostics != null || failure != null || supportedRates.isNotEmpty() || dacInfo != null)) {
         BypassDiagnosticsCard(
             diagnostics = diagnostics,
             failure = failure,
             supportedRates = supportedRates,
+            dacInfo = dacInfo,
         )
     }
 }
 
 /**
  * Renders a compact info card beneath the exclusive-USB toggle:
+ *   - DAC identity (when a device is owned): manufacturer/product name,
+ *     VID:PID, USB version, class triple, serial when granted
  *   - Active stream specs (when streaming): rate / bits / channels /
  *     UAC version / device speed / async-feedback presence / clock id
  *   - Failure detail (when not streaming and a start attempt failed)
@@ -2052,6 +2060,7 @@ private fun BypassDiagnosticsCard(
     diagnostics: tf.monochrome.android.audio.usb.BypassDiagnostics?,
     failure: tf.monochrome.android.audio.usb.StartFailure?,
     supportedRates: List<tf.monochrome.android.audio.usb.ClockRateRange>,
+    dacInfo: tf.monochrome.android.audio.usb.DacInfo? = null,
 ) {
     Card(
         modifier = Modifier
@@ -2062,6 +2071,40 @@ private fun BypassDiagnosticsCard(
         ),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            if (dacInfo != null) {
+                Text(
+                    text = "DAC",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = dacInfo.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = buildString {
+                        append(dacInfo.descriptorLine)
+                        dacInfo.serialNumber?.takeIf { it.isNotBlank() }?.let {
+                            append(" · SN ")
+                            append(it)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (diagnostics != null || failure != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
             if (diagnostics != null) {
                 Text(
                     text = "Active stream",

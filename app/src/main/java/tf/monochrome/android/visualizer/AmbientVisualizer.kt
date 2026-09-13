@@ -71,6 +71,11 @@ data class AmbientVisualizerSettings(
     /** How much of the dark end goes invisible, 0–[MAX_BLACK_POINT] percent. */
     val blackPointPercent: Int = DEFAULT_BLACK_POINT,
     val blend: VisualizerBlendMode = VisualizerBlendMode.DEFAULT,
+    /** Hide the square album cover in the player while the ambient
+     *  visualizer is on — MilkDrop's atmosphere becomes the whole
+     *  show, with the transport and glass over it. The backdrop
+     *  behind is untouched. */
+    val hideCover: Boolean = false,
 ) {
     val opacity: Float get() = (opacityPercent / 100f).coerceIn(0f, 1f)
 
