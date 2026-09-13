@@ -1682,24 +1682,24 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Spatial Audio")
-        SettingItem(
-            title = "Atmos Renderer Configuration",
-            subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
-            onClick = { navController.navigateTool(Screen.AtmosRenderer) },
-        )
-
-        // Everything below used to sit under "Spatial Audio" too, which only
-        // ever described the Atmos row above it. The DSP block size, the USB
-        // routing and the downmix are what leaves the engine and how — their
-        // own group.
+        // One group, not two. "Spatial Audio" held nothing but the Atmos row,
+        // and that row is the multichannel renderer's own settings — channel
+        // map, downmix coefficients, binaural render. It belongs against the
+        // switch that decides whether any of it runs, so it sits directly
+        // above the downmix toggle instead of under a heading of its own.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Output")
         DspBlockSizeSelector(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
         UsbBitPerfectToggle(viewModel)
+
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingItem(
+            title = "Atmos Renderer Configuration",
+            subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
+            onClick = { navController.navigateTool(Screen.AtmosRenderer) },
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
         MultichannelDownmixToggle(viewModel)

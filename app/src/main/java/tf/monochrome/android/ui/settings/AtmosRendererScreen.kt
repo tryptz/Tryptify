@@ -407,7 +407,8 @@ fun AtmosRendererScreen(
             // Replaces the old read-only "Output Layout" (binaural pipeline)
             // blurb: the setting that actually governs multichannel output —
             // the fixed-matrix fold to stereo — lives here now. Same
-            // preference as the toggle in Settings › Spatial Audio.
+            // preference as the toggle in Settings › Audio › Output, which now
+            // sits directly under the row that opens this screen.
             SectionHeader("Downmix")
             val downmixEnabled by viewModel.multichannelDownmixEnabled.collectAsStateWithLifecycle()
             SettingSwitchItem(
