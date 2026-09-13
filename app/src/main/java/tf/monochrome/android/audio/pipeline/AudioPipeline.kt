@@ -43,6 +43,24 @@ data class PipelineSection(
     val stage: PipelineStage,
     val fields: List<PipelineField>,
     val note: String? = null,
+    /**
+     * Whether this stage is doing something to the audio right now.
+     *
+     * Drives the card's lighting, so a lit stage means "in use" rather than
+     * merely "present". The panel's accent used to rotate by position, which
+     * made one stage look singled out for no reason.
+     */
+    val engaged: Boolean = true,
+    /**
+     * Whether the signal goes *around* this stage untouched.
+     *
+     * Separate from [engaged] because the two are not the same claim: a
+     * decoder with no name yet is not doing anything, but the audio still goes
+     * through it. Only a stage the signal genuinely skips sets this, and the
+     * panel then draws the through-line straight past the card instead of into
+     * it — so "no conversion" reads as a route rather than as a row of dashes.
+     */
+    val bypassed: Boolean = false,
 )
 
 data class AudioPipelineSnapshot(val sections: List<PipelineSection>)
@@ -231,6 +249,9 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
         } else {
             null
         },
+        // Not bypassed when unknown — the audio still went through a decoder,
+        // we just have not been told which one yet.
+        engaged = !input.decoderName.isNullOrBlank(),
     )
 
     // The one section where the honest answer is mostly "not here". The app
@@ -251,6 +272,13 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
         }
     }
     val ratio = input.speedRatio
+    val speedResampling = kotlin.math.abs(ratio - 1f) >= 1e-4f
+    // Only claim a bypass when the rates are actually known to match. A null
+    // out-rate means nobody reported one, which is not the same as "nothing
+    // happens here" — drawing the signal around the stage on a guess would
+    // state something this app cannot see.
+    val ratesKnownEqual = outRate != null && inRate != null && outRate == inRate
+    val resamplerBypassed = ratesKnownEqual && !speedResampling
     val resampler = PipelineSection(
         PipelineStage.RESAMPLER,
         listOf(
@@ -265,19 +293,23 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
             PipelineField("Conversion", conversion),
             PipelineField(
                 "Speed resampler",
-                if (kotlin.math.abs(ratio - 1f) < 1e-4f) {
+                if (!speedResampling) {
                     "Inactive (1.00×)"
                 } else {
                     String.format(java.util.Locale.ROOT, "Active (%.2f×)", ratio)
                 },
             ),
         ),
-        note = if (outRate == null) {
-            "Tryptify does not resample. Any conversion happens in Android's " +
-                "mixer or in the DAC, which do not report a rate here."
-        } else {
-            null
+        note = when {
+            outRate == null ->
+                "Tryptify does not resample. Any conversion happens in Android's " +
+                    "mixer or in the DAC, which do not report a rate here."
+            resamplerBypassed ->
+                "Nothing to do at this rate — the signal goes straight past."
+            else -> null
         },
+        engaged = !resamplerBypassed,
+        bypassed = resamplerBypassed,
     )
 
     val blockLatency = latencyMs(input.dspBlockFrames, inRate)
@@ -311,6 +343,9 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
         } else {
             null
         },
+        // Lit once the chain has reported a format at its head, which is the
+        // point at which the processors are actually running on this stream.
+        engaged = input.chain != null,
     )
 
     val output = PipelineSection(

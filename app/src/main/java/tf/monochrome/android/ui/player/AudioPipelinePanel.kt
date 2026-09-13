@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -91,7 +92,11 @@ internal fun AudioPipelineContent(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         snapshot.sections.forEachIndexed { index, section ->
-            PipelineStageCard(section = section, accent = accentFor(index))
+            if (section.bypassed) {
+                BypassedStage(section = section, accent = accentFor(index))
+            } else {
+                PipelineStageCard(section = section, accent = accentFor(index))
+            }
             if (index != snapshot.sections.lastIndex) {
                 PipelineConnector()
             }
@@ -100,12 +105,49 @@ internal fun AudioPipelineContent(
 }
 
 /**
+ * A stage the signal skips.
+ *
+ * The card steps aside into an indent and the through-line runs straight down
+ * the lane it vacates, so the route itself says "past, not through" — which a
+ * card full of "None" and "Inactive" never did. Still drawn rather than
+ * hidden: that the resampler is idle is the fact worth showing.
+ */
+@Composable
+private fun BypassedStage(section: PipelineSection, accent: Color) {
+    val stroke = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        PipelineStageCard(
+            section = section,
+            accent = accent,
+            modifier = Modifier.padding(start = BYPASS_LANE),
+        )
+        // matchParentSize so the lane spans exactly the card it is passing,
+        // however tall that card turns out to be.
+        androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+            val x = CONNECTOR_INSET.toPx() + RAIL_WIDTH.toPx() / 2f
+            drawLine(
+                color = stroke,
+                start = Offset(x, 0f),
+                end = Offset(x, size.height),
+                strokeWidth = 1.5.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+}
+
+/**
  * Three theme accents rotating, rather than five invented hues.
  *
- * The colour is there to separate the stages at a glance, not to encode
- * anything, so borrowing the scheme's own accents keeps the panel inside
- * whatever theme the user is running. Two stages sharing a colour is fine —
- * they are never adjacent.
+ * Which hue a stage gets still carries no meaning — it is there to separate
+ * the stages at a glance, and borrowing the scheme's own accents keeps the
+ * panel inside whatever theme the user is running. Two stages sharing a colour
+ * is fine; they are never adjacent.
+ *
+ * Whether a stage is *shown* in its accent at all is the meaningful part, and
+ * that is [PipelineSection.engaged], applied in [PipelineStageCard]. An idle
+ * stage drops to muted ink, so colour reads as "working" without any single
+ * hue having to stand for a particular engine.
  */
 @Composable
 private fun accentFor(index: Int): Color = when (index % 3) {
@@ -123,35 +165,59 @@ private fun iconFor(stage: PipelineStage): ImageVector = when (stage) {
 }
 
 @Composable
-private fun PipelineStageCard(section: PipelineSection, accent: Color) {
+private fun PipelineStageCard(
+    section: PipelineSection,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    // Lit means in use. An idle stage drops to the panel's muted ink rather
+    // than keeping a colour it has not earned, so the accents now read as
+    // "these are the engines working on your audio" instead of as decoration.
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = if (section.engaged) accent else muted.copy(alpha = 0.55f)
+    val chip = if (section.engaged) accent.copy(alpha = 0.16f) else muted.copy(alpha = 0.07f)
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = MonoDimens.shapeMd,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.16f),
+        color = MaterialTheme.colorScheme.surfaceVariant
+            .copy(alpha = if (section.engaged) 0.16f else 0.08f),
     ) {
         Row(modifier = Modifier.padding(14.dp)) {
             Surface(
                 modifier = Modifier.size(RAIL_WIDTH),
                 shape = MonoDimens.shapeSm,
-                color = accent.copy(alpha = 0.16f),
+                color = chip,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         iconFor(section.stage),
                         contentDescription = null,
-                        tint = accent,
+                        tint = tint,
                         modifier = Modifier.size(20.dp),
                     )
                 }
             }
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    section.stage.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accent,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        section.stage.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tint,
+                    )
+                    if (section.engaged) {
+                        Spacer(Modifier.width(6.dp))
+                        // The light itself: a lit pip beside the name, so "in
+                        // use" survives being read in a theme where the accent
+                        // and the muted ink sit close together.
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(accent, CircleShape),
+                        )
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
                 section.fields.forEach { FieldRow(it) }
                 section.note?.let { note ->
@@ -210,7 +276,7 @@ private fun PipelineConnector() {
     val stroke = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
     androidx.compose.foundation.Canvas(
         modifier = Modifier
-            .padding(start = 14.dp)
+            .padding(start = CONNECTOR_INSET)
             .width(RAIL_WIDTH)
             .height(CONNECTOR_HEIGHT),
     ) {
@@ -244,6 +310,19 @@ private fun PipelineConnector() {
 
 private val RAIL_WIDTH = 36.dp
 private val CONNECTOR_HEIGHT = 22.dp
+
+/**
+ * Left inset shared by the connectors and the bypass lane, so the through-line
+ * is one unbroken column down the panel whether it is passing a stage or
+ * entering one.
+ */
+private val CONNECTOR_INSET = 14.dp
+
+/**
+ * How far a bypassed card steps aside. Wide enough to clear the lane the
+ * through-line runs in, which is [CONNECTOR_INSET] plus half [RAIL_WIDTH].
+ */
+private val BYPASS_LANE = 44.dp
 
 /**
  * The Audio Pipeline panel, over the player.
