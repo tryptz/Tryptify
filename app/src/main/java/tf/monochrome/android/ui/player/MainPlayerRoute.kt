@@ -372,10 +372,28 @@ fun MainPlayerRoute(
     // background layer itself.
     val ambient by playerViewModel.ambientVisualizer.collectAsStateWithLifecycle()
 
-    /** What the user asked for. Drives the Audio tools chip. */
-    val ambientEnabled = ambient.enabled &&
-        viewMode != NowPlayingViewMode.VISUALIZER &&
-        !legacyPlayer
+    /**
+     * What the user asked for. Drives the Audio tools chip.
+     *
+     * Ambient wins over the hero visualizer, not the other way round. The two
+     * can never run together — see the refcount note above — and this used to
+     * resolve that by standing ambient down whenever the view mode was
+     * VISUALIZER. Engaging the ambient toggle then appeared to do nothing,
+     * because the square hero visualizer kept the engine. Ambient is the more
+     * specific request, so it takes the engine and the hero drops back to
+     * artwork.
+     */
+    val ambientEnabled = ambient.enabled && !legacyPlayer
+
+    // Leave VISUALIZER when ambient takes over, so the stored view mode
+    // matches what is on screen. Without it the mode stays VISUALIZER behind
+    // the ambient background, which silently disables the hero's swipe-to-skip
+    // and leaves fullscreen latched on something no longer rendering.
+    LaunchedEffect(ambientEnabled, viewMode) {
+        if (ambientEnabled && viewMode == NowPlayingViewMode.VISUALIZER) {
+            playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
+        }
+    }
 
     // Preparing the engine is a first-run preset install on its own dispatcher.
     // Ask for it as soon as ambient is switched on: the only other callers are
@@ -405,15 +423,16 @@ fun MainPlayerRoute(
      */
     val onVisualizerToggle: () -> Unit = {
         when {
-            // Fullscreen visualizer is up: back to the cover.
-            viewMode == NowPlayingViewMode.VISUALIZER ->
-                playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
-            // Ambient is the visualizer that is running, so the chip stops it
-            // rather than swapping one visualizer for another. Off means off —
-            // and it works mid-load too, which is why this tests the setting
-            // and not whether the engine finished coming up.
+            // Ambient first, because ambient wins: when it is on it is the
+            // visualizer on screen, so the chip stops it rather than swapping
+            // one visualizer for another. Off means off — and it works
+            // mid-load too, which is why this tests the setting and not
+            // whether the engine finished coming up.
             ambientEnabled ->
                 playerViewModel.setAmbientVisualizerEnabled(false)
+            // Hero visualizer is up: back to the cover.
+            viewMode == NowPlayingViewMode.VISUALIZER ->
+                playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
             else ->
                 playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER)
         }
@@ -646,7 +665,16 @@ fun MainPlayerRoute(
             contentAlignment = Alignment.Center,
         ) {
             if (showAlbumHero) {
-                val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                // `&& !ambientEnabled` is the mutual exclusion itself, not a
+                // tidy-up: one boolean decides both surfaces in the same
+                // composition, so the hero visualizer is gone in the very
+                // frame ambient turns on. The LaunchedEffect above corrects
+                // the stored view mode, but it runs after composition —
+                // leaning on it would leave one frame with both attached, and
+                // both attached is the crash the refcount note warns about.
+                val effectiveStyle = if (
+                    viewMode == NowPlayingViewMode.VISUALIZER && !ambientEnabled
+                ) {
                     PlayerHeroStyle.Visualizer
                 } else {
                     heroStyle
