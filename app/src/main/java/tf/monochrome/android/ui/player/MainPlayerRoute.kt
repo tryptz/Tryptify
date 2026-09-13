@@ -23,6 +23,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -75,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -423,18 +425,42 @@ fun MainPlayerRoute(
      */
     val onVisualizerToggle: () -> Unit = {
         when {
-            // Ambient first, because ambient wins: when it is on it is the
-            // visualizer on screen, so the chip stops it rather than swapping
-            // one visualizer for another. Off means off — and it works
-            // mid-load too, which is why this tests the setting and not
-            // whether the engine finished coming up.
+            // On means the ambient background, off means no visualizer. The
+            // chip never hands over the square hero MilkDrop.
+            //
+            // It used to: ambient on -> tap -> ambient off -> tap -> square
+            // visualizer. Reading that as a three-state cycle is a mistake —
+            // the two are not peers. Ambient is a property of the player's
+            // background, the hero one replaces the artwork, and someone who
+            // has chosen the background one is not asking to be offered the
+            // other on the next tap. Worse, that second tap left the ambient
+            // *setting* switched off behind it, so the chip had quietly
+            // undone a Settings toggle the user had deliberately turned on.
+            //
+            // Tests the setting, not ambientActive, so it works mid-load
+            // rather than waiting for the engine to come up.
             ambientEnabled ->
                 playerViewModel.setAmbientVisualizerEnabled(false)
-            // Hero visualizer is up: back to the cover.
-            viewMode == NowPlayingViewMode.VISUALIZER ->
-                playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
-            else ->
-                playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER)
+            // The legacy player cannot host the ambient overlay (see
+            // ambientEnabled), so there — and only there — the chip still
+            // means the hero visualizer, which is the only one it can show.
+            legacyPlayer ->
+                playerViewModel.setNowPlayingViewMode(
+                    if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                        NowPlayingViewMode.COVER_ART
+                    } else {
+                        NowPlayingViewMode.VISUALIZER
+                    }
+                )
+            else -> {
+                playerViewModel.setAmbientVisualizerEnabled(true)
+                // Ambient wins over the hero visualizer, and the effect above
+                // enforces that — but it runs after composition. Standing the
+                // hero one down here keeps the swap to a single frame.
+                if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                    playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
+                }
+            }
         }
     }
 
@@ -465,14 +491,18 @@ fun MainPlayerRoute(
         queueLabel = queueLabel,
         albumColors = blendedColors,
         colorBlendMs = colorBlendMs,
-        // Ambient counts as the visualizer being on. It is the MilkDrop the
-        // user is looking at, so a chip that tracked only the fullscreen view
-        // mode read "off" over a running visualizer and offered no way to stop
-        // it short of the Player Visuals Studio.
+        // Lit for what the chip actually controls: ambient on the glass
+        // player, the hero view mode on the legacy one. Tracking both
+        // everywhere would light the chip over a square visualizer it no
+        // longer turns off, so a tap would appear to do nothing.
         // ambientEnabled, not ambientActive: the chip reflects the setting, so
         // it reads lit the moment ambient is switched on rather than waiting
         // for the engine to finish loading.
-        visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER || ambientEnabled,
+        visualizerActive = if (legacyPlayer) {
+            viewMode == NowPlayingViewMode.VISUALIZER
+        } else {
+            ambientEnabled
+        },
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
@@ -660,8 +690,32 @@ fun MainPlayerRoute(
             )
         }
 
+        // Ambient › "Remove album cover": the preset row below fades itself
+        // out after a few seconds so the atmosphere is unobstructed. A tap
+        // anywhere on the slot the cover vacated brings it back.
+        //
+        // A second pointerInput on the same node rather than a tap-catching
+        // overlay. An overlay would have to span the slot to catch the tap,
+        // which puts it between the finger and trackSwipe. Two detectors on
+        // one node cooperate instead: detectTapGestures consumes the down,
+        // but detectHorizontalDragGestures awaits its own with
+        // requireUnconsumed = false, so swipe-to-skip still runs — and a drag
+        // consumes the movement, which cancels the pending tap. Only attached
+        // while the row is on screen, so nothing new consumes downs in the
+        // ordinary cover mode.
+        var ambientPresetReveal by remember { mutableIntStateOf(0) }
+        // Exactly the condition the row itself is composed under, below. A
+        // looser one would leave a down-consuming detector over the lyric
+        // surface, feeding a counter nothing is reading.
+        val revealPresetControls =
+            if (ambientActive && ambient.hideCover && !showLyricsHero) {
+                Modifier.pointerInput(Unit) { detectTapGestures { ambientPresetReveal++ } }
+            } else {
+                Modifier
+            }
+
         BoxWithConstraints(
-            modifier = heroModifier.then(trackSwipe),
+            modifier = heroModifier.then(trackSwipe).then(revealPresetControls),
             contentAlignment = Alignment.Center,
         ) {
             if (showAlbumHero) {
@@ -793,6 +847,7 @@ fun MainPlayerRoute(
                     onPreviousPreset = playerViewModel::previousVisualizerPreset,
                     onNextPreset = playerViewModel::nextVisualizerPreset,
                     onOpenPresetBrowser = { showPresetSheet = true },
+                    revealKey = ambientPresetReveal,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
