@@ -647,7 +647,7 @@ fun MainPlayerRoute(
     // predicate the lyric surface is composed under.
     var ambientPresetReveal by remember { mutableIntStateOf(0) }
     val revealPresetControls =
-        if (ambientActive && ambient.hideCover && !lyricsSlotWide) {
+        if (ambientActive && !lyricsSlotWide) {
             Modifier.pointerInput(Unit) { detectTapGestures { ambientPresetReveal++ } }
         } else {
             Modifier
@@ -842,6 +842,12 @@ fun MainPlayerRoute(
                     },
                     onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
                     onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
+                    displaceVisualizerEntry = ambientActive,
+                    // The art has its own clickable, so a tap on it never
+                    // reaches the region-level reveal detector — the preset row
+                    // would fade after four seconds with no way back. Raising
+                    // it from here brings both sets of controls up together.
+                    onArtTap = { ambientPresetReveal++ },
                 )
             }
             if (showLyricsHero) {
@@ -871,11 +877,19 @@ fun MainPlayerRoute(
                 )
             }
 
-            // Ambient › "Remove album cover": the preset controls normally
-            // live on the visualizer hero, which does not exist in this view
-            // mode — so they take the space the cover just vacated. Suppressed
-            // while the lyric surface is up, since that owns the slot.
-            if (ambientActive && ambient.hideCover && !showLyricsHero) {
+            // Ambient: the preset controls live on the visualizer hero, which
+            // does not exist in this view mode, so they come here instead.
+            //
+            // Shown whenever ambient is running, not only once the cover is
+            // gone. With the cover still up there was no way to change preset
+            // from the player at all — the atmosphere was running behind the
+            // artwork with its controls nowhere. Over the art they sit across
+            // the bottom, which is why the art's own visualizer-entry button
+            // moves out of that corner (displaceVisualizerEntry, below).
+            //
+            // Suppressed while the lyric surface is up, since that owns the
+            // slot.
+            if (ambientActive && !showLyricsHero) {
                 AmbientPresetControls(
                     canGoBack = canGoToPreviousVisualizerPreset,
                     onPreviousPreset = playerViewModel::previousVisualizerPreset,

@@ -125,6 +125,13 @@ fun PlayerHero(
     onToggleShowSpectrum: () -> Unit = {},
     onEnterVisualizer: () -> Unit = {},
     onExitVisualizer: () -> Unit = {},
+    /**
+     * The ambient preset row is across the bottom of the art, so the
+     * visualizer-entry button moves up out of its corner. See HeroCoverArt.
+     */
+    displaceVisualizerEntry: Boolean = false,
+    /** Raised on a tap anywhere on the art, to bring that row back with it. */
+    onArtTap: () -> Unit = {},
 ) {
     if (style == PlayerHeroStyle.Visualizer) {
         VisualizerHero(
@@ -181,6 +188,8 @@ fun PlayerHero(
                 blendMillis = blendMillis,
                 userTrackChanges = userTrackChanges,
                 onEnterVisualizer = onEnterVisualizer,
+                displaceVisualizerEntry = displaceVisualizerEntry,
+                onArtTap = onArtTap,
             )
         }
     }
@@ -197,6 +206,8 @@ private fun SquareArtHero(
     blendMillis: Int,
     userTrackChanges: Int,
     onEnterVisualizer: () -> Unit,
+    displaceVisualizerEntry: Boolean = false,
+    onArtTap: () -> Unit = {},
 ) {
     Surface(
         modifier = Modifier
@@ -222,6 +233,8 @@ private fun SquareArtHero(
             blendMillis = blendMillis,
             userTrackChanges = userTrackChanges,
             onEnterVisualizer = onEnterVisualizer,
+            displaceVisualizerEntry = displaceVisualizerEntry,
+            onArtTap = onArtTap,
         )
     }
 }
@@ -665,6 +678,14 @@ private fun HeroCoverArt(
     blendMillis: Int = MANUAL_MORPH_MS,
     userTrackChanges: Int = 0,
     onEnterVisualizer: (() -> Unit)? = null,
+    /**
+     * The ambient preset row is sitting across the bottom of this art, so the
+     * visualizer-entry button moves up to join the other icon-only controls
+     * rather than share a corner with "next preset".
+     */
+    displaceVisualizerEntry: Boolean = false,
+    /** Also raised on a tap anywhere on the art, so that row can come back with these. */
+    onArtTap: () -> Unit = {},
 ) {
     val spectrumEnabled = showSpectrum
     var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
@@ -695,7 +716,7 @@ private fun HeroCoverArt(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { showControls() }
+            ) { showControls(); onArtTap() }
     ) {
         MorphingCoverArt(
             trackKey = track?.id,
@@ -755,6 +776,14 @@ private fun HeroCoverArt(
                         onClick = { spectrumSpeed = spectrumSpeed.next(); showControls() },
                     )
                 }
+                if (onEnterVisualizer != null && displaceVisualizerEntry) {
+                    HeroIconButton(
+                        icon = Icons.Default.GraphicEq,
+                        contentDescription = "Open visualizer",
+                        enabled = interactive,
+                        onClick = { onEnterVisualizer(); showControls() },
+                    )
+                }
             }
 
             // Quality badge (top-right) — also fades out when idle.
@@ -780,8 +809,9 @@ private fun HeroCoverArt(
                 }
             }
 
-            // Visualizer entry (bottom-right) — small, icon-only.
-            if (onEnterVisualizer != null) {
+            // Visualizer entry (bottom-right) — small, icon-only. Moves into
+            // the row above when the preset row has the bottom of the art.
+            if (onEnterVisualizer != null && !displaceVisualizerEntry) {
                 HeroIconButton(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     icon = Icons.Default.GraphicEq,
