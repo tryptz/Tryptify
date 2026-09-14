@@ -68,6 +68,8 @@ import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.components.MiniPlayer
 import tf.monochrome.android.ui.theme.ColorBlend
+import tf.monochrome.android.ui.theme.goToPage
+import tf.monochrome.android.ui.theme.reduceMotion
 import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.detail.AlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
@@ -284,13 +286,25 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // rememberCoroutineScope dies with its composable, cancelling the scroll
     // part-way. The pager then settled wherever it had got to, which is why
     // tapping a distant page opened the wrong one.
+    // Read here, not in the coroutine: reduceMotion is a Composable.
+    val slidePages = !reduceMotion()
     val selectPage: (String) -> Unit = { id ->
         val page = pages.indexOf(id)
-        // scrollToPage, not animateScrollToPage: picking a page is a choice off
-        // a list, not a drag, and sliding there sweeps the pager through every
-        // page in between — Home to Downloads animated across five of them.
-        // The slide was there to follow a finger, and there is no finger now.
-        if (page >= 0) scope.launch { pagerState.scrollToPage(page) }
+        // Slide to the page next door, jump to anything further.
+        //
+        // Sliding was removed outright because it sweeps the pager through
+        // every page in between, and Home to Downloads animated across five of
+        // them — a long smear of pages nobody asked for. That reasoning only
+        // holds when there IS something in between. One page over there is
+        // nothing to sweep, and the slide reads as the two pages being
+        // neighbours, which they are.
+        //
+        // Distance from the page actually shown, so this stays right if a drag
+        // left the pager somewhere other than where the last pick put it.
+        if (page >= 0) scope.launch {
+            val adjacent = kotlin.math.abs(page - pagerState.currentPage) == 1
+            pagerState.goToPage(page, animated = slidePages && adjacent)
+        }
     }
 
     // One-shot landing route handed over by onboarding. Keyed on Unit and not on
