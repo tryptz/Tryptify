@@ -89,8 +89,8 @@ object WhatsNew {
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
 
-    /** Tipping, and how often the app brings it up. */
-    private const val SUPPORT = "Support"
+    /** Talking to a USB DAC directly, over UAC2, instead of through Android. */
+    private const val USB_DAC = "Exclusive USB DAC"
 
     /** The projectM visualizer, its preset browser and its rotation. */
     private const val VISUALIZER = "Visualizer"
@@ -103,245 +103,123 @@ object WhatsNew {
             entries = listOf(
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = PLAYER,
-                    title = "The glass bends your artwork through it",
-                    body = "With Blurred Album Background on, the transport, the dock and " +
-                        "the panels refract the cover itself rather than a tint standing in " +
-                        "for it. Each lenses the part of the artwork behind it, so no two " +
-                        "panes on the screen carry quite the same colour.",
+                    section = USB_DAC,
+                    title = "Exclusive USB DAC output works",
+                    body = "Tryptify talks to the DAC over UAC2 itself, so audio skips " +
+                        "Android's mixer and its resampler entirely. The DAC runs at the " +
+                        "file's own rate and gets the samples untouched.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = PLAYER,
-                    title = "The mini player carries the cover too",
-                    body = "The bar takes its colour from the artwork it is showing, " +
-                        "sweeping along its length — wherever the bar is, not only over " +
-                        "the player.",
+                    section = USB_DAC,
+                    title = "24-bit and hi-res reach the DAC",
+                    body = "Up to 96 kHz at 24-bit, packed into whatever subslot width the " +
+                        "device asks for. Everything was being flattened to 16-bit before.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "The mixer and EQ run on 24-bit files",
+                    body = "On a 24-bit or 32-bit track the whole DSP chain used to drop " +
+                        "out with no sign of it: the mixer, both EQs, the spectrum and the " +
+                        "visualizer's audio all stopped while the music kept playing. They " +
+                        "run on those files now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Speed and pitch work over the DAC",
+                    body = "Semitone shift, and varispeed where pitch rides the tempo the " +
+                        "way a record does. Both took effect everywhere except the DAC.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYER,
                     title = "The headphones button shows the audio pipeline",
                     body = "What is happening to the track, stage by stage: its format, the " +
-                        "decoder, the rates in and out, the DSP, and where it lands. That " +
-                        "button opened Settings before; Settings is still in the menu next " +
-                        "to it.",
+                        "decoder, the rates in and out, the DSP, and where it lands.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYER,
+                    title = "The glass bends your artwork through it",
+                    body = "With Blurred Album Background on, the transport, the dock and " +
+                        "the panels refract the cover itself rather than a tint standing in " +
+                        "for it. The mini player carries it too, along the whole bar.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = VISUALIZER,
                     title = "MilkDrop can play behind the music, not instead of it",
-                    body = "Turn on the ambient visualizer and the preset is drawn into the " +
-                        "album background — over the blurred cover, under the controls — " +
-                        "with its black falling away so the artwork shows through. " +
-                        "Player Visuals Studio \u203a Visualizer.",
+                    body = "The ambient visualizer draws the preset into the album " +
+                        "background, over the blurred cover and under the controls, rather " +
+                        "than replacing the artwork.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = VISUALIZER,
+                    title = "Preset controls on the player",
+                    body = "Back, browse and next sit across the artwork while the ambient " +
+                        "visualizer is running, and fade out once you stop using them. Tap " +
+                        "the artwork to bring them back.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Wide Stage joins the shipped presets",
-                    body = "A wide, long reverb running beside the dry signal rather than " +
-                        "over it. Load it from the mixer's preset list like the rest.",
+                    body = "A wider image without the hollow middle that usually comes with " +
+                        "it.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = LOOK,
-                    title = "UI panels previews the panel, not just the bar",
-                    body = "That tab sets the material for every floating pane — the audio " +
-                        "tools sheet, the speed panel, the search bars — and used to " +
-                        "preview only the mini player. It shows a pane above the bar now.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = SUPPORT,
-                    title = "An occasional tip bar, easily silenced",
-                    body = "A bar at the top of Home offers a tip every 20 songs. The cross " +
-                        "puts it away until another 20 have played; tick \"Don't ask " +
-                        "again\" first and it never returns.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = SUPPORT,
-                    title = "Patreon, alongside Ko-fi",
-                    body = "Ko-fi for a one-off, Patreon for monthly, both in Settings \u203a " +
-                        "Support and on the tip bar. Neither is pushed as the better one.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = PLAYER,
-                    title = "Play and pause bend into one another",
-                    body = "The triangle opens out into the two bars and folds back, rather " +
-                        "than one shape being swapped for the other between frames. With " +
-                        "animations off it still lands on the right shape at once.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.REMOVED,
-                    section = LOOK,
-                    title = "The pane behind the Player tab's preview",
-                    body = "The Player tab drew its buttons on a panel its own sliders did " +
-                        "not control, and that the real player does not have — its transport " +
-                        "floats over the artwork. The panel is previewed under UI panels " +
-                        "instead.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = PLAYER,
-                    title = "The artwork fills the screen again",
-                    body = "On 3-button navigation the player was leaving room for the button " +
-                        "bar twice, so the cover shrank and left gutters down both sides. The " +
-                        "backdrop runs to the bottom edge now and the artwork gets that back.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = PLAYER,
-                    title = "Shuffle is on the dock, the sleep timer in Audio tools",
-                    body = "Shuffle takes the dock's second slot next to Lyrics and lights up " +
-                        "while it is on, instead of two taps into a menu. The sleep timer " +
-                        "moved to Audio tools, where it shows the minutes left rather than a " +
-                        "switch.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = PLAYER,
-                    title = "Play, pause and skip are redrawn, and press cleanly",
-                    body = "They are built from exact geometry, so the corners match and the " +
-                        "two skip chevrons sit apart rather than nested. The glow under a " +
-                        "press rides the dock's spring everywhere now, so the mini player " +
-                        "answers a tap the way the player does.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LOOK,
-                    title = "Glass stops turning grey on a light theme",
-                    body = "The player's panes and the mixer strips were frosting against the " +
-                        "theme's background instead of the dark backdrop they sit on, so on a " +
-                        "light theme they came out milky with the icons washed out of them.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LOOK,
-                    title = "The cover's halo is softer, and yours to tune",
-                    body = "The glow was landing at mid-screen with a visible edge, showing as " +
-                        "a band across the scrubber. It sits behind the artwork now, fades out " +
-                        "without a rim, and has its own sliders. A lit dock icon glows its own " +
-                        "shape too.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LOOK,
-                    title = "Visual Studio is a settings page of its own",
-                    body = "It was one row under a heading of its own at the bottom of " +
-                        "Appearance. Appearance is the app's chrome — themes, fonts; this " +
-                        "is what the player looks like. Settings \u203a Visual Studio, " +
-                        "right after Appearance.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LOOK,
-                    title = "Colour transitions no longer run for seconds",
-                    body = "It used to match Blend Between Tracks, so a four-second blend " +
-                        "repainted the whole screen for four seconds on every track change. " +
-                        "It is half a second now, on its own slider, from instant to eight " +
-                        "seconds.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LIBRARY,
-                    title = "Folders show your music, and open where it is",
-                    body = "The tab opens on the folders your music is really in, each a glass " +
-                        "tile with a count. A folder lists its own audio, not just subfolders; " +
-                        "ones with a space in the name open at last; and Back steps up one " +
-                        "level at a time.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LIBRARY,
-                    title = "Clear All Downloads says what it will delete",
-                    body = "It says how many tracks and how much disk it is about to " +
-                        "delete, before you press it rather than only after, and it is " +
-                        "disabled when there is nothing downloaded.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = LIBRARY,
-                    title = "Long press a folder to remove it",
-                    body = "Its tracks leave the library and scans skip it from then on. " +
-                        "Nothing is deleted from your phone — the files stay where they " +
-                        "are.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = LIBRARY,
-                    title = "Drag the scrollbar to move through a big library",
-                    body = "Long lists have a thumb down the right edge you can drag. It no " +
-                        "longer catches flicks meant for the list, and the songs list loads a " +
-                        "page at a time instead of building the whole library to show a " +
-                        "screenful.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = LIBRARY,
-                    title = "The track playing is coloured in the list",
-                    body = "Its row is tinted and its title takes the accent, so you can find " +
-                        "what is playing in a long list at a glance.",
+                    section = PAGES,
+                    title = "Home is the list of pages, and World radio is one of them",
+                    body = "Pick a page instead of swiping to it. World radio has its own " +
+                        "page now, and Next moves down the city's stations.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LIBRARY,
                     title = "Browse by album artist, composer or year",
-                    body = "Three more ways into what is on the device, beside albums and " +
-                        "artists. All three read tags you already have, so nothing needs " +
-                        "rescanning to appear.",
+                    body = "Local opens on a list of those instead of five swipes. Drag the " +
+                        "scrollbar to move through a big library, and the track playing is " +
+                        "coloured in the list.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Changing track no longer freezes the audio",
+                    body = "Every track change was loading the whole file into memory " +
+                        "looking for cover art. On a large WAV that stalled playback for " +
+                        "seconds at a time.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "The glass is smooth again",
+                    body = "The artwork behind it was being sampled as flat blocks of " +
+                        "colour, worst on the mini player and the Audio tools sheet.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Visual Studio is a settings page of its own",
+                    body = "Glass, themes and the player's look live together, and colour " +
+                        "transitions no longer run for seconds.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = VISUALIZER,
+                    title = "The Visualizer chip turns the ambient one on and off",
+                    body = "It used to hand you the square visualizer on the second tap, " +
+                        "and leave the ambient setting switched off behind it.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
-                    title = "Sending a file works for music on your phone",
-                    body = "\"Send file\" reported no file available for tracks sitting on the " +
-                        "device — from the player, playlists, albums, artists, Favorites and " +
-                        "search. It was trying to download them first. Only the songs list " +
-                        "ever worked.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LIBRARY,
-                    title = "Local opens on a list instead of five swipes",
-                    body = "Songs, Albums, Artists, Genres and Folders were tabs on a strip " +
-                        "too narrow to show them, four drags apart end to end. They are a " +
-                        "list you tap now, and Back returns to it.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = PAGES,
-                    title = "Home is the list of pages",
-                    body = "Tap a name to go straight there instead of swiping to it, and " +
-                        "Back returns to the list. The swipe and the dots at the top are " +
-                        "gone. Page Order in Settings now sets the order of that list.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = PAGES,
-                    title = "World radio is a page of its own",
-                    body = "It was a button partway down Discover, so finding it meant " +
-                        "knowing it was there. It is a page now, next to Discover, on the " +
-                        "list on Home and in the jump list everywhere else.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = GLOBE,
-                    title = "Next moves down the city's stations",
-                    body = "Tapping a station used to queue that one and nothing else, so " +
-                        "Next had nowhere to go. The city's list is the queue now, in the " +
-                        "order the panel shows it.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = PAGES,
-                    title = "Presses feel like the player's, everywhere",
-                    body = "The old press settled slowly and wobbled — barely visible on a " +
-                        "small button, obvious on a big tile. Every press in the app now " +
-                        "uses the spring the player's dock had. Picking a page opens it at " +
-                        "once too, rather than sliding past the pages in between.",
+                    title = "Folders show your music, and open where it is",
+                    body = "Clear All Downloads says what it will delete, and sending a " +
+                        "file works for music on your phone.",
                 ),
             ),
         ),
