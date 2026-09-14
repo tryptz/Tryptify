@@ -1,5 +1,6 @@
 package tf.monochrome.android.audio.usb
 
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
@@ -123,7 +124,12 @@ internal class ToFloatPcmAudioProcessor : AudioProcessor {
 /**
  * Bytes per sample this processor converts from, or 0 for an encoding it
  * leaves alone (16-bit and float, which the chain already accepts).
+ *
+ * Carries its own opt-in: @UnstableApi on the class above covers the class
+ * body, not a top-level declaration in the same file, and the C.ENCODING_*
+ * constants are behind that marker.
  */
+@OptIn(UnstableApi::class)
 internal fun bytesPerSample(encoding: Int): Int = when (encoding) {
     C.ENCODING_PCM_24BIT -> 3
     C.ENCODING_PCM_32BIT -> 4
