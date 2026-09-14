@@ -104,10 +104,11 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = USB_DAC,
-                    title = "Exclusive USB DAC output works",
-                    body = "Tryptify talks to the DAC over UAC2 itself, so audio skips " +
-                        "Android's mixer and its resampler entirely. The DAC runs at the " +
-                        "file's own rate and gets the samples untouched.",
+                    title = "Exclusive USB DAC output actually works now",
+                    body = "UAC2 exclusive mode was already in the app, but it never " +
+                        "delivered what it promised. Tryptify now drives the DAC itself, " +
+                        "so audio skips Android's mixer and its resampler entirely. The " +
+                        "DAC runs at the file's own rate and gets the samples untouched.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
