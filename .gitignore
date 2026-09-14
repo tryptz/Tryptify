@@ -94,6 +94,11 @@ old_HomeViewModel.kt
 !app/src/**/generated/baselineProfiles/*.txt
 !app/src/main/baseline-prof.txt
 
+# AutoEQ target curves. Same trap as the baseline profile: `*.txt` above
+# swallows them, so every target here had to be force-added and the next one
+# looks like it simply failed to save.
+!app/src/main/assets/autoeq/targets/*.txt
+
 !monochrome-library-2026-03-23.json
 !app/src/main/assets/devedit_default_layout.json
 !app/src/main/assets/qobuz_recommendations.json

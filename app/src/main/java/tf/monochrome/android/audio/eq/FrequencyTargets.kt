@@ -38,7 +38,9 @@ object FrequencyTargets {
     private val knowles by lazy { loadTargetFromAssets("Knowles.txt") }
     private val moondropVdsf by lazy { loadTargetFromAssets("Moondrop_VDSF.txt") }
     private val hifiEndgame2026 by lazy { loadTargetFromAssets("HiFiEndgame_2026.txt") }
+    private val hifiEndgameMkIII by lazy { loadTargetFromAssets("HiFiEndgame_MKIII.txt") }
     private val peqdbUltra by lazy { loadTargetFromAssets("PEQdB_Ultra.txt") }
+    private val peqdbDiamond by lazy { loadTargetFromAssets("PEQdB_Diamond.txt") }
     private val seapTarget by lazy { loadTargetFromAssets("SEAP.txt") }
     private val seapBass by lazy { loadTargetFromAssets("SEAP_Bass.txt") }
     private val flatLine by lazy { loadTargetFromAssets("Flat_Line.txt") }
@@ -85,11 +87,25 @@ object FrequencyTargets {
         filename = "HiFiEndgame_2026.txt"
     )
 
+    fun getHiFiEndgameMkIII(): EqTarget = EqTarget(
+        id = "hifi_endgame_mkiii",
+        label = "Hi-Fi Endgame MKIII",
+        data = hifiEndgameMkIII,
+        filename = "HiFiEndgame_MKIII.txt"
+    )
+
     fun getPeqdbUltra(): EqTarget = EqTarget(
         id = "peqdb_ultra",
         label = "PEQdB Ultra",
         data = peqdbUltra,
         filename = "PEQdB_Ultra.txt"
+    )
+
+    fun getPeqdbDiamond(): EqTarget = EqTarget(
+        id = "peqdb_diamond",
+        label = "PEQdB Diamond",
+        data = peqdbDiamond,
+        filename = "PEQdB_Diamond.txt"
     )
 
     fun getSeapTarget(): EqTarget = EqTarget(
@@ -120,7 +136,9 @@ object FrequencyTargets {
         getKnowles(),
         getMoondropVdsf(),
         getHiFiEndgame2026(),
+        getHiFiEndgameMkIII(),
         getPeqdbUltra(),
+        getPeqdbDiamond(),
         getSeapTarget(),
         getSeapBass(),
         getFlat()
