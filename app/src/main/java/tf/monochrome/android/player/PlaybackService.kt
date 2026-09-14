@@ -789,12 +789,10 @@ class PlaybackService : MediaSessionService() {
                 // the sink can now pack genuine 24-bit samples for the USB
                 // stream (see LibusbAudioSink.packFloatForUsb).
                 //
-                // It also stops the DSP chain rounding to 16 bits between
-                // stages: every processor here already has a float path
-                // (mixBus, AutoEQ, parametric EQ, spectrum tap all branch on
-                // ENCODING_PCM_FLOAT), and DefaultAudioSink writes float to
-                // AudioTrack natively — so the non-USB outputs keep working
-                // and gain the same headroom.
+                // This is the RENDERER's float output, which is all the
+                // exclusive path needs: LibusbAudioSink sees the renderer's
+                // format before the delegate does. The sink's own float output
+                // is a separate flag and must stay off — see buildAudioSink.
                 setEnableAudioFloatOutput(true)
 
                 // Hand ALAC to FFmpeg instead of the platform decoder.
@@ -851,7 +849,36 @@ class PlaybackService : MediaSessionService() {
             ): AudioSink {
                 return try {
                     val defaultSink = DefaultAudioSink.Builder(context)
-                        .setEnableFloatOutput(enableFloatOutput)
+                        // Deliberately false, whatever the factory was told.
+                        //
+                        // DefaultAudioSink.configure builds its pipeline one of
+                        // two ways, and they are not equivalent:
+                        //
+                        //   if (shouldUseFloatOutput(...)) {
+                        //     pipelineProcessors.addAll(toFloatPcmAvailableAudioProcessors)
+                        //   } else {
+                        //     pipelineProcessors.addAll(toIntPcmAvailableAudioProcessors)
+                        //     pipelineProcessors.add(audioProcessorChain.getAudioProcessors())
+                        //   }
+                        //
+                        // toFloatPcmAvailableAudioProcessors is exactly one
+                        // processor, the float converter. The custom chain is
+                        // added on the other branch only. So turning this on
+                        // silently deletes the mixer, both EQs, the spectrum
+                        // tap and the projectM feed from the HAL path, and the
+                        // audio keeps playing, which is how it went unnoticed:
+                        // every effect dead, nothing in the log.
+                        //
+                        // shouldUseFloatOutput also requires high-resolution
+                        // input, so this only started biting once the renderer
+                        // above began emitting float.
+                        //
+                        // Nothing is lost. The exclusive USB path takes the
+                        // renderer's float directly and packs it into the DAC's
+                        // 24-bit subslots itself; this flag never touched it.
+                        // The HAL path goes back to what it did before, which
+                        // is 16-bit out with every effect running.
+                        .setEnableFloatOutput(false)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         // Our own chain rather than setAudioProcessors, which
                         // would wrap these in DefaultAudioProcessorChain and send
@@ -959,7 +986,10 @@ class PlaybackService : MediaSessionService() {
                     val fallback = checkNotNull(
                         super.buildAudioSink(
                             context,
-                            enableFloatOutput,
+                            // False for the same reason as above: float output
+                            // drops the sink's processor chain, which on this
+                            // path is the default one carrying Sonic.
+                            false,
                             enableAudioTrackPlaybackParams
                         )
                     )
