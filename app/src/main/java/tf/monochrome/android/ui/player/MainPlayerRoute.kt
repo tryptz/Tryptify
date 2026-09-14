@@ -895,6 +895,13 @@ fun MainPlayerRoute(
                     onPreviousPreset = playerViewModel::previousVisualizerPreset,
                     onNextPreset = playerViewModel::nextVisualizerPreset,
                     onOpenPresetBrowser = { showPresetSheet = true },
+                    isFavorite = currentVisualizerPreset?.id
+                        ?.let { it in visualizerFavoritePresetIds } ?: false,
+                    onToggleFavorite = {
+                        currentVisualizerPreset?.id?.let {
+                            playerViewModel.toggleVisualizerFavoritePreset(it)
+                        }
+                    },
                     revealKey = ambientPresetReveal,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )

@@ -567,6 +567,8 @@ internal fun AmbientPresetControls(
     onPreviousPreset: () -> Unit,
     onNextPreset: () -> Unit,
     onOpenPresetBrowser: () -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
     revealKey: Int,
     modifier: Modifier = Modifier,
 ) {
@@ -590,30 +592,49 @@ internal fun AmbientPresetControls(
         exit = fadeOut(tween(520)),
         modifier = modifier,
     ) {
-        Row(
+        // A Box with three aligned children rather than a four-way
+        // SpaceBetween row. Browse has to stay on the centre axis the transport
+        // below is centred on, and four evenly spaced buttons would push it off
+        // it. Aligning the ends and the middle independently keeps browse
+        // centred no matter how many buttons the right group grows.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
         ) {
             AmbientPresetButton(
                 icon = Icons.Default.SkipPrevious,
                 label = "Previous preset",
                 enabled = canGoBack,
                 onClick = { selfPoke++; onPreviousPreset() },
+                modifier = Modifier.align(Alignment.CenterStart),
             )
             AmbientPresetButton(
                 icon = Icons.Default.LibraryMusic,
                 label = "Preset browser",
                 accent = PlayerGlowGold,
                 onClick = { selfPoke++; onOpenPresetBrowser() },
+                modifier = Modifier.align(Alignment.Center),
             )
-            AmbientPresetButton(
-                icon = Icons.Default.SkipNext,
-                label = "Next preset",
-                onClick = { selfPoke++; onNextPreset() },
-            )
+            Row(
+                modifier = Modifier.align(Alignment.CenterEnd),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Same reading as the hero overlay's: filled and pink once the
+                // preset is liked, outline and white until then.
+                AmbientPresetButton(
+                    icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    label = if (isFavorite) "Unlike preset" else "Like preset",
+                    accent = if (isFavorite) PlayerGlowPink else Color.White,
+                    onClick = { selfPoke++; onToggleFavorite() },
+                )
+                AmbientPresetButton(
+                    icon = Icons.Default.SkipNext,
+                    label = "Next preset",
+                    onClick = { selfPoke++; onNextPreset() },
+                )
+            }
         }
     }
 }
@@ -631,13 +652,14 @@ private fun AmbientPresetButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     accent: Color = Color.White,
+    modifier: Modifier = Modifier,
 ) {
     // Sized by the button, not by the Surface. IconButton carries
     // minimumInteractiveComponentSize (48dp), which a 40dp Surface would be
     // fighting; letting the glass wrap a 40dp IconButton is the same shape
     // the shared pill used to get and keeps the disc exactly on the glyph.
     Surface(
-        modifier = Modifier.liquidGlass(shape = CircleShape, tintAlpha = 0.22f),
+        modifier = modifier.liquidGlass(shape = CircleShape, tintAlpha = 0.22f),
         shape = CircleShape,
         color = Color.Transparent,
         contentColor = Color.White,
