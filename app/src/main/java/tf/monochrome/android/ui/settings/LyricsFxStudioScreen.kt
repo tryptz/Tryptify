@@ -484,11 +484,22 @@ fun LyricsFxStudioScreen(
             // graphics, preset rotation) read the main SettingsViewModel —
             // this tab hosts them now, so pull that VM in alongside.
             val settingsViewModel: SettingsViewModel = hiltViewModel()
+            // Reserve the mini player's height inside the scroll, the same way
+            // the Lyrics tab does below. Without it the last control on this
+            // tab sits under the bar permanently: the scroll ends level with
+            // the screen, so there is nothing left to scroll it clear with.
+            val visualizerNavBar =
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 8.dp + LocalMiniPlayerInset.current + visualizerNavBar,
+                    ),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -1444,7 +1455,15 @@ private fun PlayerGlassTab(
             onClick = { onApplyPreset(PlayerGlassSettings.DEFAULT) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Reset to defaults") }
-        Spacer(Modifier.height(48.dp))
+        // Same reservation as the other two tabs. A flat 48dp was short of the
+        // bar plus the navigation inset under it, leaving the reset button
+        // half-covered.
+        Spacer(
+            Modifier.height(
+                48.dp + LocalMiniPlayerInset.current +
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            ),
+        )
         }
     }
 
