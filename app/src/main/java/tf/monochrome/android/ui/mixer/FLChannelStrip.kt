@@ -50,6 +50,7 @@ import tf.monochrome.android.ui.components.toggleSemantics
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerDesignTokens
+import tf.monochrome.android.ui.player.LocalPlayerGlassGround
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
@@ -152,7 +153,8 @@ fun FLChannelStrip(
     val tint = if (glass.tintColor != 0) Color(glass.tintColor) else paneAccent
     val flat = LocalLowPerformance.current.disableLiquidGlass
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
-    val frostBg = colors.background
+    // The mixer draws `dynamicPlayerBackground` too — see [PlayerGlassGround].
+    val frostBg = LocalPlayerGlassGround.current
     val isDark = frostBg.luminance() <= 0.5f
 
     CompositionLocalProvider(LocalPlayerGlass provides glass) {

@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -12,9 +11,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -40,11 +39,23 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
+import tf.monochrome.android.ui.theme.PressSpring
 
 // Vertical paddings shared between the label overlay and the punch geometry, so
 // the hollow icons stay centred over their labels regardless of DPI.
 private val DockRowVerticalPadding = 6.dp
 private val DockItemVerticalPadding = 10.dp
+
+// The dome and the glyph squeeze both ride the app's shared press spring — see
+// Motion.kt, which is where this one moved to once every press in the app
+// started using it.
+
+// Room for the lit glyph's bloom. A blur only smears pixels it was given, and
+// Unbounded treats everything past the layer as transparent, so a glyph blurred
+// in a box its own size comes back a soft SQUARE. The dock's drawables fill
+// ~80% of their viewport: about 3dp of margin against an 11dp blur.
+private val DockBloomPadding = 16.dp
+private val DockBloomBox = PlayerDesignTokens.DockIconSize + DockBloomPadding * 2
 
 /**
  * Erase the four dock glyphs from whatever has just been drawn, leaving
@@ -84,7 +95,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.punchDockIcons(
 }
 
 /**
- * Compact tool row beneath the transport controls: Lyrics · Timer · Mixer/FX · Playlist.
+ * Compact tool row beneath the transport controls: Lyrics · Shuffle · Mixer/FX · Playlist.
  *
  * The whole rectangle is one liquid-glass slab with the four icons *hollowed out*
  * of it — exactly like the play button: a solid translucent slab, the icon shapes
@@ -97,23 +108,24 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.punchDockIcons(
 fun PlayerActionDock(
     accent: Color,
     lyricsActive: Boolean,
-    timerActive: Boolean,
+    shuffleActive: Boolean,
     onLyrics: () -> Unit,
-    onTimer: () -> Unit,
+    onShuffle: () -> Unit,
     onMixer: () -> Unit,
     onPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val icons = listOf(
         painterResource(R.drawable.ic_glass_lyrics),
-        painterResource(R.drawable.ic_glass_timer),
+        painterResource(R.drawable.ic_glass_shuffle),
         painterResource(R.drawable.ic_glass_mixer),
         painterResource(R.drawable.ic_glass_playlist),
     )
     // Press-bulge: one shared interaction source per slot so the parent knows
-    // which button is held and can swell the glass under it. The bulge grows on
-    // press (spring) and recedes on release (tween); its centre follows the last
-    // pressed slot.
+    // which button is held and can swell the glass under it. The centre is
+    // *placed* on the last pressed slot, not animated to it: a press is never
+    // handed between sibling clickables, so an animated centre cannot glide
+    // under a finger — it only drags the dome over from the last button.
     val sources = remember { List(icons.size) { MutableInteractionSource() } }
     val pressed = sources.map { it.collectIsPressedAsState() }
     val pressedIndex = pressed.indexOfFirst { it.value }
@@ -121,11 +133,7 @@ fun PlayerActionDock(
     LaunchedEffect(pressedIndex) { if (pressedIndex >= 0) bulgeSlot.intValue = pressedIndex }
     val bulgeAmt by animateFloatAsState(
         targetValue = if (pressedIndex >= 0) 1f else 0f,
-        animationSpec = if (pressedIndex >= 0) {
-            spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            tween(durationMillis = 260)
-        },
+        animationSpec = PressSpring,
         label = "dockBulge",
     )
     val bulgeCenter = Offset((bulgeSlot.intValue + 0.5f) / icons.size, 0.5f)
@@ -209,7 +217,7 @@ fun PlayerActionDock(
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
             DockLabel(Modifier.weight(1f), "Lyrics", icons[0], glassTint, lyricsActive, sources[0], onLyrics)
-            DockLabel(Modifier.weight(1f), "Timer", icons[1], glassTint, timerActive, sources[1], onTimer)
+            DockLabel(Modifier.weight(1f), "Shuffle", icons[1], glassTint, shuffleActive, sources[1], onShuffle)
             DockLabel(Modifier.weight(1f), "Mixer/FX", icons[2], glassTint, false, sources[2], onMixer)
             DockLabel(Modifier.weight(1f), "Playlist", icons[3], glassTint, false, sources[3], onPlaylist)
         }
@@ -230,7 +238,7 @@ private fun DockLabel(
     val stillPress = tf.monochrome.android.ui.theme.reduceMotion()
     val scale by animateFloatAsState(
         targetValue = if (isPressed && !stillPress) 0.92f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = PressSpring,
         label = "dockLabelScale",
     )
     // Fade the "lit" glyph in/out so toggling active glows on smoothly.
@@ -256,18 +264,28 @@ private fun DockLabel(
             .padding(vertical = DockItemVerticalPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            // Reserves the slot the glass slab's hollow icon is punched into.
-            Spacer(Modifier.size(PlayerDesignTokens.DockIconSize))
+        // Fixed to the punched hole so the bloom can overflow without the row
+        // growing: punchDockIcons places the holes from the row's paddings, and
+        // a taller slot walks them off the glyphs.
+        Box(
+            modifier = Modifier.size(PlayerDesignTokens.DockIconSize),
+            contentAlignment = Alignment.Center,
+        ) {
             if (lit > 0.004f) {
                 // Soft bloom behind the lit glyph.
                 Icon(
                     painter = painter,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(PlayerDesignTokens.DockIconSize)
+                        // Measured, never reported to the slot above.
+                        .requiredSize(DockBloomBox)
+                        // Blur OUTSIDE the alpha layer, as the slab's shadow
+                        // already does: partial alpha composites through an
+                        // offscreen buffer its own size, cutting the spill back
+                        // to a rectangle on every frame of the fade.
+                        .blur(radius = 11.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                         .graphicsLayer { alpha = lit }
-                        .blur(radius = 11.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded),
+                        .padding(DockBloomPadding),
                     tint = litColor.copy(alpha = 0.6f),
                 )
                 // Crisp lit glyph filling the hole.

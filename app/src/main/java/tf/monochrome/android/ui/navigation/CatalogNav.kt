@@ -20,14 +20,22 @@ import tf.monochrome.android.domain.model.SourceType
  * the second used to push a duplicate screen. After the first navigation the
  * current entry leaves RESUMED, so the second tap is ignored here.
  *
- * `launchSingleTop` covers the other half of the same problem: re-entering the
- * screen you are already on — tapping "Settings" from inside Settings, or the
- * mini player while Now Playing is open — replaces the top entry instead of
- * stacking an identical one behind it.
+ * Deliberately NOT `launchSingleTop`, which is a trap here. It does not compare
+ * the route: `NavController.launchSingleTopInternal` matches on the destination
+ * itself, then removes the top entry and puts a copy back carrying the new
+ * arguments. `folder/{folderPath}` is one destination, so walking from a folder
+ * into its subfolder *replaced* the folder you came from — Back had nothing
+ * left to return to and dropped you out of the browser. The same held for every
+ * trail through one screen type: album → album, artist → artist, genre → genre.
+ *
+ * The duplicate it was meant to stop is the double-tap, and [isSettled] above
+ * already stops that: after a navigate the new entry is the current one and is
+ * not RESUMED until its transition finishes, so the second tap is dropped.
+ * Re-entering a screen from a *different* screen is what [navigateTool] is for.
  */
 fun NavController.navigateSafe(route: String) {
     if (!isSettled()) return
-    navigate(route) { launchSingleTop = true }
+    navigate(route)
 }
 
 /**

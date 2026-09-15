@@ -77,6 +77,15 @@ internal data class PlayerBackdrop(
     val blurredArt: Boolean = false,
     val dominant: Color = Color(0xFF101018),
     val secondary: Color = Color(0xFF101018),
+    /**
+     * The cover as a shader input, when one has decoded. Present only while
+     * [blurredArt] is on, because that is the only time the artwork is what is
+     * actually behind the glass; otherwise the backdrop is the flat wash the
+     * shader already reconstructs exactly.
+     */
+    val art: BackdropArt? = null,
+    /** How [art] maps onto the pane — see [BackdropArtFit]. */
+    val fit: BackdropArtFit = BackdropArtFit.ROOT,
 )
 
 internal val LocalPlayerBackdrop = androidx.compose.runtime.compositionLocalOf { PlayerBackdrop() }
@@ -216,13 +225,23 @@ private fun liquidGlassModifier(
 
     val timeSec = rememberFrameSeconds()
     val tilt = rememberGravityTilt()
+    val anchor = rememberBackdropAnchor()
+    val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
 
-    return Modifier.graphicsLayer {
+    return Modifier.backdropAnchor(anchor).graphicsLayer {
         if (size.minDimension > 0f) {
             shader.setFloatUniform("uSize", size.width, size.height)
             shader.setFloatUniform("uTime", timeSec.value)
             shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
             shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
+            shader.bindBackdropArt(
+                art = backdrop.art,
+                fit = backdrop.fit,
+                scrim = scrim,
+                anchor = anchor.rect,
+                paneW = size.width,
+                paneH = size.height,
+            )
             // Second album tone + how strongly the lensed backdrop bleeds into the
             // glass body. Only non-zero when the blurred album background is on, so
             // the glass reads as sitting over the real artwork (Apple-OS style);
@@ -283,7 +302,10 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     val timeSec = rememberFrameSeconds()
     val tilt = rememberGravityTilt()
-    return Modifier.graphicsLayer {
+    val backdrop = LocalPlayerBackdrop.current
+    val anchor = rememberBackdropAnchor()
+    val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
+    return Modifier.backdropAnchor(anchor).graphicsLayer {
         if (size.minDimension > 0f) {
             shader.setFloatUniform("uSize", size.width, size.height)
             shader.setFloatUniform("uTime", timeSec.value)
@@ -291,6 +313,17 @@ private fun liquidGlassPanelModifier(tint: Color): Modifier {
             shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
             shader.setFloatUniform("uTint2", tint.red, tint.green, tint.blue)
             shader.setFloatUniform("uBackdropMix", 0f)
+            // uBackdropMix stays 0 — the panel's flat tint reconstruction is
+            // deliberate — but the real cover still lenses through it when one
+            // is behind the panel, which is the whole point of the sampler.
+            shader.bindBackdropArt(
+                art = backdrop.art,
+                fit = backdrop.fit,
+                scrim = scrim,
+                anchor = anchor.rect,
+                paneW = size.width,
+                paneH = size.height,
+            )
             // Panel tuning: a body that stays fairly present (a panel, not a
             // glyph), with a strong lit rim and gentle edge refraction.
             shader.setFloatUniform("uBodyOpacity", 0.82f)
@@ -428,7 +461,7 @@ fun PlayerGlassHaze(
     val leaving by remember { derivedStateOf { fade.value > 0.001f } }
     if (!lit && !leaving) return
 
-    val frostBg = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val frostBg = LocalPlayerGlassGround.current
     val isDark = frostBg.luminance() <= 0.5f
     // The blur is the haze; this is the frost, and it is the thin part — most
     // of what reads through should be the blurred art.
@@ -451,6 +484,37 @@ fun PlayerGlassHaze(
             ),
     )
 }
+
+/**
+ * The ground the player's glass is a sheet over.
+ *
+ * Frosted panes ask their backdrop two things — what colour to reconstruct
+ * behind the blur (`HazeStyle.backgroundColor`), and whether it is dark (which
+ * side of [playerFrostTint] to use). Both used to ask
+ * `MaterialTheme.colorScheme.background`, which is the wrong surface: the
+ * player sits on [dynamicPlayerBackground], ending on
+ * [PlayerDesignTokens.BackgroundBlack] — dark under *every* theme, which is why
+ * its chrome is hardcoded white. On a light theme the frost therefore laid
+ * white at 0.26 over a near-black ground: milky grey slabs, glyphs washed out.
+ *
+ * Keep deriving `isDark` from `luminance()` rather than hardcoding `true`, so
+ * the frost follows if the player's ground ever lightens.
+ */
+val PlayerGlassGround: Color = PlayerDesignTokens.BackgroundBlack
+
+/**
+ * The ground the glass in *this* subtree is over, defaulting to the player's.
+ *
+ * Only the Player Visuals Studio needs to override it: its preview draws the
+ * chrome over a swatch the listener picks, which can be any colour including a
+ * light one, so the player's ground would frost dark over a light backdrop —
+ * the theme bug pointed the other way, on the screen meant to show the glass.
+ *
+ * Provided next to [LocalPlayerHaze], because the ground is a property of the
+ * haze source. Nested chrome (the dock frosts inside itself) picks it up for
+ * free, which a parameter could not reach.
+ */
+val LocalPlayerGlassGround = compositionLocalOf { PlayerGlassGround }
 
 /**
  * The wash that goes over the blur — the *frost*, as opposed to the haze.
@@ -520,7 +584,10 @@ private fun playerGlassModifier(
     // by the nav host, so the gate reaches every screen.
     val timeSec = rememberFrameSeconds(animated = g.surfaceMotion > 0f)
     val tilt = rememberGravityTilt()
-    return Modifier.graphicsLayer {
+    val backdrop = LocalPlayerBackdrop.current
+    val anchor = rememberBackdropAnchor()
+    val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
+    return Modifier.backdropAnchor(anchor).graphicsLayer {
         if (size.minDimension > 0f) {
             shader.setFloatUniform("uSize", size.width, size.height)
             shader.setFloatUniform("uTime", timeSec.value)
@@ -528,6 +595,17 @@ private fun playerGlassModifier(
             shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
             shader.setFloatUniform("uTint2", tint.red, tint.green, tint.blue)
             shader.setFloatUniform("uBackdropMix", 0f)
+            // The transport and the mini player sit directly on the artwork, so
+            // this is where lensing the real thing shows most: the play glyph
+            // carries the cover's own colour through it instead of a wash.
+            shader.bindBackdropArt(
+                art = backdrop.art,
+                fit = backdrop.fit,
+                scrim = scrim,
+                anchor = anchor.rect,
+                paneW = size.width,
+                paneH = size.height,
+            )
             shader.setFloatUniform("uBodyOpacity", g.bodyOpacity)
             shader.setFloatUniform("uRefraction", g.refraction)
             // Rim fades out with the last stretch of body opacity: at 0 the
@@ -591,9 +669,21 @@ private fun rememberGravityTilt(): State<Offset> {
 
 /**
  * Shared, ref-counted gravity tilt for all liquid-glass surfaces. Registers a
- * single [SensorEventListener] on the first [acquire] and unregisters it on the
- * last [release]. All access is on the main thread (Compose effects + the
- * main-Looper sensor callback), so the counter and filter need no locking.
+ * single [SensorEventListener] on the first [acquire] and unregisters it a
+ * moment after the last [release]. All access is on the main thread (Compose
+ * effects + the main-Looper sensor callback), so the counter, the filter and
+ * the pending-stop token need no locking.
+ *
+ * The delay is the point. Navigating between two glass screens disposes the old
+ * one before the new one composes, so the count passes through zero every time
+ * — a device log shows register → unregister → register inside 120ms, twice in
+ * two seconds. Two costs came with that: a pair of binder round trips to the
+ * sensor service on every screen change, and — visibly — [fx]/[fy] starting
+ * again from zero, so the tilt on the incoming screen snapped to neutral and
+ * eased back rather than continuing from where the phone actually is.
+ *
+ * [STOP_DELAY_MS] is long enough to cover a navigation and short enough that
+ * leaving the glass behind still stops a 50Hz sensor promptly.
  */
 private object GravityTiltSource : SensorEventListener {
     val tilt = mutableStateOf(Offset.Zero)
@@ -602,8 +692,16 @@ private object GravityTiltSource : SensorEventListener {
     private var fx = 0f
     private var fy = 0f
 
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val stop = Runnable { stopNow() }
+
     fun acquire(context: Context) {
+        // Cancel a pending stop first, whatever the count: arriving inside the
+        // grace period means the listener is still live and the filter still
+        // holds the phone's real attitude, so this re-acquire is free.
+        handler.removeCallbacks(stop)
         if (refCount++ > 0) return
+        if (manager != null) return
         val mgr = context.applicationContext
             .getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val sensor = mgr?.getDefaultSensor(Sensor.TYPE_GRAVITY)
@@ -617,10 +715,19 @@ private object GravityTiltSource : SensorEventListener {
     fun release() {
         if (refCount <= 0) return
         if (--refCount == 0) {
-            manager?.unregisterListener(this)
-            manager = null
+            handler.removeCallbacks(stop)
+            handler.postDelayed(stop, STOP_DELAY_MS)
         }
     }
+
+    /** The real unregister, once the grace period has passed with nobody back. */
+    private fun stopNow() {
+        if (refCount > 0) return
+        manager?.unregisterListener(this)
+        manager = null
+    }
+
+    private const val STOP_DELAY_MS = 2_000L
 
     override fun onSensorChanged(event: SensorEvent) {
         val gx = (event.values[0] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
@@ -754,6 +861,16 @@ uniform float2 uBulge;        // press-bulge centre, normalized (0..1) in the su
 uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
 uniform float uBulgeR;        // press-bulge dome radius in px; <=0 falls back to uSize.x/6
 
+// The real backdrop, when there is one to lens. uArt is ALWAYS bound (SkSL
+// requires every child shader to be set); uArtMix is what decides whether it
+// is used, so a pane with no decoded cover pays one uniform write and nothing
+// else. See GlassBackdropArt.kt for why this is a bitmap and not a live layer.
+uniform shader uArt;          // artwork pixels behind this pane
+uniform float uArtMix;        // 0 = reconstructed field only, 1 = the real thing
+uniform float4 uArtRect;      // this pane inside the art: xy = origin, zw = size, art px
+uniform float4 uArtScreen;    // this pane inside the root layout, normalized 0..1
+uniform float3 uArtScrim;     // the scrim's mid-screen album tone (already darkened)
+
 // Smooth album-tinted backdrop field, reconstructed so the glass can lens it.
 // Returns a 0..1 luminance weight for the tint at uv (matches the vertical
 // wash + soft top glow drawn behind the lyrics). Two soft off-axis pools give
@@ -779,6 +896,35 @@ float3 backdropTintAt(float2 uv) {
     float t = clamp(uv.y * 0.82 + uv.x * 0.18, 0.0, 1.0);
     float3 two = mix(uTint, uTint2, smoothstep(0.0, 1.0, t));
     return mix(uTint, two, uBackdropMix);
+}
+
+// PlayerBlurredArtBackground lays a heavy vertical scrim over the stretched
+// cover — black at 0.58 up top, a darkened album tone at 0.52 through the
+// middle, black at 0.72 at the foot — so what is actually on screen is a good
+// deal darker than the artwork itself. Lensing the raw cover would light every
+// pane up like a lamp. This puts the same scrim back, and does it in SCREEN
+// space (uArtScreen), because the gradient runs down the display, not down the
+// pane: two panes at different heights must come out differently dark.
+float3 artScrimmed(float2 uv, float3 art) {
+    float y = clamp(uArtScreen.y + clamp(uv.y, 0.0, 1.0) * uArtScreen.w, 0.0, 1.0);
+    float top = 1.0 - smoothstep(0.0, 0.5, y);
+    float bot = smoothstep(0.5, 1.0, y);
+    float mid = 1.0 - top - bot;
+    float keep = 0.42 * top + 0.48 * mid + 0.28 * bot;
+    return art * keep + uArtScrim * (0.52 * mid);
+}
+
+// The screen behind this pane, in the artwork's own pixels. uArtRect carries
+// the pane's rect there (see backdropArtRect), so a control low on the screen
+// lenses the part of the cover actually behind it rather than the whole image
+// squashed into its bounds — the difference between glass and a decal.
+//
+// Sampler output is premultiplied, so it is divided back out: an opaque cover
+// is unchanged by that, and one with transparent corners stops fringing dark.
+float3 artAt(float2 uv) {
+    float4 c = float4(uArt.eval(uArtRect.xy + uv * uArtRect.zw));
+    float3 rgb = (c.a > 0.003) ? c.rgb / c.a : float3(0.0);
+    return artScrimmed(uv, rgb);
 }
 
 // Procedural studio environment, sampled by the reflection vector. A soft
@@ -935,6 +1081,15 @@ half4 main(float2 p) {
         backdropTintAt(uvR).r * backdropField(uvR),
         backdropTintAt(uvG).g * backdropField(uvG),
         backdropTintAt(uvB).b * backdropField(uvB));
+
+    // Real artwork, lensed at the SAME three displaced coordinates, so the
+    // dispersion survives the swap: R, G and B each land on the pixel their own
+    // index of refraction bends them to. At uArtMix = 0 the line above is
+    // returned untouched — bit-identical to the reconstruction-only glass, which
+    // is what lets this ship without re-tuning a single preset.
+    if (uArtMix > 0.001) {
+        refr = mix(refr, float3(artAt(uvR).r, artAt(uvG).g, artAt(uvB).b), uArtMix);
+    }
 
     // Vibrancy: glass slightly saturates what shows through it (thin-slab
     // absorption). A restrained boost — enough to make the transmitted colour

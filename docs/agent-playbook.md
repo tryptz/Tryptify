@@ -241,6 +241,27 @@ Re-verified against `main` on 2026-08-21; every item was true at that commit. Th
 
 **Glass Surfaces — resolved.** The `player-visuals-themes` skill's tables and its `validate_theme_ranges.py` had drifted from the model: fourteen wrong Player Glass defaults, `hazeBlurDp`/`hazeTint` undocumented, `miniProgressBar` missing from the personal set, a `popAmount` field that no longer exists, and a `bodyOpacity` floor copied from the Lyrics FX sibling. The validator now reads the bounds, the personal set and the defaults **out of the Kotlin** and checks `SKILL.md`'s tables against them, so the drift cannot recur silently — a field it cannot check is reported, and an unreadable model exits 2 rather than passing. Run it alongside `./gradlew :app:testDebugUnitTest --tests '*LyricsFxSettingsTest' --tests '*PlayerGlassSettingsTest'`.
 
+**The "missing" ORDER BY indexes are measured and not worth adding.** Six list
+queries plan as `SCAN … USE TEMP B-TREE FOR ORDER BY` — `favorite_tracks`,
+`favorite_albums`, `favorite_artists` (`data/db/entity/Entities.kt:10,27,41` have
+no `indices` at all), `user_playlists`, `downloaded_tracks` and `collections`.
+The plan looks alarming and the fix does not pay. Measured against the real
+schema (taken from the generated `MusicDatabase_Impl`) on SQLite 3.45: at 5,000
+favourites an index on `addedAt` takes the query from 9.14 ms to 8.47 ms, and on
+the 200–800 row tables it changes nothing. At 50,000 rows it is *slower* —
+125.4 ms scanning, 143.9 ms through the index — because `SELECT *` via an index
+scan does indirect row lookups where a table scan is sequential. Six indexes
+plus a Room migration would buy under a millisecond, cost a write on every like,
+download and playlist edit, and lose time on a large library. Do not add them
+without a measurement that contradicts this one.
+
+The same probe found where the time actually goes: `getAllTracks`
+(`data/local/db/LocalMediaDao.kt:17`) returns the whole library on every
+emission and costs ~118 ms at 20,000 tracks *already using its index*, and
+`searchTracks` (`:23`) is ~63 ms per search, a leading-`%` LIKE no index can
+serve. Neither is an indexing problem; both are "return fewer rows" problems
+(projection or paging), and there is no Paging 3 in the project.
+
 **Instrumentation coverage is absent.** `app/src/` contains only `main` and `test`; there is no `androidTest` source set at all. Navigation, settings persistence and session integration have no device-level coverage.
 
 **Native Atmos tests are source files, not a test target.** Twelve test sources sit in `app/src/main/cpp/atmos/tests/` (QMF, JOC, OAMD, EMDF, E-AC-3 header, object engine, HRTF render/motion/polish, pipeline), and `app/src/main/cpp/CMakeLists.txt` contains no `enable_testing`, `add_test`, or a test `add_executable`. Nothing builds or runs them.

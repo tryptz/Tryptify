@@ -12,6 +12,7 @@ import java.util.Locale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.res.painterResource
 import tf.monochrome.android.R
 import androidx.compose.ui.focus.onFocusChanged
@@ -172,7 +173,7 @@ import kotlinx.coroutines.delay
 // specific tab must go through a named constant derived from this list (see
 // SETTINGS_TAB_ABOUT), never a literal — a hardcoded index has silently broken
 // twice now, once per reorder.
-private val settingsTabs = listOf("Appearance", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+private val settingsTabs = listOf("Appearance", "Visual Studio", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
 
 /**
  * Which tab carries a given label, for the search index to point at.
@@ -375,14 +376,15 @@ fun SettingsScreen(
                     tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
                         when (page) {
                             0 -> AppearanceTab(viewModel, navController)
-                            1 -> AudioTab(viewModel, navController)
-                            2 -> EqualizerTab(navController, viewModel)
-                            3 -> LibrarySettingsTab(viewModel)
-                            4 -> DownloadsTab(viewModel)
-                            5 -> ConnectionsTab(viewModel)
-                            6 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                            7 -> SystemTab(viewModel, navController)
-                            8 -> AboutTab(viewModel)
+                            1 -> VisualStudioTab(navController)
+                            2 -> AudioTab(viewModel, navController)
+                            3 -> EqualizerTab(navController, viewModel)
+                            4 -> LibrarySettingsTab(viewModel)
+                            5 -> DownloadsTab(viewModel)
+                            6 -> ConnectionsTab(viewModel)
+                            7 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                            8 -> SystemTab(viewModel, navController)
+                            9 -> AboutTab(viewModel)
                         }
                     }
                 }
@@ -570,6 +572,27 @@ private fun EqualizerTab(
     }
 }
 
+/**
+ * The Visual Studio tab: what the player looks like while it is playing.
+ *
+ * Its own category rather than a "Now Playing Appearance" group at the bottom
+ * of Appearance, where it was one row under a header of its own — a heading
+ * over a single item is a category that has not been admitted to yet.
+ * Appearance is the app's chrome: theme, fonts, colours. This is the player's
+ * surface, which is a different thing to go looking for.
+ */
+@Composable
+private fun VisualStudioTab(navController: NavController) {
+    SettingsTabContent {
+        SettingItem(
+            title = "Player Visuals Studio",
+            subtitle = "Lyric type, 3D wave and beat FX; the player and panel glass; " +
+                "and the ambient MilkDrop background",
+            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
+        )
+    }
+}
+
 // ─── Tab 1: Appearance ─────────────────────────────────────────────────
 //
 // Appearance and Interface used to be two tabs, and the split never held up:
@@ -600,13 +623,14 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     val colorTransitionMs by viewModel.colorTransitionMs.collectAsStateWithLifecycle()
     // Only to show what "Match blend" currently works out to; the slider does
     // not change it.
-    val crossfadeSeconds by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val themePaper by viewModel.themePaper.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
     val availableFonts by viewModel.availableFonts.collectAsStateWithLifecycle()
     val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsStateWithLifecycle()
     val glowBehindArt by viewModel.glowBehindArt.collectAsStateWithLifecycle()
+    val artGlowRadius by viewModel.artGlowRadius.collectAsStateWithLifecycle()
+    val artGlowBrightness by viewModel.artGlowBrightnessPct.collectAsStateWithLifecycle()
     val customThemeEnabled by viewModel.customThemeEnabled.collectAsStateWithLifecycle()
     val customAccent by viewModel.customAccentColor.collectAsStateWithLifecycle()
     val customBackground by viewModel.customBackgroundColor.collectAsStateWithLifecycle()
@@ -645,7 +669,6 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         // there when the track changes.
         ColorTransitionSetting(
             millis = colorTransitionMs,
-            blendSeconds = crossfadeSeconds,
             onMillisChange = { viewModel.setColorTransitionMs(it) },
         )
 
@@ -727,6 +750,28 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             checked = glowBehindArt,
             onCheckedChange = { viewModel.setGlowBehindArt(it) }
         )
+        // The cover bloom's own size and strength, separate from the Studio's
+        // Glow section (the bloom behind the lyrics). Inside the switch that
+        // draws them, like the Dynamic Colors rows above. Until one is moved
+        // they read the lyric glow, so they open on what is already on screen.
+        AnimatedVisibility(visible = glowBehindArt) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                IntSettingSlider(
+                    value = artGlowRadius,
+                    valueRange = 0f..160f,
+                    onCommit = { viewModel.setArtGlowRadius(it) },
+                    label = { "Glow radius  +$it dp" },
+                    subtitle = "How far the halo reaches past the cover's edge",
+                )
+                IntSettingSlider(
+                    value = artGlowBrightness,
+                    valueRange = 0f..60f,
+                    onCommit = { viewModel.setArtGlowBrightness(it) },
+                    label = { "Glow brightness  $it%" },
+                    subtitle = "Peak strength of the halo on a kick",
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Typography")
@@ -936,6 +981,112 @@ private fun FontRow(
 @Composable
 private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavController) {
     val explicit by viewModel.showExplicitBadges.collectAsStateWithLifecycle()
+    val playerDynamicColor by viewModel.playerDynamicColor.collectAsStateWithLifecycle()
+    val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsStateWithLifecycle()
+
+    SettingsGroupHeader("Display")
+    SettingSwitchItem(
+        title = "Show Explicit Badges",
+        subtitle = "Display 'E' badge on explicit tracks",
+        checked = explicit,
+        onCheckedChange = { viewModel.setShowExplicitBadges(it) }
+    )
+    val romaji by viewModel.romajiLyrics.collectAsStateWithLifecycle()
+    SettingSwitchItem(
+        title = "Romaji Lyrics",
+        subtitle = "Transliterate Japanese lyrics to Latin characters",
+        checked = romaji,
+        onCheckedChange = { viewModel.setRomajiLyrics(it) }
+    )
+
+    // Word-level lyrics provider — which karaoke-timing source(s) run when
+    // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
+    val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            text = "Word-level lyrics provider",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        val providerOptions = listOf(
+            tf.monochrome.android.data.preferences.LyricsWordProvider.NETEASE_ONLY,
+            tf.monochrome.android.data.preferences.LyricsWordProvider.KUGOU_ONLY,
+            tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH,
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            providerOptions.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = lyricsProvider == mode,
+                    onClick = { viewModel.setLyricsWordProvider(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index, providerOptions.size),
+                ) {
+                    Text(mode.displayName)
+                }
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+    SettingsGroupHeader("Now Playing")
+    val viewMode by viewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
+    var showModeDropdown by remember { mutableStateOf(false) }
+    SettingItem(
+        title = "View Mode", 
+        subtitle = "Action when clicking album art: ${viewMode.displayName}", 
+        onClick = { showModeDropdown = true }
+    )
+    DropdownMenu(expanded = showModeDropdown, onDismissRequest = { showModeDropdown = false }) {
+        NowPlayingViewMode.entries.forEach { mode ->
+            DropdownMenuItem(
+                text = { Text(mode.displayName) },
+                onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
+            )
+        }
+    }
+    SettingSwitchItem(
+        title = "Dynamic Player Color",
+        subtitle = "Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color",
+        checked = playerDynamicColor,
+        onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
+    )
+    SettingSwitchItem(
+        title = "Blurred Album Background",
+        subtitle = "Behind the player and the mixer: the album art stretched and heavily blurred",
+        checked = playerBlurredBackground,
+        onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
+    )
+
+    Spacer(modifier = Modifier.height(16.dp))
+}
+
+/**
+ * Everything under Spectrum Analyzer, Audio Visualizer, Visualizer Graphics and
+ * Preset rotation.
+ *
+ * Split out of [InterfaceControls], which was 356 lines collecting twenty-eight
+ * pieces of state at its top — so moving the brightness slider invalidated the
+ * "Show Explicit Badges" switch, and every other row on the screen, because
+ * they all sat in one composable scope. Each half reads only its own flows now,
+ * and neither recomposes for the other's changes.
+ *
+ * It was also the single largest method in the app by compiler cost: a device
+ * log shows ART allocating 4.7 MB to JIT `InterfaceControls` the first time
+ * Settings opened, with 102 frames skipped around it. Two smaller methods are
+ * cheaper to compile and land in the profile independently.
+ *
+ * No longer rendered here: the whole visualizer — this block plus the
+ * ambient overlay controls — lives on the Player Visuals Studio's
+ * "Visualizer" tab now. Kept in this file (internal) because it shares the
+ * settings-row helpers below.
+ */
+@Composable
+internal fun VisualizerSettings(viewModel: SettingsViewModel) {
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
     val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
@@ -957,8 +1108,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
     val spectrumFftSize by viewModel.spectrumFftSize.collectAsStateWithLifecycle()
     val spectrumBins by viewModel.spectrumBins.collectAsStateWithLifecycle()
-    val playerDynamicColor by viewModel.playerDynamicColor.collectAsStateWithLifecycle()
-    val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsStateWithLifecycle()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
     var showTextureDropdown by remember { mutableStateOf(false) }
     var showPresetDropdown by remember { mutableStateOf(false) }
@@ -968,92 +1117,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     LaunchedEffect(Unit) {
         viewModel.prepareVisualizerEngine()
     }
-
-        SettingsGroupHeader("Display")
-        SettingSwitchItem(
-            title = "Show Explicit Badges",
-            subtitle = "Display 'E' badge on explicit tracks",
-            checked = explicit,
-            onCheckedChange = { viewModel.setShowExplicitBadges(it) }
-        )
-        val romaji by viewModel.romajiLyrics.collectAsStateWithLifecycle()
-        SettingSwitchItem(
-            title = "Romaji Lyrics",
-            subtitle = "Transliterate Japanese lyrics to Latin characters",
-            checked = romaji,
-            onCheckedChange = { viewModel.setRomajiLyrics(it) }
-        )
-
-        // Word-level lyrics provider — which karaoke-timing source(s) run when
-        // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
-        val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
-        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Text(
-                text = "Word-level lyrics provider",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            val providerOptions = listOf(
-                tf.monochrome.android.data.preferences.LyricsWordProvider.NETEASE_ONLY,
-                tf.monochrome.android.data.preferences.LyricsWordProvider.KUGOU_ONLY,
-                tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH,
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                providerOptions.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = lyricsProvider == mode,
-                        onClick = { viewModel.setLyricsWordProvider(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index, providerOptions.size),
-                    ) {
-                        Text(mode.displayName)
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Now Playing")
-        val viewMode by viewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
-        var showModeDropdown by remember { mutableStateOf(false) }
-        SettingItem(
-            title = "View Mode", 
-            subtitle = "Action when clicking album art: ${viewMode.displayName}", 
-            onClick = { showModeDropdown = true }
-        )
-        DropdownMenu(expanded = showModeDropdown, onDismissRequest = { showModeDropdown = false }) {
-            NowPlayingViewMode.entries.forEach { mode ->
-                DropdownMenuItem(
-                    text = { Text(mode.displayName) },
-                    onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
-                )
-            }
-        }
-        SettingSwitchItem(
-            title = "Dynamic Player Color",
-            subtitle = "Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color",
-            checked = playerDynamicColor,
-            onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
-        )
-        SettingSwitchItem(
-            title = "Blurred Album Background",
-            subtitle = "Behind the player and the mixer: the album art stretched and heavily blurred",
-            checked = playerBlurredBackground,
-            onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Now Playing Appearance")
-        SettingItem(
-            title = "Player Visuals Studio",
-            subtitle = "Live editor for the lyric type / 3D wave / beat FX, plus the player and mini-player glass",
-            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
-        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Spectrum Analyzer")
@@ -1619,24 +1682,24 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Spatial Audio")
-        SettingItem(
-            title = "Atmos Renderer Configuration",
-            subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
-            onClick = { navController.navigateTool(Screen.AtmosRenderer) },
-        )
-
-        // Everything below used to sit under "Spatial Audio" too, which only
-        // ever described the Atmos row above it. The DSP block size, the USB
-        // routing and the downmix are what leaves the engine and how — their
-        // own group.
+        // One group, not two. "Spatial Audio" held nothing but the Atmos row,
+        // and that row is the multichannel renderer's own settings — channel
+        // map, downmix coefficients, binaural render. It belongs against the
+        // switch that decides whether any of it runs, so it sits directly
+        // above the downmix toggle instead of under a heading of its own.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Output")
         DspBlockSizeSelector(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
         UsbBitPerfectToggle(viewModel)
+
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingItem(
+            title = "Atmos Renderer Configuration",
+            subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
+            onClick = { navController.navigateTool(Screen.AtmosRenderer) },
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
         MultichannelDownmixToggle(viewModel)
@@ -1954,6 +2017,7 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     val diagnostics by viewModel.usbBypassDiagnostics.collectAsStateWithLifecycle()
     val failure by viewModel.usbBypassFailure.collectAsStateWithLifecycle()
     val supportedRates by viewModel.usbBypassSupportedRates.collectAsStateWithLifecycle()
+    val dacInfo by viewModel.usbDacInfo.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = "Exclusive USB DAC (bypass Android audio)",
         subtitle = exclusiveSubtitle(
@@ -1964,20 +2028,24 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     )
     // Only render the diagnostic card when the toggle is on AND we
     // have something honest to say — either an active stream, a
-    // categorised failure, or a known rate inventory. Hidden the rest
-    // of the time so the toggle row stays clean.
+    // categorised failure, a known rate inventory, or a DAC we can
+    // actually name. Hidden the rest of the time so the toggle row
+    // stays clean.
     if (exclusiveEnabled &&
-        (diagnostics != null || failure != null || supportedRates.isNotEmpty())) {
+        (diagnostics != null || failure != null || supportedRates.isNotEmpty() || dacInfo != null)) {
         BypassDiagnosticsCard(
             diagnostics = diagnostics,
             failure = failure,
             supportedRates = supportedRates,
+            dacInfo = dacInfo,
         )
     }
 }
 
 /**
  * Renders a compact info card beneath the exclusive-USB toggle:
+ *   - DAC identity (when a device is owned): manufacturer/product name,
+ *     VID:PID, USB version, class triple, serial when granted
  *   - Active stream specs (when streaming): rate / bits / channels /
  *     UAC version / device speed / async-feedback presence / clock id
  *   - Failure detail (when not streaming and a start attempt failed)
@@ -1992,6 +2060,7 @@ private fun BypassDiagnosticsCard(
     diagnostics: tf.monochrome.android.audio.usb.BypassDiagnostics?,
     failure: tf.monochrome.android.audio.usb.StartFailure?,
     supportedRates: List<tf.monochrome.android.audio.usb.ClockRateRange>,
+    dacInfo: tf.monochrome.android.audio.usb.DacInfo? = null,
 ) {
     Card(
         modifier = Modifier
@@ -2002,6 +2071,40 @@ private fun BypassDiagnosticsCard(
         ),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            if (dacInfo != null) {
+                Text(
+                    text = "DAC",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = dacInfo.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = buildString {
+                        append(dacInfo.descriptorLine)
+                        dacInfo.serialNumber?.takeIf { it.isNotBlank() }?.let {
+                            append(" · SN ")
+                            append(it)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (diagnostics != null || failure != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
             if (diagnostics != null) {
                 Text(
                     text = "Active stream",
@@ -2167,6 +2270,8 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
     val downloadFolder by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
     var showQualityDropdown by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
+    val downloadedCount by viewModel.downloadedCount.collectAsStateWithLifecycle()
+    val downloadedSize by viewModel.downloadedSize.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val folderPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -2186,7 +2291,25 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
             title = { Text("Clear Downloads") },
-            text = { Text("This will delete all downloaded tracks from your device. This action cannot be undone.") },
+            // Named, not "all downloaded tracks". A number and a size are what
+            // tell you whether this is the three podcasts you meant or the
+            // album you spent an evening on a hotel connection fetching.
+            text = {
+                Text(
+                    buildString {
+                        append(
+                            when (downloadedCount) {
+                                1 -> "1 downloaded track"
+                                else -> "$downloadedCount downloaded tracks"
+                            }
+                        )
+                        downloadedSize?.let { append(" ($it)") }
+                        append(" will be deleted from your device. ")
+                        append("Streaming them again needs a connection, and re-downloading ")
+                        append("them needs the same data over again. This cannot be undone.")
+                    }
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAllDownloads()
@@ -2263,8 +2386,32 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         // two identically-titled headers in different tabs read as the same
         // setting reachable from two places. This one is about the files.
         SettingsGroupHeader("Downloaded Files")
+        // The warning goes above the button, not only in the dialog it opens.
+        // A confirmation you meet after committing to the tap is a speed bump;
+        // what stops the wrong tap is knowing beforehand that there is
+        // something here to lose, and how much of it.
+        if (downloadedCount > 0) {
+            SettingCaution(
+                buildString {
+                    append("Deletes ")
+                    append(if (downloadedCount == 1) "1 track" else "$downloadedCount tracks")
+                    downloadedSize?.let { append(" ($it)") }
+                    append(" from this device. They have to be downloaded again to play offline.")
+                }
+            )
+        } else {
+            Text(
+                "Nothing downloaded.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         OutlinedButton(
             onClick = { showClearDialog = true },
+            // A destructive-looking button that does nothing still costs a
+            // moment of worry to press.
+            enabled = downloadedCount > 0,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
         ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -3005,7 +3152,10 @@ private fun AboutTab(viewModel: SettingsViewModel) {
         // Support first. It used to sit at the bottom of About, below the
         // release notes and the update controls — which is to say, below the
         // fold on every phone, where nobody scrolled to find it.
-        SupportSection(onTip = { openDonationUrl(context, "https://ko-fi.com/trypt") })
+        SupportSection(
+            onKofi = { openDonationUrl(context, SupportLinks.KO_FI) },
+            onPatreon = { openDonationUrl(context, SupportLinks.PATREON) },
+        )
 
         Spacer(modifier = Modifier.height(28.dp))
         WhatsNewPanel(highlight = arrivedUnread)
@@ -3042,7 +3192,7 @@ private fun AboutTab(viewModel: SettingsViewModel) {
 
 /** The tip jar, and who's asking. */
 @Composable
-private fun SupportSection(onTip: () -> Unit) {
+private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit) {
     SettingsGroupHeader("Support the app")
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -3068,23 +3218,53 @@ private fun SupportSection(onTip: () -> Unit) {
             modifier = Modifier.padding(horizontal = 8.dp)
         )
         Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = onTip,
+        // Two ways to give, side by side and equally weighted, because they
+        // are equally good from here — one is a one-off, the other is monthly,
+        // and the app has no business steering that. Outlined rather than the
+        // single filled button Ko-fi used to be: two filled buttons compete,
+        // and a filled one beside an outlined one is a recommendation.
+        Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Tip on Ko-fi")
+            SupportButton(
+                label = "Ko-fi",
+                logo = R.drawable.logo_kofi,
+                onClick = onKofi,
+                modifier = Modifier.weight(1f),
+            )
+            SupportButton(
+                label = "Patreon",
+                logo = R.drawable.logo_patreon,
+                onClick = onPatreon,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
-// Opens an external donation/support URL in the browser (or a Custom Tab, if the
-// user's default browser supports it). Wrapped so a device with no browser can't
-// crash the app — it surfaces a Toast instead.
-private fun openDonationUrl(context: android.content.Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-    } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+/**
+ * One donation destination: its mark, then its name.
+ *
+ * The logo is tinted to the button's own content colour rather than carrying
+ * the brand's — see the note in `logo_kofi.xml`. Both marks are corals close
+ * enough that, side by side at 18dp, they would read as one brand twice.
+ */
+@Composable
+private fun SupportButton(
+    label: String,
+    @DrawableRes logo: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(onClick = onClick, modifier = modifier) {
+        Icon(
+            painter = painterResource(id = logo),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label)
     }
 }
 
@@ -3454,9 +3634,15 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         // pages this list could reach. It covers Home and Discover now, neither
         // of which is a library tab. The entry in SettingsSearchIndex has to be
         // renamed with it — a test greps these files for every index title.
+        //
+        // It no longer orders a swipe: pages are picked from the list on Home,
+        // and this is that list's order. Which is less than it used to do, and
+        // not nothing — the order here is the order you read there, and a page
+        // grayed out leaves the list altogether.
         SettingsGroupHeader("Page Order")
         Text(
-            "Reorder the pages you swipe between, and gray out the ones you don't use.",
+            "The order of the page list on Home. Gray out the ones you don't use " +
+                "and they leave the list.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -3548,31 +3734,58 @@ private fun WhatsNewPanel(highlight: Boolean) {
 
         AnimatedVisibility(visible = expanded) {
             Column {
-                // Sections are announced when they start, so consecutive entries
-                // under one heading print it once. Entries with no section carry
-                // straight on as the flat list they were.
-                var section: String? = null
-                release.entries.forEach { entry ->
-                    if (entry.section != null && entry.section != section) {
+                // Two levels of heading, and they answer different questions.
+                // The outer one is what KIND of change it is — what is new, what
+                // behaves differently, what is gone — because that is the thing
+                // a reader is usually scanning for and a flat list makes all
+                // three the same search. The inner one is what part of the app
+                // it touches.
+                //
+                // Unclassified entries print first, with no heading at all, the
+                // way the whole list did before there were groups: the releases
+                // already shipped were written flat, and inventing a label for
+                // each of them after the fact would be a hundred guesses.
+                val grouped = listOf<WhatsNewKind?>(null) + WhatsNewKind.entries
+                grouped.forEach { kind ->
+                    val entries = release.entries.filter { it.kind == kind }
+                    if (entries.isEmpty()) return@forEach
+
+                    if (kind != null) {
                         Text(
-                            text = entry.section,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                            text = kind.heading,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 2.dp),
                         )
                     }
-                    section = entry.section
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        Text(
-                            text = entry.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = entry.body,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+
+                    // Sections are announced when they start, so consecutive
+                    // entries under one heading print it once. Reset per kind:
+                    // the same section can open again under the next one.
+                    var section: String? = null
+                    entries.forEach { entry ->
+                        if (entry.section != null && entry.section != section) {
+                            Text(
+                                text = entry.section,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                            )
+                        }
+                        section = entry.section
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            Text(
+                                text = entry.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = entry.body,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -3837,16 +4050,14 @@ private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
  * How long the album's colours take to cross over, as a slider that says the
  * time in seconds.
  *
- * Its first stop is **Match blend**, not zero, and that is the default. Left
- * there the app keeps deriving the fade from "Blend Between Tracks", which is
- * the pairing [ColorBlend] exists to hold: with a blend set, the queue advances
- * at `duration - blend`, so a fade of exactly that length lands on the last
- * sample of the outgoing track. Any number here breaks that on purpose, which is
- * a fine thing to want and a poor thing to do by accident — hence a stop that
- * means "leave it alone" rather than a number that happens to match today.
- *
- * The label shows what Match blend currently works out to, because "match blend"
- * on its own does not tell you whether that is 0.6 s or twelve seconds.
+ * The first stop was **Match blend**, and it was the default: the fade took its
+ * length from "Blend Between Tracks" so the picture and the sound moved
+ * together. That pairing is real, and the price of it was not obvious from the
+ * slider — a four-second blend is an ordinary setting, and it made the left end
+ * of this control read "Match blend · 4.00 s" and repaint the whole window for
+ * four seconds on every track change. The stops start at zero now and the
+ * default is a few hundred milliseconds; anyone who wants the old behaviour can
+ * read their blend and dial the same number.
  *
  * The value is committed on release rather than on every pixel of the drag: it
  * is written to disk and read by the player, the mini player and the theme, and
@@ -3855,23 +4066,19 @@ private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
 @Composable
 private fun ColorTransitionSetting(
     millis: Int,
-    blendSeconds: Int,
     onMillisChange: (Int) -> Unit,
 ) {
     val stops = ColorBlend.steps
-    // An unrecognised stored value (an older build's, a hand-edited one) lands
-    // on Match blend rather than off the end of the track.
-    val stored = stops.indexOf(millis).coerceAtLeast(0)
+    // An unrecognised stored value — an older build's -1 for "match blend", or
+    // a hand-edited one — is resolved to a real length first, so the thumb
+    // lands on the stop that value actually behaves like rather than off the
+    // end of the track.
+    val stored = stops.indexOf(ColorBlend.millisFor(millis)).coerceAtLeast(0)
     var position by remember(stored) { mutableFloatStateOf(stored.toFloat()) }
     val selected = stops[position.roundToInt().coerceIn(stops.indices)]
 
     fun seconds(ms: Int) = String.format(Locale.US, "%.2f s", ms / 1000f)
-    val readout = when {
-        selected == ColorBlend.MATCH_BLEND ->
-            "Match blend · ${seconds(ColorBlend.millisFor(blendSeconds))}"
-        selected == 0 -> "Instant"
-        else -> seconds(selected)
-    }
+    val readout = if (selected == 0) "Instant" else seconds(selected)
 
     Column(modifier = Modifier.fillMaxWidth().settingsAnchor("Color transition")) {
         Row(
@@ -3892,7 +4099,7 @@ private fun ColorTransitionSetting(
         }
         Text(
             text = "How long the album's colours take to cross over when the track changes. " +
-                "Match blend keeps them in step with Blend Between Tracks.",
+                "Longer means more of the screen repainting for longer.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -1,6 +1,5 @@
 package tf.monochrome.android.ui.navigation
 
-import tf.monochrome.android.ui.theme.goToPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -67,16 +67,16 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.components.MiniPlayer
-import tf.monochrome.android.ui.components.SwipeToLibraryHint
-import tf.monochrome.android.ui.components.SwipeHintPillHeight
-import tf.monochrome.android.ui.components.swipeHintPillWidth
 import tf.monochrome.android.ui.theme.ColorBlend
+import tf.monochrome.android.ui.theme.goToPage
+import tf.monochrome.android.ui.theme.reduceMotion
 import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.detail.AlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
 import tf.monochrome.android.ui.detail.LocalAlbumDetailScreen
 import tf.monochrome.android.ui.detail.LocalArtistDetailScreen
-import tf.monochrome.android.ui.detail.LocalGenreDetailScreen
+import tf.monochrome.android.ui.detail.LocalFacet
+import tf.monochrome.android.ui.detail.LocalFacetDetailScreen
 import tf.monochrome.android.ui.eq.EqualizerScreen
 import tf.monochrome.android.ui.eq.ParametricEqEditScreen
 import tf.monochrome.android.ui.eq.ParametricEqScreen
@@ -109,7 +109,6 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Discover : Screen("discover")
     data object GenreMap : Screen("discover/map")
-    data object WorldRadio : Screen("discover/radio")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
     }
@@ -159,8 +158,19 @@ sealed class Screen(val route: String) {
     data object LocalArtistDetail : Screen("local_artist/{artistId}") {
         fun createRoute(artistId: Long) = "local_artist/$artistId"
     }
-    data object LocalGenreDetail : Screen("local_genre/{genre}") {
-        fun createRoute(genre: String) = "local_genre/${android.net.Uri.encode(genre)}"
+    /**
+     * One value of a library tag — a genre, an album artist, a composer, a
+     * year — and the tracks under it.
+     *
+     * This was `local_genre/{genre}`. The facet moved into the path rather
+     * than four near-identical routes being added beside it, because the
+     * screen and its view model are the same four times over; only the query
+     * differs. [LocalFacet.fromKey] decides what an unknown segment means, so
+     * a stale link opens a genre instead of crashing.
+     */
+    data object LocalFacetDetail : Screen("local_facet/{facet}/{value}") {
+        fun createRoute(facet: LocalFacet, value: String) =
+            "local_facet/${facet.key}/${android.net.Uri.encode(value)}"
     }
     data object Mixer : Screen("mixer")
     data object CarMode : Screen("car_mode")
@@ -217,12 +227,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val miniPlayerGlass by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     // The mini player's cover changes track at the same speed its album tint
-    // does — both come off "Blend Between Tracks" — and tells a skip from a
-    // song ending the same way the full player does.
-    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
+    // does — both come off "Color transition" — and tells a skip from a song
+    // ending the same way the full player does.
     val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
     val miniBlendMs = tf.monochrome.android.ui.theme.motionMillis(
-        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+        ColorBlend.millisFor(colorTransitionMs)
     )
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
 
@@ -247,8 +256,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         && currentDestination?.route !in miniPlayerHiddenRoutes
 
     val scope = rememberCoroutineScope()
-    // Page changes slide normally; with "Disable animations" on they jump.
-    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
 
     // One pager over one flat list of pages. There used to be two — an outer one
     // hardcoded to Home / Discover / Library and an inner one over the Library's
@@ -270,6 +277,34 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     }
     LaunchedEffect(pagerState.currentPage, pages) {
         lastPageId = pages.getOrNull(pagerState.currentPage)
+    }
+
+    // Every jump to a page goes through here, and it matters that `scope` is
+    // the nav host's rather than the calling screen's. The list that issues the
+    // jump is inside the thing being navigated away from — a sheet that closes,
+    // or Home, which the pager disposes on the way out — and a
+    // rememberCoroutineScope dies with its composable, cancelling the scroll
+    // part-way. The pager then settled wherever it had got to, which is why
+    // tapping a distant page opened the wrong one.
+    // Read here, not in the coroutine: reduceMotion is a Composable.
+    val slidePages = !reduceMotion()
+    val selectPage: (String) -> Unit = { id ->
+        val page = pages.indexOf(id)
+        // Slide to the page next door, jump to anything further.
+        //
+        // Sliding was removed outright because it sweeps the pager through
+        // every page in between, and Home to Downloads animated across five of
+        // them — a long smear of pages nobody asked for. That reasoning only
+        // holds when there IS something in between. One page over there is
+        // nothing to sweep, and the slide reads as the two pages being
+        // neighbours, which they are.
+        //
+        // Distance from the page actually shown, so this stays right if a drag
+        // left the pager somewhere other than where the last pick put it.
+        if (page >= 0) scope.launch {
+            val adjacent = kotlin.math.abs(page - pagerState.currentPage) == 1
+            pagerState.goToPage(page, animated = slidePages && adjacent)
+        }
     }
 
     // One-shot landing route handed over by onboarding. Keyed on Unit and not on
@@ -296,18 +331,25 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // down for a detail screen — is the sole record of which page you are on.
     // That is already how the inner section pager worked.
 
-    // Back on any page but the first returns the pager to page 0 — whichever page
-    // the user has put there — instead of popping the nav out from under it.
-    // Previously back on the Library tab popped the NavController to Home while
-    // the pager stayed on Library: visually nothing happened, and the next back
-    // exited the app with Library still on screen.
+    // Back goes to Home, and nowhere else. There is no swipe any more, so there
+    // is no route to retrace: the only movement to undo is "I opened this page
+    // from the list", and its undo is the list.
     //
-    // This is composed before the pager content below, so it registers first and
-    // LibraryScreen's selection handler — composed later, inside a page — wins the
-    // first back press while a selection is active. That ordering used to be
-    // enforced within LibraryScreen; it is spread across two files now.
-    BackHandler(enabled = isOnMainTab && pagerState.currentPage != 0) {
-        scope.launch { pagerState.goToPage(0, animateTabs) }
+    // Back never popped the NavController here and must not: back on a library
+    // page used to pop to Home while the pager stayed put, so visually nothing
+    // happened and the next Back exited the app with the page still on screen.
+    //
+    // Each page's scroll position rides along for free — `tabStateHolder` below
+    // keeps every `rememberSaveable` in a page alive while it is off screen,
+    // `rememberLazyListState` included, so a page returned to is where it was
+    // left rather than at the top.
+    //
+    // Composed before the pager content below, so it registers first and
+    // LibraryScreen's selection handler — composed later, inside a page — wins
+    // the first back press while a selection is active.
+    val homePage = homePageIndex(pages)
+    BackHandler(enabled = isOnMainTab && pagerState.currentPage != homePage) {
+        pages.getOrNull(homePage)?.let(selectPage)
     }
 
     val themeBackground = MaterialTheme.colorScheme.background
@@ -344,8 +386,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // the bar.
         // Both maps run full-bleed under the mini player on purpose, so its
         // glass has real content to lens rather than a flat inset.
+        //
+        // The player joins them: it already insets itself, so reserving the bar
+        // out here charged it twice — a second button bar of dead height on
+        // 3-button navigation, which the height-bound artwork paid for.
+        // World radio used to be here. It is a pager page now, and the pager
+        // is already full-bleed — this list is only about NavHost destinations.
         val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
-            currentDestination?.route == Screen.WorldRadio.route
+            currentDestination?.route == Screen.NowPlaying.route
 
         // Every screen runs *under* the mini player. Reserving the bar's height
         // out here letterboxed them: the strip behind the bar was flat theme
@@ -371,6 +419,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
         CompositionLocalProvider(
             LocalMiniPlayerInset provides if (showMiniPlayer) MINI_PLAYER_INSET else 0.dp,
+            // So a song row anywhere in the app can show that it is the one
+            // playing, without every list having to pass it down.
+            LocalNowPlayingTrackId provides currentTrack?.id,
             LocalAppHaze provides hazeState,
             // Published for the whole app, so every floating sheet of glass on
             // an ordinary screen is the same material as the bar it sits beside
@@ -384,7 +435,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
-                    beyondViewportPageCount = 0
+                    beyondViewportPageCount = 0,
+                    // Pages are chosen from the list on Home. The pager stays
+                    // because SaveableStateProvider hangs off it — that is what
+                    // keeps each page's scroll position while it is off screen
+                    // — but it is driven, not dragged.
+                    userScrollEnabled = false,
                 ) { page ->
                     // getOrNull, not [page]: `pages` shrinks when a page is
                     // hidden, and the content lambda can be invoked for a stale
@@ -401,11 +457,28 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         tf.monochrome.android.devedit.DevEditScreen(pageId) {
                             when (pageId) {
                                 Screen.Home.route ->
-                                    HomeScreen(navController = navController, playerViewModel = playerViewModel)
+                                    HomeScreen(
+                                        navController = navController,
+                                        playerViewModel = playerViewModel,
+                                        pages = pages,
+                                        onSelectPage = selectPage,
+                                    )
                                 Screen.Discover.route ->
                                     DiscoverScreen(
                                         navController = navController,
                                         playerViewModel = playerViewModel,
+                                        pages = pages,
+                                        onSelectPage = selectPage,
+                                    )
+                                // Its own branch rather than a Library section:
+                                // the globe is full-bleed and brings its own top
+                                // bar and gestures, and LibraryScreen wraps its
+                                // sections in chrome the globe does not want.
+                                RADIO_PAGE_ID ->
+                                    tf.monochrome.android.ui.discover.WorldRadioScreen(
+                                        playerViewModel = playerViewModel,
+                                        pages = pages,
+                                        onSelectPage = selectPage,
                                     )
                                 // Everything else is a Library page.
                                 // reconcilePageOrder drops ids this build does
@@ -415,7 +488,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                     playerViewModel = playerViewModel,
                                     sectionId = pageId,
                                     pages = pages,
-                                    pager = pagerState,
+                                    onSelectPage = selectPage,
                                 )
                             }
                         }
@@ -439,14 +512,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.GenreMap.route) {
                     tf.monochrome.android.devedit.DevEditScreen("genre_map") {
                         GenreMapScreen(
-                            navController = navController,
-                            playerViewModel = playerViewModel,
-                        )
-                    }
-                }
-                composable(Screen.WorldRadio.route) {
-                    tf.monochrome.android.devedit.DevEditScreen("world_radio") {
-                        tf.monochrome.android.ui.discover.WorldRadioScreen(
                             navController = navController,
                             playerViewModel = playerViewModel,
                         )
@@ -698,11 +763,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     }
                 }
                 composable(
-                    route = Screen.LocalGenreDetail.route,
-                    arguments = listOf(navArgument("genre") { type = NavType.StringType })
+                    route = Screen.LocalFacetDetail.route,
+                    arguments = listOf(
+                        navArgument("facet") { type = NavType.StringType },
+                        navArgument("value") { type = NavType.StringType },
+                    )
                 ) {
-                    tf.monochrome.android.devedit.DevEditScreen("local_genre_detail") {
-                        LocalGenreDetailScreen(
+                    tf.monochrome.android.devedit.DevEditScreen("local_facet_detail") {
+                        LocalFacetDetailScreen(
                             navController = navController,
                             onPlayTrack = { track, queue ->
                                 playerViewModel.playUnifiedTrack(track, queue)
@@ -720,48 +788,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         )
                     }
                 }
-            }
-        }
-
-        // ── Layer 1.5: page indicator ───────────────────────────────
-        // Compact glass pill centred on the TopAppBar's own centre line, in the
-        // free gap between the screens' titles and their action icons. Drawn
-        // OVER the pager, not behind it: Haze can only blur content already
-        // drawn this frame, so a pill under the pager loses its frost entirely.
-        if (isOnMainTab) {
-            CompositionLocalProvider(
-                tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
-            ) {
-                // One slot per visible page. This used to fold an outer
-                // Home/Discover/Library pager and an inner section pager onto
-                // one axis by hand, fading the inner one in by how far the outer
-                // crossing had got. There is one pager now, so the indicator is
-                // just its position.
-                val next = (pagerState.currentPage + 1) % pages.size.coerceAtLeast(1)
-                SwipeToLibraryHint(
-                    pageCount = pages.size,
-                    // Stays a lambda: it is read in a DrawScope, not in
-                    // composition, so the worm follows the finger without
-                    // recomposing on every frame of the swipe.
-                    progressProvider = {
-                        pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    },
-                    // Tap walks forward one page and wraps at the end.
-                    onClick = { scope.launch { pagerState.goToPage(next, animateTabs) } },
-                    onClickLabel = pages.getOrNull(next)
-                        ?.let { "Open " + (APP_PAGE_TITLES[it] ?: it) }
-                        ?: "Open next page",
-                    hazeState = hazeState,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        // The TopAppBar pads itself for the status bar and is
-                        // 64.dp tall, so this drops the pill onto its centre.
-                        .padding(top = statusBarHeight + (64.dp - SwipeHintPillHeight) / 2)
-                        .size(
-                            width = swipeHintPillWidth(pages.size),
-                            height = SwipeHintPillHeight,
-                        ),
-                )
             }
         }
         }

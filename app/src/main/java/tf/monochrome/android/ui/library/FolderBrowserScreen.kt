@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,8 +12,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -39,12 +44,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.FastScroller
+import tf.monochrome.android.ui.components.bounceCombinedClick
+import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.TrackListToolbar
@@ -52,11 +61,13 @@ import tf.monochrome.android.ui.components.TrackSort
 import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
+import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
 
@@ -83,6 +94,20 @@ fun FolderBrowserScreen(
     }
     val visibleTracks = remember(tracks, listQuery, listSort) {
         tracks.applyUnifiedSearchAndSort(listQuery, listSort)
+    }
+
+    var folderToExclude by remember { mutableStateOf<FolderToExclude?>(null) }
+    folderToExclude?.let { folder ->
+        ExcludeFolderDialog(
+            folder = folder,
+            onDismiss = { folderToExclude = null },
+            onConfirm = {
+                viewModel.excludeFolder(folder.path)
+                // The folder just left the library; staying on a page that is
+                // now guaranteed empty is not useful.
+                if (folder.path == folderPath) navController.popBackStack()
+            },
+        )
     }
 
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
@@ -145,19 +170,46 @@ fun FolderBrowserScreen(
             placeholder = "Search this folder",
             onClose = { searchOpen = false; listQuery = "" },
         ) { searchTopInset ->
+        val listState = rememberLazyListState()
+        Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                         top = searchTopInset,
                         bottom = 80.dp + LocalMiniPlayerInset.current,
                     )
         ) {
-            // Subfolders
-            items(subfolders) { folder ->
+            // Subfolders first, then the folder's own audio files. Both kinds of
+            // row live in one list, so each declares its contentType — without it
+            // Compose would try to reuse a folder row's slots for a track row.
+            items(subfolders, key = { it.path }, contentType = { "folder" }) { folder ->
                 Row(
+                    // The same pane as the Folders tab and Home's page list.
+                    // The gap is in this row's own padding rather than the
+                    // list's arrangement, because the tracks below share this
+                    // LazyColumn and are a dense list, not tiles.
+                    //
+                    // No hazeState, as everywhere else in scrolling content —
+                    // see liquidGlass.
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navController.navigateSafe("folder/${java.net.URLEncoder.encode(folder.path, "UTF-8")}") }
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .liquidGlass(shape = MonoDimens.shapeMd)
+                        .bounceCombinedClick(
+                            onLongClick = {
+                                folderToExclude = FolderToExclude(
+                                    path = folder.path,
+                                    displayName = folder.displayName,
+                                    trackCount = folder.trackCount,
+                                )
+                            },
+                            onClick = {
+                                navController.navigateSafe(
+                                    Screen.FolderBrowser.createRoute(folder.path)
+                                )
+                            },
+                        )
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -193,11 +245,18 @@ fun FolderBrowserScreen(
                     )
                 }
             }
-            items(visibleTracks, key = { it.id }) { track ->
+            items(visibleTracks, key = { it.id }, contentType = { "track" }) { track ->
+                // legacyId, not id: the queue holds legacy Tracks, so that is
+                // what LocalNowPlayingTrackId carries.
+                val nowPlaying = track.legacyId == LocalNowPlayingTrackId.current
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(MonoDimens.listRowHeight)
+                        .background(
+                            if (nowPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                            else Color.Transparent
+                        )
                         .clickable { onPlayTrack(track, visibleTracks) }
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -224,6 +283,8 @@ fun FolderBrowserScreen(
                         Text(
                             track.title,
                             style = MaterialTheme.typography.bodyLarge,
+                            color = if (nowPlaying) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -273,6 +334,34 @@ fun FolderBrowserScreen(
                     }
                 }
             }
+        }
+        // A folder with nothing in it used to render two empty lists and say
+        // nothing at all, which is how the broken folder tree went unnoticed:
+        // a blank screen looks the same whether the folder is empty or the
+        // browser lost track of its contents.
+        if (subfolders.isEmpty() && tracks.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "No music here",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Nothing under this folder has been added to your library. " +
+                        "If you have put music here since the last scan, scan again.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                TextButton(onClick = { viewModel.startFullScan() }) { Text("Scan again") }
+            }
+        }
+        FastScroller(state = listState)
         }
         }
     }

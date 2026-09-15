@@ -60,7 +60,6 @@ class SettingsViewModel @Inject constructor(
     private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
-    private val artworkRefreshDetector: tf.monochrome.android.data.local.scanner.ArtworkRefreshDetector,
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
@@ -95,6 +94,11 @@ class SettingsViewModel @Inject constructor(
     val usbBypassSupportedRates: StateFlow<List<tf.monochrome.android.audio.usb.ClockRateRange>> =
         usbExclusiveController.supportedRates
 
+    /** Which DAC is plugged in — name, VID:PID, USB version — as read from
+     *  its descriptors. Null while no device is owned. */
+    val usbDacInfo: StateFlow<tf.monochrome.android.audio.usb.DacInfo?> =
+        usbExclusiveController.dacInfo
+
     /** Shared live FFT bins from the audio pipeline — same source the NowPlaying overlay uses. */
     val spectrumBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrumBins
 
@@ -128,7 +132,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND,
+            tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS,
         )
     val fontScale: StateFlow<Float> = preferences.fontScale
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
@@ -142,6 +146,15 @@ class SettingsViewModel @Inject constructor(
     val glowBehindArt: StateFlow<Boolean> = preferences.lyricsFx
         .map { it.glowBehindArt }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    // Read through the effective values, so an unpinned slider opens on the
+    // lyric glow it follows rather than a default the user never chose.
+    // Writing either pins it (see LyricsFxSettings.artGlowRadiusDp).
+    val artGlowRadius: StateFlow<Int> = preferences.lyricsFx
+        .map { it.effectiveArtGlowRadiusDp.toInt() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 44)
+    val artGlowBrightnessPct: StateFlow<Int> = preferences.lyricsFx
+        .map { (it.effectiveArtGlowBrightness * 100).toInt() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 22)
 
     // --- Interface ---
     val gaplessPlayback: StateFlow<Boolean> = preferences.gaplessPlayback
@@ -458,6 +471,20 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setArtGlowRadius(dp: Int) {
+        viewModelScope.launch {
+            val current = preferences.lyricsFx.first()
+            preferences.setLyricsFx(current.copy(artGlowRadiusDp = dp.toFloat()))
+        }
+    }
+
+    fun setArtGlowBrightness(percent: Int) {
+        viewModelScope.launch {
+            val current = preferences.lyricsFx.first()
+            preferences.setLyricsFx(current.copy(artGlowBrightness = percent / 100f))
+        }
+    }
+
     fun importFont(uri: Uri) {
         viewModelScope.launch {
             try {
@@ -641,6 +668,17 @@ class SettingsViewModel @Inject constructor(
     val whatsNewNeverShow: StateFlow<Boolean> = preferences.whatsNewNeverShow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    // --- Tip bar ---
+    //
+    // Both start at the value that shows NOTHING, like whatsNewNeverShow above:
+    // a StateFlow's initial value is read before DataStore answers, and the
+    // wrong default here flashes a bar asking for money on every cold start.
+
+    val donatePlaysSincePrompt: StateFlow<Int> = preferences.donatePlaysSincePrompt
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val donateNeverShow: StateFlow<Boolean> = preferences.donateNeverShow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     /**
      * Whether this build's notes were still unread when Settings was opened —
      * what the "New in …" badge on the What's New header goes by.
@@ -745,6 +783,20 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Put the tip bar away. [neverAgain] is the checkbox on it.
+     *
+     * The count is reset either way: with the box ticked nothing will read it
+     * again, and leaving it at twenty would bring the bar straight back if the
+     * user ever changed their mind.
+     */
+    fun dismissDonatePrompt(neverAgain: Boolean) {
+        viewModelScope.launch {
+            if (neverAgain) preferences.setDonateNeverShow(true)
+            preferences.resetDonatePromptCount()
+        }
+    }
+
     fun setGaplessNoResample(enabled: Boolean) {
         viewModelScope.launch { preferences.setGaplessNoResample(enabled) }
     }
@@ -835,6 +887,22 @@ class SettingsViewModel @Inject constructor(
      * did a main-thread deleteRecursively() of only the default folder and
      * never cleared the DB, so tracks stayed listed and failed to play.
      */
+    /**
+     * What "Clear All Downloads" would delete, for the warning above the
+     * button: how many tracks, and how much disk they hold.
+     *
+     * Zero tracks is worth knowing too — the button is disabled there, because
+     * a destructive-looking control that does nothing still costs a moment of
+     * worry to press.
+     */
+    val downloadedCount: StateFlow<Int> = downloadDao.observeDownloadCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /** Their total size, pre-formatted, or null while it is unknown. */
+    val downloadedSize: StateFlow<String?> = downloadDao.getTotalDownloadSize()
+        .map { bytes -> bytes?.takeIf { it > 0 }?.let { formatSize(it) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     fun clearAllDownloads() {
         viewModelScope.launch(Dispatchers.IO) {
             val tracks = downloadDao.getDownloadedTracks().first()
@@ -955,10 +1023,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             withContext(Dispatchers.IO) { appContext.cacheDir.deleteRecursively() }
             calculateCacheSize()
-            // The wipe just deleted cacheDir/artwork, which local tracks'
-            // Room rows point at. Rescan now so covers come back without
-            // waiting for the next app start (or a manual refresh).
-            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
+            // No rescan to follow: cover art used to live here, so clearing
+            // the cache cost every local track its artwork and a full reindex
+            // to get it back. It lives in filesDir now, untouched by this.
         }
     }
 
@@ -969,7 +1036,6 @@ class SettingsViewModel @Inject constructor(
                 appContext.cacheDir.deleteRecursively()
             }
             calculateCacheSize()
-            runCatching { artworkRefreshDetector.refreshIfArtworkMissing() }
         }
     }
 

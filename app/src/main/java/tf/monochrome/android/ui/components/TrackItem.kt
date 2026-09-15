@@ -37,6 +37,7 @@ import tf.monochrome.android.data.downloads.TrackDownloadState
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.usecase.uiArtistRefs
 import tf.monochrome.android.ui.theme.ExplicitBadge
+import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.theme.MonoDimens
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -66,6 +67,11 @@ fun TrackItem(
     val effectiveOnAlbumClick = onAlbumClick.takeUnless { selectionMode }
     val effectiveOnArtistClick = onArtistClick.takeUnless { selectionMode }
 
+    // The row for whatever is playing right now. Read here, not passed in: see
+    // LocalNowPlayingTrackId. A track change recomposes the visible rows and
+    // nothing else.
+    val nowPlaying = track.id == LocalNowPlayingTrackId.current
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -76,7 +82,13 @@ fun TrackItem(
             )
             .liquidGlass(shape = MonoDimens.shapeMd),
         shape = MonoDimens.shapeMd,
-        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent
+        // Selection wins over now-playing: while multi-selecting, whether a row
+        // is ticked is the only thing the colour is being asked to say.
+        color = when {
+            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            nowPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+            else -> Color.Transparent
+        }
     ) {
         Row(
             modifier = Modifier
@@ -126,7 +138,11 @@ fun TrackItem(
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    // The tint alone is easy to miss against a dark row; the
+                    // title carrying the accent too is what makes the playing
+                    // track findable at a glance in a long list.
+                    color = if (nowPlaying) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)

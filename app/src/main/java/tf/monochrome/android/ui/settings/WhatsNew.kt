@@ -22,10 +22,36 @@ import tf.monochrome.android.BuildConfig
  * Discover interleaved with download and equaliser notes tells you far less
  * than the same eight lines under a title saying what they are about.
  */
+/**
+ * Whether an entry is something that was not there before, something that
+ * behaves differently, or something that is gone.
+ *
+ * A reader scanning release notes is usually answering one of three questions —
+ * what can I do now, what moved, and where did that go — and a flat list makes
+ * all three the same search. [heading] is what they are grouped under.
+ *
+ * Fixes live under [CHANGED]. Splitting them out reads as an apology list, and
+ * from the outside "this works now" and "this works differently now" are the
+ * same news: the thing does not do what it did.
+ */
+enum class WhatsNewKind(val heading: String) {
+    NEW("New"),
+    CHANGED("Changed"),
+    REMOVED("Removed"),
+}
+
 data class WhatsNewEntry(
     val title: String,
     val body: String,
     val section: String? = null,
+    /**
+     * Null means unclassified, and prints ahead of the groups exactly as this
+     * list did before there were any. That is deliberate rather than a default
+     * of [WhatsNewKind.CHANGED]: the releases already shipped were written as
+     * one flat list, and filing a hundred of them after the fact would put a
+     * confident label on a lot of guesses. New entries should set it.
+     */
+    val kind: WhatsNewKind? = null,
 )
 
 data class WhatsNewRelease(
@@ -45,20 +71,159 @@ object WhatsNew {
     /** The world radio globe and everything hanging off it. */
     private const val GLOBE = "World radio"
 
+    /** Browsing what is on the device: the song list, the folder tree. */
+    private const val LIBRARY = "Library"
+
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
+
+    /** The DSP mixer, its buses and the presets that ship with it. */
+    private const val MIXER = "Mixer"
 
     /** The pages you swipe between, their order and their visibility. */
     private const val PAGES = "Pages and order"
 
+    /** The now-playing screen: its artwork, its transport and its dock. */
+    private const val PLAYER = "Now playing"
+
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
+
+    /** Talking to a USB DAC directly, over UAC2, instead of through Android. */
+    private const val USB_DAC = "Exclusive USB DAC"
 
     /** The projectM visualizer, its preset browser and its rotation. */
     private const val VISUALIZER = "Visualizer"
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 189,
+            versionName = "1.8.9",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Exclusive USB DAC output actually works now",
+                    body = "UAC2 exclusive mode was already in the app, but it never " +
+                        "delivered what it promised. Tryptify now drives the DAC itself, " +
+                        "so audio skips Android's mixer and its resampler entirely. The " +
+                        "DAC runs at the file's own rate and gets the samples untouched.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "24-bit and hi-res reach the DAC",
+                    body = "Up to 96 kHz at 24-bit, packed into whatever subslot width the " +
+                        "device asks for. Everything was being flattened to 16-bit before.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "The mixer and EQ run on 24-bit files",
+                    body = "On a 24-bit or 32-bit track the whole DSP chain used to drop " +
+                        "out with no sign of it: the mixer, both EQs, the spectrum and the " +
+                        "visualizer's audio all stopped while the music kept playing. They " +
+                        "run on those files now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Speed and pitch work over the DAC",
+                    body = "Semitone shift, and varispeed where pitch rides the tempo the " +
+                        "way a record does. Both took effect everywhere except the DAC.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "The headphones button shows the audio pipeline",
+                    body = "What is happening to the track, stage by stage: its format, the " +
+                        "decoder, the rates in and out, the DSP, and where it lands.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "The glass bends your artwork through it",
+                    body = "With Blurred Album Background on, the transport, the dock and " +
+                        "the panels refract the cover itself rather than a tint standing in " +
+                        "for it. The mini player carries it too, along the whole bar.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = VISUALIZER,
+                    title = "MilkDrop can play behind the music, not instead of it",
+                    body = "The ambient visualizer draws the preset into the album " +
+                        "background, over the blurred cover and under the controls, rather " +
+                        "than replacing the artwork.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = VISUALIZER,
+                    title = "Preset controls on the player",
+                    body = "Back, browse and next sit across the artwork while the ambient " +
+                        "visualizer is running, and fade out once you stop using them. Tap " +
+                        "the artwork to bring them back.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Wide Stage joins the shipped presets",
+                    body = "A wider image without the hollow middle that usually comes with " +
+                        "it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "Home is the list of pages, and World radio is one of them",
+                    body = "Pick a page instead of swiping to it. World radio has its own " +
+                        "page now, and Next moves down the city's stations.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Browse by album artist, composer or year",
+                    body = "Local opens on a list of those instead of five swipes. Drag the " +
+                        "scrollbar to move through a big library, and the track playing is " +
+                        "coloured in the list.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Changing track no longer freezes the audio",
+                    body = "Every track change was loading the whole file into memory " +
+                        "looking for cover art. On a large WAV that stalled playback for " +
+                        "seconds at a time.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "The glass is smooth again",
+                    body = "The artwork behind it was being sampled as flat blocks of " +
+                        "colour, worst on the mini player and the Audio tools sheet.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Visual Studio is a settings page of its own",
+                    body = "Glass, themes and the player's look live together, and colour " +
+                        "transitions no longer run for seconds.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = VISUALIZER,
+                    title = "The Visualizer chip turns the ambient one on and off",
+                    body = "It used to hand you the square visualizer on the second tap, " +
+                        "and leave the ambient setting switched off behind it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Folders show your music, and open where it is",
+                    body = "Clear All Downloads says what it will delete, and sending a " +
+                        "file works for music on your phone.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 188,
             versionName = "1.8.8",

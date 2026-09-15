@@ -27,6 +27,25 @@ class ProjectMAssetInstaller @Inject constructor(
 ) {
     private val assetVersion = "v5"
 
+    /**
+     * Synchronized, because there is now more than one caller.
+     *
+     * The body deletes `rootDir` outright and re-extracts into it. With a
+     * single caller — the engine, driven by its own lifecycle — that was safe
+     * by construction. `MonochromeApp` warms this at launch now, so a listener
+     * who opens the visualizer while the unzip is running is a second thread
+     * arriving at a half-populated directory: both would see `needsInstall`,
+     * both would call `deleteRecursively()`, and one would be deleting the
+     * files the other was writing.
+     *
+     * Blocking rather than a coroutine Mutex, because
+     * `resolveAbsolutePresetPath` calls this from a non-suspending path and
+     * making it suspend would push the change through the engine. Contention
+     * only exists during the one install: afterwards this is a handful of
+     * `File.exists()` calls, and the second caller was going to do the same
+     * work itself anyway.
+     */
+    @Synchronized
     fun ensureInstalled(): InstalledProjectMAssets {
         val baseDir = File(context.filesDir, "projectm")
         val rootDir = File(baseDir, assetVersion)

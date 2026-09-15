@@ -7,6 +7,7 @@ import androidx.core.net.toUri
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -17,6 +18,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
@@ -51,6 +53,8 @@ import tf.monochrome.android.ui.main.MainActivity
 import tf.monochrome.android.visualizer.ProjectMAudioTapProcessor
 import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
+import tf.monochrome.android.widget.NowPlayingSnapshot
+import tf.monochrome.android.widget.NowPlayingSnapshotStore
 import tf.monochrome.android.widget.NowPlayingWidget
 import androidx.glance.appwidget.updateAll
 import javax.inject.Inject
@@ -80,6 +84,11 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
+    @Inject lateinit var playbackState: PlaybackStateRepository
+    // The Audio Pipeline panel's window into the decoder. Nothing else in
+    // the app can see a Format: the UI reaches the player through a
+    // MediaController, which carries neither one nor any decoder identity.
+    @Inject lateinit var audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
@@ -216,6 +225,8 @@ class PlaybackService : MediaSessionService() {
                 )
             }
 
+        player.addAnalyticsListener(audioPipelineAnalytics())
+
         player.addListener(object : Player.Listener {
             // Keep the home-screen now-playing widget live: the widget uses
             // updatePeriodMillis=0 (no polling), so it only refreshes when the
@@ -223,6 +234,9 @@ class PlaybackService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 // Also what wakes the blend watcher — see startCrossfadeWatcher.
                 playingSignal.value = isPlaying
+                // Where the play head most likely sits until the app closes,
+                // so this is the one save that must not be throttled away.
+                playbackState.savePosition(player.currentPosition, player.duration, flush = true)
                 refreshNowPlayingWidget()
                 // Discord draws the progress bar from timestamps and animates
                 // it on its own, so a pause has to be pushed or the bar runs
@@ -245,6 +259,7 @@ class PlaybackService : MediaSessionService() {
                 // be. Only seeks: track changes come through the queue watcher.
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                     queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
+                    playbackState.savePosition(player.currentPosition, player.duration, flush = true)
                 }
             }
 
@@ -561,6 +576,7 @@ class PlaybackService : MediaSessionService() {
             }
         }
         startCrossfadeWatcher()
+        startPositionPersistWatcher()
 
         // The Discord card mirrors the queue's current track, and nothing else.
         //
@@ -670,6 +686,86 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * Feeds the Audio Pipeline panel the two facts only this process can see.
+     *
+     * `Format` and the decoder's name never leave the player: the UI talks to
+     * playback through a `MediaController`, which carries neither. Everything
+     * else the panel shows is already a singleton somebody observes — the
+     * channel detector, the DSP engine, the USB controller — so this listener
+     * is the whole of the new plumbing.
+     *
+     * The decoder is deliberately forgotten when it is released and the format
+     * is not. A decoder is torn down between tracks and built again for the
+     * next one, and in that gap the app genuinely does not know what will
+     * decode what comes next; leaving the previous name on screen would be a
+     * confident answer to a question nobody can answer yet. Media3 reports the
+     * new format before the old decoder goes, so the format has no such gap.
+     */
+    @OptIn(UnstableApi::class)
+    private fun audioPipelineAnalytics(): AnalyticsListener = object : AnalyticsListener {
+        override fun onAudioInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: androidx.media3.common.Format,
+            decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?,
+        ) {
+            audioPipelineMonitor.onStreamFormat(
+                tf.monochrome.android.audio.pipeline.DecodedStream(
+                    mimeType = format.sampleMimeType,
+                    sampleRate = format.sampleRate.takeIf { it != Format.NO_VALUE },
+                    channelCount = format.channelCount.takeIf { it != Format.NO_VALUE },
+                    // averageBitrate is what a container actually states;
+                    // `bitrate` prefers the peak, which reads as an
+                    // implausibly high number for a VBR file.
+                    bitrate = format.averageBitrate.takeIf { it != Format.NO_VALUE }
+                        ?: format.bitrate.takeIf { it != Format.NO_VALUE },
+                    pcmBits = pcmBitsOf(format.pcmEncoding),
+                    pcmIsFloat = format.pcmEncoding == C.ENCODING_PCM_FLOAT,
+                )
+            )
+        }
+
+        override fun onAudioDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            audioPipelineMonitor.onDecoderInitialized(decoderName)
+        }
+
+        override fun onAudioDecoderReleased(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+        ) {
+            audioPipelineMonitor.onDecoderReleased()
+        }
+
+        override fun onAudioDisabled(
+            eventTime: AnalyticsListener.EventTime,
+            decoderCounters: androidx.media3.exoplayer.DecoderCounters,
+        ) {
+            audioPipelineMonitor.onIdle()
+        }
+    }
+
+    /**
+     * PCM depth from a Media3 encoding constant, or null when it says nothing.
+     *
+     * Null rather than a default of 16: "the decoder did not report a depth"
+     * and "the decoder reported 16-bit" are different facts, and the panel
+     * prints them differently.
+     */
+    @OptIn(UnstableApi::class)
+    private fun pcmBitsOf(encoding: Int): Int? = when (encoding) {
+        C.ENCODING_PCM_8BIT -> 8
+        C.ENCODING_PCM_16BIT, C.ENCODING_PCM_16BIT_BIG_ENDIAN -> 16
+        C.ENCODING_PCM_24BIT, C.ENCODING_PCM_24BIT_BIG_ENDIAN -> 24
+        C.ENCODING_PCM_32BIT, C.ENCODING_PCM_32BIT_BIG_ENDIAN -> 32
+        C.ENCODING_PCM_FLOAT -> 32
+        else -> null
+    }
+
     @OptIn(UnstableApi::class)
     private fun buildRenderersFactory(): DefaultRenderersFactory {
         val audioBus = projectMEngineRepository.audioBus
@@ -682,6 +778,22 @@ class PlaybackService : MediaSessionService() {
         return object : io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(this@PlaybackService) {
             init {
                 setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
+
+                // Decode to 32-bit float instead of 16-bit integer.
+                //
+                // This is what makes bit depths above 16 reachable at all.
+                // FfmpegAudioRenderer emits either 16-bit or float and never
+                // 24-bit, so without this the PCM reaching LibusbAudioSink is
+                // 16-bit whatever the file holds, and a 24/96 FLAC negotiated
+                // a 16-bit alt on the DAC. Float carries a 24-bit mantissa, so
+                // the sink can now pack genuine 24-bit samples for the USB
+                // stream (see LibusbAudioSink.packFloatForUsb).
+                //
+                // This is the RENDERER's float output, which is all the
+                // exclusive path needs: LibusbAudioSink sees the renderer's
+                // format before the delegate does. The sink's own float output
+                // is a separate flag and must stay off — see buildAudioSink.
+                setEnableAudioFloatOutput(true)
 
                 // Hand ALAC to FFmpeg instead of the platform decoder.
                 //
@@ -737,7 +849,36 @@ class PlaybackService : MediaSessionService() {
             ): AudioSink {
                 return try {
                     val defaultSink = DefaultAudioSink.Builder(context)
-                        .setEnableFloatOutput(enableFloatOutput)
+                        // Deliberately false, whatever the factory was told.
+                        //
+                        // DefaultAudioSink.configure builds its pipeline one of
+                        // two ways, and they are not equivalent:
+                        //
+                        //   if (shouldUseFloatOutput(...)) {
+                        //     pipelineProcessors.addAll(toFloatPcmAvailableAudioProcessors)
+                        //   } else {
+                        //     pipelineProcessors.addAll(toIntPcmAvailableAudioProcessors)
+                        //     pipelineProcessors.add(audioProcessorChain.getAudioProcessors())
+                        //   }
+                        //
+                        // toFloatPcmAvailableAudioProcessors is exactly one
+                        // processor, the float converter. The custom chain is
+                        // added on the other branch only. So turning this on
+                        // silently deletes the mixer, both EQs, the spectrum
+                        // tap and the projectM feed from the HAL path, and the
+                        // audio keeps playing, which is how it went unnoticed:
+                        // every effect dead, nothing in the log.
+                        //
+                        // shouldUseFloatOutput also requires high-resolution
+                        // input, so this only started biting once the renderer
+                        // above began emitting float.
+                        //
+                        // Nothing is lost. The exclusive USB path takes the
+                        // renderer's float directly and packs it into the DAC's
+                        // 24-bit subslots itself; this flag never touched it.
+                        // The HAL path goes back to what it did before, which
+                        // is 16-bit out with every effect running.
+                        .setEnableFloatOutput(false)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         // Our own chain rather than setAudioProcessors, which
                         // would wrap these in DefaultAudioProcessorChain and send
@@ -786,6 +927,17 @@ class PlaybackService : MediaSessionService() {
                         driver = libusbDriver,
                         volumeController = bypassVolumeController,
                         processors = listOf(
+                            // First, and only doing anything for 24/32-bit
+                            // sources: every stage after it accepts 16-bit or
+                            // float and nothing else, so without this a 24-bit
+                            // file configured the whole chain out of existence
+                            // — mixer, both EQs, spectrum and the visualizer
+                            // feed all skipped, with the audio still playing
+                            // perfectly because an empty chain passes buffers
+                            // through untouched. DefaultAudioSink gets the
+                            // equivalent from Media3; this chain is ours to
+                            // feed.
+                            tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
                             atmosAudioProcessor,
                             downmixProcessor,
@@ -793,12 +945,39 @@ class PlaybackService : MediaSessionService() {
                             autoEqProcessor,
                             parametricEqProcessor,
                             spectrumAnalyzerTap,
+                            // Transport stages last, and in the same order as
+                            // TryptifyAudioProcessorChain builds them
+                            // (resampler then transposer), so the two compose
+                            // identically on both paths and the AutoEQ
+                            // pre-warp — which runs upstream of both — still
+                            // inverts their product.
+                            //
+                            // Varispeed: pitch riding the tempo, the way a
+                            // record does. The ratio cannot arrive the usual
+                            // way here — DefaultAudioSink only runs its
+                            // chain's applyPlaybackParameters from its own
+                            // processing path, and in bypass it never
+                            // processes a buffer, so this would sit at unity
+                            // forever. LibusbAudioSink pushes the ratio itself
+                            // from setPlaybackParameters instead.
+                            variRateProcessor,
+                            // Transposition. Without it the semitone buttons
+                            // set a field nothing on the exclusive path was
+                            // reading: pitch silently did nothing over USB and
+                            // only the pre-warp moved. Needs no sample-rate
+                            // change — configure() returns the input format
+                            // untouched, so the DAC keeps the rate it
+                            // negotiated — and at zero semitones queueInput
+                            // passes the block straight through, so
+                            // bit-perfect output survives.
+                            stretchProcessor,
                             // ProjectM tap intentionally omitted from
                             // the bypass chain — the inline pump runs
                             // on the renderer thread and the visualizer
                             // bus sometimes blocks on its consumer.
                             // Spectrum tap is light-weight and fine.
                         ),
+                        resampler = variRateProcessor,
                     )
                 } catch (error: Exception) {
                     projectMEngineRepository.reportAudioTapFailure(
@@ -807,7 +986,10 @@ class PlaybackService : MediaSessionService() {
                     val fallback = checkNotNull(
                         super.buildAudioSink(
                             context,
-                            enableFloatOutput,
+                            // False for the same reason as above: float output
+                            // drops the sink's processor chain, which on this
+                            // path is the default one carrying Sonic.
+                            false,
                             enableAudioTrackPlaybackParams
                         )
                     )
@@ -827,6 +1009,11 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
+        // A normal way to end a session, and for a paused one the last moment
+        // we get.
+        if (player != null && player.mediaItemCount > 0) {
+            playbackState.savePosition(player.currentPosition, player.duration, flush = true)
+        }
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
             stopSelf()
         }
@@ -889,6 +1076,13 @@ class PlaybackService : MediaSessionService() {
         // shutdown(), not clear(): the service is going away now, so there is
         // nothing for the between-tracks grace period to wait for.
         discordPresence.shutdown()
+        // Before the player is released and stops answering. Lands on the
+        // repository's own scope, so cancelling serviceScope doesn't take it.
+        mediaSession?.player?.let {
+            if (it.mediaItemCount > 0) {
+                playbackState.savePosition(it.currentPosition, it.duration, flush = true)
+            }
+        }
         crossfade.release()
         mediaSession?.run {
             player.release()
@@ -1284,6 +1478,31 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
+     * Writes the play head down periodically, so a session that ends without
+     * warning still comes back to roughly the right second. The event hooks
+     * cover every ending we are told about; they do not cover being killed
+     * under memory pressure while playing, which is how a long session usually
+     * ends.
+     *
+     * Parks on [playingSignal] like the blend watcher below — a free-running
+     * loop would repeat that watcher's old mistake (see its ~345,000 wakes a
+     * day), and worse here, since each wake touches the disk.
+     */
+    private fun startPositionPersistWatcher() {
+        serviceScope.launch {
+            while (true) {
+                if (!player.isPlaying) {
+                    playingSignal.first { it }
+                    continue
+                }
+                kotlinx.coroutines.delay(POSITION_PERSIST_INTERVAL_MS)
+                if (!player.isPlaying) continue
+                playbackState.savePosition(player.currentPosition, player.duration)
+            }
+        }
+    }
+
+    /**
      * Watches the play head so a blend can begin before the track runs out.
      *
      * There is no callback for "the playhead reached duration - blend", so this
@@ -1413,6 +1632,9 @@ class PlaybackService : MediaSessionService() {
 
         /** How often the play head is checked against the blend threshold. */
         const val CROSSFADE_POLL_MS = 250L
+
+        /** How often a running track writes its position down. */
+        const val POSITION_PERSIST_INTERVAL_MS = 10_000L
     }
 
     /** When the service last asked the player to start, for the check above. */
@@ -1588,14 +1810,42 @@ class PlaybackService : MediaSessionService() {
     )
 
     /**
-     * Push a fresh render to every now-playing widget instance. [serviceScope] runs
-     * on the main dispatcher, so the suspend updateAll is safe to launch here; the
-     * whole thing is wrapped so a widget/Glance hiccup can never crash playback.
+     * Record the current state and push a fresh render to every now-playing
+     * widget instance. [serviceScope] runs on the main dispatcher, so the
+     * suspend calls are safe to launch here; the whole thing is wrapped so a
+     * widget/Glance hiccup can never crash playback.
+     *
+     * The write comes first and matters more than the redraw. The widget used
+     * to read its state by connecting a MediaController back to this service,
+     * which *starts* it — so drawing the widget built an ExoPlayer and a
+     * MediaSession from scratch and then dropped them. Writing what is already
+     * in hand here means the widget has somewhere to read from that costs
+     * nothing, and the state outlives the process the way a widget's contents
+     * should.
      */
     private fun refreshNowPlayingWidget() {
         serviceScope.launch {
-            runCatching { NowPlayingWidget().updateAll(this@PlaybackService) }
+            runCatching {
+                NowPlayingSnapshotStore.write(this@PlaybackService, nowPlayingSnapshot())
+                NowPlayingWidget().updateAll(this@PlaybackService)
+            }
         }
+    }
+
+    /** The player's state in the shape the widget stores and draws. */
+    private fun nowPlayingSnapshot(): NowPlayingSnapshot {
+        val md = player.mediaMetadata
+        if (player.currentMediaItem == null && md.title == null) return NowPlayingSnapshot.IDLE
+        return NowPlayingSnapshot(
+            hasSession = true,
+            isPlaying = player.isPlaying,
+            title = (md.title ?: md.displayTitle)?.toString().orEmpty(),
+            artist = (md.artist ?: md.albumArtist)?.toString().orEmpty(),
+            artworkUri = md.artworkUri?.toString(),
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+            // duration is C.TIME_UNSET (negative) until the item is prepared.
+            durationMs = player.duration.let { if (it > 0L) it else 0L },
+        )
     }
 
     /**
@@ -1726,32 +1976,43 @@ class PlaybackService : MediaSessionService() {
             // PlayerWrapper.setMediaItems → DefaultMediaSourceFactory, which
             // NPEs on any item without a localConfiguration. Returning bare
             // mediaId stubs (as we used to) crashed the session on every
-            // BT-remote / lock-screen play tap. Resolve the queue's URIs on
-            // serviceScope and complete the future when ready.
+            // BT-remote / lock-screen play tap. Resolve on serviceScope and
+            // complete the future when ready.
+            //
+            // Only the track being resumed. Resolving the whole queue was two
+            // bugs: a network request per entry on one tap — hundreds, now that
+            // queues survive a restart — and `index` counted the *unfiltered*
+            // queue while the list handed back was a mapNotNull, so one earlier
+            // failure shifted everything down and resumed the wrong track. The
+            // player never held more than one anyway: QueueForwardingPlayer
+            // routes next/previous through QueueManager because ExoPlayer's
+            // playlist is not this app's queue.
             val future = com.google.common.util.concurrent.SettableFuture
                 .create<MediaSession.MediaItemsWithStartPosition>()
             serviceScope.launch {
-                val resolvedItems = snapshot.mapNotNull { track ->
-                    val unified = unifiedTrackRegistry[track.id]
-                    if (unified != null) {
-                        val r = runCatching { streamResolver.resolveUnifiedTrack(unified) }.getOrNull()
-                        if (r?.isPlayable == true) r.mediaItem else null
-                    } else {
-                        val (mediaItem, _) = runCatching { streamResolver.resolveMediaItem(track) }
-                            .getOrDefault(Pair(null, null))
-                        mediaItem
-                    }
+                val track = snapshot.getOrNull(index.coerceAtMost(snapshot.lastIndex))
+                val unified = track?.let { unifiedTrackRegistry[it.id] }
+                val mediaItem = when {
+                    track == null -> null
+                    unified != null ->
+                        runCatching { streamResolver.resolveUnifiedTrack(unified) }
+                            .getOrNull()
+                            ?.takeIf { it.isPlayable }
+                            ?.mediaItem
+                    else -> runCatching { streamResolver.resolveMediaItem(track) }
+                        .getOrDefault(Pair(null, null)).first
                 }
-                if (resolvedItems.isEmpty()) {
+                if (mediaItem == null) {
                     future.set(MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0L))
                     return@launch
                 }
-                val safeIndex = index.coerceAtMost(resolvedItems.lastIndex)
                 future.set(
                     MediaSession.MediaItemsWithStartPosition(
-                        resolvedItems,
-                        safeIndex,
-                        /* startPositionMs = */ 0L,
+                        listOf(mediaItem),
+                        0,
+                        // A play tap from the lock screen, a BT remote or Auto
+                        // lands on the same second the app would.
+                        playbackState.peekResumePosition(track),
                     )
                 )
             }

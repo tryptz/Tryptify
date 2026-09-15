@@ -15,8 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,17 +36,21 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.liquidGlass
 
 /**
- * Bottom 2×2 grid surfacing the player's premium audio tools: output device,
+ * Bottom 2×2 grid surfacing the player's premium audio tools: sleep timer,
  * sound/AutoEQ, playback speed and the DSP mixer.
+ *
+ * The timer sits here rather than in the dock, whose slot is shuffle now. It
+ * took the Output card's place: that read a hardcoded "Default" and only opened
+ * Settings, which the top bar's headphone button already does.
  */
 @Composable
 fun PlayerStatusGrid(
     accent: Color,
-    outputLabel: String,
+    timerLabel: String,
     soundLabel: String,
     speedLabel: String,
     mixerLabel: String,
-    onOutput: () -> Unit,
+    onTimer: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
     onMixer: () -> Unit,
@@ -61,11 +65,11 @@ fun PlayerStatusGrid(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusCard(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Default.Headphones,
-                title = "Output",
-                value = outputLabel,
+                icon = Icons.Default.Timer,
+                title = "Timer",
+                value = timerLabel,
                 accent = accent,
-                onClick = onOutput,
+                onClick = onTimer,
             )
             StatusCard(
                 modifier = Modifier.weight(1f),

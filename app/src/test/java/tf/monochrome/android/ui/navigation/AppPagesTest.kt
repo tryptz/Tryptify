@@ -68,9 +68,16 @@ class AppPagesTest {
      * which is the next test.)
      */
     @Test
-    fun `reconciling a migrated complete order changes nothing`() {
+    fun `reconciling a migrated order keeps it and adds only what is new`() {
+        // This used to assert reconcile changed nothing at all, which held only
+        // while no page had been added since the flat list shipped. World radio
+        // is the first, so the guarantee is now the useful half of that: the
+        // migrated order survives intact, and anything added arrives on top of
+        // it rather than reshuffling it.
         val migrated = migrateLegacyPageOrder(legacyDefault)
-        assertEquals(migrated, reconcilePageOrder(migrated))
+        val reconciled = reconcilePageOrder(migrated)
+        assertEquals(migrated, reconciled.filter { it in migrated })
+        assertEquals(listOf(RADIO_PAGE_ID), reconciled - migrated.toSet())
     }
 
     /** A legacy order missing sections still ends up with every page. */
@@ -85,7 +92,13 @@ class AppPagesTest {
     @Test
     fun `a stored order wins over the legacy one`() {
         val stored = listOf("downloads", "home", "discover", "local", "overview", "playlists", "favorites")
-        assertEquals(stored, resolvePageOrder(stored, legacyDefault))
+        val resolved = resolvePageOrder(stored, legacyDefault)
+        // Downloads stays first, where this user put it, rather than where the
+        // legacy default would have had it.
+        assertEquals(stored, resolved.filter { it in stored })
+        // A page that install predates is still added — that is reconcile's
+        // job, and it does not make the legacy order win.
+        assertEquals(listOf(RADIO_PAGE_ID), resolved - stored.toSet())
     }
 
     // ── Forward compatibility ────────────────────────────────────────────
@@ -273,6 +286,60 @@ class AppPagesTest {
         assertTrue("library pages with no render branch: $missing", missing.isEmpty())
     }
 
+    // ── Pages that draw themselves ─────────────────────────────────────
+    //
+    // Home, Discover and World radio are not library sections: each owns its
+    // whole surface, so the pager renders them directly instead of handing an
+    // id to LibraryScreen. That split has to hold in both directions, and
+    // neither half is visible at a glance.
+
+    @Test
+    fun `the self-drawn pages are exactly the ones LibraryScreen does not render`() {
+        assertEquals(
+            listOf(Screen.Home.route, Screen.Discover.route, RADIO_PAGE_ID),
+            APP_PAGE_IDS - LIBRARY_PAGE_IDS.toSet(),
+        )
+    }
+
+    @Test
+    fun `the pager renders World radio itself instead of asking for a section`() {
+        // Without its own branch the id falls through to `else -> LibraryScreen`,
+        // which has no section by that name: a blank page and no other symptom.
+        val source = File("src/main/java/tf/monochrome/android/ui/navigation/MonochromeNavHost.kt")
+            .readText()
+        assertTrue(
+            "the pager has no RADIO_PAGE_ID branch — the globe would draw blank",
+            source.contains("RADIO_PAGE_ID ->"),
+        )
+    }
+
+    @Test
+    fun `World radio is a page rather than a destination`() {
+        // It used to be Screen.WorldRadio, reached from a button on Discover.
+        // Being a page is what makes Back leave it for Home like any other
+        // page, instead of unwinding a stack of its own — so a Screen object
+        // creeping back would quietly restore the old behaviour alongside the
+        // new one.
+        assertTrue("World radio is missing from the page list", RADIO_PAGE_ID in APP_PAGE_IDS)
+        assertEquals("World radio", APP_PAGE_TITLES[RADIO_PAGE_ID])
+        val source = File("src/main/java/tf/monochrome/android/ui/navigation/MonochromeNavHost.kt")
+            .readText()
+        assertFalse(
+            "a Screen.WorldRadio object is back alongside the page",
+            source.contains("data object WorldRadio"),
+        )
+        assertFalse(
+            "something still navigates to World radio as a destination",
+            source.contains("Screen.WorldRadio"),
+        )
+    }
+
+    @Test
+    fun `World radio sits next to Discover, where it used to be reached from`() {
+        val order = DEFAULT_PAGE_ORDER
+        assertEquals(order.indexOf(Screen.Discover.route) + 1, order.indexOf(RADIO_PAGE_ID))
+    }
+
     /**
      * An order or hidden set that does not sync is invisible until someone uses a
      * second device, which is the worst time to find out. Both keys are named
@@ -289,5 +356,25 @@ class AppPagesTest {
             .substringBefore("SETTINGS_SYNC_KEY_NAMES")
         assertTrue("page_order is not in SETTINGS_SYNC_KEYS", syncBlock.contains("PAGE_ORDER"))
         assertTrue("hidden_pages is not in SETTINGS_SYNC_KEYS", syncBlock.contains("HIDDEN_PAGES"))
+    }
+
+    // ── Back goes to Home, and only to Home ────────────────────────────
+    //
+    // Back used to retrace the route the user swiped. There is no swipe now —
+    // pages are chosen from the list on Home — so the only movement to undo is
+    // "I opened this page", and its undo is Home.
+
+    @Test
+    fun `back goes to Home wherever Home sits in the order`() {
+        assertEquals(0, homePageIndex(listOf("home", "discover", "playlists")))
+        // The user can drag Home anywhere in Settings, so this must not assume 0.
+        assertEquals(2, homePageIndex(listOf("discover", "playlists", "home")))
+    }
+
+    @Test
+    fun `a hidden Home falls back to the first page rather than nowhere`() {
+        // Settings can hide Home. indexOf would answer -1 and Back would land
+        // on no page at all, which is worse than landing on an unexpected one.
+        assertEquals(0, homePageIndex(listOf("discover", "playlists")))
     }
 }

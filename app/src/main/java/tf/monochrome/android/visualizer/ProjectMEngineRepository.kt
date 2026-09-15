@@ -58,6 +58,21 @@ class ProjectMEngineRepository @Inject constructor(
     private val _currentPreset = MutableStateFlow<VisualizerPreset?>(null)
     val currentPreset: StateFlow<VisualizerPreset?> = _currentPreset.asStateFlow()
 
+    /**
+     * Where Previous goes.
+     *
+     * Recorded from the main thread ([selectPreset]) and from the GL thread
+     * (the Next branch of [applyPendingGlWorkLocked], which holds engineLock).
+     * [PresetHistory] takes its own lock rather than borrowing engineLock —
+     * the deadlock note on [requestPresetOnGlThread] is reason enough not to
+     * hold that one any wider than it already is.
+     */
+    private val presetHistory = PresetHistory()
+
+    private val _canGoToPreviousPreset = MutableStateFlow(false)
+    /** Whether [previousPreset] has anywhere to go — drives the button's enabled state. */
+    val canGoToPreviousPreset: StateFlow<Boolean> = _canGoToPreviousPreset.asStateFlow()
+
     private val _rotationMode = MutableStateFlow(PresetRotationMode.Default)
     val rotationMode: StateFlow<PresetRotationMode> = _rotationMode.asStateFlow()
 
@@ -116,6 +131,15 @@ class ProjectMEngineRepository @Inject constructor(
     // to appear on: the view drops to RENDERMODE_WHEN_DIRTY when playback
     // stops, and without a nudge the queued preset would sit until something
     // else asked to draw.
+    //
+    // Keyed by owner rather than a bare lambda: the ambient overlay's TextureView
+    // and the hero's GLSurfaceView are never alive at the same time, but their
+    // teardowns are not atomic — the overlay's render thread can outlive its
+    // view by up to the 2s join timeout, and a bare set/clear let whichever
+    // teardown ran last clobber the other view's freshly registered trigger
+    // (or leave a dead lambda behind that a preset change would poke). With
+    // owners, a clear from a view that no longer owns the slot is a no-op.
+    private var requestRenderOwner: Any? = null
     private var requestRender: (() -> Unit)? = null
 
     /**
@@ -346,11 +370,28 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     /**
-     * Lets the view be asked for a frame. Cleared on detach so a dead surface
-     * is never poked.
+     * Lets a view ask for a frame. Keyed by [owner] so teardowns racing each
+     * other cannot clobber the other view's trigger — see the field block
+     * above for the failure this removes.
      */
-    fun setRenderTrigger(trigger: (() -> Unit)?) {
-        synchronized(engineLock) { requestRender = trigger }
+    fun setRenderTrigger(owner: Any, trigger: () -> Unit) {
+        synchronized(engineLock) {
+            requestRenderOwner = owner
+            requestRender = trigger
+        }
+    }
+
+    /**
+     * Clears the trigger only when [owner] is the one that set it. A view
+     * clearing someone else's registration is a no-op.
+     */
+    fun clearRenderTrigger(owner: Any) {
+        synchronized(engineLock) {
+            if (requestRenderOwner === owner) {
+                requestRenderOwner = null
+                requestRender = null
+            }
+        }
     }
 
     fun onSurfaceResized(width: Int, height: Int) {
@@ -502,12 +543,39 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     fun selectPreset(preset: VisualizerPreset) {
+        applyPreset(preset, recordHistory = true)
+    }
+
+    /**
+     * Step back to the preset before this one.
+     *
+     * Pops [presetHistory] rather than walking [presets] backwards, so it
+     * returns you to what you were actually watching even with shuffle on.
+     * A no-op with nothing to go back to — [canGoToPreviousPreset] says so, so
+     * the button can be disabled rather than silently doing nothing.
+     */
+    fun previousPreset() {
+        val target = presetHistory.back()
+        _canGoToPreviousPreset.value = presetHistory.canGoBack()
+        if (target == null) return
+        // recordHistory = false: walking back must not push the preset we are
+        // leaving, or Previous would bounce between two presets forever.
+        applyPreset(target, recordHistory = false)
+    }
+
+    private fun applyPreset(preset: VisualizerPreset, recordHistory: Boolean) {
+        if (recordHistory) rememberOutgoingPreset(_currentPreset.value, preset)
         preferredPresetId = preset.id
         _currentPreset.value = preset
         scope.launch {
             preferences.setVisualizerPresetId(preset.id)
         }
         requestPresetOnGlThread(PendingPresetRequest.Select(preset))
+    }
+
+    private fun rememberOutgoingPreset(outgoing: VisualizerPreset?, incoming: VisualizerPreset?) {
+        presetHistory.record(outgoing, incoming)
+        _canGoToPreviousPreset.value = presetHistory.canGoBack()
     }
 
     /**
@@ -650,7 +718,10 @@ class ProjectMEngineRepository @Inject constructor(
                 PendingPresetRequest.Next -> {
                     val path = nativeBridge.nextPreset()
                     if (path != null) {
+                        // Captured before the move, so Previous undoes a Next.
+                        val outgoing = _currentPreset.value
                         updateCurrentPresetFromPathLocked(path)
+                        rememberOutgoingPreset(outgoing, _currentPreset.value)
                         val id = _currentPreset.value?.id
                         scope.launch { preferences.setVisualizerPresetId(id) }
                     }

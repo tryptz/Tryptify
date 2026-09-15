@@ -29,6 +29,19 @@ import tf.monochrome.android.ui.theme.MonoDimens
  * - API 31+ with [hazeState]: Real backdrop blur via Haze + translucent tint + specular rim.
  * - API 31+ without [hazeState]: Translucent tint fill + specular rim (no blur overhead).
  * - API < 31: Gradient fallback + specular rim.
+ *
+ * **Only pass [hazeState] from chrome drawn OVER the pager** — the mini player,
+ * a floating panel, an overlay. Anything inside the pager's own content (a list
+ * row, a card, a page's body) must leave it null.
+ *
+ * The app installs one `hazeSource` on the full-screen Box that holds the
+ * pager, so a [hazeState] passed from inside that content makes a node that
+ * blurs the very source it is part of. Haze refuses the cycle at draw time with
+ * `IllegalArgumentException: Modifier.haze nodes can not draw Modifier.hazeChild
+ * nodes` — a crash, not a glitch, and nothing catches it before the device
+ * does. It is also pointless: content sitting on the flat theme background has
+ * no backdrop worth blurring. Every row in the app (TrackItem, AlbumItem, the
+ * search rows) passes a shape and no state, and that is why.
  */
 fun Modifier.liquidGlass(
     hazeState: HazeState? = null,

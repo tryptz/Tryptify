@@ -23,6 +23,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -75,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -172,7 +174,8 @@ fun MainPlayerRoute(
     val currentVisualizerPreset by playerViewModel.currentVisualizerPreset.collectAsStateWithLifecycle()
     val visualizerPresets by playerViewModel.visualizerPresets.collectAsStateWithLifecycle()
     val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
-    val visualizerCompact by playerViewModel.visualizerCompact.collectAsStateWithLifecycle()
+    val canGoToPreviousVisualizerPreset by
+        playerViewModel.canGoToPreviousVisualizerPreset.collectAsStateWithLifecycle()
     val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
     val spectrumAnalyzerEnabled by playerViewModel.spectrumAnalyzerEnabled.collectAsStateWithLifecycle()
     val spectrumShowOnNowPlaying by playerViewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
@@ -198,6 +201,7 @@ fun MainPlayerRoute(
     var showPresetSheet by rememberSaveable { mutableStateOf(false) }
     var showSpeedSheet by rememberSaveable { mutableStateOf(false) }
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
+    var showPipelineSheet by rememberSaveable { mutableStateOf(false) }
     // Overflow › "Add to playlist" and the create-playlist follow-up it opens.
     // Held as the pending track rather than a flag so the follow-up dialog
     // still knows what to add after the picker sheet is gone.
@@ -261,10 +265,9 @@ fun MainPlayerRoute(
     // which meant the player finished repainting while a 6s blend was still
     // half the previous track. Linear for the same reason the palette is: it
     // is pacing an audio crossfade, not decorating a tap.
-    val blendSeconds by playerViewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val colorTransitionMs by playerViewModel.colorTransitionMs.collectAsStateWithLifecycle()
     val colorBlendMs = tf.monochrome.android.ui.theme.motionMillis(
-        ColorBlend.millisFor(blendSeconds, colorTransitionMs)
+        ColorBlend.millisFor(colorTransitionMs)
     )
     // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
@@ -352,6 +355,130 @@ fun MainPlayerRoute(
         "${(currentIndex + 1).coerceAtLeast(1)} / ${queue.size}"
     } else ""
 
+    // ── Ambient MilkDrop ────────────────────────────────────────────────
+    //
+    // Never at the same time as the hero visualizer. ProjectMEngineRepository
+    // refcounts its surfaces and the FIRST attachment owns the native bridge;
+    // renderFrame needs that bridge's GL objects current, so a second view on
+    // a second context would draw from objects it does not have. The two are
+    // different compositions of the same engine, so this is not a limitation
+    // anyone should feel — but it is a crash if it is ever ignored.
+    //
+    // Off on the legacy player too: that path is the low-performance profile,
+    // which is the last place to run a GL composite behind the whole screen.
+    //
+    // Declared this high because three places need them: Audio tools' own
+    // Visualizer chip (which has to read lit while ambient is the thing on
+    // screen), the hero slot — Ambient › "Remove album cover" fades the square
+    // artwork out so MilkDrop's atmosphere is the whole show — and the
+    // background layer itself.
+    val ambient by playerViewModel.ambientVisualizer.collectAsStateWithLifecycle()
+
+    /**
+     * What the user asked for. Drives the Audio tools chip.
+     *
+     * Ambient wins over the hero visualizer, not the other way round. The two
+     * can never run together — see the refcount note above — and this used to
+     * resolve that by standing ambient down whenever the view mode was
+     * VISUALIZER. Engaging the ambient toggle then appeared to do nothing,
+     * because the square hero visualizer kept the engine. Ambient is the more
+     * specific request, so it takes the engine and the hero drops back to
+     * artwork.
+     */
+    val ambientEnabled = ambient.enabled && !legacyPlayer
+
+    // Leave VISUALIZER when ambient takes over, so the stored view mode
+    // matches what is on screen. Without it the mode stays VISUALIZER behind
+    // the ambient background, which silently disables the hero's swipe-to-skip
+    // and leaves fullscreen latched on something no longer rendering.
+    LaunchedEffect(ambientEnabled, viewMode) {
+        if (ambientEnabled && viewMode == NowPlayingViewMode.VISUALIZER) {
+            playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
+        }
+    }
+
+    // Preparing the engine is a first-run preset install on its own dispatcher.
+    // Ask for it as soon as ambient is switched on: the only other callers are
+    // the fullscreen visualizer and Settings, so with ambient on over the cover
+    // art nothing had asked, and the overlay attached to an engine that had not
+    // started installing.
+    LaunchedEffect(ambientEnabled) {
+        if (ambientEnabled) playerViewModel.visualizerRepository.requestPrepare()
+    }
+
+    /**
+     * What can actually be drawn.
+     *
+     * Attaching the overlay before the engine is ready put a TextureView's GL
+     * setup and the native init in the middle of the player's open animation —
+     * the player stuttered, waiting on a visualizer that had not loaded. Until
+     * it is ready the ordinary blurred backdrop stands in and the cover stays
+     * put, so opening is instant and MilkDrop arrives when it is genuinely
+     * able to draw.
+     */
+    val ambientActive = ambientEnabled && visualizerEngineStatus.isNativeReady
+
+    // Every reason the ambient visualizer can fail to appear is a boolean in
+    // this one expression, and none of them was observable. "It is not turning
+    // on" could be the setting, the legacy-player exclusion, or an engine that
+    // never reported ready — three very different bugs that look identical on
+    // screen. Logged on change only, so it is one line per transition rather
+    // than one per recomposition.
+    LaunchedEffect(ambientEnabled, legacyPlayer, ambient.hideCover, ambientActive) {
+        android.util.Log.i(
+            "AmbientVisualizer",
+            "gate: setting=${ambient.enabled} legacyPlayer=$legacyPlayer " +
+                "nativeReady=${visualizerEngineStatus.isNativeReady} " +
+                "hideCover=${ambient.hideCover} -> active=$ambientActive",
+        )
+    }
+
+    /**
+     * Audio tools' Visualizer chip. One lambda for both layouts — the glass and
+     * legacy players wire these controls twice, and this file already carries a
+     * scar from a parameter added to one branch and not the other.
+     */
+    val onVisualizerToggle: () -> Unit = {
+        when {
+            // On means the ambient background, off means no visualizer. The
+            // chip never hands over the square hero MilkDrop.
+            //
+            // It used to: ambient on -> tap -> ambient off -> tap -> square
+            // visualizer. Reading that as a three-state cycle is a mistake —
+            // the two are not peers. Ambient is a property of the player's
+            // background, the hero one replaces the artwork, and someone who
+            // has chosen the background one is not asking to be offered the
+            // other on the next tap. Worse, that second tap left the ambient
+            // *setting* switched off behind it, so the chip had quietly
+            // undone a Settings toggle the user had deliberately turned on.
+            //
+            // Tests the setting, not ambientActive, so it works mid-load
+            // rather than waiting for the engine to come up.
+            ambientEnabled ->
+                playerViewModel.setAmbientVisualizerEnabled(false)
+            // The legacy player cannot host the ambient overlay (see
+            // ambientEnabled), so there — and only there — the chip still
+            // means the hero visualizer, which is the only one it can show.
+            legacyPlayer ->
+                playerViewModel.setNowPlayingViewMode(
+                    if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                        NowPlayingViewMode.COVER_ART
+                    } else {
+                        NowPlayingViewMode.VISUALIZER
+                    }
+                )
+            else -> {
+                playerViewModel.setAmbientVisualizerEnabled(true)
+                // Ambient wins over the hero visualizer, and the effect above
+                // enforces that — but it runs after composition. Standing the
+                // hero one down here keeps the swap to a single frame.
+                if (viewMode == NowPlayingViewMode.VISUALIZER) {
+                    playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART)
+                }
+            }
+        }
+    }
+
     val state = MainPlayerUiState(
         track = currentTrack,
         sourceType = currentUnified?.sourceType,
@@ -379,7 +506,18 @@ fun MainPlayerRoute(
         queueLabel = queueLabel,
         albumColors = blendedColors,
         colorBlendMs = colorBlendMs,
-        visualizerActive = viewMode == NowPlayingViewMode.VISUALIZER,
+        // Lit for what the chip actually controls: ambient on the glass
+        // player, the hero view mode on the legacy one. Tracking both
+        // everywhere would light the chip over a square visualizer it no
+        // longer turns off, so a tap would appear to do nothing.
+        // ambientEnabled, not ambientActive: the chip reflects the setting, so
+        // it reads lit the moment ambient is switched on rather than waiting
+        // for the engine to finish loading.
+        visualizerActive = if (legacyPlayer) {
+            viewMode == NowPlayingViewMode.VISUALIZER
+        } else {
+            ambientEnabled
+        },
         waveformActive = showNpSpectrum,
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
@@ -400,6 +538,9 @@ fun MainPlayerRoute(
     // when the Studio toggle is on. Cover-art and lyrics views are mutually
     // exclusive, so both share ONE pulse / analyzer stake — never two FFT taps.
     val albumGlowOn = lyricsFx.glowBehindArt && lyricsFx.bassReact > 0.01f &&
+        // A halo at zero brightness is the same case as the legacy guard below:
+        // drawArtGlow returns immediately, so staking the tap buys nothing.
+        lyricsFx.effectiveArtGlowBrightness > 0.001f &&
         viewMode == NowPlayingViewMode.COVER_ART &&
         // Only MainPlayerScreen is handed the fxUnderlay that draws this glow.
         // Without the guard the legacy layout still staked the FFT tap and woke
@@ -433,6 +574,12 @@ fun MainPlayerRoute(
     // visible (dissolving in or out). derivedStateOf flips only at the threshold.
     val lyricsSlotWide by remember { derivedStateOf { lyricsProgress > 0.001f } }
 
+    // The cover as shader input for the glass, so panes refract the artwork
+    // itself rather than the field the shader reconstructs. Only loaded while
+    // the blurred background is on — that is the only time the artwork is what
+    // is actually behind them.
+    val backdropArt = rememberBackdropArt(currentTrack?.coverUrl, blurredBackground)
+
     CompositionLocalProvider(
         LocalLyricsFx provides lyricsFx,
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
@@ -444,6 +591,7 @@ fun MainPlayerRoute(
             blurredArt = blurredBackground,
             dominant = blendedColors.dominant,
             secondary = blendedColors.vibrant,
+            art = backdropArt,
         ),
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,
@@ -460,7 +608,7 @@ fun MainPlayerRoute(
             isDownloaded = isDownloaded,
             downloadState = downloadState,
             onCollapse = { navController.popBackStack() },
-            onOutputClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
+            onOutputClick = { showPipelineSheet = true },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
             onCycleRepeat = playerViewModel::cycleRepeatMode,
@@ -477,6 +625,34 @@ fun MainPlayerRoute(
             },
         )
     }
+    // Ambient › "Remove album cover": the preset row fades itself out after a
+    // few seconds so the atmosphere is unobstructed, and a tap on the space the
+    // cover vacated brings it back.
+    //
+    // Attached to the hero *region* (via MainPlayerScreen's heroRegionModifier)
+    // rather than to the hero slot. The slot is the inscribed square — side =
+    // min(width, height) — so on a tall phone it misses the strips above and
+    // below it, which to the eye are the same empty area. "Anywhere above the
+    // song title" is the region, not the square.
+    //
+    // A pointerInput rather than a tap-catching overlay Box: an overlay would
+    // sit between the finger and the hero's swipe-to-skip. As a modifier on an
+    // ancestor it cooperates instead — detectTapGestures consumes the down, but
+    // detectHorizontalDragGestures awaits its own with requireUnconsumed =
+    // false, so the swipe still runs, and a drag consumes the movement, which
+    // cancels the pending tap.
+    //
+    // Only attached while the row is actually on screen, so nothing new
+    // consumes downs in the ordinary cover mode. lyricsSlotWide is the same
+    // predicate the lyric surface is composed under.
+    var ambientPresetReveal by remember { mutableIntStateOf(0) }
+    val revealPresetControls =
+        if (ambientActive && !lyricsSlotWide) {
+            Modifier.pointerInput(Unit) { detectTapGestures { ambientPresetReveal++ } }
+        } else {
+            Modifier
+        }
+
     val heroSlot: @Composable (Modifier) -> Unit = { heroModifier ->
         // Manual dissolve between the album art / visualizer and the lyric
         // surface (lyricsProgress is hoisted above). The built-in Crossfade
@@ -488,6 +664,31 @@ fun MainPlayerRoute(
         // (expensive) art/visualizer doesn't recompose mid-dissolve.
         val showAlbumHero by remember { derivedStateOf { lyricsProgress < 0.999f } }
         val showLyricsHero by remember { derivedStateOf { lyricsProgress > 0.001f } }
+
+        // Ambient › "Remove album cover": the square art stands down (fades,
+        // not pops) so the MilkDrop atmosphere is the whole show — the
+        // backdrop behind is untouched. The swipe-to-skip gestures live on
+        // the slot itself, so they keep working over the empty region.
+        val ambientHideCoverAlpha by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (ambientActive && ambient.hideCover) 0f else 1f,
+            animationSpec = tween(durationMillis = 400),
+            label = "ambientHideCover",
+        )
+
+        // Composed only while something of the cover is actually visible.
+        //
+        // Alpha is a draw-phase property, so a hero faded to 0 still hit-tests
+        // — and the cover carries its own tap target (onEnterVisualizer, at
+        // PlayerHero.kt's 0.86f circle) across most of the slot. Invisible, it
+        // was swallowing every tap aimed at the empty region above the song
+        // title, which is where the ambient preset row asks to be tapped to
+        // come back. It also meant those taps were quietly requesting the
+        // square visualizer, which the "ambient wins" effect then had to undo.
+        //
+        // Gated on the animated alpha rather than on the setting, so the cover
+        // still fades out and back in instead of popping on the frame the
+        // toggle flips.
+        val heroVisible = showAlbumHero && ambientHideCoverAlpha > 0.001f
 
         // Horizontal swipe across the hero skips tracks, matching the
         // gesture (and the 50px threshold) the mini player already uses.
@@ -551,8 +752,17 @@ fun MainPlayerRoute(
             modifier = heroModifier.then(trackSwipe),
             contentAlignment = Alignment.Center,
         ) {
-            if (showAlbumHero) {
-                val effectiveStyle = if (viewMode == NowPlayingViewMode.VISUALIZER) {
+            if (heroVisible) {
+                // `&& !ambientEnabled` is the mutual exclusion itself, not a
+                // tidy-up: one boolean decides both surfaces in the same
+                // composition, so the hero visualizer is gone in the very
+                // frame ambient turns on. The LaunchedEffect above corrects
+                // the stored view mode, but it runs after composition —
+                // leaning on it would leave one frame with both attached, and
+                // both attached is the crash the refcount note warns about.
+                val effectiveStyle = if (
+                    viewMode == NowPlayingViewMode.VISUALIZER && !ambientEnabled
+                ) {
                     PlayerHeroStyle.Visualizer
                 } else {
                     heroStyle
@@ -593,7 +803,8 @@ fun MainPlayerRoute(
                         val travelled =
                             (abs(heroOffset.value) / size.width.coerceAtLeast(1f))
                                 .coerceIn(0f, 1f)
-                        alpha = (1f - lyricsProgress) * (1f - travelled * 0.85f)
+                        alpha = (1f - lyricsProgress) *
+                            (1f - travelled * 0.85f) * ambientHideCoverAlpha
                     },
                     style = effectiveStyle,
                     isFullscreen = isFullscreenActive,
@@ -622,8 +833,6 @@ fun MainPlayerRoute(
                     onTogglePresetFavorite = {
                         currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
                     },
-                    visualizerCompact = visualizerCompact,
-                    onToggleCompact = playerViewModel::toggleVisualizerCompact,
                     onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
                     spectrumBins = spectrumBins,
                     spectrumColor = spectrumColor,
@@ -633,6 +842,12 @@ fun MainPlayerRoute(
                     },
                     onEnterVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.VISUALIZER) },
                     onExitVisualizer = { playerViewModel.setNowPlayingViewMode(NowPlayingViewMode.COVER_ART) },
+                    displaceVisualizerEntry = ambientActive,
+                    // The art has its own clickable, so a tap on it never
+                    // reaches the region-level reveal detector — the preset row
+                    // would fade after four seconds with no way back. Raising
+                    // it from here brings both sets of controls up together.
+                    onArtTap = { ambientPresetReveal++ },
                 )
             }
             if (showLyricsHero) {
@@ -661,6 +876,36 @@ fun MainPlayerRoute(
                         ) { lyricsExpanded = !lyricsExpanded },
                 )
             }
+
+            // Ambient: the preset controls live on the visualizer hero, which
+            // does not exist in this view mode, so they come here instead.
+            //
+            // Shown whenever ambient is running, not only once the cover is
+            // gone. With the cover still up there was no way to change preset
+            // from the player at all — the atmosphere was running behind the
+            // artwork with its controls nowhere. Over the art they sit across
+            // the bottom, which is why the art's own visualizer-entry button
+            // moves out of that corner (displaceVisualizerEntry, below).
+            //
+            // Suppressed while the lyric surface is up, since that owns the
+            // slot.
+            if (ambientActive && !showLyricsHero) {
+                AmbientPresetControls(
+                    canGoBack = canGoToPreviousVisualizerPreset,
+                    onPreviousPreset = playerViewModel::previousVisualizerPreset,
+                    onNextPreset = playerViewModel::nextVisualizerPreset,
+                    onOpenPresetBrowser = { showPresetSheet = true },
+                    isFavorite = currentVisualizerPreset?.id
+                        ?.let { it in visualizerFavoritePresetIds } ?: false,
+                    onToggleFavorite = {
+                        currentVisualizerPreset?.id?.let {
+                            playerViewModel.toggleVisualizerFavoritePreset(it)
+                        }
+                    },
+                    revealKey = ambientPresetReveal,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
     }
 
@@ -674,6 +919,10 @@ fun MainPlayerRoute(
     // control; this branch added four of them for the pitch engine, twice.
     // `overlay` is `BoxScope.() -> Unit` and the legacy branch sits in a Box,
     // so one lambda serves both.
+    // The overlay draws the backdrop itself, so it needs the cover as a
+    // bitmap. Only decoded while it is actually on.
+    val ambientCover = rememberCoverBitmap(currentTrack?.coverUrl, enabled = ambientActive)
+
     val playerPanels: @Composable BoxScope.() -> Unit = {
         VisualizerPresetPanel(
             visible = showPresetSheet,
@@ -686,6 +935,11 @@ fun MainPlayerRoute(
                 navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
             },
             onDismiss = { showPresetSheet = false },
+        )
+        AudioPipelinePanel(
+            visible = showPipelineSheet,
+            track = currentUnified,
+            onDismiss = { showPipelineSheet = false },
         )
         SpeedPanel(
             visible = showSpeedSheet,
@@ -733,12 +987,7 @@ fun MainPlayerRoute(
                 onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
                 onSound = { navController.navigateTool(Screen.Equalizer) },
                 onSpeed = { showSpeedSheet = true },
-                onVisualizer = {
-                    playerViewModel.setNowPlayingViewMode(
-                        if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
-                        else NowPlayingViewMode.VISUALIZER
-                    )
-                },
+                onVisualizer = onVisualizerToggle,
                 onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
                 onCompressorToggle = playerViewModel::setCompressorEnabled,
                 onInflatorToggle = playerViewModel::setInflatorEnabled,
@@ -780,18 +1029,13 @@ fun MainPlayerRoute(
                         else NowPlayingViewMode.LYRICS
                     )
                 },
+                onShuffle = playerViewModel::toggleShuffle,
                 onTimer = { showSleepSheet = true },
                 onMixer = { navController.navigateTool(Screen.Mixer) },
                 onPlaylist = { showQueueSheet = true },
-                onOutput = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
                 onSound = { navController.navigateTool(Screen.Equalizer) },
                 onSpeed = { showSpeedSheet = true },
-                onVisualizer = {
-                    playerViewModel.setNowPlayingViewMode(
-                        if (viewMode == NowPlayingViewMode.VISUALIZER) NowPlayingViewMode.COVER_ART
-                        else NowPlayingViewMode.VISUALIZER
-                    )
-                },
+                onVisualizer = onVisualizerToggle,
                 onWaveform = { playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying) },
                 onCompressorToggle = playerViewModel::setCompressorEnabled,
                 onInflatorToggle = playerViewModel::setInflatorEnabled,
@@ -804,6 +1048,7 @@ fun MainPlayerRoute(
                 onToneControlsChange = playerViewModel::setToneControls,
                 topBar = topBarSlot,
                 hero = heroSlot,
+                heroRegionModifier = revealPresetControls,
                 fxUnderlay = {
                     if (beatPulse != null) {
                         // Cover-art view uses the album anchor with an edge-hugging
@@ -823,6 +1068,19 @@ fun MainPlayerRoute(
                 // while viewMode==LYRICS, so leaving lyrics doesn't snap it to square.
                 lyricsMode = lyricsSlotWide,
                 blurredBackground = blurredBackground,
+                ambientBackground = if (ambientActive) {
+                    {
+                        AmbientVisualizerLayer(
+                            repository = playerViewModel.visualizerRepository,
+                            settings = ambient,
+                            cover = ambientCover,
+                            dominant = albumColors.dominant,
+                            isPlaying = isPlaying,
+                        )
+                    }
+                } else {
+                    null
+                },
                 overlay = playerPanels,
             )
         }

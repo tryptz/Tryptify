@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.local.db
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -17,6 +18,94 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks ORDER BY albumArtist, album, discNumber, trackNumber")
     fun getAllTracks(): Flow<List<LocalTrackEntity>>
 
+    /**
+     * The songs list, one page at a time.
+     *
+     * Eight queries rather than one @RawQuery with the ORDER BY pasted in.
+     * Room checks these at build time; a RawQuery is a string, so a typo in a
+     * column name is a crash when the tab opens instead of a failed build. The
+     * list is the most-used screen in the app, which is exactly where that
+     * trade should fall on the safe side.
+     *
+     * Every clause ends in `albumArtist, album, discNumber, trackNumber` — the
+     * table's default order, and the order the Kotlin sort used to see. A
+     * stable sort leaves rows the key ties on in the order they arrived, so
+     * repeating the base order as a tiebreak reproduces that; and DESC repeats
+     * it reversed, because the descending case reversed the whole sorted list,
+     * ties and all. Reversing only the leading key would quietly reshuffle
+     * every same-titled track. See LibrarySortTest.
+     *
+     * LOWER(COALESCE(title, filePath)) matches `displayTitle.lowercase()` for
+     * every tagged file. Two known differences, both confined to sorting: an
+     * untitled file sorts by its full path rather than by the bare filename
+     * the row displays, and SQLite's LOWER only folds ASCII where Kotlin's
+     * lowercase() is Unicode-aware.
+     */
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByNameAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByNameDesc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByDateAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByDateDesc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByTimeAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByTimeDesc(): PagingSource<Int, LocalTrackEntity>
+
+    // codec is NOT NULL in the schema, so no COALESCE. The Kotlin sort's
+    // "\uFFFF" fallback only ever applied to an unmapped codec name, which
+    // sorts as itself here rather than as UNKNOWN.
+    @Query("SELECT * FROM local_tracks ORDER BY codec ASC, LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    fun pagedByFileTypeAsc(): PagingSource<Int, LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY codec DESC, LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    fun pagedByFileTypeDesc(): PagingSource<Int, LocalTrackEntity>
+
+    /** How many tracks there are, without loading any of them. */
+    @Query("SELECT COUNT(*) FROM local_tracks")
+    fun countTracks(): Flow<Int>
+
+    /**
+     * The whole library in one sort order, once, for building a play queue.
+     *
+     * Tapping a row queues everything after it, and the paged list above only
+     * ever holds the rows near the screen — so the queue has to come from
+     * somewhere. It comes from here, on tap, off the main thread, instead of
+     * the list being held in memory permanently just in case somebody presses
+     * play. Same rows and same order as the paged queries; the ORDER BY
+     * clauses are deliberately identical.
+     */
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByNameAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByNameDesc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByDateAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY COALESCE(lastModified, 0) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByDateDesc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByTimeAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY durationSeconds DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByTimeDesc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY codec ASC, LOWER(COALESCE(title, filePath)) ASC, albumArtist ASC, album ASC, discNumber ASC, trackNumber ASC")
+    suspend fun snapshotByFileTypeAsc(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_tracks ORDER BY codec DESC, LOWER(COALESCE(title, filePath)) DESC, albumArtist DESC, album DESC, discNumber DESC, trackNumber DESC")
+    suspend fun snapshotByFileTypeDesc(): List<LocalTrackEntity>
+
     // `genre` is in the LIKE and indexed (see LocalMediaEntities). Searching
     // "techno" used to match only tracks with it in the title; now it finds
     // everything tagged with it, which is what a genre word means.
@@ -32,7 +121,87 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks WHERE genre = :genre ORDER BY album, trackNumber")
     fun getTracksByGenre(genre: String): Flow<List<LocalTrackEntity>>
 
-    @Query("SELECT * FROM local_tracks WHERE filePath LIKE :folderPath || '%' AND filePath NOT LIKE :folderPath || '%/%' ORDER BY trackNumber, title")
+    @Query("SELECT * FROM local_tracks WHERE albumArtist = :albumArtist ORDER BY album, discNumber, trackNumber")
+    fun getTracksByAlbumArtist(albumArtist: String): Flow<List<LocalTrackEntity>>
+
+    @Query("SELECT * FROM local_tracks WHERE composer = :composer ORDER BY album, discNumber, trackNumber")
+    fun getTracksByComposer(composer: String): Flow<List<LocalTrackEntity>>
+
+    @Query("SELECT * FROM local_tracks WHERE year = :year ORDER BY albumArtist, album, discNumber, trackNumber")
+    fun getTracksByYear(year: Int): Flow<List<LocalTrackEntity>>
+
+    // ── Facet tallies ───────────────────────────────────────────────
+    //
+    // One row per distinct value with the number of tracks under it, so the
+    // Album artists / Composers / Years lists can be drawn without reading a
+    // single track. `local_genres` is a real table the scanner maintains;
+    // these three have no table of their own, so they are grouped out of
+    // `local_tracks` on demand. That is cheap for album artist (indexed) and a
+    // full scan for the other two — acceptable for a list that is built once
+    // when the page opens, and the alternative is three more tables for the
+    // scanner to keep in step.
+    //
+    // Blank is not a value: a file with no composer tag must not create a
+    // nameless row that opens onto every untagged track in the library.
+
+    @Query(
+        """
+        SELECT albumArtist AS name, COUNT(*) AS trackCount
+        FROM local_tracks
+        WHERE albumArtist IS NOT NULL AND TRIM(albumArtist) != ''
+        GROUP BY albumArtist
+        ORDER BY albumArtist COLLATE NOCASE
+        """
+    )
+    fun getAlbumArtistTallies(): Flow<List<LocalFacetTally>>
+
+    @Query(
+        """
+        SELECT composer AS name, COUNT(*) AS trackCount
+        FROM local_tracks
+        WHERE composer IS NOT NULL AND TRIM(composer) != ''
+        GROUP BY composer
+        ORDER BY composer COLLATE NOCASE
+        """
+    )
+    fun getComposerTallies(): Flow<List<LocalFacetTally>>
+
+    // Newest first, and CAST so every tally reads the same shape. Year 0 is
+    // what a missing tag decodes to often enough to be worth excluding by hand.
+    @Query(
+        """
+        SELECT CAST(year AS TEXT) AS name, COUNT(*) AS trackCount
+        FROM local_tracks
+        WHERE year IS NOT NULL AND year > 0
+        GROUP BY year
+        ORDER BY year DESC
+        """
+    )
+    fun getYearTallies(): Flow<List<LocalFacetTally>>
+
+    /**
+     * The audio files sitting directly in [folderPath], not those in its subfolders.
+     *
+     * This used to be `LIKE :folderPath || '%' AND NOT LIKE :folderPath || '%/%'`,
+     * which returned nothing at all. `%` matches the empty string, so the second
+     * pattern also matched a direct child: for `/Music`, the file
+     * `/Music/song.mp3` is `/Music` + "" + `/` + `song.mp3`, and the NOT excluded
+     * every row the first pattern let through. The folder browser could only ever
+     * list subfolders.
+     *
+     * Compared as substrings rather than patterns, so a folder name containing
+     * `_` or `%` is matched literally — as a LIKE pattern, `Hip_Hop` would also
+     * match a sibling `HipXHop`. `local_tracks` has no index on `filePath`, so
+     * both forms scan the same way.
+     */
+    @Query(
+        """
+        SELECT * FROM local_tracks
+        WHERE substr(filePath, 1, length(:folderPath) + 1) = :folderPath || '/'
+          AND instr(substr(filePath, length(:folderPath) + 2), '/') = 0
+        ORDER BY trackNumber, title
+        """
+    )
     fun getTracksInFolder(folderPath: String): Flow<List<LocalTrackEntity>>
 
     @Query("SELECT * FROM local_tracks WHERE isrc = :isrc LIMIT 1")
@@ -86,6 +255,22 @@ interface LocalMediaDao {
 
     @Query("DELETE FROM local_tracks WHERE filePath IN (:paths)")
     suspend fun deleteTracksByPaths(paths: List<String>)
+
+    /**
+     * Every track anywhere beneath [folderPath] — the whole subtree, not one
+     * level, which is what excluding a folder means.
+     *
+     * Substrings rather than a LIKE pattern, for the reason getTracksInFolder
+     * gives: a folder named `Hip_Hop` would otherwise match a sibling
+     * `HipXHop`, and here that would delete somebody else's music.
+     */
+    @Query(
+        """
+        DELETE FROM local_tracks
+        WHERE substr(filePath, 1, length(:folderPath) + 1) = :folderPath || '/'
+        """
+    )
+    suspend fun deleteTracksUnder(folderPath: String)
 
     @Query("SELECT filePath FROM local_tracks")
     suspend fun getAllTrackPaths(): List<String>
@@ -155,6 +340,20 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_folders WHERE parentPath = :parentPath ORDER BY displayName")
     fun getSubfolders(parentPath: String): Flow<List<LocalFolderEntity>>
 
+    @Query("SELECT * FROM local_folders ORDER BY path")
+    fun getAllFolders(): Flow<List<LocalFolderEntity>>
+
+    /**
+     * Never matches anything, and cannot.
+     *
+     * `parentPath` is `substringBeforeLast('/')`, which for a top-level
+     * `/storage` is the empty string, not null — so no row an absolute path
+     * produces has a null parent. The Folders tab read this and therefore only
+     * ever showed the roots a user had added by hand; a folder full of music
+     * the scanner found never appeared. See folderBrowseRoots, which is what
+     * the tab uses instead. Kept because Room needs the query to exist for
+     * anything still calling it.
+     */
     @Query("SELECT * FROM local_folders WHERE parentPath IS NULL ORDER BY displayName")
     fun getRootFolders(): Flow<List<LocalFolderEntity>>
 
@@ -174,6 +373,43 @@ interface LocalMediaDao {
 
     @Upsert
     suspend fun updateScanState(state: ScanStateEntity)
+
+    // ── Artwork store ───────────────────────────────────────────────
+
+    // Repoint keys under [oldPrefix] at [newPrefix], for the one-time move out
+    // of cacheDir. [oldPrefix] ends in a slash so "…/artwork_backup/" cannot
+    // match, and the LIKE keeps REPLACE away from the sidecar covers and raw
+    // file paths sharing the column.
+    @Query(
+        "UPDATE local_tracks SET artworkCacheKey = " +
+            "REPLACE(artworkCacheKey, :oldPrefix, :newPrefix) " +
+            "WHERE artworkCacheKey LIKE :oldPrefix || '%'"
+    )
+    suspend fun repointTrackArtwork(oldPrefix: String, newPrefix: String): Int
+
+    @Query(
+        "UPDATE local_albums SET artworkCacheKey = " +
+            "REPLACE(artworkCacheKey, :oldPrefix, :newPrefix) " +
+            "WHERE artworkCacheKey LIKE :oldPrefix || '%'"
+    )
+    suspend fun repointAlbumArtwork(oldPrefix: String, newPrefix: String): Int
+
+    @Query(
+        "UPDATE local_artists SET artworkCacheKey = " +
+            "REPLACE(artworkCacheKey, :oldPrefix, :newPrefix) " +
+            "WHERE artworkCacheKey LIKE :oldPrefix || '%'"
+    )
+    suspend fun repointArtistArtwork(oldPrefix: String, newPrefix: String): Int
+
+    // Every key an orphan sweep must keep alive. Albums and artists carry
+    // their own copies, so consulting local_tracks alone would delete a cover
+    // an album row still points at.
+    @Query(
+        "SELECT artworkCacheKey FROM local_tracks WHERE artworkCacheKey IS NOT NULL " +
+            "UNION SELECT artworkCacheKey FROM local_albums WHERE artworkCacheKey IS NOT NULL " +
+            "UNION SELECT artworkCacheKey FROM local_artists WHERE artworkCacheKey IS NOT NULL"
+    )
+    suspend fun getAllReferencedArtworkKeys(): List<String>
 
     // ── Bulk operations ─────────────────────────────────────────────
 

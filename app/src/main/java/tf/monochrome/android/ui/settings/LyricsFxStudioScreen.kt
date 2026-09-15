@@ -70,7 +70,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.components.GlassPanel
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -109,8 +108,11 @@ import tf.monochrome.android.domain.model.PlayerGlassPreset
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.MiniPlayer
+import tf.monochrome.android.visualizer.AmbientVisualizerSettings
+import tf.monochrome.android.visualizer.VisualizerBlendMode
 import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.LocalPlayerGlassGround
 import tf.monochrome.android.ui.player.LocalPlayerHaze
 import tf.monochrome.android.ui.player.PlayerGlassHaze
 import tf.monochrome.android.ui.player.PlayerActionDock
@@ -137,6 +139,8 @@ import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.exp
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import androidx.compose.material3.RadioButton
+import kotlinx.coroutines.flow.SharingStarted
 
 @HiltViewModel
 class LyricsFxStudioViewModel @Inject constructor(
@@ -169,6 +173,39 @@ class LyricsFxStudioViewModel @Inject constructor(
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _miniPlayerGlass.asStateFlow()
     private var miniPlayerGlassTouched = false
     private var miniPlayerGlassPersistJob: Job? = null
+
+    /**
+     * The ambient MilkDrop overlay's controls.
+     *
+     * Read straight from preferences with no working copy, unlike the glass
+     * blobs above: these are written on the slider's *release*, not on every
+     * frame, so there is no drag to debounce. There is nothing to preview in
+     * the Studio either — the engine allows one attached surface at a time, so
+     * a preview here would be a second one — and the values are cheap enough
+     * to round-trip through DataStore once per gesture.
+     */
+    val ambient: StateFlow<AmbientVisualizerSettings> = preferences.ambientVisualizer
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AmbientVisualizerSettings())
+
+    fun setAmbientEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setAmbientVisualizerEnabled(enabled) }
+    }
+
+    fun setAmbientOpacity(percent: Int) {
+        viewModelScope.launch { preferences.setAmbientVisualizerOpacity(percent) }
+    }
+
+    fun setAmbientBlackPoint(percent: Int) {
+        viewModelScope.launch { preferences.setAmbientVisualizerBlackPoint(percent) }
+    }
+
+    fun setAmbientBlend(mode: VisualizerBlendMode) {
+        viewModelScope.launch { preferences.setAmbientVisualizerBlend(mode) }
+    }
+
+    fun setAmbientHideCover(hide: Boolean) {
+        viewModelScope.launch { preferences.setAmbientVisualizerHideCover(hide) }
+    }
 
     /** Fonts the user has imported (Settings › Appearance copies them here). */
     private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
@@ -421,6 +458,11 @@ fun LyricsFxStudioScreen(
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Player") })
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("UI panels") })
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Lyrics") })
+            // Not glass at all, unlike the other three — this is the player's
+            // background and its visualizer engine. It lives here because the
+            // screen is the Player Visuals Studio, and because there is nowhere
+            // else that a change to what the player looks like belongs.
+            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Visualizer") })
         }
 
         // With the glass switched off app-wide, every control on these tabs still
@@ -434,6 +476,141 @@ fun LyricsFxStudioScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
+        }
+
+        if (selectedTab == 3) {
+            val ambient by viewModel.ambient.collectAsStateWithLifecycle()
+            // The rest of the visualizer's controls (spectrum, engine,
+            // graphics, preset rotation) read the main SettingsViewModel —
+            // this tab hosts them now, so pull that VM in alongside.
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
+            // Reserve the mini player's height inside the scroll, the same way
+            // the Lyrics tab does below. Without it the last control on this
+            // tab sits under the bar permanently: the scroll ends level with
+            // the screen, so there is nothing left to scroll it clear with.
+            val visualizerNavBar =
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 8.dp + LocalMiniPlayerInset.current + visualizerNavBar,
+                    ),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Ambient visualizer",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            "MilkDrop drawn into the album background — over the " +
+                                "blurred cover, under the player's controls — instead " +
+                                "of replacing the artwork.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = ambient.enabled, onCheckedChange = viewModel::setAmbientEnabled)
+                }
+
+                if (ambient.enabled) {
+                    // Sliders write on release: each change is a DataStore
+                    // round trip, and the preview lives on the player, not
+                    // here — the engine can only drive one surface at a time.
+                    var opacity by remember(ambient.opacityPercent) {
+                        mutableFloatStateOf(ambient.opacityPercent.toFloat())
+                    }
+                    var blackPoint by remember(ambient.blackPointPercent) {
+                        mutableFloatStateOf(ambient.blackPointPercent.toFloat())
+                    }
+                    FxSlider(
+                        label = "Visualizer opacity",
+                        valueLabel = "${opacity.toInt()}%",
+                        value = opacity,
+                        range = 0f..100f,
+                        description = "How much of the preset reaches the screen at all.",
+                        onChange = { opacity = it },
+                        onChangeFinished = { viewModel.setAmbientOpacity(opacity.toInt()) },
+                    )
+                    FxSlider(
+                        label = "Black transparency",
+                        valueLabel = "${blackPoint.toInt()}%",
+                        value = blackPoint,
+                        range = 0f..AmbientVisualizerSettings.MAX_BLACK_POINT.toFloat(),
+                        description = "How much of the dark end disappears. Higher hides " +
+                            "more of a preset's trails and leaves only its bright detail.",
+                        onChange = { blackPoint = it },
+                        onChangeFinished = { viewModel.setAmbientBlackPoint(blackPoint.toInt()) },
+                    )
+
+                    Text(
+                        "Blend mode",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
+                    Text(
+                        "Screen is the default: black contributes nothing, so a preset's " +
+                            "luminous detail sits over the cover without flattening it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        VisualizerBlendMode.entries.forEach { mode ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setAmbientBlend(mode) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = ambient.blend == mode,
+                                    // The whole row is the target; a radio that
+                                    // also handles the click double-fires on some
+                                    // versions.
+                                    onClick = null,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(mode.label, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Remove album cover",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "Hide the square artwork while ambient is on: MilkDrop's " +
+                                    "atmosphere is the whole show, backdrop and controls " +
+                                    "unchanged.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = ambient.hideCover,
+                            onCheckedChange = viewModel::setAmbientHideCover,
+                        )
+                    }
+                }
+
+                VisualizerSettings(settingsViewModel)
+            }
+            return@Column
         }
 
         if (selectedTab == 0 || selectedTab == 1) {
@@ -839,6 +1016,7 @@ fun LyricsFxStudioScreen(
  * The "Player Glass" tab: the same refractive-glass controls the lyrics have,
  * for the player's transport buttons, over a live preview of the glass icons.
  */
+
 @Composable
 private fun PlayerGlassTab(
     glass: PlayerGlassSettings,
@@ -856,6 +1034,13 @@ private fun PlayerGlassTab(
     // Custom preview colours (0 = use the current album colour).
     val previewTint = if (glass.tintColor != 0) Color(glass.tintColor) else accent
     val previewBgBrush = if (glass.previewBg != 0) SolidColor(Color(glass.previewBg)) else previewBackground(accent)
+    // The swatch above as ONE colour, for the frost to ask which way to wash.
+    // Here the chrome is over whatever the listener picked — possibly white —
+    // so the player's own near-black ground would lay dark frost on a light
+    // backdrop. The gradient runs accent 0.34 to 0.10 out of black; its
+    // midpoint stands for it.
+    val previewGround = if (glass.previewBg != 0) Color(glass.previewBg)
+        else lerp(Color.Black, accent, 0.22f)
     var showBgPicker by remember { mutableStateOf(false) }
     var showTintPicker by remember { mutableStateOf(false) }
     // Theme save / import / share dialog state (mirrors the Lyrics preset system).
@@ -899,10 +1084,20 @@ private fun PlayerGlassTab(
             CompositionLocalProvider(
                 LocalPlayerGlass provides glass,
                 LocalPlayerHaze provides previewHaze,
+                // Beside the haze it belongs to, so the dock's own frost
+                // gets it too.
+                LocalPlayerGlassGround provides previewGround,
             ) {
                 if (previewMini) {
-                    // The real mini player bar under the current glass — the exact
-                    // component the nav host shows, so tuning is what-you-see.
+                    // Both faces of this material, because this tab owns both:
+                    // the floating PANE (the audio-tools sheet, the speed panel,
+                    // the search bars, the map panels) and the mini player bar.
+                    //
+                    // The pane used to be previewed on the Player tab instead,
+                    // wrapped around the transport — which put the one thing on
+                    // that preview those sliders do NOT control behind
+                    // everything they do, and left the tab that does control it
+                    // showing only the bar.
                     val sampleTrack = remember {
                         Track(
                             id = 0L,
@@ -910,30 +1105,52 @@ private fun PlayerGlassTab(
                             artist = Artist(id = 0L, name = "Tiësto"),
                         )
                     }
-                    MiniPlayer(
-                        track = sampleTrack,
-                        isPlaying = false,
-                        progressProvider = { 0.4f },
-                        onPlayPauseClick = {},
-                        onSkipNextClick = {},
-                        onSkipPreviousClick = {},
-                        onClick = {},
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        GlassPanel(
+                            hazeState = previewHaze,
+                            glass = glass,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            avoidNavigationBar = false,
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    "Audio tools",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                )
+                                Text(
+                                    "Sheets, panels and search bars all wear this pane.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.62f),
+                                )
+                            }
+                        }
+                        MiniPlayer(
+                            track = sampleTrack,
+                            isPlaying = false,
+                            progressProvider = { 0.4f },
+                            onPlayPauseClick = {},
+                            onSkipNextClick = {},
+                            onSkipPreviousClick = {},
+                            onClick = {},
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
                 } else {
-                // The chrome being tuned sits on a pane of the app's own glass —
-                // the mini player's material, like every other floating panel —
-                // rather than straight onto a flat swatch. It is what the player
-                // actually looks like in use: glass over something, not shapes on
-                // a colour. The panel takes the *mini player's* settings and the
-                // transport inside it takes the player's, which is exactly the
-                // relationship on the real screen.
-                GlassPanel(
-                    hazeState = previewHaze,
-                    glass = LocalMiniPlayerGlass.current,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    avoidNavigationBar = false,
-                ) {
+                // The transport as it actually sits on the player screen: straight
+                // over the backdrop, with nothing between. There was a GlassPanel
+                // here, on the argument that glass should be previewed over
+                // something rather than on a flat swatch — but the real player has
+                // no pane behind its transport (the invariants forbid one under a
+                // punched slab), and the pane it drew was the UI panels blob,
+                // tuned on the other tab. The swatch behind is the something.
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -946,7 +1163,7 @@ private fun PlayerGlassTab(
                         // Real transport icon: bigger skip + shape-accurate shadow,
                         // exactly like the player.
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_previous), "Previous", previewTint, {},
+                            painterResource(R.drawable.ic_glass_skip_previous_chevron), "Previous", previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                         // Solid glass disc with the play symbol punched out, plus the
@@ -977,12 +1194,12 @@ private fun PlayerGlassTab(
                                         .playerGlass(previewTint)
                                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
                                 ) {
-                                    drawGlassPlayPauseDisc(isPlaying = false, fill = previewTint)
+                                    drawGlassPlayPauseDisc(morph = 0f, fill = previewTint)
                                 }
                             }
                         }
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_next), "Next", previewTint, {},
+                            painterResource(R.drawable.ic_glass_skip_next_chevron), "Next", previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                     }
@@ -990,9 +1207,9 @@ private fun PlayerGlassTab(
                     PlayerActionDock(
                         accent = accent,
                         lyricsActive = false,
-                        timerActive = false,
+                        shuffleActive = false,
                         onLyrics = {},
-                        onTimer = {},
+                        onShuffle = {},
                         onMixer = {},
                         onPlaylist = {},
                     )
@@ -1004,7 +1221,6 @@ private fun PlayerGlassTab(
                         onSeekFinished = {},
                         modifier = Modifier.fillMaxWidth(),
                     )
-                }
                 }
                 }
             }
@@ -1239,7 +1455,15 @@ private fun PlayerGlassTab(
             onClick = { onApplyPreset(PlayerGlassSettings.DEFAULT) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Reset to defaults") }
-        Spacer(Modifier.height(48.dp))
+        // Same reservation as the other two tabs. A flat 48dp was short of the
+        // bar plus the navigation inset under it, leaving the reset button
+        // half-covered.
+        Spacer(
+            Modifier.height(
+                48.dp + LocalMiniPlayerInset.current +
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            ),
+        )
         }
     }
 
@@ -1689,6 +1913,12 @@ private fun FxSlider(
     range: ClosedFloatingPointRange<Float>,
     steps: Int = 0,
     description: String? = null,
+    /**
+     * Called when the finger lifts. The glass tabs debounce persistence
+     * instead and leave this null; release-write settings use it to write
+     * once per gesture rather than once per frame.
+     */
+    onChangeFinished: (() -> Unit)? = null,
     onChange: (Float) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -1715,6 +1945,7 @@ private fun FxSlider(
         Slider(
             value = value,
             onValueChange = onChange,
+            onValueChangeFinished = onChangeFinished ?: {},
             valueRange = range,
             steps = steps,
             modifier = Modifier.fillMaxWidth(),

@@ -85,6 +85,13 @@ class LibusbUacDriver @Inject constructor(
     private val _device = MutableStateFlow<UsbDevice?>(null)
     val device: StateFlow<UsbDevice?> = _device.asStateFlow()
 
+    /** Identity of the DAC the driver currently owns, or null.
+     *  Populated from the USB descriptors the moment [open] succeeds —
+     *  available before any stream is negotiated, so the UI can say
+     *  *which* DAC it is even when nothing is streaming. */
+    private val _dacInfo = MutableStateFlow<DacInfo?>(null)
+    val dacInfo: StateFlow<DacInfo?> = _dacInfo.asStateFlow()
+
     private var connection: UsbDeviceConnection? = null
 
     init {
@@ -163,6 +170,7 @@ class LibusbUacDriver @Inject constructor(
         }
         connection = conn
         _device.value = device
+        _dacInfo.value = DacInfo.fromDevice(device)
         _isOpen.value = true
         return true
     }
@@ -173,6 +181,7 @@ class LibusbUacDriver @Inject constructor(
         connection?.close()
         connection = null
         _device.value = null
+        _dacInfo.value = null
         _isOpen.value = false
         // Without this, after a USB DAC unplug isStreaming stayed at
         // its last value (often true). MainActivity's volume-key
@@ -265,8 +274,19 @@ class LibusbUacDriver @Inject constructor(
      *  when the sink has actually finished playback vs. just queued it. */
     fun pendingFrames(): Long = nativePendingFrames()
 
-    /** Pushes [frames] frames from [buffer] (direct, native-byte-order). */
-    fun write(buffer: ByteBuffer, frames: Int): Int = nativeWrite(buffer, frames)
+    /** Pushes [frames] frames from [buffer] (direct, native-byte-order),
+     *  starting at the buffer's CURRENT POSITION. Position is load-bearing
+     *  on retries: after a partial write (driver ring ran full) the
+     *  unconsumed tail sits at a non-zero position, and the native side
+     *  reads relative to that offset — resending from the buffer's start
+     *  would duplicate PCM and scramble the stream. */
+    fun write(buffer: ByteBuffer, frames: Int): Int {
+        if (!buffer.isDirect) {
+            Log.w(TAG, "write: non-direct ByteBuffer — caller must copy to a direct buffer first")
+            return 0
+        }
+        return nativeWrite(buffer, buffer.position(), frames)
+    }
 
     private external fun nativeInit(): Boolean
     private external fun nativeOpen(fd: Int): Boolean
@@ -277,7 +297,7 @@ class LibusbUacDriver @Inject constructor(
     private external fun nativeFlushRing()
     private external fun nativeIsStreaming(): Boolean
     private external fun nativeIsStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
-    private external fun nativeWrite(buffer: ByteBuffer, frames: Int): Int
+    private external fun nativeWrite(buffer: ByteBuffer, byteOffset: Int, frames: Int): Int
     private external fun nativeWritableFrames(): Int
     private external fun nativePlayedFrames(): Long
     private external fun nativePendingFrames(): Long

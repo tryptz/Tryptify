@@ -5,85 +5,81 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The rule tying the album-colour fade to "Blend Between Tracks".
+ * How long the album colours take to cross over.
  *
- * The number matters because the queue advances at the *start* of an audio
- * blend, not the end: the UI sees the new track while the old one still has the
- * whole blend left to play. A colour fade of exactly the blend length is what
- * makes the two finish together.
+ * This used to derive the length from "Blend Between Tracks" so the picture and
+ * the sound finished together, and that was the default. The cost did not show
+ * on the control: a four-second blend is an ordinary setting, and it made the
+ * first stop of the Appearance slider read "Match blend · 4.00 s" and repaint
+ * the whole window for four seconds on every track change.
+ *
+ * The two are unhitched, so what is left to pin is that nothing can hand an
+ * animation a length it should not have — including the `-1` an older build
+ * wrote into the preference to mean "match blend".
  */
 class ColorBlendTest {
 
     @Test
-    fun `a set blend converts seconds to milliseconds unchanged`() {
-        assertEquals(1_000, ColorBlend.millisFor(1))
-        assertEquals(6_000, ColorBlend.millisFor(6))
-        // The slider's maximum. Not clamped — the audio really does take this
-        // long, so the colour has to as well.
-        assertEquals(12_000, ColorBlend.millisFor(12))
+    fun `a stored length is used as it stands`() {
+        assertEquals(0, ColorBlend.millisFor(0))
+        assertEquals(250, ColorBlend.millisFor(250))
+        assertEquals(2_500, ColorBlend.millisFor(2_500))
+        assertEquals(ColorBlend.MAX_MS, ColorBlend.millisFor(ColorBlend.MAX_MS))
     }
 
     @Test
-    fun `gapless gets its own short fade rather than a hard cut`() {
-        assertEquals(ColorBlend.GAPLESS_MS, ColorBlend.millisFor(0))
-        assertTrue("a fade of zero is a cut", ColorBlend.GAPLESS_MS > 0)
+    fun `zero is a choice, not a missing value`() {
+        // Instant is the first stop and has to survive the sanitising the
+        // negative cases below go through.
+        assertEquals(0, ColorBlend.millisFor(0))
     }
 
     @Test
-    fun `a negative value cannot produce a negative duration`() {
-        // The preference is an Int with no floor of its own; a corrupt or
-        // hand-edited store must not reach a tween as a negative duration.
-        assertEquals(ColorBlend.GAPLESS_MS, ColorBlend.millisFor(-1))
-        assertEquals(ColorBlend.GAPLESS_MS, ColorBlend.millisFor(Int.MIN_VALUE))
+    fun `the old match-blend marker becomes a real length`() {
+        // -1 is what shipped in the preference before the slider had a zero
+        // stop. Handed to an animation spec it is not a duration at all.
+        assertEquals(ColorBlend.DEFAULT_MS, ColorBlend.millisFor(-1))
+        assertEquals(ColorBlend.DEFAULT_MS, ColorBlend.millisFor(Int.MIN_VALUE))
     }
 
     @Test
-    fun `longer blends never fade faster`() {
-        var previous = 0
-        for (seconds in 0..12) {
-            val ms = ColorBlend.millisFor(seconds)
-            assertTrue("blend $seconds fell to $ms from $previous", ms >= previous)
-            previous = ms
-        }
-    }
-
-    /**
-     * The Appearance slider. Its whole job is to be ignorable: the default stop
-     * has to leave every case above exactly as it was, or adding the control
-     * changes the app for people who never touch it.
-     */
-    @Test
-    fun `match blend is what the derived rule already said`() {
-        for (seconds in 0..12) {
-            assertEquals(
-                ColorBlend.millisFor(seconds),
-                ColorBlend.millisFor(seconds, ColorBlend.MATCH_BLEND),
-            )
-        }
+    fun `nothing can produce a fade longer than the slider allows`() {
+        assertEquals(ColorBlend.MAX_MS, ColorBlend.millisFor(ColorBlend.MAX_MS + 1))
+        assertEquals(ColorBlend.MAX_MS, ColorBlend.millisFor(Int.MAX_VALUE))
     }
 
     @Test
-    fun `an override wins whatever the blend is`() {
-        for (seconds in 0..12) {
-            assertEquals(0, ColorBlend.millisFor(seconds, 0))
-            assertEquals(2_500, ColorBlend.millisFor(seconds, 2_500))
-            assertEquals(ColorBlend.MAX_MS, ColorBlend.millisFor(seconds, ColorBlend.MAX_MS))
-        }
+    fun `the default is short enough not to be an animation you sit through`() {
+        assertTrue("a fade of zero is a cut", ColorBlend.DEFAULT_MS > 0)
+        assertTrue(
+            "the default is ${ColorBlend.DEFAULT_MS}ms — that is the bug this replaced",
+            ColorBlend.DEFAULT_MS <= 1_000,
+        )
     }
 
     /**
      * The slider indexes this list, so a stop that cannot be reached back from a
-     * stored value would leave the thumb stuck at "match blend".
+     * stored value would leave the thumb pinned at the left end.
      */
     @Test
-    fun `every slider stop is a distinct value the rule accepts`() {
+    fun `every slider stop is a distinct round value the rule leaves alone`() {
         val stops = ColorBlend.steps
-        assertEquals("first stop must be the default", ColorBlend.MATCH_BLEND, stops.first())
+        assertEquals("first stop must be instant", 0, stops.first())
         assertEquals("last stop must be the maximum", ColorBlend.MAX_MS, stops.last())
         assertEquals("stops must be unique", stops.size, stops.distinct().size)
         for (stop in stops) {
-            assertTrue("$stop is not a round step", stop < 0 || stop % ColorBlend.STEP_MS == 0)
-            assertTrue("$stop produced a negative duration", ColorBlend.millisFor(0, stop) >= 0)
+            assertTrue("$stop is not a round step", stop % ColorBlend.STEP_MS == 0)
+            assertEquals("$stop does not survive a round trip", stop, ColorBlend.millisFor(stop))
         }
+    }
+
+    @Test
+    fun `the default sits on a stop the slider can rest at`() {
+        // Otherwise an untouched install shows a thumb at a position that is not
+        // what it is actually using.
+        assertTrue(
+            "${ColorBlend.DEFAULT_MS} is not one of the slider's stops",
+            ColorBlend.DEFAULT_MS in ColorBlend.steps,
+        )
     }
 }

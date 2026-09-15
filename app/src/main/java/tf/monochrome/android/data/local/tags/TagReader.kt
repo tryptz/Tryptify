@@ -10,8 +10,6 @@ import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
 import tf.monochrome.android.domain.model.AudioCodec
 import java.io.File
-import java.io.FileOutputStream
-import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,11 +64,9 @@ data class AudioTags(
 
 @Singleton
 class TagReader @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val artworkStore: ArtworkStore,
 ) {
-    private val artworkCacheDir: File by lazy {
-        File(context.cacheDir, "artwork").also { it.mkdirs() }
-    }
 
     suspend fun readTags(
         filePath: String,
@@ -183,7 +179,7 @@ class TagReader @Inject constructor(
         val artworkBytes = retriever.embeddedPicture
         val hasArt = artworkBytes != null
         val artworkCacheKey = when {
-            hasArt && artworkBytes != null -> cacheArtwork(artworkBytes, filePath)
+            hasArt && artworkBytes != null -> artworkStore.put(artworkBytes, filePath)
             // Per-track sidecar: an image next to the audio file with the
             // same stem (e.g. "song.flac" + "song.jpg"). yt-dlp, Bandcamp,
             // and rip workflows all produce this convention. Checked before
@@ -470,27 +466,5 @@ class TagReader @Inject constructor(
         private val COVER_STEM_PREFIXES = setOf(
             "albumart" // AlbumArt_{GUID}_Large.jpg (WMP)
         )
-    }
-
-    private fun cacheArtwork(artworkBytes: ByteArray, filePath: String): String {
-        val hash = MessageDigest.getInstance("MD5")
-            .digest(filePath.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-        val cacheFile = File(artworkCacheDir, "$hash.jpg")
-
-        if (!cacheFile.exists()) {
-            try {
-                // The lazy mkdirs above runs once per process, but the cache
-                // dir can vanish mid-process (Settings "Clear cache", OS
-                // eviction) — recreate it or this write fails silently and
-                // every track falls back to its raw file path.
-                artworkCacheDir.mkdirs()
-                FileOutputStream(cacheFile).use { it.write(artworkBytes) }
-            } catch (_: Exception) {
-                return filePath // fallback
-            }
-        }
-
-        return cacheFile.absolutePath
     }
 }

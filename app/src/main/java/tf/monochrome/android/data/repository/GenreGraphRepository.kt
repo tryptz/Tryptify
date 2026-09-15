@@ -2,6 +2,8 @@ package tf.monochrome.android.data.repository
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.GenreGraph
 import tf.monochrome.android.domain.model.GenreGraphData
@@ -28,6 +30,25 @@ class GenreGraphRepository @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     val graph: GenreGraph by lazy { load() }
+
+    /**
+     * Resolve [graph] off the main thread, before anything asks for it there.
+     *
+     * The `by lazy` above parses ~280 KB of JSON on whichever thread arrives
+     * first, and `SearchViewModel` arrives with a query in hand — so the first
+     * search in a session paid for it. [GenreHistoryRepository]'s note excuses
+     * this ("only defensible because search needs it during startup anyway"),
+     * and that was true of the intent and not of the code: nothing warmed it.
+     * This is what makes the excuse true.
+     *
+     * Idempotent and cheap after the first call — `lazy` has already published
+     * its value, so this is a field read. Not a replacement for the blocking
+     * path: anything that asks before the warm-up finishes still gets a correct
+     * graph, just on its own thread, exactly as before.
+     */
+    suspend fun warm() {
+        withContext(Dispatchers.IO) { graph }
+    }
 
     private fun load(): GenreGraph {
         val data = runCatching {

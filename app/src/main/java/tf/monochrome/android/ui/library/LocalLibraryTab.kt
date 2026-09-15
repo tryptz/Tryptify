@@ -1,16 +1,14 @@
 package tf.monochrome.android.ui.library
 
-import tf.monochrome.android.ui.theme.goToPage
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -34,6 +32,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -60,8 +59,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -90,18 +87,28 @@ import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
 import androidx.navigation.NavController
+import tf.monochrome.android.ui.components.FastScroller
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.LazyPagingItems
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.bounceCombinedClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
+import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.util.safTreeUriToPath
 import tf.monochrome.android.ui.components.SearchOverlay
+import tf.monochrome.android.ui.detail.LocalFacet
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -110,36 +117,38 @@ fun LocalLibraryTab(
     onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onAlbumClick: (UnifiedAlbum) -> Unit,
     onArtistClick: (UnifiedArtist) -> Unit,
-    onGenreClick: (String) -> Unit,
+    onFacetClick: (LocalFacet, String) -> Unit,
     onFolderClick: (String) -> Unit,
     onShuffleAll: (List<UnifiedTrack>) -> Unit,
     navController: NavController,
     playerViewModel: PlayerViewModel
 ) {
-    val localTracks by viewModel.localTracks.collectAsStateWithLifecycle()
-    val sortedTracks by viewModel.sortedTracks.collectAsStateWithLifecycle()
+    // Pages, not the whole library. `collectAsLazyPagingItems` holds only the
+    // rows near the screen; `trackCount` answers "is the library empty" and
+    // "can we shuffle" without building a single track to find out.
+    val pagedTracks = viewModel.pagedTracks.collectAsLazyPagingItems()
+    val trackCount by viewModel.trackCount.collectAsStateWithLifecycle()
     val sortedAlbums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
     val sortedArtists by viewModel.sortedArtists.collectAsStateWithLifecycle()
     val songSort by viewModel.songSort.collectAsStateWithLifecycle()
     val albumSort by viewModel.albumSort.collectAsStateWithLifecycle()
     val artistSort by viewModel.artistSort.collectAsStateWithLifecycle()
-    val localGenres by viewModel.localGenres.collectAsStateWithLifecycle()
     val rootFolders by viewModel.displayRootFolders.collectAsStateWithLifecycle()
     val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
 
-    val subTabs = listOf("Albums", "Artists", "Songs", "Genres", "Folders")
-    // Sub-tabs are swipeable pages. The tab row above them is a selector onto
-    // the SAME pager state rather than a second source of truth, so a swipe and
-    // a tap can't disagree — and ScrollableTabRow scrolls the selected tab into
-    // view, which is what un-clips "Folders" when you swipe onto it.
-    val subTabPager = rememberPagerState(pageCount = { subTabs.size })
+    // Which category is open, or null for the index. Saved as the category's
+    // own id rather than an ordinal so that reordering the enum cannot land a
+    // restored session on a different list than it left.
+    var openCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val openCategory = LibraryCategory.fromId(openCategoryId)
     val subTabScope = rememberCoroutineScope()
-    // Tab changes slide normally; with "Disable animations" on they jump.
-    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
-    val selectedSubTab = subTabPager.currentPage
+    // Back closes the open category before it closes the player page. Scoped
+    // to this composable, so it is only registered while the Local page is in
+    // the composition and cannot swallow Back on any other page.
+    BackHandler(enabled = openCategory != null) { openCategoryId = null }
     var showSearch by remember { mutableStateOf(false) }
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     // Focus the field (and pop the IME) the moment search opens, so it doesn't
@@ -195,6 +204,15 @@ fun LocalLibraryTab(
         navController = navController,
         playerViewModel = playerViewModel,
     )
+
+    var folderToExclude by remember { mutableStateOf<FolderToExclude?>(null) }
+    folderToExclude?.let { folder ->
+        ExcludeFolderDialog(
+            folder = folder,
+            onDismiss = { folderToExclude = null },
+            onConfirm = { viewModel.excludeFolder(folder.path) },
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Permission gate — block UI only until READ_MEDIA_AUDIO is granted
@@ -263,46 +281,61 @@ fun LocalLibraryTab(
                 onMoreClick = { menuTrack = it },
                 navController = navController,
             )
+        } else if (!isScanning && trackCount == 0) {
+            // The empty state used to be drawn *below* the pager, so a library
+            // with nothing in it showed a half-height empty list with this
+            // underneath it. It replaces the index outright instead.
+            EmptyLocalLibrary()
         } else {
 
-        // Sub-tabs get the full width. Sharing one row with the sort menu and
-        // four icon buttons left the five labels about 120dp on a 360dp screen,
-        // so "Albums" and "Folders" were clipped at both ends and the row was
-        // permanently mid-scroll. Actions moved to their own row underneath.
-        ScrollableTabRow(
-            selectedTabIndex = selectedSubTab,
-            modifier = Modifier.fillMaxWidth(),
-            containerColor = MaterialTheme.colorScheme.background,
-            edgePadding = 8.dp
-        ) {
-            subTabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedSubTab == index,
-                    onClick = { subTabScope.launch { subTabPager.goToPage(index, animateTabs) } },
-                    text = { Text(title, style = MaterialTheme.typography.bodySmall) }
-                )
-            }
-        }
-
+        // The header. On the index it is the four actions, right-aligned, as
+        // it was under the old tab row. Inside a category it also carries the
+        // way back and the category's name — system Back alone is not an
+        // affordance, and the tab row that used to say where you were is gone.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (selectedSubTab in 0..2) {
-                val (keys, current, onChange) = when (selectedSubTab) {
-                    0 -> Triple(ALBUM_SORT_KEYS, albumSort, viewModel::setAlbumSort)
-                    1 -> Triple(ARTIST_SORT_KEYS, artistSort, viewModel::setArtistSort)
-                    else -> Triple(SONG_SORT_KEYS, songSort, viewModel::setSongSort)
+            if (openCategory != null) {
+                IconButton(onClick = { openCategoryId = null }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back to library",
+                    )
                 }
+                Text(
+                    openCategory.label,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // Sorting only applies to the three lists that have a sort order
+            // to choose. A facet list is one query with its ORDER BY baked in.
+            val sortTriple = when (openCategory) {
+                LibraryCategory.ALBUMS -> Triple(ALBUM_SORT_KEYS, albumSort, viewModel::setAlbumSort)
+                LibraryCategory.ARTISTS -> Triple(ARTIST_SORT_KEYS, artistSort, viewModel::setArtistSort)
+                LibraryCategory.SONGS -> Triple(SONG_SORT_KEYS, songSort, viewModel::setSongSort)
+                else -> null
+            }
+            if (sortTriple != null) {
+                val (keys, current, onChange) = sortTriple
                 SortMenu(keys = keys, current = current, onChange = onChange)
             }
             IconButton(onClick = { showSearch = !showSearch; if (!showSearch) viewModel.setSearchQuery("") }) {
                 Icon(Icons.Default.Search, contentDescription = "Search")
             }
             IconButton(
-                onClick = { if (localTracks.isNotEmpty()) onShuffleAll(localTracks) },
-                enabled = localTracks.isNotEmpty()
+                // The queue is fetched when it is needed, not held on the
+                // chance it will be. Off the main thread, inside the scope.
+                onClick = {
+                    if (trackCount > 0) {
+                        subTabScope.launch { onShuffleAll(viewModel.songQueue()) }
+                    }
+                },
+                enabled = trackCount > 0
             ) {
                 Icon(Icons.Default.Shuffle, contentDescription = "Shuffle all")
             }
@@ -328,69 +361,69 @@ fun LocalLibraryTab(
             }
         }
 
-        val genrePairs = remember(localGenres) {
-            localGenres.map { it.name to it.trackCount }
-        }
-        // Nested inside Library's section pager, which is itself nested in the
-        // nav host's Home↔Library pager. Compose chains all three through nested
-        // scroll: this innermost one consumes the drag until it runs out of
-        // sub-tabs, then the section pager takes over, then the outer one — so
-        // it's one continuous swipe from Albums all the way out to Home.
-        //
-        // fillMaxWidth without weight() on purpose: the `when` this replaced
-        // sized itself from its child under the Column's remaining-height
-        // constraint, and weight(1f) would starve the empty state below it.
-        HorizontalPager(
-            state = subTabPager,
-            modifier = Modifier.fillMaxWidth(),
-            beyondViewportPageCount = 0,
-        ) { page ->
-            when (page) {
-                0 -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
-                1 -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
-                2 -> SongList(
-                    tracks = sortedTracks,
-                    onTrackClick = onTrackClick,
-                    onMoreClick = { menuTrack = it },
-                    navController = navController,
-                )
-                3 -> GenreList(
-                    genres = genrePairs,
-                    onGenreClick = onGenreClick
-                )
-                4 -> FolderList(
-                    folders = rootFolders,
-                    onFolderClick = onFolderClick
-                )
-            }
-        }
+        // The index, or the one category that is open. Each facet list
+        // collects its own flow here rather than at the top of the composable,
+        // so browsing one category runs one query: the other three are not
+        // subscribed while their row sits unopened on the index.
+        when (openCategory) {
+            null -> LibraryIndexList(onSelect = { openCategoryId = it.id })
 
-        // Empty state
-        if (!isScanning && localTracks.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.MusicNote,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "No local music found",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "Tap the refresh button to scan your device",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
+            LibraryCategory.SONGS -> SongList(
+                tracks = pagedTracks,
+                onTrackClick = { track ->
+                    subTabScope.launch { onTrackClick(track, viewModel.songQueue()) }
+                },
+                onMoreClick = { menuTrack = it },
+                navController = navController,
+            )
+
+            LibraryCategory.ALBUMS -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
+
+            LibraryCategory.ARTISTS -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
+
+            LibraryCategory.ALBUM_ARTISTS -> {
+                val tallies by viewModel.albumArtistTallies.collectAsStateWithLifecycle()
+                FacetTallyList(
+                    tallies = tallies,
+                    icon = LocalFacet.ALBUM_ARTIST.icon,
+                    onClick = { onFacetClick(LocalFacet.ALBUM_ARTIST, it) },
+                )
             }
+
+            LibraryCategory.COMPOSERS -> {
+                val tallies by viewModel.composerTallies.collectAsStateWithLifecycle()
+                FacetTallyList(
+                    tallies = tallies,
+                    icon = LocalFacet.COMPOSER.icon,
+                    onClick = { onFacetClick(LocalFacet.COMPOSER, it) },
+                )
+            }
+
+            LibraryCategory.GENRES -> {
+                val tallies by viewModel.genreTallies.collectAsStateWithLifecycle()
+                FacetTallyList(
+                    tallies = tallies,
+                    icon = LocalFacet.GENRE.icon,
+                    onClick = { onFacetClick(LocalFacet.GENRE, it) },
+                )
+            }
+
+            LibraryCategory.YEARS -> {
+                val tallies by viewModel.yearTallies.collectAsStateWithLifecycle()
+                FacetTallyList(
+                    tallies = tallies,
+                    icon = LocalFacet.YEAR.icon,
+                    onClick = { onFacetClick(LocalFacet.YEAR, it) },
+                )
+            }
+
+            LibraryCategory.FOLDERS -> FolderList(
+                folders = rootFolders,
+                onFolderClick = onFolderClick,
+                onFolderLongClick = { path, name ->
+                    folderToExclude = FolderToExclude(path = path, displayName = name)
+                },
+            )
         }
         }
         }
@@ -439,6 +472,41 @@ private fun SortMenu(
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * What the Local page says when the scanner has found nothing.
+ *
+ * Its own composable because it is now an alternative to the whole index
+ * rather than a strip underneath a list. It used to draw below the pager, so
+ * an empty library showed a half-height empty list with this beneath it.
+ */
+@Composable
+private fun EmptyLocalLibrary() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Default.MusicNote,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "No local music found",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "Tap the refresh button to scan your device",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
         }
     }
 }
@@ -538,73 +606,78 @@ fun AlbumGrid(
     albums: List<UnifiedAlbum>,
     onAlbumClick: (UnifiedAlbum) -> Unit
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 150.dp),
-        contentPadding = PaddingValues(MonoDimens.spacingLg),
-        horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd),
-        verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd)
-    ) {
-        items(albums, key = { it.id }) { album ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .bounceClick(onClick = { onAlbumClick(album) }),
-                shape = MonoDimens.shapeMd,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha)
-                )
-            ) {
-                Column {
-                    if (album.artworkUri != null) {
-                        AsyncImage(
-                            model = album.artworkUri,
-                            contentDescription = album.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f)
-                                .clip(MonoDimens.shapeMd)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Album,
-                                contentDescription = null,
-                                modifier = Modifier.size(MonoDimens.coverList),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+    val state = rememberLazyGridState()
+    Box {
+        LazyVerticalGrid(
+            state = state,
+            columns = GridCells.Adaptive(minSize = 150.dp),
+            contentPadding = PaddingValues(MonoDimens.spacingLg),
+            horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd),
+            verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd)
+        ) {
+            items(albums, key = { it.id }) { album ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .bounceClick(onClick = { onAlbumClick(album) }),
+                    shape = MonoDimens.shapeMd,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha)
+                    )
+                ) {
+                    Column {
+                        if (album.artworkUri != null) {
+                            AsyncImage(
+                                model = album.artworkUri,
+                                contentDescription = album.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clip(MonoDimens.shapeMd)
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Album,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(MonoDimens.coverList),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                )
+                            }
                         }
-                    }
-                    Column(modifier = Modifier.padding(MonoDimens.spacingSm)) {
-                        Text(
-                            album.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            album.artistName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (album.qualitySummary != null) {
+                        Column(modifier = Modifier.padding(MonoDimens.spacingSm)) {
                             Text(
-                                album.qualitySummary,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                album.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                            Text(
+                                album.artistName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (album.qualitySummary != null) {
+                                Text(
+                                    album.qualitySummary,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+        FastScroller(state = state)
     }
 }
 
@@ -613,222 +686,318 @@ fun ArtistList(
     artists: List<UnifiedArtist>,
     onArtistClick: (UnifiedArtist) -> Unit
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(artists, key = { it.id }) { artist ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(MonoDimens.listRowHeight)
+                        .bounceClick(onClick = { onArtistClick(artist) })
+                        .padding(horizontal = MonoDimens.listItemPaddingH),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (artist.artworkUri != null) {
+                        AsyncImage(
+                            model = artist.artworkUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            artist.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            "${artist.albumCount} albums, ${artist.trackCount} tracks",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+        FastScroller(state = state)
+    }
+}
+/**
+ * One song row. Shared by both lists below so the paged library and the
+ * bounded search results cannot drift apart in appearance.
+ */
+@Composable
+private fun SongRow(
+    track: UnifiedTrack,
+    onClick: () -> Unit,
+    onMoreClick: (UnifiedTrack) -> Unit,
+    navController: NavController,
+) {
+    // legacyId, not id: the queue holds legacy Tracks, so that is what
+    // `currentTrack.id` — and therefore LocalNowPlayingTrackId — is.
+    val nowPlaying = track.legacyId == LocalNowPlayingTrackId.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
+            .bounceClick(onClick = onClick)
+            .liquidGlass(shape = MonoDimens.shapeMd),
+        shape = MonoDimens.shapeMd,
+        color = if (nowPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                else Color.Transparent,
     ) {
-        items(artists, key = { it.id }) { artist ->
-            Row(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(MonoDimens.listRowHeight)
+                .padding(horizontal = MonoDimens.listItemPaddingH),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Music-note placeholder sits underneath the artwork: if the
+            // cover loads (cached JPG, sidecar, or embedded art pulled on
+            // demand by AudioFileCoverFetcher) it covers the icon; if the
+            // file genuinely has no art the icon stays visible.
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MonoDimens.listRowHeight)
-                    .bounceClick(onClick = { onArtistClick(artist) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH),
-                verticalAlignment = Alignment.CenterVertically
+                    .size(48.dp)
+                    .clip(MonoDimens.shapeSm),
+                contentAlignment = Alignment.Center
             ) {
-                if (artist.artworkUri != null) {
+                Icon(
+                    Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                if (track.artworkUri != null) {
                     AsyncImage(
-                        model = artist.artworkUri,
+                        model = track.artworkUri,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.matchParentSize()
                     )
                 }
-                Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        artist.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+            }
+            Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    track.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (nowPlaying) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row {
+                    TrackArtistAlbumLine(
+                        track = track,
+                        onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                        onAlbumClick = { navController.openAlbum(track.albumId) },
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                    Text(
-                        "${artist.albumCount} albums, ${artist.trackCount} tracks",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    track.qualityBadge?.let { badge ->
+                        Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                        Text(
+                            badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                    }
                 }
+            }
+            Text(
+                track.formattedDuration,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            IconButton(
+                onClick = { onMoreClick(track) },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
 }
 
+/**
+ * The songs list, one page at a time.
+ *
+ * [tracks] is a paged window, not the library: only the rows near the screen
+ * exist. [onTrackClick] therefore takes just the track — the play queue is
+ * built by the caller when a row is tapped, because this list cannot supply
+ * one. That is the whole point: the library used to be held in memory so that
+ * a tap could answer instantly, at ~118 ms and 20,000 objects per emission.
+ */
+@Composable
+fun SongList(
+    tracks: LazyPagingItems<UnifiedTrack>,
+    onTrackClick: (UnifiedTrack) -> Unit,
+    onMoreClick: (UnifiedTrack) -> Unit,
+    navController: NavController,
+) {
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(
+                count = tracks.itemCount,
+                key = tracks.itemKey { it.id },
+                contentType = tracks.itemContentType { "track" },
+            ) { index ->
+                val track = tracks[index]
+                if (track == null) {
+                    // Placeholders are on, so a row not yet loaded arrives as
+                    // null. It still has to occupy its height or the list would
+                    // shorten under the scroller mid-drag.
+                    Spacer(Modifier.fillMaxWidth().height(MonoDimens.listRowHeight))
+                } else {
+                    SongRow(
+                        track = track,
+                        onClick = { onTrackClick(track) },
+                        onMoreClick = onMoreClick,
+                        navController = navController,
+                    )
+                }
+            }
+        }
+        FastScroller(state = state)
+    }
+}
+
+/**
+ * The same list over a plain list, for search results.
+ *
+ * Search is already bounded — a query narrows the library and the flow behind
+ * it is debounced — so there is nothing to page, and the result set is the
+ * queue, which keeps tapping a search hit behaving as it always has.
+ */
 @Composable
 fun SongList(
     tracks: List<UnifiedTrack>,
     onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onMoreClick: (UnifiedTrack) -> Unit,
-    navController: NavController
+    navController: NavController,
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(tracks, key = { it.id }) { track ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
-                    .bounceClick(onClick = { onTrackClick(track, tracks) })
-                    .liquidGlass(shape = MonoDimens.shapeMd),
-                shape = MonoDimens.shapeMd,
-                color = Color.Transparent,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(MonoDimens.listRowHeight)
-                        .padding(horizontal = MonoDimens.listItemPaddingH),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Music-note placeholder sits underneath the artwork: if the
-                    // cover loads (cached JPG, sidecar, or embedded art pulled on
-                    // demand by AudioFileCoverFetcher) it covers the icon; if the
-                    // file genuinely has no art the icon stays visible.
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(MonoDimens.shapeSm),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                        if (track.artworkUri != null) {
-                            AsyncImage(
-                                model = track.artworkUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.matchParentSize()
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            track.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Row {
-                            TrackArtistAlbumLine(
-                                track = track,
-                                onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
-                                onAlbumClick = { navController.openAlbum(track.albumId) },
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            track.qualityBadge?.let { badge ->
-                                Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
-                                Text(
-                                    badge,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        track.formattedDuration,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    IconButton(
-                        onClick = { onMoreClick(track) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = "More options",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun GenreList(
-    genres: List<Pair<String, Int>>,
-    onGenreClick: (String) -> Unit
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(genres, key = { it.first }) { (genre, count) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MonoDimens.listRowHeight)
-                    .bounceClick(onClick = { onGenreClick(genre) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Style,
-                    contentDescription = null,
-                    modifier = Modifier.size(MonoDimens.iconMd),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
-                Text(
-                    genre,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    "$count tracks",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+        ) {
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+                SongRow(
+                    track = track,
+                    onClick = { onTrackClick(track, tracks) },
+                    onMoreClick = onMoreClick,
+                    navController = navController,
                 )
             }
         }
+        FastScroller(state = state)
     }
 }
 
 @Composable
 fun FolderList(
-    folders: List<Pair<String, String>>,
-    onFolderClick: (String) -> Unit
+    folders: List<FolderRoot>,
+    onFolderClick: (String) -> Unit,
+    onFolderLongClick: (String, String) -> Unit = { _, _ -> },
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
-    ) {
-        items(folders, key = { it.second }) { (name, path) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MonoDimens.listRowHeight)
-                    .bounceClick(onClick = { onFolderClick(path) })
-                    .padding(horizontal = MonoDimens.listItemPaddingH),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Folder,
-                    contentDescription = null,
-                    modifier = Modifier.size(MonoDimens.iconMd),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
-                Text(
-                    name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(
+                top = 8.dp,
+                bottom = MonoDimens.listBottomPadding,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(folders, key = { it.path }) { folder ->
+                val name = folder.displayName
+                val path = folder.path
+                Row(
+                    // A pane each, like Home's page list: the gutter padding
+                    // and the gap between rows are what make these read as
+                    // separate tiles rather than one striped slab.
+                    //
+                    // No hazeState — see liquidGlass's own note. This is inside
+                    // the pager, which is inside the app's one hazeSource, and a
+                    // haze child within its own source is a cycle Haze throws
+                    // on. The tiles sit on the flat theme background, so a
+                    // backdrop blur of it would be that same colour anyway.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MonoDimens.listItemPaddingH)
+                        .height(MonoDimens.listRowHeight)
+                        .liquidGlass(shape = MonoDimens.shapeMd)
+                        .bounceCombinedClick(
+                            onLongClick = { onFolderLongClick(path, name) },
+                            onClick = { onFolderClick(path) },
+                        )
+                        .padding(horizontal = MonoDimens.listItemPaddingH),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(MonoDimens.iconMd),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        // Two folders can share a name, and the level these
+                        // roots come from is picked by walking the tree — so
+                        // the path is how you tell which one you are looking at.
+                        Text(
+                            path,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    // A root that reads "0 tracks" is a folder the library has
+                    // found nothing in, said before you tap it rather than by a
+                    // blank screen afterwards.
+                    Text(
+                        if (folder.trackCount == 1) "1 track" else "${folder.trackCount} tracks",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
             }
         }
+        FastScroller(state = state)
     }
 }

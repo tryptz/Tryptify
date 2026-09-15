@@ -34,41 +34,69 @@ val ARTIST_SORT_KEYS = listOf(
     LibrarySortKey.NAME, LibrarySortKey.TRACKS, LibrarySortKey.ALBUMS,
 )
 
+/**
+ * One element decorated with the text keys it sorts by, computed once.
+ *
+ * `compareBy { it.title.lowercase() }` looks harmless and is not: the selector
+ * runs on every *comparison*, so a library sort allocated a fresh lowercase
+ * String O(n log n) times. Decorating costs one String per element instead.
+ */
+private class TextKeyed<T>(val value: T, val first: String, val second: String)
+
+/**
+ * Sort by text keys computed once per element.
+ *
+ * Stable, like the `sortedWith` it replaces — `ArrayList.sortWith` is a TimSort
+ * — so elements the keys tie on keep the order they arrived in. Callers that
+ * want descending reverse the RESULT rather than the comparator, which is not
+ * the same thing and is why this stays stable: reversing the list flips ties as
+ * well, reversing the comparator leaves them alone, and the first is what the
+ * library has always shown.
+ *
+ * [second] defaults to a constant, which ties for every element and so leaves
+ * the single-key case ordered purely by [first] and input order.
+ */
+private inline fun <T> List<T>.sortedByText(
+    crossinline first: (T) -> String,
+    crossinline second: (T) -> String = { "" },
+): List<T> {
+    val slots = ArrayList<TextKeyed<T>>(size)
+    for (element in this) slots.add(TextKeyed(element, first(element), second(element)))
+    slots.sortWith(compareBy({ it.first }, { it.second }))
+    val sorted = ArrayList<T>(size)
+    for (slot in slots) sorted.add(slot.value)
+    return sorted
+}
+
 @JvmName("applySortTracks")
 fun List<UnifiedTrack>.applySort(sort: LibrarySort): List<UnifiedTrack> {
-    val comparator: Comparator<UnifiedTrack> = when (sort.key) {
-        LibrarySortKey.DATE -> compareBy { it.dateModified ?: 0L }
-        LibrarySortKey.FILE_TYPE -> compareBy(
-            { it.codec?.name ?: "￿" }, { it.title.lowercase() },
-        )
-        LibrarySortKey.TIME -> compareBy { it.durationSeconds }
-        else -> compareBy { it.title.lowercase() }
+    val sorted = when (sort.key) {
+        LibrarySortKey.DATE -> sortedWith(compareBy { it.dateModified ?: 0L })
+        LibrarySortKey.FILE_TYPE -> sortedByText({ it.codec?.name ?: "￿" }, { it.title.lowercase() })
+        LibrarySortKey.TIME -> sortedWith(compareBy { it.durationSeconds })
+        else -> sortedByText(first = { it.title.lowercase() })
     }
-    val sorted = sortedWith(comparator)
     return if (sort.ascending) sorted else sorted.reversed()
 }
 
 @JvmName("applySortAlbums")
 fun List<UnifiedAlbum>.applySort(sort: LibrarySort): List<UnifiedAlbum> {
-    val comparator: Comparator<UnifiedAlbum> = when (sort.key) {
-        LibrarySortKey.DATE -> compareBy { it.year ?: 0 }
-        LibrarySortKey.FILE_TYPE -> compareBy(
-            { it.qualitySummary ?: "￿" }, { it.title.lowercase() },
-        )
-        LibrarySortKey.TIME -> compareBy { it.totalDuration }
-        else -> compareBy { it.title.lowercase() }
+    val sorted = when (sort.key) {
+        LibrarySortKey.DATE -> sortedWith(compareBy { it.year ?: 0 })
+        LibrarySortKey.FILE_TYPE ->
+            sortedByText({ it.qualitySummary ?: "￿" }, { it.title.lowercase() })
+        LibrarySortKey.TIME -> sortedWith(compareBy { it.totalDuration })
+        else -> sortedByText(first = { it.title.lowercase() })
     }
-    val sorted = sortedWith(comparator)
     return if (sort.ascending) sorted else sorted.reversed()
 }
 
 @JvmName("applySortArtists")
 fun List<UnifiedArtist>.applySort(sort: LibrarySort): List<UnifiedArtist> {
-    val comparator: Comparator<UnifiedArtist> = when (sort.key) {
-        LibrarySortKey.TRACKS -> compareBy { it.trackCount }
-        LibrarySortKey.ALBUMS -> compareBy { it.albumCount }
-        else -> compareBy { it.name.lowercase() }
+    val sorted = when (sort.key) {
+        LibrarySortKey.TRACKS -> sortedWith(compareBy { it.trackCount })
+        LibrarySortKey.ALBUMS -> sortedWith(compareBy { it.albumCount })
+        else -> sortedByText(first = { it.name.lowercase() })
     }
-    val sorted = sortedWith(comparator)
     return if (sort.ascending) sorted else sorted.reversed()
 }

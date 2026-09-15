@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.baselineprofile)
 }
 
 val keystoreProperties = Properties()
@@ -52,8 +53,8 @@ android {
         applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 188
-        versionName = "1.8.8"
+        versionCode = 189
+        versionName = "1.8.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -126,6 +127,16 @@ android {
             // over a CI-produced APK (or vice versa) upgrades in place.
             signingConfig = signingConfigs.getByName("debug")
         }
+        // Macrobenchmark and profile generation need a build that is shaped
+        // like release — minified, not debuggable — but signed with the debug
+        // key so it installs anywhere. Measuring a debug build measures the
+        // debugger.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
         release {
             if (hasCompleteReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
@@ -166,6 +177,33 @@ android {
         noCompress += "presets.zip"
     }
 }
+
+// Compose compiler metrics and reports, off by default.
+//
+// `-Pcompose.metrics` on any build writes, per module, which composables are
+// skippable and restartable and — the half that matters here — which
+// parameters the compiler inferred as unstable and why. That is the evidence
+// for a stability change; annotating a model @Immutable because it "looks
+// immutable" is how a wrong annotation gets shipped, and @Immutable is a
+// promise the compiler does not verify.
+//
+// Off by default because it adds a compiler pass and a pile of files to every
+// build. Run it when a stability question comes up:
+//
+//   ./gradlew :app:compileDebugKotlin -Pcompose.metrics
+//   app/build/compose_reports/app_debug-composables.txt
+composeCompiler {
+    // What the compiler cannot infer but the report proves. See the file.
+    stabilityConfigurationFiles.add(
+        layout.projectDirectory.file("compose_stability.conf")
+    )
+
+    if (project.hasProperty("compose.metrics")) {
+        metricsDestination = layout.buildDirectory.dir("compose_metrics")
+        reportsDestination = layout.buildDirectory.dir("compose_reports")
+    }
+}
+
 
 // Packs the ~9.8k raw .milk presets in src/main/projectm-assets/presets into a
 // single assets/projectm/presets.zip. Shipping one archive instead of individual
@@ -325,7 +363,15 @@ dependencies {
 
     // Bundles app/src/main/baseline-prof.txt into the APK so ProfileInstaller
     // AOT-compiles hot Compose code paths on first launch.
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
+    implementation(libs.room.paging)
     implementation(libs.profileinstaller)
+    // Where the generated profile comes from. profileinstaller above is the
+    // runtime half — it installs a profile at first launch — and until this
+    // existed the only profiles it had to install were the ones the AndroidX
+    // libraries ship. Nothing described this app's own startup or its lists.
+    baselineProfile(project(":baselineprofile"))
 
     // Testing
     testImplementation(libs.junit)

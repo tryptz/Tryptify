@@ -33,10 +33,11 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
@@ -117,8 +118,6 @@ fun PlayerHero(
     onOpenPresetBrowser: () -> Unit,
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
-    visualizerCompact: Boolean = false,
-    onToggleCompact: () -> Unit = {},
     onToggleFullscreen: () -> Unit = {},
     spectrumBins: FloatArray = FloatArray(0),
     spectrumColor: Color = PlayerGlowBlue,
@@ -126,6 +125,13 @@ fun PlayerHero(
     onToggleShowSpectrum: () -> Unit = {},
     onEnterVisualizer: () -> Unit = {},
     onExitVisualizer: () -> Unit = {},
+    /**
+     * The ambient preset row is across the bottom of the art, so the
+     * visualizer-entry button moves up out of its corner. See HeroCoverArt.
+     */
+    displaceVisualizerEntry: Boolean = false,
+    /** Raised on a tap anywhere on the art, to bring that row back with it. */
+    onArtTap: () -> Unit = {},
 ) {
     if (style == PlayerHeroStyle.Visualizer) {
         VisualizerHero(
@@ -147,8 +153,6 @@ fun PlayerHero(
             onOpenPresetBrowser = onOpenPresetBrowser,
             isPresetFavorite = isPresetFavorite,
             onTogglePresetFavorite = onTogglePresetFavorite,
-            visualizerCompact = visualizerCompact,
-            onToggleCompact = onToggleCompact,
             onToggleFullscreen = onToggleFullscreen,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
@@ -184,6 +188,8 @@ fun PlayerHero(
                 blendMillis = blendMillis,
                 userTrackChanges = userTrackChanges,
                 onEnterVisualizer = onEnterVisualizer,
+                displaceVisualizerEntry = displaceVisualizerEntry,
+                onArtTap = onArtTap,
             )
         }
     }
@@ -200,6 +206,8 @@ private fun SquareArtHero(
     blendMillis: Int,
     userTrackChanges: Int,
     onEnterVisualizer: () -> Unit,
+    displaceVisualizerEntry: Boolean = false,
+    onArtTap: () -> Unit = {},
 ) {
     Surface(
         modifier = Modifier
@@ -225,6 +233,8 @@ private fun SquareArtHero(
             blendMillis = blendMillis,
             userTrackChanges = userTrackChanges,
             onEnterVisualizer = onEnterVisualizer,
+            displaceVisualizerEntry = displaceVisualizerEntry,
+            onArtTap = onArtTap,
         )
     }
 }
@@ -308,8 +318,6 @@ private fun VisualizerHero(
     onOpenPresetBrowser: () -> Unit,
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
-    visualizerCompact: Boolean,
-    onToggleCompact: () -> Unit,
     onToggleFullscreen: () -> Unit,
     spectrumBins: FloatArray,
     spectrumColor: Color,
@@ -348,53 +356,18 @@ private fun VisualizerHero(
                     onClick = { overlayInteraction++ },
                 )
         ) {
-            if (visualizerCompact) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    HeroCoverArt(
-                        track = track,
-                        isPlaying = isPlaying,
-                        spectrumBins = spectrumBins,
-                        spectrumColor = spectrumColor,
-                        showSpectrum = showSpectrum,
-                        onToggleShowSpectrum = onToggleShowSpectrum,
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(12.dp)
-                            .size(120.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.Black,
-                        shadowElevation = 8.dp,
-                    ) {
-                        VisualizerComponent(
-                            isPlaying = isPlaying,
-                            sensitivity = visualizerSensitivity,
-                            brightness = visualizerBrightness,
-                            modifier = Modifier.fillMaxSize(),
-                            engineStatus = visualizerEngineStatus,
-                            engineEnabled = visualizerEngineEnabled,
-                            showFps = false,
-                            isFullscreen = false,
-                            touchWaveformEnabled = visualizerTouchWaveform,
-                            repository = visualizerRepository,
-                        )
-                    }
-                }
-            } else {
-                VisualizerComponent(
-                    isPlaying = isPlaying,
-                    sensitivity = visualizerSensitivity,
-                    brightness = visualizerBrightness,
-                    modifier = Modifier.fillMaxSize(),
-                    engineStatus = visualizerEngineStatus,
-                    engineEnabled = visualizerEngineEnabled,
-                    showFps = visualizerShowFps,
-                    isFullscreen = isFullscreen,
-                    touchWaveformEnabled = visualizerTouchWaveform,
-                    repository = visualizerRepository,
-                )
-            }
+            VisualizerComponent(
+                isPlaying = isPlaying,
+                sensitivity = visualizerSensitivity,
+                brightness = visualizerBrightness,
+                modifier = Modifier.fillMaxSize(),
+                engineStatus = visualizerEngineStatus,
+                engineEnabled = visualizerEngineEnabled,
+                showFps = visualizerShowFps,
+                isFullscreen = isFullscreen,
+                touchWaveformEnabled = visualizerTouchWaveform,
+                repository = visualizerRepository,
+            )
 
             AnimatedVisibility(
                 visible = showOverlay,
@@ -403,19 +376,6 @@ private fun VisualizerHero(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    IconButton(
-                        onClick = onToggleCompact,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(16.dp)
-                            .background(Color.Black.copy(alpha = 0.3f), shape = RoundedCornerShape(999.dp)),
-                    ) {
-                        Icon(
-                            if (visualizerCompact) Icons.Default.Fullscreen else Icons.Default.GraphicEq,
-                            contentDescription = if (visualizerCompact) "Expand Visualizer" else "Window Mode",
-                            tint = Color.White,
-                        )
-                    }
                     IconButton(
                         onClick = onToggleFullscreen,
                         modifier = Modifier
@@ -552,6 +512,173 @@ private fun VisualizerHeroOverlay(
     }
 }
 
+/**
+ * How long the ambient preset row stays up after the last interaction.
+ *
+ * The row exists so someone can change preset without leaving the atmosphere;
+ * it is not a permanent chrome. Four seconds is long enough to read the three
+ * glyphs and reach one, short enough that the visualizer is unobstructed the
+ * rest of the time.
+ */
+private const val AMBIENT_CONTROLS_IDLE_MS = 4_000L
+
+/**
+ * Preset controls for ambient mode's "Remove album cover" state.
+ *
+ * With the cover gone the MilkDrop atmosphere is the whole player, but the
+ * preset controls live on [VisualizerHeroOverlay] — which only exists in
+ * VISUALIZER view mode, not here. This puts the three that matter into the
+ * space the cover vacated: back, browse, forward.
+ *
+ * Laid out edge to edge rather than as one centred pill. Three glyphs in a
+ * shared pill sat as a single object floating in the middle of an otherwise
+ * empty field, which reads as a widget dropped on the artwork; pushed to the
+ * margins they read as the frame around it, and the centre — the part of the
+ * atmosphere worth looking at — is left clear. Browse stays in the middle
+ * because it is the one that opens something, and because SpaceBetween puts
+ * it exactly on the axis the transport below is already centred on.
+ *
+ * Individually glassed for the same reason: with the row spanning the width,
+ * one pill would have to be a full-width bar.
+ *
+ * Fades itself out after [AMBIENT_CONTROLS_IDLE_MS] of no interaction, and a
+ * tap anywhere on the vacated cover slot brings it back — the caller signals
+ * that by bumping [revealKey]. [AnimatedVisibility] rather than an alpha
+ * animation so the buttons leave the composition when they finish fading:
+ * invisible tap targets parked over a fullscreen visualizer would swallow
+ * taps meant for it.
+ *
+ * Deliberately small. The player's own language is bare outlined glyphs in
+ * slim glass — the transport and the action dock carry no labels — so a
+ * full-width slab with a preset-name banner and three captioned pills read as
+ * a dialog rather than as part of the player. The current preset's name lives
+ * in the browser this opens, which is where someone reading names is already
+ * going.
+ *
+ * Track skip is deliberately absent. The transport is still on screen below,
+ * and the hero slot's swipe-to-skip gesture keeps working over this region —
+ * so these buttons are unambiguously about presets.
+ *
+ * @param revealKey bump to bring the row back and restart the idle timer.
+ */
+@Composable
+internal fun AmbientPresetControls(
+    canGoBack: Boolean,
+    onPreviousPreset: () -> Unit,
+    onNextPreset: () -> Unit,
+    onOpenPresetBrowser: () -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    revealKey: Int,
+    modifier: Modifier = Modifier,
+) {
+    // Bumped by the row's own buttons. Kept separate from revealKey so the
+    // caller does not have to observe presses it has no other use for; both
+    // key the same effect, so either one restarts the timer.
+    var selfPoke by remember { mutableIntStateOf(0) }
+    var visible by remember { mutableStateOf(true) }
+
+    LaunchedEffect(revealKey, selfPoke) {
+        visible = true
+        delay(AMBIENT_CONTROLS_IDLE_MS)
+        visible = false
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        // Quick in so a reveal tap feels answered, slow out so the row does
+        // not appear to be snatched away from a finger on its way to it.
+        enter = fadeIn(tween(140)),
+        exit = fadeOut(tween(520)),
+        modifier = modifier,
+    ) {
+        // A Box with three aligned children rather than a four-way
+        // SpaceBetween row. Browse has to stay on the centre axis the transport
+        // below is centred on, and four evenly spaced buttons would push it off
+        // it. Aligning the ends and the middle independently keeps browse
+        // centred no matter how many buttons the right group grows.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+        ) {
+            AmbientPresetButton(
+                icon = Icons.Default.SkipPrevious,
+                label = "Previous preset",
+                enabled = canGoBack,
+                onClick = { selfPoke++; onPreviousPreset() },
+                modifier = Modifier.align(Alignment.CenterStart),
+            )
+            AmbientPresetButton(
+                icon = Icons.Default.LibraryMusic,
+                label = "Preset browser",
+                accent = PlayerGlowGold,
+                onClick = { selfPoke++; onOpenPresetBrowser() },
+                modifier = Modifier.align(Alignment.Center),
+            )
+            Row(
+                modifier = Modifier.align(Alignment.CenterEnd),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Same reading as the hero overlay's: filled and pink once the
+                // preset is liked, outline and white until then.
+                AmbientPresetButton(
+                    icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    label = if (isFavorite) "Unlike preset" else "Like preset",
+                    accent = if (isFavorite) PlayerGlowPink else Color.White,
+                    onClick = { selfPoke++; onToggleFavorite() },
+                )
+                AmbientPresetButton(
+                    icon = Icons.Default.SkipNext,
+                    label = "Next preset",
+                    onClick = { selfPoke++; onNextPreset() },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One glyph in [AmbientPresetControls]. Sized to the transport's own icons
+ * rather than to a labelled pill, and carrying its own glass disc now that
+ * the row has no shared pill to sit in. The 40dp tap target is the whole
+ * disc, so the smaller glyph does not make it harder to hit.
+ */
+@Composable
+private fun AmbientPresetButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    accent: Color = Color.White,
+    modifier: Modifier = Modifier,
+) {
+    // Sized by the button, not by the Surface. IconButton carries
+    // minimumInteractiveComponentSize (48dp), which a 40dp Surface would be
+    // fighting; letting the glass wrap a 40dp IconButton is the same shape
+    // the shared pill used to get and keeps the disc exactly on the glyph.
+    Surface(
+        modifier = modifier.liquidGlass(shape = CircleShape, tintAlpha = 0.22f),
+        shape = CircleShape,
+        color = Color.Transparent,
+        contentColor = Color.White,
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (enabled) accent.copy(alpha = 0.92f) else accent.copy(alpha = 0.30f),
+                modifier = Modifier.size(19.dp),
+            )
+        }
+    }
+}
+
 private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
     SLOW("SLOW", 0.12f, 0.03f),
     NORMAL("NORMAL", 0.55f, 0.12f),
@@ -573,6 +700,14 @@ private fun HeroCoverArt(
     blendMillis: Int = MANUAL_MORPH_MS,
     userTrackChanges: Int = 0,
     onEnterVisualizer: (() -> Unit)? = null,
+    /**
+     * The ambient preset row is sitting across the bottom of this art, so the
+     * visualizer-entry button moves up to join the other icon-only controls
+     * rather than share a corner with "next preset".
+     */
+    displaceVisualizerEntry: Boolean = false,
+    /** Also raised on a tap anywhere on the art, so that row can come back with these. */
+    onArtTap: () -> Unit = {},
 ) {
     val spectrumEnabled = showSpectrum
     var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
@@ -603,7 +738,7 @@ private fun HeroCoverArt(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { showControls() }
+            ) { showControls(); onArtTap() }
     ) {
         MorphingCoverArt(
             trackKey = track?.id,
@@ -663,6 +798,14 @@ private fun HeroCoverArt(
                         onClick = { spectrumSpeed = spectrumSpeed.next(); showControls() },
                     )
                 }
+                if (onEnterVisualizer != null && displaceVisualizerEntry) {
+                    HeroIconButton(
+                        icon = Icons.Default.GraphicEq,
+                        contentDescription = "Open visualizer",
+                        enabled = interactive,
+                        onClick = { onEnterVisualizer(); showControls() },
+                    )
+                }
             }
 
             // Quality badge (top-right) — also fades out when idle.
@@ -688,8 +831,9 @@ private fun HeroCoverArt(
                 }
             }
 
-            // Visualizer entry (bottom-right) — small, icon-only.
-            if (onEnterVisualizer != null) {
+            // Visualizer entry (bottom-right) — small, icon-only. Moves into
+            // the row above when the preset row has the bottom of the art.
+            if (onEnterVisualizer != null && !displaceVisualizerEntry) {
                 HeroIconButton(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     icon = Icons.Default.GraphicEq,

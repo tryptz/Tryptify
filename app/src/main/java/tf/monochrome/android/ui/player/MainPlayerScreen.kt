@@ -135,7 +135,7 @@ data class MainPlayerUiState(
      * has to move at the same speed or the two disagree for the length of the
      * transition. See `ColorBlend`.
      */
-    val colorBlendMs: Int = tf.monochrome.android.ui.theme.ColorBlend.GAPLESS_MS,
+    val colorBlendMs: Int = tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS,
     val visualizerActive: Boolean,
     val waveformActive: Boolean,
     val compressorEnabled: Boolean,
@@ -180,10 +180,10 @@ fun MainPlayerScreen(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onLyrics: () -> Unit,
+    onShuffle: () -> Unit,
     onTimer: () -> Unit,
     onMixer: () -> Unit,
     onPlaylist: () -> Unit,
-    onOutput: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
     onVisualizer: () -> Unit,
@@ -200,6 +200,13 @@ fun MainPlayerScreen(
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
+    // Applied to the region the hero square is centred in, not to the square.
+    // The square is inscribed (side = min(width, height)), so on a tall phone
+    // there are strips above and below it that belong to the empty area a user
+    // sees but that the hero slot never receives a touch from. Ambient's
+    // tap-to-bring-the-preset-row-back needs the whole region, which is what
+    // "anywhere above the song title" means on screen.
+    heroRegionModifier: Modifier = Modifier,
     // Full-screen, unclipped layer between the background/stain and the player
     // content — the bass-reactive glow blooms here behind the active line's
     // screen bounds, so the light can never be clipped by a canvas/container.
@@ -213,6 +220,16 @@ fun MainPlayerScreen(
     lyricsMode: Boolean = false,
     // Full-screen blurred, stretched album-art background (Appearance setting).
     blurredBackground: Boolean = false,
+    /**
+     * The ambient MilkDrop background, when it is on.
+     *
+     * Given as a slot rather than a flag because it *replaces* the blurred
+     * artwork below rather than layering over it: the visualizer has to be
+     * screen-blended against the cover, HWUI cannot do that between sibling
+     * views, so the GL layer draws the cover and the scrim itself. Two
+     * backdrops at once would be the artwork darkened twice.
+     */
+    ambientBackground: (@Composable () -> Unit)? = null,
     /**
      * Chrome the route wants drawn over the player, inside the player's own
      * window — a slot rather than the route rendering it itself, because *where*
@@ -328,7 +345,9 @@ fun MainPlayerScreen(
             animationSpec = androidx.compose.animation.core.tween(durationMillis = 400),
             label = "blurredBg",
         )
-        if (blurBgAlpha > 0.001f) {
+        if (ambientBackground != null) {
+            ambientBackground()
+        } else if (blurBgAlpha > 0.001f) {
             PlayerBlurredArtBackground(
                 coverUrl = state.track?.coverUrl,
                 albumColors = state.albumColors,
@@ -447,9 +466,9 @@ fun MainPlayerScreen(
                 PlayerActionDock(
                     accent = accent,
                     lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
-                    timerActive = state.sleepTimerActive,
+                    shuffleActive = state.shuffleEnabled,
                     onLyrics = onLyrics,
-                    onTimer = onTimer,
+                    onShuffle = onShuffle,
                     onMixer = onMixer,
                     onPlaylist = onPlaylist,
                 )
@@ -588,7 +607,10 @@ fun MainPlayerScreen(
                 // track info below it. For expanded lyrics the same slot animates
                 // out to fill everything the hidden controls freed up.
                 BoxWithConstraints(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .then(heroRegionModifier),
                     contentAlignment = Alignment.Center,
                 ) {
                     val side = minOf(maxWidth, maxHeight)
@@ -721,7 +743,7 @@ fun MainPlayerScreen(
             StatusOverlayPanel(
                 accent = accent,
                 hazeState = panelHaze,
-                outputLabel = state.outputLabel,
+                timerLabel = state.sleepTimerLabel,
                 soundLabel = state.soundLabel,
                 speedLabel = state.speedLabel,
                 visualizerActive = state.visualizerActive,
@@ -732,7 +754,7 @@ fun MainPlayerScreen(
                 autoEqEnabled = state.autoEqEnabled,
                 systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
                 toneControls = state.toneControls,
-                onOutput = onOutput,
+                onTimer = onTimer,
                 onSound = onSound,
                 onSpeed = onSpeed,
                 onMixer = onMixer,
@@ -859,7 +881,7 @@ private fun SwipeUpHandle(onClick: () -> Unit) {
 private fun StatusOverlayPanel(
     accent: Color,
     hazeState: HazeState?,
-    outputLabel: String,
+    timerLabel: String,
     soundLabel: String,
     speedLabel: String,
     visualizerActive: Boolean,
@@ -870,7 +892,7 @@ private fun StatusOverlayPanel(
     autoEqEnabled: Boolean,
     systemWideAutoEqEnabled: Boolean,
     toneControls: tf.monochrome.android.domain.model.ToneControls,
-    onOutput: () -> Unit,
+    onTimer: () -> Unit,
     onSound: () -> Unit,
     onSpeed: () -> Unit,
     onMixer: () -> Unit,
@@ -922,7 +944,7 @@ private fun StatusOverlayPanel(
         // Frosted backdrop UNDER the slab — the mini player's exact recipe.
         val profile = LocalPerformanceProfile.current
         if (useGlass && hazeState != null && profile.allowHazeBlur && g.hazeBlurDp > 0f) {
-            val frostBg = MaterialTheme.colorScheme.background
+            val frostBg = LocalPlayerGlassGround.current
             val isDark = frostBg.luminance() <= 0.5f
             val frostTint = playerFrostTint(g, isDark)
             androidx.compose.foundation.layout.Box(
@@ -1026,11 +1048,11 @@ private fun StatusOverlayPanel(
             )
             PlayerStatusGrid(
                 accent = accent,
-                outputLabel = outputLabel,
+                timerLabel = timerLabel,
                 soundLabel = soundLabel,
                 speedLabel = speedLabel,
                 mixerLabel = "FX",
-                onOutput = onOutput,
+                onTimer = onTimer,
                 onSound = onSound,
                 onSpeed = onSpeed,
                 onMixer = onMixer,

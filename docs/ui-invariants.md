@@ -57,12 +57,55 @@ window's haze source: `MainPlayerScreen`'s `overlay` slot exists for exactly
 this, and the speed panel goes through it. The cost is owning the scrim, the
 slide and Back by hand, and that is the cheaper half of the trade.
 
+**The real backdrop is sampled, not reconstructed — when there is one.** The
+`playerGlass` shader carries a `uArt` sampler holding the current cover
+(`GlassBackdropArt.kt`), so a pane refracts the artwork actually behind it
+rather than the procedural field `backdropField` reconstructs. Three rules keep
+it safe:
+
+- `uArt` is **always bound**, including on every path that does not use it. SkSL
+  requires a child shader to have an input; an unbound one fails the draw rather
+  than sampling blank.
+- `uArtMix = 0` must stay **bit-identical** to the reconstruction-only output.
+  That is what let the sampler ship without re-tuning a single preset, and it is
+  what every device with no decoded cover falls back to.
+- Whoever provides the art decides whether there is any: `rememberBackdropArt`
+  returns null when it should not be used and a null art binds `uArtMix = 0`.
+  In the player that means **only while the blurred album background is on**,
+  because that is the only time the artwork is really behind the glass; with it
+  off the backdrop is the flat wash, which the shader reconstructs exactly.
+
+The **mini player is the exception, and deliberately so.** Away from the player
+the artwork is not behind the bar — the app's own content is — so its glass uses
+`BackdropArtFit.PANE`: the cover is fitted to the bar rather than positioned
+behind it, and its colours sweep along the length of it. Two reasons it cannot
+use the honest mapping. A 64dp bar is about a twelfth of a phone, so the slice
+of a 64px thumbnail behind it is roughly five pixels and refraction moves it by
+a fraction of one — the effect would be invisible. And there is nothing honest
+to map: PANE is a material property of the bar, not a window onto something, so
+it is not gated on the blurred-background setting either. Its scrim is flat
+(zero height in `uArtScreen`) and read off the bar's own position on screen,
+because the gradient it stands in for is not really there.
+
+It is a bitmap and not a live layer capture because it cannot be one:
+`RenderEffect.createRuntimeShaderEffect` binds exactly one input, this shader
+spends it on `content` (the alpha heightfield every bevel normal comes from),
+and no public API turns a `GraphicsLayer` into an `android.graphics.Shader` for
+the second. The thumbnail is 64px on purpose — it stands in for a 64dp blur, and
+lensing a sharp cover would refract detail that is nowhere on the screen.
+
 Search bars and other app chrome take **the mini player's** settings
 (`LocalMiniPlayerGlass`), not the player's. The player route overrides
 `LocalPlayerGlass` with its own material for the transport, which is right there
 and wrong everywhere else. `GlassPanel` publishes whatever settings it was handed
 as `LocalPlayerGlass` for its own shader, so its `glass` parameter is the whole
 material — frost and shader both.
+
+**The Studio previews each material on the tab that owns it.** The Player tab
+shows the transport straight over the swatch, with no pane behind it — that is
+how the real screen is built, and a `GlassPanel` there would be drawing the *UI
+panels* blob, which those sliders do not control. The pane belongs to the UI
+panels tab, alongside the mini player bar, because that tab is what tunes it.
 
 ### Search bars
 
@@ -208,6 +251,50 @@ the assembled size.
 Local (`content://` / `file://`) artwork has no URL Discord can fetch, so it is
 uploaded as an attachment and referenced by the media-proxy path — the same route
 the animation takes. This needs the upload channel configured.
+
+## The visualizer has two compositions, and only one at a time
+
+The hero visualizer (`ProjectMRendererView`, a `GLSurfaceView`) **replaces** the
+artwork. The ambient overlay (`ProjectMOverlayView`, a `TextureView`) **is** the
+player's background, with the artwork composited into it. They are two framings
+of the same engine and they must never be on screen together:
+`ProjectMEngineRepository` refcounts attached surfaces and only the *first* owns
+the native bridge, whose GL objects belong to that one context. A second view
+would render from objects it does not have. `MainPlayerRoute` gates the overlay
+on `viewMode != VISUALIZER`.
+
+The overlay is a `TextureView` for a reason that cannot be worked around: a
+`SurfaceView` is composited by SurfaceFlinger either *behind* the window
+(hole-punched, so opaque Compose content above hides it) or, with
+`setZOrderOnTop`, *in front of the whole window* including the player's
+controls. There is no "in the middle of the stack" for a SurfaceView. The same
+fact is why the `graphicsLayer { alpha }` around the hero renderer does nothing:
+view alpha never reaches a SurfaceView's buffer.
+
+**projectM will not render into your framebuffer.** `ProjectM::RenderFrame` in
+4.1.6 ends with a hardcoded `glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0)` — the
+`ToDo: Allow external apps to provide a custom target framebuffer` is on the
+line above — and the C API has no FBO-taking variant. So the overlay lets it
+draw where it insists, then `glBlitFramebuffer`s the result into a texture
+before overwriting the surface with the composite. GPU-side throughout; nothing
+is read back to the CPU, and preset feedback is untouched because that lives in
+projectM's own internal FBOs.
+
+**The blend happens in the fragment shader, not between views.** HWUI composites
+a TextureView with plain source-over and `glBlendFunc` only reaches inside our
+own surface, so a Screen blend against the artwork is only possible if the
+shader has the artwork. It does: the overlay draws the blurred cover and the
+scrim itself and outputs opaque pixels, which is why it replaces
+`PlayerBlurredArtBackground` rather than layering over it. Two backdrops would
+be the artwork darkened twice.
+
+**Alpha is inferred from the rendered image, never from the preset.** Presets
+assume an opaque, usually black framebuffer and many depend on feedback; making
+the target transparent breaks trails, warps and glow. `ambientAlpha` derives the
+alpha from the pixels afterwards, which is what makes this work across a whole
+`.milk` collection unmodified. Its Kotlin twin in `AmbientVisualizer.kt` is
+tested; the GLSL is not runnable in this build, so the two must be changed
+together.
 
 ## Build and test
 

@@ -1,10 +1,7 @@
 package tf.monochrome.android.ui.components
 
 import android.os.Build
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -30,6 +27,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -69,9 +67,14 @@ import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
 import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.theme.glassTint
+import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.abs
 import tf.monochrome.android.ui.player.playerFrostTint
+import tf.monochrome.android.ui.player.BackdropArtFit
+import tf.monochrome.android.ui.player.LocalPlayerBackdrop
+import tf.monochrome.android.ui.player.PlayerBackdrop
+import tf.monochrome.android.ui.player.rememberBackdropArt
 
 // Geometry shared between the punched holes and the tap-target overlay so they
 // stay aligned across DPI. The two controls are the rightmost fixed-size cells
@@ -175,11 +178,32 @@ fun MiniPlayer(
     // icons punched out as see-through holes, and a smooth press-bulge under the
     // pressed control — the same shader treatment as the player action dock. ──
     val tint = glassTint(glass.tintColor)
+    // The bar lenses the cover, the way the player's transport does. It has to
+    // do it differently, though: away from the player the artwork is not behind
+    // the bar — the app's own content is — and a 64dp strip of a cover stretched
+    // over the window would be about five pixels of thumbnail, which refraction
+    // could not move enough to see. BackdropArtFit.PANE fits the cover to the
+    // bar instead, so its colours sweep along the length of it.
+    //
+    // Not gated on the blurred-album-background setting the player's is. That
+    // setting says the artwork really is behind the glass, which is what makes
+    // the player's mapping truthful; here it is the bar's own material either
+    // way, and the cover in it is the cover it is already showing.
+    val backdropArt = rememberBackdropArt(track.coverUrl, enabled = true)
+    val barBackdrop = remember(backdropArt, tint) {
+        PlayerBackdrop(
+            dominant = tint,
+            secondary = tint,
+            art = backdropArt,
+            fit = BackdropArtFit.PANE,
+        )
+    }
     val playPainter = painterResource(if (isPlaying) R.drawable.ic_glass_pause else R.drawable.ic_glass_play)
     val skipPainter = painterResource(R.drawable.ic_glass_skip_next)
 
     // Press-bulge, mirroring PlayerActionDock: swell the glass under whichever
-    // control is held (spring in, tween out); the bulge centre follows it.
+    // control is held; the bulge centre follows it. The dock's own spring, both
+    // ways, so the two slabs answer a press identically — see PressSpring.
     val playSource = remember { MutableInteractionSource() }
     val skipSource = remember { MutableInteractionSource() }
     val playPressed by playSource.collectIsPressedAsState()
@@ -190,11 +214,7 @@ fun MiniPlayer(
     LaunchedEffect(skipPressed) { if (skipPressed) lastControl = 1 }
     val bulgeAmt by animateFloatAsState(
         targetValue = if (anyPressed) 1f else 0f,
-        animationSpec = if (anyPressed) {
-            spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
-        } else {
-            tween(durationMillis = 260)
-        },
+        animationSpec = PressSpring,
         label = "miniBulge",
     )
 
@@ -272,6 +292,7 @@ fun MiniPlayer(
         // The glass slab with the two controls carved out of it. One offscreen
         // layer so the DstOut punch clears only the glyph shapes (revealing the
         // app behind the bar), not the whole rectangle.
+        CompositionLocalProvider(LocalPlayerBackdrop provides barBackdrop) {
         Canvas(
             modifier = Modifier
                 .matchParentSize()
@@ -315,6 +336,7 @@ fun MiniPlayer(
                 }
             }
             canvas.restore()
+        }
         }
 
         // Transparent content overlay: progress, cover, text, and the two tap

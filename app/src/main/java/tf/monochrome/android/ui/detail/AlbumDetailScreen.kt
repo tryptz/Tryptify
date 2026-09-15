@@ -316,7 +316,15 @@ fun AlbumDetailScreen(
                         )
                     }
 
-                    itemsIndexed(visibleTracks) { index, track ->
+                    // itemsIndexed, not items: the row falls back to the
+                    // list position when a track carries no track number.
+                    // Keyed by id all the same, so searching or re-sorting
+                    // moves rows instead of rebuilding every one of them.
+                    itemsIndexed(
+                        visibleTracks,
+                        key = { _, track -> track.id },
+                        contentType = { _, _ -> "track" },
+                    ) { index, track ->
                         TrackItem(
                             track = track,
                             isLiked = favoriteTrackIds.contains(track.id),

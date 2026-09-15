@@ -229,13 +229,25 @@ private:
     // ship even on underrun (better a glitch than a dropped URB).
     int drainRing(uint8_t* dst, int bytes);
 
-    // SPSC ring buffer. Power-of-two size, atomic head/tail. Producer
-    // is the audio thread (writePcm); consumer is the event thread
-    // via onIso → drainRing.
+    // SPSC ring buffer. Atomic head/tail, modulo indexing (head/tail
+    // are monotonic byte counters reset at start()/flush(), so
+    // `cursor % ringBytes_` is exact and the size doesn't need to be
+    // a power of two — start() sizes it to ~250 ms of audio at the
+    // negotiated format). Producer is the audio thread (writePcm);
+    // consumer is the event thread via onIso → drainRing.
     std::vector<uint8_t> ring_;
-    size_t ringMask_ = 0;
-    std::atomic<size_t> ringHead_{0};  // producer cursor (writePcm)
-    std::atomic<size_t> ringTail_{0};  // consumer cursor (onIso)
+    size_t ringBytes_ = 1u << 20;  // resized at start() to ~250 ms of audio
+    // uint64_t, not size_t: with modulo indexing the cursors must not wrap at
+    // a boundary that isn't a multiple of ringBytes_, or the producer and the
+    // consumer map the same logical byte to different offsets until both have
+    // wrapped — one ring depth of scrambled PCM. size_t is 32 bits on
+    // armeabi-v7a, which we ship, and no size start() picks is a power of two,
+    // so 2^32 % ringBytes_ != 0 at every supported format (and isn't even
+    // frame-aligned at 96k/24-bit). That wrap lands after ~6.8 h at 44.1k and
+    // ~23 min at 384k/32-bit/2ch. The old power-of-two mask wrapped cleanly;
+    // 64-bit counters restore that for free (~190,000 years at 384k).
+    std::atomic<uint64_t> ringHead_{0};  // producer cursor (writePcm)
+    std::atomic<uint64_t> ringTail_{0};  // consumer cursor (onIso)
 
     mutable std::mutex mutex_;          // guards open/start/stop only
     libusb_context* ctx_ = nullptr;

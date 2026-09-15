@@ -3,31 +3,27 @@ package tf.monochrome.android.audio.usb
 import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
+import tf.monochrome.android.audio.resample.VariRateAudioProcessor
 
 /**
- * Media3 [AudioSink] that hands PCM directly to libusb when the user
- * has Exclusive USB DAC mode on AND the iso pump is live; otherwise
- * delegates everything to a [DefaultAudioSink] (provided by the
- * caller as `delegate`). Wrapping ForwardingAudioSink keeps every
- * one of the ~35 AudioSink methods doing the right thing without
- * us having to re-implement them.
+ * AudioSink wrapper that routes decoded PCM directly to the libusb UAC driver
+ * while exclusive USB output is active, and otherwise forwards to Media3's
+ * normal sink.
  *
- * Honest scope:
- *  - When bypass is hot, the sink runs the same AudioProcessor chain
- *    that DefaultAudioSink would (mixBus DSP, AutoEQ, parametric EQ,
- *    spectrum FFT, ProjectM tap) inline via [AudioProcessorChain],
- *    then writes the post-DSP PCM to libusb. So EQ + visualizer keep
- *    working in exclusive mode.
- *  - getCurrentPositionUs uses frames-written accounting, ignoring
- *    iso buffer-depth latency (~32 ms at 48 kHz w/ defaults).
- *    A/V sync is "good enough" for music; would need correction for
- *    video lipsync.
+ * The exclusive path drives the app's DSP processors manually. Processor
+ * output must therefore obey the same back-pressure contract as Media3's
+ * AudioTrack sink: once a processor has consumed input, every produced byte
+ * must be retained until the USB ring accepts it. Dropping a partially written
+ * processor buffer corrupts the PCM stream even though the iso pump itself is
+ * healthy.
  */
 @UnstableApi
 class LibusbAudioSink(
@@ -35,134 +31,220 @@ class LibusbAudioSink(
     private val driver: LibusbUacDriver,
     private val volumeController: BypassVolumeController,
     processors: List<AudioProcessor> = emptyList(),
+    /**
+     * The varispeed resampler from [processors], if it is in there.
+     *
+     * Handed in separately because this path has to drive it by hand.
+     * DefaultAudioSink runs its chain's `applyPlaybackParameters` only from
+     * its own processing path, and in bypass it never processes a buffer — so
+     * the ratio Media3 hands the sink would never reach the resampler and
+     * speed would silently do nothing over USB.
+     */
+    private val resampler: VariRateAudioProcessor? = null,
 ) : ForwardingAudioSink(delegate) {
 
     private val chain = AudioProcessorChain(processors)
+
     private var bypassActive = false
     private var configuredFormat: Format? = null
-    private var framesWritten: Long = 0L
-    private var startTimeUs: Long = C.TIME_UNSET
-    private var pcmBytesPerFrame: Int = 0
-    // Throttle for the lazy-engage path so that if driver.start
-    // returns false for the current format, we don't hammer it on
-    // every handleBuffer (~50× per second) — that flooded logcat
-    // with SET_CUR errors during the UAC1 bug. Reset on
-    // configure/flush so the next track gets a fresh attempt.
-    private var lastEngageFailHash: Int = 0
 
-    // Wedged-iso-pump watchdog. driver.start() can succeed (returns
-    // true, _isStreaming flips on) but the iso completion callbacks
-    // never actually fire on some Android xHCI controllers — e.g.
-    // OnePlus OP611FL1 / CPH2749 in field reports. The user-visible
-    // symptom is "USB audio crash after a couple of seconds": the
-    // ring fills (~6 sec at 44.1k/16/2ch), driver.write() starts
-    // returning 0, ExoPlayer back-pressures, PipelineWatcher floods
-    // "pipelineFull (4)" for ~3.5 sec, then everything falls silent
-    // because the renderer thread stops feeding a sink that won't
-    // drain. There is no Java exception and no native tombstone —
-    // just dead audio. To recover, watch driver.playedFrames(): if it
-    // hasn't budged for kIsoStallNs after our first successful write
-    // we declare the iso pump wedged, latch bypass off, and let
-    // ForwardingAudioSink delegate to DefaultAudioSink so audio
-    // actually plays. Latch is cleared on flush()/configure() so the
-    // next track / next play attempt gets a fresh shot at bypass.
-    private var firstWriteNs: Long = 0L
-    private var lastPlayedFrames: Long = 0L
-    private var lastPlayedAdvanceNs: Long = 0L
-    private var watchdogTripped: Boolean = false
-    // True between the first successful write of a stream and the
-    // next flush/configure/reset. Used solely to log a one-shot
-    // diagnostic ("first bypass write succeeded") so a build that
-    // includes this code path is visibly distinct in logcat from
-    // an older build that doesn't — saves a "did you rebuild?"
-    // round-trip when triaging field reports.
-    private var firstWriteLogged: Boolean = false
+    /**
+     * Stride of the PCM the chain hands us — 4 bytes/sample for float, 2 for
+     * 16-bit. Distinct from the USB stride because the two differ the moment
+     * the DAC runs at a width the chain does not: a float chain feeding a
+     * 24-bit stream is 8 bytes in and 6 out per stereo frame. Everything that
+     * advances a Media3 buffer counts in this one.
+     */
+    private var sourceBytesPerFrame = 0
+    private var sourceIsFloat = false
 
-    // Reusable scratch for the software-gain path. Only allocated /
-    // grown when the user actually attenuates (volume < 1.0f); at
-    // unity the bypass stays bit-perfect — direct buffer goes
-    // straight to libusb with no copy, no allocation, no rounding.
+    /**
+     * Subslot size the driver negotiated, from the device's own descriptor —
+     * NOT bitsPerSample / 8. A 24-bit alt may carry each sample in 4 bytes
+     * (bSubslotSize = 4, sample left-justified), and the driver strides its
+     * ring by exactly this. Guessing would desync the two and the JNI bounds
+     * check would reject every write.
+     */
+    private var usbBytesPerSample = 0
+    private var outChannels = 0
+    private var outBitsPerSample = 0
+
+    /**
+     * Media seconds per output second, from the playback parameters.
+     *
+     * The resampler consumes [speedRatio] input frames per output frame, so
+     * one output frame is that many media frames. Position accounting has to
+     * scale by it or the progress bar runs at the wrong rate the moment speed
+     * leaves 1.
+     */
+    private var speedRatio = 1f
+
+    private var framesWritten = 0L
+    private var startTimeUs = C.TIME_UNSET
+    private var positionPlayedBaseFrames = 0L
+    private var endOfStreamRequested = false
+
+    /**
+     * Set by [pause], cleared by [play]. While set, the bypass path refuses
+     * every buffer: [pause] flushed the DAC's ring, and anything accepted
+     * afterwards would reach the speakers through the iso pump — the exact
+     * "pause takes a second to stop" symptom. Hard back-pressure keeps the
+     * ring empty until playback resumes; Media3 holds the buffer and
+     * re-presents it on the next handleBuffer after [play].
+     */
+    private var paused = false
+
+    /**
+     * Output owned by the final AudioProcessor that has already consumed its
+     * corresponding Media3 input but has not yet fully fitted in the USB ring.
+     * We never call chain.process() again until this buffer is empty, so the
+     * processor cannot overwrite it under us.
+     */
+    private var pendingProcessedOutput: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    private var lastEngageFailHash = 0
+
+    private var firstWriteNs = 0L
+    private var lastPlayedFrames = 0L
+    private var lastPlayedAdvanceNs = 0L
+    private var watchdogTripped = false
+    private var firstWriteLogged = false
+    private var partialWriteLogged = false
+
     private var gainScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
-
-    // Same deal for the direct-buffer copy the JNI side requires: the driver
-    // reads via GetDirectBufferAddress, so a non-direct upstream buffer has to
-    // be copied. Held and grown rather than reallocated per audio buffer.
     private var copyScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
-
-    // Bit depth is per-stream; cache so the gain path doesn't have
-    // to recompute pcmBitsFromEncoding on every handleBuffer.
-    private var outBitsPerSample: Int = 0
+    private var packScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
 
     override fun configure(
         inputFormat: Format,
         specifiedBufferSize: Int,
         outputChannels: IntArray?,
     ) {
-        // Always configure the delegate so [flush] / [reset] / fallback
-        // playback all work. The libusb pump only kicks in if start()
-        // succeeds; if it doesn't, audio still plays via the delegate.
         super.configure(inputFormat, specifiedBufferSize, outputChannels)
+
         configuredFormat = inputFormat
-        lastEngageFailHash = 0   // fresh attempt for the new format
+        lastEngageFailHash = 0
+        pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        endOfStreamRequested = false
 
         val rate = inputFormat.sampleRate
         val channels = inputFormat.channelCount
-        val bits = pcmBitsFromEncoding(inputFormat.pcmEncoding)
-        if (rate <= 0 || channels <= 0 || bits <= 0) {
+        // Both bail-outs below used to be silent. A track that reached here and
+        // fell out left no trace at all: no "configured" line, the DAC still
+        // streaming the previous track's rate with an empty ring, and the
+        // pipeline panel reporting the stale chain rate because that is what it
+        // prefers. Indistinguishable, in a log, from configure never being
+        // called — which is the other half of the same question.
+        if (rate <= 0 || channels <= 0 ||
+            sourceBytesPerSample(inputFormat.pcmEncoding) <= 0
+        ) {
+            Log.w(
+                TAG,
+                "configure declined the input: ${rate}Hz ${channels}ch " +
+                    "encoding=${inputFormat.pcmEncoding} " +
+                    "(${encodingLabel(inputFormat.pcmEncoding)}, " +
+                    "${sourceBytesPerSample(inputFormat.pcmEncoding)} bytes/sample) " +
+                    "— delegate takes over",
+            )
             bypassActive = false
             return
         }
 
-        // Configure the inline DSP chain with the same input format
-        // the renderer is feeding us. Output format may change (e.g.
-        // an upsampler would lift the rate); we negotiate the libusb
-        // alt setting against the *post-chain* format so the DAC
-        // sees what the chain actually produced.
         val chainOut = chain.configure(
             AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
         )
-        val outRate = if (chainOut != AudioProcessor.AudioFormat.NOT_SET)
-            chainOut.sampleRate else rate
-        val outChans = if (chainOut != AudioProcessor.AudioFormat.NOT_SET)
-            chainOut.channelCount else channels
-        val outBits = if (chainOut != AudioProcessor.AudioFormat.NOT_SET)
-            pcmBitsFromEncoding(chainOut.encoding) else bits
-        if (outRate <= 0 || outChans <= 0 || outBits <= 0) {
+        val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
+            chainOut
+        } else {
+            AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
+        }
+
+        if (out.sampleRate <= 0 || out.channelCount <= 0 ||
+            sourceBytesPerSample(out.encoding) <= 0
+        ) {
+            Log.w(
+                TAG,
+                "configure declined the chain output: ${out.sampleRate}Hz " +
+                    "${out.channelCount}ch encoding=${out.encoding} " +
+                    "(${encodingLabel(out.encoding)}) — delegate takes over",
+            )
             bypassActive = false
             return
         }
-        pcmBytesPerFrame = (outBits / 8) * outChans
-        outBitsPerSample = outBits
 
-        // Track-to-track configure with the same format: skip the
-        // stop/start cycle so we don't release the streaming
-        // interface (releasing causes the Android kernel to briefly
-        // re-grab it, after which the next claim returns BUSY and
-        // playback dies until the user re-plugs the DAC).
-        bypassActive = when {
-            !driver.isOpen.value -> false
-            driver.isStreamingFormat(outRate, outBits, outChans) -> {
-                Log.i(TAG, "configured: reused active stream "
-                    + "($outRate/${outBits}b/${outChans}ch)")
-                true
-            }
-            else -> {
-                // Format changed (or first start). driver.start now
-                // handles the "already streaming, different format"
-                // case internally — stops iso pump and keeps the
-                // interface claim, so the kernel can't grab the
-                // device in the gap and bounce us with EBUSY.
-                driver.start(outRate, outBits, outChans).also { ok ->
-                    if (ok) Log.i(TAG, "configured: bypass active " +
-                        "(in $rate/${bits}b/${channels}ch → out $outRate/${outBits}b/${outChans}ch)")
-                }
-            }
+        val driverOpen = driver.isOpen.value
+        bypassActive = driverOpen && engageDriver(out.sampleRate, out.channelCount, out.encoding)
+        if (!bypassActive) {
+            Log.w(
+                TAG,
+                "bypass not engaged for ${out.sampleRate}Hz ${out.channelCount}ch " +
+                    "${encodingLabel(out.encoding)} (driverOpen=$driverOpen) " +
+                    "— delegate takes over",
+            )
         }
+
         if (bypassActive) {
-            framesWritten = 0L
-            startTimeUs = C.TIME_UNSET
-            resetWatchdog()
+            Log.i(
+                TAG,
+                "configured: bypass active (chain ${out.sampleRate}/" +
+                    "${encodingLabel(out.encoding)}/${out.channelCount}ch -> DAC " +
+                    "${out.sampleRate}/${outBitsPerSample}b in " +
+                    "${usbBytesPerSample}-byte subslots)",
+            )
+            resetStreamAccounting()
         }
+    }
+
+    /**
+     * Brings the DAC up for [encoding] and records the stride it negotiated.
+     *
+     * A float chain asks for 24-bit and falls back to 16. Float carries a
+     * 24-bit mantissa, so rounding it to 16 on the way out throws away
+     * precision the DSP actually produced — but a DAC with no 24-bit alt at
+     * this rate must still get audio rather than being dropped to the HAL,
+     * which is what a single failed start() would have done.
+     */
+    private fun engageDriver(rate: Int, channels: Int, encoding: Int): Boolean {
+        for (bits in usbBitDepthLadder(encoding)) {
+            val reused = driver.isStreamingFormat(rate, bits, channels)
+            if (reused) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
+            if (reused || driver.start(rate, bits, channels)) {
+                adoptNegotiatedFormat(bits, channels, encoding)
+                // Integer PCM reaches the DAC untouched, so its stride has to
+                // match the subslot the device negotiated. Normally it does —
+                // 16-bit is two bytes everywhere — but a 24-bit alt may use
+                // 4-byte subslots, and handing it 3-byte frames would have the
+                // driver read past the buffer. The JNI bounds check turns that
+                // into a dropped write and an error line per buffer, i.e.
+                // silence, so take the next rung (or the delegate) instead.
+                val sourceStride = sourceBytesPerSample(encoding)
+                if (!sourceIsFloat && usbBytesPerSample != sourceStride) {
+                    Log.w(
+                        TAG,
+                        "DAC negotiated ${usbBytesPerSample}-byte subslots at ${bits}b but " +
+                            "the chain emits $sourceStride bytes/sample — not engaging at this depth",
+                    )
+                    continue
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun adoptNegotiatedFormat(bits: Int, channels: Int, encoding: Int) {
+        outBitsPerSample = bits
+        outChannels = channels
+        sourceIsFloat = encoding == C.ENCODING_PCM_FLOAT
+        sourceBytesPerFrame = sourceBytesPerSample(encoding) * channels
+        // Ask the driver what it actually negotiated rather than assuming
+        // bits / 8 — see the note on [usbBytesPerSample]. The guard keeps a
+        // stale snapshot from a previous stream out of the arithmetic.
+        usbBytesPerSample = driver.diagnostics.value
+            ?.takeIf { it.bitsPerSample == bits && it.channels == channels }
+            ?.bytesPerSample
+            ?.takeIf { it > 0 }
+            ?: (bits / 8)
     }
 
     override fun handleBuffer(
@@ -170,264 +252,374 @@ class LibusbAudioSink(
         presentationTimeUs: Long,
         encodedAccessUnitCount: Int,
     ): Boolean {
-        // Lazy-engage bypass: if the user flipped the toggle AFTER
-        // configure() ran for this track (typical case — they enable
-        // exclusive mode mid-listen), we still have the format from
-        // configure but bypassActive=false. Try to start the iso pump
-        // here so the next buffer flows through the DAC. The check is
-        // cheap (two atomics + a small int compare) so it's fine on
-        // the hot handleBuffer path.
-        if (!bypassActive && pcmBytesPerFrame > 0 && driver.isOpen.value) {
-            val fmt = configuredFormat
-            if (fmt != null) {
-                // Engage against the POST-chain format, like configure()
-                // does — with the downmixer active a 6-ch input emits
-                // stereo, and starting the DAC at the input's channel
-                // count would negotiate the wrong alt setting.
-                val chainOut = chain.outputFormat()
-                val rate: Int
-                val ch: Int
-                val bits: Int
-                if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
-                    rate = chainOut.sampleRate
-                    ch = chainOut.channelCount
-                    bits = pcmBitsFromEncoding(chainOut.encoding)
-                } else {
-                    rate = fmt.sampleRate
-                    ch = fmt.channelCount
-                    bits = pcmBitsFromEncoding(fmt.pcmEncoding)
-                }
-                val fmtHash = (rate * 31 + ch) * 31 + bits
-                if (rate > 0 && ch > 0 && bits > 0 &&
-                    fmtHash != lastEngageFailHash) {
-                    bypassActive = if (driver.isStreamingFormat(rate, bits, ch)) {
-                        true
-                    } else {
-                        driver.start(rate, bits, ch)
-                    }
-                    if (bypassActive) {
-                        lastEngageFailHash = 0
-                        Log.i(TAG, "lazy-engaged bypass mid-stream " +
-                            "($rate/${bits}b/${ch}ch)")
-                    } else {
-                        // Cache the failed format so we don't retry
-                        // until configure or flush clears it. Without
-                        // this, every handleBuffer (~50/s) re-tries
-                        // and floods logcat with the same error.
-                        lastEngageFailHash = fmtHash
-                        Log.w(TAG, "bypass engage failed for "
-                            + "$rate/${bits}b/${ch}ch — staying on delegate")
-                    }
-                }
-            }
-        }
+        tryLazyEngage()
+        checkDriverStillOwned()
 
         if (!bypassActive) {
             return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
         }
-        if (!buffer.hasRemaining()) return true
-        if (startTimeUs == C.TIME_UNSET) startTimeUs = presentationTimeUs
 
-        // Run input through the DSP chain (no-op when no processors
-        // are active). Chain returns a buffer owned by the last
-        // processor, or EMPTY_BUFFER if it buffered the input
-        // waiting for more — in which case our input was consumed
-        // (chain advances `buffer`'s position) but no output yet,
-        // and we report the buffer fully handled.
-        val processed = if (chain.anyActive()) chain.process(buffer)
-                        else buffer
+        // Paused: refuse everything. flushRing() emptied the DAC's queue at
+        // pause(); a buffer accepted now would play through the iso pump.
+        if (paused) return false
+
+        endOfStreamRequested = false
+
+        // Drain processor output retained from a previous partial USB write
+        // before accepting another Media3 input buffer.
+        if (pendingProcessedOutput.hasRemaining()) {
+            drainPendingProcessedOutput()
+            if (pendingProcessedOutput.hasRemaining()) {
+                return false
+            }
+        }
+
+        if (!buffer.hasRemaining()) return true
+
+        if (startTimeUs == C.TIME_UNSET) {
+            startTimeUs = presentationTimeUs
+            positionPlayedBaseFrames = driver.playedFrames()
+        }
+
+        val processed = if (chain.anyActive()) {
+            chain.process(buffer)
+        } else {
+            buffer
+        }
 
         if (!processed.hasRemaining()) {
             return !buffer.hasRemaining()
         }
 
-        // Driver expects a direct, native-byte-order ByteBuffer because
-        // the JNI side reads via GetDirectBufferAddress.
-        val direct = if (processed.isDirect) processed else copyIntoScratch(processed)
-        val framesAvailable = direct.remaining() / pcmBytesPerFrame
-        if (framesAvailable <= 0) return !buffer.hasRemaining()
+        if (processed !== buffer) {
+            pendingProcessedOutput = processed
+        }
 
-        // Software volume on the bypass path. AudioFlinger's
-        // master-volume / hardware-volume-key apparatus doesn't reach
-        // the DAC here, so without this attenuation the user has no
-        // way to lower the level short of yanking the cable.
-        // BypassVolumeController is fed by the UI slider
-        // (PlayerViewModel.setVolume), ReplayGain
-        // (PlaybackService.applyReplayGain), and the hardware key
-        // dispatcher (MainActivity.dispatchKeyEvent). At unity gain
-        // OR on a bit depth we don't have a fast path for (24/32),
-        // we skip the scaling entirely and feed `direct` straight to
-        // libusb — preserves bit-perfect output for users who keep
-        // the slider maxed, and matches the prior behavior at
-        // depths the integer-multiply path doesn't yet cover.
-        val gain = volumeController.getVolume()
-        val toWrite = if (gain >= 0.9999f || outBitsPerSample != 16) {
-            direct
-        } else {
-            applyGainPcm16(direct, gain)
-        }
-        val written = driver.write(toWrite, framesAvailable)
+        val written = writeProcessedBuffer(processed)
         if (written <= 0) {
-            // Ring full. If we owned the input buffer (no DSP),
-            // back-pressure to the renderer; otherwise the chain
-            // already consumed the input and we'd be lying to claim
-            // we couldn't take it. Drop this tick's output —
-            // underrun handling in the iso pump will pad with
-            // silence.
-            return processed === buffer && !buffer.hasRemaining()
+            return !buffer.hasRemaining()
         }
-        if (processed === buffer) {
-            buffer.position(buffer.position() + written * pcmBytesPerFrame)
-        } else {
-            // Advance the processed buffer so the chain sees its
-            // output as consumed on the next tick.
-            processed.position(processed.position() + written * pcmBytesPerFrame)
+
+        if (processed !== buffer && !processed.hasRemaining()) {
+            pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         }
-        framesWritten += written
-        if (!firstWriteLogged) {
-            firstWriteLogged = true
-            Log.i(TAG, "bypass first write succeeded — wrote $written frames " +
-                "at ${outBitsPerSample}b, gain=$gain")
-        }
-        checkIsoPumpWatchdog()
+
         return !buffer.hasRemaining()
     }
 
-    // Pause/play: ExoPlayer's DefaultAudioSink.pause() calls
-    // AudioTrack.pause(), which immediately mutes the hardware
-    // regardless of what's queued. Our libusb path has no such
-    // primitive — the iso pump keeps draining the ring on its own
-    // thread until it goes empty, so without intervention the user
-    // hears up to a full ring's worth of audio (multiple seconds
-    // depending on encoding) AFTER they hit pause. Mute by
-    // dropping queued PCM so the iso pump immediately starts
-    // padding silence on its next packet.
-    //
-    // We do NOT call driver.stop() here — stopIsoPump spins for up
-    // to a second waiting for cancelled URBs to drain (see
-    // libusb_uac_driver.cpp:stopIsoPump), which would block the
-    // pause-button latency on the audio thread. Keeping the iso
-    // pump alive over pause also means resume() doesn't need to
-    // re-claim the streaming interface, which is the slow path
-    // that occasionally wedges with EBUSY when snd-usb-audio
-    // re-attaches in the gap.
+    /**
+     * Writes from [processed.position] and advances [processed] by exactly the
+     * number of frames native accepted.
+     *
+     * JNI GetDirectBufferAddress() points at the allocation base, not at
+     * ByteBuffer.position(). Slicing here makes address zero correspond to the
+     * current PCM position, so a partial USB write resumes at the correct frame
+     * instead of replaying the beginning of the chunk.
+     */
+    private fun writeProcessedBuffer(processed: ByteBuffer): Int {
+        if (!processed.hasRemaining() || sourceBytesPerFrame <= 0) return 0
+
+        val direct = if (processed.isDirect) processed else copyIntoScratch(processed)
+        val framesAvailable = direct.remaining() / sourceBytesPerFrame
+        if (framesAvailable <= 0) return 0
+
+        val gain = volumeController.getVolume()
+        val toWrite = when {
+            // Float chain: gain and the pack down to the DAC's subslot happen
+            // in one pass. This is also what gives 24-bit output a working
+            // volume control — the integer path only ever had a 16-bit fast
+            // path and silently skipped attenuation at any other depth.
+            sourceIsFloat -> packFloatForUsb(direct, framesAvailable, gain)
+            gain >= 0.9999f || outBitsPerSample != 16 -> direct
+            else -> applyGainPcm16(direct, gain)
+        }
+
+        val positionedView = toWrite.slice().order(ByteOrder.nativeOrder())
+        val written = driver.write(positionedView, framesAvailable)
+
+        if (written > 0) {
+            // Source stride, not USB stride: this advances the Media3 buffer,
+            // which is still the chain's PCM however narrow the DAC is.
+            val bytesWritten = written * sourceBytesPerFrame
+            processed.position((processed.position() + bytesWritten).coerceAtMost(processed.limit()))
+            framesWritten += written
+
+            if (!firstWriteLogged) {
+                firstWriteLogged = true
+                Log.i(
+                    TAG,
+                    "bypass first write succeeded — wrote $written frames at ${outBitsPerSample}b, gain=$gain",
+                )
+            }
+
+            if (written < framesAvailable && !partialWriteLogged) {
+                partialWriteLogged = true
+                Log.i(
+                    TAG,
+                    "USB ring back-pressure: retained ${framesAvailable - written} frames for next drain",
+                )
+            }
+        }
+
+        checkIsoPumpWatchdog()
+        return written
+    }
+
+    private fun drainPendingProcessedOutput() {
+        val pending = pendingProcessedOutput
+        if (!pending.hasRemaining()) {
+            pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+            return
+        }
+
+        writeProcessedBuffer(pending)
+        if (!pending.hasRemaining()) {
+            pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        }
+    }
+
+    /**
+     * Hands the stream back to the delegate the moment the driver stops owning
+     * the DAC.
+     *
+     * An unplug or an exclusive-mode toggle tears the stream down on
+     * UsbExclusiveController's own IO thread, so [bypassActive] is still true
+     * here while every subsequent driver.write() is guaranteed to fail. Before
+     * this check the only exit was the 400 ms wedge watchdog, which cost a full
+     * audible dropout and ~80 "no active stream format" JNI error lines (one
+     * per renderer tick) before the delegate took over. Both flags are cleared
+     * only by an explicit close()/stop(), so this cannot false-trip mid-stream.
+     */
+    private fun checkDriverStillOwned() {
+        if (!bypassActive) return
+        if (driver.isOpen.value && driver.isStreaming.value) return
+
+        Log.i(TAG, "driver released the DAC — disengaging bypass, delegate takes over")
+        bypassActive = false
+        pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        // Clear the engage throttle so a replug re-engages on the next buffer
+        // instead of waiting for a configure()/flush().
+        lastEngageFailHash = 0
+        resetWatchdog()
+    }
+
+    private fun tryLazyEngage() {
+        if (bypassActive || !driver.isOpen.value) return
+
+        val fmt = configuredFormat ?: return
+        val chainOut = chain.outputFormat()
+
+        val rate: Int
+        val channels: Int
+        val encoding: Int
+        if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
+            rate = chainOut.sampleRate
+            channels = chainOut.channelCount
+            encoding = chainOut.encoding
+        } else {
+            rate = fmt.sampleRate
+            channels = fmt.channelCount
+            encoding = fmt.pcmEncoding
+        }
+
+        if (rate <= 0 || channels <= 0 || sourceBytesPerSample(encoding) <= 0) return
+
+        val fmtHash = (rate * 31 + channels) * 31 + encoding
+        if (fmtHash == lastEngageFailHash) return
+
+        bypassActive = engageDriver(rate, channels, encoding)
+
+        if (bypassActive) {
+            lastEngageFailHash = 0
+            pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+            endOfStreamRequested = false
+            resetStreamAccounting()
+            Log.i(
+                TAG,
+                "lazy-engaged bypass mid-stream (chain $rate/${encodingLabel(encoding)}/" +
+                    "${channels}ch -> DAC ${outBitsPerSample}b)",
+            )
+        } else {
+            lastEngageFailHash = fmtHash
+            Log.w(
+                TAG,
+                "bypass engage failed for $rate/${encodingLabel(encoding)}/${channels}ch " +
+                    "— staying on delegate",
+            )
+        }
+    }
+
+    /**
+     * Drives the varispeed resampler, which nothing else on this path will.
+     *
+     * Mirrors the rides-tempo decision [TryptifyAudioProcessorChain] makes:
+     * pitch equal to speed and away from unity is a record played faster, and
+     * goes to the resampler. Anything else — preserve-pitch speed — is Sonic's
+     * job, and Sonic is not in the bypass chain, so the ratio stays at 1 and
+     * speed does not apply. Better than resampling it here and changing the
+     * pitch the user asked to keep.
+     */
+    override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {
+        super.setPlaybackParameters(playbackParameters)
+        val speed = playbackParameters.speed
+        val pitch = playbackParameters.pitch
+        val ridesTempo = abs(pitch - speed) < SPEED_TOLERANCE &&
+            abs(speed - 1f) >= SPEED_TOLERANCE
+        val ratio = if (ridesTempo) speed else 1f
+        speedRatio = ratio
+        resampler?.setRatio(ratio)
+        // Speed and the mixer interact here and nowhere else, and until now
+        // this path wrote nothing to the log at all — so a report of "the
+        // mixer stopped when I used speed" had no evidence to sit on. Logs
+        // what the sink was actually asked for, what it decided, and (via the
+        // chain, below) which stages that left running.
+        Log.i(
+            TAG,
+            "playback params: speed=$speed pitch=$pitch -> " +
+                "${if (ridesTempo) "varispeed" else "stretch/none"} ratio=$ratio " +
+                "(bypass=$bypassActive)",
+        )
+        // Setting the ratio is not enough on its own: the resampler is only a
+        // member of the chain while that ratio is away from 1, and membership
+        // is otherwise fixed at configure. A track configured at 1.00x had
+        // already skipped it, so the new ratio went to a processor nothing was
+        // calling.
+        chain.refreshActive()
+    }
+
     override fun pause() {
         super.pause()
+        // Gate first, flush second: a renderer that is still mid-feed when
+        // pause lands must not be able to refill the ring behind the flush.
+        // With the gate up the ring stays empty and the DAC goes silent on
+        // its next iso packet.
+        //
+        // Set unconditionally, outside the bypassActive check: `paused`
+        // mirrors transport state, not bypass state. Gating it meant that if
+        // bypass dropped while paused (DAC unplugged, exclusive mode toggled
+        // off, watchdog trip), the matching play() also no-opped and the gate
+        // stayed up — so the next engage refused every buffer forever, with
+        // no log and no recovery short of reset().
+        paused = true
         if (bypassActive) {
+            pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
             driver.flushRing()
+            framesWritten = 0L
+            startTimeUs = C.TIME_UNSET
+            positionPlayedBaseFrames = 0L
+            endOfStreamRequested = false
         }
     }
 
     override fun play() {
         super.play()
+        // Unconditional, for the same reason as pause(): the gate must come
+        // down even if bypass happened to be off when the user hit play.
+        paused = false
         if (bypassActive) {
-            // Resume from pause: the ring is empty (we flushed on
-            // pause) and the iso pump has been padding silence
-            // while playedFrames kept advancing. Resetting the
-            // watchdog and the position-reporting baseline avoids
-            // a false "playedFrames stuck" trip on the very next
-            // write, since by definition lastPlayedAdvanceNs is
-            // far in the past after a long pause.
             resetWatchdog()
             startTimeUs = C.TIME_UNSET
+            positionPlayedBaseFrames = 0L
+            endOfStreamRequested = false
         }
     }
 
-    // Trips bypass off if the iso pump accepted writes but never
-    // actually dispatched any frames. See the field-block comment on
-    // firstWriteNs for the failure mode this exists to catch.
+    override fun playToEndOfStream() {
+        if (!bypassActive) {
+            super.playToEndOfStream()
+            return
+        }
+
+        endOfStreamRequested = true
+        // Same rule as handleBuffer: nothing may reach the ring while paused,
+        // or the tail of the track plays after the user hit pause.
+        if (!paused && pendingProcessedOutput.hasRemaining()) {
+            drainPendingProcessedOutput()
+        }
+    }
+
     private fun checkIsoPumpWatchdog() {
-        if (watchdogTripped) return
+        if (watchdogTripped || !bypassActive) return
+
         val now = System.nanoTime()
         if (firstWriteNs == 0L) {
+            if (!firstWriteLogged) return
             firstWriteNs = now
             lastPlayedFrames = driver.playedFrames()
             lastPlayedAdvanceNs = now
             return
         }
+
         val played = driver.playedFrames()
-        // != not > : driver.flushRing() (called on our own pause()
-        // override and on Media3-driven flushes) zeros the C++ side
-        // playedFrames_ counter, so a healthy pump can legitimately
-        // produce played < lastPlayedFrames right after a flush.
-        // Treating that as "stuck" causes a false trip + fallback to
-        // the delegate sink mid-stream — which the user perceives
-        // as audio "fighting" itself between two paths every time
-        // they pause / skip / seek. Any change at all means the
-        // pump is alive; only zero-progress is a genuine wedge.
         if (played != lastPlayedFrames) {
             lastPlayedFrames = played
             lastPlayedAdvanceNs = now
             return
         }
-        // Both gates so we don't false-trip on the very first tick
-        // (pump hasn't had time to start) or on a brief stall mid-
-        // stream that recovers on its own.
+
         val sinceFirstWriteNs = now - firstWriteNs
         val sinceAdvanceNs = now - lastPlayedAdvanceNs
         if (sinceFirstWriteNs > kIsoWarmupNs && sinceAdvanceNs > kIsoStallNs) {
-            Log.w(TAG, "iso pump wedged — playedFrames=$played stuck for " +
-                "${sinceAdvanceNs / 1_000_000} ms after $framesWritten frames " +
-                "written; falling back to delegate sink. Re-engages on next " +
-                "configure/flush.")
+            Log.w(
+                TAG,
+                "iso pump wedged — playedFrames=$played stuck for " +
+                    "${sinceAdvanceNs / 1_000_000} ms after $framesWritten frames written; " +
+                    "falling back to delegate sink. Re-engages on next configure/flush.",
+            )
             watchdogTripped = true
             bypassActive = false
-            // Don't call driver.stop() here — nativeStop() spins up
-            // to a second waiting for cancelled transfers to drain,
-            // which would glitch the audio thread mid-buffer.
-            // ForwardingAudioSink's delegate is already configured
-            // with the same format (we always call super.configure
-            // in configure()), so the next handleBuffer flows
-            // straight to it.
+            pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         }
     }
 
     override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
         if (!bypassActive) return super.getCurrentPositionUs(sourceEnded)
-        val rate = configuredFormat?.sampleRate ?: return C.TIME_UNSET
-        if (rate <= 0) return C.TIME_UNSET
-        // Use frames the iso pump has actually dispatched, not frames
-        // we've pushed into the ring — the renderer fills the ring
-        // 10× faster than realtime, and reporting written-frames
-        // makes ExoPlayer think a 30-second track ended after 3
-        // seconds. (Symptom the user saw: 'plays for 5 sec then
-        // skips to next track with weird distortion'.)
-        val playedUs = driver.playedFrames() * 1_000_000L / rate
-        return (if (startTimeUs == C.TIME_UNSET) 0L else startTimeUs) + playedUs
+
+        val rate = chain.outputFormat().let {
+            if (it != AudioProcessor.AudioFormat.NOT_SET) it.sampleRate
+            else configuredFormat?.sampleRate ?: 0
+        }
+        // CURRENT_POSITION_NOT_SET, not C.TIME_UNSET: the two differ by one
+        // (Long.MIN_VALUE vs Long.MIN_VALUE + 1) and only the former is
+        // filtered by MediaCodecAudioRenderer.updateCurrentPosition(). Worse,
+        // the guard it does pass assigns straight through while
+        // allowPositionDiscontinuity is set — which onPositionReset() sets on
+        // every seek, exactly when startTimeUs is back to unset. Returning
+        // TIME_UNSET here reported a position of Long.MIN_VALUE + 1.
+        if (rate <= 0 || startTimeUs == C.TIME_UNSET) return AudioSink.CURRENT_POSITION_NOT_SET
+
+        val playedDelta = (driver.playedFrames() - positionPlayedBaseFrames).coerceAtLeast(0L)
+        val outputFramesPlayed = minOf(playedDelta, framesWritten)
+        // Scaled by the ratio: these are output frames, and at 2x one second
+        // of them carries two seconds of media. Without this the progress bar
+        // crawls at half speed while the music plays twice as fast.
+        val mediaFramesPlayed = (outputFramesPlayed * speedRatio).toLong()
+        return startTimeUs + mediaFramesPlayed * 1_000_000L / rate
     }
 
     override fun hasPendingData(): Boolean {
         if (!bypassActive) return super.hasPendingData()
-        // Honest answer: we have pending data iff frames are still
-        // queued in the ring waiting for the iso pump to dispatch
-        // them. Returning `false` unconditionally (the previous
-        // impl) made Media3's renderer stop waiting for the sink to
-        // drain at end-of-track, which combined with the inflated
-        // position made ExoPlayer skip to the next track way before
-        // the previous one finished playing.
-        return driver.pendingFrames() > 0
+        return pendingProcessedOutput.hasRemaining() || driver.pendingFrames() > 0L
     }
 
     override fun isEnded(): Boolean {
         if (!bypassActive) return super.isEnded()
-        // We're ended only when the iso pump has flushed everything
-        // we pushed AND the renderer has indicated it's not feeding
-        // any more (driver.isStreaming becomes false on stop()).
-        return !hasPendingData() && !driver.isStreaming.value
+        return endOfStreamRequested && !hasPendingData()
     }
 
     override fun flush() {
         super.flush()
         chain.flush()
+
+        pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        endOfStreamRequested = false
         if (bypassActive) {
-            // Drop queued PCM but keep the iso pump running on
-            // silence — see LibusbUacDriver.flushRing for why we
-            // can't release the interface here without breaking
-            // track-to-track playback.
             driver.flushRing()
             framesWritten = 0L
             startTimeUs = C.TIME_UNSET
+            positionPlayedBaseFrames = 0L
         }
+
         lastEngageFailHash = 0
         resetWatchdog()
     }
@@ -436,9 +628,29 @@ class LibusbAudioSink(
         super.reset()
         chain.reset()
         if (driver.isStreaming.value) driver.stop()
+
         bypassActive = false
+        paused = false
+        pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         framesWritten = 0L
         startTimeUs = C.TIME_UNSET
+        positionPlayedBaseFrames = 0L
+        endOfStreamRequested = false
+        lastEngageFailHash = 0
+        resetWatchdog()
+    }
+
+    override fun release() {
+        pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        super.release()
+        if (driver.isStreaming.value) driver.stop()
+    }
+
+    private fun resetStreamAccounting() {
+        framesWritten = 0L
+        startTimeUs = C.TIME_UNSET
+        positionPlayedBaseFrames = 0L
+        endOfStreamRequested = false
         resetWatchdog()
     }
 
@@ -448,42 +660,71 @@ class LibusbAudioSink(
         lastPlayedAdvanceNs = 0L
         watchdogTripped = false
         firstWriteLogged = false
+        partialWriteLogged = false
     }
 
-    override fun release() {
-        super.release()
-        if (driver.isStreaming.value) driver.stop()
-    }
-
-    // PCM16 software gain. Reads signed 16-bit samples from `src`
-    // (native byte order — set on every direct buffer we touch), does
-    // one float multiply per sample, clamps at ±0x7FFF to match the
-    // PCM16 range exactly, and writes the result to a reusable direct
-    // scratch buffer that's safe to hand to libusb. Returned buffer
-    // is positioned at 0 / limited to the byte count actually written
-    // so driver.write sees the whole payload. Source position is
-    // intentionally NOT advanced — handleBuffer's existing accounting
-    // advances `processed` (or `buffer`) by `written * pcmBytesPerFrame`
-    // after the write returns.
-    //
-    // No dither: attenuation is monotonic, so the LSB error is
-    // deterministic and quieter than a pre-existing dither floor on
-    // the upstream MixBusProcessor. Adding TPDF here would just
-    // double-dither.
     private fun applyGainPcm16(src: ByteBuffer, gain: Float): ByteBuffer {
         val srcPos = src.position()
-        val srcLimit = src.limit()
-        val totalBytes = srcLimit - srcPos
+        val totalBytes = src.remaining()
         val scratch = ensureGainScratch(totalBytes)
         val numSamples = totalBytes / 2
+
         for (i in 0 until numSamples) {
-            val s = src.getShort(srcPos + i * 2).toInt()
-            val scaled = (s * gain).toInt().coerceIn(-32768, 32767)
+            val sample = src.getShort(srcPos + i * 2).toInt()
+            val scaled = (sample * gain).toInt().coerceIn(-32768, 32767)
             scratch.putShort(i * 2, scaled.toShort())
         }
+
         scratch.position(0)
         scratch.limit(numSamples * 2)
         return scratch
+    }
+
+    /**
+     * Converts [frames] frames of native-order float PCM into the DAC's
+     * subslot width, applying [gain] on the way.
+     *
+     * Scales to a 24-bit sample and then keeps the top [usbBytesPerSample]
+     * bytes, which is what left-justification means: USB Audio Type I places
+     * a sample narrower than its subslot in the high bits with the low ones
+     * zeroed — the same mapping snd-usb-audio uses when it reports a
+     * 24-bit-in-4-byte alt as S32_LE. One scale therefore covers 2-, 3- and
+     * 4-byte subslots with no per-width special case beyond which bytes to
+     * emit. USB PCM is always little-endian, hence the explicit byte order
+     * rather than the buffer's.
+     */
+    private fun packFloatForUsb(src: ByteBuffer, frames: Int, gain: Float): ByteBuffer {
+        val bytesPerSample = usbBytesPerSample
+        val samples = frames * outChannels
+        val out = ensurePackScratch(samples * bytesPerSample)
+        val srcPos = src.position()
+
+        var o = 0
+        for (i in 0 until samples) {
+            val sample = floatToSubslotSample(
+                src.getFloat(srcPos + (i shl 2)) * gain,
+                bytesPerSample,
+            )
+            out.put(o, sample.toByte())
+            if (bytesPerSample > 1) out.put(o + 1, (sample shr 8).toByte())
+            if (bytesPerSample > 2) out.put(o + 2, (sample shr 16).toByte())
+            if (bytesPerSample > 3) out.put(o + 3, (sample shr 24).toByte())
+            o += bytesPerSample
+        }
+
+        out.position(0)
+        out.limit(samples * bytesPerSample)
+        return out
+    }
+
+    private fun ensurePackScratch(needBytes: Int): ByteBuffer {
+        if (packScratch.capacity() < needBytes) {
+            packScratch = ByteBuffer.allocateDirect(needBytes)
+                .order(ByteOrder.nativeOrder())
+        } else {
+            packScratch.clear()
+        }
+        return packScratch
     }
 
     private fun ensureGainScratch(needBytes: Int): ByteBuffer {
@@ -496,20 +737,17 @@ class LibusbAudioSink(
         return gainScratch
     }
 
-    // Grow-and-reuse, like ensureGainScratch above — this used to
-    // allocateDirect() on every call, i.e. ~50 times a second whenever the
-    // upstream buffer wasn't already direct. allocateDirect zeroes its memory
-    // and registers a cleaner, so it is a poor fit for a per-buffer path.
     private fun copyIntoScratch(buffer: ByteBuffer): ByteBuffer {
         val needBytes = buffer.remaining()
         if (copyScratch.capacity() < needBytes) {
             copyScratch = ByteBuffer.allocateDirect(needBytes)
                 .order(ByteOrder.nativeOrder())
         }
+
         copyScratch.clear()
-        val mark = buffer.position()
+        val originalPosition = buffer.position()
         copyScratch.put(buffer)
-        buffer.position(mark)  // restore — handleBuffer will advance below
+        buffer.position(originalPosition)
         copyScratch.flip()
         return copyScratch
     }
@@ -518,24 +756,62 @@ class LibusbAudioSink(
         C.ENCODING_PCM_16BIT -> 16
         C.ENCODING_PCM_24BIT -> 24
         C.ENCODING_PCM_32BIT -> 32
-        else -> 0   // float / packed / encoded streams not supported on bypass
+        else -> 0
     }
+
+    /** Bytes one sample of [encoding] occupies in the chain's own buffers. */
+    private fun sourceBytesPerSample(encoding: Int): Int =
+        if (encoding == C.ENCODING_PCM_FLOAT) 4 else pcmBitsFromEncoding(encoding) / 8
+
+    /**
+     * Widths to offer the DAC for [encoding], best first.
+     *
+     * Only float gets a ladder. An integer chain has exactly as many bits as
+     * it has, so there is nothing to gain by asking for more and no converter
+     * here to narrow it if the DAC wants less — offering one width keeps that
+     * case behaving exactly as it did.
+     */
+    private fun usbBitDepthLadder(encoding: Int): IntArray =
+        if (encoding == C.ENCODING_PCM_FLOAT) intArrayOf(24, 16)
+        else intArrayOf(pcmBitsFromEncoding(encoding))
+
+    private fun encodingLabel(encoding: Int): String =
+        if (encoding == C.ENCODING_PCM_FLOAT) "float" else "${pcmBitsFromEncoding(encoding)}b"
 
     companion object {
         private const val TAG = "LibusbAudioSink"
-        // Give the iso pump this long to start dispatching frames
-        // before we even consider it stuck. The first ~150 ms after
-        // configure can legitimately produce zero playedFrames while
-        // the URBs prime, the kernel schedules iso slots, and the
-        // ring fills up to the silence head-start. 400 ms is well
-        // above the longest legit warmup we've measured but well
-        // under the ~3.5 s of back-pressure the wedged-pump bug
-        // produces in field logs, so we still recover fast enough
-        // that the user gets fallback audio before they notice the
-        // dropout.
-        private const val kIsoWarmupNs: Long = 400_000_000L
-        // After warmup, this much time without playedFrames advancing
-        // means the pump isn't draining and won't recover.
-        private const val kIsoStallNs: Long = 400_000_000L
+        /**
+         * How far speed or pitch must sit from unity to count as a change.
+         * Matches TryptifyAudioProcessorChain's own dead zone so the two paths
+         * agree on when varispeed is running.
+         */
+        private const val SPEED_TOLERANCE = 1e-4f
+        private const val kIsoWarmupNs = 400_000_000L
+        private const val kIsoStallNs = 400_000_000L
+    }
+}
+
+/**
+ * A float sample as the little-endian integer a USB Audio Type I subslot of
+ * [bytesPerSample] bytes carries.
+ *
+ * Scales to 24 bits and then shifts, because that is what left-justification
+ * means: a sample narrower than its subslot sits in the subslot's high bits
+ * with the low ones zeroed — the same mapping snd-usb-audio uses when it
+ * reports a 24-bit-in-4-byte alt as S32_LE. 2^23 - 1 is exactly representable
+ * as a float, so the product cannot overflow the Int conversion the way a 2^31
+ * scale would, and NaN converts to zero rather than to garbage.
+ *
+ * A free function, like [tf.monochrome.android.visualizer.shouldDropFrame],
+ * because every way to get this wrong still plays: a bad scale is distortion
+ * at full level, and a missed shift is 48 dB of attenuation on a 4-byte DAC.
+ */
+internal fun floatToSubslotSample(value: Float, bytesPerSample: Int): Int {
+    val clamped = if (value > 1f) 1f else if (value < -1f) -1f else value
+    val sample24 = (clamped * 8_388_607f).toInt()
+    return when {
+        bytesPerSample >= 4 -> sample24 shl 8
+        bytesPerSample == 2 -> sample24 shr 8
+        else -> sample24
     }
 }

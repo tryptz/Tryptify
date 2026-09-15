@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -107,7 +109,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavController
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Job
@@ -179,22 +180,37 @@ import kotlin.math.sin
  */
 @Composable
 fun WorldRadioScreen(
-    navController: NavController,
     playerViewModel: PlayerViewModel,
+    // The page list and the pager's way of opening one, for the jump sheet —
+    // the same pair every other page takes. The globe stopped being a nav
+    // destination when it became a page, so there is no back stack to pop and
+    // nothing here needs a NavController.
+    pages: List<String>,
+    onSelectPage: (String) -> Unit,
     viewModel: WorldRadioViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     DynamicColorScope {
-        WorldRadioContent(navController, playerViewModel, viewModel)
+        WorldRadioContent(playerViewModel, pages, onSelectPage, viewModel)
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WorldRadioContent(
-    navController: NavController,
     playerViewModel: PlayerViewModel,
+    pages: List<String>,
+    onSelectPage: (String) -> Unit,
     viewModel: WorldRadioViewModel,
 ) {
+    var pageJumpOpen by remember { mutableStateOf(false) }
+    if (pageJumpOpen) {
+        tf.monochrome.android.ui.navigation.PageJumpSheet(
+            pages = pages,
+            onSelect = onSelectPage,
+            current = tf.monochrome.android.ui.navigation.RADIO_PAGE_ID,
+            onDismiss = { pageJumpOpen = false },
+        )
+    }
     val globe by viewModel.globe.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val stations by viewModel.stations.collectAsStateWithLifecycle()
@@ -286,8 +302,11 @@ private fun WorldRadioContent(
         TopAppBar(
             title = { Text("World radio") },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                // The page list, as on every other page. Back used to pop a
+                // detail screen off the stack; there is no stack now — Back
+                // leaves the globe for Home the way it leaves any page.
+                IconButton(onClick = { pageJumpOpen = true }) {
+                    Icon(Icons.Default.Menu, contentDescription = "Pages")
                 }
             },
             actions = {
@@ -452,7 +471,9 @@ private fun WorldRadioContent(
                                 .coerceAtLeast(with(density) { 140.dp.toPx() })
                                 .toDp()
                         },
-                        onPlay = { viewModel.play(it, city, playerViewModel) },
+                        onPlay = { station, index ->
+                            viewModel.play(station, index, city, playerViewModel)
+                        },
                         onFavourite = { viewModel.toggleFavourite(it) },
                         onNearby = { viewModel.select(it) },
                         onDismiss = { viewModel.select(null) },
@@ -934,7 +955,8 @@ private fun CityCard(
     hazeState: dev.chrisbanes.haze.HazeState,
     glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
     maxStationsHeight: androidx.compose.ui.unit.Dp,
-    onPlay: (RadioStation) -> Unit,
+    /** The tapped station and its row, so the queue can start on it. */
+    onPlay: (RadioStation, Int) -> Unit,
     onFavourite: (RadioStation) -> Unit,
     onNearby: (RadioCity) -> Unit,
     onDismiss: () -> Unit,
@@ -1025,11 +1047,11 @@ private fun CityCard(
                         // does not promise uniqueness — a repeated uuid is a
                         // crash in a keyed LazyColumn, and a duplicated row is
                         // the better failure by a wide margin.
-                        items(stations.stations) { station ->
+                        itemsIndexed(stations.stations) { index, station ->
                             StationRow(
                                 station = station,
                                 favourite = station.uuid in favourites,
-                                onPlay = { onPlay(station) },
+                                onPlay = { onPlay(station, index) },
                                 onFavourite = { onFavourite(station) },
                                 onHomepage = station.homepage?.let {
                                     { uriHandler.openUri(it) }

@@ -30,6 +30,35 @@ class QueueManager @Inject constructor() {
     val currentQueue: List<Track> get() = _queue.value
     val currentQueueIndex: Int get() = _currentIndex.value
 
+    /**
+     * The pre-shuffle order, for whoever is persisting this. Not a permutation
+     * of [queue]: setQueue, addToQueue, clearUpcoming and toggleShuffle keep it,
+     * but remove, move and play-next leave it alone, so it can hold tracks the
+     * queue no longer has and miss ones it does.
+     */
+    val originalQueueSnapshot: List<Track> get() = originalQueue
+
+    /**
+     * Put every field back at once from a persisted session. Not [setQueue],
+     * which forces shuffle off and discards the pre-shuffle order — the two
+     * things a restore exists to bring back. Touches no player; the only
+     * visible effect is [currentTrack] going non-null, raising the mini player.
+     */
+    fun restore(
+        queue: List<Track>,
+        originalQueue: List<Track>,
+        currentIndex: Int,
+        shuffleEnabled: Boolean,
+        repeatMode: RepeatMode,
+    ) {
+        _queue.value = queue
+        this.originalQueue = originalQueue.ifEmpty { queue }
+        _currentIndex.value = if (queue.isEmpty()) -1 else currentIndex.coerceIn(0, queue.lastIndex)
+        _shuffleEnabled.value = shuffleEnabled
+        _repeatMode.value = repeatMode
+        updateCurrentTrack()
+    }
+
     fun setQueue(tracks: List<Track>, startIndex: Int = 0) {
         _queue.value = tracks
         originalQueue = tracks

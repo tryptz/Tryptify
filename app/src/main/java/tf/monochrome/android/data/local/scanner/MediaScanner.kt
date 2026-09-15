@@ -44,6 +44,7 @@ class MediaScanner @Inject constructor(
     private val preferences: PreferencesManager,
     private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
     private val genreGraph: tf.monochrome.android.data.repository.GenreGraphRepository,
+    private val artworkStore: tf.monochrome.android.data.local.tags.ArtworkStore,
 ) {
 
     fun fullScan(
@@ -56,8 +57,13 @@ class MediaScanner @Inject constructor(
             // are removed consistently). Empty set = whole-device scan —
             // the behavior for users who never picked folders in onboarding.
             val folderRoots = preferences.userFolderRoots.first()
+            // Read the stored exclusions here rather than trusting the caller.
+            // They were a parameter only, and the one real caller —
+            // ScanCoordinator.runFullScan — has nothing to pass, so the setting
+            // was written by the UI and then ignored by every scan.
+            val excluded = excludedPaths + preferences.excludedPaths.first()
             val mediaStoreFiles =
-                mediaStoreSource.queryAllAudio(minDurationMs, excludedPaths, folderRoots)
+                mediaStoreSource.queryAllAudio(minDurationMs, excluded, folderRoots)
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
 
             // One projection query up front instead of a findByPath() SELECT
@@ -83,7 +89,14 @@ class MediaScanner @Inject constructor(
             rebuildFolders()
 
             // Update scan state
-            updateScanState()
+            updateScanState(full = true)
+
+            // App data now, not a cache the OS bounds for us, and a scan is
+            // the one moment we know which covers are still spoken for. Best
+            // effort: a failed sweep is wasted disk, never a failed scan.
+            runCatching {
+                artworkStore.sweepOrphans(localMediaDao.getAllReferencedArtworkKeys())
+            }
 
             emit(ScanProgress.Complete(
                 scanned = mediaStoreFiles.size,
@@ -100,11 +113,16 @@ class MediaScanner @Inject constructor(
     ): Flow<ScanProgress> = flow {
         try {
             val folderRoots = preferences.userFolderRoots.first()
+            // Exclusions apply here too. They used to be read only by fullScan,
+            // so adding or touching a file under an excluded folder let the
+            // incremental scan import it straight back — the removal held only
+            // until the next song landed in that folder.
+            val excluded = preferences.excludedPaths.first()
             val scanState = localMediaDao.getScanState()
             val lastScan = scanState?.lastIncremental ?: scanState?.lastFullScan ?: 0
 
             val modifiedFiles =
-                mediaStoreSource.queryModifiedSince(lastScan, minDurationMs, folderRoots)
+                mediaStoreSource.queryModifiedSince(lastScan, minDurationMs, folderRoots, excluded)
             if (modifiedFiles.isEmpty()) {
                 // No new tag content to read, but still rebuild groupings so
                 // album-cover-into-track propagation runs and the UI picks up
@@ -112,7 +130,7 @@ class MediaScanner @Inject constructor(
                 emit(ScanProgress.Grouping("Refreshing library..."))
                 rebuildGroupings()
                 rebuildFolders()
-                updateScanState()
+                updateScanState(full = false)
                 emit(ScanProgress.Complete(scanned = 0, added = 0, removed = 0))
                 return@flow
             }
@@ -130,13 +148,13 @@ class MediaScanner @Inject constructor(
             // Check for deleted files. Same roots filter as fullScan so the
             // prune diff never mass-deletes tracks a full scan would keep.
             val allMediaStorePaths = mediaStoreSource
-                .queryAllAudio(minDurationMs, folderRoots = folderRoots)
+                .queryAllAudio(minDurationMs, excluded, folderRoots)
                 .mapTo(HashSet()) { it.absolutePath }
             pruneDeleted(allMediaStorePaths)
 
             rebuildGroupings()
             rebuildFolders()
-            updateScanState()
+            updateScanState(full = false)
 
             emit(ScanProgress.Complete(scanned = modifiedFiles.size, added = addedCount, removed = 0))
         } catch (e: Exception) {
@@ -405,25 +423,35 @@ class MediaScanner @Inject constructor(
         }
     }
 
-    private suspend fun rebuildFolders() {
-        val allPaths = localMediaDao.getAllTrackPaths()
-        val folderMap = mutableMapOf<String, MutableList<String>>()
+    /**
+     * Drop a folder from the library: its tracks go, and scans stop finding it.
+     *
+     * Nothing on disk is touched. The files stay where they are; this is the
+     * library forgetting them.
+     *
+     * Deleting the rows is not enough on its own — the albums, artists and
+     * genres they belonged to would linger, and the folder itself would keep
+     * its row — so the two rebuild passes a scan runs are run here too. That is
+     * much cheaper than a scan: no MediaStore query and no tag reading.
+     */
+    suspend fun excludeFolder(path: String) {
+        val folder = path.trimEnd('/')
+        // trimEnd matches what addUserFolderRoot stores, so re-adding the same
+        // folder finds the exclusion it needs to clear.
+        if (folder.isEmpty()) return
+        preferences.addExcludedPath(folder)
+        // A folder the user added by hand is also a scan root, and leaving it
+        // there would have the next scan re-find what the exclusion just
+        // removed — the two settings pulling against each other.
+        preferences.removeUserFolderRoot(folder)
+        localMediaDao.deleteTracksUnder(folder)
+        rebuildGroupings()
+        rebuildFolders()
+        localLibraryRevision.bump()
+    }
 
-        for (path in allPaths) {
-            val folder = path.substringBeforeLast('/')
-            folderMap.getOrPut(folder) { mutableListOf() }.add(path)
-        }
-
-        val folders = folderMap.map { (folderPath, filePaths) ->
-            val parentPath = folderPath.substringBeforeLast('/').takeIf { it != folderPath }
-            LocalFolderEntity(
-                path = folderPath,
-                parentPath = parentPath,
-                displayName = folderPath.substringAfterLast('/'),
-                trackCount = filePaths.size,
-                totalDuration = 0 // Could compute from track durations
-            )
-        }
+    suspend fun rebuildFolders() {
+        val folders = buildFolderTree(localMediaDao.getAllTrackPaths())
 
         // Clear + repopulate atomically so folder-tab observers never see an
         // empty list mid-scan, and the whole rebuild is one Room flush.
@@ -435,14 +463,18 @@ class MediaScanner @Inject constructor(
         }
     }
 
-    private suspend fun updateScanState() {
+    private suspend fun updateScanState(full: Boolean) {
         val trackCount = localMediaDao.getTrackCount()
         val existingState = localMediaDao.getScanState()
+        val now = System.currentTimeMillis()
         localMediaDao.updateScanState(
             ScanStateEntity(
                 id = 1,
-                lastFullScan = existingState?.lastFullScan ?: System.currentTimeMillis(),
-                lastIncremental = System.currentTimeMillis(),
+                // Was `existingState?.lastFullScan ?: now`, which pinned this
+                // to the install's first scan — recording when the library was
+                // first indexed rather than when it was last rebuilt.
+                lastFullScan = if (full) now else existingState?.lastFullScan ?: now,
+                lastIncremental = now,
                 totalTracks = trackCount,
                 totalDuration = 0,
                 totalSizeBytes = 0
@@ -506,6 +538,12 @@ class MediaScanner @Inject constructor(
             // older scan logic missed it" — re-read so freshly-
             // installed cover detection logic gets a chance.
             if (!existing.hasEmbeddedArt && existing.artworkCacheKey == null) return true
+            // Carried over from the old cache-keyed store: one unscaled copy
+            // per track. Re-reading replaces it with a downscaled copy shared
+            // across the album, so the store compacts over the user's rescans.
+            if (tf.monochrome.android.data.local.tags.ArtworkKeys
+                    .isLegacyKey(existing.artworkCacheKey)
+            ) return true
             // Re-read rows that were indexed before artist-from-title
             // recovery existed: no artist tag, but a "Artist - Title"
             // shaped title we can now split. Self-heals (artist gets

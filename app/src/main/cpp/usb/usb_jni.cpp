@@ -73,10 +73,18 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeIsStreaming(
     return driver().isStreaming() ? JNI_TRUE : JNI_FALSE;
 }
 
-// Expects a direct ByteBuffer; we read [position, position+frames*frameSize).
+// Expects a direct ByteBuffer plus the caller-visible [byteOffset]
+// (ByteBuffer.position()); we read [base+byteOffset,
+// base+byteOffset+frames*frameSize). The offset must come from the
+// caller: GetDirectBufferAddress always returns element 0 of the
+// buffer, so after a partial write (ring ran full) the unconsumed
+// tail sits at a non-zero position, and reading from `base` directly
+// resent PCM from the START of the buffer on every retry — the
+// scrambling/duplication users heard once the ring filled (~5.9 s
+// at 44.1k/16-bit/stereo).
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeWrite(
-    JNIEnv* env, jobject, jobject directBuffer, jint frames) {
+    JNIEnv* env, jobject, jobject directBuffer, jint byteOffset, jint frames) {
     if (!directBuffer || frames <= 0) return 0;
     auto* base = static_cast<uint8_t*>(env->GetDirectBufferAddress(directBuffer));
     if (!base) {
@@ -84,7 +92,29 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeWrite(
             "nativeWrite: ByteBuffer.isDirect() must be true");
         return 0;
     }
-    return driver().writePcm(base, frames);
+    const auto& fmt = driver().currentFormat();
+    const int64_t frameStride =
+        static_cast<int64_t>(fmt.channels) * fmt.bytesPerSample;
+    if (frameStride <= 0) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG,
+            "nativeWrite: no active stream format — start() first");
+        return 0;
+    }
+    const int64_t capacity =
+        static_cast<int64_t>(env->GetDirectBufferCapacity(directBuffer));
+    if (byteOffset < 0 || capacity < 0 ||
+        static_cast<int64_t>(byteOffset) +
+                static_cast<int64_t>(frames) * frameStride > capacity) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG,
+            "nativeWrite: offset=%d + %d frames (stride %lld) exceeds "
+            "direct-buffer capacity %lld — dropping the write rather "
+            "than corrupting the stream",
+            byteOffset, frames,
+            static_cast<long long>(frameStride),
+            static_cast<long long>(capacity));
+        return 0;
+    }
+    return driver().writePcm(base + byteOffset, frames);
 }
 
 JNIEXPORT jint JNICALL

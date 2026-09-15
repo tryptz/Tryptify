@@ -51,6 +51,7 @@ import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.player.StreamResolver
 import tf.monochrome.android.radio.RadioQueueManager
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
+import tf.monochrome.android.visualizer.AmbientVisualizerSettings
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import javax.inject.Inject
 
@@ -75,6 +76,7 @@ class PlayerViewModel @Inject constructor(
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
     private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
+    private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
 ) : ViewModel() {
 
     /**
@@ -195,13 +197,14 @@ class PlayerViewModel @Inject constructor(
     // colour crossfade against the audio one rather than a fixed tween.
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-    // Appearance › "Color transition". MATCH_BLEND (the default) leaves the
-    // pacing above alone; anything else overrides it outright.
+    // Appearance › "Color transition", in milliseconds. It used to default to
+    // the blend above, which made a six-second audio crossfade a six-second
+    // repaint of the window; it is its own short length now.
     val colorTransitionMs: StateFlow<Int> = preferences.colorTransitionMs
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND,
+            tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS,
         )
 
     // Counts playback changes the UI asked for (see resolveAndPlay). Only
@@ -230,8 +233,29 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val visualizerTouchWaveform: StateFlow<Boolean> = preferences.visualizerTouchWaveform
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    private val _visualizerCompact = MutableStateFlow(false)
-    val visualizerCompact: StateFlow<Boolean> = _visualizerCompact.asStateFlow()
+
+    /**
+     * MilkDrop as the player's background rather than instead of the artwork.
+     *
+     * The initial value is the disabled default rather than the stored one:
+     * DataStore has not answered yet on the first frame, and defaulting to
+     * "on" would flash a GL surface over the player on every cold start for
+     * everybody who has it off — which is everybody, until they turn it on.
+     */
+    val ambientVisualizer: StateFlow<AmbientVisualizerSettings> = preferences.ambientVisualizer
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AmbientVisualizerSettings())
+
+    /**
+     * Turns the ambient MilkDrop background off (or back on) from the player.
+     *
+     * The setting's home is the Player Visuals Studio, but Audio tools' own
+     * Visualizer chip has to be able to switch it off: when ambient is running
+     * it *is* the visualizer the user is looking at, so a chip that only knows
+     * about the fullscreen view mode leaves no way to stop it from here.
+     */
+    fun setAmbientVisualizerEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setAmbientVisualizerEnabled(enabled) }
+    }
 
     // --- Spectrum analyzer (global prefs) ---
     val spectrumAnalyzerEnabled: StateFlow<Boolean> = preferences.spectrumAnalyzerEnabled
@@ -263,6 +287,8 @@ class PlayerViewModel @Inject constructor(
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
     val currentVisualizerPreset: StateFlow<VisualizerPreset?> = projectMEngineRepository.currentPreset
     val visualizerFavoritePresetIds: StateFlow<Set<String>> = projectMEngineRepository.favoritePresetIds
+    val canGoToPreviousVisualizerPreset: StateFlow<Boolean> =
+        projectMEngineRepository.canGoToPreviousPreset
     val visualizerRepository: ProjectMEngineRepository
         get() = projectMEngineRepository
 
@@ -433,6 +459,17 @@ class PlayerViewModel @Inject constructor(
         connectToService()
         startPositionPolling()
         observeCurrentTrackMeta()
+        // Before anything is loaded, so the mini player comes back with the
+        // scrubber where the user left it. Duration comes from the snapshot:
+        // the player has no opinion until it is prepared.
+        viewModelScope.launch {
+            playbackState.pendingStart.collect { pending ->
+                if (pending != null && mediaController?.currentMediaItem == null) {
+                    _positionMs.value = pending.positionMs
+                    _durationMs.value = pending.durationMs
+                }
+            }
+        }
         // Mirror the now-playing lyrics + position into the app-scoped holder so
         // other screens (the Player Visuals Studio preview) can show the real lyrics.
         viewModelScope.launch { _currentLyrics.collect { nowPlayingLyrics.setLyrics(it) } }
@@ -568,6 +605,11 @@ class PlayerViewModel @Inject constructor(
     private fun syncState() {
         mediaController?.let { mc ->
             _isPlaying.value = mc.isPlaying
+            // This runs the moment the controller connects, and on an empty
+            // player Media3 reports position 0 and an unset duration — "no
+            // item", not "at the start". Without the guard those zeroes land on
+            // the scrubber a frame after the restore paints it.
+            if (mc.currentMediaItem == null && playbackState.pendingStart.value != null) return@let
             _durationMs.value = mc.duration.coerceAtLeast(0)
             _positionMs.value = mc.currentPosition.coerceAtLeast(0)
         }
@@ -652,11 +694,39 @@ class PlayerViewModel @Inject constructor(
      * behind it and the station becomes the first track of a playlist nobody
      * asked for.
      */
-    fun playRadioStation(station: UnifiedTrack) {
+    /** One station, on its own. */
+    fun playRadioStation(station: UnifiedTrack) = playRadioStations(listOf(station), 0)
+
+    /**
+     * Tune in with the rest of the list behind it, so Next moves down the city.
+     *
+     * This used to be a queue of exactly one, which is why Next did nothing on
+     * a station: there was nowhere to go. A city's stations are an ordinary
+     * queue — the same shape [playAllUnified] builds — and the transport does
+     * not need to know that its entries happen to be live streams.
+     *
+     * [startIndex] rather than a lookup by id: the directory does not promise
+     * unique station uuids (see the deliberately unkeyed list in
+     * `WorldRadioScreen`), so "find the one that was tapped" can find the wrong
+     * one. The caller knows which row it was.
+     *
+     * Duplicate ids are still collapsed before the queue is built. Two entries
+     * sharing an id would fight over one slot in [unifiedTrackRegistry] — the
+     * second overwriting the first — and both would then resolve to the same
+     * stream. Dropping the repeat gives a queue whose length matches what it
+     * will actually play, and the start index is moved onto the survivor so the
+     * tapped row is still what comes out of the speaker.
+     */
+    fun playRadioStations(stations: List<UnifiedTrack>, startIndex: Int) {
+        if (stations.isEmpty()) return
+        val plan = planRadioQueue(stations.map { it.id }, startIndex)
+        val queue = plan.keep.map { stations[it] }
+        if (queue.isEmpty()) return
+
         radioQueueManager.stopRadio()
-        val legacy = station.toLegacyTrack()
-        unifiedTrackRegistry.put(legacy.id, station)
-        queueManager.setQueue(listOf(legacy), 0)
+        val legacy = queue.map { it.toLegacyTrack() }
+        queue.forEachIndexed { i, track -> unifiedTrackRegistry.put(legacy[i].id, track) }
+        queueManager.setQueue(legacy, plan.startIndex)
         resolveAndPlay()
     }
 
@@ -830,7 +900,15 @@ class PlayerViewModel @Inject constructor(
 
     fun togglePlayPause() {
         mediaController?.let { mc ->
-            if (mc.isPlaying) mc.pause() else mc.play()
+            when {
+                mc.isPlaying -> mc.pause()
+                // A restored session has a queue but the player was never
+                // handed an item, and play() on an empty timeline does nothing.
+                // The one point where a restore touches the network, on a tap.
+                mc.currentMediaItem == null && queueManager.currentTrack.value != null ->
+                    resolveAndPlay()
+                else -> mc.play()
+            }
         }
     }
 
@@ -862,7 +940,14 @@ class PlayerViewModel @Inject constructor(
         // looks like it rewinds would actually restart the stream. Every seek
         // verb the UI offers funnels through here, so one guard covers them all.
         if (isLiveStreamTrack(currentTrack.value)) return
-        mediaController?.seekTo(positionMs)
+        // Scrubbing before play on a restored session: the player holds no
+        // item, so the seek is dropped and play starts from the stale position.
+        // Move where it will start instead of seeking something unloaded.
+        if (mediaController?.currentMediaItem == null && playbackState.pendingStart.value != null) {
+            playbackState.overridePendingStart(positionMs)
+        } else {
+            mediaController?.seekTo(positionMs)
+        }
         _positionMs.value = positionMs
     }
 
@@ -941,6 +1026,10 @@ class PlayerViewModel @Inject constructor(
         projectMEngineRepository.nextPreset()
     }
 
+    fun previousVisualizerPreset() {
+        projectMEngineRepository.previousPreset()
+    }
+
     fun selectVisualizerPreset(preset: VisualizerPreset) {
         projectMEngineRepository.selectPreset(preset)
     }
@@ -951,10 +1040,6 @@ class PlayerViewModel @Inject constructor(
 
     fun setVisualizerPlaybackPaused(paused: Boolean) {
         projectMEngineRepository.setPlaybackPaused(paused)
-    }
-
-    fun toggleVisualizerCompact() {
-        _visualizerCompact.value = !_visualizerCompact.value
     }
 
     fun toggleVisualizerFullscreen() {
@@ -973,8 +1058,13 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPlaybackSpeed(speed) }
     }
 
-    private fun resolveAndPlay() {
+    private fun resolveAndPlay(startPositionMs: Long = 0L) {
         val track = queueManager.currentTrack.value ?: return
+        // Consumed on first use and keyed on the track, so replaying it later
+        // starts at the beginning and a skipped-past track never hands its
+        // offset to a different one.
+        val start = if (startPositionMs > 0L) startPositionMs
+        else playbackState.consumePendingStart(track.id)
         // Every playback change the UI asks for funnels through here — taps,
         // transport skips, queue jumps, a removed current track. The player's
         // own end-of-track advance happens inside PlaybackService and never
@@ -1014,7 +1104,7 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mc.setMediaItem(resolved.mediaItem)
+                    mc.setMediaItem(resolved.mediaItem, start)
                     mc.prepare()
                     mc.play()
                     onResolveSucceeded()
@@ -1031,7 +1121,7 @@ class PlayerViewModel @Inject constructor(
                         handleResolveFailure()
                         return@launch
                     }
-                    mc.setMediaItem(mediaItem)
+                    mc.setMediaItem(mediaItem, start)
                     mc.prepare()
                     mc.play()
                     onResolveSucceeded()
@@ -1098,6 +1188,9 @@ class PlayerViewModel @Inject constructor(
      */
     private fun handleResolveFailure() {
         consecutiveResolveFailures++
+        // Never loaded. Leaving the offset hands it to whatever the skip
+        // below lands on.
+        playbackState.clearPendingStart()
         val queueSize = queueManager.queue.value.size.coerceAtLeast(1)
         if (repeatMode.value == RepeatMode.ONE) {
             _playbackError.value = "Couldn't play this track."
@@ -1233,11 +1326,30 @@ class PlayerViewModel @Inject constructor(
     }
 
     /**
-     * Hand the track's local audio file to Android's share sheet. Resolves
-     * a downloaded copy first, then a Qobuz cache hit; if neither exists
-     * the call is a no-op (logged in TrackShareHelper).
+     * Hand the track's audio file to Android's share sheet.
+     *
+     * A scanned file goes straight to its path. Everything else resolves a
+     * downloaded copy, then a Qobuz cache hit, then a fetch on demand.
+     *
+     * The local branch is the whole point. A [Track] carries no file path, and
+     * TrackShareHelper.shareTrack has nowhere to look for one: it finds no
+     * download row and no cache entry for a scanned file, and falls through to
+     * *downloading the track from Qobuz* — which fails, and reports "No file
+     * available to share" about a file sitting on the user's phone. Every
+     * screen that shares a legacy Track hit that: the player, playlists, album
+     * and artist pages, Favorites, search. Only the unified context menu, which
+     * has the UnifiedTrack and its path, ever worked.
+     *
+     * The lookup is the one already drawing the player's "Downloaded" tick —
+     * see [isLocalTrack]. It was answering correctly one menu row above the
+     * failure.
      */
     fun shareTrack(track: Track) {
+        val unified = unifiedTrackRegistry[track.id]
+        if (unified?.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile) {
+            shareUnifiedTrack(unified)
+            return
+        }
         viewModelScope.launch {
             trackShareHelper.shareTrack(track)
         }

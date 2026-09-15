@@ -1,0 +1,34 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!--
+      Ko-fi's cup, drawn rather than copied: a recognisable mark in the app's
+      own icon language, not a reproduction of the trademark artwork.
+
+      Filled white and tinted at the call site, unlike logo_spotify and friends,
+      which carry their brand colour. Those sit on a neutral onboarding card
+      where the colour IS the recognition. These two sit on buttons and on
+      glass, across every theme the app ships — and Ko-fi's coral and Patreon's
+      coral are close enough that side by side they would read as one brand
+      twice. Tinted, each takes its container's content colour and is legible
+      wherever it lands.
+    -->
+    <!-- Cup body: straight sides into a rounded base. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3.4,6.6 h12.2 v6.2 a6.1,6.1 0 0 1 -6.1,6.1 h-0.0 a6.1,6.1 0 0 1 -6.1,-6.1 z" />
+    <!-- Handle: a ring off the right-hand side, open where it meets the cup. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round"
+        android:pathData="M16.4,8.2 h1.5 a3.3,3.3 0 0 1 0,6.6 h-1.5" />
+    <!-- Saucer, so the cup reads as a cup at 24dp rather than as a bucket. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2.2,20.2 h15.6 a0.8,0.8 0 0 1 0,1.6 h-15.6 a0.8,0.8 0 0 1 0,-1.6 z" />
+</vector>

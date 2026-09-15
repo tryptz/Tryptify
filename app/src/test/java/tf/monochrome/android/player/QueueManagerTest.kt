@@ -190,4 +190,80 @@ class QueueManagerTest {
         val current = qm.currentQueueIndex
         assertEquals(1L, qm.currentQueue[current + 1].id)
     }
+
+    // --- restore (bringing a session back after process death) ---
+
+    @Test
+    fun `restore brings back the queue, the play head and the modes`() {
+        val qm = QueueManager()
+        val queue = (1..5).map { track(it.toLong()) }
+        qm.restore(
+            queue = queue,
+            originalQueue = queue,
+            currentIndex = 3,
+            shuffleEnabled = true,
+            repeatMode = RepeatMode.ALL,
+        )
+        assertEquals(queue, qm.queue.value)
+        assertEquals(3, qm.currentQueueIndex)
+        assertEquals(4L, qm.currentTrack.value?.id)
+        assertTrue(qm.shuffleEnabled.value)
+        assertEquals(RepeatMode.ALL, qm.repeatMode.value)
+    }
+
+    @Test
+    fun `turning shuffle off after a restore returns the original order`() {
+        // The reason the pre-shuffle order is persisted at all. setQueue cannot
+        // do this job: it forces shuffle off and overwrites the original order
+        // with the shuffled one.
+        val qm = QueueManager()
+        val original = (1..4).map { track(it.toLong()) }
+        val shuffled = listOf(track(3), track(1), track(4), track(2))
+        qm.restore(
+            queue = shuffled,
+            originalQueue = original,
+            currentIndex = 0,
+            shuffleEnabled = true,
+            repeatMode = RepeatMode.OFF,
+        )
+        qm.toggleShuffle()
+        assertEquals(original.map { it.id }, qm.queue.value.map { it.id })
+        assertEquals(3L, qm.currentTrack.value?.id)
+    }
+
+    @Test
+    fun `restore clamps an index the queue cannot hold`() {
+        val qm = QueueManager()
+        val queue = (1..3).map { track(it.toLong()) }
+        qm.restore(queue, queue, currentIndex = 99, shuffleEnabled = false, repeatMode = RepeatMode.OFF)
+        assertEquals(2, qm.currentQueueIndex)
+        assertEquals(3L, qm.currentTrack.value?.id)
+    }
+
+    @Test
+    fun `restore of an empty queue leaves nothing playing`() {
+        val qm = QueueManager()
+        qm.restore(emptyList(), emptyList(), currentIndex = 4, shuffleEnabled = false, repeatMode = RepeatMode.OFF)
+        assertEquals(-1, qm.currentQueueIndex)
+        assertNull(qm.currentTrack.value)
+    }
+
+    @Test
+    fun `restore with no original order falls back to the queue itself`() {
+        val qm = QueueManager()
+        val queue = (1..3).map { track(it.toLong()) }
+        qm.restore(queue, emptyList(), currentIndex = 0, shuffleEnabled = true, repeatMode = RepeatMode.OFF)
+        qm.toggleShuffle()
+        assertEquals(queue.map { it.id }, qm.queue.value.map { it.id })
+    }
+
+    @Test
+    fun `the original order is exposed for persisting`() {
+        val qm = QueueManager()
+        val queue = (1..4).map { track(it.toLong()) }
+        qm.setQueue(queue, 0)
+        assertEquals(queue, qm.originalQueueSnapshot)
+        qm.toggleShuffle()
+        assertEquals(queue, qm.originalQueueSnapshot)
+    }
 }

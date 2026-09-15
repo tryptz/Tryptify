@@ -1,11 +1,19 @@
 package tf.monochrome.android.data.local.repository
 
 import kotlinx.coroutines.Dispatchers
+import tf.monochrome.android.ui.library.LibrarySortKey
+import tf.monochrome.android.ui.library.LibrarySort
+import kotlinx.coroutines.withContext
+import androidx.paging.map
+import androidx.paging.PagingData
+import androidx.paging.PagingConfig
+import androidx.paging.Pager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import tf.monochrome.android.data.local.db.LocalAlbumEntity
 import tf.monochrome.android.data.local.db.LocalArtistEntity
+import tf.monochrome.android.data.local.db.LocalFacetTally
 import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.db.LocalMediaDao
@@ -48,6 +56,84 @@ class LocalMediaRepository @Inject constructor(
         localMediaDao.getAllTracks().map { tracks -> tracks.map { it.toUnifiedTrack() } }
             .flowOn(Dispatchers.Default)
 
+    /** How many local tracks there are, without building a single one of them. */
+    fun countTracks(): Flow<Int> = localMediaDao.countTracks()
+
+    /**
+     * The songs list as pages, in [sort] order.
+     *
+     * [getAllTracks] above materialises the whole library on every emission —
+     * measured at ~118 ms and 20,000 objects for a 20,000-track library, all
+     * of it to draw the dozen rows that fit on a screen. This loads a window
+     * instead. The ordering moved into SQL with it, because there is no longer
+     * a full list in memory to sort.
+     */
+    fun pagedTracks(sort: LibrarySort): Flow<PagingData<UnifiedTrack>> =
+        Pager(
+            // A page is comfortably more than a screenful, so scrolling at a
+            // normal speed never waits on a query; the placeholder-free config
+            // means the list length grows as pages land rather than starting
+            // at the full count with blank rows.
+            // Placeholders ON so the list reports its real length from the
+            // first frame: the fast scroller's thumb is sized and positioned
+            // from totalItemsCount, and without them that is only the rows
+            // loaded so far, so the thumb would shrink and the drag crawl.
+            // Unloaded rows come back null and the list draws an empty row of
+            // the right height until the page lands.
+            config = PagingConfig(
+                pageSize = 60,
+                prefetchDistance = 30,
+                enablePlaceholders = true,
+                // Without a jump threshold, dragging the scrollbar to row
+                // 15,000 makes Paging walk there — loading, and keeping, every
+                // page in between. Past this many rows skipped it throws the
+                // loaded pages away and reloads around where the finger landed,
+                // which is one query instead of two hundred. Room's
+                // LimitOffsetPagingSource supports it; a source that does not
+                // simply ignores the value.
+                jumpThreshold = 180,
+            ),
+            pagingSourceFactory = { pagingSourceFor(sort) },
+        ).flow.map { page -> page.map { it.toUnifiedTrack() } }
+
+    /**
+     * The whole library in [sort] order, for the moment a play queue is built.
+     *
+     * Tapping a row queues everything after it, and a paged list cannot answer
+     * that — it only holds what is near the screen. So the cost is paid on tap,
+     * off the main thread, rather than by holding the library in memory for the
+     * whole session in case somebody presses play.
+     */
+    suspend fun tracksForQueue(sort: LibrarySort): List<UnifiedTrack> =
+        withContext(Dispatchers.Default) {
+            snapshotFor(sort).map { it.toUnifiedTrack() }
+        }
+
+    // The two mappings from a sort selection to a query. Kept side by side so
+    // a new sort key cannot be added to one and forgotten in the other, which
+    // would show the list in one order and play it in another.
+    private fun pagingSourceFor(sort: LibrarySort) = when (sort.key) {
+        LibrarySortKey.DATE ->
+            if (sort.ascending) localMediaDao.pagedByDateAsc() else localMediaDao.pagedByDateDesc()
+        LibrarySortKey.FILE_TYPE ->
+            if (sort.ascending) localMediaDao.pagedByFileTypeAsc() else localMediaDao.pagedByFileTypeDesc()
+        LibrarySortKey.TIME ->
+            if (sort.ascending) localMediaDao.pagedByTimeAsc() else localMediaDao.pagedByTimeDesc()
+        else ->
+            if (sort.ascending) localMediaDao.pagedByNameAsc() else localMediaDao.pagedByNameDesc()
+    }
+
+    private suspend fun snapshotFor(sort: LibrarySort) = when (sort.key) {
+        LibrarySortKey.DATE ->
+            if (sort.ascending) localMediaDao.snapshotByDateAsc() else localMediaDao.snapshotByDateDesc()
+        LibrarySortKey.FILE_TYPE ->
+            if (sort.ascending) localMediaDao.snapshotByFileTypeAsc() else localMediaDao.snapshotByFileTypeDesc()
+        LibrarySortKey.TIME ->
+            if (sort.ascending) localMediaDao.snapshotByTimeAsc() else localMediaDao.snapshotByTimeDesc()
+        else ->
+            if (sort.ascending) localMediaDao.snapshotByNameAsc() else localMediaDao.snapshotByNameDesc()
+    }
+
     fun searchTracks(query: String): Flow<List<UnifiedTrack>> =
         localMediaDao.searchTracks("%$query%").map { tracks -> tracks.map { it.toUnifiedTrack() } }
             .flowOn(Dispatchers.Default)
@@ -62,6 +148,18 @@ class LocalMediaRepository @Inject constructor(
 
     fun getTracksByGenre(genre: String): Flow<List<UnifiedTrack>> =
         localMediaDao.getTracksByGenre(genre).map { tracks -> tracks.map { it.toUnifiedTrack() } }
+            .flowOn(Dispatchers.Default)
+
+    fun getTracksByAlbumArtist(albumArtist: String): Flow<List<UnifiedTrack>> =
+        localMediaDao.getTracksByAlbumArtist(albumArtist).map { tracks -> tracks.map { it.toUnifiedTrack() } }
+            .flowOn(Dispatchers.Default)
+
+    fun getTracksByComposer(composer: String): Flow<List<UnifiedTrack>> =
+        localMediaDao.getTracksByComposer(composer).map { tracks -> tracks.map { it.toUnifiedTrack() } }
+            .flowOn(Dispatchers.Default)
+
+    fun getTracksByYear(year: Int): Flow<List<UnifiedTrack>> =
+        localMediaDao.getTracksByYear(year).map { tracks -> tracks.map { it.toUnifiedTrack() } }
             .flowOn(Dispatchers.Default)
 
     fun getTracksInFolder(folderPath: String): Flow<List<UnifiedTrack>> =
@@ -108,9 +206,25 @@ class LocalMediaRepository @Inject constructor(
 
     fun getAllGenres(): Flow<List<LocalGenreEntity>> = localMediaDao.getAllGenres()
 
+    // ── Facets without a table ──────────────────────────────────────
+    //
+    // Genres have `local_genres`, kept up to date by the scanner. Album
+    // artists, composers and years are grouped straight out of the track table
+    // instead, so a retag shows up the moment the row is rewritten and there
+    // is nothing extra for the scanner to keep in step.
+
+    fun getAlbumArtistTallies(): Flow<List<LocalFacetTally>> = localMediaDao.getAlbumArtistTallies()
+
+    fun getComposerTallies(): Flow<List<LocalFacetTally>> = localMediaDao.getComposerTallies()
+
+    fun getYearTallies(): Flow<List<LocalFacetTally>> = localMediaDao.getYearTallies()
+
     // ── Folders ─────────────────────────────────────────────────────
 
     fun getRootFolders(): Flow<List<LocalFolderEntity>> = localMediaDao.getRootFolders()
+
+    /** Every folder row, for working out where the Folders tab should open. */
+    fun getAllFolders(): Flow<List<LocalFolderEntity>> = localMediaDao.getAllFolders()
 
     fun getSubfolders(parentPath: String): Flow<List<LocalFolderEntity>> =
         localMediaDao.getSubfolders(parentPath)

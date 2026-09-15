@@ -50,7 +50,7 @@ import tf.monochrome.android.ui.main.MainActivity
  */
 class NowPlayingWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val snapshot = readNowPlaying(context)
+        val snapshot = NowPlayingSnapshotStore.read(context)
         val art = snapshot.artworkUri?.let { loadArtwork(context, it) }
         val accent = art?.let { accentFrom(it) } ?: WidgetColors.AccentFallback
         provideContent { WidgetContent(snapshot, art, accent) }

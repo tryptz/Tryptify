@@ -29,7 +29,9 @@ import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
+import tf.monochrome.android.visualizer.AmbientVisualizerSettings
 import tf.monochrome.android.visualizer.PresetRotationMode
+import tf.monochrome.android.visualizer.VisualizerBlendMode
 import tf.monochrome.android.radio.RadioPlannerWeights
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -142,8 +144,9 @@ class PreferencesManager @Inject constructor(
         private val DYNAMIC_COLORS_MENUS = booleanPreferencesKey("dynamic_colors_menus")
         private val DYNAMIC_COLORS_KEEP_BACKGROUND =
             booleanPreferencesKey("dynamic_colors_keep_background")
-        // How long the album colours take to cross over, in ms, or
-        // ColorBlend.MATCH_BLEND to go on following "Blend Between Tracks".
+        // How long the album colours take to cross over, in ms. Older builds
+        // also stored -1 here for "match Blend Between Tracks"; ColorBlend
+        // .millisFor turns that back into a real length.
         private val COLOR_TRANSITION_MS = intPreferencesKey("color_transition_ms")
         // Custom colours: when on, an accent and a ground the listener picked
         // replace whichever preset is selected. Stored as ARGB ints.
@@ -243,6 +246,8 @@ class PreferencesManager @Inject constructor(
         private val GAPLESS_NO_RESAMPLE = booleanPreferencesKey("gapless_no_resample")
         private val WHATS_NEW_SEEN_VERSION = intPreferencesKey("whats_new_seen_version")
         private val WHATS_NEW_NEVER_SHOW = booleanPreferencesKey("whats_new_never_show")
+        private val DONATE_PLAYS_SINCE_PROMPT = intPreferencesKey("donate_plays_since_prompt")
+        private val DONATE_NEVER_SHOW = booleanPreferencesKey("donate_never_show")
         private val UPDATE_LAST_CHECKED_AT = longPreferencesKey("update_last_checked_at")
         private val UPDATE_LATEST_VERSION = stringPreferencesKey("update_latest_version")
         private val UPDATE_LATEST_URL = stringPreferencesKey("update_latest_url")
@@ -308,6 +313,13 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_SHOW_FPS = booleanPreferencesKey("visualizer_show_fps")
         private val VISUALIZER_FULLSCREEN = booleanPreferencesKey("visualizer_fullscreen")
         private val VISUALIZER_TOUCH_WAVEFORM = booleanPreferencesKey("visualizer_touch_waveform")
+        // Ambient overlay — MilkDrop composited into the player background
+        // rather than replacing the artwork. See AmbientVisualizerSettings.
+        private val VISUALIZER_OVERLAY_ENABLED = booleanPreferencesKey("visualizer_overlay_enabled")
+        private val VISUALIZER_OVERLAY_OPACITY = intPreferencesKey("visualizer_overlay_opacity")
+        private val VISUALIZER_OVERLAY_BLACK_POINT = intPreferencesKey("visualizer_overlay_black_point")
+        private val VISUALIZER_OVERLAY_BLEND = stringPreferencesKey("visualizer_overlay_blend")
+        private val VISUALIZER_OVERLAY_HIDE_COVER = booleanPreferencesKey("visualizer_overlay_hide_cover")
         private val VISUALIZER_FAVORITE_PRESETS = stringSetPreferencesKey("visualizer_favorite_presets")
 
         // AI
@@ -375,6 +387,7 @@ class PreferencesManager @Inject constructor(
 
         // Library / Local Media
         private val EXCLUDED_PATHS_JSON = stringPreferencesKey("excluded_paths_json")
+        private val FOLDER_TREE_REBUILD = intPreferencesKey("folder_tree_rebuild_version")
         private val USER_FOLDER_ROOTS_JSON = stringPreferencesKey("user_folder_roots_json")
 
         // DSP Mixer
@@ -383,6 +396,12 @@ class PreferencesManager @Inject constructor(
         private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
         private val DOWNLOAD_QUEUE_JSON = stringPreferencesKey("download_queue_json")
+
+        // One-shot marker for the move of the cover store out of cacheDir.
+        // Deliberately NOT in SETTINGS_SYNC_KEYS: it describes this device's
+        // filesystem, and syncing it would tell a fresh device the move had
+        // already happened there.
+        private val ARTWORK_STORE_MIGRATED = booleanPreferencesKey("artwork_store_migrated")
         private val USB_BIT_PERFECT_ENABLED = booleanPreferencesKey("usb_bit_perfect_enabled")
         private val USB_EXCLUSIVE_BIT_PERFECT_ENABLED =
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
@@ -609,12 +628,13 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
-     * How long the album colours take to cross over, in milliseconds, or
-     * [tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND] (the default) to
-     * keep deriving it from "Blend Between Tracks".
+     * How long the album colours take to cross over, in milliseconds.
+     *
+     * Read it through `ColorBlend.millisFor`, which handles the `-1` an older
+     * build wrote here when this followed "Blend Between Tracks".
      */
     val colorTransitionMs: Flow<Int> = dataStore.data.map { prefs ->
-        prefs[COLOR_TRANSITION_MS] ?: tf.monochrome.android.ui.theme.ColorBlend.MATCH_BLEND
+        prefs[COLOR_TRANSITION_MS] ?: tf.monochrome.android.ui.theme.ColorBlend.DEFAULT_MS
     }
 
     suspend fun setColorTransitionMs(millis: Int) {
@@ -970,6 +990,18 @@ class PreferencesManager @Inject constructor(
     /** Set once the user asks never to be told about updates again. */
     val whatsNewNeverShow: Flow<Boolean> = dataStore.data.map { it[WHATS_NEW_NEVER_SHOW] ?: false }
 
+    // --- Tip bar ---
+    //
+    // Device-local, like the update keys above and for the same reason: this
+    // counts what happened on THIS phone. Syncing it would have a second
+    // device open on a bar the user just put away on the first.
+
+    /** Songs played since the tip bar was last put away. */
+    val donatePlaysSincePrompt: Flow<Int> = dataStore.data.map { it[DONATE_PLAYS_SINCE_PROMPT] ?: 0 }
+
+    /** Set once the user ticks "don't ask again" on the tip bar. */
+    val donateNeverShow: Flow<Boolean> = dataStore.data.map { it[DONATE_NEVER_SHOW] ?: false }
+
     suspend fun setGaplessNoResample(enabled: Boolean) {
         dataStore.edit { it[GAPLESS_NO_RESAMPLE] = enabled }
     }
@@ -1011,6 +1043,32 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[WHATS_NEW_NEVER_SHOW] = enabled }
     }
 
+    /**
+     * One more song towards the tip bar.
+     *
+     * Read-modify-write inside a single `edit`, which DataStore runs on one
+     * writer: counting with a separate read would drop plays whenever two
+     * tracks ended close together, and this is the only thing that advances it.
+     * Stops counting once the user has asked not to be asked, so the number
+     * does not sit there climbing forever.
+     */
+    suspend fun recordPlayTowardsDonatePrompt() {
+        dataStore.edit {
+            if (it[DONATE_NEVER_SHOW] != true) {
+                it[DONATE_PLAYS_SINCE_PROMPT] = (it[DONATE_PLAYS_SINCE_PROMPT] ?: 0) + 1
+            }
+        }
+    }
+
+    /** Put the tip bar away; it comes back after another run of songs. */
+    suspend fun resetDonatePromptCount() {
+        dataStore.edit { it[DONATE_PLAYS_SINCE_PROMPT] = 0 }
+    }
+
+    suspend fun setDonateNeverShow(enabled: Boolean) {
+        dataStore.edit { it[DONATE_NEVER_SHOW] = enabled }
+    }
+
     val showExplicitBadges: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[SHOW_EXPLICIT_BADGES] ?: true
     }
@@ -1036,6 +1094,14 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDownloadQueueJson(json: String) {
         dataStore.edit { it[DOWNLOAD_QUEUE_JSON] = json }
+    }
+
+    /** Whether cover art has been moved out of cacheDir into the durable store. */
+    val artworkStoreMigrated: Flow<Boolean> =
+        dataStore.data.map { it[ARTWORK_STORE_MIGRATED] ?: false }
+
+    suspend fun setArtworkStoreMigrated(migrated: Boolean) {
+        dataStore.edit { it[ARTWORK_STORE_MIGRATED] = migrated }
     }
 
     val crossfadeDuration: Flow<Int> = dataStore.data.map { prefs ->
@@ -1384,6 +1450,54 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setVisualizerVsyncEnabled(value: Boolean) {
         dataStore.edit { it[VISUALIZER_VSYNC_ENABLED] = value }
+    }
+
+    /**
+     * The ambient MilkDrop overlay, as one value.
+     *
+     * Five keys but one setting as far as anything reading it is concerned —
+     * the renderer wants all of it at once, and combining here keeps three
+     * separate collectors out of the player.
+     *
+     * **Off by default, deliberately.** It changes what the player looks like,
+     * and a visual change nobody asked for should not arrive with an update.
+     */
+    val ambientVisualizer: Flow<AmbientVisualizerSettings> = dataStore.data.map { prefs ->
+        AmbientVisualizerSettings(
+            enabled = prefs[VISUALIZER_OVERLAY_ENABLED] ?: false,
+            opacityPercent = prefs[VISUALIZER_OVERLAY_OPACITY]
+                ?: AmbientVisualizerSettings.DEFAULT_OPACITY,
+            blackPointPercent = prefs[VISUALIZER_OVERLAY_BLACK_POINT]
+                ?: AmbientVisualizerSettings.DEFAULT_BLACK_POINT,
+            blend = VisualizerBlendMode.fromId(prefs[VISUALIZER_OVERLAY_BLEND]),
+            hideCover = prefs[VISUALIZER_OVERLAY_HIDE_COVER] ?: false,
+        )
+    }
+
+    suspend fun setAmbientVisualizerEnabled(enabled: Boolean) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_ENABLED] = enabled }
+    }
+
+    suspend fun setAmbientVisualizerOpacity(percent: Int) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_OPACITY] = percent.coerceIn(0, 100) }
+    }
+
+    suspend fun setAmbientVisualizerBlackPoint(percent: Int) {
+        dataStore.edit {
+            it[VISUALIZER_OVERLAY_BLACK_POINT] =
+                percent.coerceIn(0, AmbientVisualizerSettings.MAX_BLACK_POINT)
+        }
+    }
+
+    suspend fun setAmbientVisualizerBlend(mode: VisualizerBlendMode) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_BLEND] = mode.id }
+    }
+
+    /** Hide the square album cover in the player while the ambient
+     *  visualizer is on — the backdrop stays; the artwork stands down
+     *  so the MilkDrop atmosphere is the whole show. */
+    suspend fun setAmbientVisualizerHideCover(hide: Boolean) {
+        dataStore.edit { it[VISUALIZER_OVERLAY_HIDE_COVER] = hide }
     }
     suspend fun setVisualizerShowFps(enabled: Boolean) {
         dataStore.edit { it[VISUALIZER_SHOW_FPS] = enabled }
@@ -1787,6 +1901,34 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[EXCLUDED_PATHS_JSON] = pathsJson }
     }
 
+    /** The excluded paths, decoded. The stored JSON is the source of truth. */
+    val excludedPaths: Flow<Set<String>> = excludedPathsJson
+        .distinctUntilChanged()
+        .map { raw -> runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet()) }
+
+    suspend fun addExcludedPath(path: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[EXCLUDED_PATHS_JSON]
+                ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
+                ?: emptySet()
+            prefs[EXCLUDED_PATHS_JSON] = json.encodeToString(current + path)
+        }
+    }
+
+    /**
+     * Which build last rebuilt `local_folders`.
+     *
+     * The folder tree used to be written without its intermediate folders, and
+     * the table is only rebuilt during a scan — so fixing the builder would
+     * leave every existing install broken until the user happened to rescan.
+     * Bumping [FOLDER_TREE_REBUILD_VERSION] makes the next launch rebuild it
+     * once, which costs a query and a table rewrite rather than a scan.
+     */
+    val folderTreeRebuildVersion: Flow<Int> = dataStore.data.map { it[FOLDER_TREE_REBUILD] ?: 0 }
+    suspend fun setFolderTreeRebuildVersion(version: Int) {
+        dataStore.edit { it[FOLDER_TREE_REBUILD] = version }
+    }
+
     val userFolderRoots: Flow<Set<String>> = dataStore.data
         .map { it[USER_FOLDER_ROOTS_JSON] }
         .distinctUntilChanged()
@@ -1795,12 +1937,36 @@ class PreferencesManager @Inject constructor(
             else runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
         }
 
+    /**
+     * Add a folder to scan, and stop excluding it.
+     *
+     * Both halves, in one edit. Adding a folder that was previously removed
+     * used to leave its exclusion in place: the folder reappeared in the list
+     * while every scan kept skipping its music, and nothing in the UI could
+     * clear the exclusion again. "Add this folder" and "keep ignoring this
+     * folder" are contradictory instructions, and the later one wins.
+     */
     suspend fun addUserFolderRoot(path: String) {
+        val root = path.trimEnd('/')
         dataStore.edit { prefs ->
             val current = prefs[USER_FOLDER_ROOTS_JSON]
                 ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
                 ?: emptySet()
-            prefs[USER_FOLDER_ROOTS_JSON] = json.encodeToString(current + path)
+            prefs[USER_FOLDER_ROOTS_JSON] = json.encodeToString(current + root)
+
+            val excluded = prefs[EXCLUDED_PATHS_JSON]
+                ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
+                ?: emptySet()
+            // Also drop exclusions ABOVE this folder. Re-adding /Music/Live
+            // while /Music is excluded would otherwise still find nothing, and
+            // the reason would be invisible.
+            val survivors = excluded.filterNot { ex ->
+                val e = ex.trimEnd('/')
+                e == root || root.startsWith("$e/")
+            }.toSet()
+            if (survivors.size != excluded.size) {
+                prefs[EXCLUDED_PATHS_JSON] = json.encodeToString(survivors)
+            }
         }
     }
 

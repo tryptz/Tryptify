@@ -39,15 +39,42 @@ class WhatsNewTest {
     fun `a section's entries sit together so its heading is printed once`() {
         // The panel prints a heading when the section changes, so a section
         // that reappears further down would print its title twice.
+        //
+        // Scoped per kind, because that is how the panel walks the list: it
+        // takes New, then Changed, then Removed, and starts the section over
+        // inside each. So the same section MAY appear under two kinds -- a
+        // release that both adds and changes something in the player wants
+        // exactly that -- but not twice within one of them.
         WhatsNew.releases.forEach { release ->
-            val runs = release.entries.map { it.section }
-                .fold(mutableListOf<String?>()) { acc, s ->
-                    if (acc.lastOrNull() != s) acc.add(s)
-                    acc
-                }
-                .filterNotNull()
-            assertEquals("a section is split in ${release.versionName}", runs.distinct(), runs)
+            val kinds = listOf<WhatsNewKind?>(null) + WhatsNewKind.entries
+            kinds.forEach { kind ->
+                val runs = release.entries.filter { it.kind == kind }
+                    .map { it.section }
+                    .fold(mutableListOf<String?>()) { acc, s ->
+                        if (acc.lastOrNull() != s) acc.add(s)
+                        acc
+                    }
+                    .filterNotNull()
+                assertEquals(
+                    "a section is split under ${kind?.heading ?: "no kind"} " +
+                        "in ${release.versionName}",
+                    runs.distinct(),
+                    runs,
+                )
+            }
         }
+    }
+
+    @Test
+    fun `the kinds a release uses come out in a fixed order`() {
+        // New before Changed before Removed, whatever order the entries were
+        // written in -- the panel filters by kind rather than reading the list
+        // straight through, so the source order only decides what happens
+        // inside a group.
+        assertEquals(
+            listOf("New", "Changed", "Removed"),
+            WhatsNewKind.entries.map { it.heading },
+        )
     }
 
     @Test

@@ -39,6 +39,22 @@ val LocalMiniPlayerInset = compositionLocalOf<Dp> { 0.dp }
 val LocalAppHaze = compositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }
 
 /**
+ * The id of the track playing right now, so a row can show that it is the one.
+ *
+ * Published rather than passed because a song row appears in a dozen screens —
+ * playlists, favourites, an album, a folder, search — and threading "is this
+ * the playing one" through every one of their call sites would be a parameter
+ * on every list in the app for a one-row highlight.
+ *
+ * It is the *legacy* id, because the queue holds `Track`s: `currentTrack.id`
+ * compares directly, and a UnifiedTrack row asks its own `legacyId`.
+ *
+ * Read it inside the row. A track change then recomposes the rows and nothing
+ * else, which is cheap at the rate tracks change.
+ */
+val LocalNowPlayingTrackId = compositionLocalOf<Long?> { null }
+
+/**
  * The glass the app's own chrome is made of — the mini player's settings.
  *
  * There are two tunable glass materials in the app: the player's, for the

@@ -52,6 +52,21 @@ class ReReadHeuristicsTest {
     }
 
     @Test
+    fun `art carried over from the old cache store forces re-read`() {
+        // Legacy art is one unscaled copy per track file. Re-reading is what
+        // replaces it with a downscaled copy shared across the album, so the
+        // store compacts over the rescans the user already runs.
+        val info = scanInfo(artworkCacheKey = "/data/.../files/artwork/legacy/abc.jpg")
+        assertTrue(MediaScanner.needsReRead(info, 1_000L, artExists))
+    }
+
+    @Test
+    fun `art written by the new store is left alone`() {
+        val info = scanInfo(artworkCacheKey = "/data/.../files/artwork/abc.jpg")
+        assertFalse(MediaScanner.needsReRead(info, 1_000L, artExists))
+    }
+
+    @Test
     fun `missing artist with derivable title forces re-read`() {
         val info = scanInfo(artist = null, title = "Artist - Title")
         assertTrue(MediaScanner.needsReRead(info, 1_000L, artExists))

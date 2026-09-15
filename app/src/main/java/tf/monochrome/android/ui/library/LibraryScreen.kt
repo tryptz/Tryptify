@@ -1,12 +1,9 @@
 package tf.monochrome.android.ui.library
 
-import tf.monochrome.android.ui.theme.goToPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,15 +19,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -39,10 +34,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,6 +107,36 @@ internal object LibraryKeys {
     fun artist(id: Long) = "artist:$id"
     fun recent(id: Long) = "recent:$id"
     fun liked(id: Long) = "liked:$id"
+
+    // Headers and spacers need keys for the same reason the rows do. A bare
+    // `item {}` takes a positional key, so inserting a section above one
+    // renumbers every item after it and Compose treats the whole tail as new.
+    // Sections here appear and disappear with their content, so that happens
+    // whenever the first album is liked or the last one is unliked.
+    fun header(id: String) = "header:$id"
+    fun spacer(id: String) = "spacer:$id"
+    const val EMPTY = "empty"
+}
+
+/**
+ * What KIND of row an item is, for `LazyColumn`'s `contentType`.
+ *
+ * Compose reuses an item's composition only when the outgoing and incoming
+ * items report the same content type; with none given every item reports null,
+ * so a mixed list reuses a track row's slot table for an album row, throws
+ * almost all of it away and rebuilds. Naming the shapes lets each kind reuse
+ * its own, which is what makes scrolling a list of headers, tracks, albums and
+ * artists cost the same as scrolling a list of tracks.
+ *
+ * Values are compared with `equals`, so these are plain strings.
+ */
+internal object LibraryContentType {
+    const val TRACK = "track"
+    const val ALBUM = "album"
+    const val ARTIST = "artist"
+    const val HEADER = "header"
+    const val SPACER = "spacer"
+    const val EMPTY = "empty"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,9 +149,9 @@ fun LibraryScreen(
     // over five. All instances share one LibraryViewModel: the pager sits outside
     // the NavHost, so hiltViewModel() resolves against the Activity store.
     sectionId: String,
-    // The whole page list and the one pager, for the overflow menu's jumps.
+    // The page list and the nav host's way of opening one, for the jump sheet.
     pages: List<String>,
-    pager: PagerState,
+    onSelectPage: (String) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
 ) {
@@ -141,16 +164,7 @@ fun LibraryScreen(
     val activeDownloads by playerViewModel.activeDownloads.collectAsStateWithLifecycle()
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
 
-    val sectionScope = rememberCoroutineScope()
     // Page changes slide normally; with "Disable animations" on they jump.
-    val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
-
-    // The overflow menu survives as a shortcut past the swipe — a page the user
-    // has put several places away is a long drag — not as the only way in. It
-    // lists Home and Discover too now, since they are ordinary pages in the same
-    // sequence rather than a separate pager this screen could not reach.
-    val menuSections = pages.filter { it != sectionId }
-        .mapNotNull { id -> APP_PAGE_TITLES[id]?.let { id to it } }
 
     // Saveable so the dialog reopens after a process death triggered by its own
     // SAF CSV picker; the dialog's typed fields + picked uri are saveable too.
@@ -256,6 +270,11 @@ fun LibraryScreen(
     // Remembered because this composable is now one page rather than a pager
     // over five, so up to three instances of it are composed at once and each
     // would otherwise rebuild the list on every recomposition.
+    // Session-scoped: an expanded history is a thing you did a moment ago, not
+    // a preference, and coming back to a page scrolled into 200 rows you do not
+    // remember opening is worse than re-tapping.
+    var allRecentShown by remember { mutableStateOf(false) }
+
     val selectableTracks = remember(recentTracks, favoriteTracks) {
         (recentTracks + favoriteTracks).distinctBy { it.id }
     }
@@ -282,6 +301,17 @@ fun LibraryScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         var sectionMenuOpen by remember { mutableStateOf(false) }
+        // The same list Home renders, over this page. It used to be a
+        // DropdownMenu of small rows hung off a three-dot icon, and it existed
+        // on these five pages only.
+        if (sectionMenuOpen) {
+            tf.monochrome.android.ui.navigation.PageJumpSheet(
+                pages = pages,
+                onSelect = onSelectPage,
+                current = sectionId,
+                onDismiss = { sectionMenuOpen = false },
+            )
+        }
 
         tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
             TopAppBar(
@@ -300,35 +330,12 @@ fun LibraryScreen(
                 // more. Every page is a peer in one swipe list, and back is the
                 // nav host's — it returns to the first page from any of them.
                 actions = {
-                    // Settings lets the user hide pages, so the button goes
-                    // away rather than opening an empty menu.
-                    if (menuSections.isNotEmpty()) Box {
-                        IconButton(onClick = { sectionMenuOpen = true }) {
-                            Icon(
-                                Icons.Default.MoreVert,
-                                contentDescription = "Other pages",
-                                tint = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = sectionMenuOpen,
-                            onDismissRequest = { sectionMenuOpen = false }
-                        ) {
-                            menuSections.forEach { (id, title) ->
-                                DropdownMenuItem(
-                                    text = { Text(title) },
-                                    onClick = {
-                                        val page = pages.indexOf(id)
-                                        if (page >= 0) {
-                                            sectionScope.launch {
-                                                pager.goToPage(page, animateTabs)
-                                            }
-                                        }
-                                        sectionMenuOpen = false
-                                    }
-                                )
-                            }
-                        }
+                    IconButton(onClick = { sectionMenuOpen = true }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.List,
+                            contentDescription = "Go to page",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
                     }
                     // Only where there is a list to search. The other sections
                     // are grids of albums and artists with no filter behind
@@ -382,8 +389,26 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     if (recentTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "Recently Played") }
-                        items(recentTracks.take(5), key = { LibraryKeys.recent(it.id) }) { track ->
+                        item(key = LibraryKeys.header("recent"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(
+                                title = "Recently Played",
+                                // Home used to carry the full history; it is
+                                // the page list now, and five rows here was
+                                // all that was left of it. Rather than a
+                                // screen of its own, the section opens in
+                                // place — the history is one list, and it is
+                                // already loaded.
+                                onSeeAllClick = if (recentTracks.size > RECENT_PREVIEW) {
+                                    { allRecentShown = !allRecentShown }
+                                } else null,
+                                seeAllLabel = if (allRecentShown) "Show less" else "See All",
+                            )
+                        }
+                        items(
+                            if (allRecentShown) recentTracks else recentTracks.take(RECENT_PREVIEW),
+                            key = { LibraryKeys.recent(it.id) },
+                            contentType = { LibraryContentType.TRACK },
+                        ) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = favoriteTrackIds.contains(track.id),
@@ -407,8 +432,14 @@ fun LibraryScreen(
                     }
 
                     if (favoriteTracks.isNotEmpty()) {
-                        item { SectionHeader(title = "Liked Songs") }
-                        items(favoriteTracks.take(5), key = { LibraryKeys.liked(it.id) }) { track ->
+                        item(key = LibraryKeys.header("liked"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(title = "Liked Songs")
+                        }
+                        items(
+                            favoriteTracks.take(5),
+                            key = { LibraryKeys.liked(it.id) },
+                            contentType = { LibraryContentType.TRACK },
+                        ) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -454,11 +485,11 @@ fun LibraryScreen(
                             navController.navigateSafe("local_artist/$artistId")
                         }
                     },
-                    onGenreClick = { genre ->
-                        navController.navigateSafe(Screen.LocalGenreDetail.createRoute(genre))
+                    onFacetClick = { facet, value ->
+                        navController.navigateSafe(Screen.LocalFacetDetail.createRoute(facet, value))
                     },
                     onFolderClick = { path ->
-                        navController.navigateSafe("folder/${java.net.URLEncoder.encode(path, "UTF-8")}")
+                        navController.navigateSafe(Screen.FolderBrowser.createRoute(path))
                     },
                     onShuffleAll = { tracks ->
                         playerViewModel.shufflePlayUnified(tracks)
@@ -573,7 +604,11 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(top = searchTopInset, bottom = 80.dp)
                 ) {
                     if (favoriteTracks.isNotEmpty()) {
-                        items(visibleFavorites, key = { LibraryKeys.track(it.id) }) { track ->
+                        items(
+                            visibleFavorites,
+                            key = { LibraryKeys.track(it.id) },
+                            contentType = { LibraryContentType.TRACK },
+                        ) { track ->
                             TrackItem(
                                 track = track,
                                 isLiked = true,
@@ -597,9 +632,17 @@ fun LibraryScreen(
                     }
 
                     if (favoriteAlbums.isNotEmpty()) {
-                        item { Spacer(modifier = Modifier.height(8.dp)) }
-                        item { SectionHeader(title = "Liked Albums") }
-                        items(favoriteAlbums, key = { LibraryKeys.album(it.id) }) { album ->
+                        item(key = LibraryKeys.spacer("albums"), contentType = LibraryContentType.SPACER) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        item(key = LibraryKeys.header("albums"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(title = "Liked Albums")
+                        }
+                        items(
+                            favoriteAlbums,
+                            key = { LibraryKeys.album(it.id) },
+                            contentType = { LibraryContentType.ALBUM },
+                        ) { album ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -612,9 +655,17 @@ fun LibraryScreen(
                     }
 
                     if (favoriteArtists.isNotEmpty()) {
-                        item { Spacer(modifier = Modifier.height(8.dp)) }
-                        item { SectionHeader(title = "Liked Artists") }
-                        items(favoriteArtists, key = { LibraryKeys.artist(it.id) }) { artist ->
+                        item(key = LibraryKeys.spacer("artists"), contentType = LibraryContentType.SPACER) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        item(key = LibraryKeys.header("artists"), contentType = LibraryContentType.HEADER) {
+                            SectionHeader(title = "Liked Artists")
+                        }
+                        items(
+                            favoriteArtists,
+                            key = { LibraryKeys.artist(it.id) },
+                            contentType = { LibraryContentType.ARTIST },
+                        ) { artist ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -627,7 +678,9 @@ fun LibraryScreen(
                     }
 
                     if (favoriteTracks.isEmpty() && favoriteAlbums.isEmpty() && favoriteArtists.isEmpty()) {
-                        item { EmptyState("Like tracks, albums, and artists to see them here.") }
+                        item(key = LibraryKeys.EMPTY, contentType = LibraryContentType.EMPTY) {
+                            EmptyState("Like tracks, albums, and artists to see them here.")
+                        }
                     }
                 }
                 }
@@ -648,3 +701,6 @@ private fun EmptyState(message: String) {
         modifier = Modifier.padding(24.dp)
     )
 }
+
+/** Rows of history Overview shows before "See All" opens the rest. */
+private const val RECENT_PREVIEW = 5

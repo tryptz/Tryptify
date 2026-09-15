@@ -305,8 +305,25 @@ class WorldRadioViewModel @Inject constructor(
      * the item is handed to ExoPlayer and must not go looking anything up. Every
      * fact it needs is already in hand by this point.
      */
-    fun play(station: RadioStation, city: RadioCity, player: PlayerViewModel) {
-        player.playRadioStation(asTrack(station, city))
+    /**
+     * Tune in, with the rest of the city queued behind it.
+     *
+     * [index] is the row that was tapped, not a value to look up: the directory
+     * does not promise unique station uuids, so searching the list for the
+     * tapped station can land on a different row with the same id.
+     *
+     * The queue is the list exactly as the panel is showing it — the panel
+     * renders `StationsState.Ready.stations` unfiltered and unsorted, so the
+     * two cannot disagree about what "next" means. If the list is somehow not
+     * ready, the tapped station plays alone rather than the tap doing nothing.
+     */
+    fun play(station: RadioStation, index: Int, city: RadioCity, player: PlayerViewModel) {
+        val listed = (stations.value as? StationsState.Ready)?.stations.orEmpty()
+        if (listed.isEmpty()) {
+            player.playRadioStation(asTrack(station, city))
+        } else {
+            player.playRadioStations(listed.map { asTrack(it, city) }, index)
+        }
         // The directory builds its popularity ordering — the order this very
         // panel sorts by — out of these. Fire and forget, after playback.
         viewModelScope.launch { runCatching { repository.reportPlay(station) } }

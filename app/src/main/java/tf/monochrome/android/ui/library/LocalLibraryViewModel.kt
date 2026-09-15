@@ -6,21 +6,29 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import androidx.paging.cachedIn
+import androidx.paging.PagingData
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.collections.db.CollectionEntity
 import tf.monochrome.android.data.collections.repository.CollectionRepository
+import tf.monochrome.android.data.local.db.LocalFacetTally
 import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
 import tf.monochrome.android.data.local.scanner.ScanCoordinator
+import tf.monochrome.android.data.local.scanner.folderBrowseRoots
 import tf.monochrome.android.data.local.scanner.ScanProgress
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.UnifiedAlbum
@@ -29,6 +37,18 @@ import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.ImportCollectionUseCase
 import tf.monochrome.android.data.sync.BackupManager
 import javax.inject.Inject
+
+/**
+ * A row in the Folders tab: where the music starts, and how much is under it.
+ *
+ * [trackCount] is the whole subtree, which is what `buildFolderTree` records —
+ * a folder holding nothing but other folders still reports what is below it.
+ */
+data class FolderRoot(
+    val displayName: String,
+    val path: String,
+    val trackCount: Int,
+)
 
 @HiltViewModel
 class LocalLibraryViewModel @Inject constructor(
@@ -42,8 +62,12 @@ class LocalLibraryViewModel @Inject constructor(
 
     // ── Local media ─────────────────────────────────────────────────
 
-    val localTracks: StateFlow<List<UnifiedTrack>> = localMediaRepository.getAllTracks()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // localTracks used to live here: the whole library as a StateFlow, rebuilt
+    // on every database emission, held for the life of the screen. It is gone
+    // rather than left unused, because an unread StateFlow with a live
+    // subscriber still does all of that work — leaving it would have made the
+    // paging below buy nothing at all. What used it now asks for a page
+    // ([pagedTracks]), a count ([trackCount]), or a queue ([songQueue]).
 
     val localAlbums: StateFlow<List<UnifiedAlbum>> = localMediaRepository.getAllAlbums()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -76,6 +100,9 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesManager.artistSort.collect { _artistSort.value = parseSort(it) }
         }
+        // One-off repair for libraries indexed before the folder tree included
+        // its intermediate folders. No-ops on every launch after the first.
+        viewModelScope.launch { scanCoordinator.rebuildFolderTreeIfStale() }
     }
 
     fun setSongSort(sort: LibrarySort) {
@@ -101,38 +128,122 @@ class LocalLibraryViewModel @Inject constructor(
         return LibrarySort(key, ascending = parts.getOrNull(1) != "desc")
     }
 
-    val sortedTracks: StateFlow<List<UnifiedTrack>> = combine(localTracks, _songSort) { tracks, sort ->
-        tracks.applySort(sort)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // `flowOn(Default)` on all three: `stateIn(viewModelScope, …)` collects on
+    // Dispatchers.Main.immediate, so without it the combine body — an O(n log n)
+    // sort of the entire library — ran on the UI thread, on every database
+    // emission and every sort toggle. The repository below already does its
+    // mapping on Default (LocalMediaRepository), but flowOn only covers what is
+    // upstream of it, so everything these view models add landed back on Main.
+    /**
+     * The songs list, paged, re-pagered whenever the sort changes.
+     *
+     * `cachedIn` so the pages survive the sub-tab pager swiping this screen
+     * away and back, and so a configuration change does not re-query the
+     * database from row zero.
+     */
+    val pagedTracks: Flow<PagingData<UnifiedTrack>> = _songSort
+        .flatMapLatest { sort -> localMediaRepository.pagedTracks(sort) }
+        .cachedIn(viewModelScope)
+
+    /**
+     * How many tracks there are, for the empty state and the shuffle button.
+     *
+     * A COUNT, not `localTracks.isEmpty()`: asking the list whether it is empty
+     * is what forced the whole library into memory to answer a yes/no.
+     */
+    val trackCount: StateFlow<Int> = localMediaRepository.countTracks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /**
+     * The play queue for the songs list, in the order it is currently shown.
+     *
+     * Suspends: the query runs off the main thread when a row is tapped rather
+     * than the library being held in memory for the life of the screen against
+     * the chance that somebody presses play.
+     */
+    suspend fun songQueue(): List<UnifiedTrack> = localMediaRepository.tracksForQueue(_songSort.value)
 
     val sortedAlbums: StateFlow<List<UnifiedAlbum>> = combine(localAlbums, _albumSort) { albums, sort ->
         albums.applySort(sort)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val sortedArtists: StateFlow<List<UnifiedArtist>> = combine(localArtists, _artistSort) { artists, sort ->
         artists.applySort(sort)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val localGenres: StateFlow<List<LocalGenreEntity>> = localMediaRepository.getAllGenres()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // ── Facet browse lists ──────────────────────────────────────────
+    //
+    // Album artists, composers and years, each as a name and a tally. All
+    // three are GROUP BY queries: Room runs them on its own executor and
+    // nothing is mapped on the way out, so unlike sortedAlbums/sortedArtists
+    // above there is no work here to move off the main thread with flowOn.
+    //
+    // WhileSubscribed like their neighbours, which is what makes browsing one
+    // category at a time actually cost one query: the other lists are not
+    // collected while their row sits unopened on the index.
+
+    val genreTallies: StateFlow<List<LocalFacetTally>> = localGenres
+        .map { genres -> genres.map { LocalFacetTally(it.name, it.trackCount) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val albumArtistTallies: StateFlow<List<LocalFacetTally>> =
+        localMediaRepository.getAlbumArtistTallies()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val composerTallies: StateFlow<List<LocalFacetTally>> =
+        localMediaRepository.getComposerTallies()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val yearTallies: StateFlow<List<LocalFacetTally>> =
+        localMediaRepository.getYearTallies()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val rootFolders: StateFlow<List<LocalFolderEntity>> = localMediaRepository.getRootFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** User-added folder roots merged with scanner-derived folders. User roots come first. */
-    val displayRootFolders: StateFlow<List<Pair<String, String>>> = combine(
-        localMediaRepository.getRootFolders(),
+    /**
+     * What the Folders tab lists: the folders the user's music actually starts
+     * in, with any hand-added roots kept at the top.
+     *
+     * This used to read `getRootFolders()`, which selects `parentPath IS NULL`
+     * and therefore matched nothing — see the note on that query. The tab
+     * showed only hand-added roots, so a folder of hundreds of scanned songs
+     * never appeared in it while the same songs filled the Songs list.
+     *
+     * folderBrowseRoots does the picking; off the main thread because it walks
+     * every folder row.
+     *
+     * Each row carries its track count. Without one every root looks the same
+     * whether it holds five hundred tracks or none, which is how a folder that
+     * opened blank took three rounds to explain — the list had the number and
+     * was not showing it.
+     */
+    val displayRootFolders: StateFlow<List<FolderRoot>> = combine(
+        localMediaRepository.getAllFolders(),
         preferencesManager.userFolderRoots
-    ) { dbFolders, userPaths ->
+    ) { allFolders, userPaths ->
+        // A hand-added root has no folder row of its own until the scanner
+        // finds music under it, so its count comes from the tree when there is
+        // one and is honestly zero when there is not.
+        val countByPath = allFolders.associate { it.path to it.trackCount }
         val user = userPaths.map { path ->
-            val name = path.substringAfterLast('/').ifBlank { path }
-            name to path
+            FolderRoot(
+                displayName = path.substringAfterLast('/').ifBlank { path },
+                path = path,
+                trackCount = countByPath[path] ?: 0,
+            )
         }
-        val db = dbFolders
+        val scanned = folderBrowseRoots(allFolders)
             .filter { it.path !in userPaths }
-            .map { it.displayName to it.path }
-        user + db
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .map { FolderRoot(it.displayName, it.path, it.trackCount) }
+        user + scanned
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addUserFolderRoot(path: String) {
         if (path.isBlank()) return
@@ -179,6 +290,11 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch { scanCoordinator.runIncrementalScan() }
     }
 
+    /** Drops a folder from the library. The files on disk are not touched. */
+    fun excludeFolder(path: String) {
+        viewModelScope.launch { scanCoordinator.excludeFolder(path) }
+    }
+
     /** Dismiss the terminal scan-progress bar (Complete/Error). */
     fun clearScanProgress() { scanCoordinator.clearProgress() }
 
@@ -214,23 +330,42 @@ class LocalLibraryViewModel @Inject constructor(
 
     // ── Folder browsing ─────────────────────────────────────────────
 
+    /**
+     * One [StateFlow] per path, for the life of this view model.
+     *
+     * These are read from a composable body, and `stateIn` builds a NEW
+     * StateFlow and launches a NEW sharing coroutine every time it is called.
+     * Called straight from composition that is once per recomposition: the
+     * coroutines pile up in [viewModelScope] until the screen dies, the Room
+     * query is re-issued each time, and because `collectAsStateWithLifecycle`
+     * keys on flow identity it restarts collection, emits, and recomposes —
+     * which calls the function again.
+     *
+     * Caching by key makes the call idempotent, so the trap is closed here
+     * rather than left for each caller to remember. Main-thread only, which is
+     * where composition reads it; bounded by the paths one browser screen
+     * visits, and the whole map goes when the back stack entry does.
+     */
+    private val subfolderFlows = mutableMapOf<String, StateFlow<List<LocalFolderEntity>>>()
+    private val folderTrackFlows = mutableMapOf<String, StateFlow<List<UnifiedTrack>>>()
+
     fun getSubfolders(parentPath: String): StateFlow<List<LocalFolderEntity>> =
-        localMediaRepository.getSubfolders(parentPath)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        subfolderFlows.getOrPut(parentPath) {
+            localMediaRepository.getSubfolders(parentPath)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }
 
     fun getTracksInFolder(folderPath: String): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksInFolder(folderPath)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        folderTrackFlows.getOrPut(folderPath) {
+            localMediaRepository.getTracksInFolder(folderPath)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }
 
-    fun getTracksByAlbum(albumId: Long): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksByAlbum(albumId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun getTracksByArtist(artistId: Long): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksByArtist(artistId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun getTracksByGenre(genre: String): StateFlow<List<UnifiedTrack>> =
-        localMediaRepository.getTracksByGenre(genre)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // getTracksByAlbum / getTracksByArtist / getTracksByGenre used to sit here
+    // with the same per-call `stateIn`. Nothing called them: every local detail
+    // screen has its own view model that holds the flow as a property
+    // (LocalAlbumDetailViewModel.tracks, LocalArtistDetailViewModel,
+    // LocalGenreDetailViewModel), which is the shape that does not have the
+    // bug. They were three more copies of the trap with no users, so they are
+    // gone rather than fixed.
 }

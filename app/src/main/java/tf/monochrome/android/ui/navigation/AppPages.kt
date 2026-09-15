@@ -24,9 +24,24 @@ internal data class AppPage(val id: String, val title: String)
  * the CSV said. Swapping these two would silently move every existing user's
  * landing page.
  */
+/**
+ * The globe's page id.
+ *
+ * A plain id rather than a `Screen` route, because it is no longer a nav
+ * destination: World radio is a page of the pager like Local or Playlists, so
+ * Back leaves it for Home the way it does from any other page rather than
+ * unwinding a back stack of its own.
+ */
+internal const val RADIO_PAGE_ID = "radio"
+
 internal val APP_PAGES: List<AppPage> = listOf(
     AppPage(Screen.Home.route, "Home"),
     AppPage(Screen.Discover.route, "Discover"),
+    // Next to Discover, which is where it used to be reached from. New pages
+    // are inserted into a stored order after the nearest earlier page that is
+    // stored (see reconcilePageOrder), so an existing install finds it here
+    // rather than at the far end of the list.
+    AppPage(RADIO_PAGE_ID, "World radio"),
     AppPage("local", "Local"),
     AppPage("overview", "Overview"),
     AppPage("playlists", "Playlists"),
@@ -43,13 +58,19 @@ internal val APP_PAGE_TITLES: Map<String, String> = APP_PAGES.associate { it.id 
 internal val DEFAULT_PAGE_ORDER: List<String> = APP_PAGE_IDS
 
 /**
- * The pages `LibraryScreen` renders — everything that is not Home or Discover.
+ * The pages `LibraryScreen` renders — everything that is not Home, Discover or
+ * World radio.
+ *
+ * Those three draw themselves straight from the pager's `when`, because each
+ * owns its whole surface: Home is the page list, Discover is its shelves, and
+ * the globe is full-bleed with its own gestures and top bar. `LibraryScreen`
+ * wraps its sections in shared chrome that none of them wants.
  *
  * Every id here needs a branch in `LibraryScreen`'s `when (sectionId)`, or it
  * draws a blank page. `AppPagesTest` reads that file and checks.
  */
 internal val LIBRARY_PAGE_IDS: List<String> =
-    APP_PAGE_IDS - setOf(Screen.Home.route, Screen.Discover.route)
+    APP_PAGE_IDS - setOf(Screen.Home.route, Screen.Discover.route, RADIO_PAGE_ID)
 
 /**
  * What an install that predates the flat page list was actually looking at.
@@ -149,3 +170,17 @@ internal fun landingPageIndex(pages: List<String>, route: String): Int? = when (
  */
 internal fun restoredPageIndex(pages: List<String>, lastId: String?): Int =
     pages.indexOf(lastId).takeIf { it >= 0 } ?: 0
+
+/**
+ * Where Home sits in [pages] — where Back goes, and the only page Back goes to.
+ *
+ * Back used to retrace the route the user swiped, which made sense while the
+ * swipe existed. It does not: pages are chosen from the list on Home, so the
+ * only movement to undo is "I opened this page", and its undo is Home.
+ *
+ * Settings can hide Home, so this falls back to the first visible page rather
+ * than returning the -1 that `indexOf` would. Back landing nowhere is worse
+ * than Back landing somewhere unexpected.
+ */
+internal fun homePageIndex(pages: List<String>): Int =
+    pages.indexOf(Screen.Home.route).takeIf { it >= 0 } ?: 0

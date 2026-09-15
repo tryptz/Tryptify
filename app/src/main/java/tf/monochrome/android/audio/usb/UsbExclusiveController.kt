@@ -81,6 +81,11 @@ class UsbExclusiveController @Inject constructor(
     /** GET_RANGE inventory — what rates the DAC actually supports. */
     val supportedRates: StateFlow<List<ClockRateRange>> = driver.supportedRates
 
+    /** Identity of the DAC the driver currently owns (manufacturer, product,
+     *  VID:PID, USB version) — read from the USB descriptors, available the
+     *  moment the device is opened, even before any stream is negotiated. */
+    val dacInfo: StateFlow<DacInfo?> = driver.dacInfo
+
     private val usbManager = appContext.getSystemService(Context.USB_SERVICE) as UsbManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
