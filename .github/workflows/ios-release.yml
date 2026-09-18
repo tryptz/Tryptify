@@ -95,7 +95,8 @@ jobs:
           set -euxo pipefail
           mkdir -p build/ipa/Payload
           cp -R "build/ios/$APP_NAME.app" build/ipa/Payload/
-          (cd build/ipa && zip -qry "../$IPA_NAME.ipa" Payload)
+          (cd build/ipa && zip -qry "$IPA_NAME.ipa" Payload)
+          mv "build/ipa/$IPA_NAME.ipa" "build/ios/$IPA_NAME.ipa"
           ls -lh "build/ios/$IPA_NAME.ipa"
 
       - name: Version metadata
