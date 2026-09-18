@@ -54,7 +54,7 @@ jobs:
           swiftc \
             -sdk "$SDK" \
             -target arm64-apple-ios16.0 \
-            -I "$FWDIR" \
+            -F "$FWDIR" \
             -parse-as-library \
             -c ios/iosApp/Sources/AppDelegate.swift \
             -o build/ios/AppDelegate.o
