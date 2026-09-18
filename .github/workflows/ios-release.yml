@@ -10,10 +10,11 @@ on:
   workflow_dispatch:
 
 env:
-  APP_NAME: Monochrome
+  APP_NAME: Tryptify
+  IPA_NAME: tryptify
   BUNDLE_ID: tf.tryptify.ios
   # Keep in sync with ios/build.gradle.kts framework baseName.
-  FRAMEWORK: MonochromeKit
+  FRAMEWORK: TryptifyKit
 
 jobs:
   ipa:
@@ -34,7 +35,7 @@ jobs:
 
       # Kotlin/Native links a static framework per iOS target. No Xcode
       # project involved — Gradle is the source of truth.
-      - name: Link MonochromeKit (device + simulator)
+      - name: Link TryptifyKit (device + simulator)
         run: |
           ./gradlew --no-daemon \
             :ios:linkReleaseFrameworkIosArm64 \
@@ -61,10 +62,10 @@ jobs:
           clang build/ios/AppDelegate.o \
             -isysroot "$SDK" \
             -F "$FWDIR" \
-            -framework MonochromeKit \
+            -framework TryptifyKit \
             -framework UIKit -framework Foundation \
             -lobjc -arch arm64 \
-            -o build/ios/Monochrome
+            -o build/ios/Tryptify
 
       - name: Assemble .app
         run: |
@@ -93,8 +94,8 @@ jobs:
           set -euxo pipefail
           mkdir -p build/ipa/Payload
           cp -R "build/ios/$APP_NAME.app" build/ipa/Payload/
-          (cd build/ipa && zip -qry "../$APP_NAME.ipa" Payload)
-          ls -lh "build/ios/$APP_NAME.ipa"
+          (cd build/ipa && zip -qry "../$IPA_NAME.ipa" Payload)
+          ls -lh "build/ios/$IPA_NAME.ipa"
 
       - name: Version metadata
         id: meta
@@ -103,7 +104,7 @@ jobs:
       - name: Upload unsigned IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monochrome-unsigned-${{ steps.meta.outputs.short }}
-          path: build/ios/Monochrome.ipa
+          name: tryptify-unsigned-${{ steps.meta.outputs.short }}
+          path: build/ios/tryptify.ipa
           retention-days: 14
           if-no-files-found: error

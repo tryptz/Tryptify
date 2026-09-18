@@ -22,7 +22,7 @@ kotlin {
     ).forEach { target ->
         target.binaries {
             framework {
-                baseName = "MonochromeKit"
+                baseName = "TryptifyKit"
                 isStatic = true
             }
         }

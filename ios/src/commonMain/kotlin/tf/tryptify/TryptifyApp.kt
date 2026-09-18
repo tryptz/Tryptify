@@ -19,11 +19,11 @@ import androidx.compose.ui.Modifier
  * crashing on missing platform plumbing.
  */
 @Composable
-fun MonochromeApp() {
+fun TryptifyApp() {
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text(text = "Monochrome — iOS port (M1 shell)")
+                Text(text = "Tryptify — iOS port (M1 shell)")
             }
         }
     }
