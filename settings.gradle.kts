@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 rootProject.name = "Monochrome"
 include(":app")
 include(":baselineprofile")
+include(":ios")

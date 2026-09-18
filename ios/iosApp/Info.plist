@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Tryptify</string>
+	<key>CFBundleExecutable</key>
+	<string>Tryptify</string>
+	<key>CFBundleIdentifier</key>
+	<string>tf.tryptify.ios</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Tryptify</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.8.5</string>
+	<key>CFBundleVersion</key>
+	<string>185</string>
+	<key>MinimumOSVersion</key>
+	<string>16.0</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<!-- Modern launch screen: empty dict is a valid, system-styled blank. -->
+	<key>UILaunchScreen</key>
+	<dict/>
+	<!-- Compose renders edge-to-edge; declare all orientations the Android
+	     app supports. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- Background audio: the player must continue with the screen locked.
+	     (Wired up in M2 when playback lands on iOS.) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<!-- Spotify PKCE callback — must match the Android intent filter scheme:
+	     tryptify://spotify-callback -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>tf.tryptify.ios.spotify</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tryptify</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
