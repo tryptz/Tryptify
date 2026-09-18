@@ -23,7 +23,10 @@ kotlin {
         target.binaries {
             framework {
                 baseName = "TryptifyKit"
-                isStatic = true
+                // Dynamic: the CI workflow embeds the .framework into the app
+                // bundle and ad-hoc signs it. (Static would mean linking it
+                // into the executable instead — different packaging.)
+                isStatic = false
             }
         }
     }

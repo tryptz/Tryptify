@@ -57,6 +57,8 @@ jobs:
             -F "$FWDIR" \
             -framework TryptifyKit \
             -framework UIKit -framework Foundation \
+            -Xlinker -rpath -Xlinker @executable_path/Frameworks \
+            -Xlinker -rpath -Xlinker /usr/lib/swift \
             ios/iosApp/Sources/main.swift \
             ios/iosApp/Sources/AppDelegate.swift \
             -o build/ios/Tryptify
@@ -72,14 +74,19 @@ jobs:
           cp -R "$FWDIR/$FRAMEWORK.framework" "$APP/Frameworks/"
           cp ios/iosApp/Info.plist "$APP/Info.plist"
 
-          # The embedded framework binary must be arm64-only for device.
-          lipo "$APP/Frameworks/$FRAMEWORK.framework/$FRAMEWORK" \
-            -thin arm64 -output \
-            "$APP/Frameworks/$FRAMEWORK.framework/$FRAMEWORK"
+          # Thin to arm64 only if the framework is a fat binary; Gradle's
+          # per-target framework is normally already single-arch (Non-fat).
+          if lipo "$APP/Frameworks/$FRAMEWORK.framework/$FRAMEWORK" -info | grep -q "Non-fat"; then
+            echo "framework is already single-arch: skipping lipo"
+          else
+            lipo "$APP/Frameworks/$FRAMEWORK.framework/$FRAMEWORK" \
+              -thin arm64 -output \
+              "$APP/Frameworks/$FRAMEWORK.framework/$FRAMEWORK"
+          fi
 
-          # Ad-hoc sign; end users re-sign via Sideloadly/AltStore/Xcode.
-          codesign --force --sign - "$APP/$APP_NAME"
+          # Sign nested code first (framework), then the app binary.
           codesign --force --sign - "$APP/Frameworks/$FRAMEWORK.framework"
+          codesign --force --sign - "$APP"
 
           du -sh "$APP"
 
