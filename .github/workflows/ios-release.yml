@@ -42,8 +42,8 @@ jobs:
             :ios:linkReleaseFrameworkIosSimulatorArm64
 
       # Compile the two-file Swift shell against the framework's generated
-      # Obj-C header, link, then hand-assemble the .app. Simpler and far
-      # faster than maintaining an .xcodeproj for a storyboard-less shell.
+      # Obj-C header and link in one driver invocation (main.swift must be
+      # compiled without -parse-as-library so it emits the entry point).
       - name: Compile + link Swift shell (arm64 device)
         run: |
           set -euxo pipefail
@@ -55,16 +55,10 @@ jobs:
             -sdk "$SDK" \
             -target arm64-apple-ios16.0 \
             -F "$FWDIR" \
-            -parse-as-library \
-            -c ios/iosApp/Sources/AppDelegate.swift \
-            -o build/ios/AppDelegate.o
-
-          clang build/ios/AppDelegate.o \
-            -isysroot "$SDK" \
-            -F "$FWDIR" \
             -framework TryptifyKit \
             -framework UIKit -framework Foundation \
-            -lobjc -arch arm64 \
+            ios/iosApp/Sources/main.swift \
+            ios/iosApp/Sources/AppDelegate.swift \
             -o build/ios/Tryptify
 
       - name: Assemble .app
