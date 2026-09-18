@@ -1,0 +1,109 @@
+name: iOS IPA
+
+on:
+  push:
+    branches: [iOS-port]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-release.yml'
+      - 'gradle/libs.versions.toml'
+  workflow_dispatch:
+
+env:
+  APP_NAME: Monochrome
+  BUNDLE_ID: tf.tryptify.ios
+  # Keep in sync with ios/build.gradle.kts framework baseName.
+  FRAMEWORK: MonochromeKit
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle (wrapper + dependency caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      # Kotlin/Native links a static framework per iOS target. No Xcode
+      # project involved — Gradle is the source of truth.
+      - name: Link MonochromeKit (device + simulator)
+        run: |
+          ./gradlew --no-daemon \
+            :ios:linkReleaseFrameworkIosArm64 \
+            :ios:linkReleaseFrameworkIosSimulatorArm64
+
+      # Compile the two-file Swift shell against the framework's generated
+      # Obj-C header, link, then hand-assemble the .app. Simpler and far
+      # faster than maintaining an .xcodeproj for a storyboard-less shell.
+      - name: Compile + link Swift shell (arm64 device)
+        run: |
+          set -euxo pipefail
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p build/ios
+          FWDIR="ios/build/bin/iosArm64/releaseFramework"
+
+          swiftc \
+            -sdk "$SDK" \
+            -target arm64-apple-ios16.0 \
+            -I "$FWDIR" \
+            -parse-as-library \
+            -c ios/iosApp/Sources/AppDelegate.swift \
+            -o build/ios/AppDelegate.o
+
+          clang build/ios/AppDelegate.o \
+            -isysroot "$SDK" \
+            -F "$FWDIR" \
+            -framework MonochromeKit \
+            -framework UIKit -framework Foundation \
+            -lobjc -arch arm64 \
+            -o build/ios/Monochrome
+
+      - name: Assemble .app
+        run: |
+          set -euxo pipefail
+          APP="build/ios/$APP_NAME.app"
+          FWDIR="ios/build/bin/iosArm64/releaseFramework"
+
+          mkdir -p "$APP/Frameworks"
+          cp "build/ios/$APP_NAME" "$APP/$APP_NAME"
+          cp -R "$FWDIR/$FRAMEWORK.framework" "$APP/Frameworks/"
+          cp ios/iosApp/Info.plist "$APP/Info.plist"
+
+          # The embedded framework binary must be arm64-only for device.
+          lipo "$APP/Frameworks/$FRAMEWORK.framework/$FRAMEWORK" \
+            -thin arm64 -output \
+            "$APP/Frameworks/$FRAMEWORK.framework/$FRAMEWORK"
+
+          # Ad-hoc sign; end users re-sign via Sideloadly/AltStore/Xcode.
+          codesign --force --sign - "$APP/$APP_NAME"
+          codesign --force --sign - "$APP/Frameworks/$FRAMEWORK.framework"
+
+          du -sh "$APP"
+
+      - name: Package unsigned IPA
+        run: |
+          set -euxo pipefail
+          mkdir -p build/ipa/Payload
+          cp -R "build/ios/$APP_NAME.app" build/ipa/Payload/
+          (cd build/ipa && zip -qry "../$APP_NAME.ipa" Payload)
+          ls -lh "build/ios/$APP_NAME.ipa"
+
+      - name: Version metadata
+        id: meta
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Monochrome-unsigned-${{ steps.meta.outputs.short }}
+          path: build/ios/Monochrome.ipa
+          retention-days: 14
+          if-no-files-found: error
