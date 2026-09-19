@@ -39,22 +39,24 @@ target_link_libraries(monochrome_visualizer
     projectM_playlist
 )
 
+# ── Shared audio core (third_party/tryptify-audio-core) ─────────────────
+# The DSP engine and the libusb output driver live in their own repo so the
+# StepMania port links the same code. It builds two static libraries,
+# tac_dsp and tac_usb (which carries libusb); the JNI bridges stay here
+# because their symbol names encode this app's Kotlin classes.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/tryptify-audio-core
+    ${CMAKE_CURRENT_BINARY_DIR}/tryptify-audio-core)
+
 # ── DSP Engine ───────────────────────────────────────────────────────────
 add_library(monochrome_dsp SHARED
-    dsp/dsp_engine.cpp
     dsp/dsp_jni.cpp
     dsp/oxford/oxford_jni.cpp
 )
 
-target_include_directories(monochrome_dsp PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/dsp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dsp/util
-    ${CMAKE_CURRENT_SOURCE_DIR}/dsp/snapins
-    ${CMAKE_CURRENT_SOURCE_DIR}/dsp/oxford
-)
-
 target_compile_features(monochrome_dsp PRIVATE cxx_std_17)
 
+# The JNI units instantiate the header-only snap-ins, so they need the same
+# flags tac_dsp builds dsp_engine.cpp with.
 target_compile_options(monochrome_dsp PRIVATE
     -O3 -ffast-math -fno-exceptions -fno-rtti
     # ARM NEON SIMD for float processing on arm64
@@ -68,49 +70,14 @@ set_target_properties(monochrome_visualizer PROPERTIES DEBUG_POSTFIX "")
 target_link_libraries(monochrome_dsp
     android
     log
+    tac_dsp
 )
 
-# ── libusb (USB Audio Class direct output) ────────────────────────────────
-# Vendored at third_party/libusb. Upstream uses autotools + Android.mk;
-# we list the platform source files directly here so the existing CMake
-# toolchain handles arm64-v8a / armeabi-v7a / x86_64 in one shot. Builds
-# as a static library so the resulting libmonochrome_usb.so embeds it
-# (one less .so to load at app startup).
-set(LIBUSB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/libusb)
-add_library(usb1.0 STATIC
-    ${LIBUSB_DIR}/libusb/core.c
-    ${LIBUSB_DIR}/libusb/descriptor.c
-    ${LIBUSB_DIR}/libusb/hotplug.c
-    ${LIBUSB_DIR}/libusb/io.c
-    ${LIBUSB_DIR}/libusb/sync.c
-    ${LIBUSB_DIR}/libusb/strerror.c
-    ${LIBUSB_DIR}/libusb/os/linux_usbfs.c
-    ${LIBUSB_DIR}/libusb/os/events_posix.c
-    ${LIBUSB_DIR}/libusb/os/threads_posix.c
-    ${LIBUSB_DIR}/libusb/os/linux_netlink.c
-)
-target_include_directories(usb1.0 PUBLIC
-    ${LIBUSB_DIR}/libusb
-    ${LIBUSB_DIR}/libusb/os
-    ${LIBUSB_DIR}/android   # config.h with autotools-generated #defines
-)
-target_compile_options(usb1.0 PRIVATE
-    -fvisibility=hidden
-    -Wno-unused-parameter
-    -Wno-unused-but-set-variable
-)
-set_target_properties(usb1.0 PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-# JNI bridge + UAC2 driver. The actual isochronous transfer pump lives
-# inside libusb_uac_driver.cpp; this shared lib is the surface Kotlin's
-# UsbNativeLoader.ensureLoaded() pulls in.
+# ── USB Audio Class direct output ─────────────────────────────────────────
+# JNI bridge only. The isochronous pump lives in tac_usb; this shared lib is
+# the surface Kotlin's UsbNativeLoader.ensureLoaded() pulls in.
 add_library(monochrome_usb SHARED
     usb/usb_jni.cpp
-    usb/libusb_uac_driver.cpp
-)
-target_include_directories(monochrome_usb PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb
-    ${LIBUSB_DIR}/libusb
 )
 target_compile_features(monochrome_usb PRIVATE cxx_std_17)
 target_compile_options(monochrome_usb PRIVATE
@@ -120,7 +87,7 @@ set_target_properties(monochrome_usb PROPERTIES DEBUG_POSTFIX "")
 target_link_libraries(monochrome_usb
     android
     log
-    usb1.0
+    tac_usb
 )
 
 # ── Atmos renderer foundation (clean-room) ───────────────────────────────
@@ -215,4 +182,6 @@ target_compile_options(monochrome_stretch PRIVATE
 # name Kotlin loads it by, as the sibling libs do.
 set_target_properties(monochrome_stretch PROPERTIES DEBUG_POSTFIX "")
 
-target_link_libraries(monochrome_stretch log)
+# WSOLA lives in the audio core. Linking the archive only adds its include
+# paths here: stretch references nothing in it, so no object is pulled in.
+target_link_libraries(monochrome_stretch tac_dsp log)

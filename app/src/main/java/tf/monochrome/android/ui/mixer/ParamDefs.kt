@@ -20,7 +20,7 @@ data class ParamDef(
 
 /**
  * Ordered parameter list per snapin type. Order and count mirror the native
- * `enum Params` in the per-effect `cpp/dsp/snapins` headers (index == native param index).
+ * `enum Params` in the per-effect `tryptify-audio-core/dsp/snapins` headers (index == native param index).
  *
  * The `when` is intentionally exhaustive (no `else`): adding a new [SnapinType]
  * without a branch here is a compile error rather than a silently-empty editor.
@@ -289,7 +289,7 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
     )
     SnapinType.EQ_10BAND -> buildList {
         // 51 params: preamp + 10 bands x (freq, gain, Q, type, enabled).
-        // Mirrors cpp/dsp/snapins/eq_10band.h (PREAMP=0; 1+n*5+{0..4}).
+        // Mirrors tryptify-audio-core/dsp/snapins/eq_10band.h (PREAMP=0; 1+n*5+{0..4}).
         add(ParamDef("Preamp", -24f, 24f, 0f, "dB"))
         val freqs = listOf(31f, 63f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
         freqs.forEachIndexed { n, f ->

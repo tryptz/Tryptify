@@ -34,7 +34,7 @@
 #include <new>
 
 #include "signalsmith-stretch.h"
-#include "../dsp/wsola_pitch.h"
+#include "wsola_pitch.h"
 
 namespace {
 

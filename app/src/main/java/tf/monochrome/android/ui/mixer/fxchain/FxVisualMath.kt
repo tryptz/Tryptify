@@ -20,7 +20,7 @@ import kotlin.math.tanh
  *
  * Everything here is a deterministic function of the snapin's parameter values
  * so the displays track the *actual* DSP. Formulas mirror the
- * native processors in `cpp/dsp/snapins` (RBJ biquads, the distortion
+ * native processors in `tryptify-audio-core/dsp/snapins` (RBJ biquads, the distortion
  * waveshaper cases, the trance-gate pattern table, the dynamics transfer
  * curve, …) — keep them in sync when the native side changes.
  *

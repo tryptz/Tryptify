@@ -231,7 +231,7 @@ The two commands that work from a bare clone are the ones in `AGENTS.md`:
 ./gradlew :app:testDebugUnitTest
 ```
 
-Anything that assembles an APK — `assembleDebug`, any release build, the R8 and clean-build rows above — needs the git submodules (`third_party/projectm`, `libusb`) checked out. Without them it fails for reasons unrelated to the change, so do not report that as a regression, and do not claim a shrinker or release-build gate passed on a tree where it could not have run.
+Anything that assembles an APK — `assembleDebug`, any release build, the R8 and clean-build rows above — needs the git submodules (`third_party/projectm`, `third_party/tryptify-audio-core`, which carries libusb) checked out. Without them it fails for reasons unrelated to the change, so do not report that as a regression, and do not claim a shrinker or release-build gate passed on a tree where it could not have run.
 
 Several JVM tests exist specifically to hold the UI invariants in `docs/ui-invariants.md` — `LightSchemesTest`, `CustomSchemeTest`, `GlobeLandClipTest`, `SettingsSearchIndexTest`. They are the guarantee, not a formality. If one fails, fix the code; do not loosen the threshold.
 

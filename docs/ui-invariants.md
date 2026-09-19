@@ -303,7 +303,7 @@ together.
 ./gradlew :app:testDebugUnitTest
 ```
 
-`assembleDebug` needs git submodules (`third_party/projectm`, `libusb`) checked
+`assembleDebug` needs git submodules (`third_party/projectm`, `third_party/tryptify-audio-core`, which carries libusb) checked
 out; without them it fails for reasons unrelated to any change here.
 
 ## Commits

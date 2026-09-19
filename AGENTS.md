@@ -43,13 +43,24 @@ Conventions in this file override it wherever the two differ.
 ./gradlew :app:testDebugUnitTest
 ```
 
-`assembleDebug` needs the git submodules (`third_party/projectm`, `libusb`)
+`assembleDebug` needs the git submodules (`third_party/projectm`, `third_party/tryptify-audio-core`, which carries libusb)
 checked out; without them it fails for reasons unrelated to your change.
 
 Several tests exist specifically to hold the invariants above — `LightSchemesTest`,
 `CustomSchemeTest`, `GlobeLandClipTest`, `SettingsSearchIndexTest`. They are the
 guarantee, not a formality. If one fails, fix the code; do not loosen the
 threshold.
+
+## Native audio core
+
+The mix-bus DSP engine and the libusb output driver live in
+[`tryptz/tryptify-audio-core`](https://github.com/tryptz/tryptify-audio-core),
+checked out at `third_party/tryptify-audio-core`. Only the JNI bridges
+(`app/src/main/cpp/dsp/*_jni.cpp`, `usb/usb_jni.cpp`) stay in this repo.
+
+Change engine or driver code in the core repo, run its host tests there, then
+bump the submodule here. An edit made inside the submodule checkout and never
+pushed to the core leaves this repo pointing at a commit nobody else can fetch.
 
 ## Baseline profile
 
