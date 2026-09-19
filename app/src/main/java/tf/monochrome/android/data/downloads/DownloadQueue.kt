@@ -17,6 +17,11 @@ import javax.inject.Singleton
  * particular [appleId] is captured while the source is still known — deriving
  * it later from [trackId] is what used to mis-route Apple tracks with synthetic
  * ids to the Qobuz backend.
+ *
+ * Every field needs a default. The queue survives process death as a plain JSON
+ * array in DataStore with no version and no migration, and [DownloadQueue.restore]
+ * swallows a decode failure — so a field without a default would not fail loudly,
+ * it would empty every queue that was already on disk, silently.
  */
 @Serializable
 data class DownloadItem(
@@ -29,6 +34,20 @@ data class DownloadItem(
     val duration: Int = 0,
     val version: String? = null,
     val isThxSpatialAudio: Boolean = false,
+    /**
+     * Tag fields, carried so the downloader can write them into the file. A
+     * player with no TRACKNUMBER sorts an album alphabetically, and one with no
+     * ALBUMARTIST splits a collaboration album into an artist per track — which
+     * is what downloads looked like in Auxio and Symfonium before this.
+     *
+     * 0 means "not known", matching the tag conventions: a track number is
+     * 1-based, so there is no zeroth track to confuse it with.
+     */
+    val trackNumber: Int = 0,
+    val discNumber: Int = 0,
+    val albumArtist: String? = null,
+    /** ISO date (`YYYY-MM-DD`) or a bare year; goes to the Vorbis `DATE` field. */
+    val releaseDate: String? = null,
 ) {
     companion object {
         fun from(track: Track): DownloadItem = DownloadItem(
@@ -42,6 +61,16 @@ data class DownloadItem(
             duration = track.duration,
             version = track.version,
             isThxSpatialAudio = track.isThxSpatialAudio,
+            trackNumber = track.trackNumber ?: 0,
+            // `volumeNumber` is TIDAL's name for the disc; the Qobuz mapper puts
+            // `media_number` in it.
+            discNumber = track.volumeNumber ?: 0,
+            // The album's own artist, not the track's — that is the whole point
+            // of the tag. `displayArtist` covers the multi-artist album where
+            // there is no single `artist`.
+            albumArtist = track.album?.artist?.name
+                ?: track.album?.displayArtist?.takeIf { it.isNotBlank() },
+            releaseDate = track.album?.releaseDate,
         )
     }
 }

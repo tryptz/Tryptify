@@ -586,6 +586,16 @@ data class UnifiedTrack(
                 Album(
                     id = albumId?.hashCode()?.toLong() ?: tidalId,
                     title = albumTitle.orEmpty(),
+                    // The album artist and the release year are carried here
+                    // because this is the only route some of them take: the
+                    // unified context menu downloads through toLegacyTrack, and
+                    // DownloadItem reads both off `album` to write ALBUMARTIST
+                    // and DATE into the file. Dropping them here left a
+                    // downloaded album splitting into an artist per track.
+                    artist = albumArtistName
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { Artist(id = it.hashCode().toLong(), name = it) },
+                    releaseDate = releaseYear?.toString(),
                     cover = coverFallback
                 )
             } else null,

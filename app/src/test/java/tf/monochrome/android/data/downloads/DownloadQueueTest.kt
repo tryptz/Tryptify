@@ -2,6 +2,7 @@ package tf.monochrome.android.data.downloads
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -207,12 +208,38 @@ class DownloadQueueTest {
         val restored = queue()
         restored.restore(saved)
         assertEquals(50, restored.entries.value.size)
+        // Whole items, not just their ids: the blob carries the tag fields the
+        // downloader writes into the file, and a field that failed to round-trip
+        // would otherwise pass this test and lose metadata on a resumed download.
         assertEquals(
-            q.entries.value.map { it.item.trackId },
-            restored.entries.value.map { it.item.trackId },
+            q.entries.value.map { it.item },
+            restored.entries.value.map { it.item },
         )
         // Everything comes back waiting: an interrupted transfer restarts.
         assertTrue(restored.entries.value.all { it.status == DownloadStatus.QUEUED })
+    }
+
+    @Test
+    fun `a queue written before the tag fields existed still restores`() {
+        // The queue is a bare JSON array in DataStore with no version and no
+        // migration, and restore() swallows a decode failure — so a new field
+        // without a default would not fail loudly, it would empty every queue
+        // already on disk. This is that blob, as 1.8.9 wrote it.
+        val legacy = """
+            [{"trackId":41,"title":"Track 41","artistName":"Artist","albumTitle":"Album"}]
+        """.trimIndent()
+        val q = queue()
+        q.restore(legacy)
+
+        assertEquals(1, q.entries.value.size)
+        val item = q.entries.value.single().item
+        assertEquals(41L, item.trackId)
+        assertEquals("Album", item.albumTitle)
+        // Absent, not fabricated.
+        assertEquals(0, item.trackNumber)
+        assertEquals(0, item.discNumber)
+        assertNull(item.albumArtist)
+        assertNull(item.releaseDate)
     }
 
     @Test

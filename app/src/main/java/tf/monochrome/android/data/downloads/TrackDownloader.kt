@@ -200,26 +200,48 @@ class TrackDownloader @Inject constructor(
                     detectActualQuality(if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0), quality)
                 isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
             }
+            // Everything the non-Apple path delivers that is not FLAC is MP3 —
+            // `detectActualQuality` reports HIGH for anything without the fLaC
+            // magic, and the extension below follows the same split.
+            val isMp3 = !usedApple && !isFlac
 
-            // The Qobuz CDN FLACs arrive with no embedded metadata, so a THX
-            // download would land on disk anonymous. Embed Vorbis comments now
-            // (only for THX/versioned FLACs, so ordinary downloads keep their
-            // current fast path) — TITLE without the version suffix, the raw
-            // VERSION string Qobuz uses, and a COMMENT marker for players that
-            // ignore VERSION. Tagging happens in place on the temp file
-            // (JAudioTagger is file-based). Best-effort: a tagging failure
-            // never fails the download (the bytes are good).
-            if (isFlac && (isThxSpatialAudio || !version.isNullOrBlank())) {
+            // The cover is fetched before tagging rather than after the file is
+            // in place, because the tag wants the same bytes the sidecars get.
+            // One download, two uses.
+            val coverBytes = if (!albumCover.isNullOrBlank()) fetchAlbumArt(albumCover) else null
+
+            // The CDN FLACs arrive with no embedded metadata at all, so whatever
+            // is not written here is what the file will not have on disk. That
+            // used to mean only THX and versioned releases were tagged and every
+            // ordinary download landed anonymous — sorted alphabetically by any
+            // player that reads track numbers, and split into an artist per
+            // track by any player that reads album artists. So: tag everything
+            // this process produced the bytes for.
+            //
+            // MP3 is included; JAudioTagger writes ID3 as readily as Vorbis, and
+            // the only difference here is the extension it picks its reader by.
+            // Apple's M4A is not — see the note above `usedApple`.
+            //
+            // Tagging happens in place on the temp file (JAudioTagger is
+            // file-based) and is best-effort throughout: a failure leaves a
+            // playable file and a successful download.
+            if (isFlac || isMp3) {
                 val baseTitle = if (!version.isNullOrBlank()) {
                     trackTitle.removeSuffix(" — $version").trim()
                 } else trackTitle
-                tagFlacFile(
+                tagAudioFile(
                     file = tempAudio,
+                    ext = if (isFlac) "flac" else "mp3",
                     title = baseTitle,
                     artist = artistName,
                     album = albumTitle,
+                    albumArtist = item.albumArtist,
+                    trackNumber = item.trackNumber,
+                    discNumber = item.discNumber,
+                    releaseDate = item.releaseDate,
                     version = version,
                     isThxSpatialAudio = isThxSpatialAudio,
+                    coverBytes = coverBytes,
                 )
             }
             val audioSizeBytes = tempAudio.length()
@@ -300,7 +322,9 @@ class TrackDownloader @Inject constructor(
                 }
             }
 
-            // Save the album art alongside the track. Two reasons:
+            // Save the album art alongside the track, from the bytes already
+            // fetched above. Still worth writing even though the picture is now
+            // embedded in the file, for three reasons:
             //   1. The system MediaScanner picks up `cover.jpg` /
             //      `albumart.jpg` in the same folder as audio files and
             //      attaches them as the album image automatically — that's
@@ -308,10 +332,11 @@ class TrackDownloader @Inject constructor(
             //      Local tab on a fresh install.
             //   2. Other Android players (and our own DownloadsScreen) can
             //      load the cover off-line.
+            //   3. An M4A download has no embedded picture written by us at all.
             // Errors here are non-fatal — losing the cover shouldn't fail
             // the whole download.
-            if (!albumCover.isNullOrBlank()) {
-                runCatching { saveAlbumArt(albumCover, sanitizedTitle, customFolderUri) }
+            if (coverBytes != null) {
+                runCatching { saveAlbumArt(coverBytes, sanitizedTitle, customFolderUri) }
             }
 
             // Tell MediaStore about the new audio + cover so the Local tab
@@ -368,21 +393,26 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
-     * Fetches the album cover URL and saves it both as `<sanitizedTitle>.jpg`
-     * (per-track sidecar, matched by some MP3-style players) and as
-     * `cover.jpg` in the same folder (the Android MediaScanner convention).
-     * Skipped silently on network or SAF failure.
+     * Downloads the album cover, or returns null on any failure. Split out from
+     * [saveAlbumArt] because the bytes are wanted twice — once embedded in the
+     * file's tag, once as the sidecars beside it — and once is enough to fetch.
      */
-    private suspend fun saveAlbumArt(
-        coverUrl: String,
+    private suspend fun fetchAlbumArt(coverUrl: String): ByteArray? = runCatching {
+        val response = httpClient.get(coverUrl)
+        if (!response.status.isSuccess()) return null
+        response.readBytes().takeIf { it.isNotEmpty() }
+    }.getOrNull()
+
+    /**
+     * Saves the cover bytes both as `<sanitizedTitle>.jpg` (per-track sidecar,
+     * matched by some MP3-style players) and as `cover.jpg` in the same folder
+     * (the Android MediaScanner convention). Skipped silently on SAF failure.
+     */
+    private fun saveAlbumArt(
+        bytes: ByteArray,
         sanitizedTitle: String,
         customFolderUri: String?,
     ) {
-        val response = httpClient.get(coverUrl)
-        if (!response.status.isSuccess()) return
-        val bytes = response.readBytes()
-        if (bytes.isEmpty()) return
-
         if (customFolderUri != null) {
             val treeUri = customFolderUri.toUri()
             val docFile = DocumentFile.fromTreeUri(context, treeUri) ?: return
@@ -395,8 +425,9 @@ class TrackDownloader @Inject constructor(
                 notifyMediaScanner(file.uri.toString())
             }
             // Folder-level cover.jpg — MediaScanner reads this for the
-            // album thumbnail without needing to embed the picture in
-            // each FLAC's METADATA_BLOCK_PICTURE.
+            // album thumbnail, which is how an album gets its cover in the
+            // Local tab even for the M4A downloads that carry no embedded
+            // picture of their own.
             if (docFile.findFile("cover.jpg") == null) {
                 docFile.createFile("image/jpeg", "cover")?.let { file ->
                     context.contentResolver.openOutputStream(file.uri)?.use { it.write(bytes) }
@@ -478,42 +509,136 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
-     * Embed Vorbis comments into a FLAC file in place (JAudioTagger is
+     * Embed metadata into a downloaded file in place (JAudioTagger is
      * file-based, so no byte-array round trip). The download temp carries a
      * ".dl" extension and JAudioTagger picks its reader by extension, so the
-     * file is renamed to a ".flac" alias for the tagging and renamed back.
-     * Best-effort: on any failure the file is left playable and the download
-     * still succeeds.
+     * file is renamed to a "[ext]" alias for the tagging and renamed back.
+     *
+     * Writes what an offline player needs to reassemble an album: title, artist,
+     * album, album artist, track and disc number, date, the raw Qobuz VERSION,
+     * the THX comment marker, and the cover picture.
+     *
+     * Best-effort throughout: on any failure the file is left playable and the
+     * download still succeeds.
      */
-    private fun tagFlacFile(
+    private fun tagAudioFile(
         file: File,
+        ext: String,
         title: String,
         artist: String,
         album: String?,
+        albumArtist: String?,
+        trackNumber: Int,
+        discNumber: Int,
+        releaseDate: String?,
         version: String?,
         isThxSpatialAudio: Boolean,
+        coverBytes: ByteArray?,
     ) {
-        val alias = File(file.parentFile, "${file.nameWithoutExtension}_tag.flac")
+        val alias = File(file.parentFile, "${file.nameWithoutExtension}_tag.$ext")
         if (!file.renameTo(alias)) {
-            Log.w(TAG, "THX tag: rename for tagging failed for \"$title\"")
+            Log.w(TAG, "tag: rename for tagging failed for \"$title\"")
             return
         }
         try {
             val audioFile = org.jaudiotagger.audio.AudioFileIO.read(alias)
-            val tag = audioFile.tagOrCreateAndSetDefault as? org.jaudiotagger.tag.flac.FlacTag
-                ?: return
+            val tag = audioFile.tagOrCreateAndSetDefault ?: return
             if (title.isNotBlank()) tag.setField(org.jaudiotagger.tag.FieldKey.TITLE, title)
             if (artist.isNotBlank()) tag.setField(org.jaudiotagger.tag.FieldKey.ARTIST, artist)
             album?.takeIf { it.isNotBlank() }?.let { tag.setField(org.jaudiotagger.tag.FieldKey.ALBUM, it) }
+            // Without ALBUMARTIST a compilation or a featured-artist album
+            // fragments into one album per track in Auxio, Symfonium and
+            // MediaStore alike.
+            albumArtist?.takeIf { it.isNotBlank() }
+                ?.let { tag.setField(org.jaudiotagger.tag.FieldKey.ALBUM_ARTIST, it) }
+            // Track and disc order. Absent these a player has nothing to sort on
+            // but the filename, which puts track 10 before track 2.
+            if (trackNumber > 0) {
+                tag.setField(org.jaudiotagger.tag.FieldKey.TRACK, trackNumber.toString())
+            }
+            if (discNumber > 0) {
+                tag.setField(org.jaudiotagger.tag.FieldKey.DISC_NO, discNumber.toString())
+            }
+            // YEAR maps to Vorbis DATE and to ID3 TDRC, both of which take a
+            // full ISO date, so the release date goes in whole rather than
+            // truncated to four digits.
+            releaseDate?.takeIf { it.isNotBlank() }
+                ?.let { tag.setField(org.jaudiotagger.tag.FieldKey.YEAR, it) }
             // Raw VERSION comment — the field Qobuz itself uses for the release.
-            version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
+            // Vorbis-only: ID3 has no equivalent free-text release field, and
+            // the COMMENT marker below already covers the THX case there.
+            if (tag is org.jaudiotagger.tag.flac.FlacTag) {
+                version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
+            }
             // COMMENT marker as belt-and-braces for players that ignore VERSION.
             if (isThxSpatialAudio) tag.setField(org.jaudiotagger.tag.FieldKey.COMMENT, "THX Spatial Audio")
+            if (coverBytes != null) {
+                runCatching { setCoverArt(tag, coverBytes) }
+                    .onFailure { Log.w(TAG, "tag: artwork embed failed for \"$title\": ${it.message}") }
+            }
             audioFile.commit()
         } catch (e: Exception) {
-            Log.w(TAG, "THX tag: FLAC tagging failed for \"$title\": ${e.message}")
+            Log.w(TAG, "tag: $ext tagging failed for \"$title\": ${e.message}")
         } finally {
             alias.renameTo(file)
+        }
+    }
+
+    /**
+     * Embed the cover picture.
+     *
+     * The obvious call — `ArtworkFactory.createArtworkFromFile(f)` then
+     * `tag.setField(artwork)` — cannot work on Android, in either direction.
+     * `ArtworkFactory` dispatches on `TagOptionSingleton.isAndroid()`, which
+     * defaults to false, so it builds a `StandardArtwork` backed by
+     * `javax.imageio`, which android.jar does not have. Force the Android branch
+     * and FLAC still breaks: `FlacTag.createField(Artwork)` calls
+     * `Artwork.setImageFromData()`, and `AndroidArtwork`'s override of that is a
+     * bare `throw UnsupportedOperationException()`.
+     *
+     * So each container gets the route that never asks for a decoded image:
+     * FLAC's METADATA_BLOCK_PICTURE is built field by field, and ID3's APIC
+     * frame is assembled from an in-memory `AndroidArtwork` — which is enough
+     * there, because that path reads only the bytes, mime type, description and
+     * picture type back off it.
+     */
+    private fun setCoverArt(tag: org.jaudiotagger.tag.Tag, bytes: ByteArray) {
+        // Read the real mime type out of the bytes rather than assuming JPEG.
+        val mime = org.jaudiotagger.tag.id3.valuepair.ImageFormats
+            .getMimeTypeForBinarySignature(bytes)
+            ?: return
+        val pictureType = org.jaudiotagger.tag.reference.PictureTypes.DEFAULT_ID
+        when (tag) {
+            is org.jaudiotagger.tag.flac.FlacTag -> {
+                // The picture block declares its own dimensions, and nothing in
+                // JAudioTagger's Android path fills them in, so decode the
+                // bounds. 0 would be legal but tells a reader nothing.
+                val opts = android.graphics.BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                tag.setField(
+                    tag.createArtworkField(
+                        bytes,
+                        pictureType,
+                        mime,
+                        "",
+                        opts.outWidth.coerceAtLeast(0),
+                        opts.outHeight.coerceAtLeast(0),
+                        0,
+                        0,
+                    )
+                )
+            }
+            else -> {
+                val artwork = org.jaudiotagger.tag.images.AndroidArtwork().apply {
+                    binaryData = bytes
+                    mimeType = mime
+                    description = ""
+                    this.pictureType = pictureType
+                }
+                tag.setField(artwork)
+            }
         }
     }
 }
