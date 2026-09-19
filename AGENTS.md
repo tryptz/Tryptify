@@ -83,3 +83,37 @@ stale profile is not wrong, only progressively less useful.
 
 Author as `tryptz`. No co-author trailers and no tool attribution in commit
 messages, PR bodies, or code comments.
+
+## Releases
+
+`.github/workflows/release.yml` is the only workflow that ships anything. It
+builds the release variant — minified, never a debug APK — and, when it can sign
+it, publishes a GitHub Release with the APK, its SHA-256, and the notes for that
+version out of `CHANGELOG.md`.
+
+To cut one:
+
+1. Bump `versionCode`/`versionName` in `app/build.gradle.kts` and add the
+   matching `## [x.y.z]` section to `CHANGELOG.md`.
+2. Tag the commit with the bare version (`1.8.8`, matching the existing tags; a
+   `v` prefix is accepted) and push the tag.
+
+The workflow refuses to publish an APK that disagrees with the tag, that came out
+unminified, that is marked debuggable, or that is signed with the committed debug
+keystore. A tag suffix (`1.9.0-rc1`) publishes as a pre-release.
+
+Signing comes from four repository secrets — `KEYSTORE_BASE64`,
+`KEYSTORE_STORE_PASSWORD`, `KEYSTORE_KEY_ALIAS`, `KEYSTORE_KEY_PASSWORD` — which
+the workflow writes into `keystore.properties` and deletes afterwards.
+
+**Those secrets are not set on this repository.** Until they are, the workflow
+does not fail — it builds, shrinks and verifies the release APK, uploads it as a
+workflow artifact, prints the four secrets to add, and publishes nothing. That is
+deliberate: an earlier version of this workflow hard-failed on the missing
+keystore, so tagging 1.8.7 hung a red check off main, and it was deleted for it.
+
+A `workflow_dispatch` run with no tag is the same thing on purpose, and it is the
+**R8 gate**: `isMinifyEnabled = true` has been set for the release build type far
+longer than anything has built that variant, so a dry run is how the shrinker and
+the keep rules in `app/proguard-rules.pro` get exercised. Reach for it before
+believing a release build works, and read the mapping artifact it uploads.
